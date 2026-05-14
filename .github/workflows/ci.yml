@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}
           path: TestResults/
@@ -106,7 +106,7 @@ jobs:
             -assemblyfilters:"+SimpleSign.*;-SimpleSign.*.Tests;-SimpleSign.TestHelpers"
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage-report/
@@ -144,7 +144,7 @@ jobs:
           done
 
       - name: Upload NuGet packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nupkg
           path: ./nupkg/*.nupkg
