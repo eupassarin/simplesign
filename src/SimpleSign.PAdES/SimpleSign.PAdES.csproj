@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.PAdES</AssemblyName>
+    <RootNamespace>SimpleSign.PAdES</RootNamespace>
+    <PackageId>SimpleSign.PAdES</PackageId>
+    <Description>PAdES (PDF Advanced Electronic Signatures) signing, validation, and inspection for the SimpleSign framework.</Description>
+    <Version>0.1.0</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Brasil" />
+    <InternalsVisibleTo Include="SimpleSign.PAdES.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Brasil.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Fuzz" />
+    <InternalsVisibleTo Include="simplesign-cli" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.8.0" />
+  </ItemGroup>
+
+</Project>
+

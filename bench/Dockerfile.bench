@@ -1,0 +1,9 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS bench
+
+WORKDIR /app
+COPY . .
+
+RUN dotnet restore bench/SimpleSign.Benchmarks/SimpleSign.Benchmarks.csproj
+
+ENTRYPOINT ["dotnet", "run", "-c", "Release", "--framework", "net10.0", "--project", "bench/SimpleSign.Benchmarks", "--"]
+CMD ["--filter", "*", "--exporters", "json", "markdown"]

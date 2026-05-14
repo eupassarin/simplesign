@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickelpack/nsis-tauri-utils/main/schemas/nsis-extension-schema.json",
+  "productName": "SimpleSign Agent",
+  "version": "1.0.0",
+  "identifier": "com.simplesign.agent",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SimpleSign",
+        "width": 460,
+        "height": 540,
+        "resizable": false,
+        "center": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

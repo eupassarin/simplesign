@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>SimpleSign.TestFixtures</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Captured/ holds real TSA / OCSP / CRL byte payloads recorded by scripts/record-fixtures.sh.
+    Each is embedded as a resource so tests can load them without filesystem access.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Captured\**\*" Visible="false" />
+    <None Update="Captured\.gitkeep" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+</Project>

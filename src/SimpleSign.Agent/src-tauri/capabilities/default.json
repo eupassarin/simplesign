@@ -1,0 +1,8 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for SimpleSign Agent",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

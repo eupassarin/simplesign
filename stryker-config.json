@@ -1,0 +1,34 @@
+{
+  "stryker-config": {
+    "reporters": [
+      "html",
+      "progress",
+      "cleartext"
+    ],
+    "mutate": [
+      "!**/Log.cs",
+      "!**/*.g.cs",
+      "!**/JsonContext*.cs",
+      "!**/obj/**/*.*",
+      "!**/bin/**/*.*"
+    ],
+    "mutation-level": "Standard",
+    "ignore-mutations": [
+      "Linq",
+      "Block"
+    ],
+    "thresholds": {
+      "high": 80,
+      "low": 60,
+      "break": 50
+    },
+    "ignore-methods": [
+      "ArgumentNullException.ThrowIfNull",
+      "ArgumentException.ThrowIfNullOrWhiteSpace",
+      "ArgumentOutOfRangeException.ThrowIfNegative*"
+    ],
+    "language-version": "Latest",
+    "concurrency": 4,
+    "target-framework": "net10.0"
+  }
+}

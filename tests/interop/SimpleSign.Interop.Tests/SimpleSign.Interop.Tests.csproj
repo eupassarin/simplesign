@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="FluentAssertions" Version="8.3.0" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
+  </ItemGroup>
+
+  <!-- ETSI corpus PDFs (<500 KB) embedded as test resources. Large files (51sigs, DSS-1443, PAdES-LTA) are skipped in CI. -->
+  <ItemGroup>
+    <EmbeddedResource Include="corpus\pades\AD-RB.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\BadEncodedCMS.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\DSS-1683.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\DSS-1983.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\PAdES-LT.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\Signature-P-BG_BOR-1.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\Signature-P-BG_BOR-2.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\Signature-P-DE_SCI-4.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\Signature-P-FR_CS-5.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\Signature-P-HU_MIC-1.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\belgian_pki_multiple_ocsps.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\doc-firmado.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\doc-firmado-T.pdf" Visible="false" />
+    <EmbeddedResource Include="corpus\pades\doc-firmado-LT.pdf" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\..\src\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
+    <ProjectReference Include="..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
+  </ItemGroup>
+
+</Project>

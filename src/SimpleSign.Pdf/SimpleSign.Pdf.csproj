@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Pdf</AssemblyName>
+    <RootNamespace>SimpleSign.Pdf</RootNamespace>
+    <PackageId>SimpleSign.Pdf</PackageId>
+    <Description>PDF structure parsing and signature field extraction for the SimpleSign digital signature framework.</Description>
+    <Version>0.1.0</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.PAdES" />
+    <InternalsVisibleTo Include="SimpleSign.Pdf.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.PAdES.Tests" />
+    <InternalsVisibleTo Include="simplesign-cli" />
+  </ItemGroup>
+
+</Project>
+

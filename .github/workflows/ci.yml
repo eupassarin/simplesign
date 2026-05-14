@@ -1,0 +1,169 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET (multi-target)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        if: matrix.os != 'ubuntu-latest'
+        shell: bash
+        run: |
+          dotnet test --no-build --configuration Release \
+            --logger "trx" \
+            --logger "console;verbosity=normal"
+
+      - name: Test (with coverage)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          dotnet test --no-build --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            --settings coverlet.runsettings \
+            --results-directory TestResults \
+            --logger "trx" \
+            --logger "console;verbosity=normal"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: TestResults/
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          files: TestResults/*/coverage.cobertura.xml
+          fail_ci_if_error: false
+
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-ubuntu-latest
+          path: coverage-raw
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate report
+        run: |
+          reportgenerator \
+            -reports:"coverage-raw/**/coverage.cobertura.xml" \
+            -targetdir:coverage-report \
+            -reporttypes:"Html;MarkdownSummary;TextSummary" \
+            -assemblyfilters:"+SimpleSign.*;-SimpleSign.*.Tests;-SimpleSign.TestHelpers"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report/
+
+      - name: Coverage summary
+        run: cat coverage-report/Summary.md >> $GITHUB_STEP_SUMMARY
+
+  pack:
+    name: Pack NuGet
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Pack all libraries
+        run: |
+          for proj in src/SimpleSign/SimpleSign.csproj \
+                     src/SimpleSign.Core/SimpleSign.Core.csproj \
+                     src/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
+                     src/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
+                     src/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
+                     src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj; do
+            dotnet pack "$proj" --configuration Release --no-restore --output ./nupkg
+          done
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: ./nupkg/*.nupkg
+
+  aot-smoke-test:
+    name: AOT Smoke Test
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish AOT
+        run: dotnet publish tests/smoke/SimpleSign.AotSmokeTest -c Release -f net10.0 -r linux-x64
+
+      - name: Run AOT smoke test
+        run: ./tests/smoke/SimpleSign.AotSmokeTest/bin/Release/net10.0/linux-x64/publish/SimpleSign.AotSmokeTest
+

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>simplesign-cli</AssemblyName>
+    <RootNamespace>SimpleSign.Cli</RootNamespace>
+    <!-- Spectre.Console.Cli instantiates commands/settings via reflection -->
+    <NoWarn>CA1812</NoWarn>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
+    <ProjectReference Include="..\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
+    <ProjectReference Include="..\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console.Cli" Version="0.53.1" />
+  </ItemGroup>
+
+</Project>

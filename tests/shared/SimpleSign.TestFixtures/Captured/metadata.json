@@ -1,0 +1,8 @@
+{
+  "captured_at": "2026-04-29T12:46:27Z",
+  "tsa_url": "https://freetsa.org/tsr",
+  "ocsp_url": "http://ocsp.digicert.com",
+  "crl_url": "http://crl3.digicert.com/DigiCertEVRSACAG2.crl",
+  "subject_cert": "www.digicert.com",
+  "notes": "Refresh quarterly or when tests start failing due to expired CRL/cert."
+}
