@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign</AssemblyName>
+    <RootNamespace>SimpleSign</RootNamespace>
+    <PackageId>SimpleSign</PackageId>
+    <Description>Meta-package that includes all SimpleSign digital signature capabilities: PAdES (PDF) signing and validation.</Description>
+    <Version>0.1.0</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
+    <ProjectReference Include="..\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+  </ItemGroup>
+
+</Project>

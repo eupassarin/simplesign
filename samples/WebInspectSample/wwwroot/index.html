@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SimpleSign — PDF Inspector</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <style>
+        :root {
+            --primary: #4f46e5; --primary-light: #eef2ff; --primary-hover: #4338ca;
+            --success: #059669; --success-light: #ecfdf5;
+            --warning: #d97706; --warning-light: #fffbeb;
+            --danger: #dc2626; --danger-light: #fef2f2;
+            --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+            --gray-300: #d1d5db; --gray-400: #9ca3af; --gray-500: #6b7280;
+            --gray-600: #4b5563; --gray-700: #374151; --gray-800: #1f2937; --gray-900: #111827;
+            --radius: 10px;
+            --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.08), 0 4px 6px rgba(0,0,0,.04);
+            --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d1b69 100%);
+            min-height: 100vh; padding: 2rem 1rem; color: var(--gray-900);
+        }
+        .app {
+            background: white; border-radius: 16px; box-shadow: var(--shadow-lg);
+            max-width: 960px; width: 100%; margin: 0 auto; overflow: hidden;
+        }
+        .header {
+            background: var(--gray-900); color: white; padding: 1.1rem 1.75rem;
+            display: flex; align-items: center; gap: 0.7rem;
+        }
+        .header .icon { width: 32px; height: 32px; background: var(--primary); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; }
+        .header h1 { font-size: 1rem; font-weight: 600; }
+        .header .sub { font-size: 0.72rem; color: var(--gray-400); margin-left: 0.4rem; }
+        .body { padding: 1.5rem 1.75rem 2rem; }
+
+        /* ═══ Upload ═══ */
+        .drop-zone {
+            border: 2px dashed var(--gray-200); border-radius: var(--radius); padding: 2.5rem 1rem;
+            text-align: center; cursor: pointer; transition: all 0.15s; color: var(--gray-400);
+        }
+        .drop-zone:hover, .drop-zone.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+        .drop-zone .dz-icon { font-size: 2.2rem; margin-bottom: 0.4rem; }
+        .drop-zone .dz-text { font-size: 0.85rem; }
+
+        .file-bar {
+            display: flex; align-items: center; gap: 0.5rem;
+            background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px;
+            padding: 0.55rem 0.9rem; font-size: 0.82rem; margin-bottom: 1rem;
+        }
+        .file-bar .fname { font-weight: 600; }
+        .file-bar .fsize { color: var(--gray-500); }
+        .file-bar .fclear { margin-left: auto; cursor: pointer; color: var(--gray-400); font-size: 1rem; }
+        .file-bar .fclear:hover { color: var(--danger); }
+
+        /* ═══ Tabs ═══ */
+        .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-100); margin-bottom: 1rem; }
+        .tab {
+            padding: 0.55rem 1.1rem; font-size: 0.8rem; font-weight: 600; color: var(--gray-400);
+            cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s;
+            display: flex; align-items: center; gap: 0.35rem;
+        }
+        .tab:hover { color: var(--gray-700); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+        /* ═══ Toolbar ═══ */
+        .toolbar {
+            display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;
+        }
+        .search-box {
+            flex: 1; min-width: 180px; position: relative;
+        }
+        .search-box input {
+            width: 100%; border: 1.5px solid var(--gray-200); border-radius: 8px;
+            padding: 0.45rem 0.7rem 0.45rem 2rem; font-size: 0.8rem; outline: none; transition: border-color 0.15s;
+        }
+        .search-box input:focus { border-color: var(--primary); }
+        .search-box .si { position: absolute; left: 0.65rem; top: 50%; transform: translateY(-50%); color: var(--gray-400); font-size: 0.85rem; }
+        .toolbar .btn-sm {
+            border: 1px solid var(--gray-200); background: white; border-radius: 7px;
+            padding: 0.4rem 0.7rem; font-size: 0.75rem; font-weight: 500; cursor: pointer;
+            display: flex; align-items: center; gap: 0.3rem; color: var(--gray-600); transition: all 0.12s;
+            white-space: nowrap;
+        }
+        .toolbar .btn-sm:hover { border-color: var(--primary); color: var(--primary); }
+        .toolbar .btn-sm.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+        .toolbar label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--gray-600); cursor: pointer; white-space: nowrap; }
+
+        /* ═══ Loading / Error ═══ */
+        .loading { text-align: center; padding: 2rem; color: var(--gray-500); font-size: 0.85rem; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--gray-200); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-box { background: var(--danger-light); border: 1px solid #fecaca; border-radius: 8px; padding: 1rem; color: var(--danger); font-size: 0.85rem; }
+        .hidden { display: none !important; }
+
+        /* ═══ Inspect: Collapsible Cards ═══ */
+        .section-card {
+            border: 1px solid var(--gray-200); border-radius: var(--radius); margin-bottom: 0.75rem;
+            overflow: hidden; transition: box-shadow 0.15s;
+        }
+        .section-card:hover { box-shadow: var(--shadow); }
+        .section-card.sig { border-left: 3px solid var(--primary); }
+        .section-card.ts { border-left: 3px solid #7c3aed; }
+        .section-card.doc { border-left: 3px solid var(--gray-700); }
+        .card-head {
+            display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem;
+            cursor: pointer; user-select: none; background: var(--gray-50); transition: background 0.12s;
+        }
+        .card-head:hover { background: var(--gray-100); }
+        .card-head .chevron { font-size: 0.7rem; color: var(--gray-400); transition: transform 0.2s; }
+        .card-head .chevron.open { transform: rotate(90deg); }
+        .card-head .card-title { font-weight: 700; font-size: 0.82rem; }
+        .card-head .card-title.sig-title { color: var(--primary); }
+        .card-head .card-title.ts-title { color: #7c3aed; }
+        .card-head .card-title.doc-title { color: var(--gray-800); }
+        .card-head .card-badges { margin-left: auto; display: flex; gap: 0.4rem; }
+        .card-body { padding: 0.75rem 1rem 1rem; display: none; }
+        .card-body.open { display: block; }
+
+        /* ═══ Inspect: Property Grid ═══ */
+        .prop-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 1rem; font-size: 0.78rem; align-items: baseline; }
+        .prop-grid .pk { color: var(--gray-500); font-weight: 500; white-space: nowrap; }
+        .prop-grid .pv { color: var(--gray-900); word-break: break-all; }
+        .prop-grid .pv.ok { color: var(--success); }
+        .prop-grid .pv.err { color: var(--danger); }
+        .prop-grid .pv.warn { color: var(--warning); }
+        .prop-grid .pv.muted { color: var(--gray-400); font-style: italic; }
+
+        .sub-section { margin-top: 0.65rem; padding-top: 0.5rem; border-top: 1px solid var(--gray-100); }
+        .sub-title { font-weight: 700; font-size: 0.76rem; color: var(--gray-700); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.35rem; }
+
+        .cert-chip {
+            display: flex; align-items: center; gap: 0.4rem;
+            background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 6px;
+            padding: 0.35rem 0.6rem; font-size: 0.74rem; margin-bottom: 0.35rem;
+        }
+        .cert-chip.expired { border-color: #fecaca; background: var(--danger-light); }
+        .cert-chip .cc-subject { font-weight: 600; color: var(--gray-800); }
+        .cert-chip .cc-meta { color: var(--gray-500); }
+        .cert-chip .cc-expired { color: var(--danger); font-weight: 600; font-size: 0.68rem; }
+
+        /* ═══ Badge ═══ */
+        .badge {
+            display: inline-flex; align-items: center; gap: 0.2rem;
+            padding: 0.12rem 0.45rem; border-radius: 4px; font-size: 0.68rem; font-weight: 600;
+        }
+        .badge.ok { background: var(--success-light); color: var(--success); }
+        .badge.fail { background: var(--danger-light); color: var(--danger); }
+        .badge.warn { background: var(--warning-light); color: var(--warning); }
+        .badge.info { background: var(--primary-light); color: var(--primary); }
+        .badge.purple { background: #f5f3ff; color: #7c3aed; }
+
+        /* ═══ Validate Cards ═══ */
+        .val-card {
+            border: 1px solid var(--gray-200); border-radius: var(--radius); margin-bottom: 0.65rem; overflow: hidden;
+        }
+        .val-card.valid { border-left: 4px solid var(--success); }
+        .val-card.invalid { border-left: 4px solid var(--danger); }
+        .val-card.warning { border-left: 4px solid var(--warning); }
+        .val-head {
+            display: flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1rem;
+            cursor: pointer; user-select: none; transition: background 0.12s;
+        }
+        .val-head:hover { background: var(--gray-50); }
+        .val-head .chevron { font-size: 0.7rem; color: var(--gray-400); transition: transform 0.2s; }
+        .val-head .chevron.open { transform: rotate(90deg); }
+        .val-head .val-icon { font-size: 1rem; }
+        .val-head .val-name { font-weight: 700; font-size: 0.82rem; }
+        .val-head .val-signer { color: var(--gray-500); font-size: 0.78rem; margin-left: 0.3rem; }
+        .val-head .val-badges { margin-left: auto; display: flex; gap: 0.35rem; align-items: center; }
+        .val-body { padding: 0.5rem 1rem 1rem; display: none; border-top: 1px solid var(--gray-100); }
+        .val-body.open { display: block; }
+        .val-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.25rem 0.75rem; font-size: 0.78rem; margin-bottom: 0.5rem; }
+        .val-checks .vc { display: flex; align-items: center; gap: 0.3rem; }
+        .val-errors { margin-top: 0.4rem; padding: 0.5rem 0.7rem; background: var(--danger-light); border-radius: 6px; font-size: 0.74rem; color: var(--danger); }
+        .val-errors div { margin-bottom: 0.15rem; }
+        .val-warnings { margin-top: 0.4rem; padding: 0.5rem 0.7rem; background: var(--warning-light); border-radius: 6px; font-size: 0.74rem; color: var(--warning); }
+        .val-warnings div { margin-bottom: 0.15rem; }
+        .val-time { font-size: 0.76rem; color: var(--gray-500); margin-bottom: 0.4rem; }
+
+        .highlight { background: #fef08a; border-radius: 2px; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="header">
+        <div class="icon"><i class="bi bi-shield-check"></i></div>
+        <h1>SimpleSign</h1>
+        <span class="sub">PDF Inspector & Validator</span>
+    </div>
+    <div class="body">
+        <!-- Upload -->
+        <div id="uploadSection">
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <div class="dz-icon"><i class="bi bi-file-earmark-pdf"></i></div>
+                <div class="dz-text">Drop a PDF file here or click to browse</div>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf" hidden />
+        </div>
+
+        <!-- File bar -->
+        <div class="file-bar hidden" id="fileBar">
+            <i class="bi bi-file-earmark-pdf" style="color:var(--danger)"></i>
+            <span class="fname" id="fName"></span>
+            <span class="fsize" id="fSize"></span>
+            <i class="bi bi-x-lg fclear" onclick="clearFile()"></i>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs hidden" id="tabsBar">
+            <div class="tab active" data-tab="inspect" onclick="switchTab('inspect')"><i class="bi bi-search"></i> Inspect</div>
+            <div class="tab" data-tab="validate" onclick="switchTab('validate')"><i class="bi bi-patch-check"></i> Validate</div>
+        </div>
+
+        <!-- Toolbar Inspect -->
+        <div class="toolbar hidden" id="inspectToolbar">
+            <div class="search-box">
+                <i class="bi bi-search si"></i>
+                <input type="text" id="searchInput" placeholder="Search properties, certificates..." oninput="filterInspect()" />
+            </div>
+            <button class="btn-sm" onclick="toggleAllInspect(true)"><i class="bi bi-arrows-expand"></i> Expand All</button>
+            <button class="btn-sm" onclick="toggleAllInspect(false)"><i class="bi bi-arrows-collapse"></i> Collapse All</button>
+        </div>
+
+        <!-- Toolbar Validate -->
+        <div class="toolbar hidden" id="validateToolbar">
+            <label><input type="checkbox" id="chkRevocation" checked /> Check revocation (CRL/OCSP)</label>
+            <button class="btn-sm" onclick="toggleAllValidate(true)"><i class="bi bi-arrows-expand"></i> Expand All</button>
+            <button class="btn-sm" onclick="toggleAllValidate(false)"><i class="bi bi-arrows-collapse"></i> Collapse All</button>
+            <button class="btn-sm" onclick="runValidate()" style="margin-left:auto;border-color:var(--primary);color:var(--primary)"><i class="bi bi-arrow-clockwise"></i> Validate Again</button>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading hidden" id="loadingArea"><span class="spinner"></span> <span id="loadingText">Analyzing...</span></div>
+
+        <!-- Results -->
+        <div id="inspectResult" class="hidden"></div>
+        <div id="validateResult" class="hidden"></div>
+        <div id="errorBox" class="hidden"></div>
+    </div>
+</div>
+
+<script>
+let currentFile = null, inspectData = null, validateData = null, activeTab = 'inspect';
+
+// ═══ Upload ═══════════════════════════════════════════════
+const dz = document.getElementById('dropZone'), fi = document.getElementById('fileInput');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('active'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('active'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('active'); handleFile(e.dataTransfer.files[0]); });
+fi.addEventListener('change', () => { handleFile(fi.files[0]); fi.value = ''; });
+
+function handleFile(f) {
+    if (!f || !f.name.toLowerCase().endsWith('.pdf')) return;
+    currentFile = f; inspectData = null; validateData = null;
+    document.getElementById('fName').textContent = f.name;
+    document.getElementById('fSize').textContent = `(${fmtSize(f.size)})`;
+    show('fileBar'); show('tabsBar'); hide('uploadSection'); hide('errorBox');
+    switchTab(activeTab);
+}
+function clearFile() {
+    currentFile = null; inspectData = null; validateData = null;
+    hide('fileBar'); hide('tabsBar'); hide('inspectToolbar'); hide('validateToolbar');
+    hide('inspectResult'); hide('validateResult'); hide('loadingArea'); hide('errorBox');
+    show('uploadSection');
+}
+function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    hide('inspectResult'); hide('validateResult'); hide('errorBox');
+    hide('inspectToolbar'); hide('validateToolbar');
+    if (tab === 'inspect') {
+        if (inspectData) { renderInspect(inspectData); show('inspectResult'); show('inspectToolbar'); }
+        else if (currentFile) runInspect();
+    } else {
+        if (validateData) { renderValidate(validateData); show('validateResult'); show('validateToolbar'); }
+        else if (currentFile) runValidate();
+    }
+}
+
+// ═══ API ══════════════════════════════════════════════════
+async function runInspect() {
+    show('loadingArea'); hide('inspectResult'); hide('errorBox'); hide('inspectToolbar');
+    document.getElementById('loadingText').textContent = 'Inspecting signatures...';
+    try {
+        const fd = new FormData(); fd.append('file', currentFile);
+        const r = await fetch('/api/inspect', { method: 'POST', body: fd });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
+        inspectData = await r.json();
+        renderInspect(inspectData); show('inspectResult'); show('inspectToolbar');
+    } catch (e) { showError(e.message); }
+    finally { hide('loadingArea'); }
+}
+async function runValidate() {
+    show('loadingArea'); hide('validateResult'); hide('errorBox'); hide('validateToolbar');
+    validateData = null;
+    document.getElementById('loadingText').textContent = 'Validating signatures (this may take a few seconds)...';
+    try {
+        const fd = new FormData(); fd.append('file', currentFile);
+        fd.append('checkRevocation', document.getElementById('chkRevocation').checked ? 'true' : 'false');
+        const r = await fetch('/api/validate', { method: 'POST', body: fd });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
+        validateData = await r.json();
+        renderValidate(validateData); show('validateResult'); show('validateToolbar');
+    } catch (e) { showError(e.message); }
+    finally { hide('loadingArea'); }
+}
+
+// ═══ Render Inspect ══════════════════════════════════════
+function renderInspect(data) {
+    const el = document.getElementById('inspectResult');
+    const doc = data.document;
+    const sigs = data.signatures.filter(s => !s.isDocumentTimestamp);
+    const tss = data.signatures.filter(s => s.isDocumentTimestamp);
+    let html = '';
+
+    // Document card
+    html += cardStart('doc', '📄 Document', [
+        badge('info', `${sigs.length} sig${sigs.length !== 1 ? 's' : ''}`),
+        tss.length ? badge('purple', `${tss.length} TS`) : '',
+        doc.dss && doc.dss.present ? badge('ok', '✓ DSS') : badge('warn', '✗ No DSS')
+    ], true);
+    html += '<div class="prop-grid">';
+    html += pv('Signatures', sigs.length);
+    if (tss.length) html += pv('Archive Timestamps', tss.length);
+    html += pv('Encrypted', doc.encrypted ? '<span class="pv ok">Yes</span>' : 'No');
+    html += pv('DocMDP', fmtDocMdp(doc));
+    html += pv('PDF/A', doc.pdfA || 'Not detected');
+    html += '</div>';
+    if (doc.dss && doc.dss.present) {
+        html += '<div class="sub-section"><div class="sub-title"><i class="bi bi-database-check" style="color:var(--success)"></i> Document Security Store (DSS)</div>';
+        html += '<div class="prop-grid">';
+        html += pv('Certificates', doc.dss.certificates);
+        html += pv('CRLs', doc.dss.crls);
+        html += pv('OCSPs', doc.dss.ocsps);
+        html += pv('VRI', doc.dss.hasVri ? '<span class="pv ok">✓ Present</span>' : '<span class="pv err">✗ Missing</span>');
+        html += '</div></div>';
+    } else {
+        html += '<div class="sub-section"><span class="pv warn">⚠ DSS not embedded — required for PAdES B-LT / B-LTA</span></div>';
+    }
+    html += cardEnd();
+
+    // Signature cards
+    sigs.forEach((sig, i) => { html += renderSigCard(sig, i + 1, sigs.length); });
+    tss.forEach((sig, i) => { html += renderTsCard(sig, i + 1, tss.length); });
+
+    el.innerHTML = html;
+}
+
+function renderSigCard(sig, idx, total) {
+    const badges = [
+        badge('info', sig.level),
+        sig.timestamp ? badge('ok', '✓ Timestamped') : badge('warn', '✗ No TS')
+    ];
+    let h = cardStart('sig', `✍️ Signature ${idx}/${total} — ${esc(sig.fieldName)}`, badges, true);
+
+    // Properties
+    h += '<div class="prop-grid">';
+    h += pv('SubFilter', sig.subFilter || '<span class="pv muted">— not present</span>');
+    h += pv('Level', sig.level);
+    h += pv('Digest', esc(sig.digestAlgorithm));
+    h += pv('Algorithm', esc(sig.signatureAlgorithm));
+    h += pv('Signed', sig.signingTime ? fmtDate(sig.signingTime) + ' <span class="pv muted">(CMS signed attribute)</span>' : '<span class="pv muted">— not present</span>');
+    if (sig.pdfDeclaredTime) h += pv('PDF Time', fmtDate(sig.pdfDeclaredTime) + ' <span class="pv muted">(not cryptographically bound)</span>');
+    if (sig.reason) h += pv('Reason', esc(sig.reason));
+    if (sig.location) h += pv('Location', esc(sig.location));
+    if (sig.contactInfo) h += pv('Contact', esc(sig.contactInfo));
+    if (sig.declaredSignerName) h += pv('Name', esc(sig.declaredSignerName) + ' <span class="pv muted">(PDF /Name)</span>');
+    h += pv('ESS CertV2', sig.hasSigningCertificateV2 ? '<span class="pv ok">✓ Present</span>' : '<span class="pv err">✗ Missing</span>');
+    if (sig.commitmentTypeOid) h += pv('Commitment', fmtCommitment(sig.commitmentTypeOid));
+    if (sig.signaturePolicyOid) h += pv('Policy', esc(sig.signaturePolicyOid));
+    h += pv('CMS Size', fmtSize(sig.cmsDataSize));
+    h += pv('Byte Range', fmtByteRange(sig.byteRange));
+    h += pv('Contents', fmtSize(sig.byteRange.contentsLength));
+    h += '</div>';
+
+    // Manifest
+    if (sig.manifest) {
+        h += '<div class="sub-section"><div class="sub-title"><i class="bi bi-file-text"></i> Signature Manifest <span class="pv muted">— Lei 14.063</span></div>';
+        h += '<div class="prop-grid">';
+        h += pv('Name', esc(sig.manifest.signerName || ''));
+        if (sig.manifest.cpf) h += pv('CPF', esc(sig.manifest.cpf));
+        if (sig.manifest.email) h += pv('Email', esc(sig.manifest.email));
+        if (sig.manifest.ip) h += pv('IP', esc(sig.manifest.ip));
+        if (sig.manifest.authMethod) h += pv('Authentication', esc(sig.manifest.authMethod));
+        if (sig.manifest.timestamp) h += pv('Timestamp', fmtDate(sig.manifest.timestamp));
+        if (sig.manifest.institution) h += pv('Institution', esc(sig.manifest.institution));
+        if (sig.manifest.cnpj) h += pv('CNPJ', esc(sig.manifest.cnpj));
+        if (sig.manifest.commitment) h += pv('Commitment', esc(sig.manifest.commitment));
+        h += '</div></div>';
+    }
+
+    // Signer cert
+    if (sig.signer) {
+        h += '<div class="sub-section"><div class="sub-title"><i class="bi bi-person-badge"></i> Signer Certificate</div>';
+        h += renderCertGrid(sig.signer, true);
+        h += '</div>';
+    } else {
+        h += '<div class="sub-section"><span class="pv err">✗ Signer certificate not found in CMS</span></div>';
+    }
+
+    // Timestamp
+    if (sig.timestamp) {
+        h += '<div class="sub-section"><div class="sub-title"><i class="bi bi-clock-history" style="color:var(--success)"></i> RFC 3161 Timestamp</div>';
+        h += '<div class="prop-grid">';
+        h += pv('Time', `<strong>${fmtDate(sig.timestamp.time)}</strong>`);
+        if (sig.timestamp.tsaSubject) h += pv('TSA', esc(sig.timestamp.tsaSubject));
+        if (sig.timestamp.tsaIssuer) h += pv('TSA Issuer', esc(sig.timestamp.tsaIssuer));
+        h += pv('Hash', esc(sig.timestamp.hashAlgorithm));
+        if (sig.timestamp.policyOid) h += pv('Policy', esc(sig.timestamp.policyOid));
+        if (sig.timestamp.serialNumber) h += pv('Serial', esc(sig.timestamp.serialNumber));
+        h += pv('Token Size', fmtSize(sig.timestamp.tokenSize));
+        h += '</div></div>';
+    }
+
+    // Embedded certs
+    h += renderEmbeddedCerts(sig.embeddedCertificates);
+    h += cardEnd();
+    return h;
+}
+
+function renderTsCard(sig, idx, total) {
+    const badges = [badge('purple', 'ETSI.RFC3161')];
+    if (sig.signer?.isExpired) badges.push(badge('fail', 'TSA Expired'));
+    let h = cardStart('ts', `🕐 Archive Timestamp ${idx}/${total} — ${esc(sig.fieldName)}`, badges, true);
+
+    h += '<div class="prop-grid">';
+    h += pv('Purpose', '<strong>Archive protection layer</strong> <span class="pv muted">— protects all preceding signatures (LTA)</span>');
+    h += pv('SubFilter', sig.subFilter || '');
+    h += pv('Hash', esc(sig.digestAlgorithm));
+    if (sig.signingTime) h += pv('Time', `<strong>${fmtDate(sig.signingTime)}</strong>`);
+    const br = sig.byteRange;
+    h += pv('Covers', br.valid ? `[0 → ${(br.offset2 + br.length2).toLocaleString()} bytes] <span class="pv ok">✓</span>` : '<span class="pv err">✗ inconsistent</span>');
+    h += pv('Token Size', fmtSize(sig.cmsDataSize));
+    h += '</div>';
+
+    if (sig.signer) {
+        h += '<div class="sub-section"><div class="sub-title"><i class="bi bi-building"></i> TSA Certificate</div>';
+        h += '<div class="prop-grid">';
+        h += pv('Subject', `<strong>${esc(sig.signer.subject)}</strong>`);
+        h += pv('Issuer', esc(sig.signer.issuer));
+        h += pv('Valid', `${fmtDateShort(sig.signer.notBefore)} → ${fmtDateShort(sig.signer.notAfter)}`);
+        h += pv('Expired', sig.signer.isExpired ? `<span class="pv err">✗ Yes — expired ${fmtDateShort(sig.signer.notAfter)}</span>` : '<span class="pv ok">✓ No</span>');
+        if (sig.signer.extendedKeyUsages?.length) h += pv('Extended KU', sig.signer.extendedKeyUsages.map(fmtEku).join(', '));
+        h += '</div></div>';
+    }
+
+    h += renderEmbeddedCerts(sig.embeddedCertificates);
+    h += cardEnd();
+    return h;
+}
+
+function renderCertGrid(cert, full) {
+    let h = '<div class="prop-grid">';
+    h += pv('Subject', `<strong>${esc(cert.subject)}</strong>`);
+    h += pv('Issuer', esc(cert.issuer));
+    if (cert.serialNumber) h += pv('Serial', esc(cert.serialNumber));
+    if (cert.thumbprint) h += pv('Thumbprint', fmtThumbprint(cert.thumbprint));
+    h += pv('Key', `${cert.keyAlgorithm || '?'}${cert.keySizeBits ? ' ' + cert.keySizeBits + '-bit' : ''}`);
+    h += pv('Valid', `${fmtDateShort(cert.notBefore)} → ${fmtDateShort(cert.notAfter)}`);
+    h += pv('Expired', cert.isExpired ? `<span class="pv err">✗ Yes — expired ${fmtDateShort(cert.notAfter)}</span>` : '<span class="pv ok">✓ No</span>');
+    if (full) {
+        h += pv('Key Usage', cert.keyUsages?.length ? cert.keyUsages.join(', ') : '<span class="pv muted">— not present</span>');
+        h += pv('NonRepudiation', cert.hasNonRepudiation ? '<span class="pv ok">✓ Suitable for legal signatures</span>' : '<span class="pv err">✗ Not set</span>');
+        h += pv('Extended KU', cert.extendedKeyUsages?.length ? cert.extendedKeyUsages.map(fmtEku).join(', ') : '<span class="pv muted">— not present</span>');
+        h += pv('OCSP', cert.ocspUrl ? esc(cert.ocspUrl) : '<span class="pv muted">— not present</span>');
+        h += pv('CRL', cert.crlUrl ? esc(cert.crlUrl) : '<span class="pv muted">— not present</span>');
+        if (cert.aiaUrls?.length) h += pv('AIA', cert.aiaUrls.map(u => esc(u)).join('<br>'));
+    }
+    h += '</div>';
+    return h;
+}
+
+function renderEmbeddedCerts(certs) {
+    let h = `<div class="sub-section"><div class="sub-title"><i class="bi bi-link-45deg"></i> Embedded Certificates (${certs.length})</div>`;
+    if (!certs.length) {
+        h += '<span class="pv err">✗ None — CMS should embed at least the signer cert</span>';
+    } else {
+        for (const c of certs) {
+            const cls = c.isExpired ? 'cert-chip expired' : 'cert-chip';
+            const key = `${c.keyAlgorithm || '?'}${c.keySizeBits ? ' ' + c.keySizeBits + '-bit' : ''}`;
+            h += `<div class="${cls}">
+                <span class="cc-subject">${esc(c.subject)}</span>
+                <span class="cc-meta">· ${key} · ${fmtDateShort(c.notBefore)} → ${fmtDateShort(c.notAfter)}</span>
+                ${c.isExpired ? '<span class="cc-expired">EXPIRED</span>' : ''}
+            </div>`;
+        }
+    }
+    h += '</div>';
+    return h;
+}
+
+// ═══ Render Validate ═════════════════════════════════════
+function renderValidate(data) {
+    const el = document.getElementById('validateResult');
+    if (!data.length) { el.innerHTML = '<div class="error-box">No signatures found in this PDF.</div>'; return; }
+
+    let html = '';
+    for (const sig of data) {
+        const cls = sig.valid ? 'valid' : (sig.isChainTrustWarning ? 'warning' : 'invalid');
+        const icon = sig.valid ? '<i class="bi bi-check-circle-fill" style="color:var(--success)"></i>'
+            : sig.isChainTrustWarning ? '<i class="bi bi-exclamation-triangle-fill" style="color:var(--warning)"></i>'
+            : '<i class="bi bi-x-circle-fill" style="color:var(--danger)"></i>';
+        const statusBadge = sig.valid ? badge('ok', '✓ Valid') : sig.isChainTrustWarning ? badge('warn', '⚠ Trust Warning') : badge('fail', '✗ Invalid');
+        const typeBadge = sig.isDocumentTimestamp ? badge('purple', 'Timestamp') : '';
+        const levelBadge = sig.level ? badge('info', sig.level) : '';
+        const icpBadge = sig.icpBrasil ? '<span class="badge" style="background:#dcfce7;color:#15803d">🇧🇷 ICP-Brasil</span>' : '';
+        const signerText = sig.signerName ? `— ${esc(sig.signerName)}` : '';
+
+        html += `<div class="val-card ${cls}">`;
+        html += `<div class="val-head" onclick="toggleValCard(this)">`;
+        html += `<i class="bi bi-chevron-right chevron open"></i>`;
+        html += `<span class="val-icon">${icon}</span>`;
+        html += `<span class="val-name">${esc(sig.fieldName)}</span>`;
+        html += `<span class="val-signer">${signerText}</span>`;
+        html += `<div class="val-badges">${icpBadge} ${typeBadge} ${levelBadge} ${statusBadge}</div>`;
+        html += `</div>`;
+        html += `<div class="val-body open">`;
+
+        if (sig.signingTime) html += `<div class="val-time"><i class="bi bi-clock"></i> Signed: ${fmtDate(sig.signingTime)}</div>`;
+
+        html += '<div class="val-checks">';
+        html += vc('Integrity', sig.integrity);
+        html += vc('Signature', sig.signature);
+        html += vc('Chain', sig.chain, sig.isChainTrustWarning);
+        html += vc('Not Revoked', !sig.revoked);
+        if (sig.hasValidTimestamp !== null && sig.hasValidTimestamp !== undefined)
+            html += vc('Timestamp', sig.hasValidTimestamp);
+        html += '</div>';
+
+        // ICP-Brasil info
+        if (sig.icpBrasil) {
+            html += '<div class="sub-section" style="margin-top:0.5rem;padding:0.6rem 0.8rem;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0">';
+            html += '<div class="sub-title" style="color:#15803d"><i class="bi bi-shield-check"></i> ICP-Brasil Certificate</div>';
+            html += '<div class="prop-grid">';
+            if (sig.icpBrasil.cpf) html += pv('CPF', esc(sig.icpBrasil.cpf));
+            if (sig.icpBrasil.cnpj) html += pv('CNPJ', esc(sig.icpBrasil.cnpj));
+            if (sig.icpBrasil.certificateLevel) html += pv('Level', esc(sig.icpBrasil.certificateLevel));
+            html += '</div></div>';
+        }
+
+        if (sig.errors?.length) {
+            html += '<div class="val-errors">';
+            sig.errors.forEach(e => { html += `<div>✗ ${esc(e)}</div>`; });
+            html += '</div>';
+        }
+        if (sig.warnings?.length) {
+            html += '<div class="val-warnings">';
+            sig.warnings.forEach(w => { html += `<div>⚠ ${esc(w)}</div>`; });
+            html += '</div>';
+        }
+
+        html += '</div></div>';
+    }
+    el.innerHTML = html;
+}
+
+function vc(label, ok, isWarn) {
+    if (isWarn) return `<div class="vc"><i class="bi bi-exclamation-triangle-fill" style="color:var(--warning)"></i> ${label}</div>`;
+    return ok ? `<div class="vc"><i class="bi bi-check-circle-fill" style="color:var(--success)"></i> ${label}</div>`
+              : `<div class="vc"><i class="bi bi-x-circle-fill" style="color:var(--danger)"></i> ${label}</div>`;
+}
+
+// ═══ Collapse/Expand ═════════════════════════════════════
+function toggleCard(head) {
+    const chev = head.querySelector('.chevron');
+    const body = head.nextElementSibling;
+    const open = body.classList.toggle('open');
+    chev.classList.toggle('open', open);
+}
+function toggleValCard(head) {
+    const chev = head.querySelector('.chevron');
+    const body = head.nextElementSibling;
+    const open = body.classList.toggle('open');
+    chev.classList.toggle('open', open);
+}
+function toggleAllInspect(expand) {
+    document.querySelectorAll('#inspectResult .card-body').forEach(b => b.classList.toggle('open', expand));
+    document.querySelectorAll('#inspectResult .chevron').forEach(c => c.classList.toggle('open', expand));
+}
+function toggleAllValidate(expand) {
+    document.querySelectorAll('#validateResult .val-body').forEach(b => b.classList.toggle('open', expand));
+    document.querySelectorAll('#validateResult .chevron').forEach(c => c.classList.toggle('open', expand));
+}
+
+// ═══ Search/Filter ═══════════════════════════════════════
+function filterInspect() {
+    const q = document.getElementById('searchInput').value.toLowerCase().trim();
+    const cards = document.querySelectorAll('#inspectResult .section-card');
+    cards.forEach(card => {
+        if (!q) { card.classList.remove('hidden'); unhighlight(card); return; }
+        const text = card.textContent.toLowerCase();
+        if (text.includes(q)) { card.classList.remove('hidden'); highlightIn(card, q); }
+        else { card.classList.add('hidden'); unhighlight(card); }
+    });
+}
+function highlightIn(el, q) {
+    // Simple: just expand matching cards
+    const body = el.querySelector('.card-body');
+    const chev = el.querySelector('.chevron');
+    if (body) { body.classList.add('open'); if (chev) chev.classList.add('open'); }
+}
+function unhighlight(el) { /* no-op for now */ }
+
+// ═══ Helpers ═════════════════════════════════════════════
+function cardStart(type, title, badges, openByDefault) {
+    const open = openByDefault ? ' open' : '';
+    return `<div class="section-card ${type}">
+        <div class="card-head" onclick="toggleCard(this)">
+            <i class="bi bi-chevron-right chevron${open}"></i>
+            <span class="card-title ${type}-title">${title}</span>
+            <div class="card-badges">${badges.filter(Boolean).join(' ')}</div>
+        </div>
+        <div class="card-body${open}">`;
+}
+function cardEnd() { return '</div></div>'; }
+function badge(cls, text) { return `<span class="badge ${cls}">${text}</span>`; }
+function pv(key, val) { return `<span class="pk">${key}</span><span class="pv">${val}</span>`; }
+
+function esc(s) { const d = document.createElement('span'); d.textContent = s || ''; return d.innerHTML; }
+function fmtSize(b) { return b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+function fmtDate(d) { return new Date(d).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC' }) + ' UTC'; }
+function fmtDateShort(d) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—'; }
+function fmtThumbprint(t) { return t ? '<code>' + t.match(/.{2}/g).join(':').toUpperCase() + '</code>' : ''; }
+function fmtDocMdp(doc) {
+    if (!doc.docMdpLocked) return 'Not locked';
+    switch (doc.docMdpLevel) {
+        case 1: return '<span class="pv err">✗ No changes allowed</span>';
+        case 2: return '<span class="pv warn">Form filling only</span>';
+        case 3: return '<span class="pv ok">✓ Form filling + annotations</span>';
+        default: return 'Locked';
+    }
+}
+function fmtByteRange(br) {
+    return `[${br.offset1}, ${br.length1}, ${br.offset2}, ${br.length2}] ${br.valid ? '<span class="pv ok">✓</span>' : '<span class="pv err">✗ inconsistent</span>'}`;
+}
+function fmtCommitment(oid) {
+    const m = { '1.2.840.113549.1.9.16.6.1': 'Proof of Origin', '1.2.840.113549.1.9.16.6.5': 'Proof of Approval' };
+    return m[oid] || oid;
+}
+function fmtEku(eku) {
+    const m = { 'timeStamping': 'timeStamping', '1.3.6.1.5.5.7.3.8': 'timeStamping', 'codeSigning': 'codeSigning' };
+    return m[eku] || eku;
+}
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function showError(msg) { document.getElementById('errorBox').innerHTML = `<div class="error-box"><i class="bi bi-exclamation-triangle"></i> ${esc(msg)}</div>`; show('errorBox'); }
+</script>
+</body>
+</html>

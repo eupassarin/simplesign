@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Brasil</AssemblyName>
+    <RootNamespace>SimpleSign.Brasil</RootNamespace>
+    <PackageId>SimpleSign.Brasil</PackageId>
+    <Description>Brazilian extensions for SimpleSign: ICP-Brasil chain validation, Gov.br trust anchors, and Advanced Electronic Signature (AEA) per Lei 14.063/2020.</Description>
+    <Version>0.1.0</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Brasil.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Cli" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0'))">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0'))">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ICP-Brasil root CAs -->
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv4.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv4.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv5.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv5.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv6.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv6.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv7.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv7.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv8.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv8.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv9.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv9.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv10.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv10.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv11.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv11.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv12.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv12.crt" />
+    <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv13.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv13.crt" />
+    <!-- Gov.br root CAs -->
+    <EmbeddedResource Include="GovBr\Certs\GovBr-ACRaiz-v1.crt" LogicalName="SimpleSign.Brasil.GovBr.Certs.GovBr-ACRaiz-v1.crt" />
+    <EmbeddedResource Include="GovBr\Certs\GovBr-ACIntermediaria-v1.crt" LogicalName="SimpleSign.Brasil.GovBr.Certs.GovBr-ACIntermediaria-v1.crt" />
+    <EmbeddedResource Include="GovBr\Certs\GovBr-ACFinal-v1.crt" LogicalName="SimpleSign.Brasil.GovBr.Certs.GovBr-ACFinal-v1.crt" />
+  </ItemGroup>
+
+</Project>
+

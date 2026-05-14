@@ -1,0 +1,8 @@
+- name: Getting Started
+  href: getting-started.md
+- name: Deferred Signing
+  href: deferred-signing.md
+- name: Inspection & Validation
+  href: inspection-validation.md
+- name: ICP-Brasil
+  href: icp-brasil.md

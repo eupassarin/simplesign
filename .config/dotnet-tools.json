@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "dotnet-stryker": {
+      "version": "4.14.1",
+      "commands": [
+        "dotnet-stryker"
+      ],
+      "rollForward": false
+    },
+    "docfx": {
+      "version": "2.78.3",
+      "commands": [
+        "docfx"
+      ],
+      "rollForward": false
+    }
+  }
+}

@@ -1,0 +1,41 @@
+<Project>
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <Version>0.2.0</Version>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>13</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>SimpleSign Contributors</Authors>
+    <Company>SimpleSign</Company>
+    <Product>SimpleSign</Product>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/eupassarin/SimpleSign</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <Copyright>Copyright © SimpleSign Contributors</Copyright>
+    <PackageTags>pdf;pades;digital-signature;icp-brasil;govbr;signing;validation;pkcs7;cms;rfc3161</PackageTags>
+    <PackageProjectUrl>https://github.com/eupassarin/SimpleSign</PackageProjectUrl>
+    <PackageIcon>icon.png</PackageIcon>
+    <!-- SourceLink: embed source in PDB for debugger step-through -->
+    <!-- SourceLink: embed PDB in DLL for debugging -->
+    <DebugType>embedded</DebugType>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- Allow restore/build of Windows-targeting projects (e.g. HostSigner) on Linux CI -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- NU1903: System.Security.Cryptography.Xml has a known vulnerability with no patched version yet.
+         Suppress so TreatWarningsAsErrors doesn't break CI. Remove once a fixed version is available. -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)assets/icon.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+</Project>

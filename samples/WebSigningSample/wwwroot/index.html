@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SimpleSign — Digital Signature</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <style>
+        * { box-sizing: border-box; }
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #eef2ff;
+            --primary-hover: #4338ca;
+            --success: #059669;
+            --success-light: #ecfdf5;
+            --danger: #dc2626;
+            --danger-light: #fef2f2;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-700: #374151;
+            --gray-900: #111827;
+            --radius: 12px;
+            --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.08), 0 4px 6px rgba(0,0,0,.04);
+        }
+        html, body { height: 100%; margin: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 2rem 1.5rem;
+            min-height: 100vh;
+        }
+        .app-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            max-width: 680px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .app-header {
+            background: var(--gray-900);
+            color: white;
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .app-header .logo-icon {
+            width: 36px; height: 36px;
+            background: var(--primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .app-header h1 { font-size: 1.1rem; font-weight: 600; margin: 0; }
+        .app-header .agent-badge {
+            margin-left: auto;
+            font-size: 0.7rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 99px;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .agent-badge.online { background: rgba(5,150,105,.2); color: #6ee7b7; }
+        .agent-badge.offline { background: rgba(220,38,38,.2); color: #fca5a5; }
+        .agent-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+        .agent-badge.online .dot { background: #10b981; }
+        .agent-badge.offline .dot { background: #ef4444; }
+
+        .app-body { padding: 1.5rem 2rem 2rem; }
+
+        .section { margin-bottom: 1.5rem; }
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--gray-400);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .section-title .num {
+            width: 20px; height: 20px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.65rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Certificates */
+        .cert-list { max-height: 180px; overflow-y: auto; }
+        .cert-item {
+            border: 1.5px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 0.7rem 0.9rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.12s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+        }
+        .cert-item:hover { border-color: var(--primary); background: var(--primary-light); }
+        .cert-item.selected { border-color: var(--primary); background: var(--primary-light); box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
+        .cert-radio {
+            width: 16px; height: 16px;
+            border: 2px solid var(--gray-300);
+            border-radius: 50%;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .cert-item.selected .cert-radio {
+            border-color: var(--primary);
+            background: var(--primary);
+        }
+        .cert-item.selected .cert-radio::after {
+            content: '';
+            width: 6px; height: 6px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .cert-name { font-weight: 600; font-size: 0.85rem; color: var(--gray-900); }
+        .cert-detail { font-size: 0.72rem; color: var(--gray-500); margin-top: 2px; }
+        .cert-expired { color: var(--danger); font-weight: 600; font-size: 0.72rem; }
+        .btn-cert-details {
+            background: none; border: none; color: var(--gray-400); cursor: pointer;
+            padding: 4px 8px; border-radius: 6px; font-size: 1rem; align-self: flex-start; margin-top: 2px;
+        }
+        .btn-cert-details:hover { color: var(--primary); background: var(--primary-light); }
+
+        /* Drop zone */
+        .drop-zone {
+            border: 2px dashed var(--gray-200);
+            border-radius: var(--radius);
+            padding: 1.75rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.15s;
+            color: var(--gray-400);
+        }
+        .drop-zone:hover, .drop-zone.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+        .drop-zone .icon { font-size: 1.75rem; margin-bottom: 0.5rem; }
+        .drop-zone .text { font-size: 0.85rem; }
+
+        .file-list { margin-top: 0.75rem; }
+        .file-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--gray-100);
+            border: 1px solid var(--gray-200);
+            padding: 0.3rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            margin: 0.2rem 0.2rem 0.2rem 0;
+        }
+        .file-chip .remove { cursor: pointer; color: var(--gray-400); font-size: 0.9rem; }
+        .file-chip .remove:hover { color: var(--danger); }
+
+        .options-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.65rem;
+            margin-top: 0.75rem;
+        }
+        .options-row input {
+            border: 1.5px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.82rem;
+            outline: none;
+            transition: border-color 0.15s;
+            width: 100%;
+        }
+        .options-row input:focus { border-color: var(--primary); }
+
+        /* Sign button */
+        .btn-sign {
+            width: 100%;
+            padding: 0.85rem;
+            border: none;
+            border-radius: var(--radius);
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-sign:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); box-shadow: var(--shadow); }
+        .btn-sign:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+        /* Progress */
+        .progress-section {
+            margin-top: 1.25rem;
+            background: var(--gray-50);
+            border-radius: var(--radius);
+            padding: 1rem 1.25rem;
+            display: none;
+        }
+        .progress-section.active { display: block; }
+        .progress-bar-container {
+            height: 4px;
+            background: var(--gray-200);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .progress-fill.done { background: var(--success); }
+        .log-area {
+            background: var(--gray-900);
+            border-radius: 8px;
+            padding: 0.65rem 0.85rem;
+            max-height: 130px;
+            overflow-y: auto;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.72rem;
+            line-height: 1.6;
+            color: #d1d5db;
+        }
+        .log-area .line-ok { color: #6ee7b7; }
+        .log-area .line-err { color: #fca5a5; }
+
+        /* Results */
+        .results-section { margin-top: 1rem; display: none; }
+        .results-section.active { display: block; }
+        .result-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.7rem 0.9rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+        }
+        .result-item.ok { background: var(--success-light); border: 1px solid #a7f3d0; }
+        .result-item.fail { background: var(--danger-light); border: 1px solid #fecaca; }
+        .btn-dl {
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-dl:hover { background: #047857; }
+
+        .status-msg { text-align: center; padding: 1rem; color: var(--gray-500); font-size: 0.85rem; }
+        .status-msg.error { color: var(--danger); }
+
+        .btn-reload {
+            background: none; border: 1px solid var(--gray-200); border-radius: 6px;
+            padding: 0.2rem 0.5rem; font-size: 0.7rem; color: var(--gray-500); cursor: pointer;
+            margin-left: auto;
+        }
+        .btn-reload:hover { border-color: var(--primary); color: var(--primary); }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="app-header">
+        <div class="logo-icon"><i class="bi bi-vector-pen"></i></div>
+        <h1>SimpleSign</h1>
+        <div id="agentBadge" class="agent-badge offline">
+            <span class="dot"></span> Offline
+        </div>
+    </div>
+    <div class="app-body">
+
+        <!-- 1. Certificate -->
+        <div class="section">
+            <div class="section-title">
+                <span class="num">1</span> Select Certificate
+                <button class="btn-reload" onclick="loadCerts()"><i class="bi bi-arrow-clockwise"></i> Reload</button>
+            </div>
+            <div id="certArea">
+                <div class="status-msg">Connecting to HostSigner...</div>
+            </div>
+        </div>
+
+        <!-- 2. Documents -->
+        <div class="section">
+            <div class="section-title"><span class="num">2</span> Upload Documents</div>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <div class="icon"><i class="bi bi-cloud-arrow-up"></i></div>
+                <div class="text">Drop PDF files here or click to browse</div>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf" multiple hidden />
+            <div class="file-list" id="fileList"></div>
+            <div class="options-row">
+                <input type="text" id="inputReason" placeholder="Reason (optional)" />
+                <input type="text" id="inputLocation" placeholder="Location (optional)" />
+            </div>
+        </div>
+
+        <!-- 3. Sign -->
+        <button class="btn-sign" id="btnSign" disabled onclick="doSign()">
+            <i class="bi bi-pen-fill"></i> Sign Documents
+        </button>
+
+        <!-- Progress -->
+        <div class="progress-section" id="progressSection">
+            <div class="progress-bar-container">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="log-area" id="logArea"></div>
+        </div>
+
+        <!-- Results -->
+        <div class="results-section" id="resultsSection"></div>
+    </div>
+</div>
+
+<script>
+const HOSTSIGNER = 'http://localhost:21590';
+let certs = [];
+let selectedCert = null;
+let files = [];
+
+// ────── HostSigner ──────────────────────────────────────────
+async function loadCerts() {
+    const area = $('certArea');
+    area.innerHTML = '<div class="status-msg"><div class="spinner-border spinner-border-sm"></div> Connecting to HostSigner...</div>';
+    try {
+        const r = await fetch(`${HOSTSIGNER}/api/certificates`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        certs = await r.json();
+        setAgent(true);
+        renderCerts();
+    } catch (e) {
+        setAgent(false);
+        area.innerHTML = `<div class="status-msg error">
+            <i class="bi bi-exclamation-triangle"></i> Cannot reach HostSigner at ${HOSTSIGNER}
+            <br><button class="btn btn-sm btn-outline-primary mt-2" onclick="launchAndRetry()"><i class="bi bi-play-circle"></i> Launch HostSigner</button>
+        </div>`;
+    }
+}
+
+async function launchAndRetry() {
+    try { window.open('simplesign://', '_blank'); } catch {}
+    const area = $('certArea');
+    area.innerHTML = '<div class="status-msg"><div class="spinner-border spinner-border-sm"></div> Launching HostSigner...</div>';
+    // Retry up to 10 times (5 seconds)
+    for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        try {
+            const r = await fetch(`${HOSTSIGNER}/api/health`);
+            if (r.ok) { await loadCerts(); return; }
+        } catch {}
+    }
+    area.innerHTML = `<div class="status-msg error"><i class="bi bi-exclamation-triangle"></i> HostSigner did not start. Please start it manually.</div>`;
+}
+
+function setAgent(online) {
+    const b = $('agentBadge');
+    b.className = `agent-badge ${online ? 'online' : 'offline'}`;
+    b.innerHTML = `<span class="dot"></span> ${online ? 'Online' : 'Offline'}`;
+}
+
+function renderCerts() {
+    const area = $('certArea');
+    if (!certs.length) { area.innerHTML = '<div class="status-msg">No certificates found</div>'; return; }
+    area.innerHTML = '<div class="cert-list">' + certs.map((c, i) => {
+        const cn = extractCN(c.name || c.Name || '');
+        const expired = c.expireDate ? new Date(c.expireDate) < new Date() : (c.ExpireDate ? new Date(c.ExpireDate) < new Date() : false);
+        const expStr = formatCertDate(c.expireDate || c.ExpireDate);
+        const notBefore = formatCertDate(c.notBefore || c.NotBefore);
+        const issuerCn = extractCN(c.issuerName || c.IssuerName || '');
+        const algo = `${c.signatureAlgorithm || c.SignatureAlgorithm || 'RSA'} · ${c.hashAlgorithm || c.HashAlgorithm || 'SHA256'}`;
+        const thumb = c.thumbprint || c.Thumbprint || '';
+        return `<div class="cert-item" data-i="${i}" onclick="pickCert(${i})">
+            <div class="cert-radio"></div>
+            <div style="flex:1;min-width:0">
+                <div class="cert-name">${esc(cn)}${expired ? ' <span class="cert-expired">⚠ Expirado</span>' : ''}</div>
+                <div class="cert-detail">Válido até ${expStr} · ${algo}</div>
+                <div class="cert-details-panel" id="certDetails${i}" style="display:none;margin-top:8px;padding:8px 10px;background:var(--gray-50);border-radius:6px;font-size:12px;line-height:1.6">
+                    <div><strong>Subject:</strong> ${esc(c.name || c.Name || '')}</div>
+                    <div><strong>Issuer:</strong> ${esc(issuerCn)}</div>
+                    <div><strong>Valid:</strong> ${notBefore} → ${expStr}</div>
+                    <div><strong>Thumbprint:</strong> <code style="font-size:11px">${esc(thumb)}</code></div>
+                    <div><strong>Algorithm:</strong> ${algo}</div>
+                </div>
+            </div>
+            <button class="btn-cert-details" onclick="event.stopPropagation();toggleDetails(${i})" title="Details">
+                <i class="bi bi-info-circle"></i>
+            </button>
+        </div>`;
+    }).join('') + '</div>';
+}
+
+function extractCN(raw) {
+    if (!raw) return '';
+    const match = raw.match(/CN=([^,]+)/i);
+    let cn = match ? match[1].trim() : raw;
+    if (cn.startsWith('S-1-5-')) cn = cn.split('/').pop() || cn;
+    if (cn.length > 50) cn = cn.substring(0, 47) + '…';
+    return cn;
+}
+
+function formatCertDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso; }
+}
+
+function toggleDetails(i) {
+    const el = $('certDetails' + i);
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function pickCert(i) {
+    selectedCert = certs[i];
+    document.querySelectorAll('.cert-item').forEach(el => el.classList.remove('selected'));
+    document.querySelector(`.cert-item[data-i="${i}"]`).classList.add('selected');
+    checkBtn();
+}
+
+// ────── Files ──────────────────────────────────────────────
+const dz = $('dropZone');
+const fi = $('fileInput');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('active'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('active'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('active'); addFiles(e.dataTransfer.files); });
+fi.addEventListener('change', () => { addFiles(fi.files); fi.value = ''; });
+
+function addFiles(list) {
+    for (const f of list) {
+        if (f.name.toLowerCase().endsWith('.pdf') && !files.some(x => x.name === f.name && x.size === f.size)) {
+            files.push(f);
+        }
+    }
+    renderFiles();
+    checkBtn();
+}
+function removeFile(i) { files.splice(i, 1); renderFiles(); checkBtn(); }
+function renderFiles() {
+    $('fileList').innerHTML = files.map((f, i) =>
+        `<span class="file-chip"><i class="bi bi-file-earmark-pdf text-danger"></i> ${esc(f.name)} <small>(${fmtSize(f.size)})</small> <i class="bi bi-x remove" onclick="removeFile(${i})"></i></span>`
+    ).join('');
+}
+
+function checkBtn() { $('btnSign').disabled = !(selectedCert && files.length); }
+
+// ────── Signing ────────────────────────────────────────────
+async function doSign() {
+    const btn = $('btnSign');
+    btn.disabled = true;
+    const prog = $('progressSection');
+    const res = $('resultsSection');
+    prog.classList.add('active');
+    res.classList.remove('active');
+    res.innerHTML = '';
+    clearLog();
+    setProgress(0);
+
+    try {
+        // Phase 1: Upload to server for hash preparation
+        log('⬆ Uploading documents to server...');
+        setProgress(5);
+
+        const fd = new FormData();
+        files.forEach(f => fd.append('files', f));
+        fd.append('certificateBase64', selectedCert.UserCertificateBase64 || selectedCert.userCertificateBase64 || '');
+        fd.append('reason', $('inputReason').value);
+        fd.append('location', $('inputLocation').value);
+
+        const prepResp = await fetch('/api/prepare', { method: 'POST', body: fd });
+        if (!prepResp.ok) {
+            const err = await prepResp.json().catch(() => ({ error: `HTTP ${prepResp.status}` }));
+            throw new Error(err.error || `Server error ${prepResp.status}`);
+        }
+        const prepared = await prepResp.json();
+        const valid = prepared.filter(p => !p.error);
+        const failed = prepared.filter(p => p.error);
+
+        if (valid.length === 0) throw new Error('No documents could be prepared: ' + (failed[0]?.error || 'unknown'));
+
+        log(`✓ Server prepared ${valid.length} hash(es)`, 'ok');
+        setProgress(30);
+
+        // Phase 2: Send hashes to HostSigner
+        log('🔑 Sending hashes to HostSigner for signing...');
+        const signPayload = {
+            hashAlgorithm: selectedCert.hashAlgorithm || selectedCert.HashAlgorithm || 'SHA256',
+            signatureAlgorithm: selectedCert.signatureAlgorithm || selectedCert.SignatureAlgorithm || 'RSA',
+            thumbprint: selectedCert.thumbprint || selectedCert.Thumbprint,
+            signRequests: valid.map((p, idx) => ({
+                id: String(idx),
+                authenticatedAttributeBase64: p.hashBase64,
+            }))
+        };
+
+        const signResp = await fetch(`${HOSTSIGNER}/api/sign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(signPayload)
+        });
+        if (!signResp.ok) throw new Error(`HostSigner error: HTTP ${signResp.status}`);
+        const signatures = await signResp.json();
+
+        log(`✓ HostSigner returned ${Array.isArray(signatures) ? signatures.length : 1} signature(s)`, 'ok');
+        setProgress(60);
+
+        // Phase 3: Complete each signature on server
+        log('📄 Embedding signatures into PDFs...');
+        const results = [];
+
+        // Add failed preparations
+        failed.forEach(p => results.push({ fileName: p.fileName, ok: false, error: p.error }));
+
+        const sigArray = Array.isArray(signatures) ? signatures : [signatures];
+
+        for (let i = 0; i < valid.length; i++) {
+            const doc = valid[i];
+            const sig = sigArray.find(s => (s.id || s.Id) === String(i)) || sigArray[i];
+            const sigBase64 = sig?.signedHashBase64 || sig?.SignedHashBase64;
+
+            if (!sigBase64) {
+                results.push({ fileName: doc.fileName, ok: false, error: sig?.Error || sig?.error || 'No signature' });
+                continue;
+            }
+
+            const cResp = await fetch('/api/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionDataBase64: doc.sessionDataBase64, SignedHashBase64: sigBase64 })
+            });
+
+            if (!cResp.ok) {
+                const e = await cResp.json().catch(() => ({}));
+                results.push({ fileName: doc.fileName, ok: false, error: e.error || 'Completion failed' });
+            } else {
+                const c = await cResp.json();
+                results.push({ fileName: doc.fileName, ok: true, data: c.signedPdfBase64 });
+            }
+            setProgress(60 + ((i + 1) / valid.length) * 35);
+        }
+
+        setProgress(100, true);
+        const okCount = results.filter(r => r.ok).length;
+        log(`✓ Done — ${okCount}/${results.length} signed successfully`, okCount === results.length ? 'ok' : 'err');
+        showResults(results);
+
+    } catch (ex) {
+        log(`✗ ${ex.message}`, 'err');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function showResults(results) {
+    const sec = $('resultsSection');
+    sec.classList.add('active');
+    sec.innerHTML = results.map(r => {
+        if (r.ok) {
+            return `<div class="result-item ok">
+                <span><i class="bi bi-check-circle-fill text-success me-2"></i><strong>${esc(r.fileName)}</strong></span>
+                <button class="btn-dl" onclick="dl('${esc(r.fileName)}','${r.data}')"><i class="bi bi-download"></i> Download</button>
+            </div>`;
+        }
+        return `<div class="result-item fail">
+            <span><i class="bi bi-x-circle-fill text-danger me-2"></i><strong>${esc(r.fileName)}</strong> — ${esc(r.error)}</span>
+        </div>`;
+    }).join('');
+}
+
+function dl(name, b64) {
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name.replace(/\.pdf$/i, '-signed.pdf');
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// ────── Utils ──────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function esc(s) { const d = document.createElement('span'); d.textContent = s || ''; return d.innerHTML; }
+function fmtSize(b) { return b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+function setProgress(pct, done) {
+    const el = $('progressFill');
+    el.style.width = pct + '%';
+    if (done) el.classList.add('done'); else el.classList.remove('done');
+}
+function clearLog() { $('logArea').innerHTML = ''; }
+function log(msg, cls) {
+    const el = $('logArea');
+    const d = document.createElement('div');
+    d.className = cls === 'ok' ? 'line-ok' : cls === 'err' ? 'line-err' : '';
+    d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+}
+
+// Init
+loadCerts();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+## Build output
+bin/
+obj/
+artifacts/
+BenchmarkDotNet.Artifacts/
+Findings/
+
+## IDE / Editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+## OS
+.DS_Store
+Thumbs.db
+
+## NuGet
+*.nupkg
+*.snupkg
+
+## Secrets (never commit private keys)
+*.pfx
+*.p12
+*.snk
+!tests/SimpleSign.TestFixtures/**/*.pem
+
+## Misc
+TestResults/
+coverage/
+*.trx
+
+# Local benchmark results
+bench-results-docker/
+copilot-report-*
+/publish-agent-local
+/simplesingn-demo
+/publish-cli-local
+nupkgs/
+
+# Docfx
+docs/_site/

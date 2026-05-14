@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Documento Longo Multi-Página</title>
+</head>
+<body>
+    <h1>Manual Técnico - SimpleSign.HtmlToPdf</h1>
+    <p>Este documento longo visa testar a quebra de páginas e a geração de PDFs com múltiplas páginas.</p>
+
+    <h2>Capítulo 1: Introdução</h2>
+    <p>O SimpleSign.HtmlToPdf é um módulo de conversão de HTML para PDF totalmente desenvolvido em .NET, sem dependências externas. Ele foi projetado para ser leve, rápido e fácil de integrar em qualquer aplicação .NET.</p>
+    <p>A arquitetura do módulo segue o padrão de pipeline: primeiro o HTML é parseado em uma árvore DOM, depois as regras CSS são aplicadas, em seguida o layout é calculado e finalmente o PDF é renderizado.</p>
+    <p>Este manual cobre todos os aspectos técnicos do módulo, desde a instalação até o uso avançado com customizações de estilo e layout.</p>
+
+    <h2>Capítulo 2: Instalação e Configuração</h2>
+    <p>Para instalar o SimpleSign.HtmlToPdf, adicione a referência ao pacote NuGet em seu projeto:</p>
+    <pre>dotnet add package SimpleSign.HtmlToPdf</pre>
+    <p>Não há configurações adicionais necessárias. O módulo funciona out-of-the-box com as configurações padrão (página A4, margens de 40pt).</p>
+    <p>Para projetos que necessitam de customizações, todas as opções são configuráveis através do builder pattern fluente que será descrito no próximo capítulo.</p>
+
+    <h2>Capítulo 3: API Fluente</h2>
+    <p>O ponto de entrada principal é a classe estática HtmlToPdfConverter. Ela oferece três formas de iniciar uma conversão:</p>
+    <ul>
+        <li><strong>Html(string)</strong> - A partir de uma string HTML</li>
+        <li><strong>Html(byte[])</strong> - A partir de bytes UTF-8</li>
+        <li><strong>FileAsync(string)</strong> - A partir de um arquivo HTML</li>
+    </ul>
+    <p>Após a inicialização, o builder permite encadear configurações:</p>
+    <pre>
+byte[] pdf = HtmlToPdfConverter
+    .Html(htmlContent)
+    .WithPageSize(PageSize.A4)
+    .WithMargins(30, 25, 30, 25)
+    .WithStylesheet(css)
+    .WithTitle("Meu Documento")
+    .WithAuthor("João Silva")
+    .Convert();
+    </pre>
+
+    <h2>Capítulo 4: Tamanhos de Página</h2>
+    <p>O módulo suporta quatro tamanhos de página padrão:</p>
+    <table border="1" style="border-collapse:collapse">
+        <thead>
+            <tr>
+                <th>Tamanho</th>
+                <th>Dimensões</th>
+                <th>Uso Comum</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>A4</td>
+                <td>210 × 297 mm</td>
+                <td>Documentos gerais, relatórios</td>
+            </tr>
+            <tr>
+                <td>Letter</td>
+                <td>8.5 × 11 in</td>
+                <td>Padrão norte-americano</td>
+            </tr>
+            <tr>
+                <td>Legal</td>
+                <td>8.5 × 14 in</td>
+                <td>Documentos jurídicos</td>
+            </tr>
+            <tr>
+                <td>A3</td>
+                <td>297 × 420 mm</td>
+                <td>Posters, diagramas grandes</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Capítulo 5: Margens</h2>
+    <p>As margens podem ser configuradas de forma uniforme ou individual para cada lado da página. O valor é especificado em pontos (1pt = 1/72 polegada).</p>
+    <p>Margem uniforme: WithMargins(40) aplica 40pt em todos os lados.</p>
+    <p>Margens individuais: WithMargins(top, right, bottom, left) permite configurar cada lado separadamente.</p>
+    <p>As margens padrão são de 40pt em todos os lados, o que proporciona um bom equilíbrio entre espaço útil e legibilidade.</p>
+
+    <h2>Capítulo 6: Estilos CSS</h2>
+    <p>O conversor suporta estilos CSS inline (atributo style) e folhas de estilo externas via WithStylesheet(). As propriedades CSS suportadas incluem:</p>
+    <ul>
+        <li>font-size, font-weight, font-style</li>
+        <li>color, background-color</li>
+        <li>margin, padding</li>
+        <li>border, border-collapse</li>
+        <li>width, text-align</li>
+        <li>display (block, inline)</li>
+    </ul>
+    <p>Os seletores CSS suportados incluem seletores de tipo (h1, p, table), seletores de classe (.classe) e seletores de ID (#id).</p>
+
+    <h2>Capítulo 7: Elementos HTML Suportados</h2>
+    <p>O parser HTML suporta os seguintes elementos de bloco:</p>
+    <ul>
+        <li>Headings: h1, h2, h3, h4, h5, h6</li>
+        <li>Texto: p, div, blockquote, pre</li>
+        <li>Listas: ul, ol, li</li>
+        <li>Tabelas: table, thead, tbody, tfoot, tr, th, td</li>
+        <li>Semânticos: header, footer, section, article, main</li>
+        <li>Outros: hr</li>
+    </ul>
+    <p>E os seguintes elementos inline:</p>
+    <ul>
+        <li>Formatação: strong, em, span</li>
+        <li>Links: a</li>
+        <li>Quebra: br</li>
+    </ul>
+
+    <h2>Capítulo 8: Metadados do PDF</h2>
+    <p>É possível definir metadados no documento PDF gerado:</p>
+    <ul>
+        <li><strong>Title</strong> - Título do documento (aparece nas propriedades do PDF)</li>
+        <li><strong>Author</strong> - Autor do documento</li>
+        <li><strong>Header</strong> - Template de cabeçalho com placeholders {page}, {pages}, {title}, {date}</li>
+        <li><strong>Footer</strong> - Template de rodapé com os mesmos placeholders</li>
+    </ul>
+
+    <h2>Capítulo 9: Performance</h2>
+    <p>O módulo foi otimizado para performance, utilizando:</p>
+    <ul>
+        <li>Span-based parsing para minimizar alocações</li>
+        <li>FlateDecode compression para reduzir o tamanho do arquivo</li>
+        <li>Immutable builder para thread-safety</li>
+        <li>Async-first API para operações de I/O</li>
+    </ul>
+    <p>Em benchmarks internos, o módulo consegue converter um documento HTML de 10KB em menos de 50ms em hardware moderno.</p>
+
+    <h2>Capítulo 10: CLI</h2>
+    <p>O SimpleSign CLI inclui o comando html-to-pdf para conversão via linha de comando:</p>
+    <pre>simplesign-cli html-to-pdf input.html -o output.pdf --page-size A4 --margin 40</pre>
+    <p>Opções disponíveis:</p>
+    <ul>
+        <li>--output, -o: Caminho do arquivo PDF de saída</li>
+        <li>--page-size, -s: Tamanho da página (A4, Letter, Legal, A3)</li>
+        <li>--margin: Margem uniforme em pontos</li>
+        <li>--margin-top, --margin-right, --margin-bottom, --margin-left: Margens individuais</li>
+        <li>--css: Caminho para arquivo CSS adicional</li>
+        <li>--title: Título do documento PDF</li>
+        <li>--author: Autor do documento PDF</li>
+    </ul>
+</body>
+</html>

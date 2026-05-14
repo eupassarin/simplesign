@@ -1,0 +1,53 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "files": [
+            "src/SimpleSign.Core/SimpleSign.Core.csproj",
+            "src/SimpleSign.Pdf/SimpleSign.Pdf.csproj",
+            "src/SimpleSign.PAdES/SimpleSign.PAdES.csproj",
+            "src/SimpleSign.Brasil/SimpleSign.Brasil.csproj",
+            "src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj"
+          ],
+          "src": ".."
+        }
+      ],
+      "dest": "api",
+      "properties": {
+        "TargetFramework": "net8.0"
+      },
+      "filter": "filterConfig.yml"
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": ["api/**.yml", "api/index.md"]
+      },
+      {
+        "files": ["articles/**.md", "articles/**/toc.yml", "toc.yml", "*.md"]
+      }
+    ],
+    "resource": [
+      {
+        "files": ["images/**"]
+      }
+    ],
+    "output": "_site",
+    "globalMetadataFiles": [],
+    "fileMetadataFiles": [],
+    "template": ["default", "modern"],
+    "globalMetadata": {
+      "_appTitle": "SimpleSign",
+      "_appFooter": "SimpleSign — .NET PAdES digital signature library",
+      "_enableSearch": true,
+      "_disableContribution": false,
+      "_gitContribute": {
+        "repo": "https://github.com/eupassarin/SimpleSign",
+        "branch": "main"
+      }
+    },
+    "postProcessors": ["ExtractSearchIndex"]
+  }
+}

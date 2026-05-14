@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Pack & Publish NuGet
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity quiet
+
+      - name: Pack
+        run: >-
+          dotnet pack --no-build --configuration Release
+          -p:Version=${{ steps.version.outputs.version }}
+          --output nupkgs
+
+      - name: Push to NuGet.org
+        continue-on-error: true
+        run: |
+          if [ -z "${{ secrets.NUGET_API_KEY }}" ]; then
+            echo "NUGET_API_KEY not configured. Skipping push to NuGet.org"
+            exit 0
+          fi
+          dotnet nuget push "nupkgs/*.nupkg" \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --skip-duplicate
+
+      - name: Upload packages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs-${{ steps.version.outputs.version }}
+          path: nupkgs/
+
+  cli:
+    name: Publish CLI
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish CLI (win-x64)
+        run: |
+          dotnet publish src/SimpleSign.Cli/SimpleSign.Cli.csproj \
+            -c Release \
+            -f net8.0 \
+            -p:Version=${{ steps.version.outputs.version }} \
+            -o publish-cli
+
+      - name: Create CLI ZIP
+        run: |
+          cd publish-cli
+          zip -r ../simplesign-cli-win-x64.zip .
+
+      - name: Upload CLI to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: simplesign-cli-win-x64.zip
+
+  hostsigner:
+    name: Publish HostSigner
+    runs-on: windows-latest
+    needs: release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish HostSigner (win-x64)
+        run: |
+          dotnet publish src/SimpleSign.HostSigner/SimpleSign.HostSigner.csproj `
+            -c Release `
+            -f net8.0-windows `
+            -r win-x64 `
+            --self-contained true `
+            -p:Version=${{ steps.version.outputs.version }} `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o publish-hostsigner
+
+      - name: Create HostSigner ZIP
+        run: Compress-Archive -Path publish-hostsigner\* -DestinationPath simplesign-hostsigner-win-x64.zip
+
+      - name: Upload HostSigner to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: simplesign-hostsigner-win-x64.zip

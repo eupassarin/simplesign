@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Listas Aninhadas</title>
+</head>
+<body>
+    <h1>Estrutura do Projeto</h1>
+    <p>Exemplo de listas ordenadas e não-ordenadas com vários níveis de aninhamento.</p>
+
+    <h2>Tecnologias Utilizadas</h2>
+    <ul>
+        <li>Backend
+            <ul>
+                <li>.NET 10
+                    <ul>
+                        <li>ASP.NET Core</li>
+                        <li>Entity Framework Core</li>
+                        <li>SignalR</li>
+                    </ul>
+                </li>
+                <li>PostgreSQL</li>
+                <li>Redis</li>
+            </ul>
+        </li>
+        <li>Frontend
+            <ul>
+                <li>React 19</li>
+                <li>TypeScript</li>
+                <li>Tailwind CSS</li>
+            </ul>
+        </li>
+        <li>Infraestrutura
+            <ul>
+                <li>Docker</li>
+                <li>Kubernetes</li>
+                <li>Azure</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h2>Passos de Instalação</h2>
+    <ol>
+        <li>Clonar o repositório</li>
+        <li>Instalar dependências
+            <ol>
+                <li>Executar <strong>dotnet restore</strong></li>
+                <li>Executar <strong>npm install</strong> no diretório frontend</li>
+                <li>Configurar variáveis de ambiente
+                    <ol>
+                        <li>Copiar .env.example para .env</li>
+                        <li>Preencher as credenciais do banco</li>
+                        <li>Configurar chave JWT</li>
+                    </ol>
+                </li>
+            </ol>
+        </li>
+        <li>Executar migrations do banco de dados</li>
+        <li>Iniciar o servidor</li>
+        <li>Acessar http://localhost:5000</li>
+    </ol>
+
+    <h2>Requisitos</h2>
+    <ul>
+        <li>.NET SDK 10.0 ou superior</li>
+        <li>Node.js 22+</li>
+        <li>Docker Desktop</li>
+        <li>PostgreSQL 16+</li>
+    </ul>
+</body>
+</html>

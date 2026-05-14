@@ -1,0 +1,6 @@
+###############
+# Docfx generated
+###############
+*.yml
+*.manifest
+!index.md

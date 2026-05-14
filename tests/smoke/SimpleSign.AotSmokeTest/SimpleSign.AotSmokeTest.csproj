@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <PublishAot>true</PublishAot>
+    <PublishTrimmed>true</PublishTrimmed>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <!-- Exclude from main test runs — this is a publish-time smoke test -->
+    <ExcludeFromBuild>false</ExcludeFromBuild>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/SimpleSign.PAdES/SimpleSign.PAdES.csproj" />
+  </ItemGroup>
+
+</Project>

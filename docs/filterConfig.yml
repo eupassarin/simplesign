@@ -1,0 +1,15 @@
+apiRules:
+  - exclude:
+      uidRegex: ^SimpleSign\.Tests
+  - exclude:
+      uidRegex: ^SimpleSign\.TestHelpers
+  - exclude:
+      uidRegex: ^SimpleSign\.AotSmokeTest
+  - exclude:
+      uidRegex: ^SimpleSign\.Cli
+  - exclude:
+      uidRegex: ^SimpleSign\.HostSigner
+  - exclude:
+      uidRegex: ^WebSigningSample
+  - exclude:
+      uidRegex: ^WebInspectSample
