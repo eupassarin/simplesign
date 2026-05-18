@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using SimpleSign.Pdf;
 using SimpleSign.Pdf.Enums;
 
 namespace SimpleSign.PAdES.Inspection;
@@ -9,6 +10,9 @@ namespace SimpleSign.PAdES.Inspection;
 [ExcludeFromCodeCoverage]
 public sealed class PdfDocumentInfo
 {
+    /// <summary>PDF version as declared in the file header (%PDF-X.Y).</summary>
+    public PdfVersion PdfVersion { get; init; }
+
     /// <summary>Whether the PDF is encrypted (encrypted PDFs cannot be signed/validated).</summary>
     public bool IsEncrypted { get; init; }
 

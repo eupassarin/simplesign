@@ -1,5 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
@@ -42,9 +42,9 @@ public sealed class BulkValidatorTests
         using var stream = new MemoryStream(signed);
         var results = await bulk.ValidateAsync(stream);
 
-        results.Should().NotBeEmpty();
-        bulk.SuccessCount.Should().Be(1);
-        bulk.FailureCount.Should().Be(0);
+        results.ShouldNotBeEmpty();
+        bulk.SuccessCount.ShouldBe(1);
+        bulk.FailureCount.ShouldBe(0);
     }
 
     [Fact(DisplayName = "ValidateAllAsync processes batch and yields results")]
@@ -72,10 +72,10 @@ public sealed class BulkValidatorTests
             results.Add(result);
         }
 
-        results.Should().HaveCount(2);
-        results.Should().OnlyContain(r => r.IsProcessed);
-        results.Should().OnlyContain(r => r.TotalSignatureCount > 0);
-        bulk.SuccessCount.Should().Be(2);
+        results.Count().ShouldBe(2);
+        results.ShouldAllBe(r => r.IsProcessed);
+        results.ShouldAllBe(r => r.TotalSignatureCount > 0);
+        bulk.SuccessCount.ShouldBe(2);
     }
 
     [Fact(DisplayName = "ValidateAllAsync handles failures gracefully")]
@@ -103,12 +103,12 @@ public sealed class BulkValidatorTests
             results.Add(result);
         }
 
-        results.Should().HaveCount(3);
+        results.Count().ShouldBe(3);
         var processed = results.Where(r => r.IsProcessed).ToList();
         var failed = results.Where(r => !r.IsProcessed).ToList();
 
-        processed.Should().HaveCountGreaterThanOrEqualTo(2);
-        failed.Should().HaveCountLessThanOrEqualTo(1);
+        processed.Count().ShouldBeGreaterThanOrEqualTo(2);
+        failed.Count().ShouldBeLessThanOrEqualTo(1);
     }
 
     [Fact(DisplayName = "Metrics track success and failure correctly")]
@@ -128,9 +128,9 @@ public sealed class BulkValidatorTests
         using var stream = new MemoryStream(signed);
         await bulk.ValidateAsync(stream);
 
-        bulk.SuccessCount.Should().Be(1);
-        bulk.TotalProcessed.Should().Be(1);
-        bulk.AverageElapsedMs.Should().BeGreaterThanOrEqualTo(0);
+        bulk.SuccessCount.ShouldBe(1);
+        bulk.TotalProcessed.ShouldBe(1);
+        bulk.AverageElapsedMs.ShouldBeGreaterThanOrEqualTo(0);
     }
 
     [Fact(DisplayName = "ResetMetrics clears all counters")]
@@ -149,13 +149,13 @@ public sealed class BulkValidatorTests
 
         using var stream = new MemoryStream(signed);
         await bulk.ValidateAsync(stream);
-        bulk.SuccessCount.Should().Be(1);
+        bulk.SuccessCount.ShouldBe(1);
 
         bulk.ResetMetrics();
-        bulk.SuccessCount.Should().Be(0);
-        bulk.FailureCount.Should().Be(0);
-        bulk.TotalProcessed.Should().Be(0);
-        bulk.AverageElapsedMs.Should().Be(0);
+        bulk.SuccessCount.ShouldBe(0);
+        bulk.FailureCount.ShouldBe(0);
+        bulk.TotalProcessed.ShouldBe(0);
+        bulk.AverageElapsedMs.ShouldBe(0);
     }
 
     [Fact(DisplayName = "Constructor rejects zero concurrency")]
@@ -163,14 +163,14 @@ public sealed class BulkValidatorTests
     {
         var validator = new PdfSignatureValidator();
         var act = () => new BulkValidator(validator, maxConcurrency: 0);
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        Should.Throw<ArgumentOutOfRangeException>(act);
     }
 
     [Fact(DisplayName = "Constructor rejects null validator")]
     public void Constructor_NullValidator_Throws()
     {
         var act = () => new BulkValidator(null!);
-        act.Should().Throw<ArgumentNullException>();
+        Should.Throw<ArgumentNullException>(act);
     }
 
     [Fact(DisplayName = "BulkValidationResult IsProcessed and counts")]
@@ -178,17 +178,17 @@ public sealed class BulkValidatorTests
     {
         var success = new BulkValidationResult("ok", new List<SignatureValidationResult>
         {
-            new() { FieldName = "Sig1", IsIntegrityValid = true, IsSignatureValid = true, IsCertificateChainValid = true }
+            new() { FieldName = "Sig1", IsIntegrityValid = true, IsSignatureValid = true, IsCertificateChainValid = true, IsNotRevoked = true }
         }, null, TimeSpan.FromMilliseconds(50));
 
-        success.IsProcessed.Should().BeTrue();
-        success.TotalSignatureCount.Should().Be(1);
-        success.ValidSignatureCount.Should().Be(1);
+        success.IsProcessed.ShouldBeTrue();
+        success.TotalSignatureCount.ShouldBe(1);
+        success.ValidSignatureCount.ShouldBe(1);
 
         var failure = new BulkValidationResult("bad", null, new InvalidOperationException("test"), TimeSpan.FromMilliseconds(10));
-        failure.IsProcessed.Should().BeFalse();
-        failure.TotalSignatureCount.Should().Be(0);
-        failure.ValidSignatureCount.Should().Be(0);
+        failure.IsProcessed.ShouldBeFalse();
+        failure.TotalSignatureCount.ShouldBe(0);
+        failure.ValidSignatureCount.ShouldBe(0);
     }
 
     private static async IAsyncEnumerable<(string Id, byte[] PdfBytes)> ToAsyncEnumerable(

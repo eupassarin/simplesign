@@ -1,5 +1,5 @@
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Pdf.Exceptions;
 using Xunit;
 
@@ -40,7 +40,7 @@ public sealed class PdfReaderEdgeCaseTests
 
         var act = () => PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        await act.Should().ThrowAsync<PdfStructureException>();
+        await Should.ThrowAsync<PdfStructureException>(act);
     }
 
     [Fact(DisplayName = "PDF with large xref table does not cause stack overflow")]
@@ -67,8 +67,8 @@ public sealed class PdfReaderEdgeCaseTests
         var act = () => PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
         // Should not throw stack overflow; result is just empty (no signatures)
-        var results = await act.Should().NotThrowAsync();
-        results.Subject.Should().BeEmpty();
+        var results = await act();
+        results.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "ReadSignatureFieldsAsync with cancelled token throws OperationCanceledException")]
@@ -81,7 +81,7 @@ public sealed class PdfReaderEdgeCaseTests
 
         var act = () => PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(act);
     }
 
     [Fact(DisplayName = "IsEncryptedAsync on non-PDF bytes throws exception")]
@@ -98,11 +98,11 @@ public sealed class PdfReaderEdgeCaseTests
         {
             var result = await act();
             // If it doesn't throw, it should return false (no /Encrypt marker)
-            result.Should().BeFalse();
+            result.ShouldBeFalse();
         }
         catch (Exception ex)
         {
-            ex.Should().BeAssignableTo<Exception>();
+            ex.ShouldBeAssignableTo<Exception>();
         }
     }
 
@@ -114,6 +114,6 @@ public sealed class PdfReaderEdgeCaseTests
 
         var results = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        results.Should().BeEmpty("minimal PDF has no signature fields");
+        results.ShouldBeEmpty("minimal PDF has no signature fields");
     }
 }

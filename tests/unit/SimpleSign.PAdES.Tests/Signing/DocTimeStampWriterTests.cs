@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using Xunit;
 
@@ -12,8 +12,8 @@ public sealed class DocTimeStampWriterTests
         var act = () => DocTimeStampWriter.AppendDocTimeStampAsync(
             null!, "http://tsa.example.com", new HttpClient());
 
-        await act.Should().ThrowAsync<ArgumentNullException>()
-            .WithParameterName("signedPdf");
+        var ex = await Should.ThrowAsync<ArgumentNullException>(act);
+        ex.ParamName.ShouldBe("signedPdf");
     }
 
     [Fact(DisplayName = "Null TSA URL throws ArgumentException")]
@@ -22,8 +22,8 @@ public sealed class DocTimeStampWriterTests
         var act = () => DocTimeStampWriter.AppendDocTimeStampAsync(
             [0x25], null!, new HttpClient());
 
-        await act.Should().ThrowAsync<ArgumentException>()
-            .WithParameterName("tsaUrl");
+        var ex2 = await Should.ThrowAsync<ArgumentException>(act);
+        ex2.ParamName.ShouldBe("tsaUrl");
     }
 
     [Fact(DisplayName = "Null HttpClient throws ArgumentNullException")]
@@ -32,13 +32,13 @@ public sealed class DocTimeStampWriterTests
         var act = () => DocTimeStampWriter.AppendDocTimeStampAsync(
             [0x25], "http://tsa.example.com", null!);
 
-        await act.Should().ThrowAsync<ArgumentNullException>()
-            .WithParameterName("httpClient");
+        var ex3 = await Should.ThrowAsync<ArgumentNullException>(act);
+        ex3.ParamName.ShouldBe("httpClient");
     }
 
-    [Fact(DisplayName = "Default reserved bytes for timestamp is 32KB")]
-    public void DefaultTimestampReservedBytes_Is32KB()
+    [Fact(DisplayName = "Default reserved bytes for timestamp is 12KB")]
+    public void DefaultTimestampReservedBytes_Is12KB()
     {
-        DocTimeStampWriter.DefaultTimestampReservedBytes.Should().Be(32768);
+        DocTimeStampWriter.DefaultTimestampReservedBytes.ShouldBe(12288);
     }
 }

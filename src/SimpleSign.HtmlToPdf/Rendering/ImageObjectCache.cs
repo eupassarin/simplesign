@@ -154,7 +154,7 @@ internal sealed class ImageObjectCache
             deflate.CopyTo(output);
             decompressed = output.ToArray();
         }
-        catch
+        catch (InvalidDataException)
         {
             return [];
         }
@@ -283,9 +283,9 @@ internal sealed class ImageObjectCache
     private static byte[] Deflate(byte[] data)
     {
         using var output = new MemoryStream();
-        using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
+        using (var zlib = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
         {
-            deflate.Write(data, 0, data.Length);
+            zlib.Write(data, 0, data.Length);
         }
 
         return output.ToArray();

@@ -198,7 +198,7 @@ internal static class TimestampValidator
     {
         if (tsaData.Certificates is [] || tsaData.SignedAttrs is null || tsaData.Signature is null)
         {
-            return true; // nothing to verify
+            return false; // nothing to verify
         }
 
         // Convert implicit [0] back to SET OF for verification (RFC 5652 §5.4)

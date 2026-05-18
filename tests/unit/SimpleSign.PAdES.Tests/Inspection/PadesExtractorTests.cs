@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.Pdf.Exceptions;
@@ -28,15 +28,15 @@ public sealed class PadesExtractorTests : IDisposable
 
         var signatures = await PadesExtractor.ExtractAsync(signed);
 
-        signatures.Should().ContainSingle();
+        signatures.Count().ShouldBe(1);
         var sig = signatures[0];
-        sig.CmsSignature.Should().NotBeEmpty();
-        sig.SignedData.Should().NotBeEmpty();
+        sig.CmsSignature.ShouldNotBeEmpty();
+        sig.SignedData.ShouldNotBeEmpty();
 
         // CmsParser is internal but visible to tests
         var cms = CmsParser.Parse(sig.CmsSignature);
-        cms.SignerCertificate.Should().NotBeNull();
-        cms.MessageDigest.Should().NotBeNull();
+        cms.SignerCertificate.ShouldNotBeNull();
+        cms.MessageDigest.ShouldNotBeNull();
     }
 
     // ── 2. Extracted signed data hash matches messageDigest ──────────
@@ -52,8 +52,8 @@ public sealed class PadesExtractorTests : IDisposable
 
         byte[] computedHash = SHA256.HashData(sig.SignedData);
 
-        cms.MessageDigest.Should().NotBeNull();
-        computedHash.Should().BeEquivalentTo(cms.MessageDigest!);
+        cms.MessageDigest.ShouldNotBeNull();
+        computedHash.ShouldBe(cms.MessageDigest!);
     }
 
     // ── 4. Multiple signatures ───────────────────────────────────────
@@ -69,10 +69,10 @@ public sealed class PadesExtractorTests : IDisposable
 
         var signatures = await PadesExtractor.ExtractAsync(doubleSigned);
 
-        signatures.Should().HaveCount(2);
-        signatures[0].CmsSignature.Should().NotBeEmpty();
-        signatures[1].CmsSignature.Should().NotBeEmpty();
-        signatures[0].FieldName.Should().NotBe(signatures[1].FieldName);
+        signatures.Count().ShouldBe(2);
+        signatures[0].CmsSignature.ShouldNotBeEmpty();
+        signatures[1].CmsSignature.ShouldNotBeEmpty();
+        signatures[0].FieldName.ShouldNotBe(signatures[1].FieldName);
     }
 
     // ── 5. Field name preserved ──────────────────────────────────────
@@ -84,9 +84,9 @@ public sealed class PadesExtractorTests : IDisposable
 
         var signatures = await PadesExtractor.ExtractAsync(signed);
 
-        signatures.Should().ContainSingle();
-        signatures[0].FieldName.Should().NotBeNullOrEmpty();
-        signatures[0].FieldName.Should().StartWith("Signature_");
+        signatures.Count().ShouldBe(1);
+        signatures[0].FieldName.ShouldNotBeNullOrEmpty();
+        signatures[0].FieldName.ShouldStartWith("Signature_");
     }
 
     // ── 6. SubFilter preserved ───────────────────────────────────────
@@ -98,10 +98,10 @@ public sealed class PadesExtractorTests : IDisposable
 
         var signatures = await PadesExtractor.ExtractAsync(signed);
 
-        signatures.Should().ContainSingle();
-        signatures[0].SubFilter.Should().NotBeNullOrEmpty();
+        signatures.Count().ShouldBe(1);
+        signatures[0].SubFilter.ShouldNotBeNullOrEmpty();
         // PAdES always uses one of these sub-filters
-        signatures[0].SubFilter.Should().BeOneOf(
+        signatures[0].SubFilter.ShouldBeOneOf(
             "adbe.pkcs7.detached",
             "ETSI.CAdES.detached");
     }
@@ -123,7 +123,7 @@ public sealed class PadesExtractorTests : IDisposable
             await sig.SaveSignatureAsync(tempPath);
 
             byte[] savedBytes = await File.ReadAllBytesAsync(tempPath);
-            savedBytes.Should().BeEquivalentTo(sig.CmsSignature);
+            savedBytes.ShouldBe(sig.CmsSignature);
         }
         finally
         {
@@ -148,7 +148,7 @@ public sealed class PadesExtractorTests : IDisposable
             await sig.SaveSignedDataAsync(tempPath);
 
             byte[] savedBytes = await File.ReadAllBytesAsync(tempPath);
-            savedBytes.Should().BeEquivalentTo(sig.SignedData);
+            savedBytes.ShouldBe(sig.SignedData);
         }
         finally
         {
@@ -165,7 +165,7 @@ public sealed class PadesExtractorTests : IDisposable
 
         Func<Task> act = () => PadesExtractor.ExtractAsync(garbage);
 
-        await act.Should().ThrowAsync<PdfStructureException>();
+        await Should.ThrowAsync<PdfStructureException>(act);
     }
 
     [Fact(DisplayName = "Unsigned PDF returns empty list")]
@@ -175,7 +175,7 @@ public sealed class PadesExtractorTests : IDisposable
 
         var signatures = await PadesExtractor.ExtractAsync(pdf);
 
-        signatures.Should().BeEmpty();
+        signatures.ShouldBeEmpty();
     }
 
     // ── 10. Stream overload works ────────────────────────────────────
@@ -188,9 +188,9 @@ public sealed class PadesExtractorTests : IDisposable
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
 
-        signatures.Should().ContainSingle();
-        signatures[0].CmsSignature.Should().NotBeEmpty();
-        signatures[0].SignedData.Should().NotBeEmpty();
+        signatures.Count().ShouldBe(1);
+        signatures[0].CmsSignature.ShouldNotBeEmpty();
+        signatures[0].SignedData.ShouldNotBeEmpty();
     }
 
     // ── 11. File overload works ──────────────────────────────────────
@@ -208,8 +208,8 @@ public sealed class PadesExtractorTests : IDisposable
 
             var signatures = await PadesExtractor.ExtractFromFileAsync(tempPath);
 
-            signatures.Should().ContainSingle();
-            signatures[0].CmsSignature.Should().NotBeEmpty();
+            signatures.Count().ShouldBe(1);
+            signatures[0].CmsSignature.ShouldNotBeEmpty();
         }
         finally
         {
@@ -226,10 +226,10 @@ public sealed class PadesExtractorTests : IDisposable
 
         var signatures = await PadesExtractor.ExtractAsync(signed);
 
-        signatures.Should().ContainSingle();
+        signatures.Count().ShouldBe(1);
         var revision = signatures[0].PdfRevision;
-        revision.Should().NotBeEmpty();
-        Encoding.Latin1.GetString(revision, 0, 5).Should().Be("%PDF-");
+        revision.ShouldNotBeEmpty();
+        Encoding.Latin1.GetString(revision, 0, 5).ShouldBe("%PDF-");
     }
 
     // ── 13. PDF revision size matches ByteRange ──────────────────────
@@ -241,10 +241,10 @@ public sealed class PadesExtractorTests : IDisposable
 
         var signatures = await PadesExtractor.ExtractAsync(signed);
 
-        signatures.Should().ContainSingle();
+        signatures.Count().ShouldBe(1);
         var sig = signatures[0];
         long expectedLength = sig.ByteRange.Offset2 + sig.ByteRange.Length2;
-        sig.PdfRevision.Length.Should().Be((int)expectedLength);
+        sig.PdfRevision.Length.ShouldBe((int)expectedLength);
     }
 
     // ── 14. Multiple signatures have different revision sizes ────────
@@ -260,9 +260,9 @@ public sealed class PadesExtractorTests : IDisposable
 
         var signatures = await PadesExtractor.ExtractAsync(doubleSigned);
 
-        signatures.Should().HaveCount(2);
-        signatures[0].PdfRevision.Length.Should().BeLessThan(signatures[1].PdfRevision.Length);
-        signatures[1].PdfRevision.Length.Should().BeLessThanOrEqualTo(doubleSigned.Length);
+        signatures.Count().ShouldBe(2);
+        signatures[0].PdfRevision.Length.ShouldBeLessThan(signatures[1].PdfRevision.Length);
+        signatures[1].PdfRevision.Length.ShouldBeLessThanOrEqualTo(doubleSigned.Length);
     }
 
     // ── 15. PDF revision is a valid standalone PDF ───────────────────
@@ -277,8 +277,8 @@ public sealed class PadesExtractorTests : IDisposable
 
         // The revision itself should be a valid signed PDF that can be re-extracted
         var reExtracted = await PadesExtractor.ExtractAsync(revision);
-        reExtracted.Should().ContainSingle();
-        reExtracted[0].CmsSignature.Should().NotBeEmpty();
+        reExtracted.Count().ShouldBe(1);
+        reExtracted[0].CmsSignature.ShouldNotBeEmpty();
     }
 
     // ── 16. SavePdfRevisionAsync works ───────────────────────────────
@@ -298,7 +298,7 @@ public sealed class PadesExtractorTests : IDisposable
             await sig.SavePdfRevisionAsync(tempPath);
 
             byte[] savedBytes = await File.ReadAllBytesAsync(tempPath);
-            savedBytes.Should().BeEquivalentTo(sig.PdfRevision);
+            savedBytes.ShouldBe(sig.PdfRevision);
         }
         finally
         {

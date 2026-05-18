@@ -35,6 +35,7 @@ public static partial class PdfSignatureInspector
         var isEncrypted = await PdfStructureReader.IsEncryptedAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
         var docMdpLevel = await PdfStructureReader.GetDocMdpPermissionLevelAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
         var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var pdfVersion = await PdfStructureReader.DetectPdfVersionAsync(pdfStream, cancellationToken).ConfigureAwait(false);
         var dssInfo = await ExtractDssInfoAsync(pdfStream, cancellationToken).ConfigureAwait(false);
 
         var signatures = new List<SignatureFieldInfo>(fields.Count);
@@ -53,6 +54,7 @@ public static partial class PdfSignatureInspector
         {
             Document = new PdfDocumentInfo
             {
+                PdfVersion = pdfVersion,
                 IsEncrypted = isEncrypted,
                 IsDocMdpLocked = docMdpLevel > 0 && docMdpLevel < 3,
                 DocMdpPermissionLevel = docMdpLevel,
@@ -115,6 +117,8 @@ public static partial class PdfSignatureInspector
             EmbeddedCertificates = embeddedCerts,
             DigestAlgorithm = AlgorithmInfo.FromOid(cms.DigestAlgorithmOid),
             SignatureAlgorithm = AlgorithmInfo.FromOid(cms.SignatureAlgorithmOid),
+            IsDigestAlgorithmDeprecated = cms.DigestAlgorithmOid == Core.Constants.Oids.Sha1,
+            IsSignatureAlgorithmDeprecated = cms.SignatureAlgorithmOid == Core.Constants.Oids.RsaSha1,
             SigningTime = cms.SigningTime,
             PdfDeclaredSigningTime = field.PdfSigningTime,
             Timestamp = timestamp,
@@ -160,12 +164,20 @@ public static partial class PdfSignatureInspector
             bool hasVri = DssExtractor.IndexOfBytes(dssSpan, "/VRI "u8) >= 0
                        || DssExtractor.IndexOfBytes(dssSpan, "/VRI<<"u8) >= 0;
 
+            // Validate VRI structure per ISO 32000-2 §12.8.4.4
+            var vriResult = hasVri
+                ? VriValidator.Validate(dssSpan)
+                : null;
+
             return new DssInfo
             {
                 CrlCount = crlCount,
                 OcspResponseCount = ocspCount,
                 CertificateCount = certCount,
-                HasVri = hasVri
+                HasVri = hasVri,
+                VriEntryCount = vriResult?.EntryCount ?? 0,
+                VriHasTimestamps = vriResult?.AllHaveTimestamps ?? false,
+                VriWarnings = vriResult?.Warnings ?? []
             };
         }
         catch

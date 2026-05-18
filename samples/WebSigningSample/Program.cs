@@ -18,7 +18,12 @@ app.MapPost("/api/prepare", async (HttpRequest request) =>
         return Results.BadRequest(new { error = "certificateBase64 is required" });
     }
 
+#if NET9_0_OR_GREATER
+    using var cert = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(certBase64));
+#else
     using var cert = new X509Certificate2(Convert.FromBase64String(certBase64));
+#endif
+
     var files = form.Files;
 
     if (files.Count == 0)

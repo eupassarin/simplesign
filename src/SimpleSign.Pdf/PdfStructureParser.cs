@@ -36,6 +36,11 @@ internal static class PdfStructureParser
         int rootObjNum = 0;
         while (cursor < data.Length && data[cursor] >= (byte)'0' && data[cursor] <= (byte)'9')
         {
+            if (rootObjNum > int.MaxValue / 10)
+            {
+                return 1;
+            }
+
             rootObjNum = rootObjNum * 10 + (data[cursor++] - '0');
         }
 
@@ -118,7 +123,7 @@ internal static class PdfStructureParser
         }
 
         int cursor;
-        for (cursor = acroFormKeyPos + "/AcroForm".Length; cursor < catalogText.Length && (catalogText[cursor] == ' ' || catalogText[cursor] == '\n'); cursor++)
+        for (cursor = acroFormKeyPos + "/AcroForm".Length; cursor < catalogText.Length && (catalogText[cursor] == ' ' || catalogText[cursor] == '\n' || catalogText[cursor] == '\r'); cursor++)
         {
         }
 
@@ -127,6 +132,11 @@ internal static class PdfStructureParser
             int acroFormObjNum = 0;
             while (cursor < catalogText.Length && char.IsDigit(catalogText[cursor]))
             {
+                if (acroFormObjNum > int.MaxValue / 10)
+                {
+                    return 0;
+                }
+
                 acroFormObjNum = acroFormObjNum * 10 + (catalogText[cursor++] - '0');
             }
             return acroFormObjNum;
@@ -444,6 +454,13 @@ internal static class PdfStructureParser
             return height;
         }
 
+        // Follow /Parent chain for inherited MediaBox/CropBox
+        height = ResolveInheritedBoxHeight(data, pageDict);
+        if (height > 0)
+        {
+            return height;
+        }
+
         // Scan full PDF as fallback
         string fullText = Encoding.Latin1.GetString(data);
         height = ExtractBoxHeight(fullText, "/MediaBox");
@@ -566,6 +583,11 @@ internal static class PdfStructureParser
         long xrefOffset = 0L;
         while (cursor < tail.Length && tail[cursor] >= (byte)'0' && tail[cursor] <= (byte)'9')
         {
+            if (xrefOffset > long.MaxValue / 10)
+            {
+                return 0L;
+            }
+
             xrefOffset = xrefOffset * 10 + (tail[cursor++] - '0');
         }
 
@@ -595,6 +617,11 @@ internal static class PdfStructureParser
         long xrefOffset = 0L;
         while (cursor < data.Length && data[cursor] >= (byte)'0' && data[cursor] <= (byte)'9')
         {
+            if (xrefOffset > long.MaxValue / 10)
+            {
+                return false;
+            }
+
             xrefOffset = xrefOffset * 10 + (data[cursor++] - '0');
         }
 
@@ -694,6 +721,11 @@ internal static class PdfStructureParser
         int fieldsObjNum = 0;
         while (cursor < acroFormText.Length && char.IsDigit(acroFormText[cursor]))
         {
+            if (fieldsObjNum > int.MaxValue / 10)
+            {
+                return [];
+            }
+
             fieldsObjNum = fieldsObjNum * 10 + (acroFormText[cursor++] - '0');
         }
 
@@ -887,6 +919,11 @@ internal static class PdfStructureParser
         int sizeValue = 0;
         while (cursor < data.Length && data[cursor] >= (byte)'0' && data[cursor] <= (byte)'9')
         {
+            if (sizeValue > int.MaxValue / 10)
+            {
+                return 10;
+            }
+
             sizeValue = sizeValue * 10 + (data[cursor++] - '0');
         }
 
@@ -921,6 +958,11 @@ internal static class PdfStructureParser
                 int objNum = 0;
                 for (int i = numStart; i < numEnd; i++)
                 {
+                    if (objNum > int.MaxValue / 10)
+                    {
+                        break;
+                    }
+
                     objNum = objNum * 10 + (data[i] - '0');
                 }
                 if (objNum > highest)
@@ -1014,6 +1056,11 @@ internal static class PdfStructureParser
         int objNum = 0;
         for (int i = objNumStart; i < objNumEnd; i++)
         {
+            if (objNum > int.MaxValue / 10)
+            {
+                return 0;
+            }
+
             objNum = objNum * 10 + (window[i] - '0');
         }
 
@@ -1037,9 +1084,11 @@ internal static class PdfStructureParser
 
         string[] parts = text.Substring(open + 1, close - open - 1).Trim()
             .Split([' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 4 && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float w))
+        if (parts.Length >= 4
+            && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float llx)
+            && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float urx))
         {
-            return w;
+            return urx - llx;
         }
 
         return 0f;
@@ -1062,9 +1111,11 @@ internal static class PdfStructureParser
 
         string[] parts = text.Substring(open + 1, close - open - 1).Trim()
             .Split([' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 4 && float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float h))
+        if (parts.Length >= 4
+            && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float lly)
+            && float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float ury))
         {
-            return h;
+            return ury - lly;
         }
 
         return 0f;
@@ -1114,7 +1165,48 @@ internal static class PdfStructureParser
     }
 
     /// <summary>
-    /// Extracts an integer value after a key in a PDF dictionary text (e.g., "/Rotate 90", "/Parent 5").
+    /// Follows /Parent chain to find inherited /CropBox or /MediaBox height (§8.3.2.1).
+    /// </summary>
+    private static float ResolveInheritedBoxHeight(ReadOnlySpan<byte> data, string pageDict)
+    {
+        int parentObjNum = ExtractIntValue(pageDict, "/Parent");
+        if (parentObjNum <= 0)
+        {
+            return 0f;
+        }
+
+        for (int depth = 0; depth < 10; depth++)
+        {
+            var (objStart, objEnd) = FindObjectBytes(data, parentObjNum);
+            if (objStart < 0)
+            {
+                break;
+            }
+
+            string parentText = Encoding.Latin1.GetString(data.Slice(objStart, objEnd - objStart));
+
+            float h = ExtractBoxHeight(parentText, "/CropBox");
+            if (h > 0)
+            {
+                return h;
+            }
+
+            h = ExtractBoxHeight(parentText, "/MediaBox");
+            if (h > 0)
+            {
+                return h;
+            }
+
+            parentObjNum = ExtractIntValue(parentText, "/Parent");
+            if (parentObjNum <= 0)
+            {
+                break;
+            }
+        }
+
+        return 0f;
+    }
+    /// <summary>
     /// For indirect references like "/Parent 5 0 R", returns just the object number (5).
     /// </summary>
     private static int ExtractIntValue(string text, string key)
@@ -1639,6 +1731,11 @@ internal static class PdfStructureParser
         int objNum = 0;
         while (cursor < data.Length && data[cursor] >= (byte)'0' && data[cursor] <= (byte)'9')
         {
+            if (objNum > int.MaxValue / 10)
+            {
+                return null;
+            }
+
             objNum = objNum * 10 + (data[cursor++] - '0');
         }
 
@@ -1664,6 +1761,11 @@ internal static class PdfStructureParser
         int genNum = 0;
         while (cursor < data.Length && data[cursor] >= (byte)'0' && data[cursor] <= (byte)'9')
         {
+            if (genNum > int.MaxValue / 10)
+            {
+                return null;
+            }
+
             genNum = genNum * 10 + (data[cursor++] - '0');
         }
 

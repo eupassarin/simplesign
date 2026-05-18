@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using Xunit;
 
@@ -33,9 +33,9 @@ public sealed class AppearanceEdgeCaseTests
             ShowLocation = false,
         };
 
-        app.LineCount(hasReason: false, hasLocation: false).Should().Be(2);
+        app.LineCount(hasReason: false, hasLocation: false).ShouldBe(2);
         var height = app.ComputeHeight(hasReason: false, hasLocation: false);
-        height.Should().BeGreaterThan(0);
+        height.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "ShowReason=true but null Reason does not add a line")]
@@ -44,7 +44,7 @@ public sealed class AppearanceEdgeCaseTests
         var app = new SignatureAppearance { ShowReason = true, ShowDate = false };
 
         // hasReason=false simulates null reason
-        app.LineCount(hasReason: false, hasLocation: false).Should().Be(2);
+        app.LineCount(hasReason: false, hasLocation: false).ShouldBe(2);
     }
 
     [Fact(DisplayName = "ShowLocation=true but null Location does not add a line")]
@@ -52,21 +52,21 @@ public sealed class AppearanceEdgeCaseTests
     {
         var app = new SignatureAppearance { ShowLocation = true, ShowDate = false };
 
-        app.LineCount(hasReason: false, hasLocation: false).Should().Be(2);
+        app.LineCount(hasReason: false, hasLocation: false).ShouldBe(2);
     }
 
     [Fact(DisplayName = "CustomFontSize=0 returns 0 as font size")]
     public void CustomFontSizeZero_ReturnsZero()
     {
         var app = new SignatureAppearance { CustomFontSize = 0f };
-        app.GetFontSizeValue().Should().Be(0f);
+        app.GetFontSizeValue().ShouldBe(0f);
     }
 
     [Fact(DisplayName = "CustomFontSize=72 (very large) is stored without error")]
     public void CustomFontSizeVeryLarge_IsStored()
     {
         var app = new SignatureAppearance { CustomFontSize = 72f };
-        app.GetFontSizeValue().Should().Be(72f);
+        app.GetFontSizeValue().ShouldBe(72f);
     }
 
     [Fact(DisplayName = "Empty SignerName renders without exception")]
@@ -84,7 +84,7 @@ public sealed class AppearanceEdgeCaseTests
         var act = () => SignatureAppearanceRenderer.BuildAppearanceXObject(
             10, options, SampleTime, width, height);
 
-        act.Should().NotThrow();
+        Should.NotThrow(act);
     }
 
     [Fact(DisplayName = "SignerName with exactly 40 characters is not truncated")]
@@ -92,8 +92,8 @@ public sealed class AppearanceEdgeCaseTests
     {
         string name = new('A', 40);
         var result = SignatureAppearance.Truncate(name);
-        result.Should().Be(name);
-        result.Should().HaveLength(40);
+        result.ShouldBe(name);
+        result.Length.ShouldBe(40);
     }
 
     [Fact(DisplayName = "SignerName with 41 characters is truncated to 37 + '...'")]
@@ -101,9 +101,9 @@ public sealed class AppearanceEdgeCaseTests
     {
         string name = new('B', 41);
         var result = SignatureAppearance.Truncate(name);
-        result.Should().HaveLength(40);
-        result.Should().EndWith("...");
-        result.Should().StartWith(new string('B', 37));
+        result.Length.ShouldBe(40);
+        result.ShouldEndWith("...");
+        result.ShouldStartWith(new string('B', 37));
     }
 
     [Fact(DisplayName = "SignerName with PDF special characters is escaped")]
@@ -111,9 +111,9 @@ public sealed class AppearanceEdgeCaseTests
     {
         string name = @"John (Doe) \ Jr.";
         var escaped = SignatureAppearanceRenderer.EscapePdfString(name);
-        escaped.Should().NotContain("(Doe)");
-        escaped.Should().Contain("\\(Doe\\)");
-        escaped.Should().Contain("\\\\");
+        escaped.ShouldNotContain("(Doe)");
+        escaped.ShouldContain("\\(Doe\\)");
+        escaped.ShouldContain("\\\\");
     }
 
     // ── ComputeAutoPosition ─────────────────────────────────────────────
@@ -125,8 +125,8 @@ public sealed class AppearanceEdgeCaseTests
             pageWidth: 595f, pageBottomMargin: 0f, existingSigCount: 0,
             stampWidth: 150f, stampHeight: 40f);
 
-        x.Should().Be(8f); // Margin = 8
-        y.Should().Be(8f);
+        x.ShouldBe(8f); // Margin = 8
+        y.ShouldBe(8f);
     }
 
     [Fact(DisplayName = "AutoPosition index 10 distributes across multiple lines")]
@@ -141,7 +141,7 @@ public sealed class AppearanceEdgeCaseTests
             stampWidth: 150f, stampHeight: 40f);
 
         // Must have wrapped to a row above
-        y10.Should().BeGreaterThan(y0, "índice 10 deve estar em linha acima");
+        y10.ShouldBeGreaterThan(y0, "índice 10 deve estar em linha acima");
     }
 
     [Fact(DisplayName = "AutoPosition very small page (50x50) does not fail")]
@@ -151,9 +151,9 @@ public sealed class AppearanceEdgeCaseTests
             pageWidth: 50f, pageBottomMargin: 0f, existingSigCount: 0,
             stampWidth: 150f, stampHeight: 40f);
 
-        var (x, y) = act.Should().NotThrow().Subject;
-        x.Should().BeGreaterThanOrEqualTo(0);
-        y.Should().BeGreaterThanOrEqualTo(0);
+        var (x, y) = act.Invoke();
+        x.ShouldBeGreaterThanOrEqualTo(0);
+        y.ShouldBeGreaterThanOrEqualTo(0);
     }
 
     // ── Color and border edge cases ─────────────────────────────────────
@@ -174,7 +174,7 @@ public sealed class AppearanceEdgeCaseTests
         var result = SignatureAppearanceRenderer.BuildAppearanceXObject(
             10, options, SampleTime, width, height);
 
-        result.Should().NotBeEmpty();
+        result.ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "BorderColor with BorderWidth=0 renders without error")]
@@ -195,7 +195,7 @@ public sealed class AppearanceEdgeCaseTests
         var result = SignatureAppearanceRenderer.BuildAppearanceXObject(
             10, options, SampleTime, width, height);
 
-        result.Should().NotBeEmpty();
+        result.ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "BackgroundColor with full opacity renders without error")]
@@ -213,7 +213,7 @@ public sealed class AppearanceEdgeCaseTests
             10, options, SampleTime, width, height);
 
         var content = System.Text.Encoding.Latin1.GetString(result);
-        content.Should().Contain("1.00 0.00 0.00 rg");
+        content.ShouldContain("1.00 0.00 0.00 rg");
     }
 
     // ── Image edge cases ────────────────────────────────────────────────
@@ -232,9 +232,9 @@ public sealed class AppearanceEdgeCaseTests
         var result = SignatureAppearanceRenderer.BuildAppearanceXObject(
             10, options, SampleTime, width, height);
 
-        result.Should().NotBeEmpty();
+        result.ShouldNotBeEmpty();
         var content = System.Text.Encoding.Latin1.GetString(result);
-        content.Should().NotContain("/Img0");
+        content.ShouldNotContain("/Img0");
     }
 
     [Fact(DisplayName = "Empty BackgroundImageJpeg does not cause exception")]
@@ -251,7 +251,7 @@ public sealed class AppearanceEdgeCaseTests
         var act = () => SignatureAppearanceRenderer.BuildAppearanceXObject(
             10, options, SampleTime, width, height);
 
-        act.Should().NotThrow();
+        Should.NotThrow(act);
     }
 
     [Fact(DisplayName = "BackgroundImageJpeg with 1 byte does not cause exception")]
@@ -268,7 +268,7 @@ public sealed class AppearanceEdgeCaseTests
         var act = () => SignatureAppearanceRenderer.BuildAppearanceXObject(
             10, options, SampleTime, width, height);
 
-        act.Should().NotThrow();
+        Should.NotThrow(act);
     }
 
     [Fact(DisplayName = "Valid BackgroundImagePng renders with FlateDecode and /Img0")]
@@ -286,8 +286,8 @@ public sealed class AppearanceEdgeCaseTests
             10, options, SampleTime, width, height, imageObjNum: 11);
 
         var content = System.Text.Encoding.Latin1.GetString(bytes);
-        content.Should().Contain("/Filter /FlateDecode");
-        content.Should().Contain("/Img0 11 0 R");
+        content.ShouldContain("/Filter /FlateDecode");
+        content.ShouldContain("/Img0 11 0 R");
     }
 
     [Fact(DisplayName = "Invalid BackgroundImagePng throws ArgumentException")]
@@ -304,7 +304,7 @@ public sealed class AppearanceEdgeCaseTests
         var act = () => SignatureAppearanceRenderer.BuildAppearanceXObject(
             10, options, SampleTime, width, height, imageObjNum: 11);
 
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     [Fact(DisplayName = "Custom BaseFontName appears in font dictionary")]
@@ -322,7 +322,7 @@ public sealed class AppearanceEdgeCaseTests
             10, options, SampleTime, width, height);
 
         var content = System.Text.Encoding.Latin1.GetString(bytes);
-        content.Should().Contain("/BaseFont /Courier-Bold");
+        content.ShouldContain("/BaseFont /Courier-Bold");
     }
 
     [Fact(DisplayName = "Invalid BaseFontName falls back to Helvetica")]
@@ -340,7 +340,7 @@ public sealed class AppearanceEdgeCaseTests
             10, options, SampleTime, width, height);
 
         var content = System.Text.Encoding.Latin1.GetString(bytes);
-        content.Should().Contain("/BaseFont /Helvetica");
+        content.ShouldContain("/BaseFont /Helvetica");
     }
 
     // ── EscapePdfString edge cases ──────────────────────────────────────
@@ -349,14 +349,14 @@ public sealed class AppearanceEdgeCaseTests
     public void EscapePdfString_UnbalancedParenthesis_Escapes()
     {
         var result = SignatureAppearanceRenderer.EscapePdfString("(test");
-        result.Should().Be("\\(test");
+        result.ShouldBe("\\(test");
     }
 
     [Fact(DisplayName = "EscapePdfString with backslashes escapes correctly")]
     public void EscapePdfString_Backslashes_Escapes()
     {
         var result = SignatureAppearanceRenderer.EscapePdfString(@"test\path");
-        result.Should().Be("test\\\\path");
+        result.ShouldBe("test\\\\path");
     }
 
     [Fact(DisplayName = "EscapePdfString with line break preserves content")]
@@ -364,7 +364,7 @@ public sealed class AppearanceEdgeCaseTests
     {
         var result = SignatureAppearanceRenderer.EscapePdfString("line1\nline2");
         // Newlines are not among the escaped chars; they pass through
-        result.Should().Contain("line1");
-        result.Should().Contain("line2");
+        result.ShouldContain("line1");
+        result.ShouldContain("line2");
     }
 }

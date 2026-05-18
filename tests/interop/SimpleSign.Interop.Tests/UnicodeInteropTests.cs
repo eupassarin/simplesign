@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -38,9 +38,8 @@ public sealed class UnicodeInteropTests(ITestOutputHelper output)
             if (!string.IsNullOrEmpty(stderr))
                 output.WriteLine($"STDERR: {stderr}");
 
-            exitCode.Should().Be(0);
-            (stdout + stderr).Should().Contain("intact=True",
-                because: "pyHanko should verify PAdES with CJK signer name as intact");
+            exitCode.ShouldBe(0);
+            (stdout + stderr).ShouldContain("intact=True");
         }
         finally
         {
@@ -72,8 +71,8 @@ public sealed class UnicodeInteropTests(ITestOutputHelper output)
             if (!string.IsNullOrEmpty(stderr))
                 output.WriteLine($"STDERR: {stderr}");
 
-            exitCode.Should().Be(0, because: "iText should validate PAdES with Arabic reason");
-            stdout.Should().Contain("RESULT: VALID");
+            exitCode.ShouldBe(0, "iText should validate PAdES with Arabic reason");
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {
@@ -105,8 +104,8 @@ public sealed class UnicodeInteropTests(ITestOutputHelper output)
             if (!string.IsNullOrEmpty(stderr))
                 output.WriteLine($"STDERR: {stderr}");
 
-            exitCode.Should().Be(0, because: "pdfbox should parse PAdES with emoji location");
-            stdout.Should().NotContain("ERROR");
+            exitCode.ShouldBe(0, "pdfbox should parse PAdES with emoji location");
+            stdout.ShouldNotContain("ERROR");
         }
         finally
         {
@@ -138,9 +137,9 @@ public sealed class UnicodeInteropTests(ITestOutputHelper output)
             if (!string.IsNullOrEmpty(stderr))
                 output.WriteLine($"STDERR: {stderr}");
 
-            exitCode.Should().Be(0, because: "EU DSS should validate PAdES with accented characters");
-            (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).Should().BeTrue(
-                because: "EU DSS should report TOTAL_PASSED or INDETERMINATE for self-signed certs");
+            exitCode.ShouldBe(0, "EU DSS should validate PAdES with accented characters");
+            (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).ShouldBeTrue(
+                "EU DSS should report TOTAL_PASSED or INDETERMINATE for self-signed certs");
         }
         finally
         {

@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Fonts;
 using Xunit;
 
@@ -20,7 +20,7 @@ public class FontTests
     {
         var result = StandardFonts.Resolve(family, bold, italic);
 
-        result.Should().Be(expected);
+        result.ShouldBe(expected);
     }
 
     [Theory(DisplayName = "StandardFonts.Resolve: serif fonts")]
@@ -33,7 +33,7 @@ public class FontTests
     {
         var result = StandardFonts.Resolve(family, bold, italic);
 
-        result.Should().Be(expected);
+        result.ShouldBe(expected);
     }
 
     [Theory(DisplayName = "StandardFonts.Resolve: monospace fonts")]
@@ -45,7 +45,7 @@ public class FontTests
     {
         var result = StandardFonts.Resolve(family, bold, italic);
 
-        result.Should().Be(expected);
+        result.ShouldBe(expected);
     }
 
     // ── TextMeasurer ────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ public class FontTests
     {
         var width = TextMeasurer.MeasureWidth("", "Helvetica", 12f, false, false);
 
-        width.Should().Be(0);
+        width.ShouldBe(0);
     }
 
     [Fact(DisplayName = "MeasureWidth: non-empty string returns positive value")]
@@ -63,7 +63,7 @@ public class FontTests
     {
         var width = TextMeasurer.MeasureWidth("Hello World", "Helvetica", 12f, false, false);
 
-        width.Should().BeGreaterThan(0);
+        width.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "MeasureWidth: larger font size produces wider text")]
@@ -72,7 +72,7 @@ public class FontTests
         var small = TextMeasurer.MeasureWidth("Test", "Helvetica", 12f, false, false);
         var large = TextMeasurer.MeasureWidth("Test", "Helvetica", 24f, false, false);
 
-        large.Should().BeGreaterThan(small);
+        large.ShouldBeGreaterThan(small);
     }
 
     [Fact(DisplayName = "MeasureWidth: longer text is wider")]
@@ -81,7 +81,7 @@ public class FontTests
         var short_ = TextMeasurer.MeasureWidth("Hi", "Helvetica", 12f, false, false);
         var long_ = TextMeasurer.MeasureWidth("Hello World", "Helvetica", 12f, false, false);
 
-        long_.Should().BeGreaterThan(short_);
+        long_.ShouldBeGreaterThan(short_);
     }
 
     // ── WrapText ────────────────────────────────────────────────────────
@@ -91,8 +91,8 @@ public class FontTests
     {
         var lines = TextMeasurer.WrapText("Hi", 200f, "Helvetica", 12f, false, false);
 
-        lines.Should().ContainSingle();
-        lines[0].Should().Be("Hi");
+        lines.Count().ShouldBe(1);
+        lines[0].ShouldBe("Hi");
     }
 
     [Fact(DisplayName = "WrapText: long text wraps into multiple lines")]
@@ -102,7 +102,7 @@ public class FontTests
             "This is a very long sentence that should definitely wrap across multiple lines when given a narrow width",
             100f, "Helvetica", 12f, false, false);
 
-        lines.Should().HaveCountGreaterThan(1);
+        lines.Count().ShouldBeGreaterThan(1);
     }
 
     [Fact(DisplayName = "WrapText: empty text returns empty or single empty")]
@@ -110,7 +110,7 @@ public class FontTests
     {
         var lines = TextMeasurer.WrapText("", 200f, "Helvetica", 12f, false, false);
 
-        lines.Should().NotBeNull();
+        lines.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "WrapText: single long word")]
@@ -119,8 +119,8 @@ public class FontTests
         var lines = TextMeasurer.WrapText(
             "Supercalifragilisticexpialidocious", 50f, "Helvetica", 12f, false, false);
 
-        lines.Should().NotBeNull();
-        lines.Should().NotBeEmpty();
+        lines.ShouldNotBeNull();
+        lines.ShouldNotBeEmpty();
     }
 
     // ── FitChars ────────────────────────────────────────────────────────
@@ -130,8 +130,8 @@ public class FontTests
     {
         var count = TextMeasurer.FitChars("Hello World", 0, 200f, "Helvetica", 12f, false, false);
 
-        count.Should().BeGreaterThan(0);
-        count.Should().BeLessThanOrEqualTo("Hello World".Length);
+        count.ShouldBeGreaterThan(0);
+        count.ShouldBeLessThanOrEqualTo("Hello World".Length);
     }
 
     [Fact(DisplayName = "FitChars: zero width returns zero")]
@@ -139,7 +139,7 @@ public class FontTests
     {
         var count = TextMeasurer.FitChars("Hello", 0, 0f, "Helvetica", 12f, false, false);
 
-        count.Should().Be(0);
+        count.ShouldBe(0);
     }
 
     // ── FontMetrics ─────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ public class FontTests
     public void FontMetrics_Helvetica_HasMetrics()
     {
         var width = FontMetrics.GetCharWidth("Helvetica", 'A');
-        width.Should().BeGreaterThan(0);
+        width.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "FontMetrics: different chars have different widths")]
@@ -157,6 +157,6 @@ public class FontTests
         var wideChar = FontMetrics.GetCharWidth("Helvetica", 'W');
         var narrowChar = FontMetrics.GetCharWidth("Helvetica", 'i');
 
-        wideChar.Should().BeGreaterThan(narrowChar);
+        wideChar.ShouldBeGreaterThan(narrowChar);
     }
 }

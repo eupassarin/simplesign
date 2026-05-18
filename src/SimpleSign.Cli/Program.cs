@@ -17,6 +17,8 @@ app.Configure(config =>
         .WithDescription("Inspect signature metadata (no validation)");
     config.AddCommand<ExtractCommand>("extract")
         .WithDescription("Extract CMS signatures from a signed PDF");
+    config.AddCommand<ExplainCommand>("explain")
+        .WithDescription("Explain PDF signature terms and fields");
     config.AddCommand<HtmlToPdfCommand>("html-to-pdf")
         .WithDescription("Convert an HTML file to PDF");
     config.AddCommand<VersionCommand>("version")

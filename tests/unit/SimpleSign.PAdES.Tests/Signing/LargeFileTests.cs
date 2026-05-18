@@ -1,5 +1,5 @@
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
@@ -70,12 +70,13 @@ public sealed class LargeFileTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=LargeFile Test");
         var largePdf = CreateLargePdf(1_000_000); // ~1MB
 
-        largePdf.Length.Should().BeGreaterThanOrEqualTo(1_000_000);
+        largePdf.Length.ShouldBeGreaterThanOrEqualTo(1_000_000);
 
         var signed = await SimpleSigner.Document(largePdf).WithCertificate(cert).SignAsync();
 
-        signed.Should().NotBeNullOrEmpty();
-        signed.Length.Should().BeGreaterThan(largePdf.Length);
+        signed.ShouldNotBeNull();
+        signed.ShouldNotBeEmpty();
+        signed.Length.ShouldBeGreaterThan(largePdf.Length);
     }
 
     [Fact(DisplayName = "BatchSigner signs many documents successfully")]
@@ -93,11 +94,11 @@ public sealed class LargeFileTests
             results.Add(result);
         }
 
-        results.Should().HaveCount(50);
-        results.Should().OnlyContain(r => r.IsSuccess);
-        results.Should().OnlyContain(r => r.SignedPdf != null);
-        signer.SuccessCount.Should().Be(50);
-        signer.FailureCount.Should().Be(0);
+        results.Count().ShouldBe(50);
+        results.ShouldAllBe(r => r.IsSuccess);
+        results.ShouldAllBe(r => r.SignedPdf != null);
+        signer.SuccessCount.ShouldBe(50);
+        signer.FailureCount.ShouldBe(0);
     }
 
     [Fact(DisplayName = "Signed PDF can be validated")]
@@ -118,9 +119,9 @@ public sealed class LargeFileTests
 
         var validationResults = await validator.ValidateAsync(stream);
 
-        validationResults.Should().NotBeEmpty();
-        validationResults[0].IsIntegrityValid.Should().BeTrue();
-        validationResults[0].IsSignatureValid.Should().BeTrue();
+        validationResults.ShouldNotBeEmpty();
+        validationResults[0].IsIntegrityValid.ShouldBeTrue();
+        validationResults[0].IsSignatureValid.ShouldBeTrue();
     }
 
     private static async IAsyncEnumerable<(string Id, byte[] PdfBytes)> GenerateInputs(int count)

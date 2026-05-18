@@ -5,11 +5,11 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RootNamespace>SimpleSign.Fuzz</RootNamespace>
     <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);CA1031;CA1303;CS1591;CA1515;CA2007;IDE0055;NU1903</NoWarn>
+    <NoWarn>$(NoWarn);CA1031;CA1303;CS1591;CA1515;CA2007;IDE0055;NU1903;CA1829;CA1861</NoWarn>
   </PropertyGroup>
 
-  <!-- Fuzz harnesses for SimpleSign parsers. Targets: cms, pdf, dss, timestamp.
-       Run: dotnet run -c Release   cms
+  <!-- Fuzz harnesses for SimpleSign parsers. Targets: pdf, dss, timestamp, ocsp.
+       Run: dotnet run -c Release   pdf
        Instrumented: dotnet publish -c Release; sharpfuzz on the published dll. -->
   <ItemGroup>
     <PackageReference Include="SharpFuzz" Version="2.*" />

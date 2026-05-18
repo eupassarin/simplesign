@@ -31,14 +31,21 @@ SimpleSign.HtmlToPdf        Pure-.NET HTML→PDF (independent)
 The simplest way to sign a PDF:
 
 ```csharp
-using SimpleSign.Signing;
+using SimpleSign.PAdES;
 
+// From a byte array
 var signedPdf = await SimpleSigner
-    .Document("contract.pdf")
+    .Document(pdfBytes)
     .WithCertificate(certificate)
     .SignAsync();
 
 File.WriteAllBytes("contract-signed.pdf", signedPdf);
+
+// Or from a file path (async I/O)
+var builder = await SimpleSigner.DocumentAsync("contract.pdf");
+var signedPdf2 = await builder
+    .WithCertificate(certificate)
+    .SignAsync();
 ```
 
 This creates a **PAdES B-B** (basic) signature.
@@ -94,7 +101,8 @@ await SimpleSigner
 ## Validate Signatures
 
 ```csharp
-using SimpleSign.Validation;
+using SimpleSign.Core.Validation;
+using SimpleSign.PAdES.Validation;
 
 var validator = new PdfSignatureValidator(new ValidationOptions
 {
@@ -110,6 +118,22 @@ foreach (var r in results)
     Console.WriteLine($"  Integrity={r.IsIntegrityValid}");
     Console.WriteLine($"  Chain={r.IsCertificateChainValid}");
 }
+```
+
+## Dependency Injection
+
+Register SimpleSign in your DI container:
+
+```csharp
+using SimpleSign.PAdES;
+
+services.AddSimpleSign(options =>
+{
+    options.DefaultTsaUrl = "http://timestamp.digicert.com";
+});
+
+// For ICP-Brasil support
+services.AddSimpleSignBrasil();
 ```
 
 ## Next Steps

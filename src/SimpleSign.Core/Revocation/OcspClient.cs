@@ -190,7 +190,7 @@ internal sealed class OcspClient
 
         // certs [0] OPTIONAL — extract responder cert
         X509Certificate2? responderCert = null;
-#pragma warning disable CA2000 // responderCert ownership transfers to caller via usage below
+#pragma warning disable CA2000 // responderCert is disposed in the finally block below
         if (basicOcsp.HasData && basicOcsp.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))
         {
             var certsWrapper = basicOcsp.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true));
@@ -206,48 +206,55 @@ internal sealed class OcspClient
         }
 #pragma warning restore CA2000
 
-        // Verify OCSP response signature
-        if (responderCert is not null)
+        try
         {
-            bool sigValid = VerifyOcspSignature(responderCert, tbsResponseDataRaw, ocspSignature, sigAlgOid, logger);
-            if (!sigValid)
+            // Verify OCSP response signature
+            if (responderCert is not null)
             {
-                throw new InvalidOperationException("OCSP response signature verification failed.");
-            }
-        }
-
-        // Parse tbsResponseData for cert status
-        if (tbsResponseData.HasData && tbsResponseData.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))
-        {
-            tbsResponseData.ReadEncodedValue(); // version
-        }
-
-        tbsResponseData.ReadEncodedValue(); // responderID
-        tbsResponseData.ReadEncodedValue(); // producedAt
-
-        var responses = tbsResponseData.ReadSequence();
-        while (responses.HasData)
-        {
-            var single = responses.ReadSequence();
-            single.ReadSequence(); // CertID
-
-            var certStatusTag = single.PeekTag();
-            if (certStatusTag.TagClass == TagClass.ContextSpecific)
-            {
-                switch (certStatusTag.TagValue)
+                bool sigValid = VerifyOcspSignature(responderCert, tbsResponseDataRaw, ocspSignature, sigAlgOid, logger);
+                if (!sigValid)
                 {
-                    case 0:
-                        return true;  // good
-                    case 1:
-                        return false; // revoked
-                    case 2:
-                        throw new InvalidOperationException("OCSP response indicates certificate status is 'unknown'.");
+                    throw new InvalidOperationException("OCSP response signature verification failed.");
                 }
             }
-            break;
-        }
 
-        throw new InvalidDataException("OCSP response does not contain a valid certificate status.");
+            // Parse tbsResponseData for cert status
+            if (tbsResponseData.HasData && tbsResponseData.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))
+            {
+                tbsResponseData.ReadEncodedValue(); // version
+            }
+
+            tbsResponseData.ReadEncodedValue(); // responderID
+            tbsResponseData.ReadEncodedValue(); // producedAt
+
+            var responses = tbsResponseData.ReadSequence();
+            while (responses.HasData)
+            {
+                var single = responses.ReadSequence();
+                single.ReadSequence(); // CertID
+
+                var certStatusTag = single.PeekTag();
+                if (certStatusTag.TagClass == TagClass.ContextSpecific)
+                {
+                    switch (certStatusTag.TagValue)
+                    {
+                        case 0:
+                            return true;  // good
+                        case 1:
+                            return false; // revoked
+                        case 2:
+                            throw new InvalidOperationException("OCSP response indicates certificate status is 'unknown'.");
+                    }
+                }
+                break;
+            }
+
+            throw new InvalidDataException("OCSP response does not contain a valid certificate status.");
+        }
+        finally
+        {
+            responderCert?.Dispose();
+        }
     }
 
     internal static bool VerifyOcspSignature(X509Certificate2 responderCert, byte[] tbsData, byte[] signature, string sigAlgOid, ILogger? logger = null)

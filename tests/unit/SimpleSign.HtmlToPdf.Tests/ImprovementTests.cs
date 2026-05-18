@@ -1,6 +1,6 @@
 // Licensed to SimpleSign under the MIT License.
 
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Layout;
 using SimpleSign.HtmlToPdf.Parsing;
 using Xunit;
@@ -24,7 +24,7 @@ public class ImprovementTests
 
         byte[] pdf = HtmlToPdfConverter.Html(largeHtml).Convert();
 
-        pdf.Length.Should().BeLessThan(largeHtml.Length,
+        pdf.Length.ShouldBeLessThan(largeHtml.Length,
             "FlateDecode compression should make the PDF smaller than raw HTML for large content");
     }
 
@@ -50,7 +50,7 @@ public class ImprovementTests
             idx += "/Filter /FlateDecode".Length;
         }
 
-        count.Should().BeGreaterThanOrEqualTo(3,
+        count.ShouldBeGreaterThanOrEqualTo(3,
             "each page content stream should have its own FlateDecode filter");
     }
 
@@ -59,9 +59,9 @@ public class ImprovementTests
     {
         byte[] pdf = HtmlToPdfConverter.Html("<html><body></body></html>").Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 
     [Fact(DisplayName = "Compression: decompressed content matches original text")]
@@ -74,8 +74,8 @@ public class ImprovementTests
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
         // PDF renderer splits inline text into individual word runs
-        decompressed.Should().Contain("Compression");
-        decompressed.Should().Contain("Content");
+        decompressed.ShouldContain("Compression");
+        decompressed.ShouldContain("Content");
     }
 
     [Fact(DisplayName = "Compression: special characters survive roundtrip")]
@@ -87,9 +87,9 @@ public class ImprovementTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("&");
-        decompressed.Should().Contain("<");
-        decompressed.Should().Contain(">");
+        decompressed.ShouldContain("&");
+        decompressed.ShouldContain("<");
+        decompressed.ShouldContain(">");
     }
 
     // ── Page Orientation ───────────────────────────────────────────────
@@ -105,7 +105,7 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/MediaBox [0 0 841.89 595.28]");
+        text.ShouldContain("/MediaBox [0 0 841.89 595.28]");
     }
 
     [Fact(DisplayName = "Landscape Letter: MediaBox is 792 x 612")]
@@ -120,7 +120,7 @@ public class ImprovementTests
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
         // Renderer formats dimensions with F2 (2 decimal places)
-        text.Should().Contain("/MediaBox [0 0 792.00 612.00]");
+        text.ShouldContain("/MediaBox [0 0 792.00 612.00]");
     }
 
     [Fact(DisplayName = "Landscape: content width is wider than portrait")]
@@ -142,9 +142,9 @@ public class ImprovementTests
         string landscapeText = System.Text.Encoding.ASCII.GetString(landscapePdf);
 
         // Portrait A4 MediaBox: width=595.28, height=841.89
-        portraitText.Should().Contain("/MediaBox [0 0 595.28 841.89]");
+        portraitText.ShouldContain("/MediaBox [0 0 595.28 841.89]");
         // Landscape A4 MediaBox: width=841.89, height=595.28 (swapped)
-        landscapeText.Should().Contain("/MediaBox [0 0 841.89 595.28]");
+        landscapeText.ShouldContain("/MediaBox [0 0 841.89 595.28]");
     }
 
     [Fact(DisplayName = "Landscape with custom margins: respects margins and MediaBox")]
@@ -159,8 +159,8 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/MediaBox [0 0 841.89 595.28]");
-        pdf.Length.Should().BeGreaterThan(0);
+        text.ShouldContain("/MediaBox [0 0 841.89 595.28]");
+        pdf.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "Portrait default: same MediaBox as explicit Portrait")]
@@ -180,8 +180,8 @@ public class ImprovementTests
         string defaultText = System.Text.Encoding.ASCII.GetString(defaultPdf);
         string explicitText = System.Text.Encoding.ASCII.GetString(explicitPdf);
 
-        defaultText.Should().Contain("/MediaBox [0 0 595.28 841.89]");
-        explicitText.Should().Contain("/MediaBox [0 0 595.28 841.89]");
+        defaultText.ShouldContain("/MediaBox [0 0 595.28 841.89]");
+        explicitText.ShouldContain("/MediaBox [0 0 595.28 841.89]");
     }
 
     // ── PDF Metadata ───────────────────────────────────────────────────
@@ -196,7 +196,7 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
 
-        text.Should().Contain("/Title (Teste)");
+        text.ShouldContain("/Title (Teste)");
     }
 
     [Fact(DisplayName = "Metadata: author appears in Info dict")]
@@ -209,7 +209,7 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
 
-        text.Should().Contain("/Author");
+        text.ShouldContain("/Author");
     }
 
     [Fact(DisplayName = "Metadata: special chars are escaped in title")]
@@ -222,8 +222,8 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
 
-        text.Should().Contain("\\(");
-        text.Should().Contain("\\)");
+        text.ShouldContain("\\(");
+        text.ShouldContain("\\)");
     }
 
     [Fact(DisplayName = "Metadata: no title or author still has Creator")]
@@ -235,7 +235,7 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/Creator (SimpleSign.HtmlToPdf)");
+        text.ShouldContain("/Creator (SimpleSign.HtmlToPdf)");
     }
 
     [Fact(DisplayName = "Metadata: combined with bookmarks, both present")]
@@ -249,9 +249,9 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
 
-        text.Should().Contain("/Title (Combined Test)");
-        text.Should().Contain("/Outlines");
-        text.Should().Contain("/Type /Outlines");
+        text.ShouldContain("/Title (Combined Test)");
+        text.ShouldContain("/Outlines");
+        text.ShouldContain("/Type /Outlines");
     }
 
     // ── HSL Colors ─────────────────────────────────────────────────────
@@ -261,9 +261,9 @@ public class ImprovementTests
     {
         var color = PdfColor.Parse("hsl(0, 100%, 50%)");
 
-        color.R.Should().BeApproximately(1.0f, 0.01f);
-        color.G.Should().BeApproximately(0.0f, 0.01f);
-        color.B.Should().BeApproximately(0.0f, 0.01f);
+        color.R.ShouldBe(1.0f, 0.01f);
+        color.G.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(0.0f, 0.01f);
     }
 
     [Fact(DisplayName = "HSL: green (120, 100%, 50%) parses correctly")]
@@ -271,9 +271,9 @@ public class ImprovementTests
     {
         var color = PdfColor.Parse("hsl(120, 100%, 50%)");
 
-        color.R.Should().BeApproximately(0.0f, 0.01f);
-        color.G.Should().BeApproximately(1.0f, 0.01f);
-        color.B.Should().BeApproximately(0.0f, 0.01f);
+        color.R.ShouldBe(0.0f, 0.01f);
+        color.G.ShouldBe(1.0f, 0.01f);
+        color.B.ShouldBe(0.0f, 0.01f);
     }
 
     [Fact(DisplayName = "HSL: blue (240, 100%, 50%) parses correctly")]
@@ -281,9 +281,9 @@ public class ImprovementTests
     {
         var color = PdfColor.Parse("hsl(240, 100%, 50%)");
 
-        color.R.Should().BeApproximately(0.0f, 0.01f);
-        color.G.Should().BeApproximately(0.0f, 0.01f);
-        color.B.Should().BeApproximately(1.0f, 0.01f);
+        color.R.ShouldBe(0.0f, 0.01f);
+        color.G.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(1.0f, 0.01f);
     }
 
     [Fact(DisplayName = "HSL: white (0, 0%, 100%) parses correctly")]
@@ -291,9 +291,9 @@ public class ImprovementTests
     {
         var color = PdfColor.Parse("hsl(0, 0%, 100%)");
 
-        color.R.Should().BeApproximately(1.0f, 0.01f);
-        color.G.Should().BeApproximately(1.0f, 0.01f);
-        color.B.Should().BeApproximately(1.0f, 0.01f);
+        color.R.ShouldBe(1.0f, 0.01f);
+        color.G.ShouldBe(1.0f, 0.01f);
+        color.B.ShouldBe(1.0f, 0.01f);
     }
 
     [Fact(DisplayName = "HSL: black (0, 0%, 0%) parses correctly")]
@@ -301,9 +301,9 @@ public class ImprovementTests
     {
         var color = PdfColor.Parse("hsl(0, 0%, 0%)");
 
-        color.R.Should().BeApproximately(0.0f, 0.01f);
-        color.G.Should().BeApproximately(0.0f, 0.01f);
-        color.B.Should().BeApproximately(0.0f, 0.01f);
+        color.R.ShouldBe(0.0f, 0.01f);
+        color.G.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(0.0f, 0.01f);
     }
 
     [Fact(DisplayName = "HSL: gray 50% (0, 0%, 50%) parses correctly")]
@@ -311,9 +311,9 @@ public class ImprovementTests
     {
         var color = PdfColor.Parse("hsl(0, 0%, 50%)");
 
-        color.R.Should().BeApproximately(0.5f, 0.01f);
-        color.G.Should().BeApproximately(0.5f, 0.01f);
-        color.B.Should().BeApproximately(0.5f, 0.01f);
+        color.R.ShouldBe(0.5f, 0.01f);
+        color.G.ShouldBe(0.5f, 0.01f);
+        color.B.ShouldBe(0.5f, 0.01f);
     }
 
     [Fact(DisplayName = "HSLA: with alpha parses correctly without crash")]
@@ -321,9 +321,9 @@ public class ImprovementTests
     {
         var color = PdfColor.Parse("hsla(120, 100%, 50%, 0.5)");
 
-        color.R.Should().BeApproximately(0.0f, 0.01f);
-        color.G.Should().BeApproximately(1.0f, 0.01f);
-        color.B.Should().BeApproximately(0.0f, 0.01f);
+        color.R.ShouldBe(0.0f, 0.01f);
+        color.G.ShouldBe(1.0f, 0.01f);
+        color.B.ShouldBe(0.0f, 0.01f);
     }
 
     [Fact(DisplayName = "HSL in CSS: renders valid PDF with color operator")]
@@ -333,13 +333,13 @@ public class ImprovementTests
             .Html("""<p style="color: hsl(210, 80%, 30%)">HSL colored text</p>""")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
-        decompressed.Should().Contain("HSL");
-        decompressed.Should().Contain("colored");
+        decompressed.ShouldContain("HSL");
+        decompressed.ShouldContain("colored");
     }
 
     // ── Bookmarks ──────────────────────────────────────────────────────
@@ -353,8 +353,8 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/Type /Outlines");
-        text.Should().Contain("/Count 1");
+        text.ShouldContain("/Type /Outlines");
+        text.ShouldContain("/Count 1");
     }
 
     [Fact(DisplayName = "Bookmarks: multiple headings all present in PDF")]
@@ -366,10 +366,10 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("(Chapter)");
-        text.Should().Contain("(Section)");
-        text.Should().Contain("(Subsection)");
-        text.Should().Contain("/Count 3");
+        text.ShouldContain("(Chapter)");
+        text.ShouldContain("(Section)");
+        text.ShouldContain("(Subsection)");
+        text.ShouldContain("/Count 3");
     }
 
     [Fact(DisplayName = "Bookmarks: special chars are escaped in bookmark title")]
@@ -381,8 +381,8 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
 
-        text.Should().Contain("\\(");
-        text.Should().Contain("\\)");
+        text.ShouldContain("\\(");
+        text.ShouldContain("\\)");
     }
 
     [Fact(DisplayName = "Bookmarks: empty heading is skipped")]
@@ -394,8 +394,8 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/Count 1", "empty h1 should not create a bookmark");
-        text.Should().Contain("(Real Title)");
+        text.ShouldContain("/Count 1");
+        text.ShouldContain("(Real Title)");
     }
 
     [Fact(DisplayName = "Bookmarks: catalog has Outlines and PageMode")]
@@ -407,8 +407,8 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/Type /Outlines");
-        text.Should().Contain("/PageMode /UseOutlines");
+        text.ShouldContain("/Type /Outlines");
+        text.ShouldContain("/PageMode /UseOutlines");
     }
 
     [Fact(DisplayName = "Bookmarks: destination points to valid page with XYZ")]
@@ -420,7 +420,7 @@ public class ImprovementTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().MatchRegex(@"/Dest \[\d+ 0 R /XYZ 0 \d+\.\d+ null\]");
+        text.ShouldMatch(@"/Dest \[\d+ 0 R /XYZ 0 \d+\.\d+ null\]");
     }
 
     // ── Headers & Footers ──────────────────────────────────────────────
@@ -435,7 +435,7 @@ public class ImprovementTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("Page 1");
+        decompressed.ShouldContain("Page 1");
     }
 
     [Fact(DisplayName = "Footer: {page}/{pages} shows total page count")]
@@ -448,7 +448,7 @@ public class ImprovementTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("1/1");
+        decompressed.ShouldContain("1/1");
     }
 
     [Fact(DisplayName = "Header: {title} placeholder uses metadata")]
@@ -462,7 +462,7 @@ public class ImprovementTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("My Doc");
+        decompressed.ShouldContain("My Doc");
     }
 
     [Fact(DisplayName = "Footer: {date} placeholder has current date")]
@@ -476,7 +476,7 @@ public class ImprovementTests
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
         string today = DateTime.Now.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
-        decompressed.Should().Contain(today);
+        decompressed.ShouldContain(today);
     }
 
     [Fact(DisplayName = "Header and footer: both appear in PDF simultaneously")]
@@ -490,8 +490,8 @@ public class ImprovementTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("HEADER TEXT");
-        decompressed.Should().Contain("FOOTER TEXT");
+        decompressed.ShouldContain("HEADER TEXT");
+        decompressed.ShouldContain("FOOTER TEXT");
     }
 
     [Fact(DisplayName = "Multi-page: header/footer appear on all pages")]
@@ -511,10 +511,10 @@ public class ImprovementTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("H-1");
-        decompressed.Should().Contain("H-2");
-        decompressed.Should().Contain("F-1");
-        decompressed.Should().Contain("F-2");
+        decompressed.ShouldContain("H-1");
+        decompressed.ShouldContain("H-2");
+        decompressed.ShouldContain("F-1");
+        decompressed.ShouldContain("F-2");
     }
 
     [Fact(DisplayName = "No header/footer: template text absent from PDF")]
@@ -527,7 +527,7 @@ public class ImprovementTests
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
         // Without header/footer, page numbering text should not be present
-        decompressed.Should().NotContain("Page 1 of 1");
+        decompressed.ShouldNotContain("Page 1 of 1");
     }
 
     // ── Robustness ─────────────────────────────────────────────────────
@@ -542,12 +542,12 @@ public class ImprovementTests
 
         var act = () => HtmlToPdfConverter.Html(html).Convert();
 
-        byte[] pdf = act.Should().NotThrow().Subject;
-        pdf.Should().NotBeNull();
+        byte[] pdf = act.Invoke();
+        pdf.ShouldNotBeNull();
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
-        decompressed.Should().Contain("Deep");
-        decompressed.Should().Contain("256");
+        decompressed.ShouldContain("Deep");
+        decompressed.ShouldContain("256");
     }
 
     [Fact(DisplayName = "Max nesting 300 levels: clamped at 256, content present")]
@@ -560,12 +560,12 @@ public class ImprovementTests
 
         var act = () => HtmlToPdfConverter.Html(html).Convert();
 
-        byte[] pdf = act.Should().NotThrow().Subject;
-        pdf.Should().NotBeNull();
+        byte[] pdf = act.Invoke();
+        pdf.ShouldNotBeNull();
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
-        decompressed.Should().Contain("Deep");
-        decompressed.Should().Contain("300");
+        decompressed.ShouldContain("Deep");
+        decompressed.ShouldContain("300");
     }
 
     [Fact(DisplayName = "Broken image data URI with alt: shows alt text in brackets")]
@@ -577,7 +577,7 @@ public class ImprovementTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("[Broken]");
+        decompressed.ShouldContain("[Broken]");
     }
 
     [Fact(DisplayName = "Broken image HTTP URL with alt: shows alt text in brackets")]
@@ -589,7 +589,7 @@ public class ImprovementTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("[Not Found]");
+        decompressed.ShouldContain("[Not Found]");
     }
 
     [Fact(DisplayName = "Broken image no alt: valid PDF, no crash, no alt text box")]
@@ -599,9 +599,9 @@ public class ImprovementTests
             .Html("""<p>Before</p><img src="invalid"><p>After</p>""")
             .Convert();
 
-        byte[] pdf = act.Should().NotThrow().Subject;
-        pdf.Should().NotBeNull();
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        byte[] pdf = act.Invoke();
+        pdf.ShouldNotBeNull();
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 
     [Fact(DisplayName = "Malformed HTML with unclosed tags: does not crash")]
@@ -611,9 +611,9 @@ public class ImprovementTests
             .Html("<div><p>Test<table><tr><td>Cell")
             .Convert();
 
-        byte[] pdf = act.Should().NotThrow().Subject;
-        pdf.Should().NotBeNull();
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        byte[] pdf = act.Invoke();
+        pdf.ShouldNotBeNull();
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 
     // ── Integration / End-to-End ───────────────────────────────────────
@@ -654,20 +654,20 @@ public class ImprovementTests
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
         // Valid PDF
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
 
         // Landscape A4
-        raw.Should().Contain("/MediaBox [0 0 841.89 595.28]");
+        raw.ShouldContain("/MediaBox [0 0 841.89 595.28]");
 
         // Metadata
-        raw.Should().Contain("/Title");
-        raw.Should().Contain("/Author");
+        raw.ShouldContain("/Title");
+        raw.ShouldContain("/Author");
 
         // Bookmarks (headings h1+h2 produce outlines)
-        raw.Should().Contain("/Type /Outlines");
+        raw.ShouldContain("/Type /Outlines");
 
         // Header/footer resolved (text is split into words by renderer)
-        decompressed.Should().Contain("Parecer");
+        decompressed.ShouldContain("Parecer");
     }
 
     [Fact(DisplayName = "E2E: multi-page with bookmarks and footers")]
@@ -696,9 +696,9 @@ public class ImprovementTests
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
         // All 3 bookmarks present
-        raw.Should().Contain("(Chapter 1)");
-        raw.Should().Contain("(Chapter 2)");
-        raw.Should().Contain("(Chapter 3)");
+        raw.ShouldContain("(Chapter 1)");
+        raw.ShouldContain("(Chapter 2)");
+        raw.ShouldContain("(Chapter 3)");
 
         // Should have multiple pages (count MediaBox occurrences)
         int pageCount = 0;
@@ -709,10 +709,10 @@ public class ImprovementTests
             searchIdx += "/MediaBox".Length;
         }
 
-        pageCount.Should().BeGreaterThanOrEqualTo(3, "long content should span at least 3 pages");
+        pageCount.ShouldBeGreaterThanOrEqualTo(3, "long content should span at least 3 pages");
 
         // Footer should show page numbers in decompressed content
-        decompressed.Should().Contain($"/{pageCount}");
+        decompressed.ShouldContain($"/{pageCount}");
     }
 
     [Fact(DisplayName = "E2E: CKEditor-style output with improvements")]
@@ -749,21 +749,21 @@ public class ImprovementTests
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
         // Valid PDF
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
 
         // Metadata
-        raw.Should().Contain("/Title (CKEditor Doc)");
+        raw.ShouldContain("/Title (CKEditor Doc)");
 
         // Bookmarks
-        raw.Should().Contain("(Document Title)");
+        raw.ShouldContain("(Document Title)");
 
         // Footer resolved - check date present in decompressed output
         string today = DateTime.Now.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
-        decompressed.Should().Contain(today);
+        decompressed.ShouldContain(today);
 
         // Content present (words are split individually by renderer)
-        decompressed.Should().Contain("Final");
-        decompressed.Should().Contain("paragraph");
+        decompressed.ShouldContain("Final");
+        decompressed.ShouldContain("paragraph");
     }
 
     [Fact(DisplayName = "E2E: empty HTML produces minimal valid PDF")]
@@ -771,8 +771,8 @@ public class ImprovementTests
     {
         byte[] pdf = HtmlToPdfConverter.Html("").Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 }

@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Layout;
 using Xunit;
 
@@ -15,9 +15,9 @@ public class HtmlToPdfConverterTests
             .Html("<h1>Test</h1><p>Content</p>")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 
     [Fact(DisplayName = "Html(byte[]): converts UTF-8 bytes")]
@@ -29,8 +29,8 @@ public class HtmlToPdfConverterTests
             .Html(htmlBytes)
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "Html(null): throws ArgumentNullException")]
@@ -38,7 +38,7 @@ public class HtmlToPdfConverterTests
     {
         var act = () => HtmlToPdfConverter.Html((string)null!);
 
-        act.Should().Throw<ArgumentNullException>();
+        Should.Throw<ArgumentNullException>(act);
     }
 
     // ── File entry points ───────────────────────────────────────────────
@@ -48,7 +48,7 @@ public class HtmlToPdfConverterTests
     {
         var act = () => HtmlToPdfConverter.File("/tmp/does-not-exist-12345.html");
 
-        act.Should().Throw<FileNotFoundException>();
+        Should.Throw<FileNotFoundException>(act);
     }
 
     [Fact(DisplayName = "File: converts existing HTML file")]
@@ -63,8 +63,8 @@ public class HtmlToPdfConverterTests
                 .File(tmpFile)
                 .Convert();
 
-            pdf.Should().NotBeNull();
-            System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+            pdf.ShouldNotBeNull();
+            System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
         }
         finally
         {
@@ -83,8 +83,8 @@ public class HtmlToPdfConverterTests
             var builder = await HtmlToPdfConverter.FileAsync(tmpFile);
             byte[] pdf = builder.Convert();
 
-            pdf.Should().NotBeNull();
-            System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+            pdf.ShouldNotBeNull();
+            System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
         }
         finally
         {
@@ -104,8 +104,8 @@ public class HtmlToPdfConverterTests
                 .WithPageSize(size)
                 .Convert();
 
-            pdf.Should().NotBeNull($"PageSize.{size} should produce a valid PDF");
-            pdf.Length.Should().BeGreaterThan(0);
+            pdf.ShouldNotBeNull($"PageSize.{size} should produce a valid PDF");
+            pdf.Length.ShouldBeGreaterThan(0);
         }
     }
 
@@ -117,8 +117,8 @@ public class HtmlToPdfConverterTests
             .WithMargins(50)
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "WithMargins(t,r,b,l): applies individual margins")]
@@ -129,8 +129,8 @@ public class HtmlToPdfConverterTests
             .WithMargins(30, 25, 30, 25)
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "WithStylesheet: applies CSS to output")]
@@ -141,8 +141,8 @@ public class HtmlToPdfConverterTests
             .WithStylesheet(".big { font-size: 24px; }")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "WithStylesheet: multiple calls accumulate")]
@@ -154,7 +154,7 @@ public class HtmlToPdfConverterTests
             .WithStylesheet(".b { font-weight: bold; }")
             .Convert();
 
-        pdf.Should().NotBeNull();
+        pdf.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "WithTitle: sets metadata")]
@@ -165,7 +165,7 @@ public class HtmlToPdfConverterTests
             .WithTitle("My Document")
             .Convert();
 
-        pdf.Should().NotBeNull();
+        pdf.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "WithAuthor: sets metadata")]
@@ -176,7 +176,7 @@ public class HtmlToPdfConverterTests
             .WithAuthor("André Almeida")
             .Convert();
 
-        pdf.Should().NotBeNull();
+        pdf.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "WithHeader: sets header template")]
@@ -187,9 +187,9 @@ public class HtmlToPdfConverterTests
             .WithHeader("Page {page} of {pages}")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 
     [Fact(DisplayName = "WithFooter: sets footer template")]
@@ -201,9 +201,9 @@ public class HtmlToPdfConverterTests
             .WithTitle("My Document")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 
     [Fact(DisplayName = "WithHeader: null throws ArgumentException")]
@@ -213,7 +213,7 @@ public class HtmlToPdfConverterTests
             .Html("<p>Test</p>")
             .WithHeader(null!);
 
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     [Fact(DisplayName = "WithFooter: null throws ArgumentException")]
@@ -223,7 +223,7 @@ public class HtmlToPdfConverterTests
             .Html("<p>Test</p>")
             .WithFooter(null!);
 
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     [Fact(DisplayName = "WithHeader: whitespace throws ArgumentException")]
@@ -233,7 +233,7 @@ public class HtmlToPdfConverterTests
             .Html("<p>Test</p>")
             .WithHeader("   ");
 
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     [Fact(DisplayName = "WithFooter: whitespace throws ArgumentException")]
@@ -243,7 +243,7 @@ public class HtmlToPdfConverterTests
             .Html("<p>Test</p>")
             .WithFooter("   ");
 
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     [Fact(DisplayName = "WithHeader and WithFooter: both render in PDF")]
@@ -256,8 +256,8 @@ public class HtmlToPdfConverterTests
             .WithTitle("Report")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(100);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(100);
     }
 
     [Fact(DisplayName = "Builder is immutable: each With returns new instance")]
@@ -270,8 +270,8 @@ public class HtmlToPdfConverterTests
         byte[] pdf1 = original.Convert();
         byte[] pdf2 = modified.Convert();
 
-        pdf1.Should().NotBeNull();
-        pdf2.Should().NotBeNull();
+        pdf1.ShouldNotBeNull();
+        pdf2.ShouldNotBeNull();
     }
 
     // ── Output methods ──────────────────────────────────────────────────
@@ -285,11 +285,11 @@ public class HtmlToPdfConverterTests
             .Html("<p>Stream Test</p>")
             .Convert(ms);
 
-        ms.Length.Should().BeGreaterThan(0);
+        ms.Length.ShouldBeGreaterThan(0);
         ms.Position = 0;
         var buffer = new byte[5];
         _ = ms.Read(buffer, 0, 5);
-        System.Text.Encoding.ASCII.GetString(buffer).Should().Be("%PDF-");
+        System.Text.Encoding.ASCII.GetString(buffer).ShouldBe("%PDF-");
     }
 
     [Fact(DisplayName = "ConvertAsync: returns PDF bytes")]
@@ -299,8 +299,8 @@ public class HtmlToPdfConverterTests
             .Html("<p>Async Test</p>")
             .ConvertAsync();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "ConvertAsync(Stream): writes to stream")]
@@ -312,7 +312,7 @@ public class HtmlToPdfConverterTests
             .Html("<p>Async Stream Test</p>")
             .ConvertAsync(ms);
 
-        ms.Length.Should().BeGreaterThan(0);
+        ms.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "SaveTo: writes to file")]
@@ -326,7 +326,7 @@ public class HtmlToPdfConverterTests
                 .SaveTo(tmpFile);
 
             var info = new FileInfo(tmpFile);
-            info.Length.Should().BeGreaterThan(0);
+            info.Length.ShouldBeGreaterThan(0);
         }
         finally
         {
@@ -345,7 +345,7 @@ public class HtmlToPdfConverterTests
                 .SaveToAsync(tmpFile);
 
             var info = new FileInfo(tmpFile);
-            info.Length.Should().BeGreaterThan(0);
+            info.Length.ShouldBeGreaterThan(0);
         }
         finally
         {
@@ -379,9 +379,9 @@ public class HtmlToPdfConverterTests
             .WithStylesheet("body { font-family: serif; font-size: 12px; line-height: 1.6; }")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(100);
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(100);
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 
     [Fact(DisplayName = "E2E: table with data")]
@@ -400,8 +400,8 @@ public class HtmlToPdfConverterTests
             .WithStylesheet("table { width: 100%; } th, td { border: 1px solid black; padding: 4px; }")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(100);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(100);
     }
 
     [Fact(DisplayName = "E2E: lists and formatting")]
@@ -423,7 +423,7 @@ public class HtmlToPdfConverterTests
             .Html(html)
             .Convert();
 
-        pdf.Should().NotBeNull();
+        pdf.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "E2E: complex styled document")]
@@ -466,8 +466,8 @@ public class HtmlToPdfConverterTests
             .WithAuthor("Unit Test")
             .Convert();
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(500);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(500);
     }
 
     // ── FlateDecode compression ─────────────────────────────────────────
@@ -481,7 +481,7 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/Filter /FlateDecode");
+        text.ShouldContain("/Filter /FlateDecode");
     }
 
     [Fact(DisplayName = "FlateDecode: PDF contains compressed stream markers")]
@@ -493,9 +493,9 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/Filter /FlateDecode");
-        text.Should().Contain("stream");
-        text.Should().Contain("endstream");
+        text.ShouldContain("/Filter /FlateDecode");
+        text.ShouldContain("stream");
+        text.ShouldContain("endstream");
     }
 
     [Fact(DisplayName = "FlateDecode: JPEG images use DCTDecode (no double compression)")]
@@ -520,7 +520,7 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/DCTDecode");
+        text.ShouldContain("/DCTDecode");
     }
 
     // ── Page orientation ────────────────────────────────────────────────
@@ -537,7 +537,7 @@ public class HtmlToPdfConverterTests
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
         // Landscape A4: width=841.89, height=595.28
-        text.Should().Contain("/MediaBox [0 0 841.89 595.28]");
+        text.ShouldContain("/MediaBox [0 0 841.89 595.28]");
     }
 
     [Fact(DisplayName = "Default orientation: Portrait has normal A4 MediaBox")]
@@ -551,7 +551,7 @@ public class HtmlToPdfConverterTests
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
         // Portrait A4: width=595.28, height=841.89
-        text.Should().Contain("/MediaBox [0 0 595.28 841.89]");
+        text.ShouldContain("/MediaBox [0 0 595.28 841.89]");
     }
 
     // ── PDF metadata ────────────────────────────────────────────────────
@@ -567,8 +567,8 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
 
-        text.Should().Contain("/Title (Test Doc)");
-        text.Should().Contain("/Author");
+        text.ShouldContain("/Title (Test Doc)");
+        text.ShouldContain("/Author");
     }
 
     [Fact(DisplayName = "Default: Creator and Producer are always present")]
@@ -580,8 +580,8 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/Creator (SimpleSign.HtmlToPdf)");
-        text.Should().Contain("/Producer (SimpleSign.HtmlToPdf)");
+        text.ShouldContain("/Creator (SimpleSign.HtmlToPdf)");
+        text.ShouldContain("/Producer (SimpleSign.HtmlToPdf)");
     }
 
     [Fact(DisplayName = "Default: CreationDate is present")]
@@ -593,7 +593,7 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/CreationDate (D:");
+        text.ShouldContain("/CreationDate (D:");
     }
 
     // ── Bookmarks ───────────────────────────────────────────────────────
@@ -607,8 +607,8 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("/Outlines");
-        text.Should().Contain("/Type /Outlines");
+        text.ShouldContain("/Outlines");
+        text.ShouldContain("/Type /Outlines");
     }
 
     [Fact(DisplayName = "Bookmarks: bookmark text appears in PDF")]
@@ -620,8 +620,8 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().Contain("(Title)");
-        text.Should().Contain("(Subtitle)");
+        text.ShouldContain("(Title)");
+        text.ShouldContain("(Subtitle)");
     }
 
     [Fact(DisplayName = "Bookmarks: no headings means no Outlines")]
@@ -633,7 +633,7 @@ public class HtmlToPdfConverterTests
 
         string text = System.Text.Encoding.ASCII.GetString(pdf);
 
-        text.Should().NotContain("/Type /Outlines");
+        text.ShouldNotContain("/Type /Outlines");
     }
 
     // ── Header / Footer ─────────────────────────────────────────────────
@@ -648,7 +648,7 @@ public class HtmlToPdfConverterTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("Page 1 of 1");
+        decompressed.ShouldContain("Page 1 of 1");
     }
 
     [Fact(DisplayName = "WithFooter: title placeholder rendered in PDF")]
@@ -662,7 +662,7 @@ public class HtmlToPdfConverterTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("Doc");
+        decompressed.ShouldContain("Doc");
     }
 
     [Fact(DisplayName = "No header/footer: no extra margin text")]
@@ -675,7 +675,7 @@ public class HtmlToPdfConverterTests
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
         // "Page 1 of 1" should NOT appear when no header/footer is set
-        decompressed.Should().NotContain("Page 1 of 1");
+        decompressed.ShouldNotContain("Page 1 of 1");
     }
 
     // ── Robustness ──────────────────────────────────────────────────────
@@ -691,9 +691,9 @@ public class HtmlToPdfConverterTests
 
         var act = () => HtmlToPdfConverter.Html(html).Convert();
 
-        byte[] pdf = act.Should().NotThrow().Subject;
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
+        byte[] pdf = act.Invoke();
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "Broken image with alt: renders alt text in brackets")]
@@ -705,7 +705,7 @@ public class HtmlToPdfConverterTests
 
         string decompressed = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        decompressed.Should().Contain("[Missing image]");
+        decompressed.ShouldContain("[Missing image]");
     }
 
     [Fact(DisplayName = "Broken image without alt: does not crash")]
@@ -715,8 +715,8 @@ public class HtmlToPdfConverterTests
             .Html("""<p>Before</p><img src="invalid"><p>After</p>""")
             .Convert();
 
-        byte[] pdf = act.Should().NotThrow().Subject;
-        pdf.Should().NotBeNull();
-        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).Should().Be("%PDF-");
+        byte[] pdf = act.Invoke();
+        pdf.ShouldNotBeNull();
+        System.Text.Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
     }
 }

@@ -1,6 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
 using Moq;
+using Shouldly;
 using SimpleSign.Core.Extensions;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -21,7 +21,7 @@ public sealed class TrustAnchorProviderContractTests
 
         var provider = mock.Object;
 
-        provider.GetTrustAnchors().Should().NotBeEmpty();
+        provider.GetTrustAnchors().ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "ITrustAnchorProvider: Empty trust anchors is valid edge case")]
@@ -34,7 +34,7 @@ public sealed class TrustAnchorProviderContractTests
 
         var provider = mock.Object;
 
-        provider.GetTrustAnchors().Should().BeEmpty();
+        provider.GetTrustAnchors().ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "ITrustAnchorProvider: RegionCode and DisplayName are accessible")]
@@ -46,8 +46,8 @@ public sealed class TrustAnchorProviderContractTests
 
         var provider = mock.Object;
 
-        provider.RegionCode.Should().Be("BR");
-        provider.DisplayName.Should().Be("ICP-Brasil");
+        provider.RegionCode.ShouldBe("BR");
+        provider.DisplayName.ShouldBe("ICP-Brasil");
     }
 }
 
@@ -70,8 +70,8 @@ public sealed class ChainValidationProviderContractTests
 
         var provider = mock.Object;
 
-        provider.CanValidate(cert).Should().BeTrue();
-        provider.Validate(cert, null).IsTrusted.Should().BeTrue();
+        provider.CanValidate(cert).ShouldBeTrue();
+        provider.Validate(cert, null).IsTrusted.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "IChainValidationProvider: CanValidate returns false for unknown cert")]
@@ -81,7 +81,7 @@ public sealed class ChainValidationProviderContractTests
         var mock = new Mock<IChainValidationProvider>();
         mock.Setup(x => x.CanValidate(cert)).Returns(false);
 
-        mock.Object.CanValidate(cert).Should().BeFalse();
+        mock.Object.CanValidate(cert).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "IChainValidationProvider: Validate with null chain still works")]
@@ -98,8 +98,8 @@ public sealed class ChainValidationProviderContractTests
 
         var result = mock.Object.Validate(cert, null);
 
-        result.Should().NotBeNull();
-        result.RegionCode.Should().Be("TS");
+        result.ShouldNotBeNull();
+        result.RegionCode.ShouldBe("TS");
     }
 }
 
@@ -129,8 +129,8 @@ public sealed class SignatureManifestProviderContractTests
 
         var provider = new StubManifestProvider();
 
-        provider.ManifestOid.Should().NotBeNullOrEmpty();
-        provider.BuildManifest(context).Should().NotBeEmpty();
+        provider.ManifestOid.ShouldNotBeNullOrEmpty();
+        provider.BuildManifest(context).ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "ISignatureManifestProvider: ParseManifest with valid data returns object")]
@@ -139,7 +139,7 @@ public sealed class SignatureManifestProviderContractTests
         var provider = new StubManifestProvider();
         var data = new byte[] { 0x30, 0x0A, 0x01, 0x02 };
 
-        provider.ParseManifest(data).Should().NotBeNull();
+        provider.ParseManifest(data).ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "ISignatureManifestProvider: ParseManifest with invalid data returns null")]
@@ -148,7 +148,7 @@ public sealed class SignatureManifestProviderContractTests
         var provider = new StubManifestProvider();
         var data = new byte[] { 0xFF, 0xFF };
 
-        provider.ParseManifest(data).Should().BeNull();
+        provider.ParseManifest(data).ShouldBeNull();
     }
 }
 
@@ -180,11 +180,11 @@ public sealed class CountryExtensionContractTests
 
         var ext = extension.Object;
 
-        ext.RegionCode.Should().Be("TS");
-        ext.DisplayName.Should().Be("Test Country");
-        ext.TrustAnchorProviders.Should().HaveCount(1);
-        ext.ChainValidationProviders.Should().HaveCount(1);
-        ext.ManifestProvider.Should().NotBeNull();
-        ext.TrustAnchorProviders[0].GetTrustAnchors().Should().NotBeEmpty();
+        ext.RegionCode.ShouldBe("TS");
+        ext.DisplayName.ShouldBe("Test Country");
+        ext.TrustAnchorProviders.Count().ShouldBe(1);
+        ext.ChainValidationProviders.Count().ShouldBe(1);
+        ext.ManifestProvider.ShouldNotBeNull();
+        ext.TrustAnchorProviders[0].GetTrustAnchors().ShouldNotBeEmpty();
     }
 }

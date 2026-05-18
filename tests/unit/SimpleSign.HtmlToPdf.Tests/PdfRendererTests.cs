@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Layout;
 using SimpleSign.HtmlToPdf.Parsing;
 using SimpleSign.HtmlToPdf.Rendering;
@@ -17,11 +17,11 @@ public class PdfRendererTests
 
         byte[] pdf = PdfDocumentRenderer.Render(layout);
 
-        pdf.Should().NotBeNull();
-        pdf.Length.Should().BeGreaterThan(0);
+        pdf.ShouldNotBeNull();
+        pdf.Length.ShouldBeGreaterThan(0);
 
         string header = System.Text.Encoding.ASCII.GetString(pdf, 0, Math.Min(10, pdf.Length));
-        header.Should().StartWith("%PDF-");
+        header.ShouldStartWith("%PDF-");
     }
 
     [Fact(DisplayName = "Render: contains EOF marker")]
@@ -32,7 +32,7 @@ public class PdfRendererTests
         byte[] pdf = PdfDocumentRenderer.Render(layout);
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
-        text.Should().Contain("%%EOF");
+        text.ShouldContain("%%EOF");
     }
 
     [Fact(DisplayName = "Render: contains xref table")]
@@ -43,8 +43,8 @@ public class PdfRendererTests
         byte[] pdf = PdfDocumentRenderer.Render(layout);
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
-        text.Should().Contain("xref");
-        text.Should().Contain("startxref");
+        text.ShouldContain("xref");
+        text.ShouldContain("startxref");
     }
 
     [Fact(DisplayName = "Render: contains catalog and pages")]
@@ -55,9 +55,9 @@ public class PdfRendererTests
         byte[] pdf = PdfDocumentRenderer.Render(layout);
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
-        text.Should().Contain("/Type /Catalog");
-        text.Should().Contain("/Type /Pages");
-        text.Should().Contain("/Type /Page");
+        text.ShouldContain("/Type /Catalog");
+        text.ShouldContain("/Type /Pages");
+        text.ShouldContain("/Type /Page");
     }
 
     [Fact(DisplayName = "Render: contains font resources")]
@@ -68,8 +68,8 @@ public class PdfRendererTests
         byte[] pdf = PdfDocumentRenderer.Render(layout);
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
-        text.Should().Contain("/Type /Font");
-        text.Should().Contain("/BaseFont");
+        text.ShouldContain("/Type /Font");
+        text.ShouldContain("/BaseFont");
     }
 
     // ── Multi-page ──────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ public class PdfRendererTests
 
         // Could match "/Type /Page" and "/Type /Pages" differently
         // Just verify we have content for multiple pages
-        text.Should().Contain("/Count 3");
+        text.ShouldContain("/Count 3");
     }
 
     // ── Content stream ──────────────────────────────────────────────────
@@ -124,9 +124,9 @@ public class PdfRendererTests
 
         string text = PdfTextHelper.GetDecompressedPdfText(pdf);
         // PDF text is in (text) Tj format
-        text.Should().Contain("BT");
-        text.Should().Contain("ET");
-        text.Should().Contain("Tj");
+        text.ShouldContain("BT");
+        text.ShouldContain("ET");
+        text.ShouldContain("Tj");
     }
 
     [Fact(DisplayName = "Render: empty layout produces valid PDF")]
@@ -141,9 +141,9 @@ public class PdfRendererTests
 
         byte[] pdf = PdfDocumentRenderer.Render(layout);
 
-        pdf.Should().NotBeNull();
+        pdf.ShouldNotBeNull();
         string header = System.Text.Encoding.ASCII.GetString(pdf, 0, 5);
-        header.Should().Be("%PDF-");
+        header.ShouldBe("%PDF-");
     }
 
     // ── Background and borders ──────────────────────────────────────────
@@ -168,7 +168,7 @@ public class PdfRendererTests
 
         string text = System.Text.Encoding.Latin1.GetString(pdf);
         // Should contain rectangle fill operators
-        text.Should().Contain("re");
+        text.ShouldContain("re");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

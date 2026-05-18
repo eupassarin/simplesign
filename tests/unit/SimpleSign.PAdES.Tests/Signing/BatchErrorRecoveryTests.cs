@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
@@ -41,17 +41,17 @@ public sealed class BatchErrorRecoveryTests
             results.Add(result);
         }
 
-        results.Should().HaveCount(3);
+        results.Count().ShouldBe(3);
 
         var successResults = results.Where(r => r.IsSuccess).ToList();
         var errorResults = results.Where(r => !r.IsSuccess).ToList();
 
-        successResults.Should().HaveCount(2);
-        successResults.Should().OnlyContain(r => r.SignedPdf != null);
+        successResults.Count().ShouldBe(2);
+        successResults.ShouldAllBe(r => r.SignedPdf != null);
 
-        errorResults.Should().ContainSingle();
-        errorResults[0].Error.Should().NotBeNull();
-        errorResults[0].Id.Should().Be("invalid-1");
+        errorResults.Count().ShouldBe(1);
+        errorResults[0].Error.ShouldNotBeNull();
+        errorResults[0].Id.ShouldBe("invalid-1");
     }
 
     [Fact(DisplayName = "BatchSigner SignAllAsync with expired cert returns all errors")]
@@ -67,10 +67,10 @@ public sealed class BatchErrorRecoveryTests
             results.Add(result);
         }
 
-        results.Should().HaveCount(3);
-        results.Should().OnlyContain(r => !r.IsSuccess);
-        results.Should().OnlyContain(r => r.Error != null);
-        results.Should().OnlyContain(r => r.SignedPdf == null);
+        results.Count().ShouldBe(3);
+        results.ShouldAllBe(r => !r.IsSuccess);
+        results.ShouldAllBe(r => r.Error != null);
+        results.ShouldAllBe(r => r.SignedPdf == null);
     }
 
     [Fact(DisplayName = "BatchSigner SignAsync with expired cert throws with meaningful message")]
@@ -82,8 +82,8 @@ public sealed class BatchErrorRecoveryTests
 
         var act = () => signer.SignAsync(CreateMinimalPdf());
 
-        var exception = await act.Should().ThrowAsync<CertificateValidationException>();
-        exception.Which.Message.Should().Contain("expired");
+        var exception = await Should.ThrowAsync<CertificateValidationException>(act);
+        exception.Message.ShouldContain("expired");
     }
 
     private static async IAsyncEnumerable<(string Id, byte[] PdfBytes)> GenerateMixedInputs()

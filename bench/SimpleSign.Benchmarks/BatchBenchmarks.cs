@@ -61,6 +61,60 @@ public class BatchBenchmarks
         return count;
     }
 
+    [Benchmark(Description = "BatchSigner (concurrency=1)")]
+    public async Task<int> SignBatch_Concurrency1()
+    {
+        await using var batcher = BatchSigner.Create(_cert)
+            .WithMaxConcurrency(1)
+            .Build();
+
+        int count = 0;
+        await foreach (var result in batcher.SignAllAsync(ToAsyncEnumerable(_pdfs)))
+        {
+            if (result.IsSuccess)
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    [Benchmark(Description = "BatchSigner (concurrency=8)")]
+    public async Task<int> SignBatch_Concurrency8()
+    {
+        await using var batcher = BatchSigner.Create(_cert)
+            .WithMaxConcurrency(8)
+            .Build();
+
+        int count = 0;
+        await foreach (var result in batcher.SignAllAsync(ToAsyncEnumerable(_pdfs)))
+        {
+            if (result.IsSuccess)
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    [Benchmark(Description = "BatchSigner (concurrency=16)")]
+    public async Task<int> SignBatch_Concurrency16()
+    {
+        await using var batcher = BatchSigner.Create(_cert)
+            .WithMaxConcurrency(16)
+            .Build();
+
+        int count = 0;
+        await foreach (var result in batcher.SignAllAsync(ToAsyncEnumerable(_pdfs)))
+        {
+            if (result.IsSuccess)
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private static async IAsyncEnumerable<(string Id, byte[] PdfBytes)> ToAsyncEnumerable(
         byte[][] pdfs,
         [EnumeratorCancellation] CancellationToken ct = default)

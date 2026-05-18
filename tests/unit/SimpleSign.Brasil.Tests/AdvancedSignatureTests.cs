@@ -1,10 +1,10 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Brasil.Signing;
-using SimpleSign.PAdES;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
@@ -31,7 +31,7 @@ public sealed class AdvancedSignatureTests
     [InlineData("99999999999", "***.999.999-**")]
     public void MaskCpf_ValidInput_MasksCorrectly(string cpf, string expected)
     {
-        AdvancedSignatureInfo.MaskCpf(cpf).Should().Be(expected);
+        AdvancedSignatureInfo.MaskCpf(cpf).ShouldBe(expected);
     }
 
     [Theory(DisplayName = "MaskCpf handles formatted input")]
@@ -39,7 +39,7 @@ public sealed class AdvancedSignatureTests
     [InlineData("123 456 789 01", "***.456.789-**")]
     public void MaskCpf_FormattedInput_StripsPunctuation(string cpf, string expected)
     {
-        AdvancedSignatureInfo.MaskCpf(cpf).Should().Be(expected);
+        AdvancedSignatureInfo.MaskCpf(cpf).ShouldBe(expected);
     }
 
     [Theory(DisplayName = "MaskCpf rejects invalid CPFs")]
@@ -49,14 +49,14 @@ public sealed class AdvancedSignatureTests
     public void MaskCpf_InvalidLength_Throws(string cpf)
     {
         var act = () => AdvancedSignatureInfo.MaskCpf(cpf);
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     [Fact(DisplayName = "MaskCpf rejects null")]
     public void MaskCpf_Null_Throws()
     {
         var act = () => AdvancedSignatureInfo.MaskCpf(null!);
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     // ── CmsAttribute Factories ───────────────────────────────────────────────
@@ -66,26 +66,26 @@ public sealed class AdvancedSignatureTests
     {
         var attr = CmsAttribute.CommitmentTypeIndication(CommitmentType.ProofOfApproval);
 
-        attr.Oid.Should().Be("1.2.840.113549.1.9.16.2.16");
-        attr.DerValue.Should().NotBeEmpty();
+        attr.Oid.ShouldBe("1.2.840.113549.1.9.16.2.16");
+        attr.DerValue.ShouldNotBeEmpty();
 
         // Parse the DER to verify structure
         var reader = new AsnReader(attr.DerValue, AsnEncodingRules.DER);
         var seq = reader.ReadSequence();
         var commitmentOid = seq.ReadObjectIdentifier();
-        commitmentOid.Should().Be("1.2.840.113549.1.9.16.6.5"); // proofOfApproval
+        commitmentOid.ShouldBe("1.2.840.113549.1.9.16.6.5"); // proofOfApproval
     }
 
     [Fact(DisplayName = "CommitmentTypeIndication ProofOfOrigin produces valid DER")]
     public void CommitmentType_ProofOfOrigin_ProducesValidDer()
     {
         var attr = CmsAttribute.CommitmentTypeIndication(CommitmentType.ProofOfOrigin);
-        attr.Oid.Should().Be("1.2.840.113549.1.9.16.2.16");
+        attr.Oid.ShouldBe("1.2.840.113549.1.9.16.2.16");
 
         var reader = new AsnReader(attr.DerValue, AsnEncodingRules.DER);
         var seq = reader.ReadSequence();
         var commitmentOid = seq.ReadObjectIdentifier();
-        commitmentOid.Should().Be("1.2.840.113549.1.9.16.6.1"); // proofOfOrigin
+        commitmentOid.ShouldBe("1.2.840.113549.1.9.16.6.1"); // proofOfOrigin
     }
 
     [Fact(DisplayName = "SignaturePolicyIdentifier produces valid DER with OID")]
@@ -93,13 +93,13 @@ public sealed class AdvancedSignatureTests
     {
         var attr = CmsAttribute.SignaturePolicyIdentifier("2.16.76.1.7.1.99.1");
 
-        attr.Oid.Should().Be("1.2.840.113549.1.9.16.2.15");
-        attr.DerValue.Should().NotBeEmpty();
+        attr.Oid.ShouldBe("1.2.840.113549.1.9.16.2.15");
+        attr.DerValue.ShouldNotBeEmpty();
 
         var reader = new AsnReader(attr.DerValue, AsnEncodingRules.DER);
         var seq = reader.ReadSequence();
         var policyOid = seq.ReadObjectIdentifier();
-        policyOid.Should().Be("2.16.76.1.7.1.99.1");
+        policyOid.ShouldBe("2.16.76.1.7.1.99.1");
     }
 
     [Fact(DisplayName = "SignaturePolicyIdentifier includes URI qualifier")]
@@ -109,11 +109,11 @@ public sealed class AdvancedSignatureTests
             "2.16.76.1.7.1.99.1",
             "https://example.org/policy/v1");
 
-        attr.DerValue.Should().NotBeEmpty();
+        attr.DerValue.ShouldNotBeEmpty();
         // Just verify it parses without error — detailed ASN.1 is validated by the DER encoder
         var reader = new AsnReader(attr.DerValue, AsnEncodingRules.DER);
         var seq = reader.ReadSequence();
-        seq.HasData.Should().BeTrue();
+        seq.HasData.ShouldBeTrue();
     }
 
     // ── CMS Build with Extra Attributes ──────────────────────────────────────
@@ -132,12 +132,12 @@ public sealed class AdvancedSignatureTests
 
         var cms = CmsSignatureBuilder.Build(data, cert, HashAlgorithmName.SHA256, extraAttributes: attrs);
 
-        cms.Should().NotBeEmpty();
+        cms.ShouldNotBeEmpty();
 
         // Parse back and verify attributes are present
         var parsed = CmsParser.Parse(cms);
-        parsed.CommitmentTypeOid.Should().Be("1.2.840.113549.1.9.16.6.5");
-        parsed.SignaturePolicyOid.Should().Be("2.16.76.1.7.1.99.1");
+        parsed.CommitmentTypeOid.ShouldBe("1.2.840.113549.1.9.16.6.5");
+        parsed.SignaturePolicyOid.ShouldBe("2.16.76.1.7.1.99.1");
     }
 
     [Fact(DisplayName = "CmsSignatureBuilder.Build without extras has no commitment/policy")]
@@ -149,8 +149,8 @@ public sealed class AdvancedSignatureTests
         var cms = CmsSignatureBuilder.Build(data, cert, HashAlgorithmName.SHA256);
 
         var parsed = CmsParser.Parse(cms);
-        parsed.CommitmentTypeOid.Should().BeNull();
-        parsed.SignaturePolicyOid.Should().BeNull();
+        parsed.CommitmentTypeOid.ShouldBeNull();
+        parsed.SignaturePolicyOid.ShouldBeNull();
     }
 
     // ── Round-trip: Sign → Inspect ───────────────────────────────────────────
@@ -173,25 +173,25 @@ public sealed class AdvancedSignatureTests
             })
             .SignAsync();
 
-        signed.Should().NotBeEmpty();
+        signed.ShouldNotBeEmpty();
 
         // Inspect the signed PDF
         using var stream = new MemoryStream(signed);
         var result = await PdfSignatureInspector.InspectAsync(stream);
 
-        result.Signatures.Should().HaveCount(1);
+        result.Signatures.Count().ShouldBe(1);
         var sig = result.Signatures[0];
-        sig.CommitmentTypeOid.Should().Be("1.2.840.113549.1.9.16.6.5");
+        sig.CommitmentTypeOid.ShouldBe("1.2.840.113549.1.9.16.6.5");
 
         // Manifest should be present
-        sig.ManifestJson.Should().NotBeNull();
+        sig.ManifestJson.ShouldNotBeNull();
         var manifest = SignatureManifest.FromJsonUtf8(sig.ManifestJson!);
-        manifest.Should().NotBeNull();
-        manifest!.Signer.Name.Should().Be("Test User");
-        manifest.Signer.Cpf.Should().Be("***.456.789-**");
-        manifest.Evidence.AuthMethod.Should().Be("Institutional login");
-        manifest.Institution!.Name.Should().Be("TCE-ES");
-        manifest.Commitment.Should().Be("proofOfApproval");
+        manifest.ShouldNotBeNull();
+        manifest!.Signer.Name.ShouldBe("Test User");
+        manifest.Signer.Cpf.ShouldBe("***.456.789-**");
+        manifest.Evidence.AuthMethod.ShouldBe("Institutional login");
+        manifest.Institution!.Name.ShouldBe("TCE-ES");
+        manifest.Commitment.ShouldBe("proofOfApproval");
     }
 
     [Fact(DisplayName = "AEA with policy OID round-trip")]
@@ -216,10 +216,10 @@ public sealed class AdvancedSignatureTests
         using var stream = new MemoryStream(signed);
         var result = await PdfSignatureInspector.InspectAsync(stream);
 
-        result.Signatures.Should().HaveCount(1);
+        result.Signatures.Count().ShouldBe(1);
         var sig = result.Signatures[0];
-        sig.CommitmentTypeOid.Should().Be("1.2.840.113549.1.9.16.6.1"); // proofOfOrigin
-        sig.SignaturePolicyOid.Should().Be("2.16.76.1.7.1.99.1");
+        sig.CommitmentTypeOid.ShouldBe("1.2.840.113549.1.9.16.6.1"); // proofOfOrigin
+        sig.SignaturePolicyOid.ShouldBe("2.16.76.1.7.1.99.1");
     }
 
     [Fact(DisplayName = "AEA sets reason to Lei 14.063")]
@@ -240,7 +240,7 @@ public sealed class AdvancedSignatureTests
 
         // Verify the reason is set in the PDF — check via byte search
         var pdfText = System.Text.Encoding.Latin1.GetString(signed);
-        pdfText.Should().Contain("Lei 14.063");
+        pdfText.ShouldContain("Lei 14.063");
     }
 
     [Fact(DisplayName = "AEA with email sets /ContactInfo in PDF")]
@@ -261,11 +261,11 @@ public sealed class AdvancedSignatureTests
             .SignAsync();
 
         var pdfText = System.Text.Encoding.Latin1.GetString(signed);
-        pdfText.Should().Contain("/ContactInfo");
+        pdfText.ShouldContain("/ContactInfo");
         // ContactInfo now includes structured AEA metadata
-        pdfText.Should().Contain("CPF: ***.456.789-**");
-        pdfText.Should().Contain("andre@tce.es.gov.br");
-        pdfText.Should().Contain("Username and password");
+        pdfText.ShouldContain("CPF: ***.456.789-**");
+        pdfText.ShouldContain("andre@tce.es.gov.br");
+        pdfText.ShouldContain("Username and password");
     }
 
     [Fact(DisplayName = "AEA ContactInfo includes all metadata fields in Adobe details")]
@@ -290,12 +290,12 @@ public sealed class AdvancedSignatureTests
         var pdfText = System.Text.Encoding.Latin1.GetString(signed);
 
         // /ContactInfo in the sig dictionary should contain all AEA metadata
-        pdfText.Should().Contain("/ContactInfo");
-        pdfText.Should().Contain("CPF: ***.456.789-**");
-        pdfText.Should().Contain("Email: test@org.br");
-        pdfText.Should().Contain("IP: 10.0.0.1");
-        pdfText.Should().Contain("Token OTP");
-        pdfText.Should().Contain("TCE-ES");
+        pdfText.ShouldContain("/ContactInfo");
+        pdfText.ShouldContain("CPF: ***.456.789-**");
+        pdfText.ShouldContain("Email: test@org.br");
+        pdfText.ShouldContain("IP: 10.0.0.1");
+        pdfText.ShouldContain("Token OTP");
+        pdfText.ShouldContain("TCE-ES");
     }
 
     [Fact(DisplayName = "AEA with appearance does NOT inject AEA lines into visual stamp")]
@@ -317,13 +317,13 @@ public sealed class AdvancedSignatureTests
             .WithAppearance(SignatureAppearance.Auto())
             .SignAsync();
 
-        signed.Length.Should().BeGreaterThan(1000, "signed PDF should be much larger than input");
+        signed.Length.ShouldBeGreaterThan(1000, "signed PDF should be much larger than input");
 
         string pdfAscii = System.Text.Encoding.ASCII.GetString(signed);
 
         // ContactInfo IS in the signature dictionary (Adobe details panel)
-        pdfAscii.Should().Contain("/ContactInfo");
-        pdfAscii.Should().Contain("CPF: ***.456.789-**");
+        pdfAscii.ShouldContain("/ContactInfo");
+        pdfAscii.ShouldContain("CPF: ***.456.789-**");
 
         // Find the appearance stream (between BT and ET)
         int btIdx = pdfAscii.IndexOf("BT\n", StringComparison.Ordinal);
@@ -332,9 +332,9 @@ public sealed class AdvancedSignatureTests
         {
             string stampText = pdfAscii[btIdx..etIdx];
             // The visual stamp should NOT contain CPF/Email/IP lines
-            stampText.Should().NotContain("CPF:", "AEA data belongs in /ContactInfo, not the visual stamp");
-            stampText.Should().NotContain("Email:", "AEA data belongs in /ContactInfo, not the visual stamp");
-            stampText.Should().NotContain("IP:", "AEA data belongs in /ContactInfo, not the visual stamp");
+            stampText.ShouldNotContain("CPF:");
+            stampText.ShouldNotContain("Email:");
+            stampText.ShouldNotContain("IP:");
         }
     }
 
@@ -343,7 +343,7 @@ public sealed class AdvancedSignatureTests
     {
         var pdf = CreateMinimalPdf();
         var act = () => SimpleSigner.Document(pdf).WithAdvancedSignature(null!);
-        act.Should().Throw<ArgumentNullException>();
+        Should.Throw<ArgumentNullException>(act);
     }
 
     // ── Signature Manifest ──────────────────────────────────────────────────
@@ -365,18 +365,18 @@ public sealed class AdvancedSignatureTests
 
         var manifest = SignatureManifest.FromInfo(info);
 
-        manifest.Version.Should().Be(1);
-        manifest.Type.Should().Be("aea");
-        manifest.Law.Should().Be("Lei 14.063/2020");
-        manifest.Signer.Name.Should().Be("Maria Silva");
-        manifest.Signer.Cpf.Should().Be("***.654.321-**");
-        manifest.Signer.Email.Should().Be("maria@org.br");
-        manifest.Evidence.Ip.Should().Be("10.0.0.42");
-        manifest.Evidence.AuthMethod.Should().Be("Facial biometrics");
-        manifest.Institution.Should().NotBeNull();
-        manifest.Institution!.Name.Should().Be("TCE-ES");
-        manifest.Institution.Cnpj.Should().Be("12345678000190");
-        manifest.Commitment.Should().Be("proofOfOrigin");
+        manifest.Version.ShouldBe(1);
+        manifest.Type.ShouldBe("aea");
+        manifest.Law.ShouldBe("Lei 14.063/2020");
+        manifest.Signer.Name.ShouldBe("Maria Silva");
+        manifest.Signer.Cpf.ShouldBe("***.654.321-**");
+        manifest.Signer.Email.ShouldBe("maria@org.br");
+        manifest.Evidence.Ip.ShouldBe("10.0.0.42");
+        manifest.Evidence.AuthMethod.ShouldBe("Facial biometrics");
+        manifest.Institution.ShouldNotBeNull();
+        manifest.Institution!.Name.ShouldBe("TCE-ES");
+        manifest.Institution.Cnpj.ShouldBe("12345678000190");
+        manifest.Commitment.ShouldBe("proofOfOrigin");
     }
 
     [Fact(DisplayName = "SignatureManifest JSON round-trip preserves data")]
@@ -396,11 +396,11 @@ public sealed class AdvancedSignatureTests
         byte[] json = manifest.ToJsonUtf8();
         var restored = SignatureManifest.FromJsonUtf8(json);
 
-        restored.Should().NotBeNull();
-        restored!.Signer.Name.Should().Be("João");
-        restored.Signer.Email.Should().Be("joao@test.com");
-        restored.Evidence.Ip.Should().Be("192.168.1.1");
-        restored.Institution!.Name.Should().Be("Org");
+        restored.ShouldNotBeNull();
+        restored!.Signer.Name.ShouldBe("João");
+        restored.Signer.Email.ShouldBe("joao@test.com");
+        restored.Evidence.Ip.ShouldBe("192.168.1.1");
+        restored.Institution!.Name.ShouldBe("Org");
     }
 
     [Fact(DisplayName = "SignatureManifest omits null optional fields in JSON")]
@@ -417,9 +417,9 @@ public sealed class AdvancedSignatureTests
         byte[] json = manifest.ToJsonUtf8();
         string jsonStr = System.Text.Encoding.UTF8.GetString(json);
 
-        jsonStr.Should().NotContain("\"email\"");
-        jsonStr.Should().NotContain("\"ip\"");
-        jsonStr.Should().NotContain("\"institution\"");
+        jsonStr.ShouldNotContain("\"email\"");
+        jsonStr.ShouldNotContain("\"ip\"");
+        jsonStr.ShouldNotContain("\"institution\"");
     }
 
     [Fact(DisplayName = "CmsAttribute.SignatureManifestAttr produces valid DER")]
@@ -436,14 +436,14 @@ public sealed class AdvancedSignatureTests
         var manifest = SignatureManifest.FromInfo(info);
         var attr = CmsAttribute.SignatureManifestAttr(manifest.ToJsonUtf8());
 
-        attr.Oid.Should().Be("2.16.76.1.12.1.1");
-        attr.DerValue.Should().NotBeEmpty();
+        attr.Oid.ShouldBe("2.16.76.1.12.1.1");
+        attr.DerValue.ShouldNotBeEmpty();
 
         // Verify it's a valid OCTET STRING containing JSON
         var reader = new AsnReader(attr.DerValue, AsnEncodingRules.DER);
         byte[] content = reader.ReadOctetString();
         string json = System.Text.Encoding.UTF8.GetString(content);
-        json.Should().Contain("\"name\":\"Test\"");
+        json.ShouldContain("\"name\":\"Test\"");
     }
 
     [Fact(DisplayName = "CMS round-trip includes manifest in signed attributes")]
@@ -472,13 +472,13 @@ public sealed class AdvancedSignatureTests
         var cms = CmsSignatureBuilder.Build(data, cert, HashAlgorithmName.SHA256, extraAttributes: attrs);
         var parsed = CmsParser.Parse(cms);
 
-        parsed.ManifestJson.Should().NotBeNull();
+        parsed.ManifestJson.ShouldNotBeNull();
         var restored = SignatureManifest.FromJsonUtf8(parsed.ManifestJson!);
-        restored.Should().NotBeNull();
-        restored!.Signer.Name.Should().Be("André");
-        restored.Signer.Email.Should().Be("andre@tce.es.gov.br");
-        restored.Evidence.Ip.Should().Be("10.0.0.1");
-        restored.Institution!.Name.Should().Be("TCE-ES");
+        restored.ShouldNotBeNull();
+        restored!.Signer.Name.ShouldBe("André");
+        restored.Signer.Email.ShouldBe("andre@tce.es.gov.br");
+        restored.Evidence.Ip.ShouldBe("10.0.0.1");
+        restored.Institution!.Name.ShouldBe("TCE-ES");
     }
 
     [Fact(DisplayName = "Full round-trip: sign with email+IP → inspect manifest")]
@@ -506,17 +506,17 @@ public sealed class AdvancedSignatureTests
         var result = await PdfSignatureInspector.InspectAsync(stream);
         var sig = result.Signatures[0];
 
-        sig.ManifestJson.Should().NotBeNull();
+        sig.ManifestJson.ShouldNotBeNull();
         var manifest = SignatureManifest.FromJsonUtf8(sig.ManifestJson!);
-        manifest.Should().NotBeNull();
-        manifest!.Signer.Name.Should().Be("André Almeida");
-        manifest.Signer.Cpf.Should().Be("***.456.789-**");
-        manifest.Signer.Email.Should().Be("andre@tce.es.gov.br");
-        manifest.Evidence.Ip.Should().Be("192.168.1.100");
-        manifest.Evidence.AuthMethod.Should().Be("Facial biometrics");
-        manifest.Institution!.Name.Should().Be("TCE-ES");
-        manifest.Institution.Cnpj.Should().Be("12345678000190");
-        manifest.Commitment.Should().Be("proofOfOrigin");
-        manifest.Law.Should().Be("Lei 14.063/2020");
+        manifest.ShouldNotBeNull();
+        manifest!.Signer.Name.ShouldBe("André Almeida");
+        manifest.Signer.Cpf.ShouldBe("***.456.789-**");
+        manifest.Signer.Email.ShouldBe("andre@tce.es.gov.br");
+        manifest.Evidence.Ip.ShouldBe("192.168.1.100");
+        manifest.Evidence.AuthMethod.ShouldBe("Facial biometrics");
+        manifest.Institution!.Name.ShouldBe("TCE-ES");
+        manifest.Institution.Cnpj.ShouldBe("12345678000190");
+        manifest.Commitment.ShouldBe("proofOfOrigin");
+        manifest.Law.ShouldBe("Lei 14.063/2020");
     }
 }

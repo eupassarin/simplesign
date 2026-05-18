@@ -73,7 +73,7 @@ public sealed class SignatureValidationResult
 
     /// <summary>Indicates whether the signature is considered valid as a whole.</summary>
     public bool IsValid =>
-        IsIntegrityValid && IsSignatureValid && (IsCertificateChainValid || IsChainTrustWarning);
+        IsIntegrityValid && IsSignatureValid && (IsCertificateChainValid || IsChainTrustWarning) && IsNotRevoked;
 
     /// <summary>Errors found during validation.</summary>
     public IReadOnlyList<string> Errors { get; init; } = [];

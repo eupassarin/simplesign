@@ -1,5 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
@@ -38,7 +38,7 @@ public sealed class CancellationTokenTests : IDisposable
             .WithCertificate(_cert)
             .SignAsync(CanceledToken);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(act);
     }
 
     [Fact(DisplayName = "SignerBuilder.SignAsync(stream, canceledToken) throws OperationCanceledException")]
@@ -51,7 +51,7 @@ public sealed class CancellationTokenTests : IDisposable
             .WithCertificate(_cert)
             .SignAsync(output, CanceledToken);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(act);
     }
 
     [Fact(DisplayName = "BatchSigner.SignAsync(bytes, canceledToken) throws OperationCanceledException")]
@@ -61,7 +61,7 @@ public sealed class CancellationTokenTests : IDisposable
 
         Func<Task> act = () => signer.SignAsync(MinimalPdf, CanceledToken);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(act);
     }
 
     [Fact(DisplayName = "BatchSigner.SignAllAsync with canceled token throws OperationCanceledException")]
@@ -76,7 +76,7 @@ public sealed class CancellationTokenTests : IDisposable
             }
         };
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(act);
 
         static async IAsyncEnumerable<(string Id, byte[] PdfBytes)> GetInputs()
         {
@@ -95,7 +95,7 @@ public sealed class CancellationTokenTests : IDisposable
 
         Func<Task> act = () => validator.ValidateAsync(stream, cancellationToken: CanceledToken);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(act);
     }
 
     [Fact(DisplayName = "PdfSignatureValidator.ValidateFieldAsync(canceledToken) throws OperationCanceledException")]
@@ -106,6 +106,6 @@ public sealed class CancellationTokenTests : IDisposable
 
         Func<Task> act = () => validator.ValidateFieldAsync(stream, "Signature1", CanceledToken);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(act);
     }
 }

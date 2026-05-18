@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -88,8 +89,34 @@ internal static partial class DssExtractor
         }
 
         int dictStart = IndexOfBytesFrom(data, "<<"u8, objIdx);
-        int dictEnd = IndexOfBytesFrom(data, ">>"u8, dictStart + 2);
-        if (dictStart < 0 || dictEnd < 0)
+        if (dictStart < 0)
+        {
+            return null;
+        }
+
+        // Count bracket depth to handle nested dictionaries
+        int depth = 0;
+        int dictEnd = -1;
+        for (int i = dictStart; i < data.Length - 1; i++)
+        {
+            if (data[i] == '<' && data[i + 1] == '<')
+            {
+                depth++;
+                i++; // skip second '<'
+            }
+            else if (data[i] == '>' && data[i + 1] == '>')
+            {
+                depth--;
+                i++; // skip second '>'
+                if (depth == 0)
+                {
+                    dictEnd = i - 1; // points to first '>'
+                    break;
+                }
+            }
+        }
+
+        if (dictEnd < 0)
         {
             return null;
         }
@@ -122,12 +149,26 @@ internal static partial class DssExtractor
                         continue;
                     }
 
-                    int streamStart = IndexOfBytesFrom(data, "stream\n"u8, crlObjIdx);
+                    // Check if stream uses FlateDecode compression
+                    int streamStart = IndexOfBytesFrom(data, "stream"u8, crlObjIdx);
                     if (streamStart < 0)
                     {
                         continue;
                     }
-                    streamStart += 7; // skips "stream\n"
+
+                    bool isFlateEncoded = IndexOfBytesFrom(data, "FlateDecode"u8, crlObjIdx) is int flateIdx
+                        && flateIdx >= 0 && flateIdx < streamStart;
+
+                    streamStart += 6; // skip "stream"
+                    // PDF spec: "stream" followed by \r\n or \n
+                    if (streamStart < data.Length && data[streamStart] == '\r' && streamStart + 1 < data.Length && data[streamStart + 1] == '\n')
+                    {
+                        streamStart += 2;
+                    }
+                    else if (streamStart < data.Length && data[streamStart] == '\n')
+                    {
+                        streamStart += 1;
+                    }
 
                     int streamEnd = IndexOfBytesFrom(data, "\nendstream"u8, streamStart);
                     if (streamEnd < 0)
@@ -135,7 +176,14 @@ internal static partial class DssExtractor
                         continue;
                     }
 
-                    crls.Add(data[streamStart..streamEnd].ToArray());
+                    byte[] streamBytes = data[streamStart..streamEnd].ToArray();
+
+                    if (isFlateEncoded)
+                    {
+                        streamBytes = DecompressZlib(streamBytes);
+                    }
+
+                    crls.Add(streamBytes);
                 }
             }
         }
@@ -182,4 +230,13 @@ internal static partial class DssExtractor
 
     [GeneratedRegex(@"(\d+)\s+0\s+R")]
     internal static partial Regex ObjRefRegex();
+
+    private static byte[] DecompressZlib(byte[] compressed)
+    {
+        using var input = new MemoryStream(compressed);
+        using var zlib = new ZLibStream(input, CompressionMode.Decompress);
+        using var output = new MemoryStream();
+        zlib.CopyTo(output);
+        return output.ToArray();
+    }
 }

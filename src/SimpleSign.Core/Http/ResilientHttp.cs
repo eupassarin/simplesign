@@ -46,9 +46,15 @@ internal static class ResilientHttp
     internal static async Task<byte[]?> GetBytesAsync(
         HttpClient httpClient, string url, ILogger? logger = null, CancellationToken ct = default)
     {
+        if (!UrlValidator.IsSafeUrl(url))
+        {
+            (logger ?? NullLogger.Instance).HttpGetFailed(url, 0, "SSRF blocked: URL points to localhost or private network");
+            return null;
+        }
+
         try
         {
-            var response = await Pipeline.ExecuteAsync(async token =>
+            using var response = await Pipeline.ExecuteAsync(async token =>
                 await httpClient.GetAsync(url, token).ConfigureAwait(false), ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
@@ -68,6 +74,11 @@ internal static class ResilientHttp
     internal static async Task<HttpResponseMessage> PostAsync(
         HttpClient httpClient, string url, HttpContent content, CancellationToken ct = default)
     {
+        if (!UrlValidator.IsSafeUrl(url))
+        {
+            throw new InvalidOperationException($"SSRF blocked: URL points to localhost or private network — {new Uri(url).Host}");
+        }
+
         return await Pipeline.ExecuteAsync(async token =>
             await httpClient.PostAsync(url, content, token).ConfigureAwait(false), ct).ConfigureAwait(false);
     }

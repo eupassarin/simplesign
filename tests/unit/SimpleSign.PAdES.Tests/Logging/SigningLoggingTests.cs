@@ -1,7 +1,7 @@
 #pragma warning disable IDE0005 // needed for multi-TFM build
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Shouldly;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -65,7 +65,7 @@ public sealed class SigningLoggingTests : IDisposable
             .WithCertificate(_cert)
             .SignAsync();
 
-        logger.Entries.Should().Contain(e =>
+        logger.Entries.ShouldContain(e =>
             e.Level == LogLevel.Information &&
             e.Message.Contains("Starting PDF signature"));
     }
@@ -80,7 +80,7 @@ public sealed class SigningLoggingTests : IDisposable
             .WithCertificate(_cert)
             .SignAsync();
 
-        logger.Entries.Should().Contain(e =>
+        logger.Entries.ShouldContain(e =>
             e.Level == LogLevel.Information &&
             e.Message.Contains("completed"));
     }
@@ -93,7 +93,7 @@ public sealed class SigningLoggingTests : IDisposable
             .WithCertificate(_cert)
             .SignAsync();
 
-        await act.Should().NotThrowAsync();
+        await Should.NotThrowAsync(act);
     }
 
     // ── PAdES Validation Logs ────────────────────────────────────────
@@ -113,7 +113,7 @@ public sealed class SigningLoggingTests : IDisposable
         using var stream = new MemoryStream(signed);
         await validator.ValidateAsync(stream);
 
-        logger.Entries.Should().Contain(e =>
+        logger.Entries.ShouldContain(e =>
             e.Level == LogLevel.Information &&
             e.Message.Contains("validation started", StringComparison.OrdinalIgnoreCase));
     }
@@ -128,7 +128,7 @@ public sealed class SigningLoggingTests : IDisposable
 
         // An invalid PDF should throw; logging may or may not capture it
         var act = () => validator.ValidateAsync(stream);
-        await act.Should().ThrowAsync<Exception>();
+        await Should.ThrowAsync<Exception>(act);
     }
 
     // ── Sensitive Data ───────────────────────────────────────────────
@@ -145,9 +145,9 @@ public sealed class SigningLoggingTests : IDisposable
 
         foreach (var entry in logger.Entries)
         {
-            entry.Message.Should().NotContainEquivalentOf("private");
-            entry.Message.Should().NotContainEquivalentOf("MIIE"); // PEM/Base64 key prefix
-            entry.Message.Should().NotContainEquivalentOf("BEGIN RSA");
+            entry.Message.ShouldNotContain("private");
+            entry.Message.ShouldNotContain("MIIE"); // PEM/Base64 key prefix
+            entry.Message.ShouldNotContain("BEGIN RSA");
         }
     }
 }

@@ -2,7 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
@@ -42,10 +42,10 @@ public sealed class ValidationEdgeCaseTests
     public void ValidationOptions_DefaultBehavior_CheckRevocationAndTrustSystemRoots()
     {
         ValidationOptions validationOptions = ValidationOptions.Default;
-        validationOptions.CheckRevocation.Should().BeTrue("");
-        validationOptions.TrustSystemRoots.Should().BeTrue("");
-        validationOptions.TrustedRoots.Should().BeNull("");
-        validationOptions.NetworkTimeout.Should().Be(TimeSpan.FromSeconds(10.0), "");
+        validationOptions.CheckRevocation.ShouldBeTrue("");
+        validationOptions.TrustSystemRoots.ShouldBeTrue("");
+        validationOptions.TrustedRoots.ShouldBeNull("");
+        validationOptions.NetworkTimeout.ShouldBe(TimeSpan.FromSeconds(10.0), "");
     }
 
     [Fact(DisplayName = "CheckRevocation=false skips revocation checks")]
@@ -60,8 +60,8 @@ public sealed class ValidationEdgeCaseTests
         };
         PdfSignatureValidator pdfSignatureValidator = new PdfSignatureValidator(options);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await pdfSignatureValidator.ValidateAsync(new MemoryStream(buffer));
-        readOnlyList.Should().HaveCount(1, "");
-        readOnlyList[0].IsNotRevoked.Should().BeTrue("revocation check is disabled");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsNotRevoked.ShouldBeTrue("revocation check is disabled");
     }
 
     [Fact(DisplayName = "TrustSystemRoots=false without TrustedRoots rejects certificate chain")]
@@ -78,8 +78,8 @@ public sealed class ValidationEdgeCaseTests
         };
         PdfSignatureValidator pdfSignatureValidator = new PdfSignatureValidator(options);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await pdfSignatureValidator.ValidateAsync(new MemoryStream(buffer));
-        readOnlyList.Should().HaveCount(1, "");
-        readOnlyList[0].IsCertificateChainValid.Should().BeFalse("no trusted roots available");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsCertificateChainValid.ShouldBeFalse("no trusted roots available");
     }
 
     [Fact(DisplayName = "TrustSystemRoots=false with custom root accepts certificate issued by it")]
@@ -101,8 +101,8 @@ public sealed class ValidationEdgeCaseTests
         };
         PdfSignatureValidator pdfSignatureValidator = new PdfSignatureValidator(options);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await pdfSignatureValidator.ValidateAsync(new MemoryStream(buffer));
-        readOnlyList.Should().HaveCount(1, "");
-        readOnlyList[0].IsCertificateChainValid.Should().BeTrue("CA is in custom trust store");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsCertificateChainValid.ShouldBeTrue("CA is in custom trust store");
     }
 
     [Fact(DisplayName = "NetworkTimeout=1ms configures short timeout")]
@@ -112,7 +112,7 @@ public sealed class ValidationEdgeCaseTests
         {
             NetworkTimeout = TimeSpan.FromMilliseconds(1.0)
         };
-        validationOptions.NetworkTimeout.Should().Be(TimeSpan.FromMilliseconds(1.0), "");
+        validationOptions.NetworkTimeout.ShouldBe(TimeSpan.FromMilliseconds(1.0), "");
     }
 
     [Fact(DisplayName = "Empty stream (0 bytes) throws InvalidDataException")]
@@ -125,8 +125,8 @@ public sealed class ValidationEdgeCaseTests
         MemoryStream stream = new MemoryStream(Array.Empty<byte>());
         try
         {
-            Func<Task<IReadOnlyList<SignatureValidationResult>>> action = () => validator.ValidateAsync(stream);
-            await action.Should().ThrowAsync<PdfStructureException>("", Array.Empty<object>());
+            Func<Task> action = async () => await validator.ValidateAsync(stream);
+            await Should.ThrowAsync<PdfStructureException>(action);
         }
         finally
         {
@@ -148,8 +148,8 @@ public sealed class ValidationEdgeCaseTests
         MemoryStream stream = new MemoryStream(bytes);
         try
         {
-            Func<Task<IReadOnlyList<SignatureValidationResult>>> action = () => validator.ValidateAsync(stream);
-            await action.Should().ThrowAsync<PdfStructureException>("", Array.Empty<object>());
+            Func<Task> action = async () => await validator.ValidateAsync(stream);
+            await Should.ThrowAsync<PdfStructureException>(action);
         }
         finally
         {
@@ -171,8 +171,8 @@ public sealed class ValidationEdgeCaseTests
         MemoryStream stream = new MemoryStream(bytes);
         try
         {
-            Func<Task<IReadOnlyList<SignatureValidationResult>>> action = () => validator.ValidateAsync(stream);
-            await action.Should().ThrowAsync<PdfStructureException>("", Array.Empty<object>());
+            Func<Task> action = async () => await validator.ValidateAsync(stream);
+            await Should.ThrowAsync<PdfStructureException>(action);
         }
         finally
         {
@@ -199,7 +199,7 @@ public sealed class ValidationEdgeCaseTests
             {
                 cts.Cancel();
                 Func<Task<IReadOnlyList<SignatureValidationResult>>> action = () => validator.ValidateAsync(stream, null, cts.Token);
-                await action.Should().ThrowAsync<OperationCanceledException>("", Array.Empty<object>());
+                await Should.ThrowAsync<OperationCanceledException>(async () => await action());
             }
             finally
             {
@@ -230,10 +230,10 @@ public sealed class ValidationEdgeCaseTests
         });
         IReadOnlyList<SignatureValidationResult> results1 = await validator.ValidateAsync(new MemoryStream(signedPdf));
         IReadOnlyList<SignatureValidationResult> readOnlyList = await validator.ValidateAsync(new MemoryStream(signedPdf));
-        results1.Should().HaveCount(1, "");
-        readOnlyList.Should().HaveCount(1, "");
-        results1[0].IsIntegrityValid.Should().Be(readOnlyList[0].IsIntegrityValid, "");
-        results1[0].IsSignatureValid.Should().Be(readOnlyList[0].IsSignatureValid, "");
+        results1.Count().ShouldBe(1, "");
+        readOnlyList.Count().ShouldBe(1, "");
+        results1[0].IsIntegrityValid.ShouldBe(readOnlyList[0].IsIntegrityValid, "");
+        results1[0].IsSignatureValid.ShouldBe(readOnlyList[0].IsSignatureValid, "");
     }
 
     [Fact(DisplayName = "CRL download HTTP 500 throws HttpRequestException")]
@@ -245,7 +245,7 @@ public sealed class ValidationEdgeCaseTests
             using HttpClient httpClient = MockHttpHandler.ForGetBytes(Array.Empty<byte>(), HttpStatusCode.InternalServerError);
             CrlClient client = new CrlClient(httpClient);
             Func<Task<bool>> action = () => client.CheckCrlAsync(cert, "http://example.com/test.crl", CancellationToken.None);
-            await action.Should().ThrowAsync<HttpRequestException>("", Array.Empty<object>());
+            await Should.ThrowAsync<HttpRequestException>(async () => await action());
         }
         finally
         {
@@ -265,7 +265,7 @@ public sealed class ValidationEdgeCaseTests
             using HttpClient httpClient = MockHttpHandler.ForGetBytes(Array.Empty<byte>(), HttpStatusCode.NotFound);
             CrlClient client = new CrlClient(httpClient);
             Func<Task<bool>> action = () => client.CheckCrlAsync(cert, "http://example.com/test.crl", CancellationToken.None);
-            await action.Should().ThrowAsync<HttpRequestException>("", Array.Empty<object>());
+            await Should.ThrowAsync<HttpRequestException>(async () => await action());
         }
         finally
         {
@@ -290,7 +290,7 @@ public sealed class ValidationEdgeCaseTests
         try
         {
             Func<Task<bool>> action = () => client.CheckOcspAsync(cert, "http://ocsp.test/", CancellationToken.None);
-            await action.Should().ThrowAsync<TaskCanceledException>("", Array.Empty<object>());
+            await Should.ThrowAsync<TaskCanceledException>(async () => await action());
         }
         finally
         {
@@ -311,7 +311,7 @@ public sealed class ValidationEdgeCaseTests
         try
         {
             Func<Task<bool>> action = () => client.CheckOcspAsync(cert, "http://ocsp.test/", CancellationToken.None);
-            await action.Should().ThrowAsync<Exception>("", Array.Empty<object>());
+            await Should.ThrowAsync<Exception>(async () => await action());
         }
         finally
         {
@@ -331,7 +331,7 @@ public sealed class ValidationEdgeCaseTests
             using HttpClient httpClient = MockHttpHandler.Failing();
             CrlClient client = new CrlClient(httpClient);
             Func<Task<bool>> action = () => client.CheckCrlAsync(cert, "http://unreachable.test/test.crl", CancellationToken.None);
-            await action.Should().ThrowAsync<HttpRequestException>("", Array.Empty<object>());
+            await Should.ThrowAsync<HttpRequestException>(async () => await action());
         }
         finally
         {
@@ -347,7 +347,7 @@ public sealed class ValidationEdgeCaseTests
     {
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         string? crlUrl = CrlClient.GetCrlUrl(cert);
-        crlUrl.Should().BeNull("certificate has no CRL Distribution Points extension");
+        crlUrl.ShouldBeNull("certificate has no CRL Distribution Points extension");
     }
 
     [Fact(DisplayName = "Certificate without OCSP AIA returns null URL, falls back to CRL")]
@@ -356,8 +356,55 @@ public sealed class ValidationEdgeCaseTests
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         string? ocspUrl = OcspClient.GetOcspUrl(cert);
         string? crlUrl = CrlClient.GetCrlUrl(cert);
-        ocspUrl.Should().BeNull("certificate has no AIA extension");
-        crlUrl.Should().BeNull("certificate has no CDP extension either");
+        ocspUrl.ShouldBeNull("certificate has no AIA extension");
+        crlUrl.ShouldBeNull("certificate has no CDP extension either");
+    }
+
+    [Fact(DisplayName = "CheckRevocation=true with self-signed cert treats indeterminate as warning, not error")]
+    public async Task ValidateAsync_CheckRevocationTrue_IndeterminateIsWarningNotError()
+    {
+        // Self-signed cert has no OCSP/CRL URLs → revocation is indeterminate.
+        // This MUST NOT make the signature invalid — indeterminate ≠ revoked.
+        using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
+        byte[] pdfBytes = BuildMinimalPdf();
+        byte[] signed = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+
+        var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = true });
+        var results = await validator.ValidateAsync(new MemoryStream(signed));
+
+        results.Count().ShouldBe(1);
+        var r = results[0];
+        r.IsNotRevoked.ShouldBeTrue("indeterminate revocation (no OCSP/CRL URL) must NOT be treated as revoked");
+        r.RevocationSource.ShouldBe(RevocationSource.Indeterminate);
+        r.Warnings.ShouldContain(w => w.Contains("Revocation check could not be completed"),
+            "indeterminate revocation should produce a warning");
+    }
+
+    [Fact(DisplayName = "Multi-signature: non-last signature ByteRange does not produce warnings")]
+    public async Task ValidateAsync_MultiSignature_NonLastByteRangeNoWarning()
+    {
+        // Sign a PDF twice (incremental updates).
+        // The first signature's ByteRange won't cover the full file — this is normal
+        // and should NOT produce any warning or error.
+        using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
+        byte[] pdfBytes = BuildMinimalPdf();
+        byte[] firstSign = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+        byte[] secondSign = await SimpleSigner.Document(firstSign).WithCertificate(cert).SignAsync();
+
+        var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false });
+        var results = await validator.ValidateAsync(new MemoryStream(secondSign));
+
+        results.Count().ShouldBeGreaterThanOrEqualTo(2);
+
+        // First signature (non-last): should have NO ByteRange warnings
+        var first = results[0];
+        first.Warnings.ShouldNotContain(w => w.Contains("ByteRange does not cover entire PDF"),
+            "non-last signatures are expected to have ByteRange < file size per ISO 32000");
+
+        // Last signature: should have no ByteRange error either (it covers full file)
+        var last = results[^1];
+        last.Errors.ShouldNotContain(e => e.Contains("ByteRange does not cover entire PDF"),
+            "last signature's ByteRange should cover the full file");
     }
 
     [Fact(DisplayName = "RevocationChecker without OCSP/CRL throws ValidationException")]
@@ -368,7 +415,8 @@ public sealed class ValidationEdgeCaseTests
         {
             RevocationChecker checker = new RevocationChecker(new OcspClient(new HttpClient()), new CrlClient(new HttpClient()));
             Func<Task<(bool, SimpleSign.Core.Validation.RevocationSource)>> action = () => checker.CheckRevocationAsync(cert, [cert], Array.Empty<byte[]>(), CancellationToken.None);
-            await action.Should().ThrowAsync<ValidationException>("", Array.Empty<object>()).WithMessage("*no OCSP or CRL URL*", "");
+            var ex = await Should.ThrowAsync<ValidationException>(async () => await action());
+            ex.Message.ShouldContain("no OCSP or CRL URL");
         }
         finally
         {

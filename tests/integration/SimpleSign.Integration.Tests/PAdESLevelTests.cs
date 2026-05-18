@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.PAdES.Validation;
@@ -23,21 +23,21 @@ public sealed class PAdESLevelTests(ITestOutputHelper output)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var parseStream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(parseStream, cancellationToken: cts.Token);
-        fields.Should().NotBeEmpty("PAdES-LTA should contain signatures");
+        fields.ShouldNotBeEmpty("PAdES-LTA should contain signatures");
         output.WriteLine($"Fields: {fields.Count}");
 
         // Check DSS dictionary presence in raw bytes
         var bytes = await FixturePath.ReadBytesAsync(fixture);
         var hasDss = System.Text.Encoding.ASCII.GetString(bytes).Contains("/DSS ");
-        hasDss.Should().BeTrue("PAdES-LTA should contain DSS dictionary");
+        hasDss.ShouldBeTrue("PAdES-LTA should contain DSS dictionary");
 
         // Validate
         var validator = CreateValidator();
         using var valStream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(valStream);
-        results.Should().NotBeNull();
-        results.Should().NotBeEmpty();
-        results[0].IsIntegrityValid.Should().BeTrue();
+        results.ShouldNotBeNull();
+        results.ShouldNotBeEmpty();
+        results[0].IsIntegrityValid.ShouldBeTrue();
         output.WriteLine($"Signers: {string.Join(", ", results.Select(r => r.SignerName ?? "(unknown)"))}");
     }
 
@@ -50,13 +50,13 @@ public sealed class PAdESLevelTests(ITestOutputHelper output)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var parseStream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(parseStream, cancellationToken: cts.Token);
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"Fields: {fields.Count}");
 
         var validator = CreateValidator();
         using var valStream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(valStream);
-        results.Should().NotBeNull();
+        results.ShouldNotBeNull();
         output.WriteLine($"Results: {results.Count}");
         foreach (var r in results)
             output.WriteLine($"  {r.FieldName}: Integrity={r.IsIntegrityValid}, Sig={r.IsSignatureValid}");
@@ -72,7 +72,7 @@ public sealed class PAdESLevelTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().HaveCountGreaterThanOrEqualTo(1, "PAdES-T should contain at least 1 signature");
+        fields.Count().ShouldBeGreaterThanOrEqualTo(1, "PAdES-T should contain at least 1 signature");
         output.WriteLine($"Fields: {string.Join(", ", fields.Select(f => f.FieldName ?? "(none)"))}");
     }
 
@@ -86,9 +86,9 @@ public sealed class PAdESLevelTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().NotBeNull();
-        results.Should().NotBeEmpty();
-        results[0].IsIntegrityValid.Should().BeTrue();
+        results.ShouldNotBeNull();
+        results.ShouldNotBeEmpty();
+        results[0].IsIntegrityValid.ShouldBeTrue();
         output.WriteLine($"Signer: {results[0].SignerName ?? "(unknown)"}");
     }
 
@@ -102,9 +102,9 @@ public sealed class PAdESLevelTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().NotBeNull();
-        results.Should().NotBeEmpty();
-        results[0].IsIntegrityValid.Should().BeTrue();
+        results.ShouldNotBeNull();
+        results.ShouldNotBeEmpty();
+        results[0].IsIntegrityValid.ShouldBeTrue();
         output.WriteLine($"Algorithm: {results[0].DigestAlgorithmName}, Signer: {results[0].SignerName ?? "(unknown)"}");
     }
 
@@ -117,13 +117,13 @@ public sealed class PAdESLevelTests(ITestOutputHelper output)
         // Check DSS
         var bytes = await FixturePath.ReadBytesAsync(fixture);
         var hasDss = System.Text.Encoding.ASCII.GetString(bytes).Contains("/DSS ");
-        hasDss.Should().BeTrue("PAdES-LTV should contain DSS dictionary");
+        hasDss.ShouldBeTrue("PAdES-LTV should contain DSS dictionary");
 
         // Parse fields
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
-        fields.Should().HaveCountGreaterThanOrEqualTo(1);
+        fields.Count().ShouldBeGreaterThanOrEqualTo(1);
         output.WriteLine($"Fields: {fields.Count}, DSS: {hasDss}");
     }
 
@@ -137,8 +137,8 @@ public sealed class PAdESLevelTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().NotBeNull();
-        results.Should().NotBeEmpty();
+        results.ShouldNotBeNull();
+        results.ShouldNotBeEmpty();
         output.WriteLine($"Results: {results.Count}");
         foreach (var r in results)
             output.WriteLine($"  {r.FieldName}: Integrity={r.IsIntegrityValid}, Signer={r.SignerName ?? "(unknown)"}");
@@ -146,6 +146,6 @@ public sealed class PAdESLevelTests(ITestOutputHelper output)
         // Check reason in raw PDF bytes
         var bytes = await FixturePath.ReadBytesAsync(fixture);
         var pdfText = System.Text.Encoding.Latin1.GetString(bytes);
-        pdfText.Should().Contain("/Reason", "PDF with reason should contain /Reason entry in signature dictionary");
+        pdfText.ShouldContain("/Reason");
     }
 }

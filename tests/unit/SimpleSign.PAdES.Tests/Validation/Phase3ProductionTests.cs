@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
@@ -64,7 +64,7 @@ public sealed class Phase3ProductionTests
         };
         var warnings = new List<string>();
 
-        IntegrityVerifier.VerifyDocumentHash([], cmsData, warnings).Should().BeFalse();
+        IntegrityVerifier.VerifyDocumentHash([], cmsData, warnings).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Empty digest returns false in hash verification")]
@@ -77,7 +77,7 @@ public sealed class Phase3ProductionTests
         };
         var warnings = new List<string>();
 
-        IntegrityVerifier.VerifyDocumentHash([], cmsData, warnings).Should().BeFalse();
+        IntegrityVerifier.VerifyDocumentHash([], cmsData, warnings).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Matching SHA-256 hash returns true")]
@@ -92,8 +92,8 @@ public sealed class Phase3ProductionTests
         };
         var warnings = new List<string>();
 
-        IntegrityVerifier.VerifyDocumentHash(data, cmsData, warnings).Should().BeTrue();
-        warnings.Should().BeEmpty();
+        IntegrityVerifier.VerifyDocumentHash(data, cmsData, warnings).ShouldBeTrue();
+        warnings.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "Mismatched SHA-256 hash returns false")]
@@ -107,7 +107,7 @@ public sealed class Phase3ProductionTests
         };
         var warnings = new List<string>();
 
-        IntegrityVerifier.VerifyDocumentHash(data, cmsData, warnings).Should().BeFalse();
+        IntegrityVerifier.VerifyDocumentHash(data, cmsData, warnings).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "SHA-1 computation adds legacy algorithm warning")]
@@ -116,8 +116,9 @@ public sealed class Phase3ProductionTests
         var warnings = new List<string>();
         byte[] result = IntegrityVerifier.ComputeSha1("test"u8.ToArray(), warnings);
 
-        result.Should().HaveCount(20);
-        warnings.Should().ContainSingle().Which.Should().Contain("SHA-1");
+        result.Count().ShouldBe(20);
+        warnings.Count().ShouldBe(1);
+        warnings[0].ShouldContain("SHA-1");
     }
 
     [Fact(DisplayName = "Unsupported OID throws NotSupportedException")]
@@ -128,9 +129,9 @@ public sealed class Phase3ProductionTests
             DigestAlgorithmOid = "1.2.3.4.999",
             MessageDigest = new byte[32]
         };
-        var act = () => IntegrityVerifier.VerifyDocumentHash([], cmsData, []);
+        Action act = () => IntegrityVerifier.VerifyDocumentHash([], cmsData, []);
 
-        act.Should().Throw<NotSupportedException>();
+        Should.Throw<NotSupportedException>(act);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -147,7 +148,7 @@ public sealed class Phase3ProductionTests
             Signature = new byte[] { 0x01 }
         };
 
-        CryptoVerifier.VerifySignature(cmsData).Should().BeFalse();
+        CryptoVerifier.VerifySignature(cmsData).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Null signed attributes return false")]
@@ -161,7 +162,7 @@ public sealed class Phase3ProductionTests
             Signature = new byte[] { 0x01 }
         };
 
-        CryptoVerifier.VerifySignature(cmsData).Should().BeFalse();
+        CryptoVerifier.VerifySignature(cmsData).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "EdDSA (Ed25519) returns explicit unsupported runtime error")]
@@ -177,9 +178,9 @@ public sealed class Phase3ProductionTests
             SignatureAlgorithmOid = Oids.Ed25519
         };
 
-        var act = () => CryptoVerifier.VerifySignature(cmsData);
-        act.Should().Throw<NotSupportedException>()
-            .WithMessage("*EdDSA*");
+        Action act = () => CryptoVerifier.VerifySignature(cmsData);
+        var ex = Should.Throw<NotSupportedException>(act);
+        ex.Message.ShouldContain("EdDSA");
     }
 
     [Fact(DisplayName = "SigningCertV2 with matching hash generates no errors")]
@@ -196,7 +197,7 @@ public sealed class Phase3ProductionTests
 
         CryptoVerifier.ValidateSigningCertV2(cmsData, errors);
 
-        errors.Should().BeEmpty();
+        errors.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "SigningCertV2 with mismatched hash adds error")]
@@ -212,7 +213,8 @@ public sealed class Phase3ProductionTests
 
         CryptoVerifier.ValidateSigningCertV2(cmsData, errors);
 
-        errors.Should().ContainSingle().Which.Should().Contain("mismatch");
+        errors.Count().ShouldBe(1);
+        errors[0].ShouldContain("mismatch");
     }
 
     [Fact(DisplayName = "SigningCertV2 with null hash generates no error")]
@@ -228,7 +230,7 @@ public sealed class Phase3ProductionTests
 
         CryptoVerifier.ValidateSigningCertV2(cmsData, errors);
 
-        errors.Should().BeEmpty();
+        errors.ShouldBeEmpty();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -240,7 +242,7 @@ public sealed class Phase3ProductionTests
     {
         var data = Encoding.ASCII.GetBytes("%PDF-1.4\ntrailer <</Size 1>>\n%%EOF");
 
-        DssExtractor.FindDssDictionary(data).Should().BeNull();
+        DssExtractor.FindDssDictionary(data).ShouldBeNull();
     }
 
     [Fact(DisplayName = "IndexOfBytes finds pattern in haystack")]
@@ -249,7 +251,7 @@ public sealed class Phase3ProductionTests
         ReadOnlySpan<byte> haystack = "Hello World"u8;
         ReadOnlySpan<byte> needle = "World"u8;
 
-        DssExtractor.IndexOfBytes(haystack, needle).Should().Be(6);
+        DssExtractor.IndexOfBytes(haystack, needle).ShouldBe(6);
     }
 
     [Fact(DisplayName = "IndexOfBytes returns -1 when pattern not found")]
@@ -258,7 +260,7 @@ public sealed class Phase3ProductionTests
         ReadOnlySpan<byte> haystack = "Hello"u8;
         ReadOnlySpan<byte> needle = "World"u8;
 
-        DssExtractor.IndexOfBytes(haystack, needle).Should().Be(-1);
+        DssExtractor.IndexOfBytes(haystack, needle).ShouldBe(-1);
     }
 
     [Fact(DisplayName = "ParseObjRefs extracts object references correctly")]
@@ -268,7 +270,7 @@ public sealed class Phase3ProductionTests
 
         var refs = DssExtractor.ParseObjRefs(content).ToList();
 
-        refs.Should().BeEquivalentTo([10, 20, 30]);
+        refs.ShouldBe([10, 20, 30]);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -286,8 +288,8 @@ public sealed class Phase3ProductionTests
 
         var act = () => checker.CheckRevocationAsync(cert, [cert], [], CancellationToken.None);
 
-        await act.Should().ThrowAsync<ValidationException>()
-            .WithMessage("*no OCSP or CRL URL*");
+        var ex2 = await Should.ThrowAsync<ValidationException>(act);
+        ex2.Message.ShouldContain("no OCSP or CRL URL");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -302,7 +304,7 @@ public sealed class Phase3ProductionTests
         var client1 = provider.GetClient();
         var client2 = provider.GetClient();
 
-        client1.Should().BeSameAs(client2);
+        client1.ShouldBeSameAs(client2);
     }
 
     [Fact(DisplayName = "Default HttpClient has 30 second timeout")]
@@ -310,7 +312,7 @@ public sealed class Phase3ProductionTests
     {
         var client = DefaultHttpClientProvider.Instance.GetClient();
 
-        client.Timeout.Should().Be(TimeSpan.FromSeconds(30));
+        client.Timeout.ShouldBe(TimeSpan.FromSeconds(30));
     }
 
     [Fact(DisplayName = "Validator accepts IHttpClientProvider in constructor")]
@@ -320,7 +322,7 @@ public sealed class Phase3ProductionTests
 
         var validator = new PdfSignatureValidator(provider);
 
-        validator.Should().NotBeNull();
+        validator.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "Null provider throws ArgumentNullException")]
@@ -328,7 +330,7 @@ public sealed class Phase3ProductionTests
     {
         var act = () => new PdfSignatureValidator(httpClientProvider: null!);
 
-        act.Should().Throw<ArgumentNullException>();
+        Should.Throw<ArgumentNullException>(act);
     }
 
     [Fact(DisplayName = "WithHttpClientProvider returns new builder instance")]
@@ -341,7 +343,7 @@ public sealed class Phase3ProductionTests
 
         var newBuilder = builder.WithHttpClientProvider(provider);
 
-        newBuilder.Should().NotBeSameAs(builder);
+        newBuilder.ShouldNotBeSameAs(builder);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -362,7 +364,7 @@ public sealed class Phase3ProductionTests
         using var stream = new MemoryStream(pdf);
         var act = () => PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        await act.Should().ThrowAsync<EncryptedPdfException>();
+        await Should.ThrowAsync<EncryptedPdfException>(act);
     }
 
     [Fact(DisplayName = "Normal PDF is not detected as encrypted")]
@@ -373,7 +375,7 @@ public sealed class Phase3ProductionTests
 
         var result = await PdfStructureReader.IsEncryptedAsync(stream);
 
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Encrypted PDF is detected correctly")]
@@ -387,7 +389,7 @@ public sealed class Phase3ProductionTests
 
         var result = await PdfStructureReader.IsEncryptedAsync(stream);
 
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -402,7 +404,7 @@ public sealed class Phase3ProductionTests
 
         var results = await validator.ValidateBatchAsync(items);
 
-        results.Should().BeEmpty();
+        results.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "Batch validation returns result for each PDF")]
@@ -423,9 +425,10 @@ public sealed class Phase3ProductionTests
         var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false });
         var results = await validator.ValidateBatchAsync(items, maxConcurrency: 2);
 
-        results.Should().HaveCount(3);
-        results.Should().AllSatisfy(r => r.IsProcessed.Should().BeTrue());
-        results.Select(r => r.Identifier).Should().BeEquivalentTo(["doc1.pdf", "doc2.pdf", "doc3.pdf"]);
+        results.Count().ShouldBe(3);
+        foreach (var r in results)
+            r.IsProcessed.ShouldBeTrue();
+        results.Select(r => r.Identifier).ShouldBe(["doc1.pdf", "doc2.pdf", "doc3.pdf"]);
     }
 
     [Fact(DisplayName = "Invalid PDF in batch returns error without throwing")]
@@ -439,10 +442,10 @@ public sealed class Phase3ProductionTests
         var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false });
         var results = await validator.ValidateBatchAsync(items);
 
-        results.Should().ContainSingle();
-        results[0].IsProcessed.Should().BeFalse();
-        results[0].Error.Should().NotBeNullOrEmpty();
-        results[0].Identifier.Should().Be("bad.pdf");
+        results.Count().ShouldBe(1);
+        results[0].IsProcessed.ShouldBeFalse();
+        results[0].Error.ShouldNotBeNullOrEmpty();
+        results[0].Identifier.ShouldBe("bad.pdf");
     }
 
     [Fact(DisplayName = "Invalid concurrency throws ArgumentOutOfRangeException")]
@@ -452,7 +455,7 @@ public sealed class Phase3ProductionTests
 
         var act = () => validator.ValidateBatchAsync([], maxConcurrency: 0);
 
-        await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(act);
     }
 
     [Fact(DisplayName = "Batch validation preserves document index")]
@@ -472,10 +475,10 @@ public sealed class Phase3ProductionTests
         var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false });
         var results = await validator.ValidateBatchAsync(items);
 
-        results[0].Index.Should().Be(0);
-        results[0].Identifier.Should().Be("first");
-        results[1].Index.Should().Be(1);
-        results[1].Identifier.Should().Be("second");
+        results[0].Index.ShouldBe(0);
+        results[0].Identifier.ShouldBe("first");
+        results[1].Index.ShouldBe(1);
+        results[1].Identifier.ShouldBe("second");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -487,7 +490,7 @@ public sealed class Phase3ProductionTests
     {
         var data = Encoding.ASCII.GetBytes("%PDF-1.4 some content");
 
-        PdfStructureReader.DetectPdfALevel(data).Should().Be(PdfALevel.None);
+        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.None);
     }
 
     [Fact(DisplayName = "PDF/A-1b is detected correctly")]
@@ -496,7 +499,7 @@ public sealed class Phase3ProductionTests
         var xmp = "%PDF-1.4\n<pdfaid:part>1</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>";
         var data = Encoding.ASCII.GetBytes(xmp);
 
-        PdfStructureReader.DetectPdfALevel(data).Should().Be(PdfALevel.A1b);
+        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.A1b);
     }
 
     [Fact(DisplayName = "PDF/A-2a is detected correctly")]
@@ -505,7 +508,7 @@ public sealed class Phase3ProductionTests
         var xmp = "%PDF-1.4\n<pdfaid:part>2</pdfaid:part><pdfaid:conformance>A</pdfaid:conformance>";
         var data = Encoding.ASCII.GetBytes(xmp);
 
-        PdfStructureReader.DetectPdfALevel(data).Should().Be(PdfALevel.A2a);
+        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.A2a);
     }
 
     [Fact(DisplayName = "PDF/A-3u is detected correctly")]
@@ -514,7 +517,7 @@ public sealed class Phase3ProductionTests
         var xmp = "%PDF-1.4\n<pdfaid:part>3</pdfaid:part><pdfaid:conformance>U</pdfaid:conformance>";
         var data = Encoding.ASCII.GetBytes(xmp);
 
-        PdfStructureReader.DetectPdfALevel(data).Should().Be(PdfALevel.A3u);
+        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.A3u);
     }
 
     [Fact(DisplayName = "Normal PDF returns PDF/A level None via async")]
@@ -525,7 +528,7 @@ public sealed class Phase3ProductionTests
 
         var level = await PdfStructureReader.DetectPdfALevelAsync(stream);
 
-        level.Should().Be(PdfALevel.None);
+        level.ShouldBe(PdfALevel.None);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -546,7 +549,7 @@ public sealed class Phase3ProductionTests
     {
         using var cert = CreatePssCert();
         var padding = CmsSignatureBuilder.DetectRsaPadding(cert);
-        padding.Should().Be(RSASignaturePadding.Pss);
+        padding.ShouldBe(RSASignaturePadding.Pss);
     }
 
     [Fact(DisplayName = "PKCS#1 certificate detects PKCS1 padding")]
@@ -554,7 +557,7 @@ public sealed class Phase3ProductionTests
     {
         using var cert = CreateCert();
         var padding = CmsSignatureBuilder.DetectRsaPadding(cert);
-        padding.Should().Be(RSASignaturePadding.Pkcs1);
+        padding.ShouldBe(RSASignaturePadding.Pkcs1);
     }
 
     [Fact(DisplayName = "RSA-PSS signature completes full round-trip")]
@@ -565,15 +568,15 @@ public sealed class Phase3ProductionTests
             .WithCertificate(cert)
             .SignAsync();
 
-        signedPdf.Should().NotBeEmpty();
+        signedPdf.ShouldNotBeEmpty();
 
         var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false });
         var results = await validator.ValidateAsync(new MemoryStream(signedPdf));
 
-        results.Should().ContainSingle();
+        results.Count().ShouldBe(1);
         // Self-signed cert fails chain validation — only check crypto integrity
-        results[0].IsIntegrityValid.Should().BeTrue();
-        results[0].IsSignatureValid.Should().BeTrue();
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "CmsParser extracts signature algorithm OID")]
@@ -585,7 +588,7 @@ public sealed class Phase3ProductionTests
             "hello"u8, cert, HashAlgorithmName.SHA256);
 
         var parsed = CmsParser.Parse(cms);
-        parsed.SignatureAlgorithmOid.Should().Be(Oids.RsaSha256);
+        parsed.SignatureAlgorithmOid.ShouldBe(Oids.RsaSha256);
     }
 
     [Fact(DisplayName = "CmsParser with PSS certificate extracts RSA-PSS OID")]
@@ -596,24 +599,24 @@ public sealed class Phase3ProductionTests
             "hello"u8, cert, HashAlgorithmName.SHA256);
 
         var parsed = CmsParser.Parse(cms);
-        parsed.SignatureAlgorithmOid.Should().Be(Oids.RsaPss);
+        parsed.SignatureAlgorithmOid.ShouldBe(Oids.RsaPss);
     }
 
     [Fact(DisplayName = "RSA-PSS OID constant has correct value")]
     public void Oids_RsaPss_HasCorrectValue()
     {
-        Oids.RsaPss.Should().Be("1.2.840.113549.1.1.10");
+        Oids.RsaPss.ShouldBe("1.2.840.113549.1.1.10");
     }
 
     [Fact(DisplayName = "Ed25519 OID constant has correct value")]
     public void Oids_Ed25519_HasCorrectValue()
     {
-        Oids.Ed25519.Should().Be("1.3.101.112");
+        Oids.Ed25519.ShouldBe("1.3.101.112");
     }
 
     [Fact(DisplayName = "Ed448 OID constant has correct value")]
     public void Oids_Ed448_HasCorrectValue()
     {
-        Oids.Ed448.Should().Be("1.3.101.113");
+        Oids.Ed448.ShouldBe("1.3.101.113");
     }
 }

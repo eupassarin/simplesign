@@ -15,9 +15,11 @@ namespace SimpleSign.PAdES.Signing;
 public sealed class PdfSignatureWriter
 {
     /// <summary>
-    /// Default number of bytes reserved for the CMS signature hex contents (64 KB).
+    /// Default number of bytes reserved for the CMS signature hex contents (16 KB).
+    /// Typical PAdES CMS signatures are 7–14 KB; 16 KB provides safe headroom
+    /// while avoiding the excessive padding that inflates file size.
     /// </summary>
-    public const int DefaultContentsReservedBytes = 65536;
+    public const int DefaultContentsReservedBytes = 16384;
 
     /// <summary>
     /// Prepares a PDF for digital signing by appending signature dictionary, field, AcroForm,

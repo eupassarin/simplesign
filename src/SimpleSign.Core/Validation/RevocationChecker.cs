@@ -77,7 +77,7 @@ internal sealed class RevocationChecker
                 bool ok = await _ocspClient.CheckOcspWithChainAsync(cert, chain, ocspUrl, ct).ConfigureAwait(false);
                 return (ok, RevocationSource.OnlineOcsp);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is HttpRequestException or AsnContentException or CryptographicException or InvalidOperationException or InvalidDataException)
             {
                 _logger.OcspCheckFailed(ex.Message);
             }

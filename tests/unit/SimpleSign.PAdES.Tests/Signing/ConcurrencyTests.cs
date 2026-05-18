@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -38,11 +38,12 @@ public sealed class ConcurrencyTests : IAsyncLifetime
 
         var results = await Task.WhenAll(tasks);
 
-        results.Should().HaveCount(10);
+        results.Count().ShouldBe(10);
         foreach (var signed in results)
         {
-            signed.Should().NotBeNullOrEmpty();
-            Encoding.ASCII.GetString(signed[..5]).Should().Be("%PDF-");
+            signed.ShouldNotBeNull();
+            signed.ShouldNotBeEmpty();
+            Encoding.ASCII.GetString(signed[..5]).ShouldBe("%PDF-");
         }
     }
 
@@ -55,11 +56,12 @@ public sealed class ConcurrencyTests : IAsyncLifetime
 
         var results = await Task.WhenAll(tasks);
 
-        results.Should().HaveCount(5);
+        results.Count().ShouldBe(5);
         foreach (var signed in results)
         {
-            signed.Should().NotBeNullOrEmpty();
-            Encoding.ASCII.GetString(signed[..5]).Should().Be("%PDF-");
+            signed.ShouldNotBeNull();
+            signed.ShouldNotBeEmpty();
+            Encoding.ASCII.GetString(signed[..5]).ShouldBe("%PDF-");
         }
     }
 
@@ -74,12 +76,13 @@ public sealed class ConcurrencyTests : IAsyncLifetime
             results.Add(result);
         }
 
-        results.Should().HaveCount(20);
+        results.Count().ShouldBe(20);
         foreach (var result in results)
         {
-            result.Error.Should().BeNull();
-            result.SignedPdf.Should().NotBeNullOrEmpty();
-            Encoding.ASCII.GetString(result.SignedPdf![..5]).Should().Be("%PDF-");
+            result.Error.ShouldBeNull();
+            result.SignedPdf.ShouldNotBeNull();
+            result.SignedPdf.ShouldNotBeEmpty();
+            Encoding.ASCII.GetString(result.SignedPdf![..5]).ShouldBe("%PDF-");
         }
     }
 

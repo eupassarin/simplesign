@@ -14,10 +14,10 @@ namespace SimpleSign.PAdES.Signing;
 public static class DocTimeStampWriter
 {
     /// <summary>
-    /// Default bytes reserved for the timestamp token hex in /Contents (32 KB).
-    /// Timestamp tokens are typically 4–8 KB; 32 KB provides ample margin.
+    /// Default bytes reserved for the timestamp token hex in /Contents (12 KB).
+    /// Timestamp tokens are typically 4–8 KB; 12 KB provides ample margin.
     /// </summary>
-    public const int DefaultTimestampReservedBytes = 32768;
+    public const int DefaultTimestampReservedBytes = 12288;
 
     /// <summary>
     /// Appends a document-level timestamp to a signed PDF with embedded DSS/LTV data.
@@ -61,7 +61,7 @@ public static class DocTimeStampWriter
 
         var sigDict = new StringBuilder();
         sigDict.Append($"{sigObjNum} 0 obj\n");
-        sigDict.Append("<< /Type /Sig\n");
+        sigDict.Append("<< /Type /DocTimeStamp\n");
         sigDict.Append("   /Filter /Adobe.PPKLite\n");
         sigDict.Append("   /SubFilter /ETSI.RFC3161\n");
         sigDict.Append("   /ByteRange [0000000000 0000000000 0000000000 0000000000]\n");

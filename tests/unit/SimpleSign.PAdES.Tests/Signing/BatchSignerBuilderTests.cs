@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
-using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Shouldly;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
@@ -22,8 +22,8 @@ public sealed class BatchSignerBuilderTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var builder = BatchSigner.Create(cert);
 
-        builder.Should().NotBeNull();
-        builder.Certificate.Should().BeSameAs(cert);
+        builder.ShouldNotBeNull();
+        builder.Certificate.ShouldBeSameAs(cert);
     }
 
     [Fact(DisplayName = "Builder defaults: SHA-256, MaxConcurrency=4, no LTV")]
@@ -32,19 +32,19 @@ public sealed class BatchSignerBuilderTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var builder = BatchSigner.Create(cert);
 
-        builder.HashAlgorithm.Should().Be(HashAlgorithmName.SHA256);
-        builder.MaxConcurrency.Should().Be(4);
-        builder.EnableLtv.Should().BeFalse();
-        builder.Chain.Should().BeNull();
-        builder.ExternalSigner.Should().BeNull();
-        builder.TsaUrl.Should().BeNull();
-        builder.HttpClientProvider.Should().BeNull();
-        builder.SignerName.Should().BeNull();
-        builder.Reason.Should().BeNull();
-        builder.Location.Should().BeNull();
-        builder.Appearance.Should().BeNull();
-        builder.ArchivalTsaUrl.Should().BeNull();
-        builder.Logger.Should().BeNull();
+        builder.HashAlgorithm.ShouldBe(HashAlgorithmName.SHA256);
+        builder.MaxConcurrency.ShouldBe(4);
+        builder.EnableLtv.ShouldBeFalse();
+        builder.Chain.ShouldBeNull();
+        builder.ExternalSigner.ShouldBeNull();
+        builder.TsaUrl.ShouldBeNull();
+        builder.HttpClientProvider.ShouldBeNull();
+        builder.SignerName.ShouldBeNull();
+        builder.Reason.ShouldBeNull();
+        builder.Location.ShouldBeNull();
+        builder.Appearance.ShouldBeNull();
+        builder.ArchivalTsaUrl.ShouldBeNull();
+        builder.Logger.ShouldBeNull();
     }
 
     [Fact(DisplayName = "WithChain stores the chain")]
@@ -54,8 +54,8 @@ public sealed class BatchSignerBuilderTests
         using var ca = TestCertificateFactory.CreateCaCert();
         var builder = BatchSigner.Create(cert).WithChain([ca]);
 
-        builder.Chain.Should().HaveCount(1);
-        builder.Chain![0].Should().BeSameAs(ca);
+        builder.Chain!.Count().ShouldBe(1);
+        builder.Chain![0].ShouldBeSameAs(ca);
     }
 
     [Fact(DisplayName = "WithExternalSigner stores delegate and OID")]
@@ -65,8 +65,8 @@ public sealed class BatchSignerBuilderTests
         Func<byte[], Task<byte[]>> signer = data => Task.FromResult(data);
 
         var builder = BatchSigner.Create(cert).WithExternalSigner(signer, "1.2.3");
-        builder.ExternalSigner.Should().BeSameAs(signer);
-        builder.ExternalSignerOid.Should().Be("1.2.3");
+        builder.ExternalSigner.ShouldBeSameAs(signer);
+        builder.ExternalSignerOid.ShouldBe("1.2.3");
     }
 
     [Fact(DisplayName = "WithExternalSigner without OID stores null OID")]
@@ -76,8 +76,8 @@ public sealed class BatchSignerBuilderTests
         Func<byte[], Task<byte[]>> signer = data => Task.FromResult(data);
 
         var builder = BatchSigner.Create(cert).WithExternalSigner(signer);
-        builder.ExternalSigner.Should().BeSameAs(signer);
-        builder.ExternalSignerOid.Should().BeNull();
+        builder.ExternalSigner.ShouldBeSameAs(signer);
+        builder.ExternalSignerOid.ShouldBeNull();
     }
 
     [Fact(DisplayName = "WithTimestamp stores TSA URL")]
@@ -85,7 +85,7 @@ public sealed class BatchSignerBuilderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var builder = BatchSigner.Create(cert).WithTimestamp("http://tsa.example.com");
-        builder.TsaUrl.Should().Be("http://tsa.example.com");
+        builder.TsaUrl.ShouldBe("http://tsa.example.com");
     }
 
     [Fact(DisplayName = "WithHttpClientProvider stores provider")]
@@ -94,7 +94,7 @@ public sealed class BatchSignerBuilderTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var provider = DefaultHttpClientProvider.Instance;
         var builder = BatchSigner.Create(cert).WithHttpClientProvider(provider);
-        builder.HttpClientProvider.Should().BeSameAs(provider);
+        builder.HttpClientProvider.ShouldBeSameAs(provider);
     }
 
     [Fact(DisplayName = "WithHashAlgorithm changes the algorithm")]
@@ -102,7 +102,7 @@ public sealed class BatchSignerBuilderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var builder = BatchSigner.Create(cert).WithHashAlgorithm(HashAlgorithmName.SHA512);
-        builder.HashAlgorithm.Should().Be(HashAlgorithmName.SHA512);
+        builder.HashAlgorithm.ShouldBe(HashAlgorithmName.SHA512);
     }
 
     [Fact(DisplayName = "WithMetadata stores signer name + reason + location")]
@@ -112,9 +112,9 @@ public sealed class BatchSignerBuilderTests
         var builder = BatchSigner.Create(cert)
             .WithMetadata(signerName: "Alice", reason: "Approval", location: "Madrid");
 
-        builder.SignerName.Should().Be("Alice");
-        builder.Reason.Should().Be("Approval");
-        builder.Location.Should().Be("Madrid");
+        builder.SignerName.ShouldBe("Alice");
+        builder.Reason.ShouldBe("Approval");
+        builder.Location.ShouldBe("Madrid");
     }
 
     [Fact(DisplayName = "WithMetadata accepts null fields (clears them)")]
@@ -123,9 +123,9 @@ public sealed class BatchSignerBuilderTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var builder = BatchSigner.Create(cert).WithMetadata();
 
-        builder.SignerName.Should().BeNull();
-        builder.Reason.Should().BeNull();
-        builder.Location.Should().BeNull();
+        builder.SignerName.ShouldBeNull();
+        builder.Reason.ShouldBeNull();
+        builder.Location.ShouldBeNull();
     }
 
     [Fact(DisplayName = "WithAppearance stores appearance reference")]
@@ -134,7 +134,7 @@ public sealed class BatchSignerBuilderTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var appearance = SignatureAppearance.Auto();
         var builder = BatchSigner.Create(cert).WithAppearance(appearance);
-        builder.Appearance.Should().BeSameAs(appearance);
+        builder.Appearance.ShouldBeSameAs(appearance);
     }
 
     [Fact(DisplayName = "WithLtv enables the LTV flag")]
@@ -142,7 +142,7 @@ public sealed class BatchSignerBuilderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var builder = BatchSigner.Create(cert).WithLtv();
-        builder.EnableLtv.Should().BeTrue();
+        builder.EnableLtv.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "WithArchivalTimestamp stores URL and implies LTV")]
@@ -151,8 +151,8 @@ public sealed class BatchSignerBuilderTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var builder = BatchSigner.Create(cert).WithArchivalTimestamp("http://tsa.example.com");
 
-        builder.ArchivalTsaUrl.Should().Be("http://tsa.example.com");
-        builder.EnableLtv.Should().BeTrue();
+        builder.ArchivalTsaUrl.ShouldBe("http://tsa.example.com");
+        builder.EnableLtv.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "Build with LTV but no TSA throws SigningException")]
@@ -162,8 +162,8 @@ public sealed class BatchSignerBuilderTests
         var builder = BatchSigner.Create(cert).WithLtv();
 
         var act = () => builder.Build();
-        act.Should().Throw<SigningException>()
-            .WithMessage("*LTV requires a timestamp*");
+        Should.Throw<SigningException>(act)
+            .Message.ShouldContain("LTV requires a timestamp");
     }
 
     [Fact(DisplayName = "WithMaxConcurrency stores the value")]
@@ -171,7 +171,7 @@ public sealed class BatchSignerBuilderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var builder = BatchSigner.Create(cert).WithMaxConcurrency(8);
-        builder.MaxConcurrency.Should().Be(8);
+        builder.MaxConcurrency.ShouldBe(8);
     }
 
     [Fact(DisplayName = "WithMaxConcurrency with zero throws")]
@@ -179,7 +179,7 @@ public sealed class BatchSignerBuilderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         Action act = () => BatchSigner.Create(cert).WithMaxConcurrency(0);
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        Should.Throw<ArgumentOutOfRangeException>(act);
     }
 
     [Fact(DisplayName = "WithMaxConcurrency with negative throws")]
@@ -187,7 +187,7 @@ public sealed class BatchSignerBuilderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         Action act = () => BatchSigner.Create(cert).WithMaxConcurrency(-1);
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        Should.Throw<ArgumentOutOfRangeException>(act);
     }
 
     [Fact(DisplayName = "WithLogger stores the logger")]
@@ -196,7 +196,7 @@ public sealed class BatchSignerBuilderTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var logger = NullLogger.Instance;
         var builder = BatchSigner.Create(cert).WithLogger(logger);
-        builder.Logger.Should().BeSameAs(logger);
+        builder.Logger.ShouldBeSameAs(logger);
     }
 
     [Fact(DisplayName = "Build returns a BatchSigner")]
@@ -204,7 +204,7 @@ public sealed class BatchSignerBuilderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var signer = BatchSigner.Create(cert).Build();
-        signer.Should().NotBeNull();
+        signer.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "Builder is mutable: chained calls return the same instance")]
@@ -214,8 +214,8 @@ public sealed class BatchSignerBuilderTests
         var b1 = BatchSigner.Create(cert);
         var b2 = b1.WithHashAlgorithm(HashAlgorithmName.SHA512);
         var b3 = b2.WithMaxConcurrency(2);
-        b1.Should().BeSameAs(b2);
-        b2.Should().BeSameAs(b3);
+        b1.ShouldBeSameAs(b2);
+        b2.ShouldBeSameAs(b3);
     }
 
     // ── BatchSignResult.IsSuccess branches ───────────────────────────────────
@@ -224,16 +224,16 @@ public sealed class BatchSignerBuilderTests
     public void BatchSignResult_NullError_IsSuccess()
     {
         var result = new BatchSignResult("doc1.pdf", new byte[] { 0x01, 0x02 }, Error: null);
-        result.IsSuccess.Should().BeTrue();
-        result.SignedPdf.Should().NotBeNull();
+        result.IsSuccess.ShouldBeTrue();
+        result.SignedPdf.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "BatchSignResult IsSuccess returns false when Error is set")]
     public void BatchSignResult_WithError_IsNotSuccess()
     {
         var result = new BatchSignResult("doc2.pdf", SignedPdf: null, new InvalidOperationException("boom"));
-        result.IsSuccess.Should().BeFalse();
-        result.Error.Should().NotBeNull();
+        result.IsSuccess.ShouldBeFalse();
+        result.Error.ShouldNotBeNull();
     }
 
     // ── BatchSigner counters ─────────────────────────────────────────────────
@@ -243,8 +243,8 @@ public sealed class BatchSignerBuilderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var signer = BatchSigner.Create(cert).Build();
-        signer.SuccessCount.Should().Be(0);
-        signer.FailureCount.Should().Be(0);
-        signer.AverageElapsedMs.Should().Be(0);
+        signer.SuccessCount.ShouldBe(0);
+        signer.FailureCount.ShouldBe(0);
+        signer.AverageElapsedMs.ShouldBe(0);
     }
 }

@@ -79,7 +79,7 @@ internal sealed class HtmlToPdfCommand : AsyncCommand<HtmlToPdfCommand.Settings>
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellation)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         string outputPath = settings.OutputPath ?? Path.ChangeExtension(settings.InputPath, ".pdf");
 
@@ -90,7 +90,7 @@ internal sealed class HtmlToPdfCommand : AsyncCommand<HtmlToPdfCommand.Settings>
             .SpinnerStyle(Style.Parse("blue"))
             .StartAsync("Converting...", async _ =>
             {
-                var builder = await HtmlToPdfConverter.FileAsync(settings.InputPath, cancellation);
+                var builder = await HtmlToPdfConverter.FileAsync(settings.InputPath, cancellationToken);
 
                 // Page size
                 PageSize pageSize = settings.PageSizeStr.ToUpperInvariant() switch
@@ -120,7 +120,7 @@ internal sealed class HtmlToPdfCommand : AsyncCommand<HtmlToPdfCommand.Settings>
                 // External CSS
                 if (settings.CssPath is not null)
                 {
-                    string css = await File.ReadAllTextAsync(settings.CssPath, cancellation);
+                    string css = await File.ReadAllTextAsync(settings.CssPath, cancellationToken);
                     builder = builder.WithStylesheet(css);
                 }
 
@@ -138,7 +138,7 @@ internal sealed class HtmlToPdfCommand : AsyncCommand<HtmlToPdfCommand.Settings>
                 pdfBytes = builder.Convert();
             });
 
-        await File.WriteAllBytesAsync(outputPath, pdfBytes, cancellation);
+        await File.WriteAllBytesAsync(outputPath, pdfBytes, cancellationToken);
 
         var info = new FileInfo(outputPath);
         AnsiConsole.MarkupLine($"[green]✓ Converted:[/] {outputPath.EscapeMarkup()}");

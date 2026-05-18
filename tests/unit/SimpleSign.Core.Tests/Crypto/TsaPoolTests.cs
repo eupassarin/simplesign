@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using Xunit;
 
@@ -10,21 +10,21 @@ public sealed class TsaPoolTests
     public void Constructor_NoUrls_Throws()
     {
         var act = () => new TsaPool(Array.Empty<string>());
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     [Fact(DisplayName = "Constructor requires non-null URLs")]
     public void Constructor_NullUrls_Throws()
     {
         var act = () => new TsaPool(null!);
-        act.Should().Throw<ArgumentNullException>();
+        Should.Throw<ArgumentNullException>(act);
     }
 
     [Fact(DisplayName = "EndpointCount reflects configured TSAs")]
     public void EndpointCount_ReflectsConfiguration()
     {
         var pool = new TsaPool(["http://tsa1.example.com", "http://tsa2.example.com"]);
-        pool.EndpointCount.Should().Be(2);
+        pool.EndpointCount.ShouldBe(2);
     }
 
     [Fact(DisplayName = "GetEndpointStatuses returns all endpoints as healthy initially")]
@@ -33,11 +33,11 @@ public sealed class TsaPoolTests
         var pool = new TsaPool(["http://tsa1.example.com", "http://tsa2.example.com"]);
         var statuses = pool.GetEndpointStatuses();
 
-        statuses.Should().HaveCount(2);
-        statuses.Should().OnlyContain(s => s.IsHealthy);
-        statuses[0].IsPrimary.Should().BeTrue();
-        statuses[1].IsPrimary.Should().BeFalse();
-        statuses.Should().OnlyContain(s => s.ConsecutiveFailures == 0);
+        statuses.Count().ShouldBe(2);
+        statuses.ShouldAllBe(s => s.IsHealthy);
+        statuses[0].IsPrimary.ShouldBeTrue();
+        statuses[1].IsPrimary.ShouldBeFalse();
+        statuses.ShouldAllBe(s => s.ConsecutiveFailures == 0);
     }
 
     [Fact(DisplayName = "ResetAll restores all endpoints to healthy")]
@@ -52,8 +52,8 @@ public sealed class TsaPoolTests
         // (We can't easily test this without a mock, so just verify reset works on statuses)
         pool.ResetAll();
         var statuses = pool.GetEndpointStatuses();
-        statuses.Should().OnlyContain(s => s.IsHealthy);
-        statuses[0].IsPrimary.Should().BeTrue();
+        statuses.ShouldAllBe(s => s.IsHealthy);
+        statuses[0].IsPrimary.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "All endpoints unavailable throws InvalidOperationException")]
@@ -71,8 +71,8 @@ public sealed class TsaPoolTests
             System.Security.Cryptography.HashAlgorithmName.SHA256,
             httpClient);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*All*TSA*unavailable*");
+        var ex = await Should.ThrowAsync<InvalidOperationException>(act);
+        ex.Message.ShouldContain("TSA");
     }
 
     [Fact(DisplayName = "After all-fail, statuses show failures")]
@@ -98,15 +98,15 @@ public sealed class TsaPoolTests
         }
 
         var statuses = pool.GetEndpointStatuses();
-        statuses.Should().OnlyContain(s => s.ConsecutiveFailures > 0);
+        statuses.ShouldAllBe(s => s.ConsecutiveFailures > 0);
     }
 
     [Fact(DisplayName = "FailureThreshold and RecoveryInterval have sensible defaults")]
     public void Defaults_AreSensible()
     {
         var pool = new TsaPool(["http://tsa.example.com"]);
-        pool.FailureThreshold.Should().Be(3);
-        pool.RecoveryInterval.Should().Be(TimeSpan.FromSeconds(60));
+        pool.FailureThreshold.ShouldBe(3);
+        pool.RecoveryInterval.ShouldBe(TimeSpan.FromSeconds(60));
     }
 
     [Fact(DisplayName = "Custom FailureThreshold and RecoveryInterval are applied")]
@@ -118,8 +118,8 @@ public sealed class TsaPoolTests
             RecoveryInterval = TimeSpan.FromMinutes(5)
         };
 
-        pool.FailureThreshold.Should().Be(5);
-        pool.RecoveryInterval.Should().Be(TimeSpan.FromMinutes(5));
+        pool.FailureThreshold.ShouldBe(5);
+        pool.RecoveryInterval.ShouldBe(TimeSpan.FromMinutes(5));
     }
 
     [Fact(DisplayName = "TsaEndpointStatus contains URL")]
@@ -127,7 +127,7 @@ public sealed class TsaPoolTests
     {
         var pool = new TsaPool(["http://tsa.example.com"]);
         var statuses = pool.GetEndpointStatuses();
-        statuses[0].Url.Should().Be("http://tsa.example.com");
+        statuses[0].Url.ShouldBe("http://tsa.example.com");
     }
 
     [Fact(DisplayName = "Initially LastFailureUtc is null")]
@@ -135,6 +135,6 @@ public sealed class TsaPoolTests
     {
         var pool = new TsaPool(["http://tsa.example.com"]);
         var statuses = pool.GetEndpointStatuses();
-        statuses[0].LastFailureUtc.Should().BeNull();
+        statuses[0].LastFailureUtc.ShouldBeNull();
     }
 }

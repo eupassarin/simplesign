@@ -1,7 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
 using Xunit;
@@ -81,6 +81,18 @@ public sealed class TimestampClientTests
             () => new TimestampClient(new HttpClient(), ""));
     }
 
+    [Theory(DisplayName = "SSRF: localhost/private TSA URLs are blocked")]
+    [InlineData("http://localhost/tsa")]
+    [InlineData("http://127.0.0.1/tsa")]
+    [InlineData("http://10.0.0.1/tsa")]
+    [InlineData("http://192.168.1.1/tsa")]
+    [InlineData("http://169.254.169.254/tsa")]
+    public void Constructor_SsrfUrl_ThrowsArgumentException(string tsaUrl)
+    {
+        Assert.Throws<ArgumentException>(
+            () => new TimestampClient(new HttpClient(), tsaUrl));
+    }
+
     [Fact(DisplayName = "Valid response returns timestamp token")]
     public async Task GetTimestampAsync_ValidResponse_ReturnsToken()
     {
@@ -91,8 +103,8 @@ public sealed class TimestampClientTests
         var token = await client.GetTimestampAsync(
             new byte[] { 0x01, 0x02, 0x03 }, HashAlgorithmName.SHA256);
 
-        token.Should().NotBeNull();
-        token.Length.Should().BeGreaterThan(0);
+        token.ShouldNotBeNull();
+        token.Length.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "Server error throws TimestampException")]
@@ -173,10 +185,10 @@ public sealed class TimestampClientTests
 
         var result = TimestampClient.EmbedTimestampInCms(cms, fakeToken);
 
-        result.Should().NotBeNull();
-        result.Length.Should().BeGreaterThan(cms.Length);
+        result.ShouldNotBeNull();
+        result.Length.ShouldBeGreaterThan(cms.Length);
         // Token must appear in the result
-        result.AsSpan().IndexOf(fakeToken).Should().BeGreaterThan(0);
+        result.AsSpan().IndexOf(fakeToken).ShouldBeGreaterThan(0);
     }
 }
 

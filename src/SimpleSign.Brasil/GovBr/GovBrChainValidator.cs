@@ -256,29 +256,39 @@ public sealed partial class GovBrChainValidator
         // Attempts to download intermediate certificates via AIA (if not present in the CMS)
         var aiaCerts = await DownloadAiaCertsAsync(certificate, warnings, cancellationToken).ConfigureAwait(false);
 
-        using var chain = ConfigureChainPolicy(extraCerts, aiaCerts);
-        chain.Build(certificate);
-
-        var (chainElements, hasRevocationUnknown) = BuildChainElementResults(chain, errors);
-
-        if (hasRevocationUnknown)
+        try
         {
-            warnings.Add("Revocation check incomplete (CRL/OCSP unreachable from this platform). " +
-                         "Verify manually at: https://assinador.iti.gov.br/");
+            using var chain = ConfigureChainPolicy(extraCerts, aiaCerts);
+            chain.Build(certificate);
+
+            var (chainElements, hasRevocationUnknown) = BuildChainElementResults(chain, errors);
+
+            if (hasRevocationUnknown)
+            {
+                warnings.Add("Revocation check incomplete (CRL/OCSP unreachable from this platform). " +
+                             "Verify manually at: https://assinador.iti.gov.br/");
+            }
+
+            bool isChainValid = errors is [] && chainElements is not [];
+
+            return new GovBrValidationResult
+            {
+                IsChainValid = isChainValid,
+                IsGovBrCertificate = isGovBr,
+                AssuranceLevel = level,
+                Cpf = cpf,
+                ChainElements = chainElements.AsReadOnly(),
+                Errors = errors.AsReadOnly(),
+                Warnings = warnings.AsReadOnly()
+            };
         }
-
-        bool isChainValid = errors is [] && chainElements is not [];
-
-        return new GovBrValidationResult
+        finally
         {
-            IsChainValid = isChainValid,
-            IsGovBrCertificate = isGovBr,
-            AssuranceLevel = level,
-            Cpf = cpf,
-            ChainElements = chainElements.AsReadOnly(),
-            Errors = errors.AsReadOnly(),
-            Warnings = warnings.AsReadOnly()
-        };
+            foreach (var c in aiaCerts)
+            {
+                c.Dispose();
+            }
+        }
     }
 
     /// <summary>
@@ -405,7 +415,17 @@ public sealed partial class GovBrChainValidator
     {
         var text = System.Text.Encoding.ASCII.GetString(sanRawData);
         var match = CpfDigitsRegex().Match(text);
-        return match.Success ? match.Value : null;
+        while (match.Success)
+        {
+            if (IcpBrasil.IcpBrasilChainValidator.IsValidCpf(match.Value))
+            {
+                return match.Value;
+            }
+
+            match = match.NextMatch();
+        }
+
+        return null;
     }
 
     [System.Text.RegularExpressions.GeneratedRegex(@"\d{11}")]

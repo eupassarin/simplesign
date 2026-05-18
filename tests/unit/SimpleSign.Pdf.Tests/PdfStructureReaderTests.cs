@@ -1,5 +1,5 @@
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Pdf.Exceptions;
 using Xunit;
 
@@ -109,7 +109,7 @@ public sealed class PdfStructureReaderTests
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().BeEmpty();
+        fields.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "Null stream throws ArgumentNullException")]
@@ -148,8 +148,8 @@ public sealed class PdfStructureReaderTests
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().HaveCount(1);
-        fields[0].IsSigned.Should().BeTrue();
+        fields.Count().ShouldBe(1);
+        fields[0].IsSigned.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "Signed PDF ByteRange is valid and correct")]
@@ -162,11 +162,11 @@ public sealed class PdfStructureReaderTests
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
         var br = fields[0].ByteRange;
-        br.IsValid.Should().BeTrue();
-        br.Offset1.Should().Be(o1);
-        br.Length1.Should().Be(l1);
-        br.Offset2.Should().Be(o2);
-        br.Length2.Should().Be(l2);
+        br.IsValid.ShouldBeTrue();
+        br.Offset1.ShouldBe(o1);
+        br.Length1.ShouldBe(l1);
+        br.Offset2.ShouldBe(o2);
+        br.Length2.ShouldBe(l2);
     }
 
     [Fact(DisplayName = "Extracted Contents matches CMS bytes")]
@@ -178,7 +178,7 @@ public sealed class PdfStructureReaderTests
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields[0].ContentsBytes.Should().StartWith(expected);
+        fields[0].ContentsBytes.Take(expected.Length).ToArray().ShouldBe(expected);
     }
 
     [Fact(DisplayName = "ReadSignedBytes returns correct byte count")]
@@ -197,8 +197,8 @@ public sealed class PdfStructureReaderTests
 
         var signedBytes = await PdfStructureReader.ReadSignedBytesAsync(stream, byteRange);
 
-        signedBytes.Should().HaveCount((int)(l1 + l2));
-        signedBytes[0].Should().Be((byte)'%');
+        signedBytes.Count().ShouldBe((int)(l1 + l2));
+        signedBytes[0].ShouldBe((byte)'%');
     }
 
     [Fact(DisplayName = "Invalid ByteRange throws ArgumentException")]
@@ -222,28 +222,28 @@ public sealed class PdfStructureReaderTests
     public void PdfByteRange_ValidRange_IsValidReturnsTrue()
     {
         var br = new PdfByteRange { Offset1 = 0, Length1 = 100, Offset2 = 200, Length2 = 50 };
-        br.IsValid.Should().BeTrue();
+        br.IsValid.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "PdfByteRange with zero Length returns IsValid false")]
     public void PdfByteRange_ZeroLength_IsValidReturnsFalse()
     {
         var br = new PdfByteRange { Offset1 = 0, Length1 = 0, Offset2 = 100, Length2 = 50 };
-        br.IsValid.Should().BeFalse();
+        br.IsValid.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Field without Contents returns IsSigned false")]
     public void PdfSignatureField_WithoutContents_IsSignedReturnsFalse()
     {
         var field = new PdfSignatureField { ContentsBytes = [] };
-        field.IsSigned.Should().BeFalse();
+        field.IsSigned.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Field with Contents returns IsSigned true")]
     public void PdfSignatureField_WithContents_IsSignedReturnsTrue()
     {
         var field = new PdfSignatureField { ContentsBytes = new byte[] { 0x30 } };
-        field.IsSigned.Should().BeTrue();
+        field.IsSigned.ShouldBeTrue();
     }
 
     // ── SubFilter extraction ──────────────────────────────────────────────────
@@ -257,8 +257,8 @@ public sealed class PdfStructureReaderTests
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().ContainSingle();
-        fields[0].SubFilter.Should().Be("adbe.pkcs7.detached");
+        fields.Count().ShouldBe(1);
+        fields[0].SubFilter.ShouldBe("adbe.pkcs7.detached");
     }
 
     [Fact(DisplayName = "Extracts SubFilter ETSI.CAdES.detached correctly")]
@@ -270,8 +270,8 @@ public sealed class PdfStructureReaderTests
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().ContainSingle();
-        fields[0].SubFilter.Should().Be("ETSI.CAdES.detached");
+        fields.Count().ShouldBe(1);
+        fields[0].SubFilter.ShouldBe("ETSI.CAdES.detached");
     }
 
     // ── Fixtures helpers ──────────────────────────────────────────────────────

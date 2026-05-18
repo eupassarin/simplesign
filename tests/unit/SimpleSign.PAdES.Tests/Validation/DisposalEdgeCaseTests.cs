@@ -1,5 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -33,7 +33,7 @@ public sealed class DisposalEdgeCaseTests : IDisposable
             await signer.DisposeAsync();
         };
 
-        await act.Should().NotThrowAsync();
+        await Should.NotThrowAsync(act);
     }
 
     [Fact(DisplayName = "BatchSigner: SignAsync after DisposeAsync still works (no owned resources)")]
@@ -45,6 +45,6 @@ public sealed class DisposalEdgeCaseTests : IDisposable
         await signer.DisposeAsync();
 
         var result = await signer.SignAsync(CreateMinimalPdf());
-        result.Should().NotBeEmpty();
+        result.ShouldNotBeEmpty();
     }
 }

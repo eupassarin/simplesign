@@ -1,7 +1,7 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Revocation;
 using Xunit;
 
@@ -25,7 +25,7 @@ public sealed class RevocationUrlExtractionTests
     {
         using var cert = CreateCertWithExtension(
             AiaOid, BuildAia([(OcspMethodOid, "http://ocsp.example.com")]));
-        OcspClient.GetOcspUrl(cert).Should().Be("http://ocsp.example.com");
+        OcspClient.GetOcspUrl(cert).ShouldBe("http://ocsp.example.com");
     }
 
     [Fact(DisplayName = "GetOcspUrl returns null when AIA has only caIssuers")]
@@ -33,14 +33,14 @@ public sealed class RevocationUrlExtractionTests
     {
         using var cert = CreateCertWithExtension(
             AiaOid, BuildAia([(CaIssuersMethodOid, "http://ca.example.com/ca.crt")]));
-        OcspClient.GetOcspUrl(cert).Should().BeNull();
+        OcspClient.GetOcspUrl(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "GetOcspUrl returns null when AIA extension is absent")]
     public void GetOcspUrl_NoAiaExtension_ReturnsNull()
     {
         using var cert = CreatePlainCert();
-        OcspClient.GetOcspUrl(cert).Should().BeNull();
+        OcspClient.GetOcspUrl(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "GetCaIssuersUrl returns CA Issuers URL when AIA contains it")]
@@ -48,14 +48,14 @@ public sealed class RevocationUrlExtractionTests
     {
         using var cert = CreateCertWithExtension(
             AiaOid, BuildAia([(CaIssuersMethodOid, "http://ca.example.com/ca.crt")]));
-        OcspClient.GetCaIssuersUrl(cert).Should().Be("http://ca.example.com/ca.crt");
+        OcspClient.GetCaIssuersUrl(cert).ShouldBe("http://ca.example.com/ca.crt");
     }
 
     [Fact(DisplayName = "GetCaIssuersUrl returns null when AIA extension is absent")]
     public void GetCaIssuersUrl_NoAia_ReturnsNull()
     {
         using var cert = CreatePlainCert();
-        OcspClient.GetCaIssuersUrl(cert).Should().BeNull();
+        OcspClient.GetCaIssuersUrl(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "ParseAiaUri returns first matching URI when multiple AIA entries exist")]
@@ -67,7 +67,7 @@ public sealed class RevocationUrlExtractionTests
             (OcspMethodOid, "http://ocsp2.example.com"),
         ]);
 
-        OcspClient.ParseAiaUri(rawAia, OcspMethodOid).Should().Be("http://ocsp.example.com");
+        OcspClient.ParseAiaUri(rawAia, OcspMethodOid).ShouldBe("http://ocsp.example.com");
     }
 
     [Fact(DisplayName = "ParseAiaUri skips non-URI GeneralName types")]
@@ -98,13 +98,13 @@ public sealed class RevocationUrlExtractionTests
             }
         }
 
-        OcspClient.ParseAiaUri(w.Encode(), OcspMethodOid).Should().Be("http://ocsp-found.example");
+        OcspClient.ParseAiaUri(w.Encode(), OcspMethodOid).ShouldBe("http://ocsp-found.example");
     }
 
     [Fact(DisplayName = "ParseAiaUri returns null on malformed bytes")]
     public void ParseAiaUri_GarbageBytes_ReturnsNull()
     {
-        OcspClient.ParseAiaUri([0xFF, 0x01, 0x02], OcspMethodOid).Should().BeNull();
+        OcspClient.ParseAiaUri([0xFF, 0x01, 0x02], OcspMethodOid).ShouldBeNull();
     }
 
     // ── CrlClient.GetCrlUrl ──────────────────────────────────────────────────
@@ -113,35 +113,35 @@ public sealed class RevocationUrlExtractionTests
     public void GetCrlUrl_ValidCdpWithHttp_ReturnsUrl()
     {
         using var cert = CreateCertWithExtension(CdpOid, BuildCdp("http://example.com/ca.crl"));
-        CrlClient.GetCrlUrl(cert).Should().Be("http://example.com/ca.crl");
+        CrlClient.GetCrlUrl(cert).ShouldBe("http://example.com/ca.crl");
     }
 
     [Fact(DisplayName = "GetCrlUrl returns null when only ldap:// URLs are present")]
     public void GetCrlUrl_LdapOnly_ReturnsNull()
     {
         using var cert = CreateCertWithExtension(CdpOid, BuildCdp("ldap://example.com/cn=ca"));
-        CrlClient.GetCrlUrl(cert).Should().BeNull();
+        CrlClient.GetCrlUrl(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "GetCrlUrl returns https URL")]
     public void GetCrlUrl_HttpsUrl_Returned()
     {
         using var cert = CreateCertWithExtension(CdpOid, BuildCdp("https://example.com/ca.crl"));
-        CrlClient.GetCrlUrl(cert).Should().Be("https://example.com/ca.crl");
+        CrlClient.GetCrlUrl(cert).ShouldBe("https://example.com/ca.crl");
     }
 
     [Fact(DisplayName = "GetCrlUrl returns null when CDP extension is absent")]
     public void GetCrlUrl_NoCdp_ReturnsNull()
     {
         using var cert = CreatePlainCert();
-        CrlClient.GetCrlUrl(cert).Should().BeNull();
+        CrlClient.GetCrlUrl(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "GetCrlUrl returns null on malformed CDP bytes")]
     public void GetCrlUrl_MalformedCdp_ReturnsNull()
     {
         using var cert = CreateCertWithExtension(CdpOid, [0xFF, 0xFE]);
-        CrlClient.GetCrlUrl(cert).Should().BeNull();
+        CrlClient.GetCrlUrl(cert).ShouldBeNull();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

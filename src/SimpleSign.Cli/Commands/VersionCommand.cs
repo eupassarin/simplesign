@@ -8,7 +8,7 @@ namespace SimpleSign.Cli.Commands;
 [Description("Show version information")]
 internal sealed class VersionCommand : Command<CommonSettings>
 {
-    public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellation)
+    protected override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken)
     {
         var cliVersion = typeof(Program).Assembly.GetName().Version;
         var libVersion = typeof(SimpleSigner).Assembly.GetName().Version;

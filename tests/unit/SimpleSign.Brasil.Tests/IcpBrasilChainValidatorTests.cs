@@ -1,7 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Brasil.IcpBrasil;
 using SimpleSign.Core.Crypto;
 
@@ -51,7 +51,7 @@ public sealed class IcpBrasilChainValidatorTests
         CertificateRequest certificateRequest = new CertificateRequest("CN=NoPolicies", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using X509Certificate2 certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
         IcpBrasilPolicy? icpBrasilPolicy = IcpBrasilChainValidator.DetectPolicy(certificate);
-        icpBrasilPolicy.Should().BeNull("");
+        icpBrasilPolicy.ShouldBeNull("");
     }
 
     [Theory(DisplayName = "ICP-Brasil OID returns correct policy")]
@@ -84,16 +84,16 @@ public sealed class IcpBrasilChainValidatorTests
     {
         using X509Certificate2 certificate = CreateCertWithPolicy(oid);
         IcpBrasilPolicy? icpBrasilPolicy = IcpBrasilChainValidator.DetectPolicy(certificate);
-        icpBrasilPolicy.Should().Be(expectedPolicy, "");
+        icpBrasilPolicy.ShouldBe(expectedPolicy, "");
     }
 
     [Fact(DisplayName = "EncodeOid for SHA-256 produces correct DER")]
     public void EncodeOid_StandardOid_ReturnsCorrectDer()
     {
         byte[] array = IcpBrasilChainValidator.EncodeOid("2.16.840.1.101.3.4.2.1");
-        array[0].Should().Be(6, "");
-        array[1].Should().Be(9, "");
-        array.Length.Should().Be(11, "");
+        array[0].ShouldBe((byte)6);
+        array[1].ShouldBe((byte)9);
+        array.Length.ShouldBe(11);
     }
 
     [Fact(DisplayName = "Encoded OID is found in cert extension")]
@@ -103,9 +103,9 @@ public sealed class IcpBrasilChainValidatorTests
         byte[] array = IcpBrasilChainValidator.EncodeOid(text);
         using X509Certificate2 x509Certificate = CreateCertWithPolicy(text);
         X509Extension? x509Extension = x509Certificate.Extensions["2.5.29.32"];
-        x509Extension.Should().NotBeNull("");
-        x509Extension!.RawData.AsSpan().IndexOf(array.AsSpan(2)).Should()
-            .BeGreaterThanOrEqualTo(0, "");
+        x509Extension.ShouldNotBeNull();
+        x509Extension!.RawData.AsSpan().IndexOf(array.AsSpan(2))
+            .ShouldBeGreaterThanOrEqualTo(0);
     }
 
     [Fact(DisplayName = "Valid result with no errors returns IsValid true")]
@@ -116,7 +116,7 @@ public sealed class IcpBrasilChainValidatorTests
             IsChainValid = true,
             Errors = Array.Empty<string>()
         };
-        icpBrasilValidationResult.IsValid.Should().BeTrue("");
+        icpBrasilValidationResult.IsValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "Result with errors returns IsValid false")]
@@ -127,7 +127,7 @@ public sealed class IcpBrasilChainValidatorTests
             IsChainValid = true,
             Errors = ["Certificate expired"]
         };
-        icpBrasilValidationResult.IsValid.Should().BeFalse("");
+        icpBrasilValidationResult.IsValid.ShouldBeFalse("");
     }
 
     [Fact(DisplayName = "ValidateAsync with null certificate throws exception")]
@@ -147,8 +147,8 @@ public sealed class IcpBrasilChainValidatorTests
         CertificateRequest certificateRequest = new CertificateRequest("CN=NoPolicy", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using X509Certificate2 cert = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
         IcpBrasilValidationResult icpBrasilValidationResult = await icpBrasilChainValidator.ValidateAsync(cert);
-        icpBrasilValidationResult.DetectedPolicy.Should().BeNull("");
-        icpBrasilValidationResult.Warnings.Should().Contain((string w) => w.Contains("ICP-Brasil"), "");
+        icpBrasilValidationResult.DetectedPolicy.ShouldBeNull("");
+        icpBrasilValidationResult.Warnings.ShouldContain((string w) => w.Contains("ICP-Brasil"), "");
     }
 
     [Fact(DisplayName = "ExtractCpfCnpj with null cert throws exception")]
@@ -164,8 +164,8 @@ public sealed class IcpBrasilChainValidatorTests
         CertificateRequest certificateRequest = new CertificateRequest("CN=NoSAN", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using X509Certificate2 certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
         var (actualValue, actualValue2) = IcpBrasilChainValidator.ExtractCpfCnpj(certificate);
-        actualValue.Should().BeNull("");
-        actualValue2.Should().BeNull("");
+        actualValue.ShouldBeNull("");
+        actualValue2.ShouldBeNull("");
     }
 
     [Fact(DisplayName = "Small RSA key produces size warning")]
@@ -177,6 +177,6 @@ public sealed class IcpBrasilChainValidatorTests
         using RSA rsa = RSA.Create(1024);
         CertificateRequest certificateRequest = new CertificateRequest("CN=SmallKey", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using X509Certificate2 cert = CertificateLoader.LoadPkcs12(certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1)).Export(X509ContentType.Pfx, "test-export"), "test-export");
-        (await icpBrasilChainValidator.ValidateAsync(cert)).Warnings.Should().Contain((string w) => w.Contains("1024") && w.Contains("2048"), "");
+        (await icpBrasilChainValidator.ValidateAsync(cert)).Warnings.ShouldContain((string w) => w.Contains("1024") && w.Contains("2048"), "");
     }
 }

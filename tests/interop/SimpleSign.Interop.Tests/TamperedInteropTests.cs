@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -46,8 +46,8 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
             // pyHanko should either explicitly say INVALID, error out, or fail to validate
             (combined.Contains("INVALID") || combined.Contains("error")
                 || combined.Contains("Error") || combined.Contains("Traceback")
-                || !combined.Contains("VALID") || exitCode != 0).Should().BeTrue(
-                because: "pyHanko should reject a PDF with tampered CMS signature bytes");
+                || !combined.Contains("VALID") || exitCode != 0).ShouldBeTrue(
+                "pyHanko should reject a PDF with tampered CMS signature bytes");
         }
         finally
         {
@@ -85,13 +85,12 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
             }
 
             var combined = stdout + stderr;
-            combined.Should().NotContain("VALID\n",
-                because: "pyHanko should not report VALID when bytes are appended after %%EOF");
+            combined.ShouldNotContain("VALID\n");
             // Accept INVALID, INDETERMINATE, error, or non-zero exit as rejection
             (combined.Contains("INVALID") || combined.Contains("INDETERMINATE")
                 || combined.Contains("error") || combined.Contains("fail")
-                || exitCode != 0).Should().BeTrue(
-                because: "validator should reject or flag modified PDF content");
+                || exitCode != 0).ShouldBeTrue(
+                "validator should reject or flag modified PDF content");
         }
         finally
         {
@@ -127,8 +126,7 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
 
             var combined = stdout + stderr;
             // iText should not report all signatures as VALID
-            combined.Should().NotContain("RESULT: VALID",
-                because: "iText should reject a PDF with tampered CMS signature");
+            combined.ShouldNotContain("RESULT: VALID");
         }
         finally
         {
@@ -166,8 +164,8 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
             // EU DSS should report TOTAL_FAILED, fail to parse, or not report TOTAL_PASSED
             (combined.Contains("TOTAL_FAILED") || combined.Contains("NO_SIGNATURES")
                 || combined.Contains("Unable to build") || !combined.Contains("TOTAL_PASSED")
-                || exitCode != 0).Should().BeTrue(
-                because: "EU DSS should reject a PDF with tampered CMS signature");
+                || exitCode != 0).ShouldBeTrue(
+                "EU DSS should reject a PDF with tampered CMS signature");
         }
         finally
         {

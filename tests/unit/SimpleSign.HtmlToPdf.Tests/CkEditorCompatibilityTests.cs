@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Layout;
 using SimpleSign.HtmlToPdf.Parsing;
 using Xunit;
@@ -15,8 +15,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p><s>deleted text</s></p>");
         StyleResolver.Resolve(root, []);
         var sNode = FindByTag(root, "s");
-        sNode.Should().NotBeNull();
-        sNode!.ComputedStyle!.IsStrikethrough.Should().BeTrue();
+        sNode.ShouldNotBeNull();
+        sNode!.ComputedStyle!.IsStrikethrough.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "CK: <del> tag produces strikethrough style")]
@@ -25,8 +25,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p><del>removed</del></p>");
         StyleResolver.Resolve(root, []);
         var del = FindByTag(root, "del");
-        del.Should().NotBeNull();
-        del!.ComputedStyle!.IsStrikethrough.Should().BeTrue();
+        del.ShouldNotBeNull();
+        del!.ComputedStyle!.IsStrikethrough.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "CK: text-decoration line-through from CSS sets strikethrough")]
@@ -35,8 +35,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p><span style=\"text-decoration: line-through\">crossed</span></p>");
         StyleResolver.Resolve(root, []);
         var span = FindByTag(root, "span");
-        span.Should().NotBeNull();
-        span!.ComputedStyle!.IsStrikethrough.Should().BeTrue();
+        span.ShouldNotBeNull();
+        span!.ComputedStyle!.IsStrikethrough.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "CK: combined underline and line-through sets both flags")]
@@ -45,9 +45,9 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p><span style=\"text-decoration: underline line-through\">both</span></p>");
         StyleResolver.Resolve(root, []);
         var span = FindByTag(root, "span");
-        span.Should().NotBeNull();
-        span!.ComputedStyle!.IsUnderline.Should().BeTrue();
-        span!.ComputedStyle!.IsStrikethrough.Should().BeTrue();
+        span.ShouldNotBeNull();
+        span!.ComputedStyle!.IsUnderline.ShouldBeTrue();
+        span!.ComputedStyle!.IsStrikethrough.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "CK: strikethrough renders in PDF")]
@@ -56,7 +56,7 @@ public class CkEditorCompatibilityTests
         byte[] pdf = ConvertToPdf("<p><s>deleted</s></p>");
         string text = PdfTextHelper.GetDecompressedPdfText(pdf);
         // Text appears in PDF content stream (may be octal-encoded for special chars)
-        text.Should().Contain("deleted");
+        text.ShouldContain("deleted");
     }
 
     // ── Subscript / Superscript ─────────────────────────────────────────
@@ -67,8 +67,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p>H<sub>2</sub>O</p>");
         StyleResolver.Resolve(root, []);
         var sub = FindByTag(root, "sub");
-        sub.Should().NotBeNull();
-        sub!.ComputedStyle!.FontPosition.Should().Be(FontPosition.Subscript);
+        sub.ShouldNotBeNull();
+        sub!.ComputedStyle!.FontPosition.ShouldBe(FontPosition.Subscript);
     }
 
     [Fact(DisplayName = "CK: <sup> tag sets FontPosition.Superscript")]
@@ -77,8 +77,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p>x<sup>2</sup></p>");
         StyleResolver.Resolve(root, []);
         var sup = FindByTag(root, "sup");
-        sup.Should().NotBeNull();
-        sup!.ComputedStyle!.FontPosition.Should().Be(FontPosition.Superscript);
+        sup.ShouldNotBeNull();
+        sup!.ComputedStyle!.FontPosition.ShouldBe(FontPosition.Superscript);
     }
 
     [Fact(DisplayName = "CK: <sub> reduces font size")]
@@ -87,8 +87,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p style=\"font-size: 12pt\">H<sub>2</sub>O</p>");
         StyleResolver.Resolve(root, []);
         var sub = FindByTag(root, "sub");
-        sub.Should().NotBeNull();
-        sub!.ComputedStyle!.FontSize.Should().BeLessThan(12);
+        sub.ShouldNotBeNull();
+        sub!.ComputedStyle!.FontSize.ShouldBeLessThan(12);
     }
 
     [Fact(DisplayName = "CK: subscript renders in PDF")]
@@ -96,9 +96,9 @@ public class CkEditorCompatibilityTests
     {
         byte[] pdf = ConvertToPdf("<p>H<sub>2</sub>O</p>");
         string text = PdfTextHelper.GetDecompressedPdfText(pdf);
-        text.Should().Contain("H");
-        text.Should().Contain("2");
-        text.Should().Contain("O");
+        text.ShouldContain("H");
+        text.ShouldContain("2");
+        text.ShouldContain("O");
     }
 
     // ── Mark (highlight) ────────────────────────────────────────────────
@@ -109,8 +109,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p><mark>highlighted</mark></p>");
         StyleResolver.Resolve(root, []);
         var mark = FindByTag(root, "mark");
-        mark.Should().NotBeNull();
-        mark!.ComputedStyle!.BackgroundColor.Should().NotBeNull();
+        mark.ShouldNotBeNull();
+        mark!.ComputedStyle!.BackgroundColor.ShouldNotBeNull();
     }
 
     // ── Links ───────────────────────────────────────────────────────────
@@ -121,9 +121,9 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p><a href=\"https://example.com\">click here</a></p>");
         StyleResolver.Resolve(root, []);
         var a = FindByTag(root, "a");
-        a.Should().NotBeNull();
-        a!.ComputedStyle!.Color.B.Should().BeGreaterThan(0.5f);
-        a!.ComputedStyle!.IsUnderline.Should().BeTrue();
+        a.ShouldNotBeNull();
+        a!.ComputedStyle!.Color.B.ShouldBeGreaterThan(0.5f);
+        a!.ComputedStyle!.IsUnderline.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "CK: <a> produces link annotation in PDF")]
@@ -131,9 +131,9 @@ public class CkEditorCompatibilityTests
     {
         byte[] pdf = ConvertToPdf("<p><a href=\"https://example.com\">visit</a></p>");
         string text = System.Text.Encoding.Latin1.GetString(pdf);
-        text.Should().Contain("/Annot");
-        text.Should().Contain("/Link");
-        text.Should().Contain("example.com");
+        text.ShouldContain("/Annot");
+        text.ShouldContain("/Link");
+        text.ShouldContain("example.com");
     }
 
     [Fact(DisplayName = "CK: link with special characters in URL")]
@@ -141,8 +141,8 @@ public class CkEditorCompatibilityTests
     {
         byte[] pdf = ConvertToPdf("<p><a href=\"https://example.com/path?q=hello&lang=pt\">test</a></p>");
         string text = System.Text.Encoding.Latin1.GetString(pdf);
-        text.Should().Contain("/URI");
-        text.Should().Contain("example.com");
+        text.ShouldContain("/URI");
+        text.ShouldContain("example.com");
     }
 
     // ── Colspan / Rowspan ───────────────────────────────────────────────
@@ -156,9 +156,9 @@ public class CkEditorCompatibilityTests
         </table>";
         byte[] pdf = ConvertToPdf(html);
         string text = PdfTextHelper.GetDecompressedPdfText(pdf);
-        text.Should().Contain("Header spanning 2 columns");
-        text.Should().Contain("Cell 1");
-        text.Should().Contain("Cell 2");
+        text.ShouldContain("Header spanning 2 columns");
+        text.ShouldContain("Cell 1");
+        text.ShouldContain("Cell 2");
     }
 
     [Fact(DisplayName = "CK: colspan cell gets wider layout")]
@@ -172,11 +172,11 @@ public class CkEditorCompatibilityTests
         string text = PdfTextHelper.GetDecompressedPdfText(pdf);
 
         // All text renders in the PDF
-        text.Should().Contain("(X)");
-        text.Should().Contain("(A)");
-        text.Should().Contain("(B)");
-        text.Should().Contain("(C)");
-        text.Should().StartWith("%PDF-");
+        text.ShouldContain("(X)");
+        text.ShouldContain("(A)");
+        text.ShouldContain("(B)");
+        text.ShouldContain("(C)");
+        text.ShouldStartWith("%PDF-");
     }
 
     [Fact(DisplayName = "CK: table with rowspan renders all content")]
@@ -188,9 +188,9 @@ public class CkEditorCompatibilityTests
         </table>";
         byte[] pdf = ConvertToPdf(html);
         string text = PdfTextHelper.GetDecompressedPdfText(pdf);
-        text.Should().Contain("Merged");
-        text.Should().Contain("Row 1");
-        text.Should().Contain("Row 2");
+        text.ShouldContain("Merged");
+        text.ShouldContain("Row 1");
+        text.ShouldContain("Row 2");
     }
 
     [Fact(DisplayName = "CK: complex table with both colspan and rowspan")]
@@ -213,13 +213,13 @@ public class CkEditorCompatibilityTests
         </table>";
         byte[] pdf = ConvertToPdf(html);
         string text = PdfTextHelper.GetDecompressedPdfText(pdf);
-        text.Should().Contain("Category");
-        text.Should().Contain("Period");
-        text.Should().Contain("Q1");
-        text.Should().Contain("Q2");
-        text.Should().Contain("Sales");
-        text.Should().Contain("100");
-        text.Should().Contain("200");
+        text.ShouldContain("Category");
+        text.ShouldContain("Period");
+        text.ShouldContain("Q1");
+        text.ShouldContain("Q2");
+        text.ShouldContain("Sales");
+        text.ShouldContain("100");
+        text.ShouldContain("200");
     }
 
     [Fact(DisplayName = "CK: table caption renders above table")]
@@ -236,7 +236,7 @@ public class CkEditorCompatibilityTests
 
         var boxes = result.Pages[0].Boxes;
         var captionBox = boxes.FirstOrDefault(b => b.Text?.Contains("Table 1") == true);
-        captionBox.Should().NotBeNull();
+        captionBox.ShouldNotBeNull();
     }
 
     // ── Images ──────────────────────────────────────────────────────────
@@ -252,9 +252,9 @@ public class CkEditorCompatibilityTests
         var result = engine.Layout(root);
 
         var imageBox = result.Pages[0].Boxes.FirstOrDefault(b => b.Type == LayoutBoxType.Image);
-        imageBox.Should().NotBeNull();
-        imageBox!.Width.Should().BeGreaterThan(0);
-        imageBox!.Height.Should().BeGreaterThan(0);
+        imageBox.ShouldNotBeNull();
+        imageBox!.Width.ShouldBeGreaterThan(0);
+        imageBox!.Height.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "CK: image XObject appears in PDF output")]
@@ -264,10 +264,10 @@ public class CkEditorCompatibilityTests
         string html = $"<p><img src=\"data:image/png;base64,{base64}\" /></p>";
         byte[] pdf = ConvertToPdf(html);
         string text = System.Text.Encoding.Latin1.GetString(pdf);
-        text.Should().Contain("/XObject");
-        text.Should().Contain("Img1");
-        text.Should().Contain("/Image");
-        text.Should().Contain("/FlateDecode");
+        text.ShouldContain("/XObject");
+        text.ShouldContain("Img1");
+        text.ShouldContain("/Image");
+        text.ShouldContain("/FlateDecode");
     }
 
     [Fact(DisplayName = "CK: image with width attribute constrains size")]
@@ -281,8 +281,8 @@ public class CkEditorCompatibilityTests
         var result = engine.Layout(root);
 
         var imageBox = result.Pages[0].Boxes.FirstOrDefault(b => b.Type == LayoutBoxType.Image);
-        imageBox.Should().NotBeNull();
-        imageBox!.Width.Should().BeApproximately(200 * 0.75f, 1f);
+        imageBox.ShouldNotBeNull();
+        imageBox!.Width.ShouldBe(200 * 0.75f, 1f);
     }
 
     [Fact(DisplayName = "CK: invalid image src is silently skipped")]
@@ -295,7 +295,7 @@ public class CkEditorCompatibilityTests
         var result = engine.Layout(root);
 
         var imageBox = result.Pages[0].Boxes.FirstOrDefault(b => b.Type == LayoutBoxType.Image);
-        imageBox.Should().BeNull();
+        imageBox.ShouldBeNull();
     }
 
     // ── CSS Improvements ────────────────────────────────────────────────
@@ -309,7 +309,7 @@ public class CkEditorCompatibilityTests
         var engine = new LayoutEngine(new PageSettings());
         var result = engine.Layout(root);
 
-        result.Pages.Should().NotBeEmpty();
+        result.Pages.ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "CK: RGBA color is parsed")]
@@ -318,9 +318,9 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p style=\"color: rgba(255,0,0,0.5)\">Red text</p>");
         StyleResolver.Resolve(root, []);
         var p = FindByTag(root, "p");
-        p.Should().NotBeNull();
-        p!.ComputedStyle!.Color.R.Should().BeApproximately(1.0f, 0.01f);
-        p!.ComputedStyle!.Color.G.Should().BeApproximately(0f, 0.01f);
+        p.ShouldNotBeNull();
+        p!.ComputedStyle!.Color.R.ShouldBe(1.0f, 0.01f);
+        p!.ComputedStyle!.Color.G.ShouldBe(0f, 0.01f);
     }
 
     [Fact(DisplayName = "CK: inline style from HTML attribute is applied")]
@@ -329,9 +329,9 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p style=\"color: red; font-weight: bold\">Bold red</p>");
         StyleResolver.Resolve(root, []);
         var p = FindByTag(root, "p");
-        p.Should().NotBeNull();
-        p!.ComputedStyle!.IsBold.Should().BeTrue();
-        p!.ComputedStyle!.Color.R.Should().BeApproximately(1.0f, 0.01f);
+        p.ShouldNotBeNull();
+        p!.ComputedStyle!.IsBold.ShouldBeTrue();
+        p!.ComputedStyle!.Color.R.ShouldBe(1.0f, 0.01f);
     }
 
     // ── Figure / Figcaption ─────────────────────────────────────────────
@@ -342,8 +342,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<figure><figcaption>Caption text</figcaption></figure>");
         StyleResolver.Resolve(root, []);
         var figure = FindByTag(root, "figure");
-        figure.Should().NotBeNull();
-        figure!.ComputedStyle!.Display.Should().Be(DisplayType.Block);
+        figure.ShouldNotBeNull();
+        figure!.ComputedStyle!.Display.ShouldBe(DisplayType.Block);
     }
 
     // ── Additional elements ─────────────────────────────────────────────
@@ -354,8 +354,8 @@ public class CkEditorCompatibilityTests
         var root = HtmlTokenizer.Parse("<p><kbd>Ctrl+C</kbd></p>");
         StyleResolver.Resolve(root, []);
         var kbd = FindByTag(root, "kbd");
-        kbd.Should().NotBeNull();
-        kbd!.ComputedStyle!.FontFamily.Should().Be("Courier");
+        kbd.ShouldNotBeNull();
+        kbd!.ComputedStyle!.FontFamily.ShouldBe("Courier");
     }
 
     // ── E2E: Full CKEditor-style document ───────────────────────────────
@@ -395,21 +395,21 @@ public class CkEditorCompatibilityTests
 
         // Verify all major content appears (ASCII-safe strings only, special chars are octal-encoded)
         // Note: text may be split across multiple PDF text operations
-        text.Should().Contain("Parecer");
-        text.Should().Contain("Processo");
-        text.Should().Contain("negrito");
-        text.Should().Contain("tachado");
-        text.Should().Contain("Despesas");
-        text.Should().Contain("Pessoal");
-        text.Should().Contain("500.000");
-        text.Should().Contain("Fim");
-        text.Should().Contain("parecer");
-        text.Should().Contain("/Annot");  // link annotation
-        text.Should().Contain("tce.es.gov.br");
+        text.ShouldContain("Parecer");
+        text.ShouldContain("Processo");
+        text.ShouldContain("negrito");
+        text.ShouldContain("tachado");
+        text.ShouldContain("Despesas");
+        text.ShouldContain("Pessoal");
+        text.ShouldContain("500.000");
+        text.ShouldContain("Fim");
+        text.ShouldContain("parecer");
+        text.ShouldContain("/Annot");  // link annotation
+        text.ShouldContain("tce.es.gov.br");
 
         // Should be valid PDF
-        text.Should().StartWith("%PDF-");
-        text.Should().Contain("%%EOF");
+        text.ShouldStartWith("%PDF-");
+        text.ShouldContain("%%EOF");
     }
 
     [Fact(DisplayName = "CK: E2E document with multiple text decorations in one paragraph")]
@@ -431,15 +431,15 @@ public class CkEditorCompatibilityTests
         byte[] pdf = ConvertToPdf(html);
         string text = PdfTextHelper.GetDecompressedPdfText(pdf);
 
-        text.Should().Contain("bold");
-        text.Should().Contain("italic");
-        text.Should().Contain("underline");
-        text.Should().Contain("strikethrough");
-        text.Should().Contain("subscript");
-        text.Should().Contain("superscript");
-        text.Should().Contain("highlight");
-        text.Should().Contain("keyboard");
-        text.Should().Contain("link");
+        text.ShouldContain("bold");
+        text.ShouldContain("italic");
+        text.ShouldContain("underline");
+        text.ShouldContain("strikethrough");
+        text.ShouldContain("subscript");
+        text.ShouldContain("superscript");
+        text.ShouldContain("highlight");
+        text.ShouldContain("keyboard");
+        text.ShouldContain("link");
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

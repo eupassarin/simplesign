@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
@@ -50,7 +50,7 @@ public sealed class MissingCoverageTests
         try
         {
             await File.WriteAllBytesAsync(tempFile, BuildMinimalPdf());
-            (await SimpleSigner.DocumentAsync(tempFile)).Should().NotBeNull("");
+            (await SimpleSigner.DocumentAsync(tempFile)).ShouldNotBeNull("");
         }
         finally
         {
@@ -69,7 +69,7 @@ public sealed class MissingCoverageTests
     public async Task DocumentAsync_EmptyString_ThrowsArgumentException()
     {
         Func<Task<SignerBuilder>> action = () => SimpleSigner.DocumentAsync("");
-        await action.Should().ThrowExactlyAsync<ArgumentException>("", Array.Empty<object>());
+        await Should.ThrowAsync<ArgumentException>(async () => await action());
     }
 
     [Fact(DisplayName = "WithTimestamp(url, HttpClient) accepts custom HttpClient without error")]
@@ -77,14 +77,14 @@ public sealed class MissingCoverageTests
     {
         using HttpClient httpClient = new HttpClient();
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithTimestamp("http://tsa.example.com", httpClient);
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "IsDocMdpLockedAsync with unsigned PDF returns false")]
     public async Task IsDocMdpLockedAsync_UnsignedPdf_ReturnsFalse()
     {
         using MemoryStream stream = new MemoryStream(BuildMinimalPdf());
-        (await PdfStructureReader.IsDocMdpLockedAsync(stream)).Should().BeFalse("");
+        (await PdfStructureReader.IsDocMdpLockedAsync(stream)).ShouldBeFalse("");
     }
 
     [Fact(DisplayName = "IsDocMdpLockedAsync with NoChanges certification returns true")]
@@ -93,7 +93,7 @@ public sealed class MissingCoverageTests
         using X509Certificate2 cert = CreateRsaCert();
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).AsCertification(CertificationLevel.NoChanges)
             .SignAsync());
-        (await PdfStructureReader.IsDocMdpLockedAsync(stream)).Should().BeTrue("");
+        (await PdfStructureReader.IsDocMdpLockedAsync(stream)).ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "IsDocMdpLockedAsync with regular signature (no certification) returns false")]
@@ -101,14 +101,14 @@ public sealed class MissingCoverageTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
-        (await PdfStructureReader.IsDocMdpLockedAsync(stream)).Should().BeFalse("");
+        (await PdfStructureReader.IsDocMdpLockedAsync(stream)).ShouldBeFalse("");
     }
 
     [Fact(DisplayName = "DetectPdfALevelAsync with regular PDF returns PdfALevel.None")]
     public async Task DetectPdfALevelAsync_RegularPdf_ReturnsNone()
     {
         using MemoryStream stream = new MemoryStream(BuildMinimalPdf());
-        (await PdfStructureReader.DetectPdfALevelAsync(stream)).Should().Be(PdfALevel.None, "");
+        (await PdfStructureReader.DetectPdfALevelAsync(stream)).ShouldBe(PdfALevel.None, "");
     }
 
     [Fact(DisplayName = "DetectPdfALevelAsync works on signed PDF without error")]
@@ -116,7 +116,7 @@ public sealed class MissingCoverageTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
-        (await PdfStructureReader.DetectPdfALevelAsync(stream)).Should().Be(PdfALevel.None, "");
+        (await PdfStructureReader.DetectPdfALevelAsync(stream)).ShouldBe(PdfALevel.None, "");
     }
 
     [Fact(DisplayName = "ExtractSignatureContentHashes with signed PDF returns non-empty hex hash list")]
@@ -124,19 +124,19 @@ public sealed class MissingCoverageTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         List<string> list = LtvEmbedder.ExtractSignatureContentHashes(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
-        list.Should().NotBeEmpty("");
-        list.Should().AllSatisfy(delegate (string h)
+        list.ShouldNotBeEmpty();
+        foreach (var h in list)
         {
-            h.Should().NotBeNullOrWhiteSpace("");
-            h.Should().MatchRegex("^[0-9A-F]+$", "");
-        }, "");
+            h.ShouldNotBeNullOrWhiteSpace();
+            h.ShouldMatch("^[0-9A-F]+$");
+        }
     }
 
     [Fact(DisplayName = "ExtractSignatureContentHashes with unsigned PDF returns empty list")]
     public void ExtractSignatureContentHashes_UnsignedPdf_ReturnsEmptyList()
     {
         List<string> list = LtvEmbedder.ExtractSignatureContentHashes(BuildMinimalPdf());
-        list.Should().BeEmpty("");
+        list.ShouldBeEmpty("");
     }
 
     [Fact(DisplayName = "BatchValidationResult with non-null Results → IsProcessed is true")]
@@ -148,7 +148,7 @@ public sealed class MissingCoverageTests
             Identifier = "test.pdf",
             Results = new List<SignatureValidationResult>()
         };
-        batchValidationResult.IsProcessed.Should().BeTrue("");
+        batchValidationResult.IsProcessed.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "BatchValidationResult with Error → IsProcessed is false")]
@@ -160,7 +160,7 @@ public sealed class MissingCoverageTests
             Identifier = "bad.pdf",
             Error = "Corrupted file"
         };
-        batchValidationResult.IsProcessed.Should().BeFalse("");
+        batchValidationResult.IsProcessed.ShouldBeFalse("");
     }
 
     [Fact(DisplayName = "BatchValidationResult without Results and without Error → IsProcessed is true")]
@@ -172,7 +172,7 @@ public sealed class MissingCoverageTests
             Results = null,
             Error = null
         };
-        batchValidationResult.IsProcessed.Should().BeTrue("");
+        batchValidationResult.IsProcessed.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "EmbeddedCertificates after self-signed PDF validation contains at least the signer certificate")]
@@ -183,9 +183,9 @@ public sealed class MissingCoverageTests
         {
             using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
             IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-            readOnlyList.Should().ContainSingle("");
-            readOnlyList[0].EmbeddedCertificates.Should().NotBeEmpty("");
-            readOnlyList[0].EmbeddedCertificates.Should().Contain((X509Certificate2 c) => c.Thumbprint == cert.Thumbprint, "");
+            readOnlyList.Count().ShouldBe(1, "");
+            readOnlyList[0].EmbeddedCertificates.ShouldNotBeEmpty("");
+            readOnlyList[0].EmbeddedCertificates.ShouldContain((X509Certificate2 c) => c.Thumbprint == cert.Thumbprint, "");
         }
         finally
         {
@@ -203,7 +203,7 @@ public sealed class MissingCoverageTests
         {
             DigestAlgorithmOid = "2.16.840.1.101.3.4.2.1"
         };
-        signatureValidationResult.DigestAlgorithmName.Should().Be("SHA-256", "");
+        signatureValidationResult.DigestAlgorithmName.ShouldBe("SHA-256", "");
     }
 
     [Fact(DisplayName = "DigestAlgorithmName with null OID returns null")]
@@ -213,14 +213,14 @@ public sealed class MissingCoverageTests
         {
             DigestAlgorithmOid = null
         };
-        signatureValidationResult.DigestAlgorithmName.Should().BeNull("");
+        signatureValidationResult.DigestAlgorithmName.ShouldBeNull("");
     }
 
     [Fact(DisplayName = "EncryptedPdfException with message preserves Message")]
     public void EncryptedPdfException_WithMessage_PreservesMessage()
     {
         EncryptedPdfException ex = new EncryptedPdfException("PDF is encrypted");
-        ex.Message.Should().Be("PDF is encrypted", "");
+        ex.Message.ShouldBe("PDF is encrypted", "");
     }
 
     [Fact(DisplayName = "EncryptedPdfException with message and inner exception preserves InnerException")]
@@ -228,8 +228,8 @@ public sealed class MissingCoverageTests
     {
         InvalidOperationException ex = new InvalidOperationException("detail");
         EncryptedPdfException ex2 = new EncryptedPdfException("PDF protected", ex);
-        ex2.Message.Should().Be("PDF protected", "");
-        ex2.InnerException.Should().BeSameAs(ex, "");
+        ex2.Message.ShouldBe("PDF protected", "");
+        ex2.InnerException.ShouldBeSameAs(ex, "");
     }
 
     [Fact(DisplayName = "Parallel signing with two different certificates does not corrupt the PDF")]
@@ -241,15 +241,15 @@ public sealed class MissingCoverageTests
         Task<byte[]> task = SimpleSigner.Document(pdfBytes).WithCertificate(cert1).SignAsync();
         Task<byte[]> task2 = SimpleSigner.Document(pdfBytes).WithCertificate(cert2).SignAsync();
         byte[][] results = await Task.WhenAll(task, task2);
-        results[0].Should().NotBeEmpty("");
-        results[1].Should().NotBeEmpty("");
+        results[0].ShouldNotBeEmpty("");
+        results[1].ShouldNotBeEmpty("");
         using MemoryStream stream1 = new MemoryStream(results[0]);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert1).ValidateAsync(stream1);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue("");
         using MemoryStream stream2 = new MemoryStream(results[1]);
         IReadOnlyList<SignatureValidationResult> readOnlyList2 = await ValidatorTrusting(cert2).ValidateAsync(stream2);
-        readOnlyList2.Should().ContainSingle("");
-        readOnlyList2[0].IsSignatureValid.Should().BeTrue("");
+        readOnlyList2.Count().ShouldBe(1, "");
+        readOnlyList2[0].IsSignatureValid.ShouldBeTrue("");
     }
 }

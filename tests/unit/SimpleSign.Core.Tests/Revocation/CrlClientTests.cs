@@ -1,7 +1,7 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Revocation;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -128,7 +128,7 @@ public sealed class CrlClientTests
     public void GetCrlUrl_CertWithoutCdp_ReturnsNull()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        CrlClient.GetCrlUrl(cert).Should().BeNull();
+        CrlClient.GetCrlUrl(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "Empty CRL returns false for non-revoked serial")]
@@ -139,7 +139,7 @@ public sealed class CrlClientTests
 
         byte[] crl = BuildCrl(issuer.SubjectName.RawData, nextUpdate: DateTimeOffset.UtcNow.AddYears(1));
 
-        CrlClient.IsSerialInCrl(leaf, crl).Should().BeFalse();
+        CrlClient.IsSerialInCrl(leaf, crl)!.Value.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Serial present in CRL returns true")]
@@ -152,7 +152,7 @@ public sealed class CrlClientTests
         byte[] crl = BuildCrl(issuer.SubjectName.RawData, revokedSerial: serial,
             nextUpdate: DateTimeOffset.UtcNow.AddYears(1));
 
-        CrlClient.IsSerialInCrl(leaf, crl).Should().BeTrue();
+        CrlClient.IsSerialInCrl(leaf, crl)!.Value.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "CRL issuer mismatch returns null")]
@@ -164,7 +164,7 @@ public sealed class CrlClientTests
         using var otherIssuer = TestCertificateFactory.CreateCaCert("CN=Other CA, O=Other");
         byte[] crl = BuildCrl(otherIssuer.SubjectName.RawData, nextUpdate: DateTimeOffset.UtcNow.AddYears(1));
 
-        CrlClient.IsSerialInCrl(leaf, crl).Should().BeNull();
+        CrlClient.IsSerialInCrl(leaf, crl).ShouldBeNull();
     }
 
     [Fact(DisplayName = "Expired CRL returns null")]
@@ -175,7 +175,7 @@ public sealed class CrlClientTests
 
         byte[] crl = BuildCrl(issuer.SubjectName.RawData, nextUpdate: DateTimeOffset.UtcNow.AddDays(-1));
 
-        CrlClient.IsSerialInCrl(leaf, crl).Should().BeNull();
+        CrlClient.IsSerialInCrl(leaf, crl).ShouldBeNull();
     }
 
     [Fact(DisplayName = "Valid CRL signature returns true")]
@@ -193,7 +193,7 @@ public sealed class CrlClientTests
         string sigAlgOid = sigAlgSeq.ReadObjectIdentifier();
         byte[] signature = seq.ReadBitString(out _);
 
-        CrlClient.VerifyCrlSignature(ca, tbsData, signature, sigAlgOid).Should().BeTrue();
+        CrlClient.VerifyCrlSignature(ca, tbsData, signature, sigAlgOid).ShouldBeTrue();
     }
 
     [Fact(DisplayName = "Invalid CRL signature returns false")]
@@ -205,7 +205,7 @@ public sealed class CrlClientTests
         byte[] badSignature = new byte[256];
 
         CrlClient.VerifyCrlSignature(ca, tbsData, badSignature, "1.2.840.113549.1.1.11")
-            .Should().BeFalse();
+            .ShouldBeFalse();
     }
 
     // ── Instance method tests (mocked HTTP) ──────────────────────────────────
@@ -222,7 +222,7 @@ public sealed class CrlClientTests
         var client = new CrlClient(httpClient);
         bool result = await client.CheckCrlAsync(leaf, "http://example.com/test.crl", CancellationToken.None);
 
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "CRL network failure throws HttpRequestException")]
@@ -233,8 +233,7 @@ public sealed class CrlClientTests
 
         var client = new CrlClient(httpClient);
 
-        await FluentActions.Awaiting(() =>
-                client.CheckCrlAsync(cert, "http://example.com/test.crl", CancellationToken.None))
-            .Should().ThrowAsync<HttpRequestException>();
+        var act = async () => await client.CheckCrlAsync(cert, "http://example.com/test.crl", CancellationToken.None);
+        await Should.ThrowAsync<HttpRequestException>(act);
     }
 }

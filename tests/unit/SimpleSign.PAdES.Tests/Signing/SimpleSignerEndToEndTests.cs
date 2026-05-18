@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
@@ -54,9 +54,9 @@ public sealed class SimpleSignerEndToEndTests
         byte[] pdfBytes = BuildMinimalPdf();
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "ECDSA signature produces valid signature")]
@@ -66,9 +66,9 @@ public sealed class SimpleSignerEndToEndTests
         byte[] pdfBytes = BuildMinimalPdf();
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "Signature with SHA-512 validates correctly")]
@@ -79,9 +79,9 @@ public sealed class SimpleSignerEndToEndTests
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithHashAlgorithm(HashAlgorithmName.SHA512)
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
-        readOnlyList[0].DigestAlgorithmOid.Should().Be("2.16.840.1.101.3.4.2.3", "");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
+        readOnlyList[0].DigestAlgorithmOid.ShouldBe("2.16.840.1.101.3.4.2.3", "");
     }
 
     [Fact(DisplayName = "Byte tampering in document detects integrity failure")]
@@ -92,8 +92,8 @@ public sealed class SimpleSignerEndToEndTests
         array[50] ^= byte.MaxValue;
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeFalse("tampering should be detected");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeFalse("tampering should be detected");
     }
 
     [Fact(DisplayName = "Tampering at end of document detects integrity failure")]
@@ -104,8 +104,8 @@ public sealed class SimpleSignerEndToEndTests
         array[^50] ^= 1;
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeFalse("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeFalse("");
     }
 
     [Fact(DisplayName = "Multiple signers validate correctly")]
@@ -118,15 +118,15 @@ public sealed class SimpleSignerEndToEndTests
             .SignAsync()).WithCertificate(cert2).WithFieldName("Sig2")
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> actualValue = await ValidatorTrusting(cert1, cert2).ValidateAsync(stream);
-        actualValue.Should().HaveCount(2, "");
-        actualValue.Should().AllSatisfy(delegate (SignatureValidationResult r)
+        actualValue.Count().ShouldBe(2, "");
+        foreach (var r in actualValue)
         {
-            r.IsIntegrityValid.Should().BeTrue("");
-        }, "");
-        actualValue.Should().AllSatisfy(delegate (SignatureValidationResult r)
+            r.IsIntegrityValid.ShouldBeTrue();
+        }
+        foreach (var r in actualValue)
         {
-            r.IsSignatureValid.Should().BeTrue("");
-        }, "");
+            r.IsSignatureValid.ShouldBeTrue();
+        }
     }
 
     [Fact(DisplayName = "Multiple signers have distinct field names")]
@@ -139,8 +139,9 @@ public sealed class SimpleSignerEndToEndTests
             .SignAsync());
         _ = new PdfStructureReader();
         IReadOnlyList<PdfSignatureField> readOnlyList = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
-        readOnlyList.Should().HaveCount(2, "");
-        readOnlyList.Select((PdfSignatureField f) => f.SigDictObjectNumber).Should().OnlyHaveUniqueItems("each signature should have a different object number");
+        readOnlyList.Count().ShouldBe(2);
+        var objNumbers = readOnlyList.Select((PdfSignatureField f) => f.SigDictObjectNumber).ToList();
+        objNumbers.Distinct().Count().ShouldBe(objNumbers.Count);
     }
 
     [Fact(DisplayName = "Tampering between signatures keeps first one intact")]
@@ -151,11 +152,11 @@ public sealed class SimpleSignerEndToEndTests
         byte[] pdfBytes = (await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert1).SignAsync()).Concat(new byte[10]).ToArray();
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert2).SignAsync());
         IReadOnlyList<SignatureValidationResult> actualValue = await ValidatorTrusting(cert1, cert2).ValidateAsync(stream);
-        actualValue.Should().HaveCount(2, "");
-        actualValue.Should().AllSatisfy(delegate (SignatureValidationResult r)
+        actualValue.Count().ShouldBe(2, "");
+        foreach (var r in actualValue)
         {
-            r.IsSignatureValid.Should().BeTrue("");
-        }, "");
+            r.IsSignatureValid.ShouldBeTrue();
+        }
     }
 
     [Theory(DisplayName = "Known OIDs return expected algorithm name")]
@@ -170,7 +171,7 @@ public sealed class SimpleSignerEndToEndTests
         {
             DigestAlgorithmOid = oid
         };
-        signatureValidationResult.DigestAlgorithmName.Should().Be(expected, "");
+        signatureValidationResult.DigestAlgorithmName.ShouldBe(expected, "");
     }
 
     [Fact(DisplayName = "Null OID returns null algorithm name")]
@@ -180,6 +181,6 @@ public sealed class SimpleSignerEndToEndTests
         {
             DigestAlgorithmOid = null
         };
-        signatureValidationResult.DigestAlgorithmName.Should().BeNull("");
+        signatureValidationResult.DigestAlgorithmName.ShouldBeNull("");
     }
 }

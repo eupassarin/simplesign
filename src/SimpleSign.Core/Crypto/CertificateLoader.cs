@@ -15,9 +15,7 @@ internal static class CertificateLoader
 #if NET9_0_OR_GREATER
         return X509CertificateLoader.LoadCertificate(data);
 #else
-#pragma warning disable SYSLIB0026 // X509Certificate2(byte[]) is obsolete
         return new X509Certificate2(data);
-#pragma warning restore SYSLIB0026
 #endif
     }
 
@@ -27,9 +25,7 @@ internal static class CertificateLoader
 #if NET9_0_OR_GREATER
         return X509CertificateLoader.LoadCertificate(data);
 #else
-#pragma warning disable SYSLIB0026
         return new X509Certificate2(data.ToArray());
-#pragma warning restore SYSLIB0026
 #endif
     }
 
@@ -39,10 +35,8 @@ internal static class CertificateLoader
 #if NET9_0_OR_GREATER
         return X509CertificateLoader.LoadPkcs12FromFile(path, password);
 #else
-#pragma warning disable SYSLIB0057
         // On macOS + .NET 8, Apple Crypto rejects null password — use empty string.
         return new X509Certificate2(path, password ?? string.Empty);
-#pragma warning restore SYSLIB0057
 #endif
     }
 
@@ -76,9 +70,7 @@ internal static class CertificateLoader
         return X509CertificateLoader.LoadPkcs12Collection(data, password, keyStorageFlags);
 #else
         var col = new X509Certificate2Collection();
-#pragma warning disable SYSLIB0057
         col.Import(data, password ?? string.Empty, keyStorageFlags);
-#pragma warning restore SYSLIB0057
         return col;
 #endif
     }

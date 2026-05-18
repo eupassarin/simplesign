@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using Xunit;
 
@@ -46,7 +46,7 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
 
         using var store = new FileCertificateStore(_tempDir, "pw", "*.pfx");
 
-        store.ListAll().Should().HaveCount(3);
+        store.ListAll().Count().ShouldBe(3);
     }
 
     [Fact(DisplayName = "Directory constructor honours the search pattern (only .p12 files loaded)")]
@@ -57,15 +57,15 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
 
         using var store = new FileCertificateStore(_tempDir, "pw", "*.p12");
 
-        store.ListAll().Should().HaveCount(1);
-        store.ListAll()[0].Subject.Should().Contain("Bob");
+        store.ListAll().Count().ShouldBe(1);
+        store.ListAll()[0].Subject.ShouldContain("Bob");
     }
 
     [Fact(DisplayName = "Directory constructor with empty directory returns empty store")]
     public void DirectoryCtor_EmptyDir_EmptyStore()
     {
         using var store = new FileCertificateStore(_tempDir, "pw", "*.pfx");
-        store.ListAll().Should().BeEmpty();
+        store.ListAll().ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "Directory constructor skips files with wrong password silently")]
@@ -77,8 +77,8 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
         using var store = new FileCertificateStore(_tempDir, "correct", "*.pfx");
 
         // Only the file with the matching password loads
-        store.ListAll().Should().HaveCount(1);
-        store.ListAll()[0].Subject.Should().Contain("Good");
+        store.ListAll().Count().ShouldBe(1);
+        store.ListAll()[0].Subject.ShouldContain("Good");
     }
 
     [Fact(DisplayName = "Directory constructor skips corrupt files silently")]
@@ -89,7 +89,7 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
 
         using var store = new FileCertificateStore(_tempDir, "pw", "*.pfx");
 
-        store.ListAll().Should().HaveCount(1);
+        store.ListAll().Count().ShouldBe(1);
     }
 
     // ── Lookup negative paths ────────────────────────────────────────────────
@@ -100,7 +100,7 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
         WritePfx("alice.pfx", "CN=Alice", "pw");
         using var store = new FileCertificateStore(_tempDir, "pw", "*.pfx");
 
-        store.FindByThumbprint("not-a-real-thumbprint").Should().BeNull();
+        store.FindByThumbprint("not-a-real-thumbprint").ShouldBeNull();
     }
 
     [Fact(DisplayName = "FindByThumbprint is case-insensitive")]
@@ -111,7 +111,7 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
         using var store = new FileCertificateStore(_tempDir, "pw", "*.pfx");
 
         var found = store.FindByThumbprint(loadedCert.Thumbprint.ToLowerInvariant());
-        found.Should().NotBeNull();
+        found.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "FindBySubject returns empty list when no match")]
@@ -120,7 +120,7 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
         WritePfx("alice.pfx", "CN=Alice", "pw");
         using var store = new FileCertificateStore(_tempDir, "pw", "*.pfx");
 
-        store.FindBySubject("Bob").Should().BeEmpty();
+        store.FindBySubject("Bob").ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "FindBySubject returns multiple matches (substring match)")]
@@ -131,7 +131,7 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
         WritePfx("eve.pfx", "CN=Eve Jones", "pw");
         using var store = new FileCertificateStore(_tempDir, "pw", "*.pfx");
 
-        store.FindBySubject("Smith").Should().HaveCount(2);
+        store.FindBySubject("Smith").Count().ShouldBe(2);
     }
 
     // ── Disposal ─────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
 
         store.Dispose();
         Action act = () => store.Dispose();
-        act.Should().NotThrow();
+        Should.NotThrow(act);
     }
 
     [Fact(DisplayName = "ListAll after Dispose returns empty list")]
@@ -154,7 +154,7 @@ public sealed class FileCertificateStoreDirectoryTests : IDisposable
         var store = new FileCertificateStore(_tempDir, "pw", "*.pfx");
         store.Dispose();
 
-        store.ListAll().Should().BeEmpty();
+        store.ListAll().ShouldBeEmpty();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

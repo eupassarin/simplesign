@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
@@ -117,12 +117,12 @@ public sealed class SignerBuilderEdgeCaseTests
         byte[] pdfBytes = BuildMinimalPdf();
         byte[] array = await SimpleSigner.Document(pdfBytes).WithCertificate(cert1).WithCertificate(cert2)
             .SignAsync();
-        array.Should().NotBeEmpty("");
+        array.ShouldNotBeEmpty();
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert2).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("");
-        readOnlyList[0].SignerName.Should().Contain("Second", "");
+        readOnlyList.Count().ShouldBe(1);
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue();
+        readOnlyList[0].SignerName!.ShouldContain("Second");
     }
 
     [Fact(DisplayName = "WithMetadata persists reason, location and name in signed document")]
@@ -132,10 +132,10 @@ public sealed class SignerBuilderEdgeCaseTests
         byte[] pdfBytes = BuildMinimalPdf();
         byte[] array = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithMetadata("João Silva", "Aprovação de contrato", "São Paulo, BR")
             .SignAsync();
-        array.Should().NotBeEmpty("");
+        array.ShouldNotBeEmpty();
         string actualValue = Encoding.Latin1.GetString(array);
-        actualValue.Should().Contain("/Reason", "");
-        actualValue.Should().Contain("/Location", "");
+        actualValue.ShouldContain("/Reason");
+        actualValue.ShouldContain("/Location");
     }
 
     [Fact(DisplayName = "WithExternalSigner with delegate that throws exception propagates the error")]
@@ -148,7 +148,8 @@ public sealed class SignerBuilderEdgeCaseTests
             throw new InvalidOperationException("HSM offline");
         });
         Func<Task<byte[]>> action = () => builder.SignAsync();
-        await action.Should().ThrowAsync<InvalidOperationException>("", Array.Empty<object>()).WithMessage("*HSM offline*", "");
+        var ex = await Should.ThrowAsync<InvalidOperationException>(async () => await action());
+        ex.Message.ShouldContain("HSM offline");
     }
 
     [Fact(DisplayName = "WithExternalSigner with delegate returning empty bytes produces error or invalid CMS")]
@@ -161,12 +162,12 @@ public sealed class SignerBuilderEdgeCaseTests
         {
             using MemoryStream stream = new MemoryStream(await signerBuilder.SignAsync());
             IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-            readOnlyList.Should().ContainSingle("");
-            readOnlyList[0].IsSignatureValid.Should().BeFalse("signature with empty bytes should not be valid");
+            readOnlyList.Count().ShouldBe(1);
+            readOnlyList[0].IsSignatureValid.ShouldBeFalse();
         }
         catch (Exception actualValue)
         {
-            actualValue.Should().BeAssignableTo<Exception>("deve falhar de alguma forma com bytes vazios", Array.Empty<object>());
+            actualValue.ShouldBeAssignableTo<Exception>();
         }
     }
 
@@ -180,12 +181,12 @@ public sealed class SignerBuilderEdgeCaseTests
         {
             using MemoryStream stream = new MemoryStream(await signerBuilder.SignAsync());
             IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-            readOnlyList.Should().ContainSingle("");
-            readOnlyList[0].IsSignatureValid.Should().BeFalse("signature with null bytes should not be valid");
+            readOnlyList.Count().ShouldBe(1);
+            readOnlyList[0].IsSignatureValid.ShouldBeFalse();
         }
         catch (Exception actualValue)
         {
-            actualValue.Should().BeAssignableTo<Exception>("deve falhar de alguma forma com bytes nulos", Array.Empty<object>());
+            actualValue.ShouldBeAssignableTo<Exception>();
         }
     }
 
@@ -197,8 +198,8 @@ public sealed class SignerBuilderEdgeCaseTests
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithHashAlgorithm(HashAlgorithmName.SHA256)
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].DigestAlgorithmOid.Should().Be("2.16.840.1.101.3.4.2.1", "");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].DigestAlgorithmOid.ShouldBe("2.16.840.1.101.3.4.2.1", "");
     }
 
     [Fact(DisplayName = "RSA + SHA-384 produces OID sha384WithRSAEncryption")]
@@ -209,8 +210,8 @@ public sealed class SignerBuilderEdgeCaseTests
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithHashAlgorithm(HashAlgorithmName.SHA384)
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].DigestAlgorithmOid.Should().Be("2.16.840.1.101.3.4.2.2", "");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].DigestAlgorithmOid.ShouldBe("2.16.840.1.101.3.4.2.2", "");
     }
 
     [Fact(DisplayName = "RSA + SHA-512 produces OID sha512WithRSAEncryption")]
@@ -221,8 +222,8 @@ public sealed class SignerBuilderEdgeCaseTests
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithHashAlgorithm(HashAlgorithmName.SHA512)
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].DigestAlgorithmOid.Should().Be("2.16.840.1.101.3.4.2.3", "");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].DigestAlgorithmOid.ShouldBe("2.16.840.1.101.3.4.2.3", "");
     }
 
     [Fact(DisplayName = "ECDSA + SHA-256 produces OID ecdsaWithSHA256")]
@@ -233,9 +234,9 @@ public sealed class SignerBuilderEdgeCaseTests
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithHashAlgorithm(HashAlgorithmName.SHA256)
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "ECDSA + SHA-384 signs successfully")]
@@ -245,8 +246,9 @@ public sealed class SignerBuilderEdgeCaseTests
         byte[] pdfBytes = BuildMinimalPdf();
         byte[] signed = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithHashAlgorithm(HashAlgorithmName.SHA384)
             .SignAsync();
-        signed.Should().NotBeNullOrEmpty("ECDSA P-384 + SHA-384 should produce a signed PDF");
-        signed.Length.Should().BeGreaterThan(pdfBytes.Length, "signed PDF should be larger than input");
+        signed.ShouldNotBeNull();
+        signed.ShouldNotBeEmpty();
+        signed.Length.ShouldBeGreaterThan(pdfBytes.Length, "signed PDF should be larger than input");
     }
 
     [Fact(DisplayName = "WithExternalSigner auto-detects RSA + SHA-256 correctly")]
@@ -254,7 +256,7 @@ public sealed class SignerBuilderEdgeCaseTests
     {
         using X509Certificate2 certificate = CreateRsaCert();
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithHashAlgorithm(HashAlgorithmName.SHA256).WithExternalSigner(certificate, (byte[] _) => Task.FromResult(Array.Empty<byte>()));
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithExternalSigner auto-detects ECDSA + SHA-256 correctly")]
@@ -262,7 +264,7 @@ public sealed class SignerBuilderEdgeCaseTests
     {
         using X509Certificate2 certificate = CreateEcdsaCert();
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithHashAlgorithm(HashAlgorithmName.SHA256).WithExternalSigner(certificate, (byte[] _) => Task.FromResult(Array.Empty<byte>()));
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithExternalSigner with SHA-384 and RSA auto-detects correctly")]
@@ -270,7 +272,7 @@ public sealed class SignerBuilderEdgeCaseTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithHashAlgorithm(HashAlgorithmName.SHA384).WithExternalSigner(cert, (byte[] _) => Task.FromResult(Array.Empty<byte>()));
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithExternalSigner with SHA-384 and ECDSA auto-detects correctly")]
@@ -278,7 +280,7 @@ public sealed class SignerBuilderEdgeCaseTests
     {
         using X509Certificate2 cert = CreateEcdsaCert();
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithHashAlgorithm(HashAlgorithmName.SHA384).WithExternalSigner(cert, (byte[] _) => Task.FromResult(Array.Empty<byte>()));
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithExternalSigner accepts explicit Ed25519 OID")]
@@ -286,7 +288,7 @@ public sealed class SignerBuilderEdgeCaseTests
     {
         using X509Certificate2 certificate = CreateRsaCert();
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithExternalSigner(certificate, (byte[] _) => Task.FromResult(Array.Empty<byte>()), "1.3.101.112");
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithExternalSigner accepts explicit Ed448 OID")]
@@ -294,14 +296,14 @@ public sealed class SignerBuilderEdgeCaseTests
     {
         using X509Certificate2 certificate = CreateRsaCert();
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithExternalSigner(certificate, (byte[] _) => Task.FromResult(Array.Empty<byte>()), "1.3.101.113");
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithLtv without timestamp URL does not throw exception in builder")]
     public void WithLtv_NoTimestamp_DoesNotThrow()
     {
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithLtv();
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithLtv without timestamp throws SigningException at sign-time")]
@@ -313,22 +315,22 @@ public sealed class SignerBuilderEdgeCaseTests
             .WithLtv();
 
         var act = () => builder.SignAsync();
-        await act.Should().ThrowAsync<SigningException>()
-            .WithMessage("*LTV requires a timestamp*");
+        var ex2 = await Should.ThrowAsync<SigningException>(act);
+        ex2.Message.ShouldContain("LTV requires a timestamp");
     }
 
     [Fact(DisplayName = "WithArchivalTimestamp without URL uses configured timestamp URL")]
     public void WithArchivalTimestamp_NullUrl_UsesConfiguredTimestamp()
     {
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithTimestamp("http://tsa.example.com").WithArchivalTimestamp();
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithArchivalTimestamp with own URL does not use timestamp URL")]
     public void WithArchivalTimestamp_ExplicitUrl_UsesProvidedUrl()
     {
         SignerBuilder actualValue = SimpleSigner.Document(BuildMinimalPdf()).WithTimestamp("http://tsa.example.com").WithArchivalTimestamp("http://archival-tsa.example.com");
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "WithLtv enables LTV and returns new instance")]
@@ -336,7 +338,7 @@ public sealed class SignerBuilderEdgeCaseTests
     {
         SignerBuilder signerBuilder = SimpleSigner.Document(BuildMinimalPdf());
         SignerBuilder actualValue = signerBuilder.WithLtv();
-        actualValue.Should().NotBeSameAs(signerBuilder, "");
+        actualValue.ShouldNotBeSameAs(signerBuilder, "");
     }
 
     [Fact(DisplayName = "WithArchivalTimestamp implies LTV and returns new instance")]
@@ -344,6 +346,6 @@ public sealed class SignerBuilderEdgeCaseTests
     {
         SignerBuilder signerBuilder = SimpleSigner.Document(BuildMinimalPdf());
         SignerBuilder actualValue = signerBuilder.WithArchivalTimestamp("http://tsa.example.com");
-        actualValue.Should().NotBeSameAs(signerBuilder, "");
+        actualValue.ShouldNotBeSameAs(signerBuilder, "");
     }
 }

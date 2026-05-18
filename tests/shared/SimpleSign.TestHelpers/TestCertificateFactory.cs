@@ -67,7 +67,10 @@ public static class TestCertificateFactory
         const string password = "test-export";
         var pfx = cert.Export(X509ContentType.Pfx, password);
 #pragma warning disable SYSLIB0057
-        return new X509Certificate2(pfx, password, X509KeyStorageFlags.Exportable);
+        // EphemeralKeySet keeps keys in memory (not persisted to Windows key store),
+        // which avoids CNG export restrictions on Windows.
+        return new X509Certificate2(pfx, password,
+            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
 #pragma warning restore SYSLIB0057
     }
 }

@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace SimpleSign.Pdf.Tests;
@@ -13,7 +13,7 @@ public sealed class PdfStructureParserTests
     {
         const string obj = "5 0 obj\n<< /Fields [1 0 R 2 0 R 3 0 R] >>\nendobj\n";
         var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Should().BeEquivalentTo(["1 0 R", "2 0 R", "3 0 R"]);
+        refs.ShouldBe(["1 0 R", "2 0 R", "3 0 R"]);
     }
 
     [Fact]
@@ -21,7 +21,7 @@ public sealed class PdfStructureParserTests
     {
         const string obj = "5 0 obj\n<< /Fields [1 0 R\n2 0 R\n3 0 R] >>\nendobj\n";
         var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Should().BeEquivalentTo(["1 0 R", "2 0 R", "3 0 R"]);
+        refs.ShouldBe(["1 0 R", "2 0 R", "3 0 R"]);
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public sealed class PdfStructureParserTests
     {
         const string obj = "5 0 obj\n<< /Fields [1 0 R\r\n2 0 R\r\n3 0 R] >>\nendobj\n";
         var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Should().BeEquivalentTo(["1 0 R", "2 0 R", "3 0 R"]);
+        refs.ShouldBe(["1 0 R", "2 0 R", "3 0 R"]);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class PdfStructureParserTests
     {
         const string obj = "5 0 obj\n<< /Fields [1 0 R\t2 0 R\t3 0 R] >>\nendobj\n";
         var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Should().BeEquivalentTo(["1 0 R", "2 0 R", "3 0 R"]);
+        refs.ShouldBe(["1 0 R", "2 0 R", "3 0 R"]);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class PdfStructureParserTests
     {
         const string obj = "5 0 obj\n<< /Fields [1 0 R \n 2 0 R\r\n\t3 0 R] >>\nendobj\n";
         var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Should().BeEquivalentTo(["1 0 R", "2 0 R", "3 0 R"]);
+        refs.ShouldBe(["1 0 R", "2 0 R", "3 0 R"]);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public sealed class PdfStructureParserTests
     {
         const string obj = "5 0 obj\n<< /Fields [] >>\nendobj\n";
         var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Should().BeEmpty();
+        refs.ShouldBeEmpty();
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class PdfStructureParserTests
     {
         const string obj = "5 0 obj\n<< /Type /AcroForm >>\nendobj\n";
         var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Should().BeEmpty();
+        refs.ShouldBeEmpty();
     }
 
     [Fact]
@@ -71,9 +71,9 @@ public sealed class PdfStructureParserTests
         var fieldsContent = string.Join("\n", Enumerable.Range(10, 22).Select(i => $"{i} 0 R"));
         var obj = $"5 0 obj\n<< /Fields [{fieldsContent}] >>\nendobj\n";
         var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Should().HaveCount(22);
-        refs[0].Should().Be("10 0 R");
-        refs[21].Should().Be("31 0 R");
+        refs.Count().ShouldBe(22);
+        refs[0].ShouldBe("10 0 R");
+        refs[21].ShouldBe("31 0 R");
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class PdfStructureParserTests
                   "trailer\n<< /Size 2 /Root 1 0 R >>\nstartxref\n109\n%%EOF\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var refs = PdfStructureParser.ExtractInlineAcroFormFields(data, 1);
-        refs.Should().BeEquivalentTo(["10 0 R", "20 0 R"]);
+        refs.ShouldBe(["10 0 R", "20 0 R"]);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class PdfStructureParserTests
                   "trailer\n<< /Size 2 /Root 1 0 R >>\nstartxref\n80\n%%EOF\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var refs = PdfStructureParser.ExtractInlineAcroFormFields(data, 1);
-        refs.Should().BeEmpty();
+        refs.ShouldBeEmpty();
     }
 
     // ── ASCII85 Decode Tests ─────────────────────────────────────────────────
@@ -108,7 +108,7 @@ public sealed class PdfStructureParserTests
         // "Man " encoded in ASCII85 = "9jqo^"
         byte[] encoded = System.Text.Encoding.ASCII.GetBytes("9jqo^");
         var result = PdfStructureReader.DecodeAscii85(encoded);
-        result.Should().BeEquivalentTo(System.Text.Encoding.ASCII.GetBytes("Man "));
+        result.ShouldBe(System.Text.Encoding.ASCII.GetBytes("Man "));
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public sealed class PdfStructureParserTests
     {
         byte[] encoded = System.Text.Encoding.ASCII.GetBytes("<~9jqo^~>");
         var result = PdfStructureReader.DecodeAscii85(encoded);
-        result.Should().BeEquivalentTo(System.Text.Encoding.ASCII.GetBytes("Man "));
+        result.ShouldBe(System.Text.Encoding.ASCII.GetBytes("Man "));
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public sealed class PdfStructureParserTests
     {
         byte[] encoded = System.Text.Encoding.ASCII.GetBytes("<~z~>");
         var result = PdfStructureReader.DecodeAscii85(encoded);
-        result.Should().BeEquivalentTo(new byte[] { 0, 0, 0, 0 });
+        result.ShouldBe(new byte[] { 0, 0, 0, 0 });
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class PdfStructureParserTests
     {
         byte[] encoded = System.Text.Encoding.ASCII.GetBytes("<~9jqo ^\r\n~>");
         var result = PdfStructureReader.DecodeAscii85(encoded);
-        result.Should().BeEquivalentTo(System.Text.Encoding.ASCII.GetBytes("Man "));
+        result.ShouldBe(System.Text.Encoding.ASCII.GetBytes("Man "));
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public sealed class PdfStructureParserTests
         // "Ma" = 2 bytes, encoded as "9jq" (3 chars, partial group)
         byte[] encoded = System.Text.Encoding.ASCII.GetBytes("<~9jq~>");
         var result = PdfStructureReader.DecodeAscii85(encoded);
-        result.Should().BeEquivalentTo(System.Text.Encoding.ASCII.GetBytes("Ma"));
+        result.ShouldBe(System.Text.Encoding.ASCII.GetBytes("Ma"));
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class PdfStructureParserTests
     {
         byte[] encoded = System.Text.Encoding.ASCII.GetBytes("<~~>");
         var result = PdfStructureReader.DecodeAscii85(encoded);
-        result.Should().BeEmpty();
+        result.ShouldBeEmpty();
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class PdfStructureParserTests
         string encoded85 = "9jqo^BlbD-BleB1DJ+*+F(f,q/0JhKF<GL>Cj@.4Gp$d7F!,L7@<6@)/0JDEF<G%<+EV:2F!,O<DJ+*.@<*K0@<6L(Df-\\0Ec5e;DffZ(EZee.Bl.9pF\"AGXBPCsi+DGm>@3BB/F*&OCAfu2/AKYi(DIb:@FD,*)+C]U=@3BN#EcYf8ATD3s@q?d$AftVqCh[NqF<G:8+EV:.+Cf>-FD5W8ARlolDIal(DId<j@<?3r@:F%a+D58'ATD4$Bl@l3De:,-DJs`8ARoFb/0JMK@qB4^F!,R<AKZ&-DfTqBG%G>uD.RTpAKYo'+CT/5+Cei#DII?(E,9)oF*2M7/c";
         byte[] encodedBytes = System.Text.Encoding.ASCII.GetBytes(encoded85);
         var result = PdfStructureReader.DecodeAscii85(encodedBytes);
-        System.Text.Encoding.ASCII.GetString(result).Should().Be(input);
+        System.Text.Encoding.ASCII.GetString(result).ShouldBe(input);
     }
 
     // ── Linearized Detection Tests ──────────────────────────────────────────
@@ -169,14 +169,14 @@ public sealed class PdfStructureParserTests
     public void IsLinearized_WithLinearizedDict_ReturnsTrue()
     {
         var pdf = "%PDF-1.7\n1 0 obj\n<< /Linearized 1 /L 12345 /O 5 /E 1000 /N 1 /T 12000 /H [100 200] >>\nendobj\n"u8;
-        PdfStructureReader.IsLinearized(pdf).Should().BeTrue();
+        PdfStructureReader.IsLinearized(pdf).ShouldBeTrue();
     }
 
     [Fact]
     public void IsLinearized_NormalPdf_ReturnsFalse()
     {
         var pdf = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"u8;
-        PdfStructureReader.IsLinearized(pdf).Should().BeFalse();
+        PdfStructureReader.IsLinearized(pdf).ShouldBeFalse();
     }
 
     // ── Signature Field Validation Tests ────────────────────────────────────
@@ -189,7 +189,7 @@ public sealed class PdfStructureParserTests
                   "6 0 obj\n<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached /ByteRange [0 100 200 300] /Contents <0000> >>\nendobj\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var warnings = PdfStructureParser.ValidateSignatureField(data, 5);
-        warnings.Should().BeEmpty();
+        warnings.ShouldBeEmpty();
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public sealed class PdfStructureParserTests
         var pdf = "%PDF-1.7\n5 0 obj\n<< /FT /Tx /T (TextField1) >>\nendobj\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var warnings = PdfStructureParser.ValidateSignatureField(data, 5);
-        warnings.Should().Contain(w => w.Contains("/FT /Sig"));
+        warnings.ShouldContain(w => w.Contains("/FT /Sig"));
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public sealed class PdfStructureParserTests
         var pdf = "%PDF-1.7\n5 0 obj\n<< /FT /Sig /T (Sig1) /V 99 0 R >>\nendobj\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var warnings = PdfStructureParser.ValidateSignatureField(data, 5);
-        warnings.Should().Contain(w => w.Contains("99") && w.Contains("does not exist"));
+        warnings.ShouldContain(w => w.Contains("99") && w.Contains("does not exist"));
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public sealed class PdfStructureParserTests
         var pdf = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var warnings = PdfStructureParser.ValidateSignatureField(data, 99);
-        warnings.Should().Contain(w => w.Contains("99") && w.Contains("not found"));
+        warnings.ShouldContain(w => w.Contains("99") && w.Contains("not found"));
     }
 
     // ── AcroForm Fields Validation Tests ────────────────────────────────────
@@ -229,7 +229,7 @@ public sealed class PdfStructureParserTests
                   "6 0 obj\n<< /FT /Sig >>\nendobj\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var warnings = PdfStructureParser.ValidateAcroFormFields(data, ["5 0 R", "6 0 R"]);
-        warnings.Should().BeEmpty();
+        warnings.ShouldBeEmpty();
     }
 
     [Fact]
@@ -238,8 +238,9 @@ public sealed class PdfStructureParserTests
         var pdf = "%PDF-1.7\n5 0 obj\n<< /FT /Sig >>\nendobj\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var warnings = PdfStructureParser.ValidateAcroFormFields(data, ["5 0 R", "99 0 R"]);
-        warnings.Should().HaveCount(1);
-        warnings[0].Should().Contain("99").And.Contain("orphaned");
+        warnings.Count().ShouldBe(1);
+        warnings[0].ShouldContain("99");
+        warnings[0].ShouldContain("orphaned");
     }
 
     [Fact]
@@ -248,7 +249,7 @@ public sealed class PdfStructureParserTests
         var pdf = "%PDF-1.7\n1 0 obj\n<< >>\nendobj\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
         var warnings = PdfStructureParser.ValidateAcroFormFields(data, []);
-        warnings.Should().BeEmpty();
+        warnings.ShouldBeEmpty();
     }
 
     // ── ByteRange Validation Tests ──────────────────────────────────────────
@@ -257,14 +258,14 @@ public sealed class PdfStructureParserTests
     public void CoversEntireFile_ExactCoverage_ReturnsTrue()
     {
         var br = new PdfByteRange { Offset1 = 0, Length1 = 100, Offset2 = 200, Length2 = 300 };
-        br.CoversEntireFile(500).Should().BeTrue();
+        br.CoversEntireFile(500).ShouldBeTrue();
     }
 
     [Fact]
     public void CoversEntireFile_NotFullCoverage_ReturnsFalse()
     {
         var br = new PdfByteRange { Offset1 = 0, Length1 = 100, Offset2 = 200, Length2 = 100 };
-        br.CoversEntireFile(500).Should().BeFalse();
+        br.CoversEntireFile(500).ShouldBeFalse();
     }
 
     [Fact]
@@ -308,7 +309,7 @@ public sealed class PdfStructureParserTests
         var fields = PdfStructureParser.ExtractFieldsFromCompressedAcroForm(pdfBytes, 50);
 
         // Assert
-        fields.Should().BeEquivalentTo(["10 0 R", "20 0 R", "30 0 R"]);
+        fields.ShouldBe(["10 0 R", "20 0 R", "30 0 R"]);
     }
 
     [Fact]
@@ -318,7 +319,7 @@ public sealed class PdfStructureParserTests
         byte[] pdfBytes = System.Text.Encoding.Latin1.GetBytes("%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n");
 
         var fields = PdfStructureParser.ExtractFieldsFromCompressedAcroForm(pdfBytes, 999);
-        fields.Should().BeEmpty();
+        fields.ShouldBeEmpty();
     }
 
     [Fact]
@@ -332,7 +333,7 @@ public sealed class PdfStructureParserTests
 
         string acroFormText = "5 0 obj\n<< /Type /AcroForm /Fields 50 0 R /SigFlags 3 >>\nendobj\n";
         var refs = PdfStructureParser.ResolveIndirectFields(pdfBytes, acroFormText);
-        refs.Should().BeEquivalentTo(["10 0 R", "20 0 R", "30 0 R"]);
+        refs.ShouldBe(["10 0 R", "20 0 R", "30 0 R"]);
     }
 
     [Fact]
@@ -343,7 +344,7 @@ public sealed class PdfStructureParserTests
         byte[] pdfBytes = System.Text.Encoding.Latin1.GetBytes(acroFormText);
 
         var refs = PdfStructureParser.ResolveIndirectFields(pdfBytes, acroFormText);
-        refs.Should().BeEmpty();
+        refs.ShouldBeEmpty();
     }
 
     [Fact]
@@ -353,7 +354,7 @@ public sealed class PdfStructureParserTests
         byte[] pdfBytes = System.Text.Encoding.Latin1.GetBytes(acroFormText);
 
         var refs = PdfStructureParser.ResolveIndirectFields(pdfBytes, acroFormText);
-        refs.Should().BeEmpty();
+        refs.ShouldBeEmpty();
     }
 
     [Fact]
@@ -367,7 +368,7 @@ public sealed class PdfStructureParserTests
 
         string acroFormText = "5 0 obj\n<< /Type /AcroForm /Fields 50 0 R /SigFlags 3 >>\nendobj\n";
         var refs = PdfStructureParser.ResolveIndirectFields(pdfBytes, acroFormText);
-        refs.Should().BeEquivalentTo(["10 0 R", "20 0 R", "30 0 R", "40 0 R"]);
+        refs.ShouldBe(["10 0 R", "20 0 R", "30 0 R", "40 0 R"]);
     }
 
     // ── UsesXRefStreams Tests ───────────────────────────────────────────────
@@ -381,7 +382,7 @@ public sealed class PdfStructureParserTests
                   "trailer\n<< /Size 2 /Root 1 0 R >>\n" +
                   "startxref\n60\n%%EOF\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
-        PdfStructureParser.UsesXRefStreams(data).Should().BeFalse();
+        PdfStructureParser.UsesXRefStreams(data).ShouldBeFalse();
     }
 
     [Fact]
@@ -394,14 +395,14 @@ public sealed class PdfStructureParserTests
         int xrefOffset = System.Text.Encoding.Latin1.GetByteCount(pdfHeader + catalog);
         var pdf = pdfHeader + catalog + xrefStream + $"startxref\n{xrefOffset}\n%%EOF\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
-        PdfStructureParser.UsesXRefStreams(data).Should().BeTrue();
+        PdfStructureParser.UsesXRefStreams(data).ShouldBeTrue();
     }
 
     [Fact]
     public void UsesXRefStreams_NoStartxref_ReturnsFalse()
     {
         var data = System.Text.Encoding.Latin1.GetBytes("%PDF-1.7\n1 0 obj\n<< >>\nendobj\n");
-        PdfStructureParser.UsesXRefStreams(data).Should().BeFalse();
+        PdfStructureParser.UsesXRefStreams(data).ShouldBeFalse();
     }
 
     [Fact]
@@ -414,6 +415,6 @@ public sealed class PdfStructureParserTests
         int xrefOffset = System.Text.Encoding.Latin1.GetByteCount(pdfHeader + catalog);
         var pdf = pdfHeader + catalog + xrefStream + $"startxref\n{xrefOffset}\n%%EOF\n";
         var data = System.Text.Encoding.Latin1.GetBytes(pdf);
-        PdfStructureParser.UsesXRefStreams(data).Should().BeTrue();
+        PdfStructureParser.UsesXRefStreams(data).ShouldBeTrue();
     }
 }

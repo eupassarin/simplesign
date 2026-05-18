@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Inspection;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.Pdf;
@@ -16,7 +16,7 @@ public sealed class ConformanceDetectorTests
 
         var level = ConformanceDetector.Detect(sig, doc, [sig]);
 
-        level.Should().Be(PAdESConformanceLevel.CmsOnly);
+        level.ShouldBe(PAdESConformanceLevel.CmsOnly);
     }
 
     [Fact(DisplayName = "Detect returns BaselineB with signingCertificateV2 only")]
@@ -27,7 +27,7 @@ public sealed class ConformanceDetectorTests
 
         var level = ConformanceDetector.Detect(sig, doc, [sig]);
 
-        level.Should().Be(PAdESConformanceLevel.BaselineB);
+        level.ShouldBe(PAdESConformanceLevel.BaselineB);
     }
 
     [Fact(DisplayName = "Detect returns BaselineT with timestamp")]
@@ -38,7 +38,7 @@ public sealed class ConformanceDetectorTests
 
         var level = ConformanceDetector.Detect(sig, doc, [sig]);
 
-        level.Should().Be(PAdESConformanceLevel.BaselineT);
+        level.ShouldBe(PAdESConformanceLevel.BaselineT);
     }
 
     [Fact(DisplayName = "Detect returns BaselineLT with timestamp and DSS")]
@@ -49,7 +49,7 @@ public sealed class ConformanceDetectorTests
 
         var level = ConformanceDetector.Detect(sig, doc, [sig]);
 
-        level.Should().Be(PAdESConformanceLevel.BaselineLT);
+        level.ShouldBe(PAdESConformanceLevel.BaselineLT);
     }
 
     [Fact(DisplayName = "Detect returns BaselineLTA with timestamp, DSS and doc timestamp")]
@@ -61,7 +61,7 @@ public sealed class ConformanceDetectorTests
 
         var level = ConformanceDetector.Detect(sig, doc, [sig, docTs]);
 
-        level.Should().Be(PAdESConformanceLevel.BaselineLTA);
+        level.ShouldBe(PAdESConformanceLevel.BaselineLTA);
     }
 
     [Fact(DisplayName = "Detect does not promote to LTA when doc timestamp is before signature")]
@@ -73,7 +73,7 @@ public sealed class ConformanceDetectorTests
 
         var level = ConformanceDetector.Detect(sig, doc, [sig, docTs]);
 
-        level.Should().Be(PAdESConformanceLevel.BaselineLT);
+        level.ShouldBe(PAdESConformanceLevel.BaselineLT);
     }
 
     [Fact(DisplayName = "DetectAll returns levels for all signatures")]
@@ -91,9 +91,9 @@ public sealed class ConformanceDetectorTests
 
         var levels = ConformanceDetector.DetectAll(result);
 
-        levels.Should().HaveCount(2);
-        levels[0].Level.Should().Be(PAdESConformanceLevel.BaselineB);
-        levels[1].Level.Should().Be(PAdESConformanceLevel.BaselineT);
+        levels.Count().ShouldBe(2);
+        levels[0].Level.ShouldBe(PAdESConformanceLevel.BaselineB);
+        levels[1].Level.ShouldBe(PAdESConformanceLevel.BaselineT);
     }
 
     [Fact(DisplayName = "DetectHighest returns lowest (weakest) conformance among signatures")]
@@ -112,7 +112,7 @@ public sealed class ConformanceDetectorTests
         var level = ConformanceDetector.DetectHighest(result);
 
         // Document conformance = weakest signature = B-B (sig1 has no timestamp)
-        level.Should().Be(PAdESConformanceLevel.BaselineB);
+        level.ShouldBe(PAdESConformanceLevel.BaselineB);
     }
 
     [Fact(DisplayName = "DetectHighest with no signatures returns Unknown")]
@@ -124,7 +124,7 @@ public sealed class ConformanceDetectorTests
             Signatures = []
         };
 
-        ConformanceDetector.DetectHighest(result).Should().Be(PAdESConformanceLevel.Unknown);
+        ConformanceDetector.DetectHighest(result).ShouldBe(PAdESConformanceLevel.Unknown);
     }
 
     private static SignatureFieldInfo MakeSig(

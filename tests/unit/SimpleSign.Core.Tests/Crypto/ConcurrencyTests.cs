@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -30,8 +30,8 @@ public sealed class ConcurrencyTests
             });
         });
 
-        exception.Should().BeNull();
-        cache.Count.Should().BeGreaterThanOrEqualTo(0);
+        exception.ShouldBeNull();
+        cache.Count.ShouldBeGreaterThanOrEqualTo(0);
     }
 
     [Fact(DisplayName = "InMemoryCertificateCache concurrent Set and Clear — no exceptions")]
@@ -39,6 +39,7 @@ public sealed class ConcurrencyTests
     {
         var cache = new InMemoryCertificateCache();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=ClearTest");
+        var certBytes = cert.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pfx);
 
         var exception = Record.Exception(() =>
         {
@@ -50,11 +51,13 @@ public sealed class ConcurrencyTests
                 }
                 else
                 {
-                    cache.Set(cert);
+                    // Use a fresh cert instance per Set to avoid disposing a shared object
+                    using var freshCert = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(certBytes, null);
+                    cache.Set(freshCert);
                 }
             });
         });
 
-        exception.Should().BeNull();
+        exception.ShouldBeNull();
     }
 }

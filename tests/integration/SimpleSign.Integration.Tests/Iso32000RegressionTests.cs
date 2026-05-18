@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.PAdES.Inspection;
@@ -30,8 +30,8 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().HaveCountGreaterThanOrEqualTo(51);
-        fields.Where(f => f.IsSigned).Should().HaveCountGreaterThanOrEqualTo(51);
+        fields.Count().ShouldBeGreaterThanOrEqualTo(51);
+        fields.Where(f => f.IsSigned).Count().ShouldBeGreaterThanOrEqualTo(51);
         output.WriteLine($"Fields found: {fields.Count}, signed: {fields.Count(f => f.IsSigned)}");
     }
 
@@ -44,13 +44,13 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().HaveCountGreaterThanOrEqualTo(2);
-        fields.Should().OnlyContain(f => f.IsSigned);
+        fields.Count().ShouldBeGreaterThanOrEqualTo(2);
+        fields.ShouldAllBe(f => f.IsSigned);
 
         // Validate each signature field has proper SubFilter
         foreach (var field in fields)
         {
-            field.SubFilter.Should().NotBeNullOrEmpty(
+            field.SubFilter.ShouldNotBeNullOrEmpty(
                 $"Field '{field.FieldName}' should have a SubFilter");
             output.WriteLine($"  {field.FieldName}: SubFilter={field.SubFilter}");
         }
@@ -68,13 +68,13 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
         using var stream = new MemoryStream(data);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().NotBeEmpty();
+        fields.ShouldNotBeEmpty();
         var lastField = fields[^1];
-        lastField.IsSigned.Should().BeTrue();
-        lastField.ByteRange.Should().NotBeNull();
+        lastField.IsSigned.ShouldBeTrue();
+        lastField.ByteRange.ShouldNotBeNull();
 
         bool coversFile = lastField.ByteRange!.CoversEntireFile(data.Length);
-        coversFile.Should().BeTrue(
+        coversFile.ShouldBeTrue(
             $"Last signature should cover entire file ({data.Length} bytes), " +
             $"ByteRange ends at {lastField.ByteRange.Offset2 + lastField.ByteRange.Length2}");
         output.WriteLine($"File size: {data.Length}, ByteRange: [{lastField.ByteRange.Offset1} {lastField.ByteRange.Length1} {lastField.ByteRange.Offset2} {lastField.ByteRange.Length2}]");
@@ -92,7 +92,7 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
 
         Skip.If(fields.Count < 2, "Need at least 2 signatures");
         var firstField = fields[0];
-        firstField.ByteRange.Should().NotBeNull();
+        firstField.ByteRange.ShouldNotBeNull();
 
         // First signature in a multi-signed PDF typically doesn't cover the full file
         bool coversFile = firstField.ByteRange!.CoversEntireFile(data.Length);
@@ -121,7 +121,7 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
             using var stream = FixturePath.Open(fixture);
             var result = await PdfSignatureInspector.InspectAsync(stream);
 
-            result.Should().NotBeNull($"Inspect of {fixture} should succeed");
+            result.ShouldNotBeNull($"Inspect of {fixture} should succeed");
             output.WriteLine($"{fixture}: {result.Signatures.Count} signatures");
         }
     }
@@ -153,7 +153,7 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
             using var stream2 = FixturePath.Open(fixture);
             var inspectionResult = await PdfSignatureInspector.InspectAsync(stream2);
 
-            validationResults.Count.Should().Be(inspectionResult.Signatures.Count,
+            validationResults.Count().ShouldBe(inspectionResult.Signatures.Count,
                 $"{fixture}: validate and inspect should find same number of signatures");
             output.WriteLine($"{fixture}: {validationResults.Count} signatures (consistent)");
         }
@@ -177,10 +177,10 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
             using var stream = FixturePath.Open(fixture);
             var results = await validator.ValidateAsync(stream);
 
-            results.Should().NotBeEmpty($"{fixture} should have signatures");
+            results.ShouldNotBeEmpty($"{fixture} should have signatures");
             foreach (var result in results)
             {
-                result.IsIntegrityValid.Should().BeTrue(
+                result.IsIntegrityValid.ShouldBeTrue(
                     $"{fixture}/{result.SignerName}: integrity should be valid");
             }
             output.WriteLine($"{fixture}: all {results.Count} signatures pass integrity");
@@ -197,7 +197,7 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().NotBeEmpty();
+        results.ShouldNotBeEmpty();
         // In an incrementally-updated PDF, earlier signatures won't cover the full file.
         // The validator should still parse all signatures without crashing.
         output.WriteLine($"Results: {results.Count} sigs, integrity valid: {results.Count(r => r.IsIntegrityValid)}, invalid: {results.Count(r => !r.IsIntegrityValid)}");
@@ -218,8 +218,8 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().NotBeEmpty();
-        fields[0].IsSigned.Should().BeTrue();
+        fields.ShouldNotBeEmpty();
+        fields[0].IsSigned.ShouldBeTrue();
         output.WriteLine($"SubFilter: {fields[0].SubFilter}, Field: {fields[0].FieldName}");
     }
 
@@ -232,9 +232,9 @@ public sealed class Iso32000RegressionTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var result = await PdfSignatureInspector.InspectAsync(stream);
 
-        result.Signatures.Should().NotBeEmpty();
+        result.Signatures.ShouldNotBeEmpty();
         // LTA should have at least one timestamp
-        result.Signatures.Should().Contain(s =>
+        result.Signatures.ShouldContain(s =>
             s.SubFilter == "ETSI.RFC3161" || s.SubFilter == "adbe.pkcs7.detached");
         output.WriteLine($"Signatures: {result.Signatures.Count}");
         foreach (var sig in result.Signatures)

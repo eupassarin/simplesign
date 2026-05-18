@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -38,8 +38,8 @@ public sealed class CertEdgeCaseInteropTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: "iText should validate PAdES with 4096-bit RSA key");
-            stdout.Should().Contain("RESULT: VALID");
+            exitCode.ShouldBe(0, "iText should validate PAdES with 4096-bit RSA key");
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {
@@ -67,9 +67,9 @@ public sealed class CertEdgeCaseInteropTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: "EU DSS should validate PAdES with 4096-bit RSA key");
-            (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).Should().BeTrue(
-                because: "EU DSS should report TOTAL_PASSED or INDETERMINATE for self-signed certs");
+            exitCode.ShouldBe(0, "EU DSS should validate PAdES with 4096-bit RSA key");
+            (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).ShouldBeTrue(
+                "EU DSS should report TOTAL_PASSED or INDETERMINATE for self-signed certs");
         }
         finally
         {
@@ -103,9 +103,9 @@ public sealed class CertEdgeCaseInteropTests(ITestOutputHelper output)
                 {
                     output.WriteLine($"STDERR: {stderr}");
                 }
-                exitCode.Should().Be(0, because: "EU DSS should validate PAdES with cert chain");
-                (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).Should().BeTrue(
-                    because: "EU DSS should report TOTAL_PASSED or INDETERMINATE for test cert chains");
+                exitCode.ShouldBe(0, "EU DSS should validate PAdES with cert chain");
+                (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).ShouldBeTrue(
+                    "EU DSS should report TOTAL_PASSED or INDETERMINATE for test cert chains");
             }
             finally
             {

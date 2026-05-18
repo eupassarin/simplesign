@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
@@ -69,7 +69,7 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         foreach (var sig in result.Signatures)
             output.WriteLine($"  {sig.FieldName}: algo={sig.SubFilter} signer={sig.Signer?.Subject}");
 
-        result.Signatures.Should().HaveCountGreaterThanOrEqualTo(minSigs,
+        result.Signatures.Count().ShouldBeGreaterThanOrEqualTo(minSigs,
             $"'{filename}' is a known-good PAdES document from the ETSI corpus");
     }
 
@@ -84,7 +84,7 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         var bytes = LoadEmbedded("Signature-P-HU_MIC-1.pdf");
         var ex = await Record.ExceptionAsync(() =>
             PdfSignatureInspector.InspectAsync(new MemoryStream(bytes)));
-        ex.Should().BeNull("the inspector must not throw on any corpus file, even unrecognized formats");
+        ex.ShouldBeNull("the inspector must not throw on any corpus file, even unrecognized formats");
         output.WriteLine("Signature-P-HU_MIC-1.pdf: inspector returned without crashing ✓");
     }
 
@@ -99,7 +99,7 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         var ex = await Record.ExceptionAsync(() =>
             PdfSignatureInspector.InspectAsync(new MemoryStream(bytes)));
 
-        ex.Should().BeNull("the inspector must handle malformed CMS gracefully");
+        ex.ShouldBeNull("the inspector must handle malformed CMS gracefully");
         output.WriteLine("BadEncodedCMS.pdf: inspector returned without crashing ✓");
     }
 
@@ -122,7 +122,7 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         var result = await PdfSignatureInspector.InspectAsync(new MemoryStream(bytes!));
 
         output.WriteLine($"[{filename}] signatures={result.Signatures.Count}");
-        result.Signatures.Should().HaveCountGreaterThanOrEqualTo(minSigs);
+        result.Signatures.Count().ShouldBeGreaterThanOrEqualTo(minSigs);
     }
 
     // ── Validator: integrity checks ───────────────────────────────────────────────────────
@@ -146,9 +146,10 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         foreach (var r in results)
             output.WriteLine($"  {r.FieldName}: integrity={r.IsIntegrityValid} sig={r.IsSignatureValid} algo={r.DigestAlgorithmName}");
 
-        results.Should().NotBeEmpty($"'{filename}' must have at least one parseable signature");
-        results.Should().AllSatisfy(r => r.IsIntegrityValid.Should().BeTrue(
-            $"'{filename}' is a single-signature ETSI corpus document — byte-range hash must verify"));
+        results.ShouldNotBeEmpty($"'{filename}' must have at least one parseable signature");
+        foreach (var r in results)
+            r.IsIntegrityValid.ShouldBeTrue(
+            $"'{filename}' is a single-signature ETSI corpus document — byte-range hash must verify");
     }
 
     /// <summary>
@@ -178,8 +179,8 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         foreach (var r in results)
             output.WriteLine($"  {r.FieldName}: integrity={r.IsIntegrityValid} sig={r.IsSignatureValid} algo={r.DigestAlgorithmName}");
 
-        results.Should().NotBeEmpty($"'{filename}' must have at least one parseable signature");
-        results.Should().Contain(r => r.IsIntegrityValid,
+        results.ShouldNotBeEmpty($"'{filename}' must have at least one parseable signature");
+        results.ShouldContain(r => r.IsIntegrityValid,
             $"'{filename}' must contain at least one signature with a valid byte-range hash");
     }
 
@@ -194,7 +195,7 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         var validator = new PdfSignatureValidator(NoNetworkOptions);
 
         var ex = await Record.ExceptionAsync(() => validator.ValidateAsync(new MemoryStream(bytes)));
-        ex.Should().BeNull("the validator must handle known-problematic corpus files gracefully without throwing");
+        ex.ShouldBeNull("the validator must handle known-problematic corpus files gracefully without throwing");
 
         output.WriteLine("DSS-1683.pdf: validator returned without crashing ✓");
     }
@@ -209,7 +210,7 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         var validator = new PdfSignatureValidator(NoNetworkOptions);
 
         var ex = await Record.ExceptionAsync(() => validator.ValidateAsync(new MemoryStream(bytes)));
-        ex.Should().BeNull("the validator must handle malformed CMS gracefully without throwing");
+        ex.ShouldBeNull("the validator must handle malformed CMS gracefully without throwing");
 
         output.WriteLine("BadEncodedCMS.pdf: validator returned without crashing ✓");
     }
@@ -239,8 +240,8 @@ public sealed class EtsiCorpusTests(ITestOutputHelper output)
         foreach (var r in results)
             output.WriteLine($"  {r.FieldName}: integrity={r.IsIntegrityValid}");
 
-        results.Should().HaveCountGreaterThanOrEqualTo(minResults);
-        results.Should().Contain(r => r.IsIntegrityValid,
+        results.Count().ShouldBeGreaterThanOrEqualTo(minResults);
+        results.ShouldContain(r => r.IsIntegrityValid,
             $"'{filename}' must contain at least one signature with a valid byte-range hash");
     }
 

@@ -2,7 +2,7 @@ using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
@@ -43,7 +43,8 @@ public sealed class CertificateChainUtilityTests
     {
         byte[] data = BuildAiaExtensionBytes("http://example.com/ca.crt");
         List<string> list = CertificateChainUtility.ExtractAiaUrls(data).ToList();
-        list.Should().ContainSingle("").Which.Should().Be("http://example.com/ca.crt", "");
+        list.Count().ShouldBe(1);
+        list[0].ShouldBe("http://example.com/ca.crt");
     }
 
     [Fact(DisplayName = "Invalid ASN.1 falls back to text search")]
@@ -51,14 +52,15 @@ public sealed class CertificateChainUtilityTests
     {
         byte[] bytes = Encoding.ASCII.GetBytes("garbage http://example.com/ca.crt more garbage");
         List<string> list = CertificateChainUtility.ExtractAiaUrls(bytes).ToList();
-        list.Should().ContainSingle("").Which.Should().Be("http://example.com/ca.crt", "");
+        list.Count().ShouldBe(1);
+        list[0].ShouldBe("http://example.com/ca.crt");
     }
 
     [Fact(DisplayName = "Empty data returns empty AIA URL list")]
     public void ExtractAiaUrls_EmptyData_ReturnsEmpty()
     {
         List<string> list = CertificateChainUtility.ExtractAiaUrls(Array.Empty<byte>()).ToList();
-        list.Should().BeEmpty("");
+        list.ShouldBeEmpty("");
     }
 
     [Fact(DisplayName = "Valid DER loads certificate successfully")]
@@ -66,7 +68,7 @@ public sealed class CertificateChainUtilityTests
     {
         using X509Certificate2 x509Certificate = TestCertificateFactory.CreateSelfSignedCert();
         List<X509Certificate2> actualValue = CertificateChainUtility.LoadCertsFromBytes(x509Certificate.RawData).ToList();
-        actualValue.Should().HaveCount(1, "");
+        actualValue.Count().ShouldBe(1, "");
     }
 
     [Fact(DisplayName = "Invalid bytes return empty or throw platform exception")]
@@ -76,28 +78,28 @@ public sealed class CertificateChainUtilityTests
 #if NET9_0_OR_GREATER
         if (OperatingSystem.IsMacOS())
         {
-            func.Should().Throw<PlatformNotSupportedException>();
+            Should.Throw<PlatformNotSupportedException>(func);
         }
         else
         {
-            func().Should().BeEmpty();
+            func().ShouldBeEmpty();
         }
 #else
         // On .NET 8 + macOS, garbage bytes return empty instead of throwing.
-        func().Should().BeEmpty();
+        func().ShouldBeEmpty();
 #endif
     }
 
     [Fact(DisplayName = "Subject with CN extracts short name correctly")]
     public void ShortName_WithCn_ExtractsCn()
     {
-        CertificateChainUtility.ShortName("CN=Fulano, O=Org").Should().Be("Fulano", "");
+        CertificateChainUtility.ShortName("CN=Fulano, O=Org").ShouldBe("Fulano", "");
     }
 
     [Fact(DisplayName = "Subject without CN returns full subject")]
     public void ShortName_WithoutCn_ReturnsFullSubject()
     {
-        CertificateChainUtility.ShortName("O=Org").Should().Be("O=Org", "");
+        CertificateChainUtility.ShortName("O=Org").ShouldBe("O=Org", "");
     }
 
     [Fact(DisplayName = "Certificate without AIA extension returns empty list")]
@@ -106,7 +108,7 @@ public sealed class CertificateChainUtilityTests
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         using HttpClient httpClient = MockHttpHandler.ForGetBytes(Array.Empty<byte>());
         List<string> warnings = new List<string>();
-        (await CertificateChainUtility.DownloadAiaCertsAsync(httpClient, cert, null, warnings, CancellationToken.None)).Should().BeEmpty("");
+        (await CertificateChainUtility.DownloadAiaCertsAsync(httpClient, cert, null, warnings, CancellationToken.None)).ShouldBeEmpty("");
     }
 
     [Fact(DisplayName = "Network failure downloading AIA adds warning")]
@@ -118,7 +120,7 @@ public sealed class CertificateChainUtilityTests
         cts.Cancel();
         List<string> warnings = new List<string>();
         await CertificateChainUtility.DownloadAiaCertsAsync(httpClient, cert, null, warnings, cts.Token);
-        warnings.Should().NotBeEmpty("");
-        warnings[0].Should().Contain("example.com/ca.crt", "");
+        warnings.ShouldNotBeEmpty();
+        warnings[0].ShouldContain("example.com/ca.crt");
     }
 }

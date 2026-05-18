@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Parsing;
 using Xunit;
 
@@ -13,9 +13,9 @@ public class ComputedStyleTests
     {
         var color = PdfColor.Parse("#FF0000");
 
-        color.R.Should().BeApproximately(1.0f, 0.01f);
-        color.G.Should().BeApproximately(0.0f, 0.01f);
-        color.B.Should().BeApproximately(0.0f, 0.01f);
+        color.R.ShouldBe(1.0f, 0.01f);
+        color.G.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(0.0f, 0.01f);
     }
 
     [Fact(DisplayName = "PdfColor.Parse: hex 3-digit")]
@@ -23,16 +23,16 @@ public class ComputedStyleTests
     {
         var color = PdfColor.Parse("#F00");
 
-        color.R.Should().BeApproximately(1.0f, 0.01f);
-        color.G.Should().BeApproximately(0.0f, 0.01f);
-        color.B.Should().BeApproximately(0.0f, 0.01f);
+        color.R.ShouldBe(1.0f, 0.01f);
+        color.G.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(0.0f, 0.01f);
     }
 
     [Fact(DisplayName = "PdfColor.Parse: named colors")]
     public void PdfColor_Parse_NamedColors()
     {
-        PdfColor.Parse("black").Should().Be(PdfColor.Black);
-        PdfColor.Parse("white").Should().Be(PdfColor.White);
+        PdfColor.Parse("black").ShouldBe(PdfColor.Black);
+        PdfColor.Parse("white").ShouldBe(PdfColor.White);
     }
 
     [Fact(DisplayName = "PdfColor.Parse: rgb() function")]
@@ -40,30 +40,30 @@ public class ComputedStyleTests
     {
         var color = PdfColor.Parse("rgb(255, 0, 128)");
 
-        color.R.Should().BeApproximately(1.0f, 0.01f);
-        color.G.Should().BeApproximately(0.0f, 0.01f);
-        color.B.Should().BeApproximately(0.5f, 0.02f);
+        color.R.ShouldBe(1.0f, 0.01f);
+        color.G.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(0.5f, 0.02f);
     }
 
     [Fact(DisplayName = "PdfColor statics are correct")]
     public void PdfColor_Statics_AreCorrect()
     {
-        PdfColor.Black.R.Should().Be(0);
-        PdfColor.Black.G.Should().Be(0);
-        PdfColor.Black.B.Should().Be(0);
+        PdfColor.Black.R.ShouldBe(0);
+        PdfColor.Black.G.ShouldBe(0);
+        PdfColor.Black.B.ShouldBe(0);
 
-        PdfColor.White.R.Should().Be(1);
-        PdfColor.White.G.Should().Be(1);
-        PdfColor.White.B.Should().Be(1);
+        PdfColor.White.R.ShouldBe(1);
+        PdfColor.White.G.ShouldBe(1);
+        PdfColor.White.B.ShouldBe(1);
 
-        PdfColor.Transparent.IsTransparent.Should().BeTrue();
+        PdfColor.Transparent.IsTransparent.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "PdfColor.IsTransparent for non-transparent color")]
     public void PdfColor_IsTransparent_ReturnsFalseForNonTransparent()
     {
-        PdfColor.Black.IsTransparent.Should().BeFalse();
-        PdfColor.White.IsTransparent.Should().BeFalse();
+        PdfColor.Black.IsTransparent.ShouldBeFalse();
+        PdfColor.White.IsTransparent.ShouldBeFalse();
     }
 
     // ── Thickness ───────────────────────────────────────────────────────
@@ -73,10 +73,10 @@ public class ComputedStyleTests
     {
         var t = Thickness.Zero;
 
-        t.Top.Should().Be(0);
-        t.Right.Should().Be(0);
-        t.Bottom.Should().Be(0);
-        t.Left.Should().Be(0);
+        t.Top.ShouldBe(0);
+        t.Right.ShouldBe(0);
+        t.Bottom.ShouldBe(0);
+        t.Left.ShouldBe(0);
     }
 
     [Fact(DisplayName = "Thickness.Uniform creates equal sides")]
@@ -84,10 +84,10 @@ public class ComputedStyleTests
     {
         var t = Thickness.Uniform(10);
 
-        t.Top.Should().Be(10);
-        t.Right.Should().Be(10);
-        t.Bottom.Should().Be(10);
-        t.Left.Should().Be(10);
+        t.Top.ShouldBe(10);
+        t.Right.ShouldBe(10);
+        t.Bottom.ShouldBe(10);
+        t.Left.ShouldBe(10);
     }
 
     [Fact(DisplayName = "Thickness constructor with 4 values")]
@@ -95,10 +95,10 @@ public class ComputedStyleTests
     {
         var t = new Thickness(1, 2, 3, 4);
 
-        t.Top.Should().Be(1);
-        t.Right.Should().Be(2);
-        t.Bottom.Should().Be(3);
-        t.Left.Should().Be(4);
+        t.Top.ShouldBe(1);
+        t.Right.ShouldBe(2);
+        t.Bottom.ShouldBe(3);
+        t.Left.ShouldBe(4);
     }
 
     [Fact(DisplayName = "Thickness constructor with 2 values (vertical, horizontal)")]
@@ -106,10 +106,10 @@ public class ComputedStyleTests
     {
         var t = new Thickness(10, 20);
 
-        t.Top.Should().Be(10);
-        t.Bottom.Should().Be(10);
-        t.Right.Should().Be(20);
-        t.Left.Should().Be(20);
+        t.Top.ShouldBe(10);
+        t.Bottom.ShouldBe(10);
+        t.Right.ShouldBe(20);
+        t.Left.ShouldBe(20);
     }
 
     // ── BorderStyle ─────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ public class ComputedStyleTests
     {
         var border = BorderStyle.None;
 
-        border.HasBorder.Should().BeFalse();
+        border.HasBorder.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "BorderStyle.Clone creates independent copy")]
@@ -134,8 +134,8 @@ public class ComputedStyleTests
         var clone = original.Clone();
         clone.TopWidth = 5;
 
-        original.TopWidth.Should().Be(2);
-        clone.TopWidth.Should().Be(5);
+        original.TopWidth.ShouldBe(2);
+        clone.TopWidth.ShouldBe(5);
     }
 
     [Fact(DisplayName = "BorderStyle.HasBorder detects non-zero widths")]
@@ -143,7 +143,7 @@ public class ComputedStyleTests
     {
         var border = new BorderStyle { TopWidth = 1 };
 
-        border.HasBorder.Should().BeTrue();
+        border.HasBorder.ShouldBeTrue();
     }
 
     // ── ComputedStyle defaults ──────────────────────────────────────────
@@ -153,17 +153,17 @@ public class ComputedStyleTests
     {
         var style = new ComputedStyle();
 
-        style.FontFamily.Should().Be("Helvetica");
-        style.FontSize.Should().Be(12f);
-        style.IsBold.Should().BeFalse();
-        style.IsItalic.Should().BeFalse();
-        style.Color.Should().Be(PdfColor.Black);
-        style.TextAlign.Should().Be(TextAlign.Left);
-        style.LineHeight.Should().BeApproximately(1.4f, 0.01f);
-        style.Display.Should().Be(DisplayType.Block);
-        style.Margin.Should().Be(Thickness.Zero);
-        style.Padding.Should().Be(Thickness.Zero);
-        style.Border.HasBorder.Should().BeFalse();
+        style.FontFamily.ShouldBe("Helvetica");
+        style.FontSize.ShouldBe(12f);
+        style.IsBold.ShouldBeFalse();
+        style.IsItalic.ShouldBeFalse();
+        style.Color.ShouldBe(PdfColor.Black);
+        style.TextAlign.ShouldBe(TextAlign.Left);
+        style.LineHeight.ShouldBe(1.4f, 0.01f);
+        style.Display.ShouldBe(DisplayType.Block);
+        style.Margin.ShouldBe(Thickness.Zero);
+        style.Padding.ShouldBe(Thickness.Zero);
+        style.Border.HasBorder.ShouldBeFalse();
     }
 
     // ── Enums ───────────────────────────────────────────────────────────
@@ -171,21 +171,21 @@ public class ComputedStyleTests
     [Fact(DisplayName = "DisplayType enum has expected values")]
     public void DisplayType_HasExpectedValues()
     {
-        Enum.IsDefined(DisplayType.Block).Should().BeTrue();
-        Enum.IsDefined(DisplayType.Inline).Should().BeTrue();
-        Enum.IsDefined(DisplayType.None).Should().BeTrue();
-        Enum.IsDefined(DisplayType.Table).Should().BeTrue();
-        Enum.IsDefined(DisplayType.TableRow).Should().BeTrue();
-        Enum.IsDefined(DisplayType.TableCell).Should().BeTrue();
-        Enum.IsDefined(DisplayType.ListItem).Should().BeTrue();
+        Enum.IsDefined(DisplayType.Block).ShouldBeTrue();
+        Enum.IsDefined(DisplayType.Inline).ShouldBeTrue();
+        Enum.IsDefined(DisplayType.None).ShouldBeTrue();
+        Enum.IsDefined(DisplayType.Table).ShouldBeTrue();
+        Enum.IsDefined(DisplayType.TableRow).ShouldBeTrue();
+        Enum.IsDefined(DisplayType.TableCell).ShouldBeTrue();
+        Enum.IsDefined(DisplayType.ListItem).ShouldBeTrue();
     }
 
     [Fact(DisplayName = "TextAlign enum has expected values")]
     public void TextAlign_HasExpectedValues()
     {
-        Enum.IsDefined(TextAlign.Left).Should().BeTrue();
-        Enum.IsDefined(TextAlign.Center).Should().BeTrue();
-        Enum.IsDefined(TextAlign.Right).Should().BeTrue();
+        Enum.IsDefined(TextAlign.Left).ShouldBeTrue();
+        Enum.IsDefined(TextAlign.Center).ShouldBeTrue();
+        Enum.IsDefined(TextAlign.Right).ShouldBeTrue();
     }
 
     // ── HSL colors ──────────────────────────────────────────────────────
@@ -195,9 +195,9 @@ public class ComputedStyleTests
     {
         var color = PdfColor.Parse("hsl(0, 100%, 50%)");
 
-        color.R.Should().BeApproximately(1.0f, 0.01f);
-        color.G.Should().BeApproximately(0.0f, 0.01f);
-        color.B.Should().BeApproximately(0.0f, 0.01f);
+        color.R.ShouldBe(1.0f, 0.01f);
+        color.G.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(0.0f, 0.01f);
     }
 
     [Fact(DisplayName = "PdfColor.Parse: hsl green (120, 100%, 50%)")]
@@ -205,9 +205,9 @@ public class ComputedStyleTests
     {
         var color = PdfColor.Parse("hsl(120, 100%, 50%)");
 
-        color.R.Should().BeApproximately(0.0f, 0.01f);
-        color.G.Should().BeApproximately(1.0f, 0.01f);
-        color.B.Should().BeApproximately(0.0f, 0.01f);
+        color.R.ShouldBe(0.0f, 0.01f);
+        color.G.ShouldBe(1.0f, 0.01f);
+        color.B.ShouldBe(0.0f, 0.01f);
     }
 
     [Fact(DisplayName = "PdfColor.Parse: hsl blue (240, 100%, 50%)")]
@@ -215,9 +215,9 @@ public class ComputedStyleTests
     {
         var color = PdfColor.Parse("hsl(240, 100%, 50%)");
 
-        color.R.Should().BeApproximately(0.0f, 0.01f);
-        color.G.Should().BeApproximately(0.0f, 0.01f);
-        color.B.Should().BeApproximately(1.0f, 0.01f);
+        color.R.ShouldBe(0.0f, 0.01f);
+        color.G.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(1.0f, 0.01f);
     }
 
     [Fact(DisplayName = "PdfColor.Parse: hsla with alpha does not throw")]
@@ -225,7 +225,7 @@ public class ComputedStyleTests
     {
         var act = () => PdfColor.Parse("hsla(0, 100%, 50%, 0.5)");
 
-        var color = act.Should().NotThrow().Subject;
-        color.R.Should().BeApproximately(1.0f, 0.01f);
+        var color = act.Invoke();
+        color.R.ShouldBe(1.0f, 0.01f);
     }
 }

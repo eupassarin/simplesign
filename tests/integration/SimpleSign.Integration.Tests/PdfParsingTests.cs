@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.Pdf;
 using SimpleSign.Pdf.Exceptions;
@@ -19,7 +19,7 @@ public sealed class PdfParsingTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().BeEmpty();
+        fields.ShouldBeEmpty();
     }
 
     [SkippableFact(DisplayName = "Malformed PDF should throw InvalidDataException")]
@@ -32,7 +32,7 @@ public sealed class PdfParsingTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
 
         var act = () => PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
-        await act.Should().ThrowAsync<PdfStructureException>();
+        await Should.ThrowAsync<PdfStructureException>(act);
     }
 
     [SkippableFact(DisplayName = "PAdES-BES PDF should return a single signed field")]
@@ -45,12 +45,12 @@ public sealed class PdfParsingTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().HaveCount(1);
+        fields.Count().ShouldBe(1);
         var field = fields[0];
-        field.IsSigned.Should().BeTrue();
-        field.SubFilter.Should().Be("ETSI.CAdES.detached");
-        field.ByteRange.Should().NotBeNull();
-        field.ByteRange!.IsValid.Should().BeTrue();
+        field.IsSigned.ShouldBeTrue();
+        field.SubFilter.ShouldBe("ETSI.CAdES.detached");
+        field.ByteRange.ShouldNotBeNull();
+        field.ByteRange!.IsValid.ShouldBeTrue();
         output.WriteLine($"Field: {field.FieldName}, SubFilter: {field.SubFilter}");
     }
 
@@ -64,8 +64,8 @@ public sealed class PdfParsingTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().HaveCountGreaterThanOrEqualTo(1);
-        fields.Should().Contain(f => f.SubFilter == "adbe.pkcs7.detached");
+        fields.Count().ShouldBeGreaterThanOrEqualTo(1);
+        fields.ShouldContain(f => f.SubFilter == "adbe.pkcs7.detached");
     }
 
     [SkippableFact(DisplayName = "Multi-signature PDF should return all fields")]
@@ -78,8 +78,8 @@ public sealed class PdfParsingTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().HaveCount(6);
-        fields.Should().OnlyContain(f => f.IsSigned);
+        fields.Count().ShouldBe(6);
+        fields.ShouldAllBe(f => f.IsSigned);
         output.WriteLine($"Fields: {string.Join(", ", fields.Select(f => f.FieldName ?? "(none)"))}");
     }
 
@@ -93,8 +93,8 @@ public sealed class PdfParsingTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().HaveCount(4);
-        fields[0].SubFilter.Should().Be("adbe.pkcs7.sha1");
+        fields.Count().ShouldBe(4);
+        fields[0].SubFilter.ShouldBe("adbe.pkcs7.sha1");
     }
 
     [SkippableTheory(DisplayName = "All fixtures should parse without hanging")]
@@ -140,7 +140,7 @@ public sealed class PdfParsingTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"{fixture}: {fields.Count} field(s)");
     }
 }

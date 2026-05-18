@@ -34,7 +34,7 @@ internal sealed class ExtractCommand : AsyncCommand<ExtractCommand.Settings>
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellation)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var loggerFactory = settings.CreateLoggerFactory();
         var logger = loggerFactory?.CreateLogger("SimpleSign.Inspection");
@@ -49,7 +49,7 @@ internal sealed class ExtractCommand : AsyncCommand<ExtractCommand.Settings>
         try
         {
             signatures = await PadesExtractor.ExtractFromFileAsync(
-                settings.InputPath, logger, cancellation);
+                settings.InputPath, logger, cancellationToken);
         }
         catch (InvalidDataException ex)
         {
@@ -72,8 +72,8 @@ internal sealed class ExtractCommand : AsyncCommand<ExtractCommand.Settings>
             var binPath = Path.Combine(outputDir, $"{safeName}.bin");
             var p7sPath = Path.Combine(outputDir, $"{safeName}.p7s");
 
-            await sig.SaveSignedDataAsync(binPath, cancellation);
-            await sig.SaveSignatureAsync(p7sPath, cancellation);
+            await sig.SaveSignedDataAsync(binPath, cancellationToken);
+            await sig.SaveSignatureAsync(p7sPath, cancellationToken);
 
             var subFilter = sig.SubFilter ?? "unknown";
             AnsiConsole.MarkupLine($"[bold]{sig.FieldName.EscapeMarkup()}[/] ({subFilter.EscapeMarkup()})");
@@ -83,7 +83,7 @@ internal sealed class ExtractCommand : AsyncCommand<ExtractCommand.Settings>
             if (!settings.NoRevision)
             {
                 var pdfPath = Path.Combine(outputDir, $"{safeName}.pdf");
-                await sig.SavePdfRevisionAsync(pdfPath, cancellation);
+                await sig.SavePdfRevisionAsync(pdfPath, cancellationToken);
                 AnsiConsole.MarkupLine($"└── PDF revision: [cyan]{sig.PdfRevision.Length:N0}[/] bytes → {Path.GetFileName(pdfPath).EscapeMarkup()}");
             }
             else

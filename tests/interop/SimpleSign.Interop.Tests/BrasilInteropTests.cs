@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Brasil.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
@@ -45,7 +45,7 @@ public sealed class BrasilInteropTests(ITestOutputHelper output)
         // Extract and validate CMS
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
-        signatures.Should().HaveCountGreaterThan(0);
+        signatures.Count().ShouldBeGreaterThan(0);
 
         await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert, "pades-aea");
     }
@@ -86,8 +86,7 @@ public sealed class BrasilInteropTests(ITestOutputHelper output)
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss inspect-cms /in/sig.der");
             output.WriteLine(stdout);
-            stdout.Should().Contain("CMS_ContentInfo",
-                because: "OpenSSL should parse AEA CMS with manifest attributes");
+            stdout.ShouldContain("CMS_ContentInfo");
         }
         finally
         {
@@ -119,8 +118,8 @@ public sealed class BrasilInteropTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: $"OpenSSL should verify AEA CMS signature ({label})");
-            stdout.Should().Contain("VALID");
+            exitCode.ShouldBe(0, $"OpenSSL should verify AEA CMS signature ({label})");
+            stdout.ShouldContain("VALID");
         }
         finally
         {

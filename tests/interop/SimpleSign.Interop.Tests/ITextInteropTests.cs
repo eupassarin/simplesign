@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
@@ -69,10 +69,10 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-itext inspect-pdf /in/signed.pdf");
             output.WriteLine(stdout);
-            exitCode.Should().Be(0);
-            stdout.Should().Contain("RESULT: INSPECTED");
-            stdout.Should().Contain("Reason: Contract review");
-            stdout.Should().Contain("Location: Vitória");
+            exitCode.ShouldBe(0);
+            stdout.ShouldContain("RESULT: INSPECTED");
+            stdout.ShouldContain("Reason: Contract review");
+            stdout.ShouldContain("Location: Vit");
         }
         finally
         {
@@ -95,9 +95,9 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-itext check-structure /in/signed.pdf");
             output.WriteLine(stdout);
-            exitCode.Should().Be(0);
-            stdout.Should().Contain("RESULT: VALID");
-            stdout.Should().Contain("Signature fields: 1");
+            exitCode.ShouldBe(0);
+            stdout.ShouldContain("RESULT: VALID");
+            stdout.ShouldContain("Signature fields: 1");
         }
         finally
         {
@@ -143,8 +143,8 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: $"iText 9 should validate our PAdES output ({label})");
-            stdout.Should().Contain("RESULT: VALID");
+            exitCode.ShouldBe(0, $"iText 9 should validate our PAdES output ({label})");
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Validation;
 
 namespace SimpleSign.Core.Revocation;
 
@@ -29,7 +30,16 @@ internal sealed class CrlClient
         var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, ct: ct).ConfigureAwait(false)
             ?? throw new HttpRequestException($"CRL download failed after retries: {crlUrl}");
         _logger.CrlDownloaded(crlBytes.Length);
-        return IsSerialInCrl(cert, crlBytes) != true;
+        bool? result = IsSerialInCrl(cert, crlBytes);
+        // null means CRL could not be parsed or doesn't belong to this issuer — indeterminate
+        return result switch
+        {
+            true => false,  // cert IS in CRL → revoked → not ok
+            false => true,  // cert NOT in CRL → ok
+            null => throw new RevocationCheckException(
+                $"Online CRL from '{crlUrl}' could not be parsed or is not relevant for this certificate.",
+                cert.Thumbprint, null, crlUrl is not null ? new Uri(crlUrl) : null)
+        };
     }
 
     /// <summary>
@@ -231,7 +241,7 @@ internal sealed class CrlClient
                 return ecdsa.VerifyData(tbsData, signature, hashAlg);
             }
 
-            return true; // unsupported key type
+            return false; // unsupported key type
         }
         catch (CryptographicException ex) { logger?.CrlSignatureVerificationFailed(ex.Message); return false; }
     }

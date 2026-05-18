@@ -6,9 +6,9 @@ using SimpleSign.Cli.Json;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
+using SimpleSign.Pdf.Enums;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using SimpleSign.Pdf.Enums;
 
 namespace SimpleSign.Cli.Commands;
 
@@ -40,7 +40,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellation)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var loggerFactory = settings.CreateLoggerFactory();
         var options = new ValidationOptions { CheckRevocation = !settings.NoRevocation };
@@ -50,11 +50,11 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             trustAnchorProviders: brasil.TrustAnchorProviders);
 
         await using var stream = File.OpenRead(settings.InputPath);
-        var results = await validator.ValidateAsync(stream, cancellationToken: cancellation);
+        var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);
 
         // Run inspection to get PAdES conformance levels and AEA info
         stream.Position = 0;
-        var inspection = await PdfSignatureInspector.InspectAsync(stream, cancellation);
+        var inspection = await PdfSignatureInspector.InspectAsync(stream, cancellationToken);
         var conformanceLevels = ConformanceDetector.DetectAll(inspection)
             .GroupBy(x => x.Signature.FieldName)
             .ToDictionary(g => g.Key, g => g.First().Level);
@@ -70,14 +70,15 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 
         if (settings.Json)
         {
-            OutputJson(settings.InputPath, results, conformanceLevels, aeaInfo);
+            OutputJson(settings.InputPath, results, conformanceLevels);
         }
         else
         {
             OutputText(settings.InputPath, results, conformanceLevels, aeaInfo, inspection, inspectionLookup);
         }
 
-        return 0;
+        bool hasInvalid = results.Any(r => !r.IsValid);
+        return hasInvalid ? 1 : 0;
     }
 
     private static void OutputText(string inputPath, IReadOnlyList<SignatureValidationResult> results,
@@ -374,8 +375,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
     }
 
     private static void OutputJson(string inputPath, IReadOnlyList<SignatureValidationResult> results,
-        Dictionary<string, PAdESConformanceLevel> conformanceLevels,
-        Dictionary<string, (string CommitmentOid, string? PolicyOid, byte[]? ManifestJson)> aeaInfo)
+        Dictionary<string, PAdESConformanceLevel> conformanceLevels)
     {
         var output = JsonMapper.MapValidation(Path.GetFileName(inputPath), results, conformanceLevels);
         Console.WriteLine(JsonSerializer.Serialize(output, CliJsonContext.Default.ValidateOutput));

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
@@ -28,9 +28,10 @@ public sealed class BatchSignerTests
 
         var signed = await signer.SignAsync(CreateMinimalPdf());
 
-        signed.Should().NotBeNullOrEmpty();
-        signer.SuccessCount.Should().Be(1);
-        signer.FailureCount.Should().Be(0);
+        signed.ShouldNotBeNull();
+        signed.ShouldNotBeEmpty();
+        signer.SuccessCount.ShouldBe(1);
+        signer.FailureCount.ShouldBe(0);
     }
 
     [Fact(DisplayName = "BatchSigner signs multiple PDFs and tracks metrics")]
@@ -44,9 +45,9 @@ public sealed class BatchSignerTests
             await signer.SignAsync(CreateMinimalPdf());
         }
 
-        signer.SuccessCount.Should().Be(3);
-        signer.FailureCount.Should().Be(0);
-        signer.AverageElapsedMs.Should().BeGreaterThanOrEqualTo(0);
+        signer.SuccessCount.ShouldBe(3);
+        signer.FailureCount.ShouldBe(0);
+        signer.AverageElapsedMs.ShouldBeGreaterThanOrEqualTo(0);
     }
 
     [Fact(DisplayName = "BatchSigner tracks failures for expired cert")]
@@ -59,10 +60,10 @@ public sealed class BatchSignerTests
         await using var signer = BatchSigner.Create(cert).Build();
 
         var act = () => signer.SignAsync(CreateMinimalPdf());
-        await act.Should().ThrowAsync<CertificateValidationException>("expired cert should throw");
+        await Should.ThrowAsync<CertificateValidationException>(act);
 
-        signer.FailureCount.Should().Be(1);
-        signer.SuccessCount.Should().Be(0);
+        signer.FailureCount.ShouldBe(1);
+        signer.SuccessCount.ShouldBe(0);
     }
 
     [Fact(DisplayName = "SignAllAsync processes batch and returns results")]
@@ -81,10 +82,10 @@ public sealed class BatchSignerTests
             results.Add(result);
         }
 
-        results.Should().HaveCount(3);
-        results.Should().OnlyContain(r => r.IsSuccess);
-        results.Should().OnlyContain(r => r.SignedPdf != null);
-        signer.SuccessCount.Should().Be(3);
+        results.Count().ShouldBe(3);
+        results.ShouldAllBe(r => r.IsSuccess);
+        results.ShouldAllBe(r => r.SignedPdf != null);
+        signer.SuccessCount.ShouldBe(3);
     }
 
     [Fact(DisplayName = "ResetMetrics clears all counters")]
@@ -94,12 +95,12 @@ public sealed class BatchSignerTests
         await using var signer = BatchSigner.Create(cert).Build();
 
         await signer.SignAsync(CreateMinimalPdf());
-        signer.SuccessCount.Should().Be(1);
+        signer.SuccessCount.ShouldBe(1);
 
         signer.ResetMetrics();
-        signer.SuccessCount.Should().Be(0);
-        signer.FailureCount.Should().Be(0);
-        signer.AverageElapsedMs.Should().Be(0);
+        signer.SuccessCount.ShouldBe(0);
+        signer.FailureCount.ShouldBe(0);
+        signer.AverageElapsedMs.ShouldBe(0);
     }
 
     [Fact(DisplayName = "Builder WithMaxConcurrency rejects zero")]
@@ -107,7 +108,7 @@ public sealed class BatchSignerTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var act = () => BatchSigner.Create(cert).WithMaxConcurrency(0);
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        Should.Throw<ArgumentOutOfRangeException>(act);
     }
 
     [Fact(DisplayName = "Builder configures metadata")]
@@ -120,17 +121,18 @@ public sealed class BatchSignerTests
             .Build();
 
         var signed = await signer.SignAsync(CreateMinimalPdf());
-        signed.Should().NotBeNullOrEmpty();
+        signed.ShouldNotBeNull();
+        signed.ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "BatchSignResult IsSuccess reflects Error state")]
     public void BatchSignResult_IsSuccess()
     {
         var success = new BatchSignResult("ok", new byte[] { 1 }, null);
-        success.IsSuccess.Should().BeTrue();
+        success.IsSuccess.ShouldBeTrue();
 
         var failure = new BatchSignResult("fail", null, new InvalidOperationException("test"));
-        failure.IsSuccess.Should().BeFalse();
+        failure.IsSuccess.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "SignAsync with stream outputs signed PDF")]
@@ -144,8 +146,8 @@ public sealed class BatchSignerTests
 
         await signer.SignAsync(input, output);
 
-        output.Length.Should().BeGreaterThan(0);
-        signer.SuccessCount.Should().Be(1);
+        output.Length.ShouldBeGreaterThan(0);
+        signer.SuccessCount.ShouldBe(1);
     }
 
     private static async IAsyncEnumerable<(string Id, byte[] PdfBytes)> GenerateInputs(int count)

@@ -1,5 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Extensions;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
@@ -33,11 +33,11 @@ public sealed class SyntheticPkiPadesEndToEndTests
         using var ms = new MemoryStream(signed, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        results.Should().HaveCount(1);
+        results.Count().ShouldBe(1);
         var r = results[0];
-        r.IsIntegrityValid.Should().BeTrue();
-        r.IsSignatureValid.Should().BeTrue();
-        r.IsCertificateChainValid.Should().BeTrue("the synthetic Root CA was registered as a trust anchor");
+        r.IsIntegrityValid.ShouldBeTrue();
+        r.IsSignatureValid.ShouldBeTrue();
+        r.IsCertificateChainValid.ShouldBeTrue("the synthetic Root CA was registered as a trust anchor");
     }
 
     [Fact(DisplayName = "PAdES-B-B with chain but unrelated trust anchor reports chain invalid")]
@@ -61,7 +61,7 @@ public sealed class SyntheticPkiPadesEndToEndTests
         using var ms = new MemoryStream(signed, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        results[0].IsCertificateChainValid.Should().BeFalse("signer's root is not in the trust set");
+        results[0].IsCertificateChainValid.ShouldBeFalse("signer's root is not in the trust set");
     }
 
     private static byte[] MinimalPdf() =>

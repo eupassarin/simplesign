@@ -1,5 +1,13 @@
 - name: Articles
   href: articles/
+- name: Architecture
+  href: architecture.md
+- name: Conformance
+  href: conformance.md
+- name: Interoperability
+  href: interoperability.md
+- name: Performance
+  href: performance.md
 - name: API Reference
   href: api/
   homepage: api/index.md

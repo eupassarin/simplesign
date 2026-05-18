@@ -1,10 +1,10 @@
 # Interop Testing
 
-This directory contains the cross-implementation validation infrastructure for SimpleSign. It runs 73 test scenarios against 7 independent verifiers to ensure signatures produced by SimpleSign are correctly validated by third-party tools, and vice versa.
+This directory contains the cross-implementation validation infrastructure for SimpleSign. It runs 81 test scenarios against 7 independent verifiers to ensure signatures produced by SimpleSign are correctly validated by third-party tools, and vice versa.
 
 ## Features
 
-- 73 automated test scenarios
+- 81 automated test scenarios
 - Forward interop: SimpleSign signatures → external verifiers
 - Reverse interop: external tool signatures → SimpleSign validation
 - Docker-based isolated environments for reproducibility

@@ -40,6 +40,11 @@ internal static class DerEncoder
             content[arcStart..contentLen].Reverse();
         }
 
+        if (contentLen > 127)
+        {
+            throw new InvalidOperationException("OID content too long for single-byte DER length.");
+        }
+
         var result = new byte[2 + contentLen];
         result[0] = Asn1Tags.ObjectIdentifier;
         result[1] = (byte)contentLen;

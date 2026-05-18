@@ -1,7 +1,7 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Brasil.GovBr;
 
 namespace SimpleSign.Brasil.Tests;
@@ -22,14 +22,14 @@ public sealed class GovBrDetectionTests
     public void IsGovBrCertificate_IssuerContainsGovBr_ReturnsTrue()
     {
         using var cert = CreatePlainCert("CN=Gov-Br Test Issuer, O=Gov-Br, C=BR");
-        GovBrChainValidator.IsGovBrCertificate(cert).Should().BeTrue();
+        GovBrChainValidator.IsGovBrCertificate(cert).ShouldBeTrue();
     }
 
     [Fact(DisplayName = "IsGovBrCertificate returns false for unrelated certificate")]
     public void IsGovBrCertificate_Unrelated_ReturnsFalse()
     {
         using var cert = CreatePlainCert("CN=Random, O=Other, C=US");
-        GovBrChainValidator.IsGovBrCertificate(cert).Should().BeFalse();
+        GovBrChainValidator.IsGovBrCertificate(cert).ShouldBeFalse();
     }
 
     // ── IsGovBrCertificate via 2.16.76.3 policy OID ──────────────────────────
@@ -39,14 +39,14 @@ public sealed class GovBrDetectionTests
     {
         // Subject/Issuer don't contain "Gov-Br"; detection must succeed via the OID arc.
         using var cert = CreateCertWithCertificatePolicy("2.16.76.3.2.1.1");
-        GovBrChainValidator.IsGovBrCertificate(cert).Should().BeTrue();
+        GovBrChainValidator.IsGovBrCertificate(cert).ShouldBeTrue();
     }
 
     [Fact(DisplayName = "IsGovBrCertificate returns false for non-Gov.br policy OID")]
     public void IsGovBrCertificate_NonGovBrPolicy_ReturnsFalse()
     {
         using var cert = CreateCertWithCertificatePolicy("1.3.6.1.4.1.99999.1");
-        GovBrChainValidator.IsGovBrCertificate(cert).Should().BeFalse();
+        GovBrChainValidator.IsGovBrCertificate(cert).ShouldBeFalse();
     }
 
     // ── DetectAssuranceLevel ─────────────────────────────────────────────────
@@ -60,28 +60,28 @@ public sealed class GovBrDetectionTests
     public void DetectAssuranceLevel_KnownArc_ReturnsLevel(string oid, GovBrAssuranceLevel expected)
     {
         using var cert = CreateCertWithCertificatePolicy(oid);
-        GovBrChainValidator.DetectAssuranceLevel(cert).Should().Be(expected);
+        GovBrChainValidator.DetectAssuranceLevel(cert).ShouldBe(expected);
     }
 
     [Fact(DisplayName = "DetectAssuranceLevel returns null for cert without policy extension")]
     public void DetectAssuranceLevel_NoExtension_ReturnsNull()
     {
         using var cert = CreatePlainCert();
-        GovBrChainValidator.DetectAssuranceLevel(cert).Should().BeNull();
+        GovBrChainValidator.DetectAssuranceLevel(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "DetectAssuranceLevel returns null for non-Gov.br arc")]
     public void DetectAssuranceLevel_NonGovBrArc_ReturnsNull()
     {
         using var cert = CreateCertWithCertificatePolicy("1.3.6.1.4.1.99999.1");
-        GovBrChainValidator.DetectAssuranceLevel(cert).Should().BeNull();
+        GovBrChainValidator.DetectAssuranceLevel(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "DetectAssuranceLevel returns null for unknown level byte (0x05)")]
     public void DetectAssuranceLevel_UnknownLevelByte_ReturnsNull()
     {
         using var cert = CreateCertWithCertificatePolicy("2.16.76.3.2.5.1");
-        GovBrChainValidator.DetectAssuranceLevel(cert).Should().BeNull();
+        GovBrChainValidator.DetectAssuranceLevel(cert).ShouldBeNull();
     }
 
     // ── LoadBundledGovBrCerts ────────────────────────────────────────────────
@@ -90,8 +90,9 @@ public sealed class GovBrDetectionTests
     public void LoadBundledGovBrCerts_ReturnsCerts()
     {
         var certs = GovBrChainValidator.LoadBundledGovBrCerts();
-        certs.Should().NotBeEmpty();
-        certs.Should().AllSatisfy(c => c.Should().NotBeNull());
+        certs.ShouldNotBeEmpty();
+        foreach (var c in certs)
+            c.ShouldNotBeNull();
     }
 
     // ── ExtractCpfFromSan ────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ public sealed class GovBrDetectionTests
     {
         const string cpf = "11144477735"; // canonical valid CPF
         using var cert = CreateCertWithSan([("2.16.76.1.3.1", cpf, UniversalTagNumber.UTF8String)]);
-        GovBrChainValidator.ExtractCpfFromSan(cert).Should().Be(cpf);
+        GovBrChainValidator.ExtractCpfFromSan(cert).ShouldBe(cpf);
     }
 
     [Fact(DisplayName = "ExtractCpfFromSan extracts 11-digit CPF from IA5String value")]
@@ -109,7 +110,7 @@ public sealed class GovBrDetectionTests
     {
         const string cpf = "12345678909"; // canonical valid CPF
         using var cert = CreateCertWithSan([("2.16.76.1.3.1", cpf, UniversalTagNumber.IA5String)]);
-        GovBrChainValidator.ExtractCpfFromSan(cert).Should().Be(cpf);
+        GovBrChainValidator.ExtractCpfFromSan(cert).ShouldBe(cpf);
     }
 
     [Fact(DisplayName = "ExtractCpfFromSan strips non-digit characters and returns 11 digits")]
@@ -118,21 +119,21 @@ public sealed class GovBrDetectionTests
         // Validator extracts digits only; "111.444.777-35" → 11 digits
         const string formatted = "111.444.777-35";
         using var cert = CreateCertWithSan([("2.16.76.1.3.1", formatted, UniversalTagNumber.UTF8String)]);
-        GovBrChainValidator.ExtractCpfFromSan(cert).Should().Be("11144477735");
+        GovBrChainValidator.ExtractCpfFromSan(cert).ShouldBe("11144477735");
     }
 
     [Fact(DisplayName = "ExtractCpfFromSan returns null when value has fewer than 11 digits")]
     public void ExtractCpfFromSan_NotEnoughDigits_ReturnsNull()
     {
         using var cert = CreateCertWithSan([("2.16.76.1.3.1", "abc12345", UniversalTagNumber.UTF8String)]);
-        GovBrChainValidator.ExtractCpfFromSan(cert).Should().BeNull();
+        GovBrChainValidator.ExtractCpfFromSan(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "ExtractCpfFromSan returns null when no SAN extension")]
     public void ExtractCpfFromSan_NoSan_ReturnsNull()
     {
         using var cert = CreatePlainCert();
-        GovBrChainValidator.ExtractCpfFromSan(cert).Should().BeNull();
+        GovBrChainValidator.ExtractCpfFromSan(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "ExtractCpfFromSan returns null when SAN has only dNSName entries")]
@@ -148,7 +149,7 @@ public sealed class GovBrDetectionTests
         }
 
         using var cert = CreateCertWithExtension(SubjectAltNameOid, w.Encode());
-        GovBrChainValidator.ExtractCpfFromSan(cert).Should().BeNull();
+        GovBrChainValidator.ExtractCpfFromSan(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "ExtractCpfFromSan ignores otherName entries with non-CPF OID")]
@@ -156,7 +157,7 @@ public sealed class GovBrDetectionTests
     {
         // OID 2.16.76.1.3.3 (CNPJ) carrying a 14-digit number — should NOT be matched as CPF
         using var cert = CreateCertWithSan([("2.16.76.1.3.3", "11444777000161", UniversalTagNumber.UTF8String)]);
-        GovBrChainValidator.ExtractCpfFromSan(cert).Should().BeNull();
+        GovBrChainValidator.ExtractCpfFromSan(cert).ShouldBeNull();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

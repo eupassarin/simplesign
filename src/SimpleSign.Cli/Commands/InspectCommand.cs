@@ -22,6 +22,14 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
         [Description("Output as JSON (machine-readable)")]
         public bool Json { get; init; }
 
+        [CommandOption("--structure|-s")]
+        [Description("Show raw PDF object structure of signatures")]
+        public bool Structure { get; init; }
+
+        [CommandOption("--explain")]
+        [Description("Add inline explanations to the structure dump (use with --structure)")]
+        public bool Explain { get; init; }
+
         public override ValidationResult Validate()
         {
             if (!File.Exists(InputPath))
@@ -33,10 +41,10 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellation)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         await using var stream = File.OpenRead(settings.InputPath);
-        var result = await PdfSignatureInspector.InspectAsync(stream, cancellation);
+        var result = await PdfSignatureInspector.InspectAsync(stream, cancellationToken);
         var fileName = Path.GetFileName(settings.InputPath);
 
         if (settings.Json)
@@ -47,6 +55,17 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
         else
         {
             OutputTree(result, fileName);
+
+            if (settings.Structure)
+            {
+                // Read PDF bytes and dump structure
+                stream.Seek(0, SeekOrigin.Begin);
+                var pdfBytes = new byte[stream.Length];
+                await stream.ReadExactlyAsync(pdfBytes, cancellationToken);
+
+                var objects = PdfStructureDumper.ExtractSignatureObjects(pdfBytes, settings.Explain);
+                StructureRenderer.Render(objects, settings.Explain);
+            }
         }
 
         return 0;
@@ -64,6 +83,7 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
 
         // Document properties
         var docNode = tree.AddNode("[blue]Document[/]");
+        docNode.AddNode($"PDF Version:      [bold]{FormatPdfVersion(doc.PdfVersion)}[/]");
         docNode.AddNode($"Signatures:       [bold]{userSigs.Count}[/]");
         if (archiveTss.Count > 0)
         {
@@ -81,6 +101,15 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
             dssNode.AddNode($"CRLs:         {dss.CrlCount}");
             dssNode.AddNode($"OCSPs:        {dss.OcspResponseCount}");
             dssNode.AddNode($"VRI:          {(dss.HasVri ? "[green]✓[/]" : "[red]✗[/]")}");
+            if (dss.HasVri && dss.VriEntryCount > 0)
+            {
+                dssNode.AddNode($"VRI entries:  {dss.VriEntryCount}");
+                dssNode.AddNode($"VRI /TU:      {(dss.VriHasTimestamps ? "[green]✓[/] all entries" : "[yellow]⚠[/] missing")}");
+            }
+            foreach (var warning in dss.VriWarnings)
+            {
+                dssNode.AddNode($"[yellow]⚠ {warning.EscapeMarkup()}[/]");
+            }
         }
         else
         {
@@ -119,8 +148,12 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
         var propsNode = sigNode.AddNode("[blue]Properties[/]");
         propsNode.AddNode($"SubFilter:  {sig.SubFilter?.EscapeMarkup() ?? "[dim]— not present[/]"}");
         propsNode.AddNode($"Level:      [bold]{FormatLevel(level).EscapeMarkup()}[/]");
-        propsNode.AddNode($"Digest:     {FormatAlgo(sig.DigestAlgorithm)}");
-        propsNode.AddNode($"Algorithm:  {FormatAlgo(sig.SignatureAlgorithm)}");
+        propsNode.AddNode(sig.IsDigestAlgorithmDeprecated
+            ? $"[yellow]\u26a0[/] Digest:     {FormatAlgo(sig.DigestAlgorithm)} [yellow](DEPRECATED per ISO 32000-2)[/]"
+            : $"Digest:     {FormatAlgo(sig.DigestAlgorithm)}");
+        propsNode.AddNode(sig.IsSignatureAlgorithmDeprecated
+            ? $"[yellow]\u26a0[/] Algorithm:  {FormatAlgo(sig.SignatureAlgorithm)} [yellow](DEPRECATED per ISO 32000-2)[/]"
+            : $"Algorithm:  {FormatAlgo(sig.SignatureAlgorithm)}");
 
         if (sig.SigningTime.HasValue)
         {
@@ -232,7 +265,9 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
     {
         tsNode.AddNode("Purpose:    [bold]Archive protection layer[/] [dim]— protects all preceding signatures (LTA)[/]");
         tsNode.AddNode($"SubFilter:  {sig.SubFilter?.EscapeMarkup() ?? "[dim]— not present[/]"}");
-        tsNode.AddNode($"Hash:       {FormatAlgo(sig.DigestAlgorithm)}");
+        tsNode.AddNode(sig.IsDigestAlgorithmDeprecated
+            ? $"[yellow]⚠[/] Hash:       {FormatAlgo(sig.DigestAlgorithm)} [yellow](DEPRECATED per ISO 32000-2)[/]"
+            : $"Hash:       {FormatAlgo(sig.DigestAlgorithm)}");
 
         if (sig.SigningTime.HasValue)
         {
@@ -370,6 +405,20 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
     }
 
     #region Formatting Helpers
+
+    private static string FormatPdfVersion(Pdf.PdfVersion version) => version switch
+    {
+        Pdf.PdfVersion.Pdf10 => "1.0",
+        Pdf.PdfVersion.Pdf11 => "1.1",
+        Pdf.PdfVersion.Pdf12 => "1.2",
+        Pdf.PdfVersion.Pdf13 => "1.3",
+        Pdf.PdfVersion.Pdf14 => "1.4",
+        Pdf.PdfVersion.Pdf15 => "1.5",
+        Pdf.PdfVersion.Pdf16 => "1.6",
+        Pdf.PdfVersion.Pdf17 => "1.7",
+        Pdf.PdfVersion.Pdf20 => "2.0",
+        _ => "Unknown"
+    };
 
     private static string FormatDocMdp(PdfDocumentInfo doc) => doc.DocMdpPermissionLevel switch
     {

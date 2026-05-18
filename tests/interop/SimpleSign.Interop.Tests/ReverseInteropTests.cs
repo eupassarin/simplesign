@@ -1,6 +1,7 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
@@ -29,8 +30,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=xmlsec1 Reverse Interop");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=xmlsec1 Reverse Interop");
+            using var _ = cert;
 
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "cert.pem"), certPem);
@@ -40,7 +41,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
                 $"-v {tmpDir}:/in simplesign-dss generate-xml-template /in/template.xml");
             output.WriteLine($"Template: exit={exit1}");
             output.WriteLine(stdout1);
-            exit1.Should().Be(0);
+            exit1.ShouldBe(0);
 
             // Sign with xmlsec1
             var (stdout2, stderr2, exit2) = await DockerRun(
@@ -52,12 +53,12 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
                 output.WriteLine($"STDERR: {stderr2}");
             }
 
-            exit2.Should().Be(0, because: "xmlsec1 should successfully sign the XML template");
+            exit2.ShouldBe(0, "xmlsec1 should successfully sign the XML template");
 
             // Verify the output is valid XML with a Signature
             var signedXml = await File.ReadAllTextAsync(Path.Combine(tmpDir, "signed.xml"));
-            signedXml.Should().Contain("<SignatureValue>", because: "signed XML should contain SignatureValue");
-            signedXml.Should().Contain("<DigestValue>", because: "signed XML should contain DigestValue");
+            signedXml.ShouldContain("<SignatureValue>");
+            signedXml.ShouldContain("<DigestValue>");
         }
         finally
         {
@@ -75,8 +76,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=xmlsec1 RoundTrip Interop");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=xmlsec1 RoundTrip Interop");
+            using var _ = cert;
 
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "cert.pem"), certPem);
@@ -85,7 +86,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             await DockerRun($"-v {tmpDir}:/in simplesign-dss generate-xml-template /in/template.xml");
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss sign-xml /in/template.xml /in/key.pem /in/cert.pem /in/signed.xml");
-            exitCode.Should().Be(0);
+            exitCode.ShouldBe(0);
 
             // Round-trip: validate with xmlsec1
             var (vStdout, vStderr, vExit) = await DockerRun(
@@ -98,8 +99,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             }
 
             // xmlsec1 with self-signed certs may warn but should parse the structure
-            (vStdout + vStderr).Should().NotContain("unable to parse",
-                because: "xmlsec1 should parse its own signed XML");
+            (vStdout + vStderr).ShouldNotContain("unable to parse");
         }
         finally
         {
@@ -117,8 +117,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=pyHanko Reverse Interop");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=pyHanko Reverse Interop");
+            using var _ = cert;
 
             // Create a minimal PDF
             var pdfBytes = MinimalPdf();
@@ -136,19 +136,19 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
                 output.WriteLine($"STDERR: {stderr}");
             }
 
-            exitCode.Should().Be(0, because: "pyHanko should successfully sign the PDF");
+            exitCode.ShouldBe(0, "pyHanko should successfully sign the PDF");
 
             // Read signed PDF and extract with SimpleSign
             var signedPath = Path.Combine(tmpDir, "signed.pdf");
-            File.Exists(signedPath).Should().BeTrue("pyHanko should have created signed.pdf");
+            File.Exists(signedPath).ShouldBeTrue("pyHanko should have created signed.pdf");
             var signedBytes = await File.ReadAllBytesAsync(signedPath);
 
             using var stream = new MemoryStream(signedBytes);
             var signatures = await PadesExtractor.ExtractAsync(stream);
-            signatures.Should().HaveCountGreaterThan(0,
-                because: "SimpleSign should extract signatures from pyHanko-signed PDF");
-            signatures[0].CmsSignature.Should().NotBeEmpty();
-            signatures[0].SignedData.Should().NotBeEmpty();
+            signatures.Count().ShouldBeGreaterThan(0,
+                "SimpleSign should extract signatures from pyHanko-signed PDF");
+            signatures[0].CmsSignature.ShouldNotBeEmpty();
+            signatures[0].SignedData.ShouldNotBeEmpty();
         }
         finally
         {
@@ -166,8 +166,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=pyHanko pdfbox Reverse");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=pyHanko pdfbox Reverse");
+            using var _ = cert;
 
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "input.pdf"), MinimalPdf());
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
@@ -176,15 +176,15 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             // Sign with pyHanko
             var (_, _, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss sign-pades /in/input.pdf /in/key.pem /in/cert.pem /in/signed.pdf");
-            exitCode.Should().Be(0);
+            exitCode.ShouldBe(0);
 
             // Verify with pdfbox
             var signedPath = Path.Combine(tmpDir, "signed.pdf");
             var (stdout, stderr, pdfboxExit) = await DockerRun(
                 $"-v {signedPath}:/in/signed.pdf simplesign-pdfbox verify-signatures /in/signed.pdf");
             output.WriteLine(stdout);
-            pdfboxExit.Should().Be(0);
-            stdout.Should().Contain("RESULT: VALID");
+            pdfboxExit.ShouldBe(0);
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {
@@ -202,8 +202,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=pyHanko Metadata Reverse");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=pyHanko Metadata Reverse");
+            using var _ = cert;
 
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "input.pdf"), MinimalPdf());
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
@@ -215,13 +215,13 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             output.WriteLine($"pyHanko sign: exit={exitCode}");
             output.WriteLine(stdout);
 
-            exitCode.Should().Be(0);
+            exitCode.ShouldBe(0);
 
             // Extract CMS and validate with OpenSSL
             var signedBytes = await File.ReadAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"));
             using var stream = new MemoryStream(signedBytes);
             var signatures = await PadesExtractor.ExtractAsync(stream);
-            signatures.Should().HaveCountGreaterThan(0);
+            signatures.Count().ShouldBeGreaterThan(0);
 
             // Write CMS + data for OpenSSL validation
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "sig.der"), signatures[0].CmsSignature);
@@ -231,8 +231,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
                 $"-v {tmpDir}:/in simplesign-dss validate-cms /in/sig.der /in/data.bin /in/cert.pem");
             output.WriteLine($"OpenSSL validate: exit={validateExit}");
             output.WriteLine(validateOut);
-            validateExit.Should().Be(0);
-            validateOut.Should().Contain("VALID");
+            validateExit.ShouldBe(0);
+            validateOut.ShouldContain("VALID");
         }
         finally
         {
@@ -250,8 +250,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=pyHanko RoundTrip Reverse");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=pyHanko RoundTrip Reverse");
+            using var _ = cert;
 
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "input.pdf"), MinimalPdf());
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
@@ -260,7 +260,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             // Sign
             var (_, _, signExit) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss sign-pades /in/input.pdf /in/key.pem /in/cert.pem /in/signed.pdf");
-            signExit.Should().Be(0);
+            signExit.ShouldBe(0);
 
             // Validate with pyHanko
             var (stdout, stderr, validateExit) = await DockerRun(
@@ -268,8 +268,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             output.WriteLine($"pyHanko validate: exit={validateExit}");
             output.WriteLine(stdout);
 
-            (stdout + (stderr ?? "")).Should().Contain("intact=True",
-                because: "pyHanko should validate its own signed PDF as intact");
+            (stdout + (stderr ?? "")).ShouldContain("intact=True");
         }
         finally
         {
@@ -289,8 +288,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=pyHanko Validator Reverse");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=pyHanko Validator Reverse");
+            using var _ = cert;
 
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "input.pdf"), MinimalPdf());
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
@@ -299,7 +298,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss sign-pades /in/input.pdf /in/key.pem /in/cert.pem /in/signed.pdf");
             output.WriteLine($"pyHanko sign: exit={exitCode}, stdout={stdout}");
-            exitCode.Should().Be(0, because: "pyHanko should sign the PDF");
+            exitCode.ShouldBe(0, "pyHanko should sign the PDF");
 
             var signedBytes = await File.ReadAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"));
 
@@ -308,9 +307,9 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             using var stream = new MemoryStream(signedBytes);
             var results = await validator.ValidateAsync(stream);
 
-            results.Should().NotBeEmpty("pyHanko-signed PDF should contain at least one signature");
-            results[0].IsIntegrityValid.Should().BeTrue("integrity of pyHanko signature should be valid");
-            results[0].IsSignatureValid.Should().BeTrue("cryptographic signature should verify");
+            results.ShouldNotBeEmpty("pyHanko-signed PDF should contain at least one signature");
+            results[0].IsIntegrityValid.ShouldBeTrue("integrity of pyHanko signature should be valid");
+            results[0].IsSignatureValid.ShouldBeTrue("cryptographic signature should verify");
             output.WriteLine($"Validation: {results[0]}");
         }
         finally
@@ -329,8 +328,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=pyHanko Inspector Reverse");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=pyHanko Inspector Reverse");
+            using var _ = cert;
 
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "input.pdf"), MinimalPdf());
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
@@ -338,7 +337,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
             var (_, _, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss sign-pades /in/input.pdf /in/key.pem /in/cert.pem /in/signed.pdf");
-            exitCode.Should().Be(0);
+            exitCode.ShouldBe(0);
 
             var signedBytes = await File.ReadAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"));
 
@@ -346,10 +345,10 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             using var stream = new MemoryStream(signedBytes);
             var inspection = await PdfSignatureInspector.InspectAsync(stream);
 
-            inspection.HasSignatures.Should().BeTrue("pyHanko-signed PDF should have signatures");
-            inspection.Signatures.Should().NotBeEmpty();
-            inspection.Signatures[0].Signer.Should().NotBeNull("signer info should be extractable");
-            inspection.Signatures[0].Signer!.Subject.Should().Contain("pyHanko Inspector Reverse");
+            inspection.HasSignatures.ShouldBeTrue("pyHanko-signed PDF should have signatures");
+            inspection.Signatures.ShouldNotBeEmpty();
+            inspection.Signatures[0].Signer.ShouldNotBeNull("signer info should be extractable");
+            inspection.Signatures[0].Signer!.Subject.ShouldContain("pyHanko Inspector Reverse");
             output.WriteLine($"Inspection: field={inspection.Signatures[0].FieldName}, signer={inspection.Signatures[0].Signer?.Subject}");
         }
         finally
@@ -369,8 +368,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
         try
         {
             // First signer (pyHanko)
-            using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=pyHanko First Signer");
-            var (keyPem1, certPem1) = ExportKeyAndCert(cert1);
+            var (keyPem1, certPem1, cert1) = CreateExportableCertAndPem("CN=pyHanko First Signer");
+            using var _1 = cert1;
 
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "input.pdf"), MinimalPdf());
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem1);
@@ -379,7 +378,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             // Sign with pyHanko
             var (_, _, exit1) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss sign-pades /in/input.pdf /in/key.pem /in/cert.pem /in/signed1.pdf");
-            exit1.Should().Be(0);
+            exit1.ShouldBe(0);
 
             // Add second signature with SimpleSign
             using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=SimpleSign Second Signer");
@@ -400,8 +399,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
             // pyHanko should find at least 2 signatures
             var combinedOutput = stdout + (stderr ?? "");
-            combinedOutput.Should().Contain("intact=True",
-                because: "at least one signature should remain intact after adding a second");
+            combinedOutput.ShouldContain("intact=True");
         }
         finally
         {
@@ -420,8 +418,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
         try
         {
             const string signerCn = "CN=pyHanko SignerName Test";
-            using var cert = TestCertificateFactory.CreateSelfSignedCert(signerCn);
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem(signerCn);
+            using var _ = cert;
 
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "input.pdf"), MinimalPdf());
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
@@ -429,7 +427,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
             var (_, _, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss sign-pades /in/input.pdf /in/key.pem /in/cert.pem /in/signed.pdf");
-            exitCode.Should().Be(0);
+            exitCode.ShouldBe(0);
 
             var signedBytes = await File.ReadAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"));
 
@@ -437,9 +435,9 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             using var stream = new MemoryStream(signedBytes);
             var results = await validator.ValidateAsync(stream);
 
-            results.Should().NotBeEmpty();
-            results[0].SignerName.Should().NotBeNullOrEmpty("signer name should be extracted from pyHanko-signed PDF");
-            results[0].SignerName.Should().Contain("pyHanko SignerName Test");
+            results.ShouldNotBeEmpty();
+            results[0].SignerName.ShouldNotBeNullOrEmpty("signer name should be extracted from pyHanko-signed PDF");
+            results[0].SignerName!.ShouldContain("pyHanko SignerName Test");
             output.WriteLine($"Signer: {results[0].SignerName}");
         }
         finally
@@ -458,8 +456,8 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
 
         try
         {
-            using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=xmlsec1 Inspector Reverse");
-            var (keyPem, certPem) = ExportKeyAndCert(cert);
+            var (keyPem, certPem, cert) = CreateExportableCertAndPem("CN=xmlsec1 Inspector Reverse");
+            using var _ = cert;
 
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "key.pem"), keyPem);
             await File.WriteAllTextAsync(Path.Combine(tmpDir, "cert.pem"), certPem);
@@ -467,23 +465,20 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             // Generate template + sign
             var (_, _, exit1) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss generate-xml-template /in/template.xml");
-            exit1.Should().Be(0);
+            exit1.ShouldBe(0);
 
             var (_, _, exit2) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss sign-xml /in/template.xml /in/key.pem /in/cert.pem /in/signed.xml");
-            exit2.Should().Be(0);
+            exit2.ShouldBe(0);
 
             // Read the signed XML and verify it contains expected certificate data
             var signedXml = await File.ReadAllTextAsync(Path.Combine(tmpDir, "signed.xml"));
-            signedXml.Should().Contain("<ds:X509Certificate>",
-                because: "xmlsec1 should embed the certificate in the signature");
-            signedXml.Should().Contain("<ds:SignatureValue>",
-                because: "signed XML should contain a signature value");
+            signedXml.ShouldContain("X509Certificate");
+            signedXml.ShouldContain("SignatureValue");
 
             // Verify the embedded certificate matches our signer
             var certBase64 = Convert.ToBase64String(cert.RawData);
-            signedXml.Should().Contain(certBase64[..40],
-                because: "the embedded certificate should match the signer cert");
+            signedXml.ShouldContain(certBase64[..40]);
 
             output.WriteLine("xmlsec1 signature contains embedded cert and signature value ✓");
         }
@@ -512,34 +507,39 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
     private static byte[] MinimalPdf() =>
         "%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n186\n%%EOF"u8.ToArray();
 
-    private static (string keyPem, string certPem) ExportKeyAndCert(X509Certificate2 cert)
+    /// <summary>
+    /// Creates a self-signed cert AND exports key/cert PEM at creation time,
+    /// before PFX round-trip, to avoid Windows CNG key export restrictions.
+    /// </summary>
+    private static (string keyPem, string certPem, X509Certificate2 cert) CreateExportableCertAndPem(string subject)
     {
-        // Export certificate PEM
-        var certPem = $"-----BEGIN CERTIFICATE-----\n{Convert.ToBase64String(cert.RawData)}\n-----END CERTIFICATE-----\n";
+        using var rsa = RSA.Create(2048);
 
-        // Export private key PEM
-        string keyPem;
-        var rsaKey = cert.GetRSAPrivateKey();
-        if (rsaKey != null)
-        {
-            var keyBytes = rsaKey.ExportPkcs8PrivateKey();
-            keyPem = $"-----BEGIN PRIVATE KEY-----\n{Convert.ToBase64String(keyBytes)}\n-----END PRIVATE KEY-----\n";
-        }
-        else
-        {
-            var ecKey = cert.GetECDsaPrivateKey();
-            if (ecKey != null)
-            {
-                var keyBytes = ecKey.ExportPkcs8PrivateKey();
-                keyPem = $"-----BEGIN PRIVATE KEY-----\n{Convert.ToBase64String(keyBytes)}\n-----END PRIVATE KEY-----\n";
-            }
-            else
-            {
-                throw new InvalidOperationException("Certificate has no supported private key");
-            }
-        }
+        // Export the private key NOW — while it's still an in-memory ephemeral key.
+        var keyBytes = rsa.ExportPkcs8PrivateKey();
+        var keyPem = "-----BEGIN PRIVATE KEY-----\n" +
+                     Convert.ToBase64String(keyBytes) +
+                     "\n-----END PRIVATE KEY-----\n";
 
-        return (keyPem, certPem);
+        var req = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: false));
+        var ephemeral = req.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+
+        var certPem = "-----BEGIN CERTIFICATE-----\n" +
+                      Convert.ToBase64String(ephemeral.RawData) +
+                      "\n-----END CERTIFICATE-----\n";
+
+        // PFX round-trip so the cert is usable for signing with SimpleSign
+        const string pw = "test-export";
+        var pfx = ephemeral.Export(X509ContentType.Pfx, pw);
+#pragma warning disable SYSLIB0057
+        var cert = new X509Certificate2(pfx, pw,
+            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+#pragma warning restore SYSLIB0057
+
+        return (keyPem, certPem, cert);
     }
 
     private static async Task<(string stdout, string stderr, int exitCode)> DockerRun(string args)

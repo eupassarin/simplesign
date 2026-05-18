@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using Xunit;
 
@@ -22,6 +22,6 @@ public sealed class CancellationTokenTests
 
         Func<Task> act = () => client.GetTimestampAsync(data, HashAlgorithmName.SHA256, CanceledToken);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(act);
     }
 }

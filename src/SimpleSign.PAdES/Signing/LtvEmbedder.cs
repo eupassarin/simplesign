@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
@@ -71,7 +72,7 @@ public sealed class LtvEmbedder
             {
                 try
                 {
-                    var issuerCert = certificateChain.FirstOrDefault(c => c.Subject == cert.Issuer);
+                    var issuerCert = certificateChain.FirstOrDefault(c => c.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData));
                     var (_, responseBytes) = await ocspClient.FetchOcspResponseAsync(cert, issuerCert, ocspUrl, cancellationToken).ConfigureAwait(false);
                     ocspData.Add(responseBytes);
                     continue; // OCSP succeeded, skip CRL for this cert
@@ -153,16 +154,15 @@ public sealed class LtvEmbedder
                 try
                 {
                     string hexString = System.Text.Encoding.Latin1.GetString(span.Slice(hexStart, hexLen));
-                    // Remove trailing zeros (padding)
-                    string trimmedHex = hexString.TrimEnd('0');
-                    if (trimmedHex.Length % 2 != 0)
+                    // Pad with leading zero if odd length (hex encoding requires even length)
+                    if (hexString.Length % 2 != 0)
                     {
-                        trimmedHex += "0";
+                        hexString = "0" + hexString;
                     }
 
-                    if (trimmedHex.Length > 0)
+                    if (hexString.Length > 0)
                     {
-                        byte[] sigBytes = Convert.FromHexString(trimmedHex);
+                        byte[] sigBytes = Convert.FromHexString(hexString);
 #pragma warning disable CA5350 // VRI key is defined as SHA-1 by PAdES spec
                         byte[] hash = SHA1.HashData(sigBytes);
 #pragma warning restore CA5350
@@ -234,6 +234,9 @@ public sealed class LtvEmbedder
                 vriSb.Append($"   /Cert [{string.Join(" ", certRefs)}]\n");
             }
 
+            // ISO 32000-2 §12.8.4.4: /TU is the time at which the VRI was created
+            vriSb.Append($"   /TU (D:{DateTime.UtcNow:yyyyMMddHHmmss}+00'00')\n");
+
             vriSb.Append(">>\nendobj\n");
             result.Write(System.Text.Encoding.Latin1.GetBytes(vriSb.ToString()));
 
@@ -284,8 +287,27 @@ public sealed class LtvEmbedder
         result.Write(updCatalog);
 
         int trailerSize = Math.Max(dssObjNum + 1, xrefMap.Keys.Max() + 1);
-        string xrefTrailer = BuildDssXrefAndTrailer(xrefMap, trailerSize, catalogObjNum, signedPdf, result.Position);
-        result.Write(System.Text.Encoding.Latin1.GetBytes(xrefTrailer));
+
+        long prevXRef = FindLastStartXRef(signedPdf);
+        string? trailerId = PdfStructureParser.FindTrailerId(signedPdf);
+        string? trailerInfo = PdfStructureParser.FindTrailerInfo(signedPdf);
+
+        bool useXRefStream = PdfStructureParser.UsesXRefStreams(signedPdf);
+        long xrefOffset = result.Position;
+
+        if (useXRefStream)
+        {
+            int xrefObjNum = xrefMap.Keys.Max() + 1;
+            trailerSize = Math.Max(trailerSize, xrefObjNum + 1);
+            var (xrefBytes, _) = PdfSignatureWriter.BuildXrefStream(
+                xrefMap, xrefObjNum, trailerSize, catalogObjNum, prevXRef, xrefOffset, trailerId, trailerInfo);
+            result.Write(xrefBytes);
+        }
+        else
+        {
+            string xrefTrailer = BuildDssXrefAndTrailer(xrefMap, trailerSize, catalogObjNum, prevXRef, trailerId, trailerInfo, xrefOffset);
+            result.Write(System.Text.Encoding.Latin1.GetBytes(xrefTrailer));
+        }
 
         return result.ToArray();
     }
@@ -308,25 +330,41 @@ public sealed class LtvEmbedder
 
             offsets[objNum] = output.Position;
 
+            // Compress with zlib (FlateDecode) — CRLs can be 1MB+ uncompressed
+            byte[] compressed = CompressWithZlib(data);
+
             var sb = new System.Text.StringBuilder();
             sb.Append($"{objNum} 0 obj\n");
-            sb.Append($"<< /Length {data.Length} >>\n");
+            sb.Append($"<< /Filter /FlateDecode /Length {compressed.Length} >>\n");
             sb.Append("stream\n");
             byte[] header = System.Text.Encoding.Latin1.GetBytes(sb.ToString());
             byte[] footer = System.Text.Encoding.Latin1.GetBytes("\nendstream\nendobj\n");
             output.Write(header);
-            output.Write(data);
+            output.Write(compressed);
             output.Write(footer);
         }
 
         return refs;
     }
 
+    private static byte[] CompressWithZlib(byte[] data)
+    {
+        using var ms = new MemoryStream();
+        using (var zlib = new ZLibStream(ms, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            zlib.Write(data);
+        }
+
+        return ms.ToArray();
+    }
+
     private static string BuildDssXrefAndTrailer(
         SortedDictionary<int, long> xrefMap,
         int trailerSize,
         int catalogObjNum,
-        byte[] signedPdf,
+        long prevXRef,
+        string? trailerId,
+        string? trailerInfo,
         long xrefOffset)
     {
         var xref = new System.Text.StringBuilder();
@@ -354,11 +392,9 @@ public sealed class LtvEmbedder
         }
 
         xref.Append("trailer\n");
-        string? trailerId = PdfStructureParser.FindTrailerId(signedPdf);
-        string? trailerInfo = PdfStructureParser.FindTrailerInfo(signedPdf);
         xref.Append($"<< /Size {Math.Max(trailerSize, xrefMap.Keys.Max() + 1)}\n");
         xref.Append($"   /Root {catalogObjNum} 0 R\n");
-        xref.Append($"   /Prev {FindLastStartXRef(signedPdf)}\n");
+        xref.Append($"   /Prev {prevXRef}\n");
         if (trailerId != null)
         {
             xref.Append($"   {trailerId}\n");
@@ -396,7 +432,16 @@ public sealed class LtvEmbedder
     private static byte[] BuildUpdatedCatalogDss(int catalogObjNum, byte[] pdf, int dssObjNum)
     {
         string marker = $"{catalogObjNum} 0 obj";
-        int start = System.Text.Encoding.Latin1.GetString(pdf).LastIndexOf(marker, StringComparison.Ordinal);
+        byte[] markerBytes = System.Text.Encoding.Latin1.GetBytes(marker);
+        int start = -1;
+        for (int i = pdf.Length - markerBytes.Length; i >= 0; i--)
+        {
+            if (pdf.AsSpan(i, markerBytes.Length).SequenceEqual(markerBytes))
+            {
+                start = i;
+                break;
+            }
+        }
         if (start < 0)
         {
             return System.Text.Encoding.Latin1.GetBytes(

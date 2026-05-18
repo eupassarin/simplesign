@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.Pdf;
 using Xunit;
@@ -18,8 +18,8 @@ public sealed class IncrementalUpdateTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().HaveCountGreaterThanOrEqualTo(2, "Incremental PDF should have at least 2 signatures");
-        fields.Should().OnlyContain(f => f.IsSigned);
+        fields.Count().ShouldBeGreaterThanOrEqualTo(2, "Incremental PDF should have at least 2 signatures");
+        fields.ShouldAllBe(f => f.IsSigned);
         output.WriteLine($"Fields: {string.Join(", ", fields.Select(f => f.FieldName ?? "(none)"))}");
     }
 
@@ -33,7 +33,7 @@ public sealed class IncrementalUpdateTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"Fields: {fields.Count}");
         foreach (var f in fields)
             output.WriteLine($"  {f.FieldName}: Signed={f.IsSigned}, SubFilter={f.SubFilter ?? "(none)"}");
@@ -49,8 +49,8 @@ public sealed class IncrementalUpdateTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().HaveCountGreaterThanOrEqualTo(2, "Double-signed PDF should have at least 2 fields");
-        fields.Should().OnlyContain(f => f.IsSigned);
+        fields.Count().ShouldBeGreaterThanOrEqualTo(2, "Double-signed PDF should have at least 2 fields");
+        fields.ShouldAllBe(f => f.IsSigned);
         output.WriteLine($"Fields: {string.Join(", ", fields.Select(f => f.FieldName ?? "(none)"))}");
     }
 
@@ -64,7 +64,7 @@ public sealed class IncrementalUpdateTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().HaveCountGreaterThanOrEqualTo(51, "PDF with 51 signatures should return at least 51 fields");
+        fields.Count().ShouldBeGreaterThanOrEqualTo(51, "PDF with 51 signatures should return at least 51 fields");
         output.WriteLine($"Total fields: {fields.Count}");
     }
 }

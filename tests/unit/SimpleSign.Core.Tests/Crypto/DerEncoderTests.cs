@@ -1,5 +1,5 @@
 using System.Formats.Asn1;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using Xunit;
 
@@ -13,11 +13,11 @@ public sealed class DerEncoderTests
         // OID 1.2.840.113549.1.1.11 = SHA256withRSA
         byte[] result = DerEncoder.EncodeOid("1.2.840.113549.1.1.11");
 
-        result[0].Should().Be(0x06, because: "DER OID tag is 0x06");
+        result[0].ShouldBe((byte)0x06);
         // Verify it can be parsed back by .NET's ASN.1 reader
         var reader = new AsnReader(result, AsnEncodingRules.DER);
         string oid = reader.ReadObjectIdentifier();
-        oid.Should().Be("1.2.840.113549.1.1.11");
+        oid.ShouldBe("1.2.840.113549.1.1.11");
     }
 
     [Theory(DisplayName = "Known OIDs encode and decode correctly")]
@@ -33,7 +33,7 @@ public sealed class DerEncoderTests
 
         var reader = new AsnReader(encoded, AsnEncodingRules.DER);
         string decoded = reader.ReadObjectIdentifier();
-        decoded.Should().Be(oidStr);
+        decoded.ShouldBe(oidStr);
     }
 
     [Fact(DisplayName = "Minimal OID (0.0) generates 3 DER bytes")]
@@ -42,10 +42,10 @@ public sealed class DerEncoderTests
         // Smallest valid OID: 0.0
         byte[] result = DerEncoder.EncodeOid("0.0");
 
-        result.Should().HaveCount(3); // tag + length(1) + content(1 byte = 0x00)
-        result[0].Should().Be(0x06);
-        result[1].Should().Be(1);
-        result[2].Should().Be(0);
+        result.Length.ShouldBe(3); // tag + length(1) + content(1 byte = 0x00)
+        result[0].ShouldBe((byte)0x06);
+        result[1].ShouldBe((byte)1);
+        result[2].ShouldBe((byte)0);
     }
 
     [Fact(DisplayName = "Large arcs use correct multi-byte encoding")]
@@ -56,7 +56,7 @@ public sealed class DerEncoderTests
 
         var reader = new AsnReader(result, AsnEncodingRules.DER);
         string decoded = reader.ReadObjectIdentifier();
-        decoded.Should().Be("2.16.840");
+        decoded.ShouldBe("2.16.840");
     }
 
     [Fact(DisplayName = "First two arcs follow X.690 §8.19.4 rule")]
@@ -66,7 +66,7 @@ public sealed class DerEncoderTests
         // OID 1.2.x → first byte = 40*1 + 2 = 42 = 0x2A
         byte[] result = DerEncoder.EncodeOid("1.2.3");
 
-        result[2].Should().Be(42, because: "40*1 + 2 = 42 per X.690 §8.19.4");
-        result[3].Should().Be(3, because: "third arc = 3 fits in single byte");
+        result[2].ShouldBe((byte)42);
+        result[3].ShouldBe((byte)3);
     }
 }

@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Parsing;
 using Xunit;
 
@@ -13,11 +13,11 @@ public class CssParserTests
     {
         var rules = CssParser.ParseStylesheet("p { color: red; font-size: 14px; }");
 
-        rules.Should().ContainSingle();
-        rules[0].Selector.Should().Be("p");
-        rules[0].Properties.Should().ContainKey("color");
-        rules[0].Properties["color"].Should().Be("red");
-        rules[0].Properties["font-size"].Should().Be("14px");
+        rules.Count().ShouldBe(1);
+        rules[0].Selector.ShouldBe("p");
+        rules[0].Properties.ShouldContainKey("color");
+        rules[0].Properties["color"].ShouldBe("red");
+        rules[0].Properties["font-size"].ShouldBe("14px");
     }
 
     [Fact(DisplayName = "ParseStylesheet: multiple rules")]
@@ -26,9 +26,9 @@ public class CssParserTests
         var rules = CssParser.ParseStylesheet(
             "h1 { font-size: 24px; } p { color: blue; }");
 
-        rules.Should().HaveCount(2);
-        rules[0].Selector.Should().Be("h1");
-        rules[1].Selector.Should().Be("p");
+        rules.Count().ShouldBe(2);
+        rules[0].Selector.ShouldBe("h1");
+        rules[1].Selector.ShouldBe("p");
     }
 
     [Fact(DisplayName = "ParseStylesheet: class selector")]
@@ -36,8 +36,8 @@ public class CssParserTests
     {
         var rules = CssParser.ParseStylesheet(".highlight { background: yellow; }");
 
-        rules.Should().ContainSingle();
-        rules[0].Selector.Should().Be(".highlight");
+        rules.Count().ShouldBe(1);
+        rules[0].Selector.ShouldBe(".highlight");
     }
 
     [Fact(DisplayName = "ParseStylesheet: id selector")]
@@ -45,8 +45,8 @@ public class CssParserTests
     {
         var rules = CssParser.ParseStylesheet("#main { width: 100%; }");
 
-        rules.Should().ContainSingle();
-        rules[0].Selector.Should().Be("#main");
+        rules.Count().ShouldBe(1);
+        rules[0].Selector.ShouldBe("#main");
     }
 
     [Fact(DisplayName = "ParseStylesheet: empty input")]
@@ -54,7 +54,7 @@ public class CssParserTests
     {
         var rules = CssParser.ParseStylesheet("");
 
-        rules.Should().BeEmpty();
+        rules.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "ParseStylesheet: grouped selectors")]
@@ -62,7 +62,7 @@ public class CssParserTests
     {
         var rules = CssParser.ParseStylesheet("h1, h2 { font-weight: bold; }");
 
-        rules.Should().HaveCountGreaterThanOrEqualTo(1);
+        rules.Count().ShouldBeGreaterThanOrEqualTo(1);
     }
 
     // ── Inline style parsing ────────────────────────────────────────────
@@ -72,8 +72,8 @@ public class CssParserTests
     {
         var props = CssParser.ParseInlineStyle("color: red");
 
-        props.Should().ContainKey("color");
-        props["color"].Should().Be("red");
+        props.ShouldContainKey("color");
+        props["color"].ShouldBe("red");
     }
 
     [Fact(DisplayName = "ParseInlineStyle: multiple properties (shorthand expanded)")]
@@ -81,10 +81,10 @@ public class CssParserTests
     {
         var props = CssParser.ParseInlineStyle("color: red; font-size: 16px; margin: 10px");
 
-        props.Should().ContainKey("color");
-        props.Should().ContainKey("font-size");
+        props.ShouldContainKey("color");
+        props.ShouldContainKey("font-size");
         // margin shorthand is expanded to individual properties
-        props.Should().ContainKey("margin-top");
+        props.ShouldContainKey("margin-top");
     }
 
     [Fact(DisplayName = "ParseInlineStyle: empty input")]
@@ -92,7 +92,7 @@ public class CssParserTests
     {
         var props = CssParser.ParseInlineStyle("");
 
-        props.Should().BeEmpty();
+        props.ShouldBeEmpty();
     }
 
     // ── Length parsing ──────────────────────────────────────────────────
@@ -107,8 +107,8 @@ public class CssParserTests
     {
         var result = CssParser.ParseLength(input, 12f);
 
-        result.Should().NotBeNull();
-        result!.Value.Should().BeApproximately(expected, 1f);
+        result.ShouldNotBeNull();
+        result!.Value.ShouldBe(expected, 1f);
     }
 
     [Fact(DisplayName = "ParseLength: px applies 0.75 conversion factor")]
@@ -116,9 +116,9 @@ public class CssParserTests
     {
         var result = CssParser.ParseLength("12px", 12f);
 
-        result.Should().NotBeNull();
+        result.ShouldNotBeNull();
         // 12px * 0.75 = 9pt
-        result!.Value.Should().BeApproximately(9f, 0.1f);
+        result!.Value.ShouldBe(9f, 0.1f);
     }
 
     [Fact(DisplayName = "ParseLength: invalid input returns null")]
@@ -126,7 +126,7 @@ public class CssParserTests
     {
         var result = CssParser.ParseLength("abc");
 
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact(DisplayName = "ParseLength: percentage does not throw")]
@@ -136,7 +136,7 @@ public class CssParserTests
         // The important thing is it doesn't throw
         var act = () => CssParser.ParseLength("50%");
 
-        act.Should().NotThrow();
+        Should.NotThrow(act);
     }
 
     // ── Specificity calculation ─────────────────────────────────────────
@@ -149,7 +149,7 @@ public class CssParserTests
     {
         var specificity = CssParser.CalculateSpecificity(selector);
 
-        specificity.Should().Be(expected);
+        specificity.ShouldBe(expected);
     }
 
     [Fact(DisplayName = "CalculateSpecificity: compound selector")]
@@ -158,7 +158,7 @@ public class CssParserTests
         // div.class = 1 (element) + 10 (class) = 11
         var specificity = CssParser.CalculateSpecificity("div.class");
 
-        specificity.Should().Be(11);
+        specificity.ShouldBe(11);
     }
 
     [Fact(DisplayName = "CalculateSpecificity: descendant selector")]
@@ -167,6 +167,6 @@ public class CssParserTests
         // div p = 1 + 1 = 2
         var specificity = CssParser.CalculateSpecificity("div p");
 
-        specificity.Should().Be(2);
+        specificity.ShouldBe(2);
     }
 }

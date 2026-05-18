@@ -31,14 +31,13 @@ Thumbs.db
 TestResults/
 coverage/
 *.trx
+tests-local/
 
 # Local benchmark results
 bench-results-docker/
 copilot-report-*
-/publish-agent-local
-/simplesingn-demo
-/publish-cli-local
 nupkgs/
 
 # Docfx
 docs/_site/
+

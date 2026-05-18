@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -213,8 +213,8 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: $"iText should validate PAdES ({label})");
-            stdout.Should().Contain("VALID", because: $"iText should report VALID for PAdES ({label})");
+            exitCode.ShouldBe(0, $"iText should validate PAdES ({label})");
+            stdout.ShouldContain("VALID");
         }
         finally
         {
@@ -236,9 +236,9 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: $"EU DSS should validate PAdES ({label})");
-            (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).Should().BeTrue(
-                because: $"EU DSS should report TOTAL_PASSED or INDETERMINATE for self-signed certs ({label})");
+            exitCode.ShouldBe(0, $"EU DSS should validate PAdES ({label})");
+            (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).ShouldBeTrue(
+                $"EU DSS should report TOTAL_PASSED or INDETERMINATE for self-signed certs ({label})");
         }
         finally
         {
@@ -260,8 +260,8 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: $"pyHanko should validate PAdES ({label})");
-            stdout.Should().Contain("VALID", because: $"pyHanko should report VALID for PAdES ({label})");
+            exitCode.ShouldBe(0, $"pyHanko should validate PAdES ({label})");
+            stdout.ShouldContain("VALID");
         }
         finally
         {

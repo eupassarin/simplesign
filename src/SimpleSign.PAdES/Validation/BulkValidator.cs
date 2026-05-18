@@ -99,53 +99,68 @@ public sealed class BulkValidator
         using var semaphore = new SemaphoreSlim(_maxConcurrency, _maxConcurrency);
         var tasks = new List<Task<BulkValidationResult>>();
 
-        await foreach (var (id, pdfBytes) in inputs.WithCancellation(cancellationToken).ConfigureAwait(false))
+        try
         {
-            await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-            tasks.Add(Task.Run(async () =>
+            await foreach (var (id, pdfBytes) in inputs.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
-                var sw = Stopwatch.StartNew();
-                try
-                {
-                    using var stream = new MemoryStream(pdfBytes);
-                    var results = await _validator.ValidateAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-                    sw.Stop();
-                    Interlocked.Increment(ref _successCount);
-                    Interlocked.Add(ref _totalElapsedMs, sw.ElapsedMilliseconds);
+                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-                    return new BulkValidationResult(id, results, null, sw.Elapsed);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                tasks.Add(Task.Run(async () =>
                 {
-                    sw.Stop();
-                    Interlocked.Increment(ref _failureCount);
-                    Interlocked.Add(ref _totalElapsedMs, sw.ElapsedMilliseconds);
-                    _logger.LogWarning(ex, "Bulk validation failed for {Id}", id);
+                    var sw = Stopwatch.StartNew();
+                    try
+                    {
+                        using var stream = new MemoryStream(pdfBytes);
+                        var results = await _validator.ValidateAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+                        sw.Stop();
+                        Interlocked.Increment(ref _successCount);
+                        Interlocked.Add(ref _totalElapsedMs, sw.ElapsedMilliseconds);
 
-                    return new BulkValidationResult(id, null, ex, sw.Elapsed);
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            }, cancellationToken));
+                        return new BulkValidationResult(id, results, null, sw.Elapsed);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        sw.Stop();
+                        Interlocked.Increment(ref _failureCount);
+                        Interlocked.Add(ref _totalElapsedMs, sw.ElapsedMilliseconds);
+                        _logger.LogWarning(ex, "Bulk validation failed for {Id}", id);
 
-            // Yield completed tasks
-            for (var i = tasks.Count - 1; i >= 0; i--)
-            {
-                if (tasks[i].IsCompleted)
+                        return new BulkValidationResult(id, null, ex, sw.Elapsed);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, cancellationToken));
+
+                // Yield completed tasks
+                for (var i = tasks.Count - 1; i >= 0; i--)
                 {
-                    yield return await tasks[i].ConfigureAwait(false);
-                    tasks.RemoveAt(i);
+                    if (tasks[i].IsCompleted)
+                    {
+                        yield return await tasks[i].ConfigureAwait(false);
+                        tasks.RemoveAt(i);
+                    }
                 }
             }
-        }
 
-        // Drain remaining
-        foreach (var task in tasks)
+            // Drain remaining
+            foreach (var task in tasks)
+            {
+                yield return await task.ConfigureAwait(false);
+            }
+        }
+        finally
         {
-            yield return await task.ConfigureAwait(false);
+            // Ensure all tasks complete before semaphore is disposed
+            try
+            {
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Exceptions are already handled individually in each task
+            }
         }
     }
 

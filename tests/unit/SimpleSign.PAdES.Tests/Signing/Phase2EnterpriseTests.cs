@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.Pdf;
 using Xunit;
@@ -18,7 +18,7 @@ public sealed class Phase2EnterpriseTests
     {
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var builder2 = builder.AsCertification(CertificationLevel.NoChanges);
-        builder2.Should().NotBeSameAs(builder);
+        builder2.ShouldNotBeSameAs(builder);
     }
 
     [Fact(DisplayName = "Default AsCertification uses FormFilling")]
@@ -26,7 +26,7 @@ public sealed class Phase2EnterpriseTests
     {
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var builder2 = builder.AsCertification();
-        builder2.Should().NotBeNull();
+        builder2.ShouldNotBeNull();
     }
 
     [Theory(DisplayName = "CertificationLevel values are between 1 and 3")]
@@ -35,7 +35,7 @@ public sealed class Phase2EnterpriseTests
     [InlineData(CertificationLevel.FormFillingAndAnnotations)]
     public void CertificationLevel_Values_AreCorrect(CertificationLevel level)
     {
-        ((int)level).Should().BeInRange(1, 3);
+        ((int)level).ShouldBeInRange(1, 3);
     }
 
     // ── Existing Field ───────────────────────────────────────────────────
@@ -45,7 +45,7 @@ public sealed class Phase2EnterpriseTests
     {
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var builder2 = builder.WithExistingField("Signature1");
-        builder2.Should().NotBeSameAs(builder);
+        builder2.ShouldNotBeSameAs(builder);
     }
 
     [Fact(DisplayName = "WithExistingField with null name throws exception")]
@@ -53,7 +53,7 @@ public sealed class Phase2EnterpriseTests
     {
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var act = () => builder.WithExistingField(null!);
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     [Fact(DisplayName = "WithExistingField with empty name throws exception")]
@@ -61,7 +61,7 @@ public sealed class Phase2EnterpriseTests
     {
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var act = () => builder.WithExistingField("");
-        act.Should().Throw<ArgumentException>();
+        Should.Throw<ArgumentException>(act);
     }
 
     // ── Rich Appearance ──────────────────────────────────────────────────
@@ -70,29 +70,29 @@ public sealed class Phase2EnterpriseTests
     public void SignatureAppearance_TextColor_IsStored()
     {
         var app = new SignatureAppearance { TextColor = (0.2f, 0.3f, 0.4f) };
-        app.TextColor.Should().Be((0.2f, 0.3f, 0.4f));
+        app.TextColor.ShouldBe((0.2f, 0.3f, 0.4f));
     }
 
     [Fact(DisplayName = "BorderColor is stored correctly")]
     public void SignatureAppearance_BorderColor_IsStored()
     {
         var app = new SignatureAppearance { BorderColor = (1f, 0f, 0f) };
-        app.BorderColor.Should().Be((1f, 0f, 0f));
+        app.BorderColor.ShouldBe((1f, 0f, 0f));
     }
 
     [Fact(DisplayName = "CustomFontSize is stored and returned")]
     public void SignatureAppearance_CustomFontSize_IsStored()
     {
         var app = new SignatureAppearance { CustomFontSize = 10f };
-        app.CustomFontSize.Should().Be(10f);
-        app.GetFontSizeValue().Should().Be(10f);
+        app.CustomFontSize.ShouldBe(10f);
+        app.GetFontSizeValue().ShouldBe(10f);
     }
 
     [Fact(DisplayName = "Default FontSize when CustomFontSize is null")]
     public void SignatureAppearance_DefaultFontSize_WhenNull()
     {
         var app = new SignatureAppearance();
-        app.GetFontSizeValue().Should().Be(SignatureAppearance.GetFontSize());
+        app.GetFontSizeValue().ShouldBe(SignatureAppearance.GetFontSize());
     }
 
     [Fact(DisplayName = "BackgroundImageJpeg is stored correctly")]
@@ -100,14 +100,14 @@ public sealed class Phase2EnterpriseTests
     {
         byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xE0];
         var app = new SignatureAppearance { BackgroundImageJpeg = jpeg };
-        app.BackgroundImageJpeg!.Value.ToArray().Should().BeEquivalentTo(jpeg);
+        app.BackgroundImageJpeg!.Value.ToArray().ShouldBe(jpeg);
     }
 
     [Fact(DisplayName = "Default BorderWidth is 0.5")]
     public void SignatureAppearance_BorderWidth_DefaultIs05()
     {
         var app = new SignatureAppearance();
-        app.BorderWidth.Should().Be(0.5f);
+        app.BorderWidth.ShouldBe(0.5f);
     }
 
     // ── FindEmptySignatureField ──────────────────────────────────────────
@@ -118,7 +118,7 @@ public sealed class Phase2EnterpriseTests
         byte[] pdf = System.Text.Encoding.Latin1.GetBytes(
             "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n");
         var result = PdfStructureParser.FindEmptySignatureField(pdf, "MissingField");
-        result.Should().Be(-1);
+        result.ShouldBe(-1);
     }
 
     [Fact(DisplayName = "Empty field found returns object number")]
@@ -128,7 +128,7 @@ public sealed class Phase2EnterpriseTests
             "%PDF-1.7\n" +
             "5 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Sig /T (Signature1) /Rect [0 0 0 0] >>\nendobj\n");
         var result = PdfStructureParser.FindEmptySignatureField(pdf, "Signature1");
-        result.Should().Be(5);
+        result.ShouldBe(5);
     }
 
     [Fact(DisplayName = "Already signed field throws exception")]
@@ -137,9 +137,9 @@ public sealed class Phase2EnterpriseTests
         byte[] pdf = System.Text.Encoding.Latin1.GetBytes(
             "%PDF-1.7\n" +
             "5 0 obj\n<< /FT /Sig /T (Signature1) /V 10 0 R >>\nendobj\n");
-        var act = () => PdfStructureParser.FindEmptySignatureField(pdf, "Signature1");
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*already signed*");
+        Action act = () => { PdfStructureParser.FindEmptySignatureField(pdf, "Signature1"); };
+        var ex = Should.Throw<InvalidOperationException>(act);
+        ex.Message.ShouldContain("already signed");
     }
 
     // ── SignatureFieldOptions ────────────────────────────────────────────
@@ -148,13 +148,13 @@ public sealed class Phase2EnterpriseTests
     public void SignatureFieldOptions_CertificationLevel_DefaultIsNull()
     {
         var opts = new SignatureFieldOptions();
-        opts.CertificationLevel.Should().BeNull();
+        opts.CertificationLevel.ShouldBeNull();
     }
 
     [Fact(DisplayName = "Default ExistingFieldName is null")]
     public void SignatureFieldOptions_ExistingFieldName_DefaultIsNull()
     {
         var opts = new SignatureFieldOptions();
-        opts.ExistingFieldName.Should().BeNull();
+        opts.ExistingFieldName.ShouldBeNull();
     }
 }

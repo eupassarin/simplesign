@@ -15,7 +15,7 @@ namespace SimpleSign.Core.Crypto;
 /// </summary>
 public sealed class TimestampClient
 {
-    private const int NonceByteLength = 8;
+    private const int NonceByteLength = 16;
 
     private static readonly MediaTypeHeaderValue TsqContentType =
         new("application/timestamp-query");
@@ -31,15 +31,17 @@ public sealed class TimestampClient
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentException.ThrowIfNullOrWhiteSpace(tsaUrl);
+
+        if (!Http.UrlValidator.IsSafeUrl(tsaUrl))
+        {
+            throw new ArgumentException($"TSA URL is blocked: must be an absolute HTTP(S) URL that does not point to localhost or private networks.", nameof(tsaUrl));
+        }
+
         _httpClient = httpClient;
         _tsaUrl = tsaUrl;
         _logger = logger ?? NullLogger.Instance;
 
-        // Set a reasonable default timeout if none configured
-        if (_httpClient.Timeout == Timeout.InfiniteTimeSpan)
-        {
-            _httpClient.Timeout = ResilientHttp.DefaultHttpTimeout;
-        }
+        // Timeout is configured by DefaultHttpClientProvider; avoid mutating shared HttpClient here.
     }
 
     /// <summary>
@@ -152,7 +154,7 @@ public sealed class TimestampClient
                 writer.WriteOctetString(hash);
             }
 
-            // nonce (random 64-bit) to prevent replay
+            // nonce (random 128-bit) to prevent replay
             writer.WriteInteger(nonceValue);
 
             // certReq = true (requests the TSA certificate in the response)

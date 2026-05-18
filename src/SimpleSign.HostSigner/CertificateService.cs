@@ -13,7 +13,8 @@ internal static class CertificateService
 
         foreach (var cert in store.Certificates)
         {
-            if (!cert.HasPrivateKey) continue;
+            if (!cert.HasPrivateKey)
+                continue;
 
             // Only signing certs (digitalSignature or nonRepudiation)
             foreach (var ext in cert.Extensions)
@@ -49,7 +50,8 @@ internal static class CertificateService
                 UserCertificateBase64 = Convert.ToBase64String(cert.RawData),
             });
 
-            next:;
+        next:
+            ;
         }
 
         return result;
@@ -121,13 +123,15 @@ internal static class CertificateService
     {
         try
         {
-            if (cert.GetRSAPrivateKey() is not null) return ("RSA", "SHA256");
+            if (cert.GetRSAPrivateKey() is not null)
+                return ("RSA", "SHA256");
         }
         catch { /* key not accessible */ }
 
         try
         {
-            if (cert.GetECDsaPrivateKey() is not null) return ("ECDSA", "SHA256");
+            if (cert.GetECDsaPrivateKey() is not null)
+                return ("ECDSA", "SHA256");
         }
         catch { /* key not accessible */ }
 
@@ -138,7 +142,6 @@ internal static class CertificateService
     {
         "SHA384" => HashAlgorithmName.SHA384,
         "SHA512" => HashAlgorithmName.SHA512,
-        "SHA1" => HashAlgorithmName.SHA1,
         _ => HashAlgorithmName.SHA256,
     };
 }

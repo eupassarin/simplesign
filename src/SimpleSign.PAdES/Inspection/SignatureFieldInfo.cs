@@ -78,6 +78,12 @@ public sealed class SignatureFieldInfo
     /// <summary>Raw CMS/PKCS#7 bytes from the signature /Contents.</summary>
     public ReadOnlyMemory<byte> CmsRawData { get; init; }
 
+    /// <summary>True if the digest algorithm is deprecated per ISO 32000-2.</summary>
+    public bool IsDigestAlgorithmDeprecated { get; init; }
+
+    /// <summary>True if the signature algorithm is deprecated per ISO 32000-2.</summary>
+    public bool IsSignatureAlgorithmDeprecated { get; init; }
+
     /// <summary>Whether this is a document timestamp (SubFilter = ETSI.RFC3161) rather than a regular signature.</summary>
     public bool IsDocumentTimestamp =>
         string.Equals(SubFilter, "ETSI.RFC3161", StringComparison.OrdinalIgnoreCase);

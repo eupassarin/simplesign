@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
@@ -73,14 +73,14 @@ public sealed class RoundTripValidationTests
         using var ms = new MemoryStream(signed, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        results.Should().HaveCount(1, $"[{label}] signed PDF must have exactly one signature");
+        results.Count().ShouldBe(1, $"[{label}] signed PDF must have exactly one signature");
         var r = results[0];
-        r.IsIntegrityValid.Should().BeTrue($"[{label}] byte-range hash must verify");
-        r.IsSignatureValid.Should().BeTrue($"[{label}] cryptographic signature must be valid");
-        r.IsCertificateChainValid.Should().BeTrue($"[{label}] cert is registered as trust anchor");
-        r.DigestAlgorithmOid.Should().Be(expectedDigestOid, $"[{label}] digest OID must match requested algorithm");
-        r.SubFilter.Should().Be(expectedSubFilter, $"[{label}] SubFilter must be the PAdES CAdES-detached type");
-        r.Errors.Should().BeEmpty($"[{label}] no errors expected on a freshly signed PDF");
+        r.IsIntegrityValid.ShouldBeTrue($"[{label}] byte-range hash must verify");
+        r.IsSignatureValid.ShouldBeTrue($"[{label}] cryptographic signature must be valid");
+        r.IsCertificateChainValid.ShouldBeTrue($"[{label}] cert is registered as trust anchor");
+        r.DigestAlgorithmOid.ShouldBe(expectedDigestOid, $"[{label}] digest OID must match requested algorithm");
+        r.SubFilter.ShouldBe(expectedSubFilter, $"[{label}] SubFilter must be the PAdES CAdES-detached type");
+        r.Errors.ShouldBeEmpty($"[{label}] no errors expected on a freshly signed PDF");
     }
 
     // ── SubFilter variants ────────────────────────────────────────────────────────────────
@@ -102,10 +102,10 @@ public sealed class RoundTripValidationTests
         using var ms = new MemoryStream(signed, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeTrue();
-        results[0].IsSignatureValid.Should().BeTrue();
-        results[0].SubFilter.Should().Be("ETSI.CAdES.detached",
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeTrue();
+        results[0].SubFilter.ShouldBe("ETSI.CAdES.detached",
             "the default SubFilter is ETSI.CAdES.detached (PAdES standard)");
     }
 
@@ -132,18 +132,21 @@ public sealed class RoundTripValidationTests
         using var ms = new MemoryStream(signed2, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        results.Should().HaveCount(2, "two incremental signatures must both be found");
-        results.Should().AllSatisfy(r =>
+        results.Count().ShouldBe(2, "two incremental signatures must both be found");
+        foreach (var r in results)
         {
-            r.IsIntegrityValid.Should().BeTrue("both signatures should have valid byte ranges");
-            r.IsSignatureValid.Should().BeTrue("both signatures should be cryptographically valid");
-        });
+            r.IsIntegrityValid.ShouldBeTrue();
+            r.IsSignatureValid.ShouldBeTrue();
+        }
 
-        // Non-last signatures must NOT warn about ByteRange not covering the entire file —
-        // this is expected for incremental updates (PAdES/ISO 32000).
-        results[0].Warnings.Should().NotContain(
+        // Non-last signatures should NOT produce ByteRange warnings — per ISO 32000, each incremental
+        // update's ByteRange only covers up to that revision's %%EOF, which is correct behavior.
+        results[0].Warnings.ShouldNotContain(
             w => w.Contains("ByteRange does not cover entire PDF"),
-            "first signature in an incremental update is not expected to cover bytes added later");
+            "non-last signature ByteRange covering its own revision is expected, not a warning");
+        results[0].Errors.ShouldNotContain(
+            w => w.Contains("ByteRange does not cover entire PDF"),
+            "non-last signature ByteRange covering its own revision is expected, not an error");
     }
 
     /// <summary>
@@ -172,8 +175,9 @@ public sealed class RoundTripValidationTests
         using var ms = new MemoryStream(current, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        results.Should().HaveCountGreaterThanOrEqualTo(5, "all 5 signatures must be found");
-        results.Should().AllSatisfy(r => r.IsIntegrityValid.Should().BeTrue());
+        results.Count().ShouldBeGreaterThanOrEqualTo(5, "all 5 signatures must be found");
+        foreach (var r in results)
+            r.IsIntegrityValid.ShouldBeTrue();
 
         foreach (var c in certs)
             c.Dispose();
@@ -204,8 +208,8 @@ public sealed class RoundTripValidationTests
         using var ms = new MemoryStream(tampered, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeFalse("tampering must be detected via hash mismatch");
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeFalse("tampering must be detected via hash mismatch");
     }
 
     /// <summary>
@@ -230,11 +234,11 @@ public sealed class RoundTripValidationTests
         using var ms = new MemoryStream(appended, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeTrue(
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue(
             "the signed bytes themselves are unchanged — only garbage was appended outside the ByteRange");
-        results[0].Warnings.Should().Contain(w => w.Contains("ByteRange") || w.Contains("Unsigned"),
-            "the validator must warn that ByteRange does not cover the entire PDF");
+        results[0].Errors.ShouldContain(w => w.Contains("ByteRange") || w.Contains("Unsigned"),
+            "the validator must report an error that ByteRange does not cover the entire PDF for the last signature");
     }
 
     // ── Field metadata ───────────────────────────────────────────────────────────────────
@@ -256,13 +260,14 @@ public sealed class RoundTripValidationTests
         using var ms = new MemoryStream(signed, writable: false);
         var results = await validator.ValidateAsync(ms);
 
-        var r = results.Should().ContainSingle().Which;
-        r.SignerName.Should().Contain("Metadata Test Signer", "CN from the certificate should appear in signer name");
-        r.DigestAlgorithmOid.Should().NotBeNullOrEmpty("digest algorithm OID must always be set");
-        r.DigestAlgorithmName.Should().NotBeNullOrEmpty("friendly algorithm name must be derived from OID");
-        r.SubFilter.Should().NotBeNullOrEmpty("SubFilter identifies the signature type");
-        r.SignerCertificate.Should().NotBeNull("signer certificate must be extracted from CMS");
-        r.FieldName.Should().NotBeNullOrEmpty("every signature must have a field name");
+        results.Count().ShouldBe(1);
+        var r = results.First();
+        r.SignerName!.ShouldContain("Metadata Test Signer");
+        r.DigestAlgorithmOid.ShouldNotBeNullOrWhiteSpace();
+        r.DigestAlgorithmName.ShouldNotBeNullOrWhiteSpace();
+        r.SubFilter.ShouldNotBeNullOrWhiteSpace();
+        r.SignerCertificate.ShouldNotBeNull();
+        r.FieldName.ShouldNotBeNullOrWhiteSpace();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────

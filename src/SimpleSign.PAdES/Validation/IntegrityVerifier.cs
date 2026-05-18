@@ -42,9 +42,46 @@ internal static class IntegrityVerifier
         // For non-last signatures in incremental updates, the ByteRange is expected to end before EOF
         // because subsequent signatures append bytes to the file (per PAdES/ISO 32000 spec).
         long expectedEnd = br.Offset2 + br.Length2;
-        if (pdfStream.CanSeek && expectedEnd != pdfStream.Length && isLastSignature)
+        if (pdfStream.CanSeek && expectedEnd != pdfStream.Length)
         {
-            warnings.Add($"ByteRange does not cover entire PDF. Expected {pdfStream.Length} bytes but ByteRange ends at {expectedEnd}. Unsigned content may be present after signature.");
+            string message = $"ByteRange does not cover entire PDF. Expected {pdfStream.Length} bytes but ByteRange ends at {expectedEnd}. Unsigned content may be present after signature.";
+            if (isLastSignature)
+            {
+                // PAdES B-LT: DSS/VRI are appended after the last approval signature as a valid
+                // incremental update. Check if the trailing content is a legitimate PDF update
+                // (contains %%EOF) rather than arbitrary tampering.
+                bool trailingContentIsValidUpdate = false;
+                if (pdfStream.CanSeek && expectedEnd < pdfStream.Length)
+                {
+                    long currentPos = pdfStream.Position;
+                    try
+                    {
+                        pdfStream.Seek(expectedEnd, SeekOrigin.Begin);
+                        int trailingSize = (int)Math.Min(pdfStream.Length - expectedEnd, 1024 * 1024);
+                        byte[] trailing = new byte[trailingSize];
+                        int read = await pdfStream.ReadAsync(trailing.AsMemory(0, trailingSize), cancellationToken).ConfigureAwait(false);
+                        if (read > 0)
+                        {
+                            trailingContentIsValidUpdate = trailing.AsSpan(0, read).IndexOf("%%EOF"u8) >= 0;
+                        }
+                    }
+                    finally
+                    {
+                        pdfStream.Seek(currentPos, SeekOrigin.Begin);
+                    }
+                }
+
+                if (trailingContentIsValidUpdate)
+                {
+                    warnings.Add(message);
+                }
+                else
+                {
+                    errors.Add(message);
+                }
+            }
+            // Non-last signatures in incremental updates are expected to not cover the full PDF.
+            // No warning or error needed — this is standard PDF incremental update behavior.
         }
 
         try
@@ -94,9 +131,44 @@ internal static class IntegrityVerifier
         }
 
         long expectedEnd = br.Offset2 + br.Length2;
-        if (pdfStream.CanSeek && expectedEnd != pdfStream.Length && isLastSignature)
+        if (pdfStream.CanSeek && expectedEnd != pdfStream.Length)
         {
-            warnings.Add($"ByteRange does not cover entire PDF. Expected {pdfStream.Length} bytes but ByteRange ends at {expectedEnd}.");
+            string message = $"ByteRange does not cover entire PDF. Expected {pdfStream.Length} bytes but ByteRange ends at {expectedEnd}.";
+            if (isLastSignature)
+            {
+                // Check if trailing content is a valid incremental update (contains %%EOF)
+                bool trailingContentIsValidUpdate = false;
+                if (expectedEnd < pdfStream.Length)
+                {
+                    long currentPos = pdfStream.Position;
+                    try
+                    {
+                        pdfStream.Seek(expectedEnd, SeekOrigin.Begin);
+                        int trailingSize = (int)Math.Min(pdfStream.Length - expectedEnd, 1024 * 1024);
+                        byte[] trailing = new byte[trailingSize];
+                        int read = await pdfStream.ReadAsync(trailing.AsMemory(0, trailingSize), cancellationToken).ConfigureAwait(false);
+                        if (read > 0)
+                        {
+                            trailingContentIsValidUpdate = trailing.AsSpan(0, read).IndexOf("%%EOF"u8) >= 0;
+                        }
+                    }
+                    finally
+                    {
+                        pdfStream.Seek(currentPos, SeekOrigin.Begin);
+                    }
+                }
+
+                if (trailingContentIsValidUpdate)
+                {
+                    warnings.Add(message);
+                }
+                else
+                {
+                    errors.Add(message);
+                }
+            }
+            // Non-last signatures in incremental updates are expected to not cover the full PDF.
+            // No warning or error needed — this is standard PDF incremental update behavior.
         }
 
 #pragma warning disable CA5350
@@ -116,6 +188,12 @@ internal static class IntegrityVerifier
             byte[] buffer = ArrayPool<byte>.Shared.Rent(StreamingBufferSize);
             try
             {
+                if (br.Length1 > int.MaxValue || br.Length2 > int.MaxValue)
+                {
+                    errors.Add($"ByteRange segment length exceeds maximum supported size ({int.MaxValue} bytes).");
+                    return false;
+                }
+
                 pdfStream.Seek(br.Offset1, SeekOrigin.Begin);
                 await HashStreamSegmentAsync(pdfStream, (int)br.Length1, incrementalHash, buffer, cancellationToken).ConfigureAwait(false);
                 pdfStream.Seek(br.Offset2, SeekOrigin.Begin);
@@ -185,6 +263,12 @@ internal static class IntegrityVerifier
         }
 
         using var incrementalHash = IncrementalHash.CreateHash(hashAlgName);
+
+        if (byteRange.Length1 > int.MaxValue || byteRange.Length2 > int.MaxValue)
+        {
+            return false;
+        }
+
         byte[] buffer = ArrayPool<byte>.Shared.Rent(StreamingBufferSize);
         try
         {

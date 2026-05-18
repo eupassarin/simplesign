@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using Xunit;
 
@@ -26,8 +26,8 @@ public sealed class CertificateStoreTests
             File.WriteAllBytes(tempFile, pfxBytes);
 
             using var store = new FileCertificateStore(tempFile, "test123");
-            store.ListAll().Should().HaveCount(1);
-            store.ListAll()[0].Subject.Should().Contain("StoreTest");
+            store.ListAll().Count().ShouldBe(1);
+            store.ListAll()[0].Subject.ShouldContain("StoreTest");
         }
         finally
         {
@@ -47,8 +47,8 @@ public sealed class CertificateStoreTests
             File.WriteAllBytes(tempFile, pfxBytes);
 
             using var store = new FileCertificateStore(tempFile, "test");
-            store.FindByThumbprint(thumbprint).Should().NotBeNull();
-            store.FindByThumbprint("NONEXISTENT").Should().BeNull();
+            store.FindByThumbprint(thumbprint).ShouldNotBeNull();
+            store.FindByThumbprint("NONEXISTENT").ShouldBeNull();
         }
         finally
         {
@@ -66,8 +66,8 @@ public sealed class CertificateStoreTests
             File.WriteAllBytes(tempFile, cert.Export(X509ContentType.Pfx, "pw"));
 
             using var store = new FileCertificateStore(tempFile, "pw");
-            store.FindBySubject("UniqueSubject123").Should().HaveCount(1);
-            store.FindBySubject("NonExistent").Should().BeEmpty();
+            store.FindBySubject("UniqueSubject123").Count().ShouldBe(1);
+            store.FindBySubject("NonExistent").ShouldBeEmpty();
         }
         finally
         {
@@ -80,7 +80,7 @@ public sealed class CertificateStoreTests
     {
         using var store = new SystemCertificateStore(StoreName.Root, StoreLocation.CurrentUser);
         // System root store should have at least some certs on any OS
-        store.ListAll().Should().NotBeNull();
+        store.ListAll().ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "CompositeCertificateStore searches all stores")]
@@ -99,9 +99,9 @@ public sealed class CertificateStoreTests
             using var store2 = new FileCertificateStore(tempFile2, "pw");
 
             var composite = new CompositeCertificateStore(store1, store2);
-            composite.ListAll().Should().HaveCount(2);
-            composite.FindBySubject("First").Should().HaveCount(1);
-            composite.FindBySubject("Second").Should().HaveCount(1);
+            composite.ListAll().Count().ShouldBe(2);
+            composite.FindBySubject("First").Count().ShouldBe(1);
+            composite.FindBySubject("Second").Count().ShouldBe(1);
         }
         finally
         {
@@ -122,8 +122,8 @@ public sealed class CertificateStoreTests
             using var store = new FileCertificateStore(tempFile, "pw");
             var composite = new CompositeCertificateStore(store);
 
-            composite.FindByThumbprint(cert.Thumbprint).Should().NotBeNull();
-            composite.FindByThumbprint("0000").Should().BeNull();
+            composite.FindByThumbprint(cert.Thumbprint).ShouldNotBeNull();
+            composite.FindByThumbprint("0000").ShouldBeNull();
         }
         finally
         {
@@ -141,9 +141,9 @@ public sealed class CertificateStoreTests
             File.WriteAllBytes(tempFile, cert.Export(X509ContentType.Pfx, "pw"));
 
             var store = new FileCertificateStore(tempFile, "pw");
-            store.ListAll().Should().HaveCount(1);
+            store.ListAll().Count().ShouldBe(1);
             store.Dispose();
-            store.ListAll().Should().BeEmpty();
+            store.ListAll().ShouldBeEmpty();
         }
         finally
         {

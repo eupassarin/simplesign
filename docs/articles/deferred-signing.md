@@ -25,7 +25,7 @@ using SimpleSign.PAdES;
 // Phase 1: Server prepares the hash
 var prepared = await DeferredSigner.PrepareAsync(pdfBytes, cert);
 byte[] hashToSign = prepared.HashToSign;
-string sessionData = prepared.SessionData; // opaque blob, store server-side
+byte[] sessionData = prepared.SessionData; // opaque blob, store server-side
 
 // Phase 2: Client signs the hash (RSA PKCS#1 v1.5, ECDSA, etc.)
 byte[] signature = SignWithClientKey(hashToSign);

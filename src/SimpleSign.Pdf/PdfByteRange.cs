@@ -61,6 +61,12 @@ public sealed class PdfByteRange
                 return false;
             }
 
+            // Guard against Length1 + Length2 overflow for array allocation
+            if (Length1 + Length2 > int.MaxValue)
+            {
+                return false;
+            }
+
             return true;
         }
     }

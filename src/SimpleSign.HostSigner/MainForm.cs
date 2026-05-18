@@ -33,7 +33,8 @@ internal sealed class MainForm : Form
 
         FormClosing += (_, e) =>
         {
-            if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); }
+            if (e.CloseReason == CloseReason.UserClosing)
+            { e.Cancel = true; Hide(); }
         };
     }
 
@@ -53,9 +54,15 @@ internal sealed class MainForm : Form
                 var action = msg.GetProperty("action").GetString();
                 switch (action)
                 {
-                    case "browseFiles": BrowseFiles(); break;
-                    case "browseInspect": BrowseForPage("inspectFile"); break;
-                    case "browseValidate": BrowseForPage("validateFile"); break;
+                    case "browseFiles":
+                        BrowseFiles();
+                        break;
+                    case "browseInspect":
+                        BrowseForPage("inspectFile");
+                        break;
+                    case "browseValidate":
+                        BrowseForPage("validateFile");
+                        break;
                     case "openUrl":
                         var url = msg.GetProperty("url").GetString();
                         if (url is not null)
@@ -81,7 +88,8 @@ internal sealed class MainForm : Form
 
     private void BrowseFiles()
     {
-        if (InvokeRequired) { Invoke(BrowseFiles); return; }
+        if (InvokeRequired)
+        { Invoke(BrowseFiles); return; }
         using var ofd = new OpenFileDialog { Filter = "PDF Files|*.pdf", Multiselect = true, Title = "Select PDF files" };
         if (ofd.ShowDialog() == DialogResult.OK)
         {
@@ -92,7 +100,8 @@ internal sealed class MainForm : Form
 
     private void BrowseForPage(string messageAction)
     {
-        if (InvokeRequired) { Invoke(() => BrowseForPage(messageAction)); return; }
+        if (InvokeRequired)
+        { Invoke(() => BrowseForPage(messageAction)); return; }
         using var ofd = new OpenFileDialog { Filter = "PDF Files|*.pdf", Title = "Select a PDF file" };
         if (ofd.ShowDialog() == DialogResult.OK)
         {
@@ -103,7 +112,8 @@ internal sealed class MainForm : Form
 
     public void Log(string message)
     {
-        if (_webView?.CoreWebView2 is null) return;
+        if (_webView?.CoreWebView2 is null)
+            return;
         try
         {
             var json = JsonSerializer.Serialize(new { action = "log", message });
@@ -120,7 +130,8 @@ internal sealed class MainForm : Form
 
     private void EnableDarkTitleBar()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
         try
         {
             int value = 1;

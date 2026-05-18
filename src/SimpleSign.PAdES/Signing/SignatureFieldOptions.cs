@@ -18,8 +18,8 @@ public sealed class SignatureFieldOptions
     /// <summary>Contact information to embed in the signature dictionary /ContactInfo entry. Shown in Adobe's "Signature Properties".</summary>
     public string? ContactInfo { get; init; }
 
-    /// <summary>Number of bytes reserved for the /Contents value. Defaults to 65536 (64 KB).</summary>
-    public int ContentsReservedBytes { get; init; } = 65536;
+    /// <summary>Number of bytes reserved for the /Contents value. Defaults to 16384 (16 KB).</summary>
+    public int ContentsReservedBytes { get; init; } = 16384;
 
     /// <summary>SubFilter value identifying the CMS format. Defaults to <see cref="PdfSignatureSubFilter.EtsiCadesDetached"/>.</summary>
     public PdfSignatureSubFilter SubFilter { get; init; } = PdfSignatureSubFilter.EtsiCadesDetached;

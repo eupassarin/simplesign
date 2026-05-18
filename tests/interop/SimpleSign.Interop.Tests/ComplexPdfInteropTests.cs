@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -27,15 +27,15 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         try
         {
             var (stdout, stderr, exitCode) = await DockerRun(
-                $"-v {tmpDir}:/in simplesign-itext verify-signatures /in/signed.pdf");
+                $"-v {tmpDir}:/in simplesign-itext validate-pdf /in/signed.pdf");
             output.WriteLine($"[10-page-itext] exit={exitCode}");
             output.WriteLine(stdout);
             if (!string.IsNullOrEmpty(stderr))
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: "iText should validate a signed 10-page PDF");
-            stdout.Should().Contain("VALID");
+            exitCode.ShouldBe(0, "iText should validate a signed 10-page PDF");
+            stdout.ShouldContain("VALID");
         }
         finally
         {
@@ -63,8 +63,8 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: "pyHanko should validate a signed multi-page PDF");
-            stdout.Should().Contain("VALID");
+            exitCode.ShouldBe(0, "pyHanko should validate a signed multi-page PDF");
+            stdout.ShouldContain("VALID");
         }
         finally
         {
@@ -97,8 +97,8 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: "pyHanko should validate all 3 signatures");
-            stdout.Should().Contain("VALID");
+            exitCode.ShouldBe(0, "pyHanko should validate all 3 signatures");
+            stdout.ShouldContain("VALID");
         }
         finally
         {
@@ -129,9 +129,9 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: "EU DSS should validate both signatures");
-            (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).Should().BeTrue(
-                because: "EU DSS should report TOTAL_PASSED or INDETERMINATE for self-signed certs");
+            exitCode.ShouldBe(0, "EU DSS should validate both signatures");
+            (stdout.Contains("TOTAL_PASSED") || stdout.Contains("INDETERMINATE")).ShouldBeTrue(
+                "EU DSS should report TOTAL_PASSED or INDETERMINATE for self-signed certs");
         }
         finally
         {
@@ -162,8 +162,8 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
             {
                 output.WriteLine($"STDERR: {stderr}");
             }
-            exitCode.Should().Be(0, because: "pdfbox should parse the double-signed PDF");
-            stdout.Should().Contain("Signature");
+            exitCode.ShouldBe(0, "pdfbox should parse the double-signed PDF");
+            stdout.ShouldContain("Signature");
         }
         finally
         {
@@ -184,15 +184,11 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         try
         {
             var (stdout, stderr, exitCode) = await DockerRun(
-                $"-v {tmpDir}:/in simplesign-itext verify-signatures /in/signed.pdf");
+                $"-v {tmpDir}:/in simplesign-itext validate-pdf /in/signed.pdf");
             output.WriteLine($"[50-page-itext-stress] exit={exitCode}");
             output.WriteLine(stdout);
-            if (!string.IsNullOrEmpty(stderr))
-            {
-                output.WriteLine($"STDERR: {stderr}");
-            }
-            exitCode.Should().Be(0, because: "iText should validate a signed 50-page PDF");
-            stdout.Should().Contain("VALID");
+            exitCode.ShouldBe(0, "iText should validate a signed 50-page PDF");
+            stdout.ShouldContain("VALID");
         }
         finally
         {

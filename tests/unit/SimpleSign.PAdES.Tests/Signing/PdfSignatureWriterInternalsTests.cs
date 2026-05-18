@@ -1,5 +1,5 @@
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.Pdf;
 using Xunit;
@@ -19,7 +19,7 @@ public sealed class PdfSignatureWriterInternalsTests
         byte[] data = Encoding.Latin1.GetBytes(
             "1 0 obj\n<< >>\nendobj\n5 0 obj\n<< >>\nendobj\n10 0 obj\n<< >>\nendobj\n");
 
-        PdfStructureParser.FindHighestObjectNumber(data).Should().Be(10);
+        PdfStructureParser.FindHighestObjectNumber(data).ShouldBe(10);
     }
 
     [Fact(DisplayName = "Returns zero when there are no objects in the PDF")]
@@ -27,7 +27,7 @@ public sealed class PdfSignatureWriterInternalsTests
     {
         byte[] data = Encoding.Latin1.GetBytes("%PDF-1.7\nsome random content\n");
 
-        PdfStructureParser.FindHighestObjectNumber(data).Should().Be(0);
+        PdfStructureParser.FindHighestObjectNumber(data).ShouldBe(0);
     }
 
     [Fact(DisplayName = "Returns highest number with sequential objects")]
@@ -36,7 +36,7 @@ public sealed class PdfSignatureWriterInternalsTests
         byte[] data = Encoding.Latin1.GetBytes(
             "1 0 obj\n<< >>\nendobj\n2 0 obj\n<< >>\nendobj\n3 0 obj\n<< >>\nendobj\n4 0 obj\n<< >>\nendobj\n");
 
-        PdfStructureParser.FindHighestObjectNumber(data).Should().Be(4);
+        PdfStructureParser.FindHighestObjectNumber(data).ShouldBe(4);
     }
 
     [Fact(DisplayName = "Does not confuse substring when searching for object number")]
@@ -44,7 +44,7 @@ public sealed class PdfSignatureWriterInternalsTests
     {
         byte[] data = Encoding.Latin1.GetBytes("12 0 obj\n<< >>\nendobj\n");
 
-        PdfStructureParser.FindHighestObjectNumber(data).Should().Be(12);
+        PdfStructureParser.FindHighestObjectNumber(data).ShouldBe(12);
     }
 
     // ── FindTrailerSize tests ──────────────────────────────────────────────────
@@ -54,7 +54,7 @@ public sealed class PdfSignatureWriterInternalsTests
     {
         byte[] data = Encoding.Latin1.GetBytes("trailer\n<< /Size 42 /Root 1 0 R >>\n");
 
-        PdfStructureParser.FindTrailerSize(data).Should().Be(42);
+        PdfStructureParser.FindTrailerSize(data).ShouldBe(42);
     }
 
     [Fact(DisplayName = "Returns fallback when trailer has no /Size")]
@@ -62,7 +62,7 @@ public sealed class PdfSignatureWriterInternalsTests
     {
         byte[] data = Encoding.Latin1.GetBytes("trailer\n<< /Root 1 0 R >>\n");
 
-        PdfStructureParser.FindTrailerSize(data).Should().Be(10);
+        PdfStructureParser.FindTrailerSize(data).ShouldBe(10);
     }
 
     [Fact(DisplayName = "Returns last /Size with multiple trailers")]
@@ -72,7 +72,7 @@ public sealed class PdfSignatureWriterInternalsTests
             "trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n100\n%%EOF\n" +
             "trailer\n<< /Size 20 /Root 1 0 R >>\nstartxref\n200\n%%EOF\n");
 
-        PdfStructureParser.FindTrailerSize(data).Should().Be(20);
+        PdfStructureParser.FindTrailerSize(data).ShouldBe(20);
     }
 
     [Fact(DisplayName = "Correctly parses large /Size value")]
@@ -80,7 +80,7 @@ public sealed class PdfSignatureWriterInternalsTests
     {
         byte[] data = Encoding.Latin1.GetBytes("trailer\n<< /Size 9999 >>\n");
 
-        PdfStructureParser.FindTrailerSize(data).Should().Be(9999);
+        PdfStructureParser.FindTrailerSize(data).ShouldBe(9999);
     }
 
     // ── FindRootObjectNumber tests ─────────────────────────────────────────────
@@ -90,7 +90,7 @@ public sealed class PdfSignatureWriterInternalsTests
     {
         byte[] data = Encoding.Latin1.GetBytes("trailer\n<< /Size 3 /Root 1 0 R >>\n");
 
-        PdfStructureParser.FindRootObjectNumber(data).Should().Be(1);
+        PdfStructureParser.FindRootObjectNumber(data).ShouldBe(1);
     }
 
     [Fact(DisplayName = "Returns high /Root object number")]
@@ -98,7 +98,7 @@ public sealed class PdfSignatureWriterInternalsTests
     {
         byte[] data = Encoding.Latin1.GetBytes("trailer\n<< /Size 50 /Root 42 0 R >>\n");
 
-        PdfStructureParser.FindRootObjectNumber(data).Should().Be(42);
+        PdfStructureParser.FindRootObjectNumber(data).ShouldBe(42);
     }
 
     [Fact(DisplayName = "Returns fallback when trailer has no /Root")]
@@ -106,7 +106,7 @@ public sealed class PdfSignatureWriterInternalsTests
     {
         byte[] data = Encoding.Latin1.GetBytes("trailer\n<< /Size 3 >>\n");
 
-        PdfStructureParser.FindRootObjectNumber(data).Should().Be(1);
+        PdfStructureParser.FindRootObjectNumber(data).ShouldBe(1);
     }
 
     [Fact(DisplayName = "Returns last /Root with multiple trailers")]
@@ -115,7 +115,7 @@ public sealed class PdfSignatureWriterInternalsTests
         byte[] data = Encoding.Latin1.GetBytes(
             "trailer\n<< /Root 1 0 R >>\n%%EOF\ntrailer\n<< /Root 7 0 R >>\n%%EOF\n");
 
-        PdfStructureParser.FindRootObjectNumber(data).Should().Be(7);
+        PdfStructureParser.FindRootObjectNumber(data).ShouldBe(7);
     }
 
     // ── BuildXrefStream Tests ──────────────────────────────────────────────
@@ -138,20 +138,20 @@ public sealed class PdfSignatureWriterInternalsTests
         string text = Encoding.Latin1.GetString(bytes);
 
         // Should contain xref stream markers
-        text.Should().Contain("/Type /XRef");
-        text.Should().Contain("/Size 104");
-        text.Should().Contain("/Root 1 0 R");
-        text.Should().Contain("/Prev 4000");
-        text.Should().Contain("/W [1 4 1]");
-        text.Should().Contain("/Filter /FlateDecode");
+        text.ShouldContain("/Type /XRef");
+        text.ShouldContain("/Size 104");
+        text.ShouldContain("/Root 1 0 R");
+        text.ShouldContain("/Prev 4000");
+        text.ShouldContain("/W [1 4 1]");
+        text.ShouldContain("/Filter /FlateDecode");
         // 4 contiguous objects: 100,101,102 + self-entry 103 (ISO 32000 §7.5.8)
-        text.Should().Contain("/Index [100 4]");
-        text.Should().Contain("/ID [<aabb> <ccdd>]");
-        text.Should().Contain("/Info 2 0 R");
-        text.Should().Contain("startxref\n5500");
-        text.Should().Contain("%%EOF");
+        text.ShouldContain("/Index [100 4]");
+        text.ShouldContain("/ID [<aabb> <ccdd>]");
+        text.ShouldContain("/Info 2 0 R");
+        text.ShouldContain("startxref\n5500");
+        text.ShouldContain("%%EOF");
 
-        xrefObjNum.Should().Be(103);
+        xrefObjNum.ShouldBe(103);
 
         // Verify the compressed data is valid zlib
         int streamStart = text.IndexOf("stream\n") + "stream\n".Length;
@@ -159,7 +159,7 @@ public sealed class PdfSignatureWriterInternalsTests
         byte[] compressedData = bytes[streamStart..streamEnd];
 
         // Zlib header: first byte should be 0x78
-        compressedData[0].Should().Be(0x78);
+        compressedData[0].ShouldBe((byte)0x78);
 
         // Decompress and verify entries (4 objects × 6 bytes each = 24 bytes)
         using var ms = new System.IO.MemoryStream(compressedData);
@@ -167,19 +167,19 @@ public sealed class PdfSignatureWriterInternalsTests
         using var output = new System.IO.MemoryStream();
         zlib.CopyTo(output);
         byte[] rawEntries = output.ToArray();
-        rawEntries.Should().HaveCount(24); // 4 entries × 6 bytes (includes self-entry)
+        rawEntries.Count().ShouldBe(24); // 4 entries × 6 bytes (includes self-entry)
 
         // First entry: type=1, offset=5000 (big-endian), gen=0
-        rawEntries[0].Should().Be(1);
+        rawEntries[0].ShouldBe((byte)1);
         var offset1 = (rawEntries[1] << 24) | (rawEntries[2] << 16) | (rawEntries[3] << 8) | rawEntries[4];
-        offset1.Should().Be(5000);
-        rawEntries[5].Should().Be(0);
+        offset1.ShouldBe(5000);
+        rawEntries[5].ShouldBe((byte)0);
 
         // Last entry (self): type=1, offset=5500, gen=0
-        rawEntries[18].Should().Be(1);
+        rawEntries[18].ShouldBe((byte)1);
         var selfOffset = (rawEntries[19] << 24) | (rawEntries[20] << 16) | (rawEntries[21] << 8) | rawEntries[22];
-        selfOffset.Should().Be(5500);
-        rawEntries[23].Should().Be(0);
+        selfOffset.ShouldBe(5500);
+        rawEntries[23].ShouldBe((byte)0);
     }
 
     [Fact(DisplayName = "BuildXrefStream handles non-contiguous object numbers")]
@@ -199,6 +199,6 @@ public sealed class PdfSignatureWriterInternalsTests
         string text = Encoding.Latin1.GetString(bytes);
 
         // Should have two groups: "5 2" (objects 5,6) and "50 2" (objects 50 + self-entry 51)
-        text.Should().Contain("/Index [5 2 50 2]");
+        text.ShouldContain("/Index [5 2 50 2]");
     }
 }

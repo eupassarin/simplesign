@@ -92,7 +92,16 @@ public sealed class ComputedStyle
 
     /// <summary>Creates a deep copy for inheritance.</summary>
     /// <returns>A cloned instance of this style.</returns>
-    public ComputedStyle Clone() => (ComputedStyle)MemberwiseClone();
+    public ComputedStyle Clone()
+    {
+        var clone = (ComputedStyle)MemberwiseClone();
+        if (clone.Border is not null && clone.Border != BorderStyle.None)
+        {
+            clone.Border = clone.Border.Clone();
+        }
+
+        return clone;
+    }
 }
 
 /// <summary>RGB color in 0-1 range for direct use in PDF operators.</summary>

@@ -1,5 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -22,7 +22,7 @@ public sealed class DisposalEdgeCaseTests
             store.Dispose();
         };
 
-        act.Should().NotThrow();
+        Should.NotThrow(act);
     }
 
     [Fact(DisplayName = "FileCertificateStore: Double Dispose does not throw")]
@@ -48,7 +48,7 @@ public sealed class DisposalEdgeCaseTests
                 store.Dispose();
             };
 
-            act.Should().NotThrow();
+            Should.NotThrow(act);
         }
         finally
         {
@@ -68,10 +68,10 @@ public sealed class DisposalEdgeCaseTests
             cache.Set(cert);
         }
 
-        cache.Count.Should().BeGreaterThan(0);
+        cache.Count.ShouldBeGreaterThan(0);
 
         cache.Clear();
 
-        cache.Count.Should().Be(0);
+        cache.Count.ShouldBe(0);
     }
 }

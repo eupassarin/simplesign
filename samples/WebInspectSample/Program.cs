@@ -223,7 +223,8 @@ static SignatureDto MapSignature(SignatureFieldInfo sig, PAdESConformanceLevel l
 static ManifestDto? MapManifest(byte[] json)
 {
     var manifest = SignatureManifest.FromJsonUtf8(json);
-    if (manifest is null) return null;
+    if (manifest is null)
+        return null;
     return new ManifestDto
     {
         SignerName = manifest.Signer.Name,

@@ -269,14 +269,20 @@ public sealed class LayoutEngine
             _currentPage.Boxes.Insert(0, continuationBox);
         }
 
-        // Collect bookmark for headings
+        // Collect bookmark for headings (use page index from before children layout)
         if (node.Tag is "h1" or "h2" or "h3" or "h4" or "h5" or "h6")
         {
+            int bookmarkPage = _pages.IndexOf(startPage);
+            if (bookmarkPage < 0)
+            {
+                // startPage is still the current (unflushed) page; its index will be _pages.Count
+                bookmarkPage = _pages.Count;
+            }
             int level = node.Tag[1] - '0';
             string title = GetTextContent(node);
             if (title.Length > 0)
             {
-                _bookmarks.Add(new BookmarkEntry(title, level, _pages.Count, boxStartY));
+                _bookmarks.Add(new BookmarkEntry(title, level, bookmarkPage, boxStartY));
             }
         }
 

@@ -1,5 +1,5 @@
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.Pdf;
 using Xunit;
@@ -60,14 +60,14 @@ public sealed class PdfSignatureWriterTests
 
         var result = await PdfSignatureWriter.PrepareAsync(input, output, DefaultOptions());
 
-        result.ByteRange.Should().NotBeNull();
-        result.ByteRange.IsValid.Should().BeTrue();
-        result.ByteRange.Offset1.Should().Be(0);
-        result.ByteRange.Length1.Should().BeGreaterThan(0);
-        result.ByteRange.Offset2.Should().BeGreaterThan(result.ByteRange.Length1);
-        result.ByteRange.Length2.Should().BeGreaterThan(0);
-        result.ContentsHexOffset.Should().Be(result.ByteRange.Length1 + 1);
-        result.ContentsReservedBytes.Should().Be(1024);
+        result.ByteRange.ShouldNotBeNull();
+        result.ByteRange.IsValid.ShouldBeTrue();
+        result.ByteRange.Offset1.ShouldBe(0);
+        result.ByteRange.Length1.ShouldBeGreaterThan(0);
+        result.ByteRange.Offset2.ShouldBeGreaterThan(result.ByteRange.Length1);
+        result.ByteRange.Length2.ShouldBeGreaterThan(0);
+        result.ContentsHexOffset.ShouldBe(result.ByteRange.Length1 + 1);
+        result.ContentsReservedBytes.ShouldBe(1024);
     }
 
     [Fact(DisplayName = "Output contains original PDF and incremental update")]
@@ -83,22 +83,22 @@ public sealed class PdfSignatureWriterTests
         byte[] outputBytes = output.ToArray();
 
         // Output must start with the original PDF content
-        outputBytes.AsSpan(0, pdfBytes.Length).ToArray().Should().BeEquivalentTo(pdfBytes);
+        outputBytes.AsSpan(0, pdfBytes.Length).ToArray().ShouldBe(pdfBytes);
 
         // Output must be larger than input (incremental update was appended)
-        outputBytes.Length.Should().BeGreaterThan(pdfBytes.Length);
+        outputBytes.Length.ShouldBeGreaterThan(pdfBytes.Length);
 
         string outputText = Encoding.Latin1.GetString(outputBytes);
 
         // Must contain signature dictionary structures
-        outputText.Should().Contain("/Type /Sig");
-        outputText.Should().Contain("/Filter /Adobe.PPKLite");
-        outputText.Should().Contain("/SubFilter /ETSI.CAdES.detached");
-        outputText.Should().Contain("/ByteRange");
-        outputText.Should().Contain("/FT /Sig");
-        outputText.Should().Contain("/SigFlags 3");
-        outputText.Should().Contain("xref");
-        outputText.Should().Contain("%%EOF");
+        outputText.ShouldContain("/Type /Sig");
+        outputText.ShouldContain("/Filter /Adobe.PPKLite");
+        outputText.ShouldContain("/SubFilter /ETSI.CAdES.detached");
+        outputText.ShouldContain("/ByteRange");
+        outputText.ShouldContain("/FT /Sig");
+        outputText.ShouldContain("/SigFlags 3");
+        outputText.ShouldContain("xref");
+        outputText.ShouldContain("%%EOF");
     }
 
     [Fact(DisplayName = "SubFilter ETSI.CAdES.detached is used correctly")]
@@ -118,7 +118,7 @@ public sealed class PdfSignatureWriterTests
         await PdfSignatureWriter.PrepareAsync(input, output, options);
 
         string outputText = Encoding.Latin1.GetString(output.ToArray());
-        outputText.Should().Contain("/SubFilter /ETSI.CAdES.detached");
+        outputText.ShouldContain("/SubFilter /ETSI.CAdES.detached");
     }
 
     [Fact(DisplayName = "Throws exception for non-seekable stream")]
@@ -130,7 +130,7 @@ public sealed class PdfSignatureWriterTests
 
         var act = () => PdfSignatureWriter.PrepareAsync(input, output, DefaultOptions());
 
-        await act.Should().ThrowAsync<ArgumentException>().WithMessage("*seekable*");
+        (await Should.ThrowAsync<ArgumentException>(act)).Message.ShouldContain("seekable");
     }
 
     [Fact(DisplayName = "Throws exception for null arguments in PrepareAsync")]
@@ -165,10 +165,10 @@ public sealed class PdfSignatureWriterTests
         string hexStr = Encoding.Latin1.GetString(hexBuf, 0, read);
 
         // The hex should start with the CMS bytes in uppercase hex
-        hexStr.Should().StartWith("CAFEBABE");
+        hexStr.ShouldStartWith("CAFEBABE");
 
         // The rest should be zero-padded
-        hexStr.Substring(8).Should().MatchRegex("^0+$");
+        hexStr.Substring(8).ShouldMatch("^0+$");
     }
 
     [Fact(DisplayName = "Throws exception when CMS exceeds reserved space")]
@@ -189,7 +189,7 @@ public sealed class PdfSignatureWriterTests
 
         var act = () => PdfSignatureWriter.FinalizeAsync(output, result, oversizedCms);
 
-        await act.Should().ThrowAsync<ArgumentException>().WithMessage("*exceed*");
+        (await Should.ThrowAsync<ArgumentException>(act)).Message.ShouldContain("exceed");
     }
 
     [Fact(DisplayName = "Throws exception for null arguments in FinalizeAsync")]
@@ -228,8 +228,9 @@ public sealed class PdfSignatureWriterTests
         output.Seek(0, SeekOrigin.Begin);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(output);
 
-        fields.Should().NotBeNullOrEmpty();
-        fields.Should().Contain(f => f.ByteRange != null && f.ByteRange.IsValid);
+        fields.ShouldNotBeNull();
+        fields.ShouldNotBeEmpty();
+        fields.ShouldContain(f => f.ByteRange != null && f.ByteRange.IsValid);
     }
 
     [Fact(DisplayName = "ByteRange covers the entire file")]
@@ -249,10 +250,10 @@ public sealed class PdfSignatureWriterTests
         var br = result.ByteRange;
 
         // ByteRange should cover the entire file except the /Contents hex value
-        (br.Length1 + br.Length2 + (br.Offset2 - br.Length1)).Should().Be(totalLength);
+        (br.Length1 + br.Length2 + (br.Offset2 - br.Length1)).ShouldBe(totalLength);
 
         // Offset2 + Length2 should equal total file length
-        (br.Offset2 + br.Length2).Should().Be(totalLength);
+        (br.Offset2 + br.Length2).ShouldBe(totalLength);
     }
 
     [Fact(DisplayName = "Includes Reason, Location and Name in output")]
@@ -274,9 +275,9 @@ public sealed class PdfSignatureWriterTests
         await PdfSignatureWriter.PrepareAsync(input, output, options);
 
         string text = Encoding.Latin1.GetString(output.ToArray());
-        text.Should().Contain("/Reason (Approval)");
-        text.Should().Contain("/Location (");
-        text.Should().Contain("/Name (Alice)");
+        text.ShouldContain("/Reason (Approval)");
+        text.ShouldContain("/Location (");
+        text.ShouldContain("/Name (Alice)");
     }
 
     [Fact(DisplayName = "PrepareAsync preserves existing fields from AcroForm in ObjStm")]
@@ -293,9 +294,9 @@ public sealed class PdfSignatureWriterTests
         string outputText = Encoding.Latin1.GetString(output.ToArray());
 
         // The new AcroForm should contain the existing field references plus the new one
-        outputText.Should().Contain("10 0 R", "existing field should be preserved");
-        outputText.Should().Contain("20 0 R", "existing field should be preserved");
-        outputText.Should().Contain("/SigFlags 3");
+        outputText.ShouldContain("10 0 R");
+        outputText.ShouldContain("20 0 R");
+        outputText.ShouldContain("/SigFlags 3");
     }
 
     /// <summary>

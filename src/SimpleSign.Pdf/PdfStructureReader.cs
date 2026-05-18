@@ -210,6 +210,61 @@ public sealed class PdfStructureReader
 
         return result;
     }
+    /// <summary>
+    /// Detects the PDF version from the header of a PDF stream.
+    /// Returns <see cref="PdfVersion.Unknown"/> if the header cannot be parsed.
+    /// </summary>
+    public static async Task<PdfVersion> DetectPdfVersionAsync(
+        Stream pdfStream, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pdfStream);
+        byte[] buffer = ArrayPool<byte>.Shared.Rent((int)Math.Min(pdfStream.Length, MaxPdfSize));
+        try
+        {
+            pdfStream.Seek(0, SeekOrigin.Begin);
+            int bytesRead = await ReadFullyAsync(pdfStream, buffer, cancellationToken).ConfigureAwait(false);
+            return DetectPdfVersion(buffer.AsSpan(0, bytesRead));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Detects the PDF version from the header bytes (%PDF-X.Y).
+    /// Returns <see cref="PdfVersion.Unknown"/> if the header cannot be parsed.
+    /// </summary>
+    public static PdfVersion DetectPdfVersion(ReadOnlySpan<byte> data)
+    {
+        // Header must start with %PDF- and have at least 8 bytes: %PDF-X.Y
+        if (data.Length < 8 || !data.StartsWith(PdfHeaderMarker))
+        {
+            return PdfVersion.Unknown;
+        }
+
+        byte major = data[5];
+        byte dot = data[6];
+        byte minor = data[7];
+
+        if (dot != (byte)'.' || major < (byte)'0' || major > (byte)'9' || minor < (byte)'0' || minor > (byte)'9')
+        {
+            return PdfVersion.Unknown;
+        }
+
+        int version = (major - '0') * 10 + (minor - '0');
+        return Enum.IsDefined((PdfVersion)version) ? (PdfVersion)version : PdfVersion.Unknown;
+    }
+
+    /// <summary>
+    /// Detects the PDF version from a byte array.
+    /// </summary>
+    public static PdfVersion DetectPdfVersion(byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        return DetectPdfVersion(data.AsSpan());
+    }
+
     #endregion
 
     #region PDF Header Validation
@@ -327,15 +382,42 @@ public sealed class PdfStructureReader
     {
         // Search for /Encrypt in the trailer region (last 4KB typically)
         int searchStart = Math.Max(0, data.Length - 4096);
-        int encryptIdx = IndexOf(data[searchStart..], EncryptKey, 0);
-        if (encryptIdx >= 0)
+        if (IsEncryptReference(data, searchStart))
         {
             return true;
         }
 
         // Also check from the start (for linearized PDFs where trailer is near the beginning)
-        int earlyEncrypt = IndexOf(data[..Math.Min(data.Length, 4096)], EncryptKey, 0);
-        return earlyEncrypt >= 0;
+        return IsEncryptReference(data, 0, Math.Min(data.Length, 4096));
+    }
+
+    /// <summary>
+    /// Checks whether /Encrypt is followed by whitespace and a digit or inline dict,
+    /// to avoid false positives on content streams containing the literal string.
+    /// </summary>
+    private static bool IsEncryptReference(ReadOnlySpan<byte> data, int regionStart, int regionLength = -1)
+    {
+        var region = regionLength >= 0 ? data.Slice(regionStart, regionLength) : data[regionStart..];
+        int idx = IndexOf(region, EncryptKey, 0);
+        while (idx >= 0)
+        {
+            int afterKey = idx + EncryptKey.Length;
+            if (afterKey < region.Length)
+            {
+                byte next = region[afterKey];
+                if (next == (byte)' ' || next == (byte)'\n' || next == (byte)'\r' || next == (byte)'\t')
+                {
+                    return true;
+                }
+                if (next == (byte)'<')
+                {
+                    return true;
+                }
+            }
+            // Not a valid reference, keep searching
+            idx = afterKey < region.Length ? IndexOf(region, EncryptKey, afterKey) : -1;
+        }
+        return false;
     }
 
     /// <summary>
@@ -1255,6 +1337,10 @@ public sealed class PdfStructureReader
             }
 
             return output.ToArray();
+        }
+        catch (InvalidDataException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

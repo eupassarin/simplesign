@@ -21,6 +21,15 @@ public sealed class DssInfo
     /// <summary>Whether the DSS contains a /VRI (Validation Related Information) dictionary.</summary>
     public bool HasVri { get; init; }
 
+    /// <summary>Number of VRI entries found in the DSS /VRI dictionary.</summary>
+    public int VriEntryCount { get; init; }
+
+    /// <summary>Whether all VRI entries contain a /TU (time of validation) field (ISO 32000-2 §12.8.4.4).</summary>
+    public bool VriHasTimestamps { get; init; }
+
+    /// <summary>Warnings about VRI structure issues.</summary>
+    public IReadOnlyList<string> VriWarnings { get; init; } = [];
+
     /// <summary>Whether any DSS data was found at all.</summary>
     public bool IsPresent => CrlCount > 0 || OcspResponseCount > 0 || CertificateCount > 0;
 

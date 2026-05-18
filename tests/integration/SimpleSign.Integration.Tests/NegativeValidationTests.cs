@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.PAdES.Validation;
@@ -23,12 +23,12 @@ public sealed class NegativeValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(4);
+        results.Count().ShouldBe(4);
         // Only the first signature (adbe.pkcs7.sha1 SubFilter with legacy structure)
         // fails integrity. The three subsequent document timestamps use SHA-256 and their
         // byte ranges are valid as incremental updates.
-        results[0].IsIntegrityValid.Should().BeFalse();
-        results.Skip(1).Should().OnlyContain(r => r.IsIntegrityValid);
+        results[0].IsIntegrityValid.ShouldBeFalse();
+        results.Skip(1).ShouldAllBe(r => r.IsIntegrityValid);
         output.WriteLine($"All {results.Count} signatures have invalid integrity as expected");
     }
 
@@ -42,9 +42,9 @@ public sealed class NegativeValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeFalse();
-        results[0].IsSignatureValid.Should().BeFalse();
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeFalse();
+        results[0].IsSignatureValid.ShouldBeFalse();
         output.WriteLine($"Signer: {results[0].SignerName ?? "(unknown)"}");
     }
 
@@ -58,7 +58,7 @@ public sealed class NegativeValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
 
         var act = () => validator.ValidateAsync(stream);
-        await act.Should().ThrowAsync<PdfStructureException>();
+        await Should.ThrowAsync<PdfStructureException>(act);
     }
 
     [SkippableFact(DisplayName = "DSS-3226 PDF with CAdES signatures validates with chain failure")]
@@ -71,10 +71,10 @@ public sealed class NegativeValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().NotBeEmpty("the PDF contains two CAdES detached signatures");
+        results.ShouldNotBeEmpty("the PDF contains two CAdES detached signatures");
         foreach (var result in results)
         {
-            result.IsIntegrityValid.Should().BeTrue();
+            result.IsIntegrityValid.ShouldBeTrue();
             output.WriteLine($"{result.FieldName}: Valid={result.IsValid}, Integrity={result.IsIntegrityValid}");
         }
     }
@@ -89,7 +89,7 @@ public sealed class NegativeValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().BeEmpty();
+        results.ShouldBeEmpty();
         output.WriteLine("No validation results as expected for unsigned PDF");
     }
 }

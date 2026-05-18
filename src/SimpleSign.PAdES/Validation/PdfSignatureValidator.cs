@@ -1,8 +1,8 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Constants;
+using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
@@ -450,6 +450,10 @@ public sealed class PdfSignatureValidator
         {
             _logger.RevocationCheckIncomplete(ex, field.FieldName);
             warnings.Add($"Revocation check could not be completed: {ex.Message}");
+            // Indeterminate ≠ revoked. When we cannot determine revocation status
+            // (network failure, unparseable CRL/OCSP, missing endpoints), we report
+            // a warning but do NOT fail the signature. Only an actual revocation
+            // entry in a CRL or OCSP "revoked" response sets IsNotRevoked = false.
             return (true, RevocationSource.Indeterminate);
         }
     }

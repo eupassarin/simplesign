@@ -1,6 +1,6 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Revocation;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -108,9 +108,9 @@ public sealed class OcspClientTests
     {
         byte[] result = OcspClient.BuildOcspRequest(SelfSignedCert, issuerCert: null);
 
-        result.Should().NotBeEmpty();
-        result[0].Should().Be(0x30, "OCSP request must start with ASN.1 SEQUENCE tag");
-        result.Length.Should().BeGreaterThan(20);
+        result.ShouldNotBeEmpty();
+        result[0].ShouldBe((byte)0x30);
+        result.Length.ShouldBeGreaterThan(20);
     }
 
     [Fact(DisplayName = "OCSP request with issuer returns ASN.1 bytes")]
@@ -118,9 +118,9 @@ public sealed class OcspClientTests
     {
         byte[] result = OcspClient.BuildOcspRequest(LeafCert, issuerCert: CaCert);
 
-        result.Should().NotBeEmpty();
-        result[0].Should().Be(0x30);
-        result.Length.Should().BeGreaterThan(20);
+        result.ShouldNotBeEmpty();
+        result[0].ShouldBe((byte)0x30);
+        result.Length.ShouldBeGreaterThan(20);
     }
 
     [Fact(DisplayName = "Public key extraction returns non-empty bytes")]
@@ -128,7 +128,7 @@ public sealed class OcspClientTests
     {
         byte[] result = OcspClient.ExtractPublicKeyBytes(SelfSignedCert);
 
-        result.Should().NotBeEmpty();
+        result.ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "Certificate without AIA returns null OCSP URL")]
@@ -136,7 +136,7 @@ public sealed class OcspClientTests
     {
         string? result = OcspClient.GetOcspUrl(SelfSignedCert);
 
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact(DisplayName = "Certificate without AIA returns null CA Issuers URL")]
@@ -144,7 +144,7 @@ public sealed class OcspClientTests
     {
         string? result = OcspClient.GetCaIssuersUrl(SelfSignedCert);
 
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact(DisplayName = "Invalid AIA data returns null URI")]
@@ -154,7 +154,7 @@ public sealed class OcspClientTests
 
         string? result = OcspClient.ParseAiaUri(garbage, "1.3.6.1.5.5.7.48.1");
 
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact(DisplayName = "OCSP response with 'good' status returns true")]
@@ -164,7 +164,7 @@ public sealed class OcspClientTests
 
         bool result = OcspClient.ParseOcspResponse(response, SelfSignedCert);
 
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "OCSP response with 'revoked' status returns false")]
@@ -174,7 +174,7 @@ public sealed class OcspClientTests
 
         bool result = OcspClient.ParseOcspResponse(response, SelfSignedCert);
 
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Non-successful OCSP response throws InvalidOperationException")]
@@ -184,8 +184,8 @@ public sealed class OcspClientTests
 
         Action act = () => OcspClient.ParseOcspResponse(response, SelfSignedCert);
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*not 'successful'*");
+        Should.Throw<InvalidOperationException>(act)
+            .Message.ShouldContain("not 'successful'");
     }
 
     [Fact(DisplayName = "Invalid OCSP signature returns false")]
@@ -197,7 +197,7 @@ public sealed class OcspClientTests
         bool result = OcspClient.VerifyOcspSignature(
             SelfSignedCert, data, badSignature, "1.2.840.113549.1.1.11");
 
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     #endregion
@@ -213,7 +213,7 @@ public sealed class OcspClientTests
 
         bool result = await client.CheckOcspAsync(SelfSignedCert, "http://ocsp.test/", CancellationToken.None);
 
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "OCSP server returns 500 throws HttpRequestException")]
@@ -225,7 +225,7 @@ public sealed class OcspClientTests
 
         Func<Task> act = () => client.CheckOcspAsync(SelfSignedCert, "http://ocsp.test/", CancellationToken.None);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await Should.ThrowAsync<HttpRequestException>(act);
     }
 
     #endregion

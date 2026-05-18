@@ -1,7 +1,7 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Inspection;
 using Xunit;
 
@@ -26,7 +26,7 @@ public sealed class CertificateInfoExtensionTests
     {
         using var cert = CreateCertWithExtension(CdpOid, BuildCdpExtension("http://example.com/ca.crl"));
         var info = CertificateInfo.From(cert);
-        info.CrlUrl.Should().Be("http://example.com/ca.crl");
+        info.CrlUrl.ShouldBe("http://example.com/ca.crl");
     }
 
     [Fact(DisplayName = "From with no CDP extension returns null CrlUrl")]
@@ -34,7 +34,7 @@ public sealed class CertificateInfoExtensionTests
     {
         using var cert = CreateCertWithoutExtensions();
         var info = CertificateInfo.From(cert);
-        info.CrlUrl.Should().BeNull();
+        info.CrlUrl.ShouldBeNull();
     }
 
     [Fact(DisplayName = "From with malformed CDP extension returns null CrlUrl (best-effort parse)")]
@@ -43,7 +43,7 @@ public sealed class CertificateInfoExtensionTests
         // Single byte → cannot parse → catch returns null
         using var cert = CreateCertWithExtension(CdpOid, [0xFF]);
         var info = CertificateInfo.From(cert);
-        info.CrlUrl.Should().BeNull();
+        info.CrlUrl.ShouldBeNull();
     }
 
     // ── AIA parsing (OCSP + CA Issuers) ──────────────────────────────────────
@@ -55,8 +55,8 @@ public sealed class CertificateInfoExtensionTests
             AiaOid,
             BuildAiaExtension([(OcspOid, "http://ocsp.example.com")]));
         var info = CertificateInfo.From(cert);
-        info.OcspUrl.Should().Be("http://ocsp.example.com");
-        info.AiaUrls.Should().Contain("http://ocsp.example.com");
+        info.OcspUrl.ShouldBe("http://ocsp.example.com");
+        info.AiaUrls.ShouldContain("http://ocsp.example.com");
     }
 
     [Fact(DisplayName = "From extracts both OCSP and CA Issuers URLs from AIA")]
@@ -69,9 +69,9 @@ public sealed class CertificateInfoExtensionTests
                 (CaIssuersOid, "http://example.com/ca.crt")
             ]));
         var info = CertificateInfo.From(cert);
-        info.OcspUrl.Should().Be("http://ocsp.example.com");
-        info.AiaUrls.Should().Contain("http://ocsp.example.com");
-        info.AiaUrls.Should().Contain("http://example.com/ca.crt");
+        info.OcspUrl.ShouldBe("http://ocsp.example.com");
+        info.AiaUrls.ShouldContain("http://ocsp.example.com");
+        info.AiaUrls.ShouldContain("http://example.com/ca.crt");
     }
 
     [Fact(DisplayName = "From with no AIA extension returns null OcspUrl and empty AiaUrls")]
@@ -79,8 +79,8 @@ public sealed class CertificateInfoExtensionTests
     {
         using var cert = CreateCertWithoutExtensions();
         var info = CertificateInfo.From(cert);
-        info.OcspUrl.Should().BeNull();
-        info.AiaUrls.Should().BeEmpty();
+        info.OcspUrl.ShouldBeNull();
+        info.AiaUrls.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "From with malformed AIA extension returns null/empty (best-effort parse)")]
@@ -88,8 +88,8 @@ public sealed class CertificateInfoExtensionTests
     {
         using var cert = CreateCertWithExtension(AiaOid, [0xFF]);
         var info = CertificateInfo.From(cert);
-        info.OcspUrl.Should().BeNull();
-        info.AiaUrls.Should().BeEmpty();
+        info.OcspUrl.ShouldBeNull();
+        info.AiaUrls.ShouldBeEmpty();
     }
 
     // ── Key Usage flags ──────────────────────────────────────────────────────
@@ -99,8 +99,8 @@ public sealed class CertificateInfoExtensionTests
     {
         using var cert = CreateCertWithKeyUsage(X509KeyUsageFlags.NonRepudiation);
         var info = CertificateInfo.From(cert);
-        info.HasNonRepudiation.Should().BeTrue();
-        info.KeyUsages.Should().Contain("NonRepudiation");
+        info.HasNonRepudiation.ShouldBeTrue();
+        info.KeyUsages.ShouldContain("NonRepudiation");
     }
 
     [Fact(DisplayName = "From extracts all common key usage flags")]
@@ -113,10 +113,10 @@ public sealed class CertificateInfoExtensionTests
             X509KeyUsageFlags.KeyAgreement);
 
         var info = CertificateInfo.From(cert);
-        info.KeyUsages.Should().Contain("DigitalSignature");
-        info.KeyUsages.Should().Contain("KeyEncipherment");
-        info.KeyUsages.Should().Contain("DataEncipherment");
-        info.KeyUsages.Should().Contain("KeyAgreement");
+        info.KeyUsages.ShouldContain("DigitalSignature");
+        info.KeyUsages.ShouldContain("KeyEncipherment");
+        info.KeyUsages.ShouldContain("DataEncipherment");
+        info.KeyUsages.ShouldContain("KeyAgreement");
     }
 
     [Fact(DisplayName = "From extracts CA-style key usage flags (KeyCertSign, CrlSign)")]
@@ -126,8 +126,8 @@ public sealed class CertificateInfoExtensionTests
             X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign);
 
         var info = CertificateInfo.From(cert);
-        info.KeyUsages.Should().Contain("KeyCertSign");
-        info.KeyUsages.Should().Contain("CrlSign");
+        info.KeyUsages.ShouldContain("KeyCertSign");
+        info.KeyUsages.ShouldContain("CrlSign");
     }
 
     [Fact(DisplayName = "From with no key usage extension returns empty list")]
@@ -135,8 +135,8 @@ public sealed class CertificateInfoExtensionTests
     {
         using var cert = CreateCertWithoutExtensions();
         var info = CertificateInfo.From(cert);
-        info.HasNonRepudiation.Should().BeFalse();
-        info.KeyUsages.Should().BeEmpty();
+        info.HasNonRepudiation.ShouldBeFalse();
+        info.KeyUsages.ShouldBeEmpty();
     }
 
     // ── Extended Key Usage ───────────────────────────────────────────────────
@@ -154,7 +154,7 @@ public sealed class CertificateInfoExtensionTests
 
         using var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
         var info = CertificateInfo.From(cert);
-        info.ExtendedKeyUsages.Should().Contain("1.3.6.1.5.5.7.3.4");
+        info.ExtendedKeyUsages.ShouldContain("1.3.6.1.5.5.7.3.4");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

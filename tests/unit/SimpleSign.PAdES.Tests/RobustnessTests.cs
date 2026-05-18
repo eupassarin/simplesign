@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
@@ -62,16 +62,16 @@ public sealed class RobustnessTests
             .SignAsync();
         using MemoryStream stream1 = new MemoryStream(signed1);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream1);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
         using MemoryStream stream2 = new MemoryStream(await SimpleSigner.Document(signed1).WithCertificate(cert).WithFieldName("Sig2")
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> actualValue = await ValidatorTrusting(cert).ValidateAsync(stream2);
-        actualValue.Should().HaveCount(2, "");
-        actualValue.Should().AllSatisfy(delegate (SignatureValidationResult r)
+        actualValue.Count().ShouldBe(2, "");
+        foreach (var r in actualValue)
         {
-            r.IsIntegrityValid.Should().BeTrue("");
-        }, "");
+            r.IsIntegrityValid.ShouldBeTrue();
+        }
     }
 
     [Fact(DisplayName = "ValidateAsync on disposed stream fails with ArgumentException")]
@@ -84,7 +84,8 @@ public sealed class RobustnessTests
             CheckRevocation = false
         });
         Func<Task<IReadOnlyList<SignatureValidationResult>>> action = () => validator.ValidateAsync(stream);
-        await action.Should().ThrowAsync<ArgumentException>("", Array.Empty<object>()).WithMessage("*seekable*", "");
+        var ex = await Should.ThrowAsync<ArgumentException>(async () => await action());
+        ex.Message.ShouldContain("seekable");
     }
 
     [Fact(DisplayName = "Signing with very long name (500 chars) does not crash")]
@@ -94,11 +95,11 @@ public sealed class RobustnessTests
         string signerName = new string('A', 500);
         byte[] array = await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(signerName)
             .SignAsync();
-        array.Should().NotBeEmpty("");
+        array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "Signing with very long reason (1000 chars) works")]
@@ -108,11 +109,11 @@ public sealed class RobustnessTests
         string reason = new string('R', 1000);
         byte[] array = await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(null, reason)
             .SignAsync();
-        array.Should().NotBeEmpty("");
+        array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
     }
 
     [Theory(DisplayName = "Signing with Unicode name (Japanese, Arabic, emoji) does not crash")]
@@ -124,11 +125,11 @@ public sealed class RobustnessTests
         using X509Certificate2 cert = CreateCert();
         byte[] array = await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(unicodeName)
             .SignAsync();
-        array.Should().NotBeEmpty("");
+        array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "ContentsReservedBytes = 256 fails gracefully when CMS does not fit")]
@@ -146,9 +147,10 @@ public sealed class RobustnessTests
         {
             PdfSignaturePrepareResult prepareResult = await PdfSignatureWriter.PrepareAsync(input, output, options);
             byte[] cms = CmsSignatureBuilder.Build(await PdfStructureReader.ReadSignedBytesAsync(output, prepareResult.ByteRange), cert, HashAlgorithmName.SHA256);
-            cms.Length.Should().BeGreaterThan(256, "a CMS with RSA-2048 certificate exceeds 256 bytes");
+            cms.Length.ShouldBeGreaterThan(256, "a CMS with RSA-2048 certificate exceeds 256 bytes");
             Func<Task> action = () => PdfSignatureWriter.FinalizeAsync(output, prepareResult, cms);
-            await action.Should().ThrowAsync<ArgumentException>("", Array.Empty<object>()).WithMessage("*exceed reserved space*", "");
+            var ex = await Should.ThrowAsync<ArgumentException>(action);
+            ex.Message.ShouldContain("exceed reserved space");
         }
         finally
         {
@@ -173,7 +175,7 @@ public sealed class RobustnessTests
         PdfSignaturePrepareResult prepareResult = await PdfSignatureWriter.PrepareAsync(input, output, options);
         byte[] cmsBytes = CmsSignatureBuilder.Build(await PdfStructureReader.ReadSignedBytesAsync(output, prepareResult.ByteRange), cert, HashAlgorithmName.SHA256);
         await PdfSignatureWriter.FinalizeAsync(output, prepareResult, cmsBytes);
-        output.Length.Should().BeGreaterThan(1048576L, "the resulting PDF should include the 1MB reserved space");
+        output.Length.ShouldBeGreaterThan(1048576L, "the resulting PDF should include the 1MB reserved space");
     }
 
     [Fact(DisplayName = "Validating same stream twice sequentially returns same results")]
@@ -184,10 +186,10 @@ public sealed class RobustnessTests
         PdfSignatureValidator validator = ValidatorTrusting(cert);
         IReadOnlyList<SignatureValidationResult> results1 = await validator.ValidateAsync(stream);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await validator.ValidateAsync(stream);
-        results1.Should().HaveCount(readOnlyList.Count, "");
-        results1[0].IsIntegrityValid.Should().Be(readOnlyList[0].IsIntegrityValid, "");
-        results1[0].IsSignatureValid.Should().Be(readOnlyList[0].IsSignatureValid, "");
-        results1[0].FieldName.Should().Be(readOnlyList[0].FieldName, "");
+        results1.Count().ShouldBe(readOnlyList.Count, "");
+        results1[0].IsIntegrityValid.ShouldBe(readOnlyList[0].IsIntegrityValid, "");
+        results1[0].IsSignatureValid.ShouldBe(readOnlyList[0].IsSignatureValid, "");
+        results1[0].FieldName.ShouldBe(readOnlyList[0].FieldName, "");
     }
 
     [Fact(DisplayName = "Validate 10 self-signed PDFs in parallel (Task.WhenAll)")]
@@ -210,13 +212,13 @@ public sealed class RobustnessTests
             return await validator.ValidateAsync(stream);
         });
         IReadOnlyList<SignatureValidationResult>[] actualValue = await Task.WhenAll(tasks);
-        actualValue.Should().HaveCount(10, "");
-        actualValue.Should().AllSatisfy(delegate (IReadOnlyList<SignatureValidationResult> results)
+        actualValue.Count().ShouldBe(10, "");
+        foreach (var results in actualValue)
         {
-            results.Should().ContainSingle("");
-            results[0].IsIntegrityValid.Should().BeTrue("");
-            results[0].IsSignatureValid.Should().BeTrue("");
-        }, "");
+            results.Count().ShouldBe(1);
+            results[0].IsIntegrityValid.ShouldBeTrue();
+            results[0].IsSignatureValid.ShouldBeTrue();
+        }
     }
 
     [Fact(DisplayName = "ValidateAsync with very small NetworkTimeout (1ms): revocation fails but integrity works")]
@@ -233,9 +235,9 @@ public sealed class RobustnessTests
         PdfSignatureValidator pdfSignatureValidator = new PdfSignatureValidator(options);
         using MemoryStream stream = new MemoryStream(buffer);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await pdfSignatureValidator.ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "Signing minimal PDF (header + empty page) works")]
@@ -244,11 +246,11 @@ public sealed class RobustnessTests
         using X509Certificate2 cert = CreateCert();
         byte[] pdfBytes = BuildHeaderOnlyPdf();
         byte[] array = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
-        array.Should().NotBeEmpty("");
+        array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "PDF signed 3 times accepts 4th signature")]
@@ -264,15 +266,15 @@ public sealed class RobustnessTests
         }
         using MemoryStream stream = new MemoryStream(array2);
         IReadOnlyList<SignatureValidationResult> actualValue = await ValidatorTrusting(cert).ValidateAsync(stream);
-        actualValue.Should().HaveCount(4, "all 4 signatures should be present");
-        actualValue.Should().AllSatisfy(delegate (SignatureValidationResult r)
+        actualValue.Count().ShouldBe(4, "all 4 signatures should be present");
+        foreach (var r in actualValue)
         {
-            r.IsIntegrityValid.Should().BeTrue("");
-        }, "");
-        actualValue.Should().AllSatisfy(delegate (SignatureValidationResult r)
+            r.IsIntegrityValid.ShouldBeTrue();
+        }
+        foreach (var r in actualValue)
         {
-            r.IsSignatureValid.Should().BeTrue("");
-        }, "");
+            r.IsSignatureValid.ShouldBeTrue();
+        }
     }
 
     [Fact(DisplayName = "Validating corrupted PDF returns meaningful errors")]
@@ -294,27 +296,25 @@ public sealed class RobustnessTests
                 {
                     return;
                 }
-                readOnlyList.Should().AllSatisfy(delegate (SignatureValidationResult r)
+                readOnlyList.Count().ShouldBeGreaterThan(0);
+                foreach (var r in readOnlyList)
                 {
-                    r.Errors.Should().NotBeEmpty("");
-                    r.Errors.Should().AllSatisfy(delegate (string e)
+                    r.Errors.ShouldNotBeEmpty();
+                    foreach (var e in r.Errors)
                     {
-                        e.Should().NotBe("Error", "error messages should be descriptive");
-                    }, "");
-                }, "");
+                        e.ShouldNotBe("Error");
+                    }
+                }
             }
             catch (Exception ex)
             {
-                ex.Message.Should().NotBe("Error", "");
-                ex.Message.Length.Should().BeGreaterThan(5, "error message should be descriptive, not generic");
+                ex.Message.ShouldNotBe("Error", "");
+                ex.Message.Length.ShouldBeGreaterThan(5, "error message should be descriptive, not generic");
             }
         }
         finally
         {
-            if (stream != null)
-            {
-                ((IDisposable)stream).Dispose();
-            }
+            ((IDisposable)stream).Dispose();
         }
     }
 
@@ -326,7 +326,8 @@ public sealed class RobustnessTests
         {
             byte[] pdf = BuildMinimalPdf();
             Func<Task<byte[]>> action = () => SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
-            await action.Should().ThrowAsync<CertificateValidationException>("", Array.Empty<object>()).WithMessage("*expired*", "");
+            var ex = await Should.ThrowAsync<CertificateValidationException>(async () => await action());
+            ex.Message.ShouldContain("expired");
         }
         finally
         {

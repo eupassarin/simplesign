@@ -151,14 +151,14 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
 
             if ((Page.HasValue || X.HasValue || Y.HasValue) && !Visible)
             {
-                return ValidationResult.Error("--page, --x, --y require --visible.");
+                return ValidationResult.Error("--page, --pos-x, --pos-y require --visible.");
             }
 
             return ValidationResult.Success();
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellation)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var loggerFactory = settings.CreateLoggerFactory();
 
@@ -166,7 +166,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             Path.GetDirectoryName(settings.InputPath) ?? ".",
             Path.GetFileNameWithoutExtension(settings.InputPath) + "_signed.pdf");
 
-        return await ExecuteCertSigningAsync(settings, outputPath, loggerFactory, cancellation);
+        return await ExecuteCertSigningAsync(settings, outputPath, loggerFactory, cancellationToken);
     }
 
     private static async Task<int> ExecuteCertSigningAsync(
@@ -182,111 +182,122 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             .Where(c => c.Thumbprint != cert.Thumbprint)
             .ToList();
 
-        byte[] signed = null!;
-        bool dssEmbedded = false;
-        await AnsiConsole.Status()
-            .Spinner(Spinner.Known.Dots)
-            .SpinnerStyle(Style.Parse("blue"))
-            .StartAsync("Signing...", async _ =>
+        try
+        {
+            byte[] signed = null!;
+            bool dssEmbedded = false;
+            await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("blue"))
+                .StartAsync("Signing...", async _ =>
+                {
+                    var pdfBytes = await File.ReadAllBytesAsync(settings.InputPath);
+                    ILogger? logger = loggerFactory?.CreateLogger("SimpleSign.Signing");
+                    var builder = chainCerts.Count > 0
+                        ? SimpleSigner.Document(pdfBytes, logger).WithCertificate(cert, chainCerts)
+                        : SimpleSigner.Document(pdfBytes, logger).WithCertificate(cert);
+
+                    if (settings.TsaUrl is not null)
+                    {
+                        builder = builder.WithTimestamp(settings.TsaUrl);
+                    }
+
+                    if (settings.Hash is not null)
+                    {
+                        builder = builder.WithHashAlgorithm(ParseHash(settings.Hash));
+                    }
+
+                    if (settings.FieldName is not null)
+                    {
+                        builder = builder.WithFieldName(settings.FieldName);
+                    }
+
+                    if (settings.ExistingField is not null)
+                    {
+                        builder = builder.WithExistingField(settings.ExistingField);
+                    }
+
+                    if (settings.Certify is not null)
+                    {
+                        builder = builder.AsCertification(ParseCertificationLevel(settings.Certify));
+                    }
+
+                    // Metadata: reason, location, contact, signer name
+                    if (settings.Reason is not null || settings.Location is not null
+                        || settings.Contact is not null || settings.SignerName is not null)
+                    {
+                        builder = builder.WithMetadata(
+                            signerName: settings.SignerName,
+                            reason: settings.Reason,
+                            location: settings.Location,
+                            contactInfo: settings.Contact);
+                    }
+
+                    // Visual appearance
+                    if (settings.Visible)
+                    {
+                        var appearance = BuildAppearance(settings);
+                        builder = builder.WithAppearance(appearance);
+                    }
+
+                    if (settings.LegacyCms)
+                    {
+                        builder = builder.WithLegacyCms();
+                    }
+
+                    if (settings.PdfA)
+                    {
+                        builder = builder.WithPdfAPreservation();
+                    }
+
+                    if (settings.Ltv)
+                    {
+                        builder = builder.WithLtv();
+                    }
+
+                    if (settings.Archival)
+                    {
+                        builder = builder.WithArchivalTimestamp();
+                    }
+
+                    var result = await builder.SignWithDetailsAsync();
+                    signed = result.Pdf;
+                    dssEmbedded = result.DssEmbedded;
+                });
+
+            await File.WriteAllBytesAsync(outputPath, signed, cancellation);
+
+            AnsiConsole.MarkupLine($"[green]✓ Signed:[/] {outputPath.EscapeMarkup()}");
+            AnsiConsole.MarkupLine($"  Certificate: [bold]{cert.Subject.EscapeMarkup()}[/]");
+            if (settings.TsaUrl is not null)
             {
-                var pdfBytes = await File.ReadAllBytesAsync(settings.InputPath);
-                ILogger? logger = loggerFactory?.CreateLogger("SimpleSign.Signing");
-                var builder = chainCerts.Count > 0
-                    ? SimpleSigner.Document(pdfBytes, logger).WithCertificate(cert, chainCerts)
-                    : SimpleSigner.Document(pdfBytes, logger).WithCertificate(cert);
+                AnsiConsole.MarkupLine($"  Timestamp:   {settings.TsaUrl.EscapeMarkup()}");
+            }
 
-                if (settings.TsaUrl is not null)
-                {
-                    builder = builder.WithTimestamp(settings.TsaUrl);
-                }
+            if (settings.Ltv)
+            {
+                AnsiConsole.MarkupLine(dssEmbedded
+                    ? "  LTV:         [green]enabled[/]"
+                    : "  LTV:         [yellow]⚠ requested but DSS not embedded[/] — revocation data unavailable (check network / certificate CRL/OCSP endpoint)");
+            }
 
-                if (settings.Hash is not null)
-                {
-                    builder = builder.WithHashAlgorithm(ParseHash(settings.Hash));
-                }
+            if (settings.Archival)
+            {
+                AnsiConsole.MarkupLine(dssEmbedded
+                    ? "  Archival TS: [green]enabled[/]"
+                    : "  Archival TS: [yellow]⚠ requested but DSS not embedded[/]");
+            }
 
-                if (settings.FieldName is not null)
-                {
-                    builder = builder.WithFieldName(settings.FieldName);
-                }
-
-                if (settings.ExistingField is not null)
-                {
-                    builder = builder.WithExistingField(settings.ExistingField);
-                }
-
-                if (settings.Certify is not null)
-                {
-                    builder = builder.AsCertification(ParseCertificationLevel(settings.Certify));
-                }
-
-                // Metadata: reason, location, contact, signer name
-                if (settings.Reason is not null || settings.Location is not null
-                    || settings.Contact is not null || settings.SignerName is not null)
-                {
-                    builder = builder.WithMetadata(
-                        signerName: settings.SignerName,
-                        reason: settings.Reason,
-                        location: settings.Location,
-                        contactInfo: settings.Contact);
-                }
-
-                // Visual appearance
-                if (settings.Visible)
-                {
-                    var appearance = BuildAppearance(settings);
-                    builder = builder.WithAppearance(appearance);
-                }
-
-                if (settings.LegacyCms)
-                {
-                    builder = builder.WithLegacyCms();
-                }
-
-                if (settings.PdfA)
-                {
-                    builder = builder.WithPdfAPreservation();
-                }
-
-                if (settings.Ltv)
-                {
-                    builder = builder.WithLtv();
-                }
-
-                if (settings.Archival)
-                {
-                    builder = builder.WithArchivalTimestamp();
-                }
-
-                var result = await builder.SignWithDetailsAsync();
-                signed = result.Pdf;
-                dssEmbedded = result.DssEmbedded;
-            });
-
-        await File.WriteAllBytesAsync(outputPath, signed, cancellation);
-
-        AnsiConsole.MarkupLine($"[green]✓ Signed:[/] {outputPath.EscapeMarkup()}");
-        AnsiConsole.MarkupLine($"  Certificate: [bold]{cert.Subject.EscapeMarkup()}[/]");
-        if (settings.TsaUrl is not null)
-        {
-            AnsiConsole.MarkupLine($"  Timestamp:   {settings.TsaUrl.EscapeMarkup()}");
+            return 0;
         }
-
-        if (settings.Ltv)
+        finally
         {
-            AnsiConsole.MarkupLine(dssEmbedded
-                ? "  LTV:         [green]enabled[/]"
-                : "  LTV:         [yellow]⚠ requested but DSS not embedded[/] — revocation data unavailable (check network / certificate CRL/OCSP endpoint)");
+            cert.Dispose();
+            foreach (var c in chainCerts)
+            {
+                c.Dispose();
+            }
         }
-
-        if (settings.Archival)
-        {
-            AnsiConsole.MarkupLine(dssEmbedded
-                ? "  Archival TS: [green]enabled[/]"
-                : "  Archival TS: [yellow]⚠ requested but DSS not embedded[/]");
-        }
-
-        return 0;
     }
 
     private static HashAlgorithmName ParseHash(string hash) => hash.ToUpperInvariant() switch
@@ -331,6 +342,8 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                     Page = appearance.Page,
                     X = appearance.X,
                     Y = appearance.Y,
+                    ShowReason = appearance.ShowReason,
+                    ShowLocation = appearance.ShowLocation,
                     VerificationUrl = appearance.VerificationUrl,
                     BackgroundImagePng = imageBytes,
                 }
@@ -340,6 +353,8 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                     Page = appearance.Page,
                     X = appearance.X,
                     Y = appearance.Y,
+                    ShowReason = appearance.ShowReason,
+                    ShowLocation = appearance.ShowLocation,
                     VerificationUrl = appearance.VerificationUrl,
                     BackgroundImageJpeg = imageBytes,
                 };

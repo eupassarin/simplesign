@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.Pdf.Enums;
 using Xunit;
@@ -12,7 +12,7 @@ public sealed class PdfAPreservationValidatorTests
     {
         var options = new SignatureFieldOptions();
         var issues = PdfAPreservationValidator.Validate(PdfALevel.None, options);
-        issues.Should().BeEmpty();
+        issues.ShouldBeEmpty();
     }
 
     [Fact]
@@ -20,8 +20,8 @@ public sealed class PdfAPreservationValidatorTests
     {
         var options = new SignatureFieldOptions { SubFilter = PdfSignatureSubFilter.EtsiCadesDetached };
         var issues = PdfAPreservationValidator.Validate(PdfALevel.A1b, options);
-        issues.Should().ContainSingle()
-            .Which.Severity.Should().Be(PdfAIssueSeverity.Error);
+        issues.Count().ShouldBe(1);
+        issues.First().Severity.ShouldBe(PdfAIssueSeverity.Error);
     }
 
     [Fact]
@@ -29,8 +29,8 @@ public sealed class PdfAPreservationValidatorTests
     {
         var options = new SignatureFieldOptions { SubFilter = PdfSignatureSubFilter.EtsiCadesDetached };
         var issues = PdfAPreservationValidator.Validate(PdfALevel.A1a, options);
-        issues.Should().ContainSingle()
-            .Which.Severity.Should().Be(PdfAIssueSeverity.Error);
+        issues.Count().ShouldBe(1);
+        issues.First().Severity.ShouldBe(PdfAIssueSeverity.Error);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class PdfAPreservationValidatorTests
     {
         var options = new SignatureFieldOptions { SubFilter = PdfSignatureSubFilter.EtsiCadesDetached };
         var issues = PdfAPreservationValidator.Validate(PdfALevel.A2b, options);
-        issues.Should().BeEmpty();
+        issues.ShouldBeEmpty();
     }
 
     [Fact]
@@ -53,8 +53,8 @@ public sealed class PdfAPreservationValidatorTests
             },
         };
         var issues = PdfAPreservationValidator.Validate(PdfALevel.A1b, options);
-        issues.Should().ContainSingle()
-            .Which.Severity.Should().Be(PdfAIssueSeverity.Warning);
+        issues.Count().ShouldBe(1);
+        issues.First().Severity.ShouldBe(PdfAIssueSeverity.Warning);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public sealed class PdfAPreservationValidatorTests
             },
         };
         var issues = PdfAPreservationValidator.Validate(PdfALevel.A2b, options);
-        issues.Should().BeEmpty();
+        issues.ShouldBeEmpty();
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class PdfAPreservationValidatorTests
     {
         var options = new SignatureFieldOptions();
         var issues = PdfAPreservationValidator.Validate(PdfALevel.A3b, options);
-        issues.Should().BeEmpty();
+        issues.ShouldBeEmpty();
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class PdfAPreservationValidatorTests
             },
         };
         var issues = PdfAPreservationValidator.Validate(PdfALevel.A1b, options);
-        issues.Should().BeEmpty("JPEG images don't have transparency issues in PDF/A-1");
+        issues.ShouldBeEmpty("JPEG images don't have transparency issues in PDF/A-1");
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class PdfAPreservationValidatorTests
     {
         var options = new SignatureFieldOptions { SubFilter = PdfSignatureSubFilter.EtsiCadesDetached };
         var issues = PdfAPreservationValidator.Validate(PdfALevel.Unknown, options);
-        issues.Should().BeEmpty("Unknown PDF/A level should not trigger errors");
+        issues.ShouldBeEmpty("Unknown PDF/A level should not trigger errors");
     }
 
     [Fact]
@@ -107,6 +107,6 @@ public sealed class PdfAPreservationValidatorTests
     {
         var a = new PdfACompatibilityIssue(PdfAIssueSeverity.Error, "test");
         var b = new PdfACompatibilityIssue(PdfAIssueSeverity.Error, "test");
-        a.Should().Be(b);
+        a.ShouldBe(b);
     }
 }

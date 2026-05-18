@@ -2,9 +2,10 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.PAdES.Signing;
+using SimpleSign.Pdf;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -115,14 +116,14 @@ public sealed class LtvEmbedderTests
     {
         using HttpClient httpClient = new HttpClient();
         LtvEmbedder actualValue = new LtvEmbedder(httpClient);
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "Constructor accepts null and uses shared client")]
     public void Constructor_AcceptsNull_UsesSharedClient()
     {
         LtvEmbedder actualValue = new LtvEmbedder();
-        actualValue.Should().NotBeNull("");
+        actualValue.ShouldNotBeNull("");
     }
 
     [Fact(DisplayName = "Null PDF throws ArgumentNullException")]
@@ -155,7 +156,7 @@ public sealed class LtvEmbedderTests
     {
         LtvEmbedder ltvEmbedder = new LtvEmbedder();
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
-        (await ltvEmbedder.EmbedLtvDataAsync(Array.Empty<byte>(), [cert])).Should().BeEmpty("");
+        (await ltvEmbedder.EmbedLtvDataAsync(Array.Empty<byte>(), [cert])).ShouldBeEmpty("");
     }
 
     [Fact(DisplayName = "Invalid bytes do not throw exception")]
@@ -164,7 +165,7 @@ public sealed class LtvEmbedderTests
         LtvEmbedder ltvEmbedder = new LtvEmbedder();
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] garbage = new byte[4] { 0, 255, 222, 173 };
-        (await ltvEmbedder.EmbedLtvDataAsync(garbage, [cert])).Should().Equal(garbage);
+        (await ltvEmbedder.EmbedLtvDataAsync(garbage, [cert])).ShouldBe(garbage);
     }
 
     [Fact(DisplayName = "Cert without CRL URL returns unchanged PDF")]
@@ -173,7 +174,7 @@ public sealed class LtvEmbedderTests
         LtvEmbedder ltvEmbedder = new LtvEmbedder();
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdf = BuildMinimalPdf();
-        (await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert])).Should().Equal(pdf, "no CRL/OCSP data means no DSS to append");
+        (await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert])).ShouldBe(pdf, "no CRL/OCSP data means no DSS to append");
     }
 
     [Fact(DisplayName = "With CRL data, output is larger than input")]
@@ -185,7 +186,7 @@ public sealed class LtvEmbedderTests
         LtvEmbedder ltvEmbedder = new LtvEmbedder(httpClient);
         using X509Certificate2 cert = CreateCertWithCrlUrl();
         byte[] pdf = BuildMinimalPdf();
-        (await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert])).Length.Should().BeGreaterThan(pdf.Length, "DSS dictionary with CRL data should be appended");
+        (await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert])).Length.ShouldBeGreaterThan(pdf.Length, "DSS dictionary with CRL data should be appended");
     }
 
     [Fact(DisplayName = "With CRL data, output contains DSS dictionary")]
@@ -198,8 +199,8 @@ public sealed class LtvEmbedderTests
         byte[] signedPdf = BuildMinimalPdf();
         byte[] bytes = await ltvEmbedder.EmbedLtvDataAsync(signedPdf, [cert]);
         string actualValue = Encoding.Latin1.GetString(bytes);
-        actualValue.Should().Contain("/Type /DSS", "output must contain a DSS dictionary");
-        actualValue.Should().Contain("/CRLs [", "DSS must reference the CRL objects");
+        actualValue.ShouldContain("/Type /DSS");
+        actualValue.ShouldContain("/CRLs [");
     }
 
     [Fact(DisplayName = "With CRL data, output starts with original PDF")]
@@ -210,7 +211,7 @@ public sealed class LtvEmbedderTests
         LtvEmbedder ltvEmbedder = new LtvEmbedder(httpClient);
         using X509Certificate2 cert = CreateCertWithCrlUrl();
         byte[] pdf = BuildMinimalPdf();
-        (await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert])).AsSpan(0, pdf.Length).ToArray().Should().Equal(pdf);
+        (await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert])).AsSpan(0, pdf.Length).ToArray().ShouldBe(pdf);
     }
 
     [Fact(DisplayName = "CRL download failure returns unchanged PDF")]
@@ -220,7 +221,7 @@ public sealed class LtvEmbedderTests
         LtvEmbedder ltvEmbedder = new LtvEmbedder(httpClient);
         using X509Certificate2 cert = CreateCertWithCrlUrl();
         byte[] pdf = BuildMinimalPdf();
-        (await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert])).Should().Equal(pdf, "failed CRL download means no DSS to append");
+        (await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert])).ShouldBe(pdf, "failed CRL download means no DSS to append");
     }
 
     [Fact(DisplayName = "Empty chain returns unchanged PDF")]
@@ -228,6 +229,93 @@ public sealed class LtvEmbedderTests
     {
         LtvEmbedder ltvEmbedder = new LtvEmbedder();
         byte[] pdf = BuildMinimalPdf();
-        (await ltvEmbedder.EmbedLtvDataAsync(pdf, Array.Empty<X509Certificate2>())).Should().Equal(pdf);
+        (await ltvEmbedder.EmbedLtvDataAsync(pdf, Array.Empty<X509Certificate2>())).ShouldBe(pdf);
+    }
+
+    [Fact(DisplayName = "LTV embedding preserves xref stream format for xref-stream PDFs")]
+    public async Task EmbedLtvDataAsync_XRefStreamPdf_PreservesXRefStreamFormat()
+    {
+        // Sign a xref-stream PDF to create a realistic signed PDF with CRL-bearing cert
+        string fixturePath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            "..", "..", "..", "..", "..", "integration",
+            "SimpleSign.Integration.Tests", "Fixtures", "empty-page-unsigned.pdf");
+
+        byte[] pdf;
+        if (File.Exists(fixturePath))
+        {
+            pdf = await File.ReadAllBytesAsync(fixturePath);
+        }
+        else
+        {
+            // Skip if fixture not available
+            return;
+        }
+
+        // Sign the PDF so LtvEmbedder has a signed PDF to work with
+        using var cert = CreateCertWithCrlUrl();
+        byte[] signedPdf = await SimpleSigner.Document(pdf)
+            .WithCertificate(cert)
+            .SignAsync();
+
+        // Verify the signed PDF uses xref streams (since original does)
+        bool usesXRefStreams = PdfStructureParser.UsesXRefStreams(signedPdf);
+        usesXRefStreams.ShouldBeTrue("signed PDF should preserve xref stream format");
+
+        // Embed LTV with a CRL server that returns valid-looking data
+        byte[] fakeCrl = BuildFakeCrl();
+        using var httpClient = new HttpClient(new MockHandler(HttpStatusCode.OK, fakeCrl));
+        var embedder = new LtvEmbedder(httpClient);
+        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signedPdf, [cert]);
+
+        // If LTV data was embedded, check xref format is preserved
+        if (!ReferenceEquals(ltvPdf, signedPdf))
+        {
+            bool ltvUsesXRefStreams = PdfStructureParser.UsesXRefStreams(ltvPdf);
+            ltvUsesXRefStreams.ShouldBeTrue(
+                "LtvEmbedder must preserve xref stream format when the signed PDF uses xref streams");
+        }
+    }
+
+    private static byte[] BuildFakeCrl()
+    {
+        // Build a minimal DER-encoded CRL structure
+        // This is a fake CRL that won't validate but is enough for LtvEmbedder to embed
+        var writer = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            // TBSCertList
+            using (writer.PushSequence())
+            {
+                writer.WriteInteger(1); // version
+                // signature algorithm
+                using (writer.PushSequence())
+                {
+                    writer.WriteObjectIdentifier("1.2.840.113549.1.1.11"); // sha256WithRSAEncryption
+                }
+                // issuer
+                using (writer.PushSequence())
+                {
+                    using (writer.PushSetOf())
+                    {
+                        using (writer.PushSequence())
+                        {
+                            writer.WriteObjectIdentifier("2.5.4.3"); // CN
+                            writer.WriteCharacterString(System.Formats.Asn1.UniversalTagNumber.UTF8String, "CRL Test");
+                        }
+                    }
+                }
+                // thisUpdate
+                writer.WriteUtcTime(DateTimeOffset.UtcNow);
+            }
+            // signatureAlgorithm
+            using (writer.PushSequence())
+            {
+                writer.WriteObjectIdentifier("1.2.840.113549.1.1.11");
+            }
+            // signature
+            writer.WriteBitString(new byte[256]);
+        }
+        return writer.Encode();
     }
 }

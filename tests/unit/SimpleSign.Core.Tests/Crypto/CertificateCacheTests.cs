@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using Xunit;
 
@@ -24,27 +24,27 @@ public sealed class CertificateCacheTests
         cache.Set(cert);
         var thumbprint = cert.GetCertHashString(HashAlgorithmName.SHA256);
 
-        cache.TryGet(thumbprint, out var retrieved).Should().BeTrue();
-        retrieved.Should().BeSameAs(cert);
+        cache.TryGet(thumbprint, out var retrieved).ShouldBeTrue();
+        retrieved.ShouldBeSameAs(cert);
     }
 
     [Fact(DisplayName = "TryGet returns false for unknown thumbprint")]
     public void TryGet_Unknown_ReturnsFalse()
     {
         var cache = new InMemoryCertificateCache();
-        cache.TryGet("AABBCCDD", out var cert).Should().BeFalse();
-        cert.Should().BeNull();
+        cache.TryGet("AABBCCDD", out var cert).ShouldBeFalse();
+        cert.ShouldBeNull();
     }
 
     [Fact(DisplayName = "Count reflects cached entries")]
     public void Count_ReflectsEntries()
     {
         var cache = new InMemoryCertificateCache();
-        cache.Count.Should().Be(0);
+        cache.Count.ShouldBe(0);
 
         using var cert = CreateCert();
         cache.Set(cert);
-        cache.Count.Should().Be(1);
+        cache.Count.ShouldBe(1);
     }
 
     [Fact(DisplayName = "Clear removes all entries")]
@@ -56,10 +56,10 @@ public sealed class CertificateCacheTests
 
         cache.Set(cert1);
         cache.Set(cert2);
-        cache.Count.Should().Be(2);
+        cache.Count.ShouldBe(2);
 
         cache.Clear();
-        cache.Count.Should().Be(0);
+        cache.Count.ShouldBe(0);
     }
 
     [Fact(DisplayName = "Expired entries are not returned")]
@@ -72,7 +72,7 @@ public sealed class CertificateCacheTests
         Thread.Sleep(10); // Let TTL expire
 
         var thumbprint = cert.GetCertHashString(HashAlgorithmName.SHA256);
-        cache.TryGet(thumbprint, out _).Should().BeFalse();
+        cache.TryGet(thumbprint, out _).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Evict removes expired entries")]
@@ -85,22 +85,22 @@ public sealed class CertificateCacheTests
         Thread.Sleep(10);
 
         var removed = cache.Evict();
-        removed.Should().Be(1);
-        cache.Count.Should().Be(0);
+        removed.ShouldBe(1);
+        cache.Count.ShouldBe(0);
     }
 
     [Fact(DisplayName = "Constructor rejects zero TTL")]
     public void Constructor_ZeroTtl_Throws()
     {
         var act = () => new InMemoryCertificateCache(ttl: TimeSpan.Zero);
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        Should.Throw<ArgumentOutOfRangeException>(act);
     }
 
     [Fact(DisplayName = "Constructor rejects negative TTL")]
     public void Constructor_NegativeTtl_Throws()
     {
         var act = () => new InMemoryCertificateCache(ttl: TimeSpan.FromSeconds(-1));
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        Should.Throw<ArgumentOutOfRangeException>(act);
     }
 
     [Fact(DisplayName = "Default TTL is 1 hour")]
@@ -113,7 +113,7 @@ public sealed class CertificateCacheTests
         var thumbprint = cert.GetCertHashString(HashAlgorithmName.SHA256);
 
         // Should still be valid (well within 1 hour)
-        cache.TryGet(thumbprint, out _).Should().BeTrue();
+        cache.TryGet(thumbprint, out _).ShouldBeTrue();
     }
 
     [Fact(DisplayName = "Set overwrites existing entry")]
@@ -125,7 +125,7 @@ public sealed class CertificateCacheTests
 
         cache.Set(cert1);
         cache.Set(cert1); // Set again
-        cache.Count.Should().Be(1);
+        cache.Count.ShouldBe(1);
     }
 
     [Fact(DisplayName = "TryGet is case-insensitive on thumbprint")]
@@ -137,7 +137,7 @@ public sealed class CertificateCacheTests
         cache.Set(cert);
         var thumbprint = cert.GetCertHashString(HashAlgorithmName.SHA256);
 
-        cache.TryGet(thumbprint.ToLowerInvariant(), out var retrieved).Should().BeTrue();
-        retrieved.Should().BeSameAs(cert);
+        cache.TryGet(thumbprint.ToLowerInvariant(), out var retrieved).ShouldBeTrue();
+        retrieved.ShouldBeSameAs(cert);
     }
 }

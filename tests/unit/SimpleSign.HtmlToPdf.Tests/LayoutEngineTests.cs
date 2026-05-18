@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Layout;
 using SimpleSign.HtmlToPdf.Parsing;
 using Xunit;
@@ -18,7 +18,7 @@ public class LayoutEngineTests
         var engine = new LayoutEngine(new PageSettings());
         var result = engine.Layout(root);
 
-        result.Should().NotBeNull();
+        result.ShouldNotBeNull();
         // Empty HTML may produce zero pages (nothing to lay out)
     }
 
@@ -31,8 +31,8 @@ public class LayoutEngineTests
         var engine = new LayoutEngine(new PageSettings());
         var result = engine.Layout(root);
 
-        result.Pages.Should().NotBeEmpty();
-        result.Pages[0].Boxes.Should().NotBeEmpty();
+        result.Pages.ShouldNotBeEmpty();
+        result.Pages[0].Boxes.ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "Layout: heading is positioned")]
@@ -45,10 +45,10 @@ public class LayoutEngineTests
         var result = engine.Layout(root);
 
         var boxes = result.Pages[0].Boxes;
-        boxes.Should().NotBeEmpty();
+        boxes.ShouldNotBeEmpty();
 
         // At least one text box should exist
-        boxes.Should().Contain(b => b.Type == LayoutBoxType.InlineText);
+        boxes.ShouldContain(b => b.Type == LayoutBoxType.InlineText);
     }
 
     // ── Multiple elements ───────────────────────────────────────────────
@@ -67,11 +67,11 @@ public class LayoutEngineTests
             .OrderBy(b => b.Y)
             .ToList();
 
-        textBoxes.Should().HaveCountGreaterThanOrEqualTo(2);
+        textBoxes.Count().ShouldBeGreaterThanOrEqualTo(2);
         // Y should increase (content flows down)
         for (int i = 1; i < textBoxes.Count; i++)
         {
-            textBoxes[i].Y.Should().BeGreaterThanOrEqualTo(textBoxes[i - 1].Y);
+            textBoxes[i].Y.ShouldBeGreaterThanOrEqualTo(textBoxes[i - 1].Y);
         }
     }
 
@@ -86,7 +86,7 @@ public class LayoutEngineTests
         var engine = new LayoutEngine(new PageSettings());
         var result = engine.Layout(root);
 
-        result.Pages[0].Boxes.Should().NotBeEmpty();
+        result.Pages[0].Boxes.ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "Layout: ordered list produces boxes")]
@@ -98,7 +98,7 @@ public class LayoutEngineTests
         var engine = new LayoutEngine(new PageSettings());
         var result = engine.Layout(root);
 
-        result.Pages[0].Boxes.Should().NotBeEmpty();
+        result.Pages[0].Boxes.ShouldNotBeEmpty();
     }
 
     // ── HR element ──────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ public class LayoutEngineTests
         var engine = new LayoutEngine(new PageSettings());
         var result = engine.Layout(root);
 
-        result.Pages[0].Boxes.Should().HaveCountGreaterThanOrEqualTo(2);
+        result.Pages[0].Boxes.Count().ShouldBeGreaterThanOrEqualTo(2);
     }
 
     // ── BR element ──────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ public class LayoutEngineTests
         var engine = new LayoutEngine(new PageSettings());
         var result = engine.Layout(root);
 
-        result.Pages[0].Boxes.Should().NotBeEmpty();
+        result.Pages[0].Boxes.ShouldNotBeEmpty();
     }
 
     // ── Table layout ────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ public class LayoutEngineTests
             .Where(b => b.Type == LayoutBoxType.InlineText)
             .ToList();
 
-        textBoxes.Should().HaveCountGreaterThanOrEqualTo(4);
+        textBoxes.Count().ShouldBeGreaterThanOrEqualTo(4);
     }
 
     [Fact(DisplayName = "Layout: table with thead/tbody")]
@@ -159,7 +159,7 @@ public class LayoutEngineTests
         var engine = new LayoutEngine(new PageSettings());
         var result = engine.Layout(root);
 
-        result.Pages[0].Boxes.Should().NotBeEmpty();
+        result.Pages[0].Boxes.ShouldNotBeEmpty();
     }
 
     // ── Page settings ───────────────────────────────────────────────────
@@ -169,8 +169,8 @@ public class LayoutEngineTests
     {
         var settings = new PageSettings();
 
-        settings.PageWidth.Should().BeApproximately(595.28f, 1f);
-        settings.PageHeight.Should().BeApproximately(841.89f, 1f);
+        settings.PageWidth.ShouldBe(595.28f, 1f);
+        settings.PageHeight.ShouldBe(841.89f, 1f);
     }
 
     [Fact(DisplayName = "PageSettings.FromPaperSize: Letter")]
@@ -178,8 +178,8 @@ public class LayoutEngineTests
     {
         var settings = PageSettings.FromPaperSize(PaperSize.Letter);
 
-        settings.PageWidth.Should().Be(612);
-        settings.PageHeight.Should().Be(792);
+        settings.PageWidth.ShouldBe(612);
+        settings.PageHeight.ShouldBe(792);
     }
 
     [Fact(DisplayName = "PageSettings.FromPaperSize: Legal")]
@@ -187,8 +187,8 @@ public class LayoutEngineTests
     {
         var settings = PageSettings.FromPaperSize(PaperSize.Legal);
 
-        settings.PageWidth.Should().Be(612);
-        settings.PageHeight.Should().Be(1008);
+        settings.PageWidth.ShouldBe(612);
+        settings.PageHeight.ShouldBe(1008);
     }
 
     [Fact(DisplayName = "PageSettings: ContentWidth accounts for margins")]
@@ -200,7 +200,7 @@ public class LayoutEngineTests
             Margins = new Thickness(0, 50, 0, 50),
         };
 
-        settings.ContentWidth.Should().Be(500);
+        settings.ContentWidth.ShouldBe(500);
     }
 
     [Fact(DisplayName = "PageSettings: ContentHeight accounts for margins")]
@@ -212,7 +212,7 @@ public class LayoutEngineTests
             Margins = new Thickness(40, 0, 40, 0),
         };
 
-        settings.ContentHeight.Should().Be(720);
+        settings.ContentHeight.ShouldBe(720);
     }
 
     // ── LayoutBox ───────────────────────────────────────────────────────
@@ -220,8 +220,8 @@ public class LayoutEngineTests
     [Fact(DisplayName = "LayoutBox: type enum has expected values")]
     public void LayoutBox_TypeEnum_HasExpectedValues()
     {
-        Enum.IsDefined(LayoutBoxType.Block).Should().BeTrue();
-        Enum.IsDefined(LayoutBoxType.InlineText).Should().BeTrue();
+        Enum.IsDefined(LayoutBoxType.Block).ShouldBeTrue();
+        Enum.IsDefined(LayoutBoxType.InlineText).ShouldBeTrue();
     }
 
     // ── LayoutResult ────────────────────────────────────────────────────
@@ -231,6 +231,6 @@ public class LayoutEngineTests
     {
         var result = new LayoutResult();
 
-        result.Pages.Should().BeEmpty();
+        result.Pages.ShouldBeEmpty();
     }
 }

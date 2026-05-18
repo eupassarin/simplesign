@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
@@ -55,9 +55,9 @@ public sealed class SignatureAppearanceEndToEndTests
             })
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("visual appearance should not affect integrity");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("visual appearance should not affect integrity");
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "PDF with appearance is larger than without appearance")]
@@ -67,7 +67,7 @@ public sealed class SignatureAppearanceEndToEndTests
         byte[] pdf = BuildPdfWithPage();
         byte[] signedNoApp = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
         (await SimpleSigner.Document(pdf).WithCertificate(cert).WithAppearance(new SignatureAppearance())
-            .SignAsync()).Length.Should().BeGreaterThan(signedNoApp.Length, "signature with appearance includes XObject and updated page");
+            .SignAsync()).Length.ShouldBeGreaterThan(signedNoApp.Length, "signature with appearance includes XObject and updated page");
     }
 
     [Fact(DisplayName = "PDF with appearance contains /Annots in page")]
@@ -82,7 +82,7 @@ public sealed class SignatureAppearanceEndToEndTests
         })
             .SignAsync();
         string actualValue = Encoding.Latin1.GetString(bytes);
-        actualValue.Should().Contain("/Annots", "page should reference the signature field");
+        actualValue.ShouldContain("/Annots");
     }
 
     [Fact(DisplayName = "PDF with appearance contains Form XObject stream")]
@@ -94,9 +94,9 @@ public sealed class SignatureAppearanceEndToEndTests
             .WithAppearance(new SignatureAppearance())
             .SignAsync();
         string actualValue = Encoding.Latin1.GetString(bytes);
-        actualValue.Should().Contain("/Subtype /Form", "aparência usa Form XObject");
-        actualValue.Should().Contain("/BBox", "Form XObject should have bounding box");
-        actualValue.Should().Contain("Signed by", "stamp should contain appearance text");
+        actualValue.ShouldContain("/Subtype /Form");
+        actualValue.ShouldContain("/BBox");
+        actualValue.ShouldContain("Signed by");
     }
 
     [Fact(DisplayName = "Two signatures with appearance remain valid")]
@@ -119,12 +119,12 @@ public sealed class SignatureAppearanceEndToEndTests
             })
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> actualValue = await ValidatorTrusting(cert1, cert2).ValidateAsync(stream);
-        actualValue.Should().HaveCount(2, "");
-        actualValue.Should().AllSatisfy(delegate (SignatureValidationResult r)
+        actualValue.Count().ShouldBe(2, "");
+        foreach (var r in actualValue)
         {
-            r.IsIntegrityValid.Should().BeTrue("");
-            r.IsSignatureValid.Should().BeTrue("");
-        }, "");
+            r.IsIntegrityValid.ShouldBeTrue();
+            r.IsSignatureValid.ShouldBeTrue();
+        }
     }
 
     [Fact(DisplayName = "Null WithAppearance throws ArgumentNullException")]
@@ -134,7 +134,7 @@ public sealed class SignatureAppearanceEndToEndTests
         try
         {
             Func<SignerBuilder> func = () => SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithAppearance(null!);
-            func.Should().Throw<ArgumentNullException>("", Array.Empty<object>());
+            Should.Throw<ArgumentNullException>(func);
         }
         finally
         {
@@ -149,10 +149,10 @@ public sealed class SignatureAppearanceEndToEndTests
     public void SignatureAppearance_Defaults_AreReasonable()
     {
         SignatureAppearance signatureAppearance = new SignatureAppearance();
-        signatureAppearance.Page.Should().Be(1, "");
-        signatureAppearance.X.Should().Be(20f, "");
-        signatureAppearance.Y.Should().Be(20f, "");
-        signatureAppearance.ShowDate.Should().BeTrue("");
+        signatureAppearance.Page.ShouldBe(1, "");
+        signatureAppearance.X.ShouldBe(20f, "");
+        signatureAppearance.Y.ShouldBe(20f, "");
+        signatureAppearance.ShowDate.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "Signer name is populated in validation")]
@@ -160,7 +160,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert("CN=Fulano de Tal, O=Orgao, C=BR");
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
-        (await ValidatorTrusting(cert).ValidateAsync(stream))[0].SignerName.Should().Be("Fulano de Tal", "");
+        (await ValidatorTrusting(cert).ValidateAsync(stream))[0].SignerName.ShouldBe("Fulano de Tal", "");
     }
 
     [Fact(DisplayName = "SubFilter is populated in validation")]
@@ -168,7 +168,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
-        (await ValidatorTrusting(cert).ValidateAsync(stream))[0].SubFilter.Should().Be("ETSI.CAdES.detached", "");
+        (await ValidatorTrusting(cert).ValidateAsync(stream))[0].SubFilter.ShouldBe("ETSI.CAdES.detached", "");
     }
 
     [Fact(DisplayName = "Digest algorithm OID is populated")]
@@ -176,7 +176,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
-        (await ValidatorTrusting(cert).ValidateAsync(stream))[0].DigestAlgorithmOid.Should().Be("2.16.840.1.101.3.4.2.1", "");
+        (await ValidatorTrusting(cert).ValidateAsync(stream))[0].DigestAlgorithmOid.ShouldBe("2.16.840.1.101.3.4.2.1", "");
     }
 
     [Fact(DisplayName = "Signature date/time is populated")]
@@ -188,8 +188,9 @@ public sealed class SignatureAppearanceEndToEndTests
         DateTimeOffset after = DateTimeOffset.UtcNow.AddSeconds(2.0);
         using MemoryStream stream = new MemoryStream(buffer);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList[0].SigningTime.Should().NotBeNull("");
-        readOnlyList[0].SigningTime!.Value.Should().BeAfter(before, "").And.BeBefore(after, "");
+        readOnlyList[0].SigningTime.ShouldNotBeNull();
+        readOnlyList[0].SigningTime!.Value.ShouldBeGreaterThan(before);
+        readOnlyList[0].SigningTime!.Value.ShouldBeLessThan(after);
     }
 
     [Fact(DisplayName = "SubFilter ETSI validates correctly")]
@@ -200,7 +201,7 @@ public sealed class SignatureAppearanceEndToEndTests
         using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithFieldName("EtsiSig")
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue("");
     }
 }

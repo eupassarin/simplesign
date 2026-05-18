@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.PAdES.Validation;
@@ -22,7 +22,7 @@ public sealed class MultiSignatureValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(6);
+        results.Count().ShouldBe(6);
         output.WriteLine($"Signers: {string.Join(", ", results.Select(r => r.SignerName ?? "(unknown)"))}");
     }
 
@@ -36,7 +36,7 @@ public sealed class MultiSignatureValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(4);
+        results.Count().ShouldBe(4);
         output.WriteLine($"Signers: {string.Join(", ", results.Select(r => r.SignerName ?? "(unknown)"))}");
     }
 
@@ -50,12 +50,12 @@ public sealed class MultiSignatureValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(2);
+        results.Count().ShouldBe(2);
         // Both signatures cover their respective byte ranges correctly.
         // The first signature is not the last (incremental update was added on top),
         // so its byte range not covering the full file is expected and not an integrity failure.
-        results[0].IsIntegrityValid.Should().BeTrue();
-        results[1].IsIntegrityValid.Should().BeTrue();
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[1].IsIntegrityValid.ShouldBeTrue();
         output.WriteLine($"Signers: {string.Join(", ", results.Select(r => r.SignerName ?? "(unknown)"))}");
     }
 }

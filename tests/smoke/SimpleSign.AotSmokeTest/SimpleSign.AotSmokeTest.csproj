@@ -10,7 +10,7 @@
     <IsTestProject>false</IsTestProject>
     <!-- Exclude from main test runs — this is a publish-time smoke test -->
     <ExcludeFromBuild>false</ExcludeFromBuild>
-    <NoWarn>$(NoWarn);NU1903</NoWarn>
+    <NoWarn>$(NoWarn);NU1903;CA1829;CA1861</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

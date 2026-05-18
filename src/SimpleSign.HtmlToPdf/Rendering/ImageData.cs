@@ -35,10 +35,10 @@ internal sealed class ImageData
         {
             (bytes, format) = ParseDataUri(src);
         }
-        else if (File.Exists(src))
+        else if (src.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                 src.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
-            bytes = File.ReadAllBytes(src);
-            format = DetectFormat(bytes);
+            // HTTP/HTTPS URLs are handled elsewhere; unsupported here.
         }
 
         if (bytes is null || bytes.Length == 0)

@@ -7,7 +7,7 @@ namespace SimpleSign.HostSigner;
 internal sealed class TrayContext : ApplicationContext
 {
     internal const int Port = 21590;
-    internal const string Version = "0.1.0-alpha";
+    internal const string Version = "0.2.0";
     private const string GitHubRepo = "eupassarin/SimpleSign";
 
     private readonly NotifyIcon _tray;
@@ -69,7 +69,8 @@ internal sealed class TrayContext : ApplicationContext
             try
             {
                 var icon = Icon.ExtractAssociatedIcon(exePath);
-                if (icon is not null) return icon;
+                if (icon is not null)
+                    return icon;
             }
             catch { /* fall through */ }
         }
@@ -102,7 +103,9 @@ internal sealed class TrayContext : ApplicationContext
         _cts.Cancel();
         _tray.Visible = false;
         _tray.Dispose();
-        try { _listener.Stop(); } catch { /* shutting down */ }
+        try
+        { _listener.Stop(); }
+        catch { /* shutting down */ }
         Application.Exit();
     }
 
@@ -128,7 +131,9 @@ internal sealed class TrayContext : ApplicationContext
         var resp = ctx.Response;
 
         // CORS
-        resp.Headers.Add("Access-Control-Allow-Origin", "*");
+        var origin = req.Headers["Origin"];
+        var allowedOrigin = IsAllowedOrigin(origin) ? origin : $"http://localhost:{Port}";
+        resp.Headers.Add("Access-Control-Allow-Origin", allowedOrigin);
         resp.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         resp.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
 
@@ -187,7 +192,8 @@ internal sealed class TrayContext : ApplicationContext
         {
             _form.Log($"ERROR: {ex.Message}");
             resp.StatusCode = 500;
-            try { await WriteJsonAsync(resp, new ErrorResponse { Error = ex.Message }); }
+            try
+            { await WriteJsonAsync(resp, new ErrorResponse { Error = "An internal error occurred. Check HostSigner logs for details." }); }
             catch { resp.Close(); }
         }
     }
@@ -304,14 +310,16 @@ internal sealed class TrayContext : ApplicationContext
         {
             var va = i < pa.Length ? pa[i] : 0;
             var vb = i < pb.Length ? pb[i] : 0;
-            if (va != vb) return va.CompareTo(vb);
+            if (va != vb)
+                return va.CompareTo(vb);
         }
         return 0;
     }
 
     private static async Task ServeStaticFileAsync(string path, HttpListenerResponse resp)
     {
-        if (path == "/") path = "/index.html";
+        if (path == "/")
+            path = "/index.html";
         var resourceName = "SimpleSign.HostSigner.wwwroot" + path.Replace('/', '.');
 
         using var stream = typeof(TrayContext).Assembly.GetManifestResourceStream(resourceName);
@@ -355,6 +363,13 @@ internal sealed class TrayContext : ApplicationContext
             return;
         }
 
+        if (!ValidateFilePath(filePath, out var pathError))
+        {
+            resp.StatusCode = 400;
+            await WriteJsonAsync(resp, new ErrorResponse { Error = pathError });
+            return;
+        }
+
         _form.Log($"POST /api/sign-file ({Path.GetFileName(filePath)})");
 
         var options = new Services.SignFileOptions(
@@ -382,8 +397,9 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
+            _form.Log($"ERROR sign-file: {ex.Message}");
             resp.StatusCode = 500;
-            await WriteJsonAsync(resp, new ErrorResponse { Error = ex.Message });
+            await WriteJsonAsync(resp, new ErrorResponse { Error = "Signing failed. Check HostSigner logs for details." });
         }
     }
 
@@ -401,6 +417,13 @@ internal sealed class TrayContext : ApplicationContext
             return;
         }
 
+        if (!ValidateFilePath(filePath, out var pathError))
+        {
+            resp.StatusCode = 400;
+            await WriteJsonAsync(resp, new ErrorResponse { Error = pathError });
+            return;
+        }
+
         _form.Log($"POST /api/inspect ({Path.GetFileName(filePath)})");
 
         try
@@ -410,8 +433,9 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
+            _form.Log($"ERROR inspect: {ex.Message}");
             resp.StatusCode = 500;
-            await WriteJsonAsync(resp, new ErrorResponse { Error = ex.Message });
+            await WriteJsonAsync(resp, new ErrorResponse { Error = "Inspection failed. Check HostSigner logs for details." });
         }
     }
 
@@ -429,6 +453,13 @@ internal sealed class TrayContext : ApplicationContext
             return;
         }
 
+        if (!ValidateFilePath(filePath, out var pathError))
+        {
+            resp.StatusCode = 400;
+            await WriteJsonAsync(resp, new ErrorResponse { Error = pathError });
+            return;
+        }
+
         _form.Log($"POST /api/validate ({Path.GetFileName(filePath)})");
 
         try
@@ -438,8 +469,9 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
+            _form.Log($"ERROR validate: {ex.Message}");
             resp.StatusCode = 500;
-            await WriteJsonAsync(resp, new ErrorResponse { Error = ex.Message });
+            await WriteJsonAsync(resp, new ErrorResponse { Error = "Validation failed. Check HostSigner logs for details." });
         }
     }
 
@@ -450,5 +482,55 @@ internal sealed class TrayContext : ApplicationContext
         resp.ContentLength64 = json.Length;
         await resp.OutputStream.WriteAsync(json);
         resp.Close();
+    }
+
+    /// <summary>
+    /// Validates that a file path is absolute, exists, ends with .pdf, and does not traverse outside user-accessible directories.
+    /// </summary>
+    private static bool ValidateFilePath(string filePath, out string error)
+    {
+        error = string.Empty;
+
+        if (!Path.IsPathFullyQualified(filePath))
+        {
+            error = "File path must be absolute.";
+            return false;
+        }
+
+        // Resolve to canonical form to prevent path traversal (e.g., ..\..\)
+        var fullPath = Path.GetFullPath(filePath);
+        if (!fullPath.Equals(filePath, StringComparison.OrdinalIgnoreCase) &&
+            !fullPath.Equals(filePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+        {
+            error = "File path contains invalid traversal sequences.";
+            return false;
+        }
+
+        if (!fullPath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "Only PDF files are supported.";
+            return false;
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            error = "File not found.";
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Checks if the Origin header is from an allowed localhost address.
+    /// </summary>
+    private static bool IsAllowedOrigin(string? origin)
+    {
+        if (string.IsNullOrEmpty(origin))
+            return false;
+        return origin.StartsWith($"http://localhost:{Port}", StringComparison.OrdinalIgnoreCase)
+            || origin.StartsWith($"http://127.0.0.1:{Port}", StringComparison.OrdinalIgnoreCase)
+            || origin.StartsWith($"http://localhost:", StringComparison.OrdinalIgnoreCase)
+            || origin.StartsWith($"http://127.0.0.1:", StringComparison.OrdinalIgnoreCase);
     }
 }

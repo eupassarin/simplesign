@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Signing;
@@ -33,7 +33,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
 
-        signatures.Should().HaveCountGreaterThan(0);
+        signatures.Count().ShouldBeGreaterThan(0);
         var sig = signatures[0];
 
         await ValidateDetachedCms(sig.CmsSignature, sig.SignedData, cert, "pades-bb");
@@ -75,7 +75,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         using var stream = new MemoryStream(signed2);
         var signatures = await PadesExtractor.ExtractAsync(stream);
 
-        signatures.Should().HaveCount(2);
+        signatures.Count().ShouldBe(2);
 
         // Validate first signature
         await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert1, "pades-double-sig1");
@@ -109,7 +109,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             output.WriteLine(stdout);
 
             // OpenSSL should be able to parse the CMS structure
-            stdout.Should().Contain("CMS_ContentInfo", because: "OpenSSL should parse our CMS structure");
+            stdout.ShouldContain("CMS_ContentInfo");
         }
         finally
         {
@@ -129,7 +129,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             .SignAsync();
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
-        signatures.Should().HaveCountGreaterThan(0);
+        signatures.Count().ShouldBeGreaterThan(0);
         await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert, "pades-sha384");
     }
 
@@ -145,7 +145,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             .SignAsync();
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
-        signatures.Should().HaveCountGreaterThan(0);
+        signatures.Count().ShouldBeGreaterThan(0);
         await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert, "pades-sha512");
     }
 
@@ -158,7 +158,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
-        signatures.Should().HaveCountGreaterThan(0);
+        signatures.Count().ShouldBeGreaterThan(0);
         await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert, "pades-ecdsa-p256");
     }
 
@@ -171,7 +171,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
-        signatures.Should().HaveCountGreaterThan(0);
+        signatures.Count().ShouldBeGreaterThan(0);
         await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert, "pades-ecdsa-p384");
     }
 
@@ -195,7 +195,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             if (!string.IsNullOrEmpty(stderr))
                 output.WriteLine($"STDERR: {stderr}");
             // pyHanko should at least recognize the signature as intact
-            (stdout + stderr).Should().Contain("intact=True", because: "pyHanko should verify our PAdES signature integrity");
+            (stdout + stderr).ShouldContain("intact=True");
         }
         finally
         {
@@ -220,9 +220,9 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss validate-pades-structure /in/signed.pdf");
             output.WriteLine(stdout);
-            exitCode.Should().Be(0);
-            stdout.Should().Contain("Start offset: OK", because: "byte range should start at offset 0");
-            stdout.Should().Contain("RESULT: VALID");
+            exitCode.ShouldBe(0);
+            stdout.ShouldContain("Start offset: OK");
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {
@@ -255,8 +255,8 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             await proc.WaitForExitAsync();
 
             output.WriteLine(stdout);
-            proc.ExitCode.Should().Be(0);
-            stdout.Should().Contain("RESULT: VALID");
+            proc.ExitCode.ShouldBe(0);
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {
@@ -284,8 +284,8 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss validate-pades-structure /in/signed.pdf");
             output.WriteLine(stdout);
-            exitCode.Should().Be(0);
-            stdout.Should().Contain("RESULT: VALID");
+            exitCode.ShouldBe(0);
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {
@@ -329,8 +329,8 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             string stderr = await proc.StandardError.ReadToEndAsync();
             await proc.WaitForExitAsync();
             output.WriteLine(stdout);
-            proc.ExitCode.Should().Be(0);
-            stdout.Should().Contain("RESULT: VALID");
+            proc.ExitCode.ShouldBe(0);
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {
@@ -351,7 +351,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
 
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
-        signatures.Should().HaveCountGreaterThan(0);
+        signatures.Count().ShouldBeGreaterThan(0);
         await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert, "pades-certification");
     }
 
@@ -374,8 +374,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss validate-pades /in/signed.pdf");
             output.WriteLine(stdout);
-            (stdout + stderr).Should().Contain("intact=True",
-                because: "pyHanko should verify PAdES with metadata as intact");
+            (stdout + stderr).ShouldContain("intact=True");
         }
         finally
         {
@@ -410,9 +409,8 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             string stderr = await proc.StandardError.ReadToEndAsync();
             await proc.WaitForExitAsync();
             output.WriteLine(stdout);
-            stderr.Should().NotContain("Error",
-                because: "pdfbox should parse PDF/A-signed document without errors");
-            (stderr + stdout).Should().NotContain("java.io.IOException");
+            stderr.ShouldNotContain("Error");
+            (stderr + stdout).ShouldNotContain("java.io.IOException");
         }
         finally
         {
@@ -440,7 +438,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         // Validate CMS
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
-        signatures.Should().HaveCountGreaterThan(0);
+        signatures.Count().ShouldBeGreaterThan(0);
         await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert, "pades-deferred");
     }
 
@@ -458,7 +456,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             var signed = await batcher.SignAsync(pdfs[i]);
             using var stream = new MemoryStream(signed);
             var signatures = await PadesExtractor.ExtractAsync(stream);
-            signatures.Should().HaveCountGreaterThan(0);
+            signatures.Count().ShouldBeGreaterThan(0);
             await ValidateDetachedCms(signatures[0].CmsSignature, signatures[0].SignedData, cert, $"pades-batch-{i}");
         }
     }
@@ -483,9 +481,9 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
             var (stdout, stderr, exitCode) = await DockerRun(
                 $"-v {tmpDir}:/in simplesign-dss validate-pades-structure /in/signed.pdf");
             output.WriteLine(stdout);
-            exitCode.Should().Be(0);
-            stdout.Should().Contain("Start offset: OK");
-            stdout.Should().Contain("RESULT: VALID");
+            exitCode.ShouldBe(0);
+            stdout.ShouldContain("Start offset: OK");
+            stdout.ShouldContain("RESULT: VALID");
         }
         finally
         {
@@ -528,8 +526,8 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
                 output.WriteLine($"STDERR: {stderr}");
             }
 
-            exitCode.Should().Be(0, because: $"OpenSSL should verify the CMS from our PAdES output ({label})");
-            stdout.Should().Contain("VALID");
+            exitCode.ShouldBe(0, $"OpenSSL should verify the CMS from our PAdES output ({label})");
+            stdout.ShouldContain("VALID");
         }
         finally
         {

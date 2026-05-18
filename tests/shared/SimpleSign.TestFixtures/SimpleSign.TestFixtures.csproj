@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <NoWarn>$(NoWarn);CA1829;CA1861</NoWarn>
     <IsPackable>false</IsPackable>
     <RootNamespace>SimpleSign.TestFixtures</RootNamespace>
   </PropertyGroup>

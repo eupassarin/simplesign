@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.PAdES.Validation;
@@ -26,7 +26,7 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
             using var stream = FixturePath.Open(fixture);
             var results = await validator.ValidateAsync(stream);
 
-            results.Should().NotBeNull();
+            results.ShouldNotBeNull();
             output.WriteLine($"Returned {results.Count} result(s) without exception");
             foreach (var r in results)
                 output.WriteLine($"  {r.FieldName}: Integrity={r.IsIntegrityValid}");
@@ -47,8 +47,8 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().NotBeNull();
-        results.Should().NotBeEmpty("Modified PDF should have at least one signature");
+        results.ShouldNotBeNull();
+        results.ShouldNotBeEmpty("Modified PDF should have at least one signature");
         output.WriteLine($"Results: {results.Count}");
         foreach (var r in results)
             output.WriteLine($"  {r.FieldName}: Integrity={r.IsIntegrityValid}, Sig={r.IsSignatureValid}");
@@ -64,7 +64,7 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"Fields: {fields.Count}");
         foreach (var f in fields)
             output.WriteLine($"  {f.FieldName}: Signed={f.IsSigned}, SubFilter={f.SubFilter ?? "(none)"}");
@@ -80,7 +80,7 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"Fields: {fields.Count}");
         foreach (var f in fields)
             output.WriteLine($"  {f.FieldName}: Signed={f.IsSigned}, SubFilter={f.SubFilter ?? "(none)"}");
@@ -95,13 +95,13 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var parseStream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(parseStream, cancellationToken: cts.Token);
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"Fields: {fields.Count}");
 
         var validator = CreateValidator();
         using var valStream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(valStream);
-        results.Should().NotBeNull();
+        results.ShouldNotBeNull();
         output.WriteLine($"Results: {results.Count}");
         foreach (var r in results)
             output.WriteLine($"  {r.FieldName}: Integrity={r.IsIntegrityValid}");
@@ -117,7 +117,7 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"Fields: {fields.Count}");
         foreach (var f in fields)
             output.WriteLine($"  {f.FieldName}: Signed={f.IsSigned}");
@@ -133,7 +133,7 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().NotBeNull();
+        results.ShouldNotBeNull();
         output.WriteLine($"Results: {results.Count}");
         foreach (var r in results)
             output.WriteLine($"  {r.FieldName}: Integrity={r.IsIntegrityValid}, Signer={r.SignerName ?? "(unknown)"}");
@@ -149,7 +149,7 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"{fixture}: {fields.Count} field(s)");
     }
 
@@ -163,7 +163,7 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream, cancellationToken: cts.Token);
 
-        fields.Should().NotBeNull();
+        fields.ShouldNotBeNull();
         output.WriteLine($"{fixture}: {fields.Count} field(s)");
     }
 }

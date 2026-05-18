@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
@@ -30,9 +30,9 @@ public sealed class PdfSignatureValidatorTests
     public void ValidationOptions_Default_HasExpectedValues()
     {
         ValidationOptions validationOptions = ValidationOptions.Default;
-        validationOptions.CheckRevocation.Should().BeTrue("");
-        validationOptions.TrustSystemRoots.Should().BeTrue("");
-        validationOptions.NetworkTimeout.Should().Be(TimeSpan.FromSeconds(10.0), "");
+        validationOptions.CheckRevocation.ShouldBeTrue("");
+        validationOptions.TrustSystemRoots.ShouldBeTrue("");
+        validationOptions.NetworkTimeout.ShouldBe(TimeSpan.FromSeconds(10.0), "");
     }
 
     [Fact(DisplayName = "Result with all fields valid returns IsValid true")]
@@ -42,9 +42,10 @@ public sealed class PdfSignatureValidatorTests
         {
             IsIntegrityValid = true,
             IsSignatureValid = true,
-            IsCertificateChainValid = true
+            IsCertificateChainValid = true,
+            IsNotRevoked = true
         };
-        signatureValidationResult.IsValid.Should().BeTrue("");
+        signatureValidationResult.IsValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "Invalid integrity makes IsValid return false")]
@@ -56,7 +57,7 @@ public sealed class PdfSignatureValidatorTests
             IsSignatureValid = true,
             IsCertificateChainValid = true
         };
-        signatureValidationResult.IsValid.Should().BeFalse("");
+        signatureValidationResult.IsValid.ShouldBeFalse("");
     }
 
     [Fact(DisplayName = "Result ToString contains field name")]
@@ -66,7 +67,7 @@ public sealed class PdfSignatureValidatorTests
         {
             FieldName = "Sig1"
         };
-        signatureValidationResult.ToString().Should().Contain("Sig1", "");
+        signatureValidationResult.ToString().ShouldContain("Sig1");
     }
 
     [Fact(DisplayName = "Null stream throws ArgumentNullException")]
@@ -88,7 +89,7 @@ public sealed class PdfSignatureValidatorTests
         {
             CheckRevocation = false
         });
-        (await pdfSignatureValidator.ValidateAsync(stream)).Should().BeEmpty("");
+        (await pdfSignatureValidator.ValidateAsync(stream)).ShouldBeEmpty("");
     }
 
     [Fact(DisplayName = "Empty field name throws ArgumentException")]
@@ -126,8 +127,8 @@ public sealed class PdfSignatureValidatorTests
                 CheckRevocation = false
             });
             IReadOnlyList<SignatureValidationResult> readOnlyList = await pdfSignatureValidator.ValidateAsync(tamperedStream);
-            readOnlyList.Should().HaveCount(1, "");
-            readOnlyList[0].IsIntegrityValid.Should().BeFalse("");
+            readOnlyList.Count().ShouldBe(1, "");
+            readOnlyList[0].IsIntegrityValid.ShouldBeFalse("");
         }
     }
 
@@ -145,10 +146,10 @@ public sealed class PdfSignatureValidatorTests
             CheckRevocation = false
         });
         IReadOnlyList<SignatureValidationResult> readOnlyList = await pdfSignatureValidator.ValidateAsync(signedStream);
-        readOnlyList.Should().HaveCount(1, "");
-        readOnlyList[0].IsIntegrityValid.Should().BeTrue("document was not tampered");
-        readOnlyList[0].IsSignatureValid.Should().BeTrue("signature was created with the same cert");
-        readOnlyList[0].SignerCertificate.Should().NotBeNull("");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsIntegrityValid.ShouldBeTrue("document was not tampered");
+        readOnlyList[0].IsSignatureValid.ShouldBeTrue("signature was created with the same cert");
+        readOnlyList[0].SignerCertificate.ShouldNotBeNull("");
     }
 
     private static byte[] BuildMinimalPdfForSigning()
@@ -202,9 +203,9 @@ public sealed class PdfSignatureValidatorTests
         }
         byte[] array = asnWriter.Encode();
         MethodInfo? method = typeof(CrlClient).GetMethod("IsSerialInCrl", BindingFlags.Static | BindingFlags.NonPublic);
-        method.Should().NotBeNull("IsSerialInCrl should exist as a private static method");
+        method.ShouldNotBeNull("IsSerialInCrl should exist as a private static method");
         bool? actualValue = (bool?)method!.Invoke(null, new object?[5] { x509Certificate2, array, null, null, null });
-        actualValue.Should().BeFalse("certificate is not in CRL — should return false, not null or true");
+        actualValue!.Value.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "Expired CRL returns null indicating untrusted")]
@@ -238,9 +239,9 @@ public sealed class PdfSignatureValidatorTests
         }
         byte[] array = asnWriter.Encode();
         MethodInfo? method = typeof(CrlClient).GetMethod("IsSerialInCrl", BindingFlags.Static | BindingFlags.NonPublic);
-        method.Should().NotBeNull("");
+        method.ShouldNotBeNull("");
         bool? actualValue = (bool?)method!.Invoke(null, new object?[5] { x509Certificate2, array, null, null, null });
-        actualValue.Should().BeNull("expired CRL is not trustworthy — should return null to fetch updated CRL");
+        actualValue.ShouldBeNull("expired CRL is not trustworthy — should return null to fetch updated CRL");
     }
 
     [Fact(DisplayName = "Certificate without NonRepudiation signs without throwing")]
@@ -256,7 +257,7 @@ public sealed class PdfSignatureValidatorTests
             MemoryStream input = new MemoryStream(buffer);
             MemoryStream output = new MemoryStream();
             Func<Task> action = () => SimpleSigner.Document(input).WithCertificate(cert).SignAsync(output);
-            await action.Should().NotThrowAsync("signing should proceed even without NonRepudiation — just a warning");
+            await Should.NotThrowAsync(action);
         }
         finally
         {
@@ -273,6 +274,6 @@ public sealed class PdfSignatureValidatorTests
         byte[] buffer = BuildMinimalPdfForSigning();
         MemoryStream pdfStream = new MemoryStream(buffer);
         PdfSignatureValidator pdfSignatureValidator = new PdfSignatureValidator();
-        (await pdfSignatureValidator.ValidateAsync(pdfStream)).Should().BeEmpty("minimal PDF without signatures has no fields to validate");
+        (await pdfSignatureValidator.ValidateAsync(pdfStream)).ShouldBeEmpty("minimal PDF without signatures has no fields to validate");
     }
 }

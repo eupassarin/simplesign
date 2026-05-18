@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.TestFixtures;
@@ -36,7 +36,7 @@ public sealed class TimestampValidatorRealFixtureTests
 
         var result = TimestampValidator.Validate(cms, warnings);
 
-        result.Should().BeTrue("the messageImprint matches sha256(Signature) and the TSA signature is valid");
+        result!.Value.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "Validate returns false when Signature does not match messageImprint")]
@@ -51,8 +51,8 @@ public sealed class TimestampValidatorRealFixtureTests
 
         var result = TimestampValidator.Validate(cms, warnings);
 
-        result.Should().BeFalse();
-        warnings.Should().Contain(w => w.Contains("hash mismatch", StringComparison.OrdinalIgnoreCase));
+        result!.Value.ShouldBeFalse();
+        warnings.ShouldContain(w => w.Contains("hash mismatch", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact(DisplayName = "Validate returns null when no timestamp token is present")]
@@ -67,8 +67,8 @@ public sealed class TimestampValidatorRealFixtureTests
 
         var result = TimestampValidator.Validate(cms, warnings);
 
-        result.Should().BeNull();
-        warnings.Should().BeEmpty();
+        result.ShouldBeNull();
+        warnings.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "Validate returns null when Signature is null")]
@@ -83,7 +83,7 @@ public sealed class TimestampValidatorRealFixtureTests
 
         var result = TimestampValidator.Validate(cms, warnings);
 
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact(DisplayName = "Validate invokes chain validator with TSA certificates from real token")]
@@ -111,9 +111,9 @@ public sealed class TimestampValidatorRealFixtureTests
 
         var result = TimestampValidator.Validate(cms, warnings, ChainValidator);
 
-        result.Should().BeTrue();
-        chainCalled.Should().BeTrue("the real freetsa token embeds TSA certificates so the chain validator should be invoked");
-        certCount.Should().BeGreaterThan(0);
+        result!.Value.ShouldBeTrue();
+        chainCalled.ShouldBeTrue();
+        certCount.ShouldBeGreaterThan(0);
     }
 
     [Fact(DisplayName = "Validate gracefully handles malformed timestamp token")]
@@ -128,8 +128,8 @@ public sealed class TimestampValidatorRealFixtureTests
 
         var result = TimestampValidator.Validate(cms, warnings);
 
-        result.Should().BeNull();
-        warnings.Should().NotBeEmpty();
+        result.ShouldBeNull();
+        warnings.ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "Validate with SigningTime far after genTime emits warning")]
@@ -147,7 +147,7 @@ public sealed class TimestampValidatorRealFixtureTests
 
         var result = TimestampValidator.Validate(cms, warnings);
 
-        result.Should().BeTrue();
-        warnings.Should().Contain(w => w.Contains("before signingTime", StringComparison.OrdinalIgnoreCase));
+        result!.Value.ShouldBeTrue();
+        warnings.ShouldContain(w => w.Contains("before signingTime", StringComparison.OrdinalIgnoreCase));
     }
 }

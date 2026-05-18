@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Inspection;
 using Xunit;
@@ -21,8 +21,8 @@ public sealed class AlgorithmInfoTests
     public void FromOid_DigestAlgorithms_MapsToFriendlyName(string oid, string expected)
     {
         var info = AlgorithmInfo.FromOid(oid);
-        info.Oid.Should().Be(oid);
-        info.Name.Should().Be(expected);
+        info.Oid.ShouldBe(oid);
+        info.Name.ShouldBe(expected);
     }
 
     [Theory(DisplayName = "FromOid maps known signature OIDs to friendly names")]
@@ -40,15 +40,15 @@ public sealed class AlgorithmInfoTests
     public void FromOid_SignatureAlgorithms_MapsToFriendlyName(string oid, string expected)
     {
         var info = AlgorithmInfo.FromOid(oid);
-        info.Name.Should().Be(expected);
+        info.Name.ShouldBe(expected);
     }
 
     [Fact(DisplayName = "FromOid with unknown OID returns OID as-is in Name")]
     public void FromOid_UnknownOid_ReturnsOidAsName()
     {
         var info = AlgorithmInfo.FromOid("1.2.3.4.5.99");
-        info.Oid.Should().Be("1.2.3.4.5.99");
-        info.Name.Should().Be("1.2.3.4.5.99");
+        info.Oid.ShouldBe("1.2.3.4.5.99");
+        info.Name.ShouldBe("1.2.3.4.5.99");
     }
 
     // ── FromUri: covers MapUriToName ─────────────────────────────────────────
@@ -61,8 +61,8 @@ public sealed class AlgorithmInfoTests
     public void FromUri_DigestUris_MapsToFriendlyName(string uri, string expected)
     {
         var info = AlgorithmInfo.FromUri(uri);
-        info.Oid.Should().Be(uri);
-        info.Name.Should().Be(expected);
+        info.Oid.ShouldBe(uri);
+        info.Name.ShouldBe(expected);
     }
 
     [Theory(DisplayName = "FromUri maps known signature URIs to friendly names")]
@@ -76,15 +76,15 @@ public sealed class AlgorithmInfoTests
     public void FromUri_SignatureUris_MapsToFriendlyName(string uri, string expected)
     {
         var info = AlgorithmInfo.FromUri(uri);
-        info.Name.Should().Be(expected);
+        info.Name.ShouldBe(expected);
     }
 
     [Fact(DisplayName = "FromUri with unknown URI returns URI as-is in Name")]
     public void FromUri_UnknownUri_ReturnsUriAsName()
     {
         var info = AlgorithmInfo.FromUri("http://unknown.example/algo");
-        info.Oid.Should().Be("http://unknown.example/algo");
-        info.Name.Should().Be("http://unknown.example/algo");
+        info.Oid.ShouldBe("http://unknown.example/algo");
+        info.Name.ShouldBe("http://unknown.example/algo");
     }
 
     // ── ToString ─────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ public sealed class AlgorithmInfoTests
     public void ToString_WithKnownName_FormatsAsNameAndOid()
     {
         var info = AlgorithmInfo.FromOid(Oids.Sha256);
-        info.ToString().Should().Be($"SHA-256 ({Oids.Sha256})");
+        info.ToString().ShouldBe($"SHA-256 ({Oids.Sha256})");
     }
 
     [Fact(DisplayName = "ToString with empty Name returns OID alone")]
@@ -101,6 +101,6 @@ public sealed class AlgorithmInfoTests
     {
         // Default-constructed AlgorithmInfo has empty Name; ToString returns Oid
         var info = new AlgorithmInfo { Oid = "1.2.3", Name = string.Empty };
-        info.ToString().Should().Be("1.2.3");
+        info.ToString().ShouldBe("1.2.3");
     }
 }

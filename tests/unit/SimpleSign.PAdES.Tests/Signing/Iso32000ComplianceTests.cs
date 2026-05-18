@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Signing;
 using Xunit;
 
@@ -189,8 +189,8 @@ public sealed class Iso32000ComplianceTests
         var (_, text) = await PrepareSignedPdf();
 
         // ISO 32000 §7.9.4: D:YYYYMMDDHHmmSSOHH'mm' where O is + or -
-        text.Should().MatchRegex(@"/M \(D:\d{14}\+00'00'\)");
-        text.Should().NotMatchRegex(@"/M \(D:\d{14}Z\)"); // must NOT use Z suffix
+        text.ShouldMatch(@"/M \(D:\d{14}\+00'00'\)");
+        text.ShouldNotMatch(@"/M \(D:\d{14}Z\)"); // must NOT use Z suffix
     }
 
     // ── §12.8.1: Signature dictionary entries ──────────────────────────────────
@@ -199,14 +199,14 @@ public sealed class Iso32000ComplianceTests
     public async Task SigDict_HasTypeSig()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().Contain("/Type /Sig");
+        text.ShouldContain("/Type /Sig");
     }
 
     [Fact(DisplayName = "§12.8.1: Signature dict has /Filter /Adobe.PPKLite")]
     public async Task SigDict_HasFilter()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().Contain("/Filter /Adobe.PPKLite");
+        text.ShouldContain("/Filter /Adobe.PPKLite");
     }
 
     [Theory(DisplayName = "§12.8.1: SubFilter is valid ISO value")]
@@ -221,21 +221,21 @@ public sealed class Iso32000ComplianceTests
             SubFilter = subFilter,
         };
         var (_, text) = await PrepareSignedPdf(options: options);
-        text.Should().Contain($"/SubFilter /{expected}");
+        text.ShouldContain($"/SubFilter /{expected}");
     }
 
     [Fact(DisplayName = "§12.8.1: Signature dict has /ByteRange with 4 integers")]
     public async Task SigDict_HasByteRangeWith4Integers()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().MatchRegex(@"/ByteRange \[\d+ \d+ \d+ \d+\s*\]");
+        text.ShouldMatch(@"/ByteRange \[\d+ \d+ \d+ \d+\s*\]");
     }
 
     [Fact(DisplayName = "§12.8.1: /Contents is hex string")]
     public async Task SigDict_ContentsIsHexString()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().MatchRegex(@"/Contents <[0-9A-Fa-f]+>");
+        text.ShouldMatch(@"/Contents <[0-9A-Fa-f]+>");
     }
 
     [Fact(DisplayName = "§12.8.1: /Name is properly escaped PDF string")]
@@ -248,7 +248,7 @@ public sealed class Iso32000ComplianceTests
             ContentsReservedBytes = 1024,
         };
         var (_, text) = await PrepareSignedPdf(options: options);
-        text.Should().Contain(@"/Name (Test \(Signer\) With\\Special)");
+        text.ShouldContain(@"/Name (Test \(Signer\) With\\Special)");
     }
 
     // ── §12.8.1: ByteRange covers entire file ─────────────────────────────────
@@ -259,22 +259,22 @@ public sealed class Iso32000ComplianceTests
         var (outputBytes, text) = await PrepareSignedPdf();
 
         var match = Regex.Match(text, @"/ByteRange \[(\d+) (\d+) (\d+) (\d+)\s*\]");
-        match.Success.Should().BeTrue();
+        match.Success.ShouldBeTrue();
 
         long offset1 = long.Parse(match.Groups[1].Value);
         long length1 = long.Parse(match.Groups[2].Value);
         long offset2 = long.Parse(match.Groups[3].Value);
         long length2 = long.Parse(match.Groups[4].Value);
 
-        offset1.Should().Be(0, "ByteRange must start at beginning of file");
-        (offset2 + length2).Should().Be(outputBytes.Length,
+        offset1.ShouldBe(0, "ByteRange must start at beginning of file");
+        (offset2 + length2).ShouldBe(outputBytes.Length,
             "ByteRange must cover to end of file");
-        offset2.Should().BeGreaterThan(length1,
+        offset2.ShouldBeGreaterThan(length1,
             "second range must start after first range");
 
         // The gap between ranges is the /Contents hex value (including < >)
         long contentsHexLength = offset2 - length1 - 2; // -2 for < and >
-        contentsHexLength.Should().Be(1024 * 2,
+        contentsHexLength.ShouldBe(1024 * 2,
             "gap should equal ContentsReservedBytes * 2");
     }
 
@@ -286,16 +286,16 @@ public sealed class Iso32000ComplianceTests
         string input = "Hello\\World(test)\nLine2\rLine3\tTab\bBack\fFeed";
         string escaped = SignatureAppearanceRenderer.EscapePdfString(input);
 
-        escaped.Should().Contain("\\\\"); // backslash
-        escaped.Should().Contain("\\("); // open paren
-        escaped.Should().Contain("\\)"); // close paren
-        escaped.Should().Contain("\\n"); // newline
-        escaped.Should().Contain("\\r"); // carriage return
-        escaped.Should().Contain("\\t"); // tab
-        escaped.Should().Contain("\\b"); // backspace
-        escaped.Should().Contain("\\f"); // form feed
-        escaped.Should().NotContain("\n"); // no raw newline
-        escaped.Should().NotContain("\r"); // no raw CR
+        escaped.ShouldContain("\\\\"); // backslash
+        escaped.ShouldContain("\\("); // open paren
+        escaped.ShouldContain("\\)"); // close paren
+        escaped.ShouldContain("\\n"); // newline
+        escaped.ShouldContain("\\r"); // carriage return
+        escaped.ShouldContain("\\t"); // tab
+        escaped.ShouldContain("\\b"); // backspace
+        escaped.ShouldContain("\\f"); // form feed
+        escaped.ShouldNotContain("\n"); // no raw newline
+        escaped.ShouldNotContain("\r"); // no raw CR
     }
 
     [Fact(DisplayName = "§7.3.4.2: EscapePdfString preserves normal characters")]
@@ -303,7 +303,7 @@ public sealed class Iso32000ComplianceTests
     {
         string input = "Simple Name 123";
         string escaped = SignatureAppearanceRenderer.EscapePdfString(input);
-        escaped.Should().Be(input);
+        escaped.ShouldBe(input);
     }
 
     // ── §12.7: Interactive forms (AcroForm) ────────────────────────────────────
@@ -312,14 +312,14 @@ public sealed class Iso32000ComplianceTests
     public async Task AcroForm_HasSigFlags3()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().Contain("/SigFlags 3");
+        text.ShouldContain("/SigFlags 3");
     }
 
     [Fact(DisplayName = "§12.7: AcroForm has /Fields array with field reference")]
     public async Task AcroForm_HasFieldsArray()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().MatchRegex(@"/Fields \[.*\d+ 0 R.*\]");
+        text.ShouldMatch(@"/Fields \[.*\d+ 0 R.*\]");
     }
 
     [Fact(DisplayName = "§12.7: AcroForm does NOT add /Type key (Adobe diff analysis)")]
@@ -329,14 +329,13 @@ public sealed class Iso32000ComplianceTests
 
         // Find the AcroForm object in the incremental update
         int acroFormStart = text.IndexOf("/Fields [", StringComparison.Ordinal);
-        acroFormStart.Should().BeGreaterThan(0);
+        acroFormStart.ShouldBeGreaterThan(0);
 
         int objStart = text.LastIndexOf(" 0 obj\n", acroFormStart, StringComparison.Ordinal);
         int objEnd = text.IndexOf("endobj", acroFormStart, StringComparison.Ordinal);
         string acroFormObj = text.Substring(objStart, objEnd - objStart + 6);
 
-        acroFormObj.Should().NotContain("/Type /AcroForm",
-            "Adding /Type /AcroForm breaks Adobe diff analysis of earlier signatures");
+        acroFormObj.ShouldNotContain("/Type /AcroForm");
     }
 
     [Fact(DisplayName = "§12.7: AcroForm preserves /DR (default resources) from original")]
@@ -345,8 +344,8 @@ public sealed class Iso32000ComplianceTests
         byte[] pdfBytes = BuildPdfWithAcroFormDR();
         var (_, text) = await PrepareSignedPdf(pdfBytes);
 
-        text.Should().Contain("/DR");
-        text.Should().Contain("/Font");
+        text.ShouldContain("/DR");
+        text.ShouldContain("/Font");
     }
 
     [Fact(DisplayName = "§12.7: AcroForm preserves /DA (default appearance) from original")]
@@ -355,7 +354,7 @@ public sealed class Iso32000ComplianceTests
         byte[] pdfBytes = BuildPdfWithAcroFormDR();
         var (_, text) = await PrepareSignedPdf(pdfBytes);
 
-        text.Should().Contain("/DA");
+        text.ShouldContain("/DA");
     }
 
     // ── §12.7.4.5: Signature fields ────────────────────────────────────────────
@@ -364,21 +363,21 @@ public sealed class Iso32000ComplianceTests
     public async Task Field_HasFTSig()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().Contain("/FT /Sig");
+        text.ShouldContain("/FT /Sig");
     }
 
     [Fact(DisplayName = "§12.7.4.5: Field has /V pointing to sig dict")]
     public async Task Field_HasVReference()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().MatchRegex(@"/V \d+ 0 R");
+        text.ShouldMatch(@"/V \d+ 0 R");
     }
 
     [Fact(DisplayName = "§12.7.4.5: Field has /T with field name")]
     public async Task Field_HasTFieldName()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().MatchRegex(@"/T \(.+\)");
+        text.ShouldMatch(@"/T \(.+\)");
     }
 
     [Fact(DisplayName = "§12.7.4.5: Unique field names when signing multiple times")]
@@ -395,8 +394,8 @@ public sealed class Iso32000ComplianceTests
         await PdfSignatureWriter.PrepareAsync(input2, output2, DefaultOptions());
         string text = Encoding.Latin1.GetString(output2.ToArray());
 
-        text.Should().Contain("/T (Signature1)");
-        text.Should().Contain("/T (Signature2)");
+        text.ShouldContain("/T (Signature1)");
+        text.ShouldContain("/T (Signature2)");
     }
 
     // ── §8.6.5: Widget annotation ──────────────────────────────────────────────
@@ -405,16 +404,16 @@ public sealed class Iso32000ComplianceTests
     public async Task Widget_HasTypeAnnotSubtypeWidget()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().Contain("/Type /Annot");
-        text.Should().Contain("/Subtype /Widget");
+        text.ShouldContain("/Type /Annot");
+        text.ShouldContain("/Subtype /Widget");
     }
 
     [Fact(DisplayName = "§8.6.5: Invisible widget has /F 0 and /Rect [0 0 0 0]")]
     public async Task Widget_InvisibleHasF0AndZeroRect()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().Contain("/F 0");
-        text.Should().Contain("/Rect [0 0 0 0]");
+        text.ShouldContain("/F 0");
+        text.ShouldContain("/Rect [0 0 0 0]");
     }
 
     [Fact(DisplayName = "§8.6.5: Visible widget has /F 132 (Print + Locked)")]
@@ -423,14 +422,14 @@ public sealed class Iso32000ComplianceTests
         var (_, text) = await PrepareSignedPdf(options: VisibleOptions());
 
         // F 132 = Print (4) + Locked (128)
-        text.Should().Contain("/F 132");
+        text.ShouldContain("/F 132");
     }
 
     [Fact(DisplayName = "§8.6.5: Widget has /P page reference")]
     public async Task Widget_HasPageReference()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().MatchRegex(@"/P \d+ 0 R");
+        text.ShouldMatch(@"/P \d+ 0 R");
     }
 
     // ── §8.7: Page /Annots updated ─────────────────────────────────────────────
@@ -440,10 +439,10 @@ public sealed class Iso32000ComplianceTests
     {
         var (_, text) = await PrepareSignedPdf();
 
-        text.Should().Contain("/Annots [");
+        text.ShouldContain("/Annots [");
 
         int pageCount = Regex.Count(text, @"/Type /Page\b");
-        pageCount.Should().BeGreaterThanOrEqualTo(2, "page should be rewritten in incremental update");
+        pageCount.ShouldBeGreaterThanOrEqualTo(2, "page should be rewritten in incremental update");
     }
 
     // ── §7.5.4-6: Incremental update structure ────────────────────────────────
@@ -455,14 +454,14 @@ public sealed class Iso32000ComplianceTests
         var (outputBytes, _) = await PrepareSignedPdf(original);
 
         outputBytes.AsSpan(0, original.Length).ToArray()
-            .Should().BeEquivalentTo(original);
+            .ShouldBe(original);
     }
 
     [Fact(DisplayName = "§7.5.4: Xref table has /Prev pointing to original xref")]
     public async Task IncrementalUpdate_HasPrev()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().MatchRegex(@"/Prev \d+");
+        text.ShouldMatch(@"/Prev \d+");
     }
 
     [Fact(DisplayName = "§7.5.4: Trailer has /Size >= highest obj num + 1")]
@@ -471,7 +470,7 @@ public sealed class Iso32000ComplianceTests
         var (_, text) = await PrepareSignedPdf();
 
         var sizeMatches = Regex.Matches(text, @"/Size (\d+)");
-        sizeMatches.Count.Should().BeGreaterThanOrEqualTo(2);
+        sizeMatches.Count().ShouldBeGreaterThanOrEqualTo(2);
         int trailerSize = int.Parse(sizeMatches[^1].Groups[1].Value);
 
         var objMatches = Regex.Matches(text, @"(\d+) 0 obj\b");
@@ -485,7 +484,7 @@ public sealed class Iso32000ComplianceTests
             }
         }
 
-        trailerSize.Should().BeGreaterThanOrEqualTo(highestObj + 1,
+        trailerSize.ShouldBeGreaterThanOrEqualTo(highestObj + 1,
             "trailer /Size must be >= highest object number + 1");
     }
 
@@ -493,14 +492,14 @@ public sealed class Iso32000ComplianceTests
     public async Task IncrementalUpdate_EndsWithEOF()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.TrimEnd().Should().EndWith("%%EOF");
+        text.TrimEnd().ShouldEndWith("%%EOF");
     }
 
     [Fact(DisplayName = "§7.5.4: Has startxref before %%EOF")]
     public async Task IncrementalUpdate_HasStartxref()
     {
         var (_, text) = await PrepareSignedPdf();
-        text.Should().MatchRegex(@"startxref\n\d+\n%%EOF");
+        text.ShouldMatch(@"startxref\n\d+\n%%EOF");
     }
 
     // ── §7.5.4: Xref table entry format ────────────────────────────────────────
@@ -527,7 +526,7 @@ public sealed class Iso32000ComplianceTests
             }
             searchFrom = idx + 1;
         }
-        lastXref.Should().BeGreaterThan(0);
+        lastXref.ShouldBeGreaterThan(0);
 
         int pos = text.IndexOf('\n', lastXref) + 1; // after "xref\n"
         pos = text.IndexOf('\n', pos) + 1; // after first group header
@@ -543,7 +542,7 @@ public sealed class Iso32000ComplianceTests
 
             int entryEnd = text.IndexOf('\n', pos) + 1;
             int entryLength = entryEnd - pos;
-            entryLength.Should().Be(20,
+            entryLength.ShouldBe(20,
                 $"xref entry at offset {pos} should be exactly 20 bytes, got {entryLength}");
             pos = entryEnd;
         }
@@ -556,7 +555,7 @@ public sealed class Iso32000ComplianceTests
     {
         byte[] pdf = BuildMinimalXRefStreamPdf();
         var (_, text) = await PrepareSignedPdf(pdf);
-        text.Should().Contain("/Type /XRef");
+        text.ShouldContain("/Type /XRef");
     }
 
     [Fact(DisplayName = "§7.5.8: Xref stream has /W array")]
@@ -564,7 +563,7 @@ public sealed class Iso32000ComplianceTests
     {
         byte[] pdf = BuildMinimalXRefStreamPdf();
         var (_, text) = await PrepareSignedPdf(pdf);
-        text.Should().MatchRegex(@"/W \[\d+ \d+ \d+\]");
+        text.ShouldMatch(@"/W \[\d+ \d+ \d+\]");
     }
 
     [Fact(DisplayName = "§7.5.8: Xref stream has /Index array")]
@@ -572,7 +571,7 @@ public sealed class Iso32000ComplianceTests
     {
         byte[] pdf = BuildMinimalXRefStreamPdf();
         var (_, text) = await PrepareSignedPdf(pdf);
-        text.Should().MatchRegex(@"/Index \[[\d\s]+\]");
+        text.ShouldMatch(@"/Index \[[\d\s]+\]");
     }
 
     [Fact(DisplayName = "§7.5.8: Xref stream includes self-entry")]
@@ -582,11 +581,11 @@ public sealed class Iso32000ComplianceTests
         var (_, text) = await PrepareSignedPdf(pdf);
 
         var xrefObjMatches = Regex.Matches(text, @"(\d+) 0 obj\n<< /Type /XRef");
-        xrefObjMatches.Count.Should().BeGreaterThanOrEqualTo(1);
+        xrefObjMatches.Count().ShouldBeGreaterThanOrEqualTo(1);
         int xrefObjNum = int.Parse(xrefObjMatches[^1].Groups[1].Value);
 
         var indexMatches = Regex.Matches(text, @"/Index \[([\d\s]+)\]");
-        indexMatches.Count.Should().BeGreaterThanOrEqualTo(1);
+        indexMatches.Count().ShouldBeGreaterThanOrEqualTo(1);
 
         string[] indexParts = indexMatches[^1].Groups[1].Value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         bool covered = false;
@@ -601,7 +600,7 @@ public sealed class Iso32000ComplianceTests
             }
         }
 
-        covered.Should().BeTrue($"xref stream obj {xrefObjNum} must be in /Index array (self-entry)");
+        covered.ShouldBeTrue($"xref stream obj {xrefObjNum} must be in /Index array (self-entry)");
     }
 
     [Fact(DisplayName = "§7.5.8: Xref stream has /Filter /FlateDecode")]
@@ -609,7 +608,7 @@ public sealed class Iso32000ComplianceTests
     {
         byte[] pdf = BuildMinimalXRefStreamPdf();
         var (_, text) = await PrepareSignedPdf(pdf);
-        text.Should().Contain("/Filter /FlateDecode");
+        text.ShouldContain("/Filter /FlateDecode");
     }
 
     [Fact(DisplayName = "§7.5.8: Xref stream has /Size, /Root, /Prev (trailer keys)")]
@@ -619,12 +618,12 @@ public sealed class Iso32000ComplianceTests
         var (_, text) = await PrepareSignedPdf(pdf);
 
         int xrefDictStart = text.LastIndexOf("/Type /XRef", StringComparison.Ordinal);
-        xrefDictStart.Should().BeGreaterThan(0);
+        xrefDictStart.ShouldBeGreaterThan(0);
 
         string xrefSection = text[xrefDictStart..];
-        xrefSection.Should().MatchRegex(@"/Size \d+");
-        xrefSection.Should().MatchRegex(@"/Root \d+ 0 R");
-        xrefSection.Should().MatchRegex(@"/Prev \d+");
+        xrefSection.ShouldMatch(@"/Size \d+");
+        xrefSection.ShouldMatch(@"/Root \d+ 0 R");
+        xrefSection.ShouldMatch(@"/Prev \d+");
     }
 
     // ── §12.8.3: Signature appearance ──────────────────────────────────────────
@@ -633,15 +632,15 @@ public sealed class Iso32000ComplianceTests
     public async Task Appearance_VisibleHasAPNormal()
     {
         var (_, text) = await PrepareSignedPdf(options: VisibleOptions());
-        text.Should().MatchRegex(@"/AP << /N \d+ 0 R >>");
+        text.ShouldMatch(@"/AP << /N \d+ 0 R >>");
     }
 
     [Fact(DisplayName = "§12.8.3: Appearance stream is Form XObject with /Subtype /Form")]
     public async Task Appearance_IsFormXObject()
     {
         var (_, text) = await PrepareSignedPdf(options: VisibleOptions());
-        text.Should().Contain("/Subtype /Form");
-        text.Should().MatchRegex(@"/BBox \[[\d\.\s]+\]");
+        text.ShouldContain("/Subtype /Form");
+        text.ShouldMatch(@"/BBox \[[\d\.\s]+\]");
     }
 
     // ── §12.8.2: DocMDP transform ──────────────────────────────────────────────
@@ -654,15 +653,15 @@ public sealed class Iso32000ComplianceTests
     {
         var (_, text) = await PrepareSignedPdf(options: DocMdpOptions(level));
 
-        text.Should().Contain("/TransformMethod /DocMDP");
-        text.Should().Contain($"/P {expectedP}");
+        text.ShouldContain("/TransformMethod /DocMDP");
+        text.ShouldContain($"/P {expectedP}");
     }
 
     [Fact(DisplayName = "§12.8.2: DocMDP adds /Perms to catalog")]
     public async Task DocMDP_AddsPermsToCatalog()
     {
         var (_, text) = await PrepareSignedPdf(options: DocMdpOptions(CertificationLevel.NoChanges));
-        text.Should().MatchRegex(@"/Perms << /DocMDP \d+ 0 R >>");
+        text.ShouldMatch(@"/Perms << /DocMDP \d+ 0 R >>");
     }
 
     // ── BuildXrefStream unit tests ─────────────────────────────────────────────
@@ -682,15 +681,15 @@ public sealed class Iso32000ComplianceTests
             catalogObjNum: 1, prevXRef: 500, xrefStreamOffset: 4000);
 
         string text = Encoding.Latin1.GetString(bytes);
-        text.Should().Contain("/Type /XRef");
-        text.Should().Contain("/Size 9");
-        text.Should().Contain("/Root 1 0 R");
-        text.Should().Contain("/Prev 500");
-        text.Should().Contain("/W [1 4 1]");
-        text.Should().Contain("/Filter /FlateDecode");
-        text.Should().Contain("stream");
-        text.Should().Contain("endstream");
-        xrefObjNum.Should().Be(8);
+        text.ShouldContain("/Type /XRef");
+        text.ShouldContain("/Size 9");
+        text.ShouldContain("/Root 1 0 R");
+        text.ShouldContain("/Prev 500");
+        text.ShouldContain("/W [1 4 1]");
+        text.ShouldContain("/Filter /FlateDecode");
+        text.ShouldContain("stream");
+        text.ShouldContain("endstream");
+        xrefObjNum.ShouldBe(8);
     }
 
     [Fact(DisplayName = "§7.5.8: BuildXrefStream preserves trailer /ID")]
@@ -703,7 +702,7 @@ public sealed class Iso32000ComplianceTests
             offsets, 6, 7, 1, 500, 2000, trailerId: trailerId);
 
         string text = Encoding.Latin1.GetString(bytes);
-        text.Should().Contain(trailerId);
+        text.ShouldContain(trailerId);
     }
 
     // ── Cross-cutting: endobj markers ──────────────────────────────────────────
@@ -720,8 +719,8 @@ public sealed class Iso32000ComplianceTests
         int objCount = Regex.Count(updateText, @"\d+ 0 obj\b");
         int endobjCount = Regex.Count(updateText, @"\bendobj\b");
 
-        objCount.Should().BeGreaterThan(0);
-        endobjCount.Should().BeGreaterThanOrEqualTo(objCount,
+        objCount.ShouldBeGreaterThan(0);
+        endobjCount.ShouldBeGreaterThanOrEqualTo(objCount,
             "every object must have a matching endobj");
     }
 }

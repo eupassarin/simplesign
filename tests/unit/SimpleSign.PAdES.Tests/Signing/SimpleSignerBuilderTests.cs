@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -41,7 +41,7 @@ public sealed class SimpleSignerBuilderTests
     public void Document_ValidBytes_ReturnsSignerBuilder()
     {
         var builder = SimpleSigner.Document(new byte[] { 0x25, 0x50, 0x44, 0x46 });
-        builder.Should().NotBeNull();
+        builder.ShouldNotBeNull();
     }
 
     [Fact(DisplayName = "Document with valid stream returns builder")]
@@ -49,7 +49,7 @@ public sealed class SimpleSignerBuilderTests
     {
         var stream = new MemoryStream(new byte[] { 0x25, 0x50, 0x44, 0x46 });
         var builder = SimpleSigner.Document(stream);
-        builder.Should().NotBeNull();
+        builder.ShouldNotBeNull();
     }
 
     // ── Fluent builder ────────────────────────────────────────────────────────
@@ -91,9 +91,9 @@ public sealed class SimpleSignerBuilderTests
         var builder3 = builder2.WithTimestamp("http://tsa.example.com");
         var builder4 = builder3.WithFieldName("MySig");
 
-        builder.Should().NotBeSameAs(builder2);
-        builder2.Should().NotBeSameAs(builder3);
-        builder3.Should().NotBeSameAs(builder4);
+        builder.ShouldNotBeSameAs(builder2);
+        builder2.ShouldNotBeSameAs(builder3);
+        builder3.ShouldNotBeSameAs(builder4);
     }
 
     [Fact(DisplayName = "SignAsync without certificate throws exception")]
@@ -112,7 +112,7 @@ public sealed class SimpleSignerBuilderTests
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var builder2 = builder.WithMetadata(signerName: "João Silva", reason: "Aprovação", location: "Vitória-ES");
 
-        builder.Should().NotBeSameAs(builder2);
+        builder.ShouldNotBeSameAs(builder2);
     }
 
     [Fact(DisplayName = "WithExternalSigner with null cert throws exception")]
@@ -139,7 +139,7 @@ public sealed class SimpleSignerBuilderTests
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var builder2 = builder.WithExternalSigner(cert, _ => Task.FromResult(Array.Empty<byte>()));
 
-        builder.Should().NotBeSameAs(builder2);
+        builder.ShouldNotBeSameAs(builder2);
     }
 
     [Fact(DisplayName = "WithExternalSigner auto-detects RSA algorithm")]
@@ -150,7 +150,7 @@ public sealed class SimpleSignerBuilderTests
 
         // Should not throw — RSA key auto-detects to RsaSha256
         var builder2 = builder.WithExternalSigner(cert, _ => Task.FromResult(Array.Empty<byte>()));
-        builder2.Should().NotBeNull();
+        builder2.ShouldNotBeNull();
     }
 
     // ── WithLtv / WithArchivalTimestamp ──────────────────────────────────────
@@ -160,7 +160,7 @@ public sealed class SimpleSignerBuilderTests
     {
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var builder2 = builder.WithLtv();
-        builder2.Should().NotBeSameAs(builder);
+        builder2.ShouldNotBeSameAs(builder);
     }
 
     [Fact(DisplayName = "WithArchivalTimestamp returns new instance")]
@@ -168,7 +168,7 @@ public sealed class SimpleSignerBuilderTests
     {
         var builder = SimpleSigner.Document(new byte[] { 0x25 });
         var builder2 = builder.WithArchivalTimestamp("http://tsa.example.com");
-        builder2.Should().NotBeSameAs(builder);
+        builder2.ShouldNotBeSameAs(builder);
     }
 
     [Fact(DisplayName = "WithArchivalTimestamp with null URL uses timestamp URL")]
@@ -177,7 +177,7 @@ public sealed class SimpleSignerBuilderTests
         var builder = SimpleSigner.Document(new byte[] { 0x25 })
             .WithTimestamp("http://tsa.example.com");
         var builder2 = builder.WithArchivalTimestamp();
-        builder2.Should().NotBeNull();
+        builder2.ShouldNotBeNull();
     }
 }
 

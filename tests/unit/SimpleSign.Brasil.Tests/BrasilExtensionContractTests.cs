@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 
 namespace SimpleSign.Brasil.Tests;
 
@@ -10,10 +10,10 @@ public sealed class BrasilExtensionContractTests
     {
         var extension = new BrasilExtension();
 
-        extension.RegionCode.Should().Be("BR");
-        extension.DisplayName.Should().NotBeNullOrEmpty();
-        extension.TrustAnchorProviders.Should().NotBeEmpty();
-        extension.TrustAnchorProviders[0].GetTrustAnchors().Should().NotBeEmpty();
+        extension.RegionCode.ShouldBe("BR");
+        extension.DisplayName.ShouldNotBeNullOrEmpty();
+        extension.TrustAnchorProviders.ShouldNotBeEmpty();
+        extension.TrustAnchorProviders[0].GetTrustAnchors().ShouldNotBeEmpty();
     }
 
     [Fact(DisplayName = "BrasilExtension.ManifestProvider is not null")]
@@ -21,8 +21,8 @@ public sealed class BrasilExtensionContractTests
     {
         var extension = new BrasilExtension();
 
-        extension.ManifestProvider.Should().NotBeNull();
-        extension.ManifestProvider!.ManifestOid.Should().NotBeNullOrEmpty();
+        extension.ManifestProvider.ShouldNotBeNull();
+        extension.ManifestProvider!.ManifestOid.ShouldNotBeNullOrEmpty();
     }
 
     [Fact(DisplayName = "BrasilExtension.ChainValidationProviders returns non-empty list")]
@@ -30,7 +30,8 @@ public sealed class BrasilExtensionContractTests
     {
         var extension = new BrasilExtension();
 
-        extension.ChainValidationProviders.Should().NotBeEmpty();
-        extension.ChainValidationProviders.Should().AllSatisfy(p => p.RegionCode.Should().Be("BR"));
+        extension.ChainValidationProviders.ShouldNotBeEmpty();
+        foreach (var p in extension.ChainValidationProviders)
+            p.RegionCode.ShouldBe("BR");
     }
 }

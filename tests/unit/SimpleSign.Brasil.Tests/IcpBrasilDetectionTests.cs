@@ -1,7 +1,7 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Brasil.IcpBrasil;
 
 namespace SimpleSign.Brasil.Tests;
@@ -24,24 +24,24 @@ public sealed class IcpBrasilDetectionTests
     {
         // Issuer == Subject (self-signed) and contains the literal "ICP-Brasil"
         using var cert = CreatePlainCert("CN=AC Test, O=ICP-Brasil, C=BR");
-        IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).Should().BeTrue();
+        IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).ShouldBeTrue();
     }
 
     [Fact(DisplayName = "IsIcpBrasilCertificate returns false for unrelated certificate")]
     public void IsIcpBrasilCertificate_Unrelated_ReturnsFalse()
     {
         using var cert = CreatePlainCert("CN=Random Self-signed, O=Generic, C=US");
-        IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).Should().BeFalse();
+        IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).ShouldBeFalse();
     }
 
     [Fact(DisplayName = "IsIcpBrasilCertificate detects bundled root certs (Issuer contains ICP-Brasil)")]
     public void IsIcpBrasilCertificate_BundledRoot_ReturnsTrue()
     {
         var roots = IcpBrasilChainValidator.LoadBundledAcRaizCerts();
-        roots.Should().NotBeEmpty();
+        roots.ShouldNotBeEmpty();
         // Every bundled AC Raiz cert has "ICP-Brasil" in its issuer (self-signed root)
-        roots.Should().AllSatisfy(c =>
-            IcpBrasilChainValidator.IsIcpBrasilCertificate(c).Should().BeTrue());
+        foreach (var c in roots)
+            IcpBrasilChainValidator.IsIcpBrasilCertificate(c).ShouldBeTrue();
     }
 
     [Fact(DisplayName = "IsIcpBrasilCertificate detects via 2.16.76.1 policy OID (no Issuer match)")]
@@ -49,14 +49,14 @@ public sealed class IcpBrasilDetectionTests
     {
         // Subject/Issuer don't contain "ICP-Brasil"; detection must succeed via the OID arc.
         using var cert = CreateCertWithCertificatePolicy("2.16.76.1.7.1.1.2.3");
-        IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).Should().BeTrue();
+        IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).ShouldBeTrue();
     }
 
     [Fact(DisplayName = "IsIcpBrasilCertificate returns false for non-Brasil policy OID")]
     public void IsIcpBrasilCertificate_NonBrasilPolicy_ReturnsFalse()
     {
         using var cert = CreateCertWithCertificatePolicy("1.3.6.1.4.1.99999.1");
-        IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).Should().BeFalse();
+        IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).ShouldBeFalse();
     }
 
     // ── DetectPolicy ─────────────────────────────────────────────────────────
@@ -71,21 +71,21 @@ public sealed class IcpBrasilDetectionTests
     public void DetectPolicy_KnownOid_ReturnsPolicy(string oid, IcpBrasilPolicy expected)
     {
         using var cert = CreateCertWithCertificatePolicy(oid);
-        IcpBrasilChainValidator.DetectPolicy(cert).Should().Be(expected);
+        IcpBrasilChainValidator.DetectPolicy(cert).ShouldBe(expected);
     }
 
     [Fact(DisplayName = "DetectPolicy returns null for cert without certificate policies extension")]
     public void DetectPolicy_NoExtension_ReturnsNull()
     {
         using var cert = CreatePlainCert();
-        IcpBrasilChainValidator.DetectPolicy(cert).Should().BeNull();
+        IcpBrasilChainValidator.DetectPolicy(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "DetectPolicy returns null for cert with unknown policy OID")]
     public void DetectPolicy_UnknownOid_ReturnsNull()
     {
         using var cert = CreateCertWithCertificatePolicy("2.16.76.1.7.1.99.99.99");
-        IcpBrasilChainValidator.DetectPolicy(cert).Should().BeNull();
+        IcpBrasilChainValidator.DetectPolicy(cert).ShouldBeNull();
     }
 
     // ── DetectCertificateLevel ───────────────────────────────────────────────
@@ -104,21 +104,21 @@ public sealed class IcpBrasilDetectionTests
     public void DetectCertificateLevel_KnownArc_ReturnsLevel(string oid, IcpBrasilCertificateLevel expected)
     {
         using var cert = CreateCertWithCertificatePolicy(oid);
-        IcpBrasilChainValidator.DetectCertificateLevel(cert).Should().Be(expected);
+        IcpBrasilChainValidator.DetectCertificateLevel(cert).ShouldBe(expected);
     }
 
     [Fact(DisplayName = "DetectCertificateLevel returns null for cert without policy extension")]
     public void DetectCertificateLevel_NoExtension_ReturnsNull()
     {
         using var cert = CreatePlainCert();
-        IcpBrasilChainValidator.DetectCertificateLevel(cert).Should().BeNull();
+        IcpBrasilChainValidator.DetectCertificateLevel(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "DetectCertificateLevel returns null for non-ICP arc")]
     public void DetectCertificateLevel_NonIcpArc_ReturnsNull()
     {
         using var cert = CreateCertWithCertificatePolicy("1.3.6.1.4.1.99999.1");
-        IcpBrasilChainValidator.DetectCertificateLevel(cert).Should().BeNull();
+        IcpBrasilChainValidator.DetectCertificateLevel(cert).ShouldBeNull();
     }
 
     [Fact(DisplayName = "DetectCertificateLevel returns null for unknown level byte (e.g. 0x05)")]
@@ -126,7 +126,7 @@ public sealed class IcpBrasilDetectionTests
     {
         // 2.16.76.1.2.5 → level byte 0x05 (not mapped to A1..A4 / S1..S4)
         using var cert = CreateCertWithCertificatePolicy("2.16.76.1.2.5.1.1");
-        IcpBrasilChainValidator.DetectCertificateLevel(cert).Should().BeNull();
+        IcpBrasilChainValidator.DetectCertificateLevel(cert).ShouldBeNull();
     }
 
     // ── ExtractCpfCnpj via SAN otherName ─────────────────────────────────────
@@ -142,8 +142,8 @@ public sealed class IcpBrasilDetectionTests
         using var cert = CreateCertWithSan([("2.16.76.1.3.1", holderData)]);
         var (extractedCpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(cert);
 
-        extractedCpf.Should().Be(cpf);
-        cnpj.Should().BeNull();
+        extractedCpf.ShouldBe(cpf);
+        cnpj.ShouldBeNull();
     }
 
     [Fact(DisplayName = "ExtractCpfCnpj extracts valid CNPJ from SAN otherName 2.16.76.1.3.3")]
@@ -155,8 +155,8 @@ public sealed class IcpBrasilDetectionTests
         using var cert = CreateCertWithSan([("2.16.76.1.3.3", cnpjData)]);
         var (cpf, extractedCnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(cert);
 
-        cpf.Should().BeNull();
-        extractedCnpj.Should().Be(cnpj);
+        cpf.ShouldBeNull();
+        extractedCnpj.ShouldBe(cnpj);
     }
 
     [Fact(DisplayName = "ExtractCpfCnpj returns null when SAN contains invalid CPF")]
@@ -166,7 +166,7 @@ public sealed class IcpBrasilDetectionTests
         const string holderData = "AAAAAAAA" + "11111111111";
         using var cert = CreateCertWithSan([("2.16.76.1.3.1", holderData)]);
         var (cpf, _) = IcpBrasilChainValidator.ExtractCpfCnpj(cert);
-        cpf.Should().BeNull();
+        cpf.ShouldBeNull();
     }
 
     [Fact(DisplayName = "ExtractCpfCnpj returns nulls when no SAN extension is present")]
@@ -174,8 +174,8 @@ public sealed class IcpBrasilDetectionTests
     {
         using var cert = CreatePlainCert();
         var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(cert);
-        cpf.Should().BeNull();
-        cnpj.Should().BeNull();
+        cpf.ShouldBeNull();
+        cnpj.ShouldBeNull();
     }
 
     [Fact(DisplayName = "ExtractCpfCnpj skips non-otherName SAN entries gracefully")]
@@ -193,8 +193,8 @@ public sealed class IcpBrasilDetectionTests
 
         using var cert = CreateCertWithExtension(SubjectAltNameOid, w.Encode());
         var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(cert);
-        cpf.Should().BeNull();
-        cnpj.Should().BeNull();
+        cpf.ShouldBeNull();
+        cnpj.ShouldBeNull();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

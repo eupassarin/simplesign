@@ -48,6 +48,10 @@ public sealed class InMemoryCertificateCache : ICertificateCache
     /// <inheritdoc/>
     public void Clear()
     {
+        foreach (var entry in _cache.Values)
+        {
+            entry.Certificate.Dispose();
+        }
         _cache.Clear();
     }
 
@@ -66,8 +70,9 @@ public sealed class InMemoryCertificateCache : ICertificateCache
         {
             if (_cache.TryGetValue(key, out var entry) && entry.IsExpired(_ttl))
             {
-                if (_cache.TryRemove(key, out _))
+                if (_cache.TryRemove(key, out var removed_entry))
                 {
+                    removed_entry.Certificate.Dispose();
                     removed++;
                 }
             }

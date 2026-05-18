@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Revocation;
 using SimpleSign.TestFixtures;
@@ -26,7 +26,7 @@ public sealed class CrlClientRealFixtureTests
 
         var result = CrlClient.IsSerialInCrl(cert, RecordedFixtures.DigiCertCrl, issuer);
 
-        result.Should().NotBe(true, "the cert is currently valid; it must not appear as revoked");
+        result.ShouldNotBe(true, "the cert is currently valid; it must not appear as revoked");
     }
 
     [Fact(DisplayName = "IsSerialInCrl handles the real DigiCert CRL without throwing")]
@@ -36,7 +36,7 @@ public sealed class CrlClientRealFixtureTests
         using var issuer = CertificateLoader.LoadCertificate(RecordedFixtures.DigiCertIssuerCertDer);
 
         Action act = () => CrlClient.IsSerialInCrl(cert, RecordedFixtures.DigiCertCrl, issuer);
-        act.Should().NotThrow();
+        Should.NotThrow(act);
     }
 
     [Fact(DisplayName = "GetCrlUrl on real DigiCert cert returns the http URL")]
@@ -44,7 +44,8 @@ public sealed class CrlClientRealFixtureTests
     {
         using var cert = CertificateLoader.LoadCertificate(RecordedFixtures.DigiCertPublicCertDer);
         var url = CrlClient.GetCrlUrl(cert);
-        url.Should().StartWith("http://").And.EndWith(".crl");
+        url!.ShouldStartWith("http://");
+        url.ShouldEndWith(".crl");
     }
 
     [Fact(DisplayName = "Real DigiCert CRL is hundreds of KB (real CA produces large CRLs)")]
@@ -52,6 +53,6 @@ public sealed class CrlClientRealFixtureTests
     {
         // Captured DigiCert CRL has ~400KB at fixture time. If this fixture ever shrinks
         // to a few hundred bytes, something has gone wrong with the recording.
-        RecordedFixtures.DigiCertCrl.Length.Should().BeGreaterThan(10_000);
+        RecordedFixtures.DigiCertCrl.Length.ShouldBeGreaterThan(10_000);
     }
 }

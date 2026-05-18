@@ -133,31 +133,41 @@ public sealed class IcpBrasilChainValidator
         // 3. Attempts to download intermediate certificates via AIA (Authority Information Access)
         var aiaCerts = await DownloadAiaCertsAsync(certificate, extraCerts, warnings, cancellationToken).ConfigureAwait(false);
 
-        // 4. Builds the chain with the AC Raiz as trust anchor
-        using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts);
-
-        var (chainElements, hasRevocationUnknown) = ProcessChainErrors(chain, errors);
-
-        if (hasRevocationUnknown)
+        try
         {
-            warnings.Add("Revocation check incomplete (CRL/OCSP unreachable from this platform). " +
-                         "Verify manually at: https://consulta.certisign.com.br/");
+            // 4. Builds the chain with the AC Raiz as trust anchor
+            using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts);
+
+            var (chainElements, hasRevocationUnknown) = ProcessChainErrors(chain, errors);
+
+            if (hasRevocationUnknown)
+            {
+                warnings.Add("Revocation check incomplete (CRL/OCSP unreachable from this platform). " +
+                "Verify manually at: https://consulta.certisign.com.br/");
+            }
+
+            // Recalculates: chain is valid if there are no real errors (RevocationUnknown is a warning, not an error)
+            bool isChainValid = errors is [] && chainElements is not [];
+
+            return new IcpBrasilValidationResult
+            {
+                IsChainValid = isChainValid,
+                IsIcpBrasilCertificate = isIcpBrasil,
+                DetectedPolicy = policy,
+                CertificateLevel = certLevel,
+                ChainElements = chainElements.AsReadOnly(),
+                AcRaizCertificates = acRaizCerts.AsReadOnly(),
+                Errors = errors.AsReadOnly(),
+                Warnings = warnings.AsReadOnly()
+            };
         }
-
-        // Recalculates: chain is valid if there are no real errors (RevocationUnknown is a warning, not an error)
-        bool isChainValid = errors is [] && chainElements is not [];
-
-        return new IcpBrasilValidationResult
+        finally
         {
-            IsChainValid = isChainValid,
-            IsIcpBrasilCertificate = isIcpBrasil,
-            DetectedPolicy = policy,
-            CertificateLevel = certLevel,
-            ChainElements = chainElements.AsReadOnly(),
-            AcRaizCertificates = acRaizCerts.AsReadOnly(),
-            Errors = errors.AsReadOnly(),
-            Warnings = warnings.AsReadOnly()
-        };
+            foreach (var c in aiaCerts)
+            {
+                c.Dispose();
+            }
+        }
     }
 
     /// <summary>
@@ -340,7 +350,15 @@ public sealed class IcpBrasilChainValidator
             {
                 return System.Text.Encoding.UTF8.GetString(r.ReadOctetString());
             }
-            return System.Text.Encoding.UTF8.GetString(r.ReadEncodedValue().Span[2..]); // skip tag+length
+            var encodedValue = r.ReadEncodedValue().Span;
+            int headerSize = encodedValue[1] switch
+            {
+                <= 127 => 2,
+                0x81 => 3,
+                0x82 => 4,
+                _ => 2,
+            };
+            return System.Text.Encoding.UTF8.GetString(encodedValue[headerSize..]);
         }
         catch (AsnContentException)
         {

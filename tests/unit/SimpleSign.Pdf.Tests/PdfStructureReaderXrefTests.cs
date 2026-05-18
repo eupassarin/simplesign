@@ -1,5 +1,5 @@
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace SimpleSign.Pdf.Tests;
@@ -23,9 +23,8 @@ public sealed class PdfStructureReaderXrefTests
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
         // Must find the signature field via brute-force scan even without classic xref
-        fields.Should().ContainSingle(
-            because: "signature field must be found in PDFs with cross-reference streams");
-        fields[0].SubFilter.Should().Be("ETSI.CAdES.detached");
+        fields.Count().ShouldBe(1);
+        fields[0].SubFilter.ShouldBe("ETSI.CAdES.detached");
     }
 
     [Fact(DisplayName = "ByteRange is valid in PDF with xref stream")]
@@ -37,9 +36,8 @@ public sealed class PdfStructureReaderXrefTests
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().ContainSingle();
-        fields[0].ByteRange.IsValid.Should().BeTrue(
-            because: "ByteRange must be parseable regardless of xref format");
+        fields.Count().ShouldBe(1);
+        fields[0].ByteRange.IsValid.ShouldBeTrue();
     }
 
     // ── FlateDecode xref streams (PDF 1.5+) ──────────────────────────────────
@@ -53,10 +51,9 @@ public sealed class PdfStructureReaderXrefTests
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().ContainSingle(
-            because: "signature field must be found in PDFs with FlateDecode xref streams");
-        fields[0].SubFilter.Should().Be("ETSI.CAdES.detached");
-        fields[0].ByteRange.IsValid.Should().BeTrue();
+        fields.Count().ShouldBe(1);
+        fields[0].SubFilter.ShouldBe("ETSI.CAdES.detached");
+        fields[0].ByteRange.IsValid.ShouldBeTrue();
     }
 
     // ── Object Streams (ObjStm / Type 2 xref entries) ────────────────────────
@@ -74,10 +71,9 @@ public sealed class PdfStructureReaderXrefTests
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().ContainSingle(
-            because: "signature field must be found in PDFs using Object Streams with Type 2 xref entries");
-        fields[0].SubFilter.Should().Be("ETSI.CAdES.detached");
-        fields[0].ByteRange.IsValid.Should().BeTrue();
+        fields.Count().ShouldBe(1);
+        fields[0].SubFilter.ShouldBe("ETSI.CAdES.detached");
+        fields[0].ByteRange.IsValid.ShouldBeTrue();
     }
 
     // ── Fixture helpers ───────────────────────────────────────────────────────

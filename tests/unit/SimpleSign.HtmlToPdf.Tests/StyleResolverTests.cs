@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.HtmlToPdf.Parsing;
 using Xunit;
 
@@ -15,10 +15,10 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, []);
 
         var h1 = FindFirstByTag(root, "h1");
-        h1.Should().NotBeNull();
-        h1!.ComputedStyle.Should().NotBeNull();
-        h1.ComputedStyle!.IsBold.Should().BeTrue();
-        h1.ComputedStyle.FontSize.Should().BeGreaterThan(12f);
+        h1.ShouldNotBeNull();
+        h1!.ComputedStyle.ShouldNotBeNull();
+        h1.ComputedStyle!.IsBold.ShouldBeTrue();
+        h1.ComputedStyle.FontSize.ShouldBeGreaterThan(12f);
     }
 
     [Fact(DisplayName = "Resolve applies default styles to p")]
@@ -28,9 +28,9 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, []);
 
         var p = FindFirstByTag(root, "p");
-        p.Should().NotBeNull();
-        p!.ComputedStyle.Should().NotBeNull();
-        p.ComputedStyle!.Display.Should().Be(DisplayType.Block);
+        p.ShouldNotBeNull();
+        p!.ComputedStyle.ShouldNotBeNull();
+        p.ComputedStyle!.Display.ShouldBe(DisplayType.Block);
     }
 
     [Fact(DisplayName = "Resolve applies bold to strong/b")]
@@ -40,8 +40,8 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, []);
 
         var strong = FindFirstByTag(root, "strong");
-        strong.Should().NotBeNull();
-        strong!.ComputedStyle!.IsBold.Should().BeTrue();
+        strong.ShouldNotBeNull();
+        strong!.ComputedStyle!.IsBold.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "Resolve applies italic to em/i")]
@@ -51,8 +51,8 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, []);
 
         var em = FindFirstByTag(root, "em");
-        em.Should().NotBeNull();
-        em!.ComputedStyle!.IsItalic.Should().BeTrue();
+        em.ShouldNotBeNull();
+        em!.ComputedStyle!.IsItalic.ShouldBeTrue();
     }
 
     // ── CSS rule application ────────────────────────────────────────────
@@ -65,8 +65,8 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, rules);
 
         var p = FindFirstByTag(root, "p");
-        p.Should().NotBeNull();
-        p!.ComputedStyle!.FontSize.Should().Be(18f);
+        p.ShouldNotBeNull();
+        p!.ComputedStyle!.FontSize.ShouldBe(18f);
     }
 
     [Fact(DisplayName = "Resolve applies class selector")]
@@ -77,8 +77,8 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, rules);
 
         var p = FindFirstByTag(root, "p");
-        p.Should().NotBeNull();
-        p!.ComputedStyle!.FontSize.Should().Be(24f);
+        p.ShouldNotBeNull();
+        p!.ComputedStyle!.FontSize.ShouldBe(24f);
     }
 
     [Fact(DisplayName = "Resolve applies id selector")]
@@ -89,8 +89,8 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, rules);
 
         var div = FindFirstByTag(root, "div");
-        div.Should().NotBeNull();
-        div!.ComputedStyle!.FontSize.Should().Be(20f);
+        div.ShouldNotBeNull();
+        div!.ComputedStyle!.FontSize.ShouldBe(20f);
     }
 
     // ── Inline styles ───────────────────────────────────────────────────
@@ -102,8 +102,8 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, []);
 
         var p = FindFirstByTag(root, "p");
-        p.Should().NotBeNull();
-        p!.ComputedStyle!.FontSize.Should().Be(20f);
+        p.ShouldNotBeNull();
+        p!.ComputedStyle!.FontSize.ShouldBe(20f);
     }
 
     [Fact(DisplayName = "Inline styles override stylesheet")]
@@ -114,7 +114,7 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, rules);
 
         var p = FindFirstByTag(root, "p");
-        p!.ComputedStyle!.FontSize.Should().Be(30f);
+        p!.ComputedStyle!.FontSize.ShouldBe(30f);
     }
 
     // ── Inheritance ─────────────────────────────────────────────────────
@@ -127,8 +127,8 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, rules);
 
         var span = FindFirstByTag(root, "span");
-        span.Should().NotBeNull();
-        span!.ComputedStyle!.FontSize.Should().Be(20f);
+        span.ShouldNotBeNull();
+        span!.ComputedStyle!.FontSize.ShouldBe(20f);
     }
 
     // ── Table display ───────────────────────────────────────────────────
@@ -141,13 +141,13 @@ public class StyleResolverTests
 
         // Table uses Block display (handled specially by LayoutEngine via tag check)
         var table = FindFirstByTag(root, "table");
-        table!.ComputedStyle!.Display.Should().Be(DisplayType.Block);
+        table!.ComputedStyle!.Display.ShouldBe(DisplayType.Block);
 
         var tr = FindFirstByTag(root, "tr");
-        tr!.ComputedStyle!.Display.Should().Be(DisplayType.TableRow);
+        tr!.ComputedStyle!.Display.ShouldBe(DisplayType.TableRow);
 
         var td = FindFirstByTag(root, "td");
-        td!.ComputedStyle!.Display.Should().Be(DisplayType.TableCell);
+        td!.ComputedStyle!.Display.ShouldBe(DisplayType.TableCell);
     }
 
     [Fact(DisplayName = "Resolve sets list-item display for li")]
@@ -157,7 +157,7 @@ public class StyleResolverTests
         StyleResolver.Resolve(root, []);
 
         var li = FindFirstByTag(root, "li");
-        li!.ComputedStyle!.Display.Should().Be(DisplayType.ListItem);
+        li!.ComputedStyle!.Display.ShouldBe(DisplayType.ListItem);
     }
 
     // ── Heading size hierarchy ──────────────────────────────────────────
@@ -172,8 +172,8 @@ public class StyleResolverTests
         var h2 = FindFirstByTag(root, "h2")!.ComputedStyle!.FontSize;
         var h3 = FindFirstByTag(root, "h3")!.ComputedStyle!.FontSize;
 
-        h1.Should().BeGreaterThan(h2);
-        h2.Should().BeGreaterThan(h3);
+        h1.ShouldBeGreaterThan(h2);
+        h2.ShouldBeGreaterThan(h3);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES.Validation;
 using Xunit;
 
@@ -19,7 +19,7 @@ public sealed class DssExtractorTests
     {
         ReadOnlySpan<byte> haystack = "abcdef"u8;
         ReadOnlySpan<byte> needle = "cd"u8;
-        DssExtractor.IndexOfBytes(haystack, needle).Should().Be(2);
+        DssExtractor.IndexOfBytes(haystack, needle).ShouldBe(2);
     }
 
     [Fact(DisplayName = "IndexOfBytes returns -1 when not found")]
@@ -27,7 +27,7 @@ public sealed class DssExtractorTests
     {
         ReadOnlySpan<byte> haystack = "abcdef"u8;
         ReadOnlySpan<byte> needle = "xyz"u8;
-        DssExtractor.IndexOfBytes(haystack, needle).Should().Be(-1);
+        DssExtractor.IndexOfBytes(haystack, needle).ShouldBe(-1);
     }
 
     [Fact(DisplayName = "IndexOfBytes returns -1 when needle longer than haystack")]
@@ -35,7 +35,7 @@ public sealed class DssExtractorTests
     {
         ReadOnlySpan<byte> haystack = "ab"u8;
         ReadOnlySpan<byte> needle = "abc"u8;
-        DssExtractor.IndexOfBytes(haystack, needle).Should().Be(-1);
+        DssExtractor.IndexOfBytes(haystack, needle).ShouldBe(-1);
     }
 
     [Fact(DisplayName = "IndexOfBytesFrom skips earlier occurrences")]
@@ -43,7 +43,7 @@ public sealed class DssExtractorTests
     {
         ReadOnlySpan<byte> haystack = "ab cd ab cd"u8;
         ReadOnlySpan<byte> needle = "ab"u8;
-        DssExtractor.IndexOfBytesFrom(haystack, needle, 3).Should().Be(6);
+        DssExtractor.IndexOfBytesFrom(haystack, needle, 3).ShouldBe(6);
     }
 
     [Fact(DisplayName = "IndexOfBytesFrom returns -1 with negative offset")]
@@ -51,7 +51,7 @@ public sealed class DssExtractorTests
     {
         ReadOnlySpan<byte> haystack = "abc"u8;
         ReadOnlySpan<byte> needle = "a"u8;
-        DssExtractor.IndexOfBytesFrom(haystack, needle, -1).Should().Be(-1);
+        DssExtractor.IndexOfBytesFrom(haystack, needle, -1).ShouldBe(-1);
     }
 
     [Fact(DisplayName = "IndexOfBytesFrom returns -1 when offset past end")]
@@ -59,7 +59,7 @@ public sealed class DssExtractorTests
     {
         ReadOnlySpan<byte> haystack = "abc"u8;
         ReadOnlySpan<byte> needle = "a"u8;
-        DssExtractor.IndexOfBytesFrom(haystack, needle, 100).Should().Be(-1);
+        DssExtractor.IndexOfBytesFrom(haystack, needle, 100).ShouldBe(-1);
     }
 
     // ── ParseObjRefs ────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ public sealed class DssExtractorTests
     {
         var content = Encoding.ASCII.GetBytes("10 0 R 20 0 R 30 0 R");
         var result = DssExtractor.ParseObjRefs(content).ToList();
-        result.Should().Equal(10, 20, 30);
+        result.ShouldBe(new[] { 10, 20, 30 });
     }
 
     [Fact(DisplayName = "ParseObjRefs ignores garbage tokens")]
@@ -77,14 +77,14 @@ public sealed class DssExtractorTests
     {
         var content = Encoding.ASCII.GetBytes("garbage 5 0 R nonsense 7 0 R end");
         var result = DssExtractor.ParseObjRefs(content).ToList();
-        result.Should().Equal(5, 7);
+        result.ShouldBe(new[] { 5, 7 });
     }
 
     [Fact(DisplayName = "ParseObjRefs on empty input returns empty")]
     public void ParseObjRefs_Empty_ReturnsEmpty()
     {
         var result = DssExtractor.ParseObjRefs(Array.Empty<byte>()).ToList();
-        result.Should().BeEmpty();
+        result.ShouldBeEmpty();
     }
 
     // ── FindDssDictionary ───────────────────────────────────────────────────
@@ -93,14 +93,14 @@ public sealed class DssExtractorTests
     public void FindDssDictionary_NoDssKey_ReturnsNull()
     {
         var data = Encoding.ASCII.GetBytes("plain pdf content with no dss");
-        DssExtractor.FindDssDictionary(data).Should().BeNull();
+        DssExtractor.FindDssDictionary(data).ShouldBeNull();
     }
 
     [Fact(DisplayName = "FindDssDictionary returns null when number is missing after /DSS")]
     public void FindDssDictionary_NoNumberAfterDss_ReturnsNull()
     {
         var data = Encoding.ASCII.GetBytes("/DSS notanumber");
-        DssExtractor.FindDssDictionary(data).Should().BeNull();
+        DssExtractor.FindDssDictionary(data).ShouldBeNull();
     }
 
     [Fact(DisplayName = "FindDssDictionary returns null when DSS object body cannot be located")]
@@ -108,7 +108,7 @@ public sealed class DssExtractorTests
     {
         // Reference to /DSS 99 0 R but no `99 0 obj` body in the data
         var data = Encoding.ASCII.GetBytes("/Catalog << /DSS 99 0 R >>");
-        DssExtractor.FindDssDictionary(data).Should().BeNull();
+        DssExtractor.FindDssDictionary(data).ShouldBeNull();
     }
 
     [Fact(DisplayName = "FindDssDictionary returns dict bytes when DSS object is present")]
@@ -124,11 +124,11 @@ public sealed class DssExtractorTests
 
         var slice = DssExtractor.FindDssDictionary(data);
 
-        slice.Should().NotBeNull();
+        slice.ShouldNotBeNull();
         var sliceText = Encoding.ASCII.GetString(slice!.Value.Span);
-        sliceText.Should().StartWith("<<");
-        sliceText.Should().EndWith(">>");
-        sliceText.Should().Contain("/CRLs [10 0 R]");
+        sliceText.ShouldStartWith("<<");
+        sliceText.ShouldEndWith(">>");
+        sliceText.ShouldContain("/CRLs [10 0 R]");
     }
 
     // ── TryReadDssDataAsync (entry point) ───────────────────────────────────
@@ -138,7 +138,7 @@ public sealed class DssExtractorTests
     {
         using var stream = new MemoryStream(Encoding.ASCII.GetBytes("not a pdf"));
         var crls = await DssExtractor.TryReadDssDataAsync(stream, CancellationToken.None);
-        crls.Should().BeEmpty();
+        crls.ShouldBeEmpty();
     }
 
     [Fact(DisplayName = "TryReadDssDataAsync extracts CRL bytes from minimal DSS-shaped payload")]
@@ -165,7 +165,7 @@ public sealed class DssExtractorTests
         using var stream = new MemoryStream(data);
         var crls = await DssExtractor.TryReadDssDataAsync(stream, CancellationToken.None);
 
-        crls.Should().HaveCount(1);
-        crls[0].Should().Equal(crlContent);
+        crls.Count().ShouldBe(1);
+        crls[0].ShouldBe(crlContent);
     }
 }

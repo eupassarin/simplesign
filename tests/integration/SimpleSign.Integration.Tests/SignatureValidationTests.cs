@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Validation;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.PAdES.Validation;
@@ -22,9 +22,9 @@ public sealed class SignatureValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeTrue();
-        results[0].IsSignatureValid.Should().BeTrue();
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeTrue();
         output.WriteLine($"Signer: {results[0].SignerName}");
     }
 
@@ -38,9 +38,9 @@ public sealed class SignatureValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeTrue();
-        results[0].IsSignatureValid.Should().BeTrue();
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeTrue();
         output.WriteLine($"Signer: {results[0].SignerName}");
     }
 
@@ -54,9 +54,9 @@ public sealed class SignatureValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeTrue();
-        results[0].IsSignatureValid.Should().BeFalse();
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeFalse();
         output.WriteLine($"Signer: {results[0].SignerName ?? "(unknown)"}");
     }
 
@@ -70,10 +70,10 @@ public sealed class SignatureValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeTrue();
-        results[0].IsSignatureValid.Should().BeTrue();
-        results[0].SignerName.Should().Contain("Karimi");
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeTrue();
+        results[0].SignerName!.ShouldContain("Karimi");
         output.WriteLine($"Signer: {results[0].SignerName}");
     }
 
@@ -87,9 +87,9 @@ public sealed class SignatureValidationTests(ITestOutputHelper output)
         using var stream = FixturePath.Open(fixture);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(1);
-        results[0].IsIntegrityValid.Should().BeTrue();
-        results[0].IsSignatureValid.Should().BeTrue();
+        results.Count().ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeTrue();
         output.WriteLine($"Signer: {results[0].SignerName}");
     }
 

@@ -166,6 +166,8 @@ public sealed class CmsSignatureBuilder
                 using (writer.PushSequence())
                 {
                     // version CMSVersion = 1
+                    // RFC 5652 §5.1: version = 1 when all SignerInfos use issuerAndSerialNumber (v1).
+                    // ETSI EN 319 142-1 does not mandate v3; v1 is interoperable with all major validators.
                     writer.WriteInteger(1);
 
                     // digestAlgorithms SET
@@ -435,6 +437,8 @@ public sealed class CmsSignatureBuilder
         _ when alg == HashAlgorithmName.SHA256 => Oids.Sha256,
         _ when alg == HashAlgorithmName.SHA384 => Oids.Sha384,
         _ when alg == HashAlgorithmName.SHA512 => Oids.Sha512,
+        _ when alg == HashAlgorithmName.SHA1 => throw new NotSupportedException("SHA-1 is deprecated and not supported for new signatures. Use SHA-256 or stronger."),
+        _ when alg == HashAlgorithmName.MD5 => throw new NotSupportedException("MD5 is insecure and not supported for signatures."),
         _ => throw new NotSupportedException($"Hash algorithm '{alg.Name}' is not supported.")
     };
 

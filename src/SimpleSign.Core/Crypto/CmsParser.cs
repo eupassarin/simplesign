@@ -137,7 +137,7 @@ internal static class CmsParser
 
             return (eContentTypeOid, hashAlgOid, hashedMessage);
         }
-        catch
+        catch (Exception)
         {
             // If parsing fails, don't block the rest of the validation pipeline
             return (null, null, null);

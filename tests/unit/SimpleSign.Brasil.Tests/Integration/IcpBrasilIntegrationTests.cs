@@ -1,6 +1,6 @@
-using FluentAssertions;
-using SimpleSign.PAdES;
+using Shouldly;
 using SimpleSign.Core.Validation;
+using SimpleSign.PAdES;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.Pdf;
 using SimpleSign.TestHelpers;
@@ -29,14 +29,14 @@ public sealed class IcpBrasilIntegrationTests
         using var stream = File.OpenRead(FixturePath(Fixture));
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().HaveCount(2);
-        fields.Should().AllSatisfy(f =>
+        fields.Count().ShouldBe(2);
+        foreach (var f in fields)
         {
-            f.IsSigned.Should().BeTrue();
-            f.SubFilter.Should().Be("adbe.pkcs7.detached");
-            f.ByteRange.Should().NotBeNull();
-            f.ByteRange!.IsValid.Should().BeTrue();
-        });
+            f.IsSigned.ShouldBeTrue();
+            f.SubFilter.ShouldBe("adbe.pkcs7.detached");
+            f.ByteRange.ShouldNotBeNull();
+            f.ByteRange!.IsValid.ShouldBeTrue();
+        }
     }
 
     [SkippableFact(DisplayName = "ICP-Brasil PDF should have signing dates in 2026")]
@@ -47,11 +47,11 @@ public sealed class IcpBrasilIntegrationTests
         using var stream = File.OpenRead(FixturePath(Fixture));
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 
-        fields.Should().HaveCount(2);
-        fields[0].PdfSigningTime.Should().NotBeNull();
-        fields[0].PdfSigningTime!.Value.Year.Should().Be(2026);
-        fields[1].PdfSigningTime.Should().NotBeNull();
-        fields[1].PdfSigningTime!.Value.Year.Should().Be(2026);
+        fields.Count().ShouldBe(2);
+        fields[0].PdfSigningTime.ShouldNotBeNull();
+        fields[0].PdfSigningTime!.Value.Year.ShouldBe(2026);
+        fields[1].PdfSigningTime.ShouldNotBeNull();
+        fields[1].PdfSigningTime!.Value.Year.ShouldBe(2026);
     }
 
     [SkippableFact(DisplayName = "ICP-Brasil PDF should have valid integrity and signature")]
@@ -63,12 +63,12 @@ public sealed class IcpBrasilIntegrationTests
         using var stream = File.OpenRead(FixturePath(Fixture));
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(2);
-        results.Should().AllSatisfy(r =>
+        results.Count().ShouldBe(2);
+        foreach (var r in results)
         {
-            r.IsIntegrityValid.Should().BeTrue();
-            r.IsSignatureValid.Should().BeTrue();
-        });
+            r.IsIntegrityValid.ShouldBeTrue();
+            r.IsSignatureValid.ShouldBeTrue();
+        }
     }
 
     [SkippableFact(DisplayName = "ICP-Brasil PDF should contain CPF in signer names")]
@@ -80,9 +80,9 @@ public sealed class IcpBrasilIntegrationTests
         using var stream = File.OpenRead(FixturePath(Fixture));
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCount(2);
-        results[0].SignerName.Should().Contain(":");
-        results[1].SignerName.Should().Contain(":");
+        results.Count().ShouldBe(2);
+        results[0].SignerName!.ShouldContain(":");
+        results[1].SignerName!.ShouldContain(":");
     }
 
     [SkippableFact(DisplayName = "Re-signing ICP-Brasil PDF should produce valid third signature")]
@@ -102,10 +102,10 @@ public sealed class IcpBrasilIntegrationTests
         using var stream = new MemoryStream(signedPdf);
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCountGreaterThanOrEqualTo(3);
+        results.Count().ShouldBeGreaterThanOrEqualTo(3);
         var lastResult = results[^1];
-        lastResult.IsIntegrityValid.Should().BeTrue();
-        lastResult.IsSignatureValid.Should().BeTrue();
+        lastResult.IsIntegrityValid.ShouldBeTrue();
+        lastResult.IsSignatureValid.ShouldBeTrue();
     }
 
     [SkippableFact(DisplayName = "ICP-Brasil AD-RB PDF should pass integrity check")]
@@ -118,7 +118,7 @@ public sealed class IcpBrasilIntegrationTests
         using var stream = File.OpenRead(FixturePath(fixture));
         var results = await validator.ValidateAsync(stream);
 
-        results.Should().HaveCountGreaterThanOrEqualTo(2);
-        results[0].IsIntegrityValid.Should().BeTrue();
+        results.Count().ShouldBeGreaterThanOrEqualTo(2);
+        results[0].IsIntegrityValid.ShouldBeTrue();
     }
 }

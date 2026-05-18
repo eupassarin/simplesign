@@ -96,8 +96,11 @@ Validate certificate assurance levels for Gov.br authentication:
 
 ```csharp
 var govValidator = new GovBrChainValidator();
-var level = await govValidator.GetAssuranceLevelAsync(certificate);
-// Bronze, Silver, Gold
+var result = await govValidator.ValidateAsync(certificate);
+// result.AssuranceLevel: Bronze, Silver, Gold
+
+// Or use the static method for quick detection (no chain validation):
+var level = GovBrChainValidator.DetectAssuranceLevel(certificate);
 ```
 
 ## CLI Support

@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
@@ -59,19 +59,19 @@ public sealed class DeferredSignerTests
         using X509Certificate2 publicCert = GetPublicCertOnly(fullCert);
         byte[] pdf = BuildMinimalPdf();
         DeferredSigningPrepareResult deferredSigningPrepareResult = await DeferredSigner.PrepareAsync(pdf, publicCert);
-        deferredSigningPrepareResult.HashToSign.Should().NotBeEmpty("should contain DER-encoded signed attributes");
-        deferredSigningPrepareResult.SessionData.Should().NotBeEmpty("should contain serialized session");
-        deferredSigningPrepareResult.DigestAlgorithm.Should().Be("SHA256", "");
-        deferredSigningPrepareResult.SignatureAlgorithmOid.Should().NotBeNullOrEmpty("");
+        deferredSigningPrepareResult.HashToSign.ShouldNotBeEmpty("should contain DER-encoded signed attributes");
+        deferredSigningPrepareResult.SessionData.ShouldNotBeEmpty("should contain serialized session");
+        deferredSigningPrepareResult.DigestAlgorithm.ShouldBe("SHA256", "");
+        deferredSigningPrepareResult.SignatureAlgorithmOid.ShouldNotBeNullOrEmpty("");
         using RSA? rsa = fullCert.GetRSAPrivateKey();
         byte[] rawSignature = rsa!.SignData(deferredSigningPrepareResult.HashToSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         byte[] array = await DeferredSigner.CompleteAsync(deferredSigningPrepareResult.SessionData, rawSignature);
-        array.Should().NotBeEmpty("");
-        array.Length.Should().BeGreaterThan(pdf.Length, "");
+        array.ShouldNotBeEmpty("");
+        array.Length.ShouldBeGreaterThan(pdf.Length, "");
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(fullCert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsValid.Should().BeTrue("deferred-signed PDF should be valid");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsValid.ShouldBeTrue("deferred-signed PDF should be valid");
     }
 
     [Fact(DisplayName = "Deferred signing with ECDSA produces valid PDF")]
@@ -85,8 +85,8 @@ public sealed class DeferredSignerTests
         byte[] rawSignature = ecdsa!.SignData(deferredSigningPrepareResult.HashToSign, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
         using MemoryStream stream = new MemoryStream(await DeferredSigner.CompleteAsync(deferredSigningPrepareResult.SessionData, rawSignature));
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(fullCert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsValid.Should().BeTrue("ECDSA deferred-signed PDF should be valid");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsValid.ShouldBeTrue("ECDSA deferred-signed PDF should be valid");
     }
 
     [Fact(DisplayName = "Session serializes and deserializes correctly")]
@@ -97,19 +97,19 @@ public sealed class DeferredSignerTests
         byte[] pdfBytes = BuildMinimalPdf();
         DeferredSigningPrepareResult deferredSigningPrepareResult = await DeferredSigner.PrepareAsync(pdfBytes, publicCert);
         DeferredSigningSession deferredSigningSession = DeferredSigningSession.Deserialize(deferredSigningPrepareResult.SessionData);
-        deferredSigningSession.SignedAttributes.Should().BeEquivalentTo(deferredSigningPrepareResult.HashToSign, "");
-        deferredSigningSession.DigestOid.Should().NotBeNullOrEmpty("");
-        deferredSigningSession.SignatureAlgorithmOid.Should().NotBeNullOrEmpty("");
-        deferredSigningSession.CertificateDer.Should().BeEquivalentTo(publicCert.RawData, "");
-        deferredSigningSession.PreparedPdf.Should().NotBeEmpty("");
-        deferredSigningSession.ContentsReservedBytes.Should().BeGreaterThan(0, "");
+        deferredSigningSession.SignedAttributes.ShouldBe(deferredSigningPrepareResult.HashToSign, "");
+        deferredSigningSession.DigestOid.ShouldNotBeNullOrEmpty("");
+        deferredSigningSession.SignatureAlgorithmOid.ShouldNotBeNullOrEmpty("");
+        deferredSigningSession.CertificateDer.ShouldBe(publicCert.RawData, "");
+        deferredSigningSession.PreparedPdf.ShouldNotBeEmpty("");
+        deferredSigningSession.ContentsReservedBytes.ShouldBeGreaterThan(0, "");
         byte[] sessionData = deferredSigningSession.Serialize();
         using RSA? rsa = fullCert.GetRSAPrivateKey();
         byte[] rawSignature = rsa!.SignData(deferredSigningPrepareResult.HashToSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         byte[] array = await DeferredSigner.CompleteAsync(sessionData, rawSignature);
-        array.Should().NotBeEmpty("");
+        array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
-        (await ValidatorTrusting(fullCert).ValidateAsync(stream))[0].IsValid.Should().BeTrue("re-serialized session should produce valid signature");
+        (await ValidatorTrusting(fullCert).ValidateAsync(stream))[0].IsValid.ShouldBeTrue("re-serialized session should produce valid signature");
     }
 
     [Fact(DisplayName = "Invalid signature produces invalid validation result")]
@@ -122,11 +122,11 @@ public sealed class DeferredSignerTests
         byte[] array = new byte[256];
         Random.Shared.NextBytes(array);
         byte[] array2 = await DeferredSigner.CompleteAsync(deferredSigningPrepareResult.SessionData, array);
-        array2.Should().NotBeEmpty("");
+        array2.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array2);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(fullCert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsValid.Should().BeFalse("garbage signature should fail validation");
+        readOnlyList.Count().ShouldBe(1, "");
+        readOnlyList[0].IsValid.ShouldBeFalse("garbage signature should fail validation");
     }
 
     [Fact(DisplayName = "Empty signature is rejected")]
@@ -137,7 +137,8 @@ public sealed class DeferredSignerTests
         byte[] pdfBytes = BuildMinimalPdf();
         DeferredSigningPrepareResult prepResult = await DeferredSigner.PrepareAsync(pdfBytes, publicCert);
         Func<Task<byte[]>> action = () => DeferredSigner.CompleteAsync(prepResult.SessionData, Array.Empty<byte>());
-        await action.Should().ThrowAsync<ArgumentException>("", Array.Empty<object>()).WithMessage("*empty*", "");
+        var ex = await Should.ThrowAsync<ArgumentException>(async () => await action());
+        ex.Message.ShouldContain("empty");
     }
 
     [Fact(DisplayName = "Expired certificate is rejected at prepare phase")]
@@ -152,7 +153,8 @@ public sealed class DeferredSignerTests
         {
             byte[] pdf = BuildMinimalPdf();
             Func<Task<DeferredSigningPrepareResult>> action = () => DeferredSigner.PrepareAsync(pdf, expiredCert);
-            await action.Should().ThrowAsync<CertificateValidationException>("", Array.Empty<object>()).WithMessage("*expired*", "");
+            var ex = await Should.ThrowAsync<CertificateValidationException>(async () => await action());
+            ex.Message.ShouldContain("expired");
         }
         finally
         {
@@ -171,7 +173,7 @@ public sealed class DeferredSignerTests
         try
         {
             Func<Task<DeferredSigningPrepareResult>> action = () => DeferredSigner.PrepareAsync(null!, publicCert);
-            await action.Should().ThrowAsync<ArgumentNullException>("", Array.Empty<object>());
+            await Should.ThrowAsync<ArgumentNullException>(async () => await action());
         }
         finally
         {
@@ -186,14 +188,14 @@ public sealed class DeferredSignerTests
     public async Task PrepareAsync_NullCert_ThrowsArgumentNullException()
     {
         Func<Task<DeferredSigningPrepareResult>> action = () => DeferredSigner.PrepareAsync(BuildMinimalPdf(), null!);
-        await action.Should().ThrowAsync<ArgumentNullException>("", Array.Empty<object>());
+        await Should.ThrowAsync<ArgumentNullException>(async () => await action());
     }
 
     [Fact(DisplayName = "Null sessionData throws ArgumentNullException")]
     public async Task CompleteAsync_NullSession_ThrowsArgumentNullException()
     {
         Func<Task<byte[]>> action = () => DeferredSigner.CompleteAsync(null!, new byte[1] { 1 });
-        await action.Should().ThrowAsync<ArgumentNullException>("", Array.Empty<object>());
+        await Should.ThrowAsync<ArgumentNullException>(async () => await action());
     }
 
     [Fact(DisplayName = "Deferred signing with metadata produces valid PDF")]
@@ -215,7 +217,7 @@ public sealed class DeferredSignerTests
         using RSA? rsa = fullCert.GetRSAPrivateKey();
         byte[] rawSignature = rsa!.SignData(deferredSigningPrepareResult.HashToSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using MemoryStream stream = new MemoryStream(await DeferredSigner.CompleteAsync(deferredSigningPrepareResult.SessionData, rawSignature));
-        (await ValidatorTrusting(fullCert).ValidateAsync(stream))[0].IsValid.Should().BeTrue("");
+        (await ValidatorTrusting(fullCert).ValidateAsync(stream))[0].IsValid.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "Full web flow: prepare on server, sign externally, complete on server")]
@@ -231,8 +233,8 @@ public sealed class DeferredSignerTests
         byte[] rawSignature = rsa!.SignData(hashToSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using MemoryStream stream = new MemoryStream(await DeferredSigner.CompleteAsync(sessionData, rawSignature));
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(fullCert).ValidateAsync(stream);
-        readOnlyList.Should().ContainSingle("");
-        readOnlyList[0].IsValid.Should().BeTrue("");
-        readOnlyList[0].SignerCertificate?.Subject.Should().Contain("Deferred RSA Signer", "");
+        readOnlyList.Count().ShouldBe(1);
+        readOnlyList[0].IsValid.ShouldBeTrue();
+        readOnlyList[0].SignerCertificate?.Subject.ShouldContain("Deferred RSA Signer");
     }
 }

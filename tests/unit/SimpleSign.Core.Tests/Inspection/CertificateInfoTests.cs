@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Inspection;
 
@@ -15,9 +15,9 @@ public sealed class CertificateInfoTests
     {
         using X509Certificate2 cert = CreateCert("CN=Test User, O=Org, C=BR");
         CertificateInfo certificateInfo = CertificateInfo.From(cert);
-        certificateInfo.Subject.Should().Contain("CN=Test User", "");
-        certificateInfo.Subject.Should().Contain("O=Org", "");
-        certificateInfo.Issuer.Should().Contain("CN=Test User", "");
+        certificateInfo.Subject.ShouldContain("CN=Test User");
+        certificateInfo.Subject.ShouldContain("O=Org");
+        certificateInfo.Issuer.ShouldContain("CN=Test User");
     }
 
     [Fact(DisplayName = "From extracts serial number")]
@@ -25,7 +25,7 @@ public sealed class CertificateInfoTests
     {
         using X509Certificate2 cert = CreateCert();
         CertificateInfo certificateInfo = CertificateInfo.From(cert);
-        certificateInfo.SerialNumber.Should().NotBeNullOrEmpty("");
+        certificateInfo.SerialNumber.ShouldNotBeNullOrEmpty("");
     }
 
     [Fact(DisplayName = "From extracts RSA key info")]
@@ -33,8 +33,8 @@ public sealed class CertificateInfoTests
     {
         using X509Certificate2 cert = CreateCert();
         CertificateInfo certificateInfo = CertificateInfo.From(cert);
-        certificateInfo.KeyAlgorithm.Should().Be("RSA", "");
-        certificateInfo.KeySizeBits.Should().Be(2048, "");
+        certificateInfo.KeyAlgorithm.ShouldBe("RSA", "");
+        certificateInfo.KeySizeBits.ShouldBe(2048, "");
     }
 
     [Fact(DisplayName = "From extracts ECDSA key info")]
@@ -45,8 +45,8 @@ public sealed class CertificateInfoTests
         X509Certificate2 x509Certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
         using X509Certificate2 cert = CertificateLoader.LoadPkcs12(x509Certificate.Export(X509ContentType.Pfx, "test-export"), "test-export");
         CertificateInfo certificateInfo = CertificateInfo.From(cert);
-        certificateInfo.KeyAlgorithm.Should().Be("ECDSA", "");
-        certificateInfo.KeySizeBits.Should().Be(256, "");
+        certificateInfo.KeyAlgorithm.ShouldBe("ECDSA", "");
+        certificateInfo.KeySizeBits.ShouldBe(256, "");
     }
 
     [Fact(DisplayName = "From extracts key usages")]
@@ -58,9 +58,9 @@ public sealed class CertificateInfoTests
         X509Certificate2 x509Certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
         using X509Certificate2 cert = CertificateLoader.LoadPkcs12(x509Certificate.Export(X509ContentType.Pfx, "test-export"), "test-export");
         CertificateInfo certificateInfo = CertificateInfo.From(cert);
-        certificateInfo.KeyUsages.Should().Contain("DigitalSignature", "");
-        certificateInfo.KeyUsages.Should().Contain("NonRepudiation", "");
-        certificateInfo.HasNonRepudiation.Should().BeTrue("");
+        certificateInfo.KeyUsages.ShouldContain("DigitalSignature", "");
+        certificateInfo.KeyUsages.ShouldContain("NonRepudiation", "");
+        certificateInfo.HasNonRepudiation.ShouldBeTrue("");
     }
 
     [Fact(DisplayName = "From extracts validity dates")]
@@ -68,9 +68,9 @@ public sealed class CertificateInfoTests
     {
         using X509Certificate2 cert = CreateCert();
         CertificateInfo certificateInfo = CertificateInfo.From(cert);
-        certificateInfo.NotBefore.Should().BeBefore(DateTime.UtcNow, "");
-        certificateInfo.NotAfter.Should().BeAfter(DateTime.UtcNow, "");
-        certificateInfo.IsExpired.Should().BeFalse("");
+        certificateInfo.NotBefore.ShouldBeLessThan(DateTime.UtcNow);
+        certificateInfo.NotAfter.ShouldBeGreaterThan(DateTime.UtcNow);
+        certificateInfo.IsExpired.ShouldBeFalse();
     }
 
     [Fact(DisplayName = "From extracts thumbprint")]
@@ -78,8 +78,8 @@ public sealed class CertificateInfoTests
     {
         using X509Certificate2 cert = CreateCert();
         CertificateInfo certificateInfo = CertificateInfo.From(cert);
-        certificateInfo.Thumbprint.Should().NotBeNullOrEmpty("");
-        certificateInfo.Thumbprint.Should().HaveLength(40, "");
+        certificateInfo.Thumbprint.ShouldNotBeNullOrEmpty("");
+        certificateInfo.Thumbprint.Length.ShouldBe(40, "");
     }
 
     [Fact(DisplayName = "From keeps reference to original certificate")]
@@ -87,7 +87,7 @@ public sealed class CertificateInfoTests
     {
         using X509Certificate2 x509Certificate = CreateCert();
         CertificateInfo certificateInfo = CertificateInfo.From(x509Certificate);
-        certificateInfo.Certificate.Should().BeSameAs(x509Certificate, "");
+        certificateInfo.Certificate.ShouldBeSameAs(x509Certificate, "");
     }
 
     [Fact(DisplayName = "ToString shows subject and expiry")]
@@ -95,8 +95,8 @@ public sealed class CertificateInfoTests
     {
         using X509Certificate2 cert = CreateCert("CN=Display Test");
         CertificateInfo certificateInfo = CertificateInfo.From(cert);
-        certificateInfo.ToString().Should().Contain("Display Test", "");
-        certificateInfo.ToString().Should().Contain("expires", "");
+        certificateInfo.ToString().ShouldContain("Display Test");
+        certificateInfo.ToString().ShouldContain("expires");
     }
 
     private static X509Certificate2 CreateCert(string subject = "CN=Test, O=Tests")

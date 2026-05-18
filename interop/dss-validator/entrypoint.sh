@@ -205,6 +205,38 @@ print('RESULT: SIGNED $OUTPUT')
     }
     ;;
 
+  sign-pades-field)
+    # Sign a PDF using pyHanko with a custom field name
+    PDF="${1:?Usage: sign-pades-field <input.pdf> <key.pem> <cert.pem> <output.pdf> <field_name>}"
+    KEY="${2:?Missing private key PEM}"
+    CERT="${3:?Missing certificate PEM}"
+    OUTPUT="${4:?Missing output path}"
+    FIELD="${5:-Signature1}"
+    echo "=== PAdES Signing (pyHanko) field=$FIELD ==="
+    python3 -c "
+import sys
+from pyhanko.sign import signers
+from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+
+signer = signers.SimpleSigner.load('$KEY', '$CERT')
+
+with open('$PDF', 'rb') as f:
+    w = IncrementalPdfFileWriter(f)
+    out = signers.sign_pdf(
+        w,
+        signers.PdfSignatureMetadata(field_name='$FIELD'),
+        signer=signer,
+    )
+    with open('$OUTPUT', 'wb') as outf:
+        outf.write(out.getbuffer())
+
+print('RESULT: SIGNED $OUTPUT')
+" 2>&1 && exit 0 || {
+      echo "RESULT: FAILED"
+      exit 1
+    }
+    ;;
+
   sign-pades-with-reason)
     # Sign a PDF with metadata using pyHanko
     PDF="${1:?Usage: sign-pades-with-reason <input.pdf> <key.pem> <cert.pem> <output.pdf> <reason> <location>}"

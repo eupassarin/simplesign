@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using FluentAssertions;
+using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -67,10 +67,8 @@ public sealed class PdfboxInteropTests
             proc.WaitForExit();
 
             // pdfbox debug should not report fatal parse errors.
-            stderr.Should().NotContain("Error",
-                because: $"pdfbox reported errors parsing our signed PDF ({label})");
-            (stderr + stdout).Should().NotContain("java.io.IOException",
-                because: $"pdfbox threw IOException parsing our signed PDF ({label})");
+            stderr.ShouldNotContain("Error");
+            (stderr + stdout).ShouldNotContain("java.io.IOException");
         }
         finally
         {

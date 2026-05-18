@@ -1,6 +1,6 @@
-using CoreCertificateInfo = SimpleSign.Core.Inspection.CertificateInfo;
 using SimpleSign.Brasil.Signing;
 using SimpleSign.PAdES.Inspection;
+using CoreCertificateInfo = SimpleSign.Core.Inspection.CertificateInfo;
 
 namespace SimpleSign.HostSigner.Services;
 
@@ -93,7 +93,8 @@ internal static class InspectMapper
 
     private static CertDto? MapCert(CoreCertificateInfo? cert, bool full)
     {
-        if (cert is null) return null;
+        if (cert is null)
+            return null;
         return new CertDto
         {
             Subject = cert.Subject,
@@ -116,9 +117,11 @@ internal static class InspectMapper
 
     private static ManifestDto? MapManifest(byte[]? manifestJson)
     {
-        if (manifestJson is not { Length: > 0 }) return null;
+        if (manifestJson is not { Length: > 0 })
+            return null;
         var manifest = SignatureManifest.FromJsonUtf8(manifestJson);
-        if (manifest is null) return null;
+        if (manifest is null)
+            return null;
         return new ManifestDto
         {
             SignerName = manifest.Signer.Name,
