@@ -142,7 +142,8 @@ jobs:
                      src/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
                      src/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
                      src/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
-                     src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj; do
+                     src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
+                     src/SimpleSign.Cli/SimpleSign.Cli.csproj; do
             dotnet pack "$proj" --configuration Release --no-restore --output ./nupkg
           done
 

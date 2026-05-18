@@ -19,7 +19,7 @@
     <InternalsVisibleTo Include="SimpleSign.Pdf.Tests" />
     <InternalsVisibleTo Include="SimpleSign.PAdES.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Brasil.Tests" />
-    <InternalsVisibleTo Include="simplesign-cli" />
+    <InternalsVisibleTo Include="simplesign" />
     <InternalsVisibleTo Include="SimpleSign.Fuzz" />
   </ItemGroup>
 

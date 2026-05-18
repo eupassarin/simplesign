@@ -2,11 +2,17 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>simplesign-cli</AssemblyName>
+    <!-- Override global TargetFrameworks — dotnet tools require a single TFM -->
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>simplesign</AssemblyName>
+    <PackageId>SimpleSign.Cli</PackageId>
+    <PackageDescription>SimpleSign CLI — sign, validate, and inspect PDF digital signatures (PAdES) from the terminal.</PackageDescription>
+    <PackageTags>pdf;pades;digital-signature;cli;simplesign;signing;validation</PackageTags>
     <RootNamespace>SimpleSign.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>simplesign</ToolCommandName>
     <!-- Spectre.Console.Cli instantiates commands/settings via reflection -->
     <NoWarn>CA1812</NoWarn>
-    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
