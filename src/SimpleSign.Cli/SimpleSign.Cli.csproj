@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- Override global TargetFrameworks — dotnet tools require a single TFM -->
+    <!-- Override TargetFrameworks from Directory.Build.props — dotnet tools require exactly one TFM -->
+    <TargetFrameworks>net8.0</TargetFrameworks>
     <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>simplesign</AssemblyName>
     <PackageId>SimpleSign.Cli</PackageId>
