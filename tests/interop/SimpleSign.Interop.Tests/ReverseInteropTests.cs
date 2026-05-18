@@ -535,8 +535,10 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
         const string pw = "test-export";
         var pfx = ephemeral.Export(X509ContentType.Pfx, pw);
 #pragma warning disable SYSLIB0057
-        var cert = new X509Certificate2(pfx, pw,
-            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+        var pfxFlags = X509KeyStorageFlags.Exportable;
+        if (!OperatingSystem.IsMacOS())
+            pfxFlags |= X509KeyStorageFlags.EphemeralKeySet;
+        var cert = new X509Certificate2(pfx, pw, pfxFlags);
 #pragma warning restore SYSLIB0057
 
         return (keyPem, certPem, cert);

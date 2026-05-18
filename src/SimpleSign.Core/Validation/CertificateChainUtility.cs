@@ -83,7 +83,9 @@ internal static class CertificateChainUtility
         try
         {
             col = CertificateLoader.LoadPkcs12Collection(bytes, password: null,
-                keyStorageFlags: X509KeyStorageFlags.EphemeralKeySet);
+                keyStorageFlags: OperatingSystem.IsMacOS()
+                    ? X509KeyStorageFlags.DefaultKeySet
+                    : X509KeyStorageFlags.EphemeralKeySet);
         }
         catch (CryptographicException ex) { logger?.Pkcs12CollectionLoadingFailed(ex.Message); }
 
