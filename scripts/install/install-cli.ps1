@@ -15,9 +15,9 @@ $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $repo = "eupassarin/SimpleSign"
-$assetName = "simplesign-cli-win-x64.zip"
+$assetName = "simplesign-win-x64.zip"
 $installDir = Join-Path $env:LOCALAPPDATA "SimpleSign\Cli"
-$launcherName = "simplesign-cli"
+$launcherName = "simplesign"
 
 function Write-Step($m) { Write-Host "`n-> $m" -ForegroundColor Cyan }
 function Write-Ok($m) { Write-Host "  [OK] $m" -ForegroundColor Green }
@@ -61,7 +61,7 @@ $sizeKB = [math]::Round($asset.size / 1KB)
 Write-Ok "Asset: $assetName ($sizeKB KB)"
 
 # 3. Download
-$tempZip = Join-Path $env:TEMP "simplesign-cli-$tag.zip"
+$tempZip = Join-Path $env:TEMP "simplesign-$tag.zip"
 Write-Step "Downloading $tag..."
 try {
     Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -UseBasicParsing
@@ -131,5 +131,5 @@ Write-Host ""
 Write-Host "  SimpleSign CLI $tag installed successfully!" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Location : $installDir" -ForegroundColor DarkGray
-Write-Host "  Run      : simplesign-cli --help" -ForegroundColor DarkGray
+Write-Host "  Run      : simplesign --help" -ForegroundColor DarkGray
 Write-Host ""

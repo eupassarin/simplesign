@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $publishDir = Join-Path $repoRoot "publish-cli-local"
 $installDir = Join-Path $env:LOCALAPPDATA "SimpleSign\Cli"
-$launcherPath = Join-Path $installDir "simplesign-cli.cmd"
+$launcherPath = Join-Path $installDir "simplesign.cmd"
 
 Write-Host ""
 Write-Host "SimpleSign CLI - Local Install" -ForegroundColor Cyan
@@ -27,12 +27,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$dll = Join-Path $publishDir "simplesign-cli.dll"
+$dll = Join-Path $publishDir "simplesign.dll"
 if (-not (Test-Path $dll)) {
-    Write-Host "  [X] simplesign-cli.dll not found in output." -ForegroundColor Red
+    Write-Host "  [X] simplesign.dll not found in output." -ForegroundColor Red
     exit 1
 }
-Write-Host "  [OK] Built: simplesign-cli.dll" -ForegroundColor Green
+Write-Host "  [OK] Built: simplesign.dll" -ForegroundColor Green
 
 # 2. Copy to install folder
 Write-Host ""
@@ -46,19 +46,19 @@ Remove-Item $publishDir -Recurse -Force
 Write-Host "  [OK] Cleaned publish output." -ForegroundColor Green
 
 # Remove unsigned apphost exe if present (left from old installs or accidental publish)
-$staleExe = Join-Path $installDir "simplesign-cli.exe"
+$staleExe = Join-Path $installDir "simplesign.exe"
 if (Test-Path $staleExe) {
     Remove-Item $staleExe -Force
-    Write-Host "  [OK] Removed stale simplesign-cli.exe (cmd wrapper takes precedence)." -ForegroundColor Green
+    Write-Host "  [OK] Removed stale simplesign.exe (cmd wrapper takes precedence)." -ForegroundColor Green
 }
 
 # 3. Create launcher (.cmd wrapper using dotnet exec)
 Write-Host ""
 Write-Host "3. Creating launcher..." -ForegroundColor Yellow
-$dllInInstall = Join-Path $installDir "simplesign-cli.dll"
+$dllInInstall = Join-Path $installDir "simplesign.dll"
 $cmdContent = "@echo off`r`ndotnet exec `"$dllInInstall`" %*"
 Set-Content -Path $launcherPath -Value $cmdContent -Encoding ASCII
-Write-Host "  [OK] Created: simplesign-cli.cmd" -ForegroundColor Green
+Write-Host "  [OK] Created: simplesign.cmd" -ForegroundColor Green
 
 # 4. Add to PATH
 Write-Host ""
@@ -75,5 +75,5 @@ if ($userPath -split ";" | Where-Object { $_ -eq $installDir }) {
 # 5. Done
 Write-Host ""
 Write-Host "[OK] Install complete!" -ForegroundColor Green
-Write-Host "  Run: simplesign-cli --help" -ForegroundColor Gray
+Write-Host "  Run: simplesign --help" -ForegroundColor Gray
 Write-Host ""

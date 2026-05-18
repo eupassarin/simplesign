@@ -94,13 +94,13 @@ jobs:
       - name: Create CLI ZIP
         run: |
           cd publish-cli
-          zip -r ../simplesign-cli-win-x64.zip .
+          zip -r ../simplesign-win-x64.zip .
 
       - name: Upload CLI to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: simplesign-cli-win-x64.zip
+          files: simplesign-win-x64.zip
 
   hostsigner:
     name: Publish HostSigner
