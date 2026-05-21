@@ -134,7 +134,8 @@ internal sealed class PdfContentStreamBuilder
                 default:
                     if (c < 32 || c > 126)
                     {
-                        sb.Append($"\\{(int)c:o3}");
+                        sb.Append('\\');
+                        sb.Append(Convert.ToString(c, 8).PadLeft(3, '0'));
                     }
                     else
                     {

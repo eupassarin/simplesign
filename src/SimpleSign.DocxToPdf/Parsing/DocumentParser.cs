@@ -104,12 +104,25 @@ internal sealed class DocumentParser
         if (pPr.SpacingBetweenLines is not null)
         {
             SpacingBetweenLines spacing = pPr.SpacingBetweenLines;
+            string lineRule = spacing.LineRule?.Value.ToString() ?? "auto";
+            float linePt = 0f;
+
+            if (spacing.Line?.Value is not null &&
+                int.TryParse(spacing.Line.Value, CultureInfo.InvariantCulture, out int lineVal))
+            {
+                // "auto" uses 240ths-of-a-line (240 = single, 480 = double)
+                // "exact" and "atLeast" use twips (20 twips = 1 point)
+                linePt = string.Equals(lineRule, "auto", StringComparison.OrdinalIgnoreCase)
+                    ? lineVal / 240f
+                    : lineVal / TwipsPerPoint;
+            }
+
             docPara.Spacing = new DocSpacing
             {
                 BeforePt = ParseTwips(spacing.Before?.Value),
                 AfterPt = ParseTwips(spacing.After?.Value),
-                LinePt = ParseTwips(spacing.Line?.Value),
-                LineRule = spacing.LineRule?.Value.ToString() ?? "auto"
+                LinePt = linePt,
+                LineRule = lineRule
             };
         }
 

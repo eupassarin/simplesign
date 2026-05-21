@@ -210,11 +210,6 @@ internal sealed class ParagraphLayouter
 
     private float GetDefaultLineHeight(DocParagraph paragraph)
     {
-        if (paragraph.Spacing.LinePt > 0)
-        {
-            return paragraph.Spacing.LinePt;
-        }
-
         float maxFontSize = _styles.DefaultFontSizeHalfPoints / 2f;
         foreach (DocRun run in paragraph.Runs)
         {
@@ -225,7 +220,27 @@ internal sealed class ParagraphLayouter
             }
         }
 
-        return maxFontSize * 1.15f; // Default ~115% line spacing
+        float defaultHeight = maxFontSize * 1.15f;
+
+        if (paragraph.Spacing.LinePt <= 0)
+        {
+            return defaultHeight;
+        }
+
+        string rule = paragraph.Spacing.LineRule;
+
+        if (string.Equals(rule, "exact", StringComparison.OrdinalIgnoreCase))
+        {
+            return paragraph.Spacing.LinePt;
+        }
+
+        if (string.Equals(rule, "atLeast", StringComparison.OrdinalIgnoreCase))
+        {
+            return Math.Max(paragraph.Spacing.LinePt, defaultHeight);
+        }
+
+        // "auto": LinePt is a multiplier (1.0 = single, 1.5 = 1.5×, 2.0 = double)
+        return defaultHeight * paragraph.Spacing.LinePt;
     }
 
     private sealed class WordSegment

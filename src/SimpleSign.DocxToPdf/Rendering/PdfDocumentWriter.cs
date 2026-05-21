@@ -251,18 +251,46 @@ internal sealed class PdfDocumentWriter
 
     private static void WriteImageObject(StreamWriter writer, Stream output, int id, LayoutImage img)
     {
-        string filter = img.Format == "jpeg" ? "/DCTDecode" : "/FlateDecode";
-        byte[] data = img.Format == "jpeg" ? img.Data : Compress(img.Data);
+        byte[] pixelData;
+        int width;
+        int height;
+        string filter;
 
-        int width = Math.Max((int)img.Width, 1);
-        int height = Math.Max((int)img.Height, 1);
+        if (img.Format == "jpeg")
+        {
+            // JPEG can be embedded directly with DCTDecode
+            pixelData = img.Data;
+            width = Math.Max((int)img.Width, 1);
+            height = Math.Max((int)img.Height, 1);
+            filter = "/DCTDecode";
+        }
+        else
+        {
+            // PNG: decode to raw RGB pixels, then FlateDecode
+            byte[]? decoded = PngDecoder.Decode(img.Data, out int pngWidth, out int pngHeight);
+            if (decoded is not null)
+            {
+                pixelData = Compress(decoded);
+                width = pngWidth;
+                height = pngHeight;
+            }
+            else
+            {
+                // Fallback: treat as raw pixel data (best effort)
+                pixelData = Compress(img.Data);
+                width = Math.Max((int)img.Width, 1);
+                height = Math.Max((int)img.Height, 1);
+            }
+
+            filter = "/FlateDecode";
+        }
 
         writer.Write($"{id} 0 obj\n");
         writer.Write(string.Create(CultureInfo.InvariantCulture,
-            $"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length {data.Length} /Filter {filter} >>\n"));
+            $"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length {pixelData.Length} /Filter {filter} >>\n"));
         writer.Write("stream\n");
         writer.Flush();
-        output.Write(data);
+        output.Write(pixelData);
         output.Flush();
         writer.Write("\nendstream\n");
         writer.Write("endobj\n");
