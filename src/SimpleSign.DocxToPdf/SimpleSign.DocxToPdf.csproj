@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.DocxToPdf</AssemblyName>
+    <RootNamespace>SimpleSign.DocxToPdf</RootNamespace>
+    <PackageId>SimpleSign.DocxToPdf</PackageId>
+    <Description>Pure .NET DOCX-to-PDF converter. No LibreOffice or Word dependency. Supports paragraphs, tables, images, headers/footers, numbering, and font embedding. Integrates with the SimpleSign signing pipeline.</Description>
+    <Version>0.1.0</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.DocxToPdf.Tests" />
+  </ItemGroup>
+
+</Project>
