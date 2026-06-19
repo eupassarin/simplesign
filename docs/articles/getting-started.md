@@ -5,11 +5,12 @@
 SimpleSign packages are split by concern — install only what you need:
 
 ```bash
-# Full PAdES stack (most common)
+# Full PAdES + CAdES stack (most common)
 dotnet add package SimpleSign
 
 # Or individual packages
 dotnet add package SimpleSign.PAdES    # PAdES signing, validation, inspection
+dotnet add package SimpleSign.CAdES    # standalone CMS/PKCS#7 signing & validation
 dotnet add package SimpleSign.Brasil   # ICP-Brasil trust anchors
 dotnet add package SimpleSign.HtmlToPdf # HTML-to-PDF conversion
 ```
@@ -21,7 +22,9 @@ SimpleSign (meta-package)
 ├── SimpleSign.PAdES        PDF signing & validation (PAdES B-B/T/LT/LTA)
 │   ├── SimpleSign.Pdf      PDF structure parser (xref, objects, fields)
 │   └── SimpleSign.Core     Crypto primitives, CMS, TSA, revocation
-│
+├── SimpleSign.CAdES        standalone CMS/PKCS#7 signing & validation
+│   └── SimpleSign.Core     (shared)
+
 SimpleSign.Brasil           ICP-Brasil + Gov.br + Lei 14.063  → depends on PAdES
 SimpleSign.HtmlToPdf        Pure-.NET HTML→PDF (independent)
 ```
@@ -125,11 +128,11 @@ foreach (var r in results)
 Register SimpleSign in your DI container:
 
 ```csharp
-using SimpleSign.PAdES;
+using SimpleSign.PAdES.DependencyInjection;
 
 services.AddSimpleSign(options =>
 {
-    options.DefaultTsaUrl = "http://timestamp.digicert.com";
+    options.TsaUrl = "http://timestamp.digicert.com";
 });
 
 // For ICP-Brasil support

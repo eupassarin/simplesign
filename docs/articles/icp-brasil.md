@@ -14,13 +14,11 @@ The `SimpleSign.Brasil` package bundles all AC Raiz (root CA) certificates from 
 
 ```csharp
 using SimpleSign.Brasil;
-using SimpleSign.Brasil.Signing;
 
-// Register ICP-Brasil trust anchors for validation
-var brasil = new BrasilExtension();
+// Register ICP-Brasil as a country extension (recommended)
 var validator = new PdfSignatureValidator(
     new ValidationOptions { CheckRevocation = true },
-    trustAnchorProviders: brasil.TrustAnchorProviders
+    countryExtensions: [new BrasilExtension()]
 );
 
 var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));

@@ -46,7 +46,7 @@ SimpleSign/
 
 ## Build System
 
-- **SDK:** .NET 10 (global.json pins to 10.0.100)
+- **SDK:** .NET 10 (global.json pins to 10.0.300)
 - **Targets:** net8.0 and net10.0 (multi-target)
 - **Language:** C# 13
 - **Analysis:** `AnalysisMode=All`, warnings as errors, code style enforced in build

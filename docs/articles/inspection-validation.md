@@ -34,8 +34,7 @@ foreach (var sig in result.Signatures)
 | Property | Description |
 |----------|-------------|
 | `Document` | PDF-level metadata (encryption, PDF/A, DSS, DocMDP) |
-| `Signatures` | List of signature fields with full metadata |
-| `DocumentTimestamps` | Archive/document-level timestamps |
+| `Signatures` | List of all signature fields — user signatures and document timestamps (`IsDocumentTimestamp`) |
 
 Each `SignatureFieldInfo` includes:
 
@@ -121,7 +120,7 @@ foreach (var r in results)
 var options = new ValidationOptions
 {
     TrustSystemRoots = false,
-    CustomTrustAnchors = myRootCertificates
+    TrustedRoots = myRootCertificates
 };
 ```
 

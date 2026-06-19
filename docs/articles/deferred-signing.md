@@ -67,10 +67,11 @@ byte[] signedPdf = await builder.CompleteAsync(prepared.SessionData, signature);
 | `WithSignerName(name)` | Sets the signer display name |
 | `WithReason(reason)` | Sets the signing reason |
 | `WithLocation(location)` | Sets the signing location |
-| `WithContactInfo(info)` | Sets contact information |
 | `WithTimestamp(tsaUrl)` | Adds an RFC 3161 timestamp (PAdES B-T) |
-| `WithSignatureField(fieldName)` | Uses an existing signature field |
+| `WithSignatureField(page, x, y)` | Places a new signature field on the given page at (x, y) |
+| `WithFieldName(name)` | Names the signature field (must be unique within the PDF) |
 | `WithHashAlgorithm(algorithm)` | Overrides hash algorithm (default: SHA-256) |
+| `WithSignatureAlgorithm(oid)` | Specifies a custom signature algorithm OID |
 | `WithExtraCertificates(certs)` | Embeds additional certificates in the CMS |
 
 ## Web Application Example

@@ -60,10 +60,12 @@ dotnet tool install -g SimpleSign.Cli
 
 ### Package Map
 
-- **SimpleSign** (meta-package) — full PAdES stack
+- **SimpleSign** (meta-package) — full PAdES + CAdES stack
   - **SimpleSign.PAdES** — PDF signing & validation (PAdES B-B/T/LT/LTA)
     - **SimpleSign.Pdf** — PDF structure parser (xref, objects, fields)
     - **SimpleSign.Core** — Crypto primitives, CMS, TSA, revocation, HTTP
+  - **SimpleSign.CAdES** — standalone CMS/PKCS#7 signing & validation (ETSI EN 319 122)
+    - **SimpleSign.Core** (shared)
 - **SimpleSign.Brasil** — ICP-Brasil + Gov.br + Lei 14.063 (depends on PAdES)
 - **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF (independent)
 - **SimpleSign.Cli** — CLI tool (install as dotnet tool)
@@ -269,8 +271,18 @@ var batch = BatchSigner.Create(cert)
     .WithLtv()
     .Build();
 
-var results = await batch.SignAsync(documents);
-// results.Succeeded, results.Failed, results.ElapsedMs
+// Sign a single document
+byte[] signed = await batch.SignAsync(pdfBytes);
+
+// Or stream results as they complete
+await foreach (var result in batch.SignAllAsync(inputs))
+{
+    if (result.PdfBytes is not null)
+        Console.WriteLine($"{result.Id}: signed");
+}
+
+// Access aggregate stats after signing
+Console.WriteLine($"Success: {batch.SuccessCount}, Fail: {batch.FailureCount}, Avg: {batch.AverageElapsedMs:F0}ms");
 ```
 
 ### Deferred Signing (Two-Phase)
@@ -316,8 +328,9 @@ var pool = new TsaPool([
     "http://timestamp.sectigo.com"
 ]);
 
-// Use TsaPool directly for resilient timestamp requests
-byte[] tsaResponse = await pool.GetTimestampAsync(hash);
+// Send timestamp request with auto-failover across servers
+byte[] tsaResponse = await pool.GetTimestampAsync(
+    hash, HashAlgorithmName.SHA256, httpClient, cancellationToken);
 ```
 
 ### Structured Logging
@@ -341,8 +354,8 @@ Full support for Brazilian digital signature standards:
 services.AddSimpleSignBrasil(); // registers ICP-Brasil trust anchors (v4–v13)
 
 var validator = new IcpBrasilChainValidator();
-var result = await validator.ValidateAsync(signedPdf);
-// result.Level: AD_RB, AD_RT, AD_RV, AD_RC, AD_RA
+var result = await validator.ValidateAsync(certificate);
+// result.DetectedPolicy: AdRb, AdRt, AdRv, AdRc, AdRa
 ```
 
 ### CPF / CNPJ Extraction
@@ -376,16 +389,28 @@ string url = ValidarItiUrlBuilder.ForDocument("https://storage.example.com/doc.p
 ### Gov.br Validation
 
 ```csharp
-var govValidator = new GovBrChainValidator();
-var level = await govValidator.GetAssuranceLevelAsync(certificate);
+var level = GovBrChainValidator.DetectAssuranceLevel(certificate);
 // Bronze, Silver, Gold
+
+// Or full chain validation
+var govValidator = new GovBrChainValidator();
+var result = await govValidator.ValidateAsync(certificate);
+Console.WriteLine($"Level: {result.AssuranceLevel}, Valid: {result.IsValid}");
 ```
 
 ### AEA — Advanced Electronic Signature (Lei 14.063/2020)
 
 ```csharp
-var info = AdvancedSignatureInfo.FromCertificate(cert);
-Console.WriteLine($"Type: {info.SignatureType}, Level: {info.AssuranceLevel}");
+var info = new AdvancedSignatureInfo
+{
+    SignerName = "Nome do Signatário",
+    Cpf = "12345678901",
+    AuthMethod = AuthenticationMethod.GovBr,
+    CommitmentType = CommitmentType.ProofOfApproval,
+    InstitutionName = "TCE-ES",
+    InstitutionCnpj = "12345678000190"
+};
+// Embed via SignerBuilder.WithSignatureManifest()
 ```
 
 ### Trust Anchors for Validation
@@ -413,11 +438,23 @@ simplesign sign contract.pdf --cert mycert.pfx --password secret --timestamp
 # Validate
 simplesign validate signed.pdf
 
+# Validate a directory of signed PDFs
+simplesign validate-dir ./documents/
+
 # Inspect
 simplesign inspect signed.pdf
 
 # Extract CMS from signed PDF
 simplesign extract signed.pdf --output signature.p7s
+
+# Convert HTML to PDF
+simplesign html2pdf page.html --output page.pdf
+
+# Explain certificate details
+simplesign explain --cert mycert.pfx --password secret
+
+# Show version
+simplesign version
 ```
 
 ### CAdES Signatures
@@ -512,7 +549,7 @@ contract-signed.pdf  1/1 valid
 | [ICP-Brasil](docs/articles/icp-brasil.md) | Brazilian PKI integration |
 | [Interoperability](docs/interoperability.md) | PDF generators tested, cross-validation matrix, ETSI corpus |
 | [Conformance](docs/conformance.md) | ISO 32000, PAdES ETSI EN 319 142, RFC 5652 compliance |
-| [Benchmark Results](docs/benchmarks.md) | Comprehensive 14-suite benchmark report with 67 metrics |
+| [Benchmark Results](docs/benchmarks.md) | Comprehensive benchmark report — 69 benchmarks across 15 suites |
 | [HostSigner](src/SimpleSign.HostSigner/README.md) | Local signing tray app — API docs & install |
 | [Web Signing Sample](samples/WebSigningSample/README.md) | Browser-based PDF signing demo |
 | [Web Inspect Sample](samples/WebInspectSample/README.md) | Browser-based PDF inspector & validator |
