@@ -37,9 +37,9 @@ SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 
 
 ---
 
-## What's New in v0.5.0
+## What's New in v0.6.0
 
-**CAdES** — New standalone CMS/PKCS#7 signing library (ETSI EN 319 122) with B-B, B-T, B-LT, and B-LTA conformance levels, plus `cades sign`/`cades validate` CLI commands. Also: SHA-3 hash + signature algorithms, EdDSA (Ed25519) external signer, QR code on visible signatures, DocMDP certification enforcement, client-side SHA-3/EdDSA compatibility with graceful fallback, `HttpClientFactoryProvider` + per-operation HTTP client slots, and CLI validate command. See the [full changelog](CHANGELOG.md) for details.
+**Fluent CAdES Builder** — `CadesSignerBuilder` brings the same fluent immutable builder pattern used in PAdES to standalone CMS signatures. `DeferredSignerBuilder` renamed `WithSignatureAlgorithmOid()` → `WithSignatureAlgorithm()` for cross-API naming consistency (breaking). VRI compliance fix removes non-standard `/SHA256` key from DSS dictionaries. CancellationToken support added to chain validation. See the [full changelog](CHANGELOG.md) for details.
 
 ---
 
@@ -495,7 +495,6 @@ contract-signed.pdf  1/1 valid
 | Custom logging | `ILogger<T>` injection |
 | Country extensions | `ICountryExtension` |
 | Chain validation | `IChainValidationProvider` |
-| Signature manifest | `ISignatureManifestProvider` |
 | Certificate caching | `ICertificateCache` |
 | Certificate store | `ICertificateStore` |
 

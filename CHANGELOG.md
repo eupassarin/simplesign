@@ -5,11 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.1] - 2026-06-16
+## [0.6.0] - 2026-06-19
+
+### Added
+
+- **`CadesSignerBuilder`** — new fluent immutable builder for CAdES signatures, matching the `SignerBuilder` pattern with `Document()`, `WithCertificate()`, `WithTimestamp()`, `WithHashAlgorithm()`, `WithSignatureAlgorithm()`, `WithOperationId()`, and `WithExternalSigner()` methods. `CadesSigner.SignAsync()` static methods now delegate to the builder for backward compatibility.
+- **`CadesSigningResult`** — sign-with-details result type exposing `TimestampApplied`, `LtvDataEmbedded`, `ArchiveTimestampApplied`, and `Warnings` for diagnostic and logging integration.
+- **CancellationToken in chain validation** — `IChainValidationProvider.ValidateAsync` now accepts `CancellationToken`, plumbed through `PdfSignatureValidator`, `CadesSignatureValidator`, `CountryExtension`, and `BrasilExtension`. Enables timeout-aware validation pipelines.
 
 ### Fixed
 
-- **SHA3 signature OID detection on Linux** — `DetectSignatureAlgorithmOid` in both `SignerBuilder` and `DeferredSigner` was missing SHA3-256/384/512 cases, causing `NotSupportedException` on platforms where SHA3 is available (Linux with OpenSSL 3.x). Added the same RSA and ECDSA SHA3 OID mappings already present in `CmsSignatureBuilder`.
+- **VRI `/SHA256` key removed from DSS dictionary** — the non-standard `/SHA256` key inserted into every VRI entry is not defined in ISO 32000-2 §12.8.4.4 Table 250 and caused ETSI Signature Conformance Checker schema validation failures (`Children order and number DO NOT MATCH specification`). VRI dictionaries now only contain `/Type`, `/Cert`, `/CRL`, `/OCSP`, `/TS`, and the SHA-1 key per the standard.
+- **`WithSignatureAlgorithm` OID preserved in auto-detect `WithExternalSigner`** — both CAdES and PAdES external-signer paths now respect an explicit `.WithSignatureAlgorithm(oid)` call when auto-detecting the signature OID. Previously the user-specified OID was silently discarded, causing the library to fall back to auto-detection from the certificate.
+
+### Changed (Breaking)
+
+- **`DeferredSignerBuilder.WithSignatureAlgorithmOid()` renamed to `WithSignatureAlgorithm()`** — consistent naming with `SignerBuilder.WithSignatureAlgorithm()` and `CadesSignerBuilder.WithSignatureAlgorithm()`. Call sites using the old method name will fail to compile.
+
+### Improved
+
+- **`DetectSignatureAlgorithmOid` consolidated into `CryptoUtility`** — removed 3 duplicate copies from `SignerBuilder`, `DeferredSigner`, and `CadesSigner`. Single shared implementation with SHA3-256/384/512, Ed25519/Ed448, and ECDSA hash-from-curve-size mappings.
+- **CAdES/PAdES fluent APIs unified** — shared code patterns across `SignerBuilder`, `CadesSignerBuilder`, and `DeferredSignerBuilder` for hash resolution, signature OID detection, PSS params extraction.
+- **`X509Chain` helper extracted** — `CertificateChainUtility.BuildX509Chain()` centralises chain construction with revocation mode, URL retrieval, and verification flags, replacing 3 inline copies.
+- **LTV embedder simplifications** — VRI parameter simplified from `List<(string Sha1, string Sha256)>` to `List<string>` (SHA-1 only). Trailing-EOL logic deduplicated.
 
 ## [0.5.0] - 2026-06-16
 
@@ -286,6 +304,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HostSigner** — React/shadcn UI overhaul
 - **README** — comprehensive rewrite: lib-focused structure, real benchmark numbers, dependency clarity, merged enterprise features
 
+[0.6.0]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.6.0
+[0.5.0]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.5.0
 [0.4.0]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.4.0
 [0.3.2]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.3.2
 [0.3.1]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.3.1
