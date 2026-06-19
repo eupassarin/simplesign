@@ -304,8 +304,8 @@ public sealed class SignerBuilder
         ArgumentNullException.ThrowIfNull(certificate);
         ArgumentNullException.ThrowIfNull(externalSigner);
         var effectiveHash = AlgorithmInference.ResolveEffectiveHashAlgorithm(
-            certificate, _hashAlgorithm, _hashAlgorithmExplicitlySet);
-        string sigAlgOid = DetectSignatureAlgorithmOid(certificate, effectiveHash);
+            certificate, _hashAlgorithm, _hashAlgorithmExplicitlySet, _signatureAlgorithmOid);
+        string sigAlgOid = _signatureAlgorithmOid ?? DetectSignatureAlgorithmOid(certificate, effectiveHash);
         return With(certificate: certificate, externalSigner: externalSigner, signatureAlgorithmOid: sigAlgOid);
     }
 
@@ -364,8 +364,8 @@ public sealed class SignerBuilder
         ArgumentNullException.ThrowIfNull(externalSigner);
         ArgumentNullException.ThrowIfNull(chain);
         var effectiveHash = AlgorithmInference.ResolveEffectiveHashAlgorithm(
-            certificate, _hashAlgorithm, _hashAlgorithmExplicitlySet);
-        string sigAlgOid = DetectSignatureAlgorithmOid(certificate, effectiveHash);
+            certificate, _hashAlgorithm, _hashAlgorithmExplicitlySet, _signatureAlgorithmOid);
+        string sigAlgOid = _signatureAlgorithmOid ?? DetectSignatureAlgorithmOid(certificate, effectiveHash);
         return With(
             certificate: certificate,
             externalSigner: externalSigner,

@@ -268,6 +268,9 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      - name: Restore HostSigner tests
+        run: dotnet restore tests/unit/SimpleSign.HostSigner.Tests
+
       - name: Build HostSigner tests
         run: dotnet build tests/unit/SimpleSign.HostSigner.Tests --no-restore --configuration Release
 

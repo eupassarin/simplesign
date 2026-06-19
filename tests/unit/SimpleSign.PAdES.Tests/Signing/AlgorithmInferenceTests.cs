@@ -1,5 +1,6 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Shouldly;
 using SimpleSign.Core.Constants;
@@ -146,6 +147,48 @@ public sealed class AlgorithmInferenceTests
         Should.Throw<ArgumentNullException>(() => builder.WithSignatureAlgorithm(null!));
     }
 
+    // ── Gap 4: WithSignatureAlgorithm + auto-detect WithExternalSigner ────────
+
+    [Fact(DisplayName = "WithSignatureAlgorithm(RsaSha512) before auto-detect WithExternalSigner → CMS uses SHA-512 / RsaSha512")]
+    public async Task WithSignatureAlgorithm_ThenAutoDetectExternalSigner_PreservesOidAndHash()
+    {
+        // PSS cert — SHA-384 in its RSASSA-PSS-params. Without the fix, auto-detect reads
+        // those params and overwrites the caller's RsaSha512 with RsaPss, producing SHA-384.
+        using var cert = TestCertificateFactory.CreatePssSelfSignedCert(HashAlgorithmName.SHA384);
+        using RSA rsaKey = cert.GetRSAPrivateKey()!;
+
+        byte[] signed = await SimpleSigner
+            .Document(TestPdfFactory.CreateMinimalPdf())
+            .WithSignatureAlgorithm(Oids.RsaSha512)
+            .WithExternalSigner(cert, signedAttrs =>
+                Task.FromResult(rsaKey.SignData(signedAttrs, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)))
+            .SignAsync();
+
+        byte[] cms = ExtractCmsFromPdf(signed);
+        ParseSignerInfoDigestOid(cms).ShouldBe(Oids.Sha512);
+        ParseSignerInfoSignatureAlgorithmOid(cms).ShouldBe(Oids.RsaSha512);
+    }
+
+    [Fact(DisplayName = "WithSignatureAlgorithm(RsaSha512) before auto-detect WithExternalSigner(chain) → CMS uses SHA-512 / RsaSha512")]
+    public async Task WithSignatureAlgorithm_ThenAutoDetectExternalSignerWithChain_PreservesOidAndHash()
+    {
+        using var cert = TestCertificateFactory.CreatePssSelfSignedCert(HashAlgorithmName.SHA384);
+        using RSA rsaKey = cert.GetRSAPrivateKey()!;
+        var chain = new List<X509Certificate2>();
+
+        byte[] signed = await SimpleSigner
+            .Document(TestPdfFactory.CreateMinimalPdf())
+            .WithSignatureAlgorithm(Oids.RsaSha512)
+            .WithExternalSigner(cert,
+                signedAttrs => Task.FromResult(rsaKey.SignData(signedAttrs, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)),
+                chain)
+            .SignAsync();
+
+        byte[] cms = ExtractCmsFromPdf(signed);
+        ParseSignerInfoDigestOid(cms).ShouldBe(Oids.Sha512);
+        ParseSignerInfoSignatureAlgorithmOid(cms).ShouldBe(Oids.RsaSha512);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private static string ExtractDigestOid(byte[] signedPdf)
@@ -192,20 +235,41 @@ public sealed class AlgorithmInferenceTests
         hexEnd += hexBegin;
 
         ReadOnlySpan<byte> hexSpan = data[hexBegin..hexEnd];
-        // The PDF pads the hex string with trailing 00 bytes to a fixed width — strip them
-        // as complete "00" pairs (each pair = one zero byte).
-        int cmsEnd = hexSpan.Length;
-        while (cmsEnd >= 2 && hexSpan[cmsEnd - 2] == (byte)'0' && hexSpan[cmsEnd - 1] == (byte)'0')
+
+        // Decode all hex bytes including any zero-byte padding added by SimpleSign.
+        byte[] allBytes = new byte[hexSpan.Length / 2];
+        for (int i = 0; i < allBytes.Length; i++)
         {
-            cmsEnd -= 2;
+            allBytes[i] = (byte)((HexDigit(hexSpan[2 * i]) << 4) | HexDigit(hexSpan[2 * i + 1]));
         }
 
-        byte[] cmsBytes = new byte[cmsEnd / 2];
-        for (int i = 0; i < cmsBytes.Length; i++)
+        // Use the DER SEQUENCE length header to determine the exact CMS boundary.
+        // Stripping trailing 00 pairs is unsafe because a valid RSA signature can end
+        // with 0x00 bytes, which would cause AsnContentException during parsing.
+        return allBytes[..GetDerTotalLength(allBytes)];
+    }
+
+    private static int GetDerTotalLength(byte[] data)
+    {
+        // DER SEQUENCE: tag byte (0x30), then length in short or long form.
+        if (data.Length < 2 || data[0] != 0x30)
         {
-            cmsBytes[i] = (byte)((HexDigit(hexSpan[2 * i]) << 4) | HexDigit(hexSpan[2 * i + 1]));
+            throw new InvalidOperationException($"CMS does not start with DER SEQUENCE tag (got 0x{data[0]:X2}).");
         }
-        return cmsBytes;
+
+        if ((data[1] & 0x80) == 0)
+        {
+            return 2 + data[1]; // short form
+        }
+
+        int numLenBytes = data[1] & 0x7F;
+        int contentLength = 0;
+        for (int i = 0; i < numLenBytes; i++)
+        {
+            contentLength = (contentLength << 8) | data[2 + i];
+        }
+
+        return 2 + numLenBytes + contentLength;
     }
 
     private static int HexDigit(byte b) => b switch
