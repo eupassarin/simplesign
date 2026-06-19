@@ -245,8 +245,8 @@ public sealed class LtvEmbedder
 
         _logger.LtvDataCollected(crlData.Count, ocspData.Count, allCerts.Count);
 
-        // Extract signature /Contents hashes for VRI (SHA-1 as PAdES key, SHA-256 for collision resilience)
-        var signatureHashPairs = ExtractSignatureContentHashPairs(signedPdf);
+        // Extract signature /Contents hashes for VRI (SHA-1 per ISO 32000-2 §12.8.4.4)
+        var signatureHashes = ExtractSignatureContentHashes(signedPdf);
 
         if (crlData is [] && ocspData is [])
         {
@@ -255,7 +255,7 @@ public sealed class LtvEmbedder
             // actual signatures to key VRI entries against (e.g. self-signed cert scenario).
             // Without signatures there is nothing to reference; return early and preserve
             // the EOL invariant the same way the "no data at all" path does.
-            if (signatureHashPairs.Count == 0)
+            if (signatureHashes.Count == 0)
             {
                 signedPdf = EnsureTrailingEol(signedPdf);
                 return signedPdf;
@@ -265,7 +265,7 @@ public sealed class LtvEmbedder
         // Parse existing DSS for merge (multi-signature support)
         var existingDss = Validation.DssExtractor.ParseExistingDss(signedPdf);
 
-        return AppendDssDictionary(signedPdf, crlData, ocspData, allCerts, signatureHashPairs, existingDss, timestampTokenBytes);
+        return AppendDssDictionary(signedPdf, crlData, ocspData, allCerts, signatureHashes, existingDss, timestampTokenBytes);
     }
 
     private static byte[] EnsureTrailingEol(byte[] data)
@@ -291,20 +291,6 @@ public sealed class LtvEmbedder
     internal static List<string> ExtractSignatureContentHashes(byte[] pdf)
     {
         var hashes = new List<string>();
-        foreach (var (sha1, _) in ExtractSignatureContentHashPairs(pdf))
-        {
-            hashes.Add(sha1);
-        }
-        return hashes;
-    }
-
-    /// <summary>
-    /// Computes both SHA-1 and SHA-256 hashes of each signature's /Contents for VRI keys.
-    /// SHA-1 is the PAdES-mandated VRI key; SHA-256 provides collision-resilient cross-reference.
-    /// </summary>
-    internal static List<(string Sha1, string Sha256)> ExtractSignatureContentHashPairs(byte[] pdf)
-    {
-        var pairs = new List<(string, string)>();
         var span = pdf.AsSpan();
         ReadOnlySpan<byte> contentsToken = "/Contents <"u8;
         int searchPos = 0;
@@ -331,8 +317,6 @@ public sealed class LtvEmbedder
             int hexLen = hexEnd - hexStart;
             if (hexLen > 1000)
             {
-                // Decode the hex to bytes and compute SHA-1 over the full byte string value,
-                // including any trailing zero padding (ISO 32000-2 §12.8.4.4).
                 try
                 {
                     string hexString = System.Text.Encoding.Latin1.GetString(span.Slice(hexStart, hexLen));
@@ -347,8 +331,7 @@ public sealed class LtvEmbedder
 #pragma warning disable CA5350 // VRI key is defined as SHA-1 by PAdES spec
                         byte[] sha1 = SHA1.HashData(sigBytes);
 #pragma warning restore CA5350
-                        byte[] sha256 = SHA256.HashData(sigBytes);
-                        pairs.Add((Convert.ToHexString(sha1), Convert.ToHexString(sha256)));
+                        hashes.Add(Convert.ToHexString(sha1));
                     }
                 }
                 catch (FormatException)
@@ -359,7 +342,7 @@ public sealed class LtvEmbedder
             searchPos = hexEnd + 1;
         }
 
-        return pairs;
+        return hashes;
     }
 
     private static byte[] AppendDssDictionary(
@@ -367,7 +350,7 @@ public sealed class LtvEmbedder
         List<byte[]> crls,
         List<byte[]> ocsps,
         IReadOnlyList<X509Certificate2> certs,
-        List<(string Sha1, string Sha256)> signatureHashPairs,
+        List<string> signatureHashes,
         ExistingDssData existingDss,
         byte[]? timestampTokenBytes = null)
     {
@@ -442,7 +425,7 @@ public sealed class LtvEmbedder
 
         // Build VRI dictionaries (one per signature)
         var vriEntries = new List<(string Hash, int ObjNum)>();
-        foreach (var (sha1Hash, sha256Hash) in signatureHashPairs)
+        foreach (var sha1Hash in signatureHashes)
         {
             int vriObjNum = nextObjNum++;
             long vriOffset = result.Position;
@@ -470,8 +453,6 @@ public sealed class LtvEmbedder
             {
                 vriSb.Append($"   /TS {tsRef}\n");
             }
-
-            vriSb.Append($"   /SHA256 <{sha256Hash.ToLowerInvariant()}>\n");
 
             // ISO 32000-2 §12.8.4.4: /TU is the time at which the VRI was created
             vriSb.Append($"   /TU (D:{DateTime.UtcNow:yyyyMMddHHmmss}+00'00')\n");

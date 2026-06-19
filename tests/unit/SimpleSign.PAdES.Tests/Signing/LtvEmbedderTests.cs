@@ -470,4 +470,63 @@ public sealed class LtvEmbedderTests
         }
         return writer.Encode();
     }
+
+    [Fact(DisplayName = "VRI dictionary contains no /SHA256 key")]
+    public async Task EmbedLtvDataAsync_VriDictionary_ContainsNoSha256Key()
+    {
+        using var cert = TestCertificateFactory.CreateSelfSignedCert();
+        byte[] pdf = TestPdfFactory.CreateMinimalPdf();
+        byte[] signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+
+        var embedder = new LtvEmbedder();
+        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signed, [cert]);
+
+        string pdfText = Encoding.Latin1.GetString(ltvPdf);
+        Assert.DoesNotContain("/SHA256", pdfText, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "VRI dictionary contains only ISO 32000-2 spec keys")]
+    public async Task EmbedLtvDataAsync_VriDictionary_ContainsOnlySpecKeys()
+    {
+        using var cert = TestCertificateFactory.CreateSelfSignedCert();
+        byte[] pdf = TestPdfFactory.CreateMinimalPdf();
+        byte[] signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+
+        var embedder = new LtvEmbedder();
+        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signed, [cert]);
+
+        string pdfText = Encoding.Latin1.GetString(ltvPdf);
+        int vriStart = pdfText.IndexOf("/Type /VRI", StringComparison.Ordinal);
+        Assert.True(vriStart >= 0, "Expected VRI dictionary in LTV PDF");
+
+        int vriEnd = pdfText.IndexOf("endobj", vriStart, StringComparison.Ordinal);
+        Assert.True(vriEnd > vriStart, "Expected endobj after VRI dictionary");
+        string vriBody = pdfText[vriStart..vriEnd];
+
+        string[] allowed = ["/Type", "/Cert", "/CRL", "/OCSP", "/TU", "/TS"];
+
+        int pos = 0;
+        while (pos < vriBody.Length)
+        {
+            int slash = vriBody.IndexOf('/', pos);
+            if (slash < 0)
+            {
+                break;
+            }
+
+            int end = slash + 1;
+            while (end < vriBody.Length && (char.IsLetterOrDigit(vriBody[end]) || vriBody[end] == '_'))
+            {
+                end++;
+            }
+
+            string key = vriBody[slash..end];
+            if (key != "/VRI")
+            {
+                Assert.Contains(key, allowed);
+            }
+
+            pos = end;
+        }
+    }
 }
