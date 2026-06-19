@@ -155,7 +155,7 @@ public sealed class CadesSignerBuilder
     {
         ArgumentNullException.ThrowIfNull(certificate);
         ArgumentNullException.ThrowIfNull(externalSigner);
-        string sigAlgOid = CryptoUtility.DetectSignatureAlgorithmOid(certificate, _hashAlgorithm);
+        string sigAlgOid = _signatureAlgorithmOid ?? CryptoUtility.DetectSignatureAlgorithmOid(certificate, _hashAlgorithm);
         CmsSignatureBuilder.ValidateSignatureAlgorithmCompatibility(certificate, sigAlgOid);
         return With(certificate: certificate, externalSigner: externalSigner,
             signatureAlgorithmOid: sigAlgOid);
