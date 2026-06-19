@@ -25,8 +25,9 @@ using SimpleSign.PAdES;              // SimpleSigner, DeferredSigner, BatchSigne
 using SimpleSign.PAdES.Validation;   // PdfSignatureValidator, ValidationOptions
 using SimpleSign.PAdES.Inspection;   // PdfSignatureInspector
 using SimpleSign.Core.Crypto;        // TsaPool, HashAlgorithmName
-using SimpleSign.Brasil;             // IcpBrasilValidator, GovBrValidator
-using SimpleSign.Brasil.Extensions;  // IcpBrasilValidationResult extensions
+using SimpleSign.CAdES;              // CadesSigner, CadesSignerBuilder, CadesSignatureValidator
+using SimpleSign.Brasil.IcpBrasil;   // IcpBrasilChainValidator, IcpBrasilValidationResult
+using SimpleSign.Brasil.GovBr;       // GovBrChainValidator, GovBrValidationResult
 ```
 
 ---
@@ -106,7 +107,6 @@ var builder = new DeferredSignerBuilder(pdfBytes, cert)
     .WithSignerName("Jane Doe")
     .WithReason("Contract approval")
     .WithTimestamp("http://timestamp.digicert.com")
-    .WithLtv()
     .WithAppearance(a => a.OnPage(1).AtPosition(50, 50, 200, 80));
 
 var prepared = await builder.PrepareAsync();
@@ -127,12 +127,18 @@ var batch = BatchSigner.Create(cert)
     .WithConcurrency(8)
     .Build();
 
-var documents = new[] { pdf1, pdf2, pdf3 };
-var results = await batch.SignAsync(documents);
+// Sign a single document
+byte[] signedPdf = await batch.SignAsync(pdfBytes);
 
-Console.WriteLine($"Succeeded: {results.Succeeded}");
-Console.WriteLine($"Failed: {results.Failed}");
-Console.WriteLine($"Time: {results.ElapsedMs}ms");
+// Or stream results as they complete
+await foreach (var result in batch.SignAllAsync(inputs))
+{
+    if (result.PdfBytes is not null)
+        Console.WriteLine($"{result.Id}: OK");
+}
+
+// Stats
+Console.WriteLine($"Success: {batch.SuccessCount}, Fail: {batch.FailureCount}, Avg: {batch.AverageElapsedMs:F0}ms");
 ```
 
 ### TSA Connection Pool
@@ -153,6 +159,65 @@ var signed = await SimpleSigner.Document(pdf)
     .WithCertificate(cert)
     .WithTimestampPool(pool)
     .SignAsync();
+```
+
+---
+
+## CAdES — Standalone CMS Signatures
+
+Create and validate detached CAdES signatures (CMS/PKCS#7 SignedData) for any binary data:
+
+```csharp
+using SimpleSign.CAdES;
+
+var data = File.ReadAllBytes("document.pdf");
+
+// CAdES-B-B (basic)
+var cms = await CadesSigner
+    .Document(data)
+    .WithCertificate(cert)
+    .SignAsync();
+
+// CAdES-B-T (with timestamp)
+var cmsBt = await CadesSigner
+    .Document(data)
+    .WithCertificate(cert)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(CadesLevel.Timestamped)
+    .SignAsync();
+
+// CAdES-B-LT (long-term)
+var cmsBlt = await CadesSigner
+    .Document(data)
+    .WithCertificate(cert, chain)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(CadesLevel.LongTerm)
+    .SignAsync();
+
+// CAdES-B-LTA (archival)
+var cmsBlta = await CadesSigner
+    .Document(data)
+    .WithCertificate(cert)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(CadesLevel.Archive)
+    .SignAsync();
+
+File.WriteAllBytes("document.pdf.p7s", cms);
+```
+
+### Validate CAdES Signatures
+
+```csharp
+using SimpleSign.CAdES;
+
+var validator = new CadesSignatureValidator(
+    new ValidationOptions { CheckRevocation = false });
+
+var result = validator.Validate(cmsBytes, originalData, trustAnchors);
+
+Console.WriteLine($"Signer: {result.SignerCertificate?.Subject}");
+Console.WriteLine($"Integrity: {result.IsIntegrityValid}");
+Console.WriteLine($"Valid: {result.IsValid}");
 ```
 
 ---
@@ -225,40 +290,34 @@ foreach (var sig in result.Signatures)
 ### Chain Validation with ICP-Brasil
 
 ```csharp
-using SimpleSign.Brasil;
+using SimpleSign.Brasil.IcpBrasil;
 
-var validator = new IcpBrasilValidator();
-var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
+var validator = new IcpBrasilChainValidator();
+var result = await validator.ValidateAsync(certificate);
 
-foreach (var r in results)
-{
-    if (r is IcpBrasilValidationResult icpResult)
-    {
-        Console.WriteLine($"CPF: {icpResult.Cpf}");
-        Console.WriteLine($"CNPJ: {icpResult.Cnpj}");
-        Console.WriteLine($"Policy: {icpResult.PolicyName}");
-    }
-}
+Console.WriteLine($"Chain Valid: {result.IsChainValid}");
+Console.WriteLine($"ICP-Brasil: {result.IsIcpBrasilCertificate}");
+Console.WriteLine($"Policy: {result.DetectedPolicy}");
+Console.WriteLine($"CPF: {result.Cpf}");
+Console.WriteLine($"CNPJ: {result.Cnpj}");
 ```
 
 ### CPF/CNPJ Extraction
 
 ```csharp
-using SimpleSign.Brasil.Extensions;
+using SimpleSign.Brasil.IcpBrasil;
 
-var result = await validator.ValidateAsync(stream);
-var icpResult = result.First() as IcpBrasilValidationResult;
-string cpf = icpResult.CpfFormatted;    // "123.456.789-00"
-string cnpj = icpResult.CnpjFormatted;  // "12.345.678/0001-00"
+string cpf = result.CpfFormatted;    // "123.456.789-00"
+string cnpj = result.CnpjFormatted;  // "12.345.678/0001-00"
 ```
 
 ### Health Professional Data (e-Prescriptions)
 
 ```csharp
-var healthData = icpResult.HealthProfessional;
-Console.WriteLine($"CRM: {healthData.RegistrationNumber}");
-Console.WriteLine($"Council: {healthData.ProfessionalCouncil}");
-Console.WriteLine($"State: {healthData.State}");
+var healthData = result.HealthProfessional;
+Console.WriteLine($"Council: {healthData.Council}");
+Console.WriteLine($"Registration: {healthData.RegistrationNumber}");
+Console.WriteLine($"State: {healthData.StateCode}");
 ```
 
 ### VALIDAR ITI Portal Link
@@ -266,10 +325,10 @@ Console.WriteLine($"State: {healthData.State}");
 Generate verification URLs for QR code embedding:
 
 ```csharp
-using SimpleSign.Brasil;
+using SimpleSign.Brasil.ValidarIti;
 
-string validarUrl = ValidarItiUrlBuilder.Build(signedPdfBytes);
-// https://validar.iti.gov.br/validar?...
+string validarUrl = ValidarItiUrlBuilder.ForDocument("https://storage.example.com/doc.pdf");
+// https://validar.iti.gov.br/?document=https%3A%2F%2Fstorage...
 ```
 
 ---

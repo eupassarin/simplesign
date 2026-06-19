@@ -43,12 +43,10 @@ src/
 ├── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL, hashing
 ├── SimpleSign.Pdf/         PDF structure: xref, objects, incremental save, fields
 ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package)
+├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
 ├── SimpleSign.Brasil/      ICP-Brasil: chain validation, CPF/CNPJ, Gov.br
 ├── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
-├── SimpleSign.Europa/      EU trust lists (future)
-├── SimpleSign.App/         Blazor web management UI
 ├── SimpleSign.Cli/         CLI tool
-├── SimpleSign.DocxToPdf/   DOCX→PDF (internal)
 └── SimpleSign.HostSigner/  Signing service host
 ```
 
@@ -86,7 +84,11 @@ var signedPdf = await builder.CompleteAsync(prepared.SessionData, signature);
 
 // Batch
 var batch = BatchSigner.Create(cert).WithTimestamp(url).Build();
-await batch.SignAsync(documents);
+byte[] signed = await batch.SignAsync(pdfBytes);
+await foreach (var r in batch.SignAllAsync(inputs)) { }
+
+// CAdES
+await CadesSigner.Document(data).WithCertificate(cert).WithTimestamp(url).WithLevel(CadesLevel.Timestamped).SignAsync();
 ```
 
 ### Extension Points (interfaces)

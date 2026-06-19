@@ -118,35 +118,42 @@ foreach (var r in results)
 
 ### CAdES — Standalone CMS Signatures
 
-Create and validate detached CAdES signatures (CMS/PKCS#7 SignedData) for any binary data:
+Create and validate detached CAdES signatures (CMS/PKCS#7 SignedData) for any binary data using the fluent builder API:
 
 ```csharp
 using SimpleSign.CAdES;
 
 var data = File.ReadAllBytes("document.pdf");
-var cms = await CadesSigner.SignAsync(data, certificate);
+
+// CAdES-B-B (basic)
+var cms = await CadesSigner
+    .Document(data)
+    .WithCertificate(certificate)
+    .SignAsync();
 
 // CAdES-B-T (with timestamp)
-var cmsBt = await CadesSigner.SignAsync(data, certificate, new CadesSigningOptions
-{
-    TsaUrl = "http://timestamp.digicert.com",
-    Level = CadesLevel.Timestamped
-});
+var cmsBt = await CadesSigner
+    .Document(data)
+    .WithCertificate(certificate)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(CadesLevel.Timestamped)
+    .SignAsync();
 
 // CAdES-B-LT (long-term with LTV data)
-var cmsBlt = await CadesSigner.SignAsync(data, certificate, new CadesSigningOptions
-{
-    TsaUrl = "http://timestamp.digicert.com",
-    Level = CadesLevel.LongTerm,
-    ExtraCertificates = chain
-});
+var cmsBlt = await CadesSigner
+    .Document(data)
+    .WithCertificate(certificate, chain)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(CadesLevel.LongTerm)
+    .SignAsync();
 
 // CAdES-B-LTA (archival timestamp)
-var cmsBlta = await CadesSigner.SignAsync(data, certificate, new CadesSigningOptions
-{
-    TsaUrl = "http://timestamp.digicert.com",
-    Level = CadesLevel.Archive
-});
+var cmsBlta = await CadesSigner
+    .Document(data)
+    .WithCertificate(certificate)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(CadesLevel.Archive)
+    .SignAsync();
 
 File.WriteAllBytes("document.pdf.p7s", cms);
 ```

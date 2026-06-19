@@ -30,13 +30,14 @@ byte[] signedPdf = await DeferredSigner.CompleteAsync(prepared.SessionData, clie
 
 // Batch signing
 var batch = BatchSigner.Create(cert).WithTimestamp(url).WithLtv().Build();
-var results = await batch.SignAsync(documents);
+byte[] signed = await batch.SignAsync(pdfBytes);
+await foreach (var r in batch.SignAllAsync(inputs)) { }
 ```
 
 ## Packages
 
 ```
-dotnet add package SimpleSign.PAdES   # PDF signing & validation (most common)
+dotnet add package SimpleSign.CAdES   # standalone CMS/PKCS#7 signing
 dotnet add package SimpleSign.Brasil  # ICP-Brasil, Gov.br, Lei 14.063
 dotnet add package SimpleSign         # Meta-package (all)
 ```
@@ -48,6 +49,8 @@ SimpleSign (meta-package)
 ├── SimpleSign.PAdES     PAdES B-B/T/LT/LTA signing & validation
 │   ├── SimpleSign.Pdf   PDF structure parser
 │   └── SimpleSign.Core  Crypto primitives, CMS, TSA, revocation
+├── SimpleSign.CAdES     standalone CMS/PKCS#7 signing & validation
+│   └── SimpleSign.Core  (shared)
 ├── SimpleSign.Brasil    ICP-Brasil + Gov.br extensions
 ├── SimpleSign.HtmlToPdf Pure-.NET HTML→PDF converter
 ├── SimpleSign.Cli       CLI tool (Spectre.Console)
