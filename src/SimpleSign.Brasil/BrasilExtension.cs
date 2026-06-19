@@ -98,6 +98,12 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
             Errors = result.Errors,
         };
     }
+
+    async Task<ChainValidationResult> IChainValidationProvider.ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return await ValidateAsync(certificate, chain).ConfigureAwait(false);
+    }
 }
 
 internal sealed class GovBrChainValidationProvider : IChainValidationProvider
@@ -128,5 +134,11 @@ internal sealed class GovBrChainValidationProvider : IChainValidationProvider
             SignerIdType = cpf is not null ? "CPF" : null,
             Errors = result.Errors,
         };
+    }
+
+    async Task<ChainValidationResult> IChainValidationProvider.ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return await ValidateAsync(certificate, chain).ConfigureAwait(false);
     }
 }

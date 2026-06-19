@@ -94,19 +94,30 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         var hashAlg = ParseHashAlgorithm(settings.HashAlgorithm) ?? HashAlgorithmName.SHA256;
         var commitment = settings.Commitment is not null ? ParseCommitment(settings.Commitment) : null;
 
-        var options = new CadesSigningOptions
-        {
-            Level = level,
-            HashAlgorithm = hashAlg,
-            TsaUrl = settings.TsaUrl,
-            CommitmentType = commitment,
-            SignaturePolicyOid = settings.PolicyOid,
-            SignaturePolicyUri = settings.PolicyUri,
-            ExtraCertificates = settings.ChainPath is not null ? LoadChainCertificates(settings.ChainPath) : null
-        };
-
         var logger = settings.CreateLogger<CadesSignCommand>();
-        byte[] cms = await CadesSigner.SignAsync(data, cert, options, logger, cancellationToken);
+        var builder = CadesSigner.Document(data, logger)
+            .WithCertificate(cert)
+            .WithHashAlgorithm(hashAlg)
+            .WithLevel(level);
+
+        if (settings.TsaUrl is not null)
+        {
+            builder = builder.WithTimestamp(settings.TsaUrl);
+        }
+        if (commitment.HasValue)
+        {
+            builder = builder.WithCommitmentType(commitment.Value);
+        }
+        if (settings.PolicyOid is not null)
+        {
+            builder = builder.WithSignaturePolicy(settings.PolicyOid, settings.PolicyUri);
+        }
+        if (settings.ChainPath is not null)
+        {
+            builder = builder.WithCertificate(cert, LoadChainCertificates(settings.ChainPath));
+        }
+
+        byte[] cms = await builder.SignAsync(cancellationToken);
 
         string outputPath = settings.OutputPath ?? settings.InputPath + ".p7s";
         await File.WriteAllBytesAsync(outputPath, cms, cancellationToken);

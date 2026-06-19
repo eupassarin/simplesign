@@ -22,6 +22,13 @@ public interface IChainValidationProvider
     /// Validates the certificate chain and returns region-specific results.
     /// </summary>
     Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain = null);
+
+    /// <summary>
+    /// Validates the certificate chain with cancellation support.
+    /// The default implementation delegates to the parameterless CancellationToken overload.
+    /// </summary>
+    Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain, CancellationToken cancellationToken)
+        => ValidateAsync(certificate, chain);
 }
 
 /// <summary>

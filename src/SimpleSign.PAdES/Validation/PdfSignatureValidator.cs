@@ -341,7 +341,7 @@ public sealed class PdfSignatureValidator
 
         // 4a. Country-specific chain validation providers (enrich with policy level, signer ID, etc.)
         var chainValidationResult = await RunChainValidationProvidersAsync(
-            cmsData.SignerCertificate, cmsData.Certificates, errors, warnings).ConfigureAwait(false);
+            cmsData.SignerCertificate, cmsData.Certificates, errors, warnings, cancellationToken).ConfigureAwait(false);
 
         // If standard PKI chain fails but a country-specific provider trusts the certificate,
         // promote chain errors to warnings (same pattern as document timestamps).
@@ -427,7 +427,7 @@ public sealed class PdfSignatureValidator
 
         // 3a. Country-specific chain validation providers (policy level, signer ID enrichment)
         var chainValidationResult = await RunChainValidationProvidersAsync(
-            cmsData.SignerCertificate, cmsData.Certificates, errors, warnings).ConfigureAwait(false);
+            cmsData.SignerCertificate, cmsData.Certificates, errors, warnings, cancellationToken).ConfigureAwait(false);
 
         // When integrity and signature are cryptographically sound but the TSA chain cannot be
         // anchored to a local trust root, treat this as an advisory warning rather than a hard
@@ -649,10 +649,7 @@ public sealed class PdfSignatureValidator
         }
 
         using var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = _options.CheckRevocation
-            ? X509RevocationMode.Online
-            : X509RevocationMode.NoCheck;
-        chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+        CryptoUtility.ConfigureChainPolicy(chain, _options.CheckRevocation);
         chain.ChainPolicy.VerificationFlags =
             X509VerificationFlags.IgnoreEndRevocationUnknown |
             X509VerificationFlags.IgnoreCertificateAuthorityRevocationUnknown;
@@ -735,7 +732,8 @@ public sealed class PdfSignatureValidator
         X509Certificate2? signerCert,
         IReadOnlyList<X509Certificate2> certificates,
         List<string> errors,
-        List<string> warnings)
+        List<string> warnings,
+        CancellationToken cancellationToken)
     {
         if (signerCert is null || _chainValidationProviders.Count == 0)
         {
@@ -751,7 +749,10 @@ public sealed class PdfSignatureValidator
 
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
+#pragma warning disable CA2016 // ValidateAsync 2-param overload doesn't accept CancellationToken
                 var result = await provider.ValidateAsync(signerCert, certificates).ConfigureAwait(false);
+#pragma warning restore CA2016
 
                 if (!result.IsTrusted)
                 {

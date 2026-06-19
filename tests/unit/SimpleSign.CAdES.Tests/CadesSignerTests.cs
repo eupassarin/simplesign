@@ -62,12 +62,10 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task SignAsync_WithCommitmentType_IncludesAttribute()
     {
-        var options = new CadesSigningOptions
-        {
-            CommitmentType = CommitmentType.ProofOfOrigin
-        };
-
-        var cms = await CadesSigner.SignAsync(_data, _cert, options);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithCommitmentType(CommitmentType.ProofOfOrigin)
+            .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
         Assert.Equal(Core.Constants.Oids.ProofOfOrigin, parsed.CommitmentTypeOid);
@@ -76,27 +74,22 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task SignAsync_WithSignaturePolicy_IncludesAttribute()
     {
-        var options = new CadesSigningOptions
-        {
-            SignaturePolicyOid = "2.16.76.1.7.1.1.1.1",
-            SignaturePolicyUri = "https://example.com/policy"
-        };
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithSignaturePolicy("2.16.76.1.7.1.1.1.1", "https://example.com/policy")
+            .SignAsync();
 
-        var cms = await CadesSigner.SignAsync(_data, _cert, options);
         var parsed = CmsParser.Parse(cms);
 
-        Assert.Equal(options.SignaturePolicyOid, parsed.SignaturePolicyOid);
+        Assert.Equal("2.16.76.1.7.1.1.1.1", parsed.SignaturePolicyOid);
     }
 
     [Fact]
     public async Task SignAsync_WithExtraCertificates_IncludesChain()
     {
-        var options = new CadesSigningOptions
-        {
-            ExtraCertificates = [_pki.IntermediateCa]
-        };
-
-        var cms = await CadesSigner.SignAsync(_data, _cert, options);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert, [_pki.IntermediateCa])
+            .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
         Assert.Contains(parsed.Certificates, c => c.Subject == _pki.IntermediateCa.Subject);
@@ -105,12 +98,10 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task SignAsync_WithSha512_UsesSha512Digest()
     {
-        var options = new CadesSigningOptions
-        {
-            HashAlgorithm = HashAlgorithmName.SHA512
-        };
-
-        var cms = await CadesSigner.SignAsync(_data, _cert, options);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithHashAlgorithm(HashAlgorithmName.SHA512)
+            .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
         Assert.Equal(Core.Constants.Oids.Sha512, parsed.DigestAlgorithmOid);
@@ -205,15 +196,11 @@ public sealed class CadesSignerTests : IDisposable
         var mockTsa = BuildMockTsaHandler();
         using var tsaHttpClient = new HttpClient(mockTsa);
 
-        var options = new CadesSigningOptions
-        {
-            Level = CadesLevel.LongTerm,
-            TsaUrl = "http://mock-tsa.example.com",
-            TsaHttpClient = tsaHttpClient,
-            ExtraCertificates = [_pki.IntermediateCa]
-        };
-
-        var cms = await CadesSigner.SignAsync(_data, _cert, options);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert, [_pki.IntermediateCa])
+            .WithLevel(CadesLevel.LongTerm)
+            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
         Assert.NotNull(parsed.SignatureTimestampToken);
@@ -227,14 +214,11 @@ public sealed class CadesSignerTests : IDisposable
         var mockTsa = BuildMockTsaHandler();
         using var tsaHttpClient = new HttpClient(mockTsa);
 
-        var options = new CadesSigningOptions
-        {
-            Level = CadesLevel.LongTerm,
-            TsaUrl = "http://mock-tsa.example.com",
-            TsaHttpClient = tsaHttpClient
-        };
-
-        var cms = await CadesSigner.SignAsync(_data, _cert, options);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithLevel(CadesLevel.LongTerm)
+            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
         Assert.NotNull(parsed.SignatureTimestampToken);
@@ -247,14 +231,11 @@ public sealed class CadesSignerTests : IDisposable
         var mockTsa = BuildMockTsaHandler();
         using var tsaHttpClient = new HttpClient(mockTsa);
 
-        var options = new CadesSigningOptions
-        {
-            Level = CadesLevel.Archive,
-            TsaUrl = "http://mock-tsa.example.com",
-            TsaHttpClient = tsaHttpClient
-        };
-
-        var cms = await CadesSigner.SignAsync(_data, _cert, options);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithLevel(CadesLevel.Archive)
+            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
         Assert.NotNull(parsed.SignatureTimestampToken);
@@ -270,15 +251,11 @@ public sealed class CadesSignerTests : IDisposable
         var mockTsa = BuildMockTsaHandler();
         using var tsaHttpClient = new HttpClient(mockTsa);
 
-        var options = new CadesSigningOptions
-        {
-            Level = CadesLevel.LongTerm,
-            TsaUrl = "http://mock-tsa.example.com",
-            TsaHttpClient = tsaHttpClient,
-            ExtraCertificates = [_pki.IntermediateCa]
-        };
-
-        var cms = await CadesSigner.SignAsync(_data, _cert, options);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert, [_pki.IntermediateCa])
+            .WithLevel(CadesLevel.LongTerm)
+            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .SignAsync();
 
         var directParsed = CmsParser.Parse(cms);
         Assert.NotNull(directParsed.UnsignedAttributes);
@@ -306,14 +283,11 @@ public sealed class CadesSignerTests : IDisposable
         // With B-T, should have SignatureTimestampToken unsigned attribute
         var mockTsa = BuildMockTsaHandler();
         using var tsaHttpClient = new HttpClient(mockTsa);
-        var options = new CadesSigningOptions
-        {
-            Level = CadesLevel.Timestamped,
-            TsaUrl = "http://mock-tsa.example.com",
-            TsaHttpClient = tsaHttpClient
-        };
-
-        var cmsWithUnsigned = await CadesSigner.SignAsync(_data, _cert, options);
+        var cmsWithUnsigned = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithLevel(CadesLevel.Timestamped)
+            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .SignAsync();
         var parsedWithUnsigned = CmsParser.Parse(cmsWithUnsigned);
 
         Assert.NotNull(parsedWithUnsigned.UnsignedAttributes);

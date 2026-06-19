@@ -11,6 +11,18 @@ namespace SimpleSign.Core.Crypto;
 internal static class CryptoUtility
 {
     /// <summary>
+    /// Configures the common <see cref="X509Chain.ChainPolicy"/> settings used by all validators:
+    /// revocation mode based on <paramref name="checkRevocation"/> and <c>ExcludeRoot</c> flag.
+    /// </summary>
+    internal static void ConfigureChainPolicy(X509Chain chain, bool checkRevocation)
+    {
+        chain.ChainPolicy.RevocationMode = checkRevocation
+            ? X509RevocationMode.Online
+            : X509RevocationMode.NoCheck;
+        chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+    }
+
+    /// <summary>
     /// Detects the appropriate RSA signature padding from the certificate, checking
     /// the SubjectPublicKeyInfo OID (RFC 4055 §4) first, then the signature algorithm.
     /// </summary>

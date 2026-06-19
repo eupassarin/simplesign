@@ -196,10 +196,7 @@ public sealed class CadesSignatureValidator
                 || !_options.TrustSystemRoots;
 
             using var chain = new X509Chain();
-            chain.ChainPolicy.RevocationMode = _options.CheckRevocation
-                ? X509RevocationMode.Online
-                : X509RevocationMode.NoCheck;
-            chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+            CryptoUtility.ConfigureChainPolicy(chain, _options.CheckRevocation);
 
             if (hasCustomRoots)
             {
