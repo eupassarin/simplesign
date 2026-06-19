@@ -152,7 +152,9 @@ internal static class InspectMapper
             return $"{algo.Name} ({algo.Oid})";
         }
 
-        return algo.Name ?? algo.Oid ?? "unknown";
+        return !string.IsNullOrEmpty(algo.Name) ? algo.Name
+            : !string.IsNullOrEmpty(algo.Oid) ? algo.Oid
+            : "unknown";
     }
 
     private static string FormatLevel(PAdESConformanceLevel level) => level switch
