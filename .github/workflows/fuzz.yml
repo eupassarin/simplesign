@@ -21,7 +21,7 @@ jobs:
         target: [pdf, dss, timestamp, ocsp, cms, validator, xref]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
