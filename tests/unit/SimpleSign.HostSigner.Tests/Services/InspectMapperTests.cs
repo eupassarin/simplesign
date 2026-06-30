@@ -315,7 +315,7 @@ public class InspectMapperTests
                 CmsRawData = new byte[10]
             }
         };
-        var doc = new PdfDocumentInfo();
+        var doc = new PdfDocumentInfo { SignatureCount = sigs.Length };
         var result = InspectMapper.Map(new PdfInspectionResult
         {
             Document = doc,
