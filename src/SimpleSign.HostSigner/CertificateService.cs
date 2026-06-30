@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Crypto;
 
 namespace SimpleSign.HostSigner;
 
@@ -144,10 +145,6 @@ internal static class CertificateService
         return ("RSA", "SHA256");
     }
 
-    private static HashAlgorithmName ParseHashAlgorithm(string? name) => name?.ToUpperInvariant() switch
-    {
-        "SHA384" => HashAlgorithmName.SHA384,
-        "SHA512" => HashAlgorithmName.SHA512,
-        _ => HashAlgorithmName.SHA256,
-    };
+    private static HashAlgorithmName ParseHashAlgorithm(string? name) =>
+        HashAlgorithmHelper.TryParse(name) ?? HashAlgorithmName.SHA256;
 }

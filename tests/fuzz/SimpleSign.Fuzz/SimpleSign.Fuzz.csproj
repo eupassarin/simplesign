@@ -19,6 +19,7 @@
     <ProjectReference Include="..\..\..\src\SimpleSign.Core\SimpleSign.Core.csproj" />
     <ProjectReference Include="..\..\..\src\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
     <ProjectReference Include="..\..\..\src\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\..\src\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
   </ItemGroup>
 
 </Project>

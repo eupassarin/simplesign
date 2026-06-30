@@ -5,9 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`UnsignedSignatureProperties` wrapper** — XAdES unsigned properties now wrapped in `<UnsignedSignatureProperties>` per ETSI EN 319 132-1 §5.3. Backward-compatible: validator searches both nested and flat structures.
+- **`CommitmentType` values** — added `ProofOfReceipt`, `ProofOfDelivery`, `ProofOfSender`, `ProofOfCreation` to the `CommitmentType` enum with corresponding OID mappings in CAdES and XAdES.
+- **`SignerRole` + `DataObjectFormat` support** — `XadesSignerBuilder.WithSignerRoles()` / `WithDataObjectFormat()` for XAdES signed data object properties.
+- **XAdES CLI tests** — 17 CLI execution tests covering signing with self-signed cert, all error cases (invalid level/form/hash/missing input), sign-then-validate round trip, signer role, commitment type, and all level aliases (basic/timestamped/longterm/archive).
+- **XAdES EU DSS interop tests** — 4 tests (B-B, B-T, B-LT, double-signed) validating SimpleSign XAdES output against the official EU DSS validator.
+- **Expanded XAdES unit test suite (56 total)** — 20 error-path tests (null/empty/invalid arguments, unsupported forms), 6 algorithm-variant tests (ECDSA SHA-384/512, RSA-PSS SHA-384/512, all 6 CommitmentType OIDs, extra certs in KeyInfo), and 8 validation edge-case tests (digest mismatch, missing SignatureValue, missing SignatureMethod, wrong trust anchor, QualifyingProperties Target mismatch, missing SignedProperties Type, plain XMLDSig without XAdES properties).
+- **Validator reference integrity checks** — validates QualifyingProperties Target matches Signature Id and that a Reference with `SignedProperties` Type exists.
+
+### Fixed
+
+- **Detached/Enveloping forms rejected** — `BuildSignature` and `BuildSignedInfoToHash` now throw `NotSupportedException` with a clear message (only Enveloped is implemented for now).
+- **NuGet CI now packs XAdES and CAdES** — added `SimpleSign.XAdES` and `SimpleSign.CAdES` to the `dotnet pack` build list in CI.
+
+### Infrastructure
+
+- **`SimpleSign.Core/Crypto/CmsAttribute.cs`** — new CommitmentType OIDs added.
+- **Fuzz harness for XAdES** — added `xades-sign` and `xades-validate` targets to the SharpFuzz-based fuzzer in `tests/fuzz/`.
+
 ## [0.6.0] - 2026-06-19
 
 ### Added
+
+- **`SimpleSign.XAdES`** — new project for XML digital signatures with XAdES (ETSI EN 319 132). Fluent `XadesSigner.Document().WithCertificate().SignAsync()` builder. Supports XAdES-B-B, B-T, B-LT, B-LTA conformance levels. Enveloped, detached, and enveloping forms. RSA/*, ECDSA, and RSA-PSS signing. Synthetic timestamp and LTV data embedding. `XadesSignatureValidator` for round-trip validation.
+- **`xades sign` / `xades validate` CLI commands** — `simplesign xades sign <xml>` and `simplesign xades validate <signed.xml>` for terminal workflows.
+- **XAdES unit tests (18 total)** — signing, validation, B-T/B-LT/B-LTA round-trips, timestamp validation (valid/hash mismatch/malformed/null), LTV detection, archive timestamp validation, `SignWithDetailsAsync` level flags.
+- **`XmlDSigUrls` constants for RSA-PSS** — `RsaPssSha256`, `RsaPssSha384`, `RsaPssSha512` URIs for XMLDSig signature methods.
 
 - **`CadesSignerBuilder`** — new fluent immutable builder for CAdES signatures, matching the `SignerBuilder` pattern with `Document()`, `WithCertificate()`, `WithTimestamp()`, `WithHashAlgorithm()`, `WithSignatureAlgorithm()`, `WithOperationId()`, and `WithExternalSigner()` methods. `CadesSigner.SignAsync()` static methods now delegate to the builder for backward compatibility.
 - **`CadesSigningResult`** — sign-with-details result type exposing `TimestampApplied`, `LtvDataEmbedded`, `ArchiveTimestampApplied`, and `Warnings` for diagnostic and logging integration.

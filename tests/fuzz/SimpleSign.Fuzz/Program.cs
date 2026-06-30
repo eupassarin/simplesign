@@ -7,6 +7,7 @@ using SimpleSign.Core.Revocation;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.Pdf;
 using SimpleSign.Pdf.Exceptions;
+using SimpleSign.XAdES;
 
 namespace SimpleSign.Fuzz;
 
@@ -26,7 +27,7 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("Usage: dotnet run -c Release -- <dss|timestamp|ocsp|pdf|cms|validator|xref>");
+            Console.Error.WriteLine("Usage: dotnet run -c Release -- <dss|timestamp|ocsp|pdf|cms|validator|xref|xades-sign|xades-validate>");
             return 1;
         }
 
@@ -39,6 +40,8 @@ internal static class Program
             "cms" => FuzzCmsParser,
             "validator" => FuzzValidator,
             "xref" => FuzzXrefParser,
+            "xades-sign" => FuzzXadesSign,
+            "xades-validate" => FuzzXadesValidate,
             _ => throw new ArgumentException($"Unknown target: {args[0]}")
         };
 
@@ -156,6 +159,30 @@ internal static class Program
             _ = PdfStructureParser.DetermineNextObjectNumber(data);
             _ = PdfStructureParser.FindRootObjectNumber(data);
             _ = PdfStructureParser.FindObjectBytes(data, 1);
+        }
+        catch (Exception ex) when (IsExpectedException(ex)) { }
+    }
+
+    private static readonly X509Certificate2 FuzzSignerCert = CreateThrowawayCert();
+
+    /// <summary>Fuzz XAdES signing with random XML input.</summary>
+    private static void FuzzXadesSign(byte[] data)
+    {
+        try
+        {
+            _ = XadesSigner.SignAsync(data, FuzzSignerCert)
+                .GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (IsExpectedException(ex)) { }
+    }
+
+    /// <summary>Fuzz XAdES validation with random XML input.</summary>
+    private static void FuzzXadesValidate(byte[] data)
+    {
+        try
+        {
+            var validator = new XadesSignatureValidator();
+            _ = validator.Validate(data);
         }
         catch (Exception ex) when (IsExpectedException(ex)) { }
     }

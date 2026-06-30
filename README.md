@@ -39,6 +39,8 @@ SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 
 
 ## What's New in v0.6.0
 
+**XAdES signatures** — `SimpleSign.XAdES` introduces XML digital signatures with full XAdES-B-B, B-T, B-LT, and B-LTA conformance levels. The same fluent builder pattern (`XadesSigner.Document().WithCertificate().SignAsync()`) used by PAdES and CAdES. Supports enveloped, detached, and enveloping forms, RSA-PSS and ECDSA, synthetic timestamps, and CLI commands (`xades sign`, `xades validate`). See [README section](#xades--xml-signatures) for details.
+
 **Fluent CAdES Builder** — `CadesSignerBuilder` brings the same fluent immutable builder pattern used in PAdES to standalone CMS signatures. `DeferredSignerBuilder` renamed `WithSignatureAlgorithmOid()` → `WithSignatureAlgorithm()` for cross-API naming consistency (breaking). VRI compliance fix removes non-standard `/SHA256` key from DSS dictionaries. CancellationToken support added to chain validation. See the [full changelog](CHANGELOG.md) for details.
 
 ---
@@ -60,11 +62,12 @@ dotnet tool install -g SimpleSign.Cli
 
 ### Package Map
 
-- **SimpleSign** (meta-package) — full PAdES + CAdES stack
+- **SimpleSign** (meta-package) — full PAdES + CAdES + XAdES stack
   - **SimpleSign.PAdES** — PDF signing & validation (PAdES B-B/T/LT/LTA)
     - **SimpleSign.Pdf** — PDF structure parser (xref, objects, fields)
     - **SimpleSign.Core** — Crypto primitives, CMS, TSA, revocation, HTTP
   - **SimpleSign.CAdES** — standalone CMS/PKCS#7 signing & validation (ETSI EN 319 122)
+  - **SimpleSign.XAdES** — XML signature signing & validation (ETSI EN 319 132)
     - **SimpleSign.Core** (shared)
 - **SimpleSign.Brasil** — ICP-Brasil + Gov.br + Lei 14.063 (depends on PAdES)
 - **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF (independent)
@@ -175,6 +178,67 @@ Console.WriteLine($"Chain: {result.IsCertificateChainValid}");
 Console.WriteLine($"Timestamp: {result.HasValidTimestamp}");
 Console.WriteLine($"LTV: {result.IsLtvDataValid}");
 Console.WriteLine($"Archive TS: {result.HasValidArchiveTimestamp}");
+Console.WriteLine($"Valid: {result.IsValid}");
+```
+
+### XAdES — XML Signatures
+
+Sign and validate XML documents with XAdES (ETSI EN 319 132) using the same fluent builder API:
+
+```csharp
+using SimpleSign.XAdES;
+
+var xml = File.ReadAllBytes("invoice.xml");
+
+// XAdES-B-B (basic)
+var signed = await XadesSigner
+    .Document(xml)
+    .WithCertificate(certificate)
+    .SignAsync();
+
+// XAdES-B-T (with timestamp)
+var signedBt = await XadesSigner
+    .Document(xml)
+    .WithCertificate(certificate)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(XadesLevel.Timestamped)
+    .SignAsync();
+
+// XAdES-B-LT (long-term with LTV data)
+var signedBlt = await XadesSigner
+    .Document(xml)
+    .WithCertificate(certificate, chain)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(XadesLevel.LongTerm)
+    .SignAsync();
+
+// XAdES-B-LTA (archival timestamp)
+var signedBlta = await XadesSigner
+    .Document(xml)
+    .WithCertificate(certificate)
+    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(XadesLevel.Archive)
+    .SignAsync();
+
+File.WriteAllBytes("invoice-signed.xml", signed);
+```
+
+### Validate XAdES Signatures
+
+```csharp
+using SimpleSign.XAdES;
+
+var validator = new XadesSignatureValidator();
+var result = validator.Validate(signedXml, trustAnchors: anchors);
+
+Console.WriteLine($"Signer: {result.SignerCertificate?.Subject}");
+Console.WriteLine($"Signature: {result.IsSignatureValid}");
+Console.WriteLine($"Integrity: {result.IsIntegrityValid}");
+Console.WriteLine($"Chain: {result.IsCertificateChainValid}");
+Console.WriteLine($"Level: {result.DetectedLevel}");
+Console.WriteLine($"Timestamp: {result.HasValidSignatureTimeStamp}");
+Console.WriteLine($"LTV: {result.IsLtvDataValid}");
+Console.WriteLine($"Archive TS: {result.HasValidArchiveTimeStamp}");
 Console.WriteLine($"Valid: {result.IsValid}");
 ```
 

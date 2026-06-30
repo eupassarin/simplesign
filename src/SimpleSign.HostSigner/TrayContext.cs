@@ -192,7 +192,7 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            _form.Log($"ERROR: {ex.Message}");
+            _form.Log($"ERROR: {ex}");
             resp.StatusCode = 500;
             try
             { await WriteJsonAsync(resp, new ErrorResponse { Error = "An internal error occurred. Check HostSigner logs for details." }); }
@@ -271,7 +271,7 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            _form.Log($"Version check failed: {ex.Message}");
+            _form.Log($"Version check failed: {ex}");
             info.Latest = Version;
         }
 
@@ -403,7 +403,7 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            _form.Log($"ERROR sign-file: {ex.Message}");
+            _form.Log($"ERROR sign-file: {ex}");
             resp.StatusCode = 500;
             await WriteJsonAsync(resp, new ErrorResponse { Error = "Signing failed. Check HostSigner logs for details." });
         }
@@ -439,7 +439,7 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            _form.Log($"ERROR inspect: {ex.Message}");
+            _form.Log($"ERROR inspect: {ex}");
             resp.StatusCode = 500;
             await WriteJsonAsync(resp, new ErrorResponse { Error = "Inspection failed. Check HostSigner logs for details." });
         }
@@ -475,7 +475,7 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            _form.Log($"ERROR validate: {ex.Message}");
+            _form.Log($"ERROR validate: {ex}");
             resp.StatusCode = 500;
             await WriteJsonAsync(resp, new ErrorResponse { Error = "Validation failed. Check HostSigner logs for details." });
         }
