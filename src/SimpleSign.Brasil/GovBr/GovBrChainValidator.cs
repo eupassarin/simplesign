@@ -100,7 +100,7 @@ public sealed partial class GovBrChainValidator
             return true;
         }
 
-        // Arco Gov.br: 2.16.76.3 → DER: 60 92 4C 03 (primeiros bytes do OID)
+        // Gov.br arc: 2.16.76.3 → DER: 60 92 4C 03 (first bytes of the OID)
         var certPoliciesExt = certificate.Extensions[Oids.CertificatePolicies];
         if (certPoliciesExt is null)
         {
@@ -184,7 +184,7 @@ public sealed partial class GovBrChainValidator
                     {
                         // value [0] EXPLICIT ANY
                         var valueWrapper = otherName.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true));
-                        // O CPF pode estar como UTF8String ou IA5String
+                        // CPF may be encoded as UTF8String or IA5String
                         if (valueWrapper.HasData)
                         {
                             var cpfTag = valueWrapper.PeekTag();

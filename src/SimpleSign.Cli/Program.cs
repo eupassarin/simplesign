@@ -14,8 +14,8 @@ services.AddSimpleSignBrasil();
 services.AddSimpleSignCades();
 services.AddSimpleSignXades();
 
-var registrar = new SimpleSignTypeRegistrar(services);
-var app = new CommandApp(registrar);
+var registry = new SimpleSignServiceRegistry(services);
+var app = new CommandApp(registry);
 ConfigureApp(app);
 return await app.RunAsync(args);
 
