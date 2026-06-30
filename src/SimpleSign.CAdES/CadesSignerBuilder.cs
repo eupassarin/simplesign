@@ -33,12 +33,31 @@ public sealed class CadesSignerBuilder
     private readonly string? _signaturePolicyOid;
     private readonly string? _signaturePolicyUri;
     private readonly ILogger _logger;
+    private readonly ITimestampClientFactory? _tsaFactory;
+    private readonly ICmsParser? _cmsParser;
 
     internal CadesSignerBuilder(byte[] data, ILogger? logger = null)
     {
         _data = data;
         _hashAlgorithm = HashAlgorithmName.SHA256;
         _logger = logger ?? NullLogger.Instance;
+    }
+
+    internal CadesSignerBuilder(byte[] data, ITimestampClientFactory tsaFactory, ILogger? logger = null)
+    {
+        _data = data;
+        _hashAlgorithm = HashAlgorithmName.SHA256;
+        _logger = logger ?? NullLogger.Instance;
+        _tsaFactory = tsaFactory;
+    }
+
+    internal CadesSignerBuilder(byte[] data, ITimestampClientFactory tsaFactory, ICmsParser cmsParser, ILogger? logger = null)
+    {
+        _data = data;
+        _hashAlgorithm = HashAlgorithmName.SHA256;
+        _logger = logger ?? NullLogger.Instance;
+        _tsaFactory = tsaFactory;
+        _cmsParser = cmsParser;
     }
 
     private CadesSignerBuilder(
@@ -77,6 +96,8 @@ public sealed class CadesSignerBuilder
         _signaturePolicyOid = signaturePolicyOid;
         _signaturePolicyUri = signaturePolicyUri;
         _logger = logger;
+        _tsaFactory = null;
+        _cmsParser = null;
     }
 
     private CadesSignerBuilder With(
@@ -393,7 +414,9 @@ public sealed class CadesSignerBuilder
         byte[] cms, HashAlgorithmName hashAlg, CancellationToken ct)
     {
         var httpClient = _tsaHttpClient ?? DefaultHttpClientProvider.Instance.GetClient();
-        var tsaClient = new TimestampClient(httpClient, _tsaUrl!, _logger);
+        var tsaClient = _tsaFactory is not null
+            ? _tsaFactory.Create(_tsaUrl!)
+            : new TimestampClient(httpClient, _tsaUrl!, _logger);
         byte[] tsToken = await tsaClient.GetTimestampAsync(
             TimestampClient.ExtractSignatureValue(cms), hashAlg, ct).ConfigureAwait(false);
         return TimestampClient.EmbedTimestampInCms(cms, tsToken);
@@ -407,7 +430,9 @@ public sealed class CadesSignerBuilder
             return cms;
         }
 
-        var cmsData = CmsParser.Parse(cms, _logger);
+        var cmsData = _cmsParser is not null
+            ? _cmsParser.Parse(cms, _logger)
+            : CmsParser.Parse(cms, _logger);
         byte[]? timestampToken = cmsData?.SignatureTimestampToken;
 
         var allKnownCerts = new List<X509Certificate2> { certificate };
@@ -439,7 +464,7 @@ public sealed class CadesSignerBuilder
             ?? DefaultHttpClientProvider.Instance.GetClient();
 
         var ltvData = await LtvDataCollector.CollectAsync(
-            httpClient, certificate, allKnownCerts, _logger, ct).ConfigureAwait(false);
+            httpClient, certificate, allKnownCerts, _logger, cancellationToken: ct).ConfigureAwait(false);
 
         var unsignedAttrs = new List<CmsAttribute>();
 
@@ -467,7 +492,9 @@ public sealed class CadesSignerBuilder
         byte[] cms, HashAlgorithmName hashAlg, CancellationToken ct)
     {
         var httpClient = _tsaHttpClient ?? DefaultHttpClientProvider.Instance.GetClient();
-        var tsaClient = new TimestampClient(httpClient, _tsaUrl!, _logger);
+        var tsaClient = _tsaFactory is not null
+            ? _tsaFactory.Create(_tsaUrl!)
+            : new TimestampClient(httpClient, _tsaUrl!, _logger);
 
         byte[] cmsHash = CryptoUtility.ComputeHash(cms, hashAlg);
         byte[] tsToken = await tsaClient.GetTimestampAsync(cmsHash, hashAlg, ct).ConfigureAwait(false);

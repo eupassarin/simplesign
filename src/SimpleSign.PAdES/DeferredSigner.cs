@@ -150,12 +150,14 @@ public static class DeferredSigner
     /// <param name="options">Optional completion configuration (e.g., timestamp).</param>
     /// <param name="logger">Optional logger for debug diagnostics.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="tsaFactory">Optional TSA client factory for DI integration.</param>
     /// <returns>The fully signed PDF bytes.</returns>
     public static async Task<byte[]> CompleteAsync(
         byte[] sessionData,
         byte[] rawSignature,
         DeferredSigningCompleteOptions? options = null,
         ILogger? logger = null,
+        ITimestampClientFactory? tsaFactory = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(sessionData);
@@ -197,7 +199,9 @@ public static class DeferredSigner
             {
                 var httpClient = options.HttpClient ?? DefaultHttpClientProvider.Instance.GetClient();
                 var hashAlg = HashAlgorithmFromDigestOid(session.DigestOid);
-                var tsaClient = new TimestampClient(httpClient, options.TsaUrl);
+                var tsaClient = tsaFactory is not null
+                    ? tsaFactory.Create(options.TsaUrl)
+                    : new TimestampClient(httpClient, options.TsaUrl);
                 byte[] tsToken = await tsaClient.GetTimestampAsync(
                     TimestampClient.ExtractSignatureValue(cms), hashAlg, cancellationToken).ConfigureAwait(false);
                 cms = TimestampClient.EmbedTimestampInCms(cms, tsToken);

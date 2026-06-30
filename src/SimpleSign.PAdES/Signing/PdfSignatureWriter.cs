@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -1160,6 +1159,5 @@ public sealed class PdfSignatureWriter
         return string.Concat(parts);
     }
 
-    /// <summary>Formats a float with '.' decimal separator regardless of system locale.</summary>
-    private static string F(float value) => value.ToString("F2", CultureInfo.InvariantCulture);
+    private static string F(float value) => PdfFormatting.F(value);
 }

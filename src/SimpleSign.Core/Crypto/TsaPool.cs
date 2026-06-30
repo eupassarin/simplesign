@@ -14,6 +14,7 @@ public sealed class TsaPool
 {
     private readonly TsaEndpoint[] _endpoints;
     private readonly ILogger _logger;
+    private readonly ITimestampClientFactory? _tsaFactory;
     private int _primaryIndex;
 
     /// <summary>Number of consecutive failures before a TSA is marked unhealthy. Default: 3.</summary>
@@ -27,9 +28,10 @@ public sealed class TsaPool
     /// The first endpoint is the primary; others are fallbacks in order.
     /// </summary>
     /// <param name="tsaUrls">One or more TSA endpoint URLs.</param>
+    /// <param name="tsaFactory">Optional TSA client factory for DI integration.</param>
     /// <param name="logger">Optional logger.</param>
     /// <exception cref="ArgumentException">Thrown if no URLs are provided.</exception>
-    public TsaPool(IEnumerable<string> tsaUrls, ILogger? logger = null)
+    public TsaPool(IEnumerable<string> tsaUrls, ITimestampClientFactory? tsaFactory = null, ILogger? logger = null)
     {
         var urls = tsaUrls?.ToArray() ?? throw new ArgumentNullException(nameof(tsaUrls));
         if (urls.Length == 0)
@@ -38,6 +40,7 @@ public sealed class TsaPool
         }
 
         _endpoints = [.. urls.Select(u => new TsaEndpoint(u))];
+        _tsaFactory = tsaFactory;
         _logger = logger ?? NullLogger.Instance;
     }
 
@@ -75,7 +78,9 @@ public sealed class TsaPool
 
             try
             {
-                var client = new TimestampClient(httpClient, endpoint.Url, _logger);
+                var client = _tsaFactory is not null
+                    ? _tsaFactory.Create(endpoint.Url)
+                    : new TimestampClient(httpClient, endpoint.Url, _logger);
                 var token = await client.GetTimestampAsync(dataToTimestamp, hashAlgorithm, cancellationToken).ConfigureAwait(false);
 
                 endpoint.RecordSuccess();

@@ -31,39 +31,47 @@ public static class TimestampValidator
         string? SignatureAlgOid,
         byte[]? SignatureAlgParams);
 
-    /// <summary>Validates the timestamp token in a CMS signature.</summary>
-    /// <returns>true = valid, false = invalid, null = absent.</returns>
+    /// <summary>Validates an RFC 3161 timestamp token against a signature value.</summary>
+    /// <param name="timestampToken">DER-encoded RFC 3161 timestamp token.</param>
+    /// <param name="signatureValueBytes">The signature bytes that were timestamped.</param>
+    /// <param name="signingTime">Optional signing time for temporal validation.</param>
+    /// <param name="warnings">Accumulated warnings.</param>
+    /// <param name="validateChain">Optional TSA certificate chain validator delegate.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <returns>true = valid, false = invalid, null = no data to validate.</returns>
     public static bool? Validate(
-        CmsSignedData cmsData,
+        byte[] timestampToken,
+        byte[] signatureValueBytes,
+        DateTimeOffset? signingTime,
         List<string> warnings,
         CertificateChainValidatorDelegate? validateChain = null,
         ILogger? logger = null)
     {
-        if (cmsData.SignatureTimestampToken is null)
+        if (timestampToken is null || timestampToken.Length == 0)
         {
-            return null; // no timestamp
+            return null;
         }
-        if (cmsData.Signature is null)
+        if (signatureValueBytes is null || signatureValueBytes.Length == 0)
         {
             return null;
         }
 
         try
         {
-            byte[]? tstInfoBytes = ExtractTstInfo(cmsData.SignatureTimestampToken);
+            byte[]? tstInfoBytes = ExtractTstInfo(timestampToken);
             if (tstInfoBytes is null)
             {
                 return null;
             }
 
-            var tsaData = ExtractTsaCertificatesAndSigner(cmsData.SignatureTimestampToken, logger);
+            var tsaData = ExtractTsaCertificatesAndSigner(timestampToken, logger);
 
             if (!VerifyTsaSignature(tsaData, warnings))
             {
                 return false;
             }
 
-            if (!ValidateHashMatch(tstInfoBytes, cmsData, warnings, out var tstInfo))
+            if (!ValidateHashMatch(tstInfoBytes, signatureValueBytes, warnings, out var tstInfo))
             {
                 return false;
             }
@@ -79,9 +87,9 @@ public static class TimestampValidator
                 {
                     warnings.Add($"Timestamp genTime ({genTime:o}) is in the future.");
                 }
-                if (cmsData.SigningTime.HasValue && genTime < cmsData.SigningTime.Value.AddMinutes(-5))
+                if (signingTime.HasValue && genTime < signingTime.Value.AddMinutes(-5))
                 {
-                    warnings.Add($"Timestamp genTime ({genTime:o}) is before signingTime ({cmsData.SigningTime.Value:o}).");
+                    warnings.Add($"Timestamp genTime ({genTime:o}) is before signingTime ({signingTime.Value:o}).");
                 }
             }
             catch (AsnContentException ex) { logger?.TimestampGenTimeExtractionFailed(ex.Message); }
@@ -110,6 +118,28 @@ public static class TimestampValidator
             warnings.Add($"Could not validate timestamp token: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>Validates the timestamp token in a CMS signature.</summary>
+    /// <returns>true = valid, false = invalid, null = absent.</returns>
+    public static bool? Validate(
+        CmsSignedData cmsData,
+        List<string> warnings,
+        CertificateChainValidatorDelegate? validateChain = null,
+        ILogger? logger = null)
+    {
+        if (cmsData.SignatureTimestampToken is null || cmsData.Signature is null)
+        {
+            return null;
+        }
+
+        return Validate(
+            cmsData.SignatureTimestampToken,
+            cmsData.Signature,
+            cmsData.SigningTime,
+            warnings,
+            validateChain,
+            logger);
     }
 
     private static byte[]? ExtractTstInfo(byte[] timestampToken)
@@ -286,7 +316,7 @@ public static class TimestampValidator
         return true;
     }
 
-    private static bool ValidateHashMatch(byte[] tstInfoBytes, CmsSignedData cmsData, List<string> warnings, out AsnReader tstInfo)
+    private static bool ValidateHashMatch(byte[] tstInfoBytes, byte[] signatureValueBytes, List<string> warnings, out AsnReader tstInfo)
     {
         // TSTInfo
         tstInfo = new AsnReader(tstInfoBytes, AsnEncodingRules.BER).ReadSequence();
@@ -302,10 +332,10 @@ public static class TimestampValidator
         // Computes hash of the signature with the algorithm indicated by the timestamp
         byte[] actualHash = hashOid switch
         {
-            Oids.Sha256 => SHA256.HashData(cmsData.Signature!),
-            Oids.Sha384 => SHA384.HashData(cmsData.Signature!),
-            Oids.Sha512 => SHA512.HashData(cmsData.Signature!),
-            Oids.Sha1 => SHA1.HashData(cmsData.Signature!),
+            Oids.Sha256 => SHA256.HashData(signatureValueBytes),
+            Oids.Sha384 => SHA384.HashData(signatureValueBytes),
+            Oids.Sha512 => SHA512.HashData(signatureValueBytes),
+            Oids.Sha1 => SHA1.HashData(signatureValueBytes),
             _ => throw new NotSupportedException($"Timestamp hash OID {hashOid} not supported.")
         };
 

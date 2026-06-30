@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace SimpleSign.Core.Crypto;
 
@@ -83,5 +84,41 @@ internal static class CertificateLoader
         col.Import(data);
 #pragma warning restore SYSLIB0057
         return col;
+    }
+
+    /// <summary>
+    /// Loads certificates from one or more PEM-encoded X.509 certificate blocks.
+    /// Extracts each "-----BEGIN CERTIFICATE-----" / "-----END CERTIFICATE-----" block,
+    /// decodes the Base64 payload, and returns all certificates found.
+    /// Returns an empty collection if the data is not PEM-encoded.
+    /// </summary>
+    internal static X509Certificate2Collection LoadPemCertificates(byte[] data)
+    {
+        var result = new X509Certificate2Collection();
+        var text = Encoding.ASCII.GetString(data);
+        var reader = new StringReader(text);
+        var pemBuilder = new StringBuilder();
+        bool inCert = false;
+
+        while (reader.ReadLine() is { } line)
+        {
+            if (line.Contains("BEGIN CERTIFICATE"))
+            {
+                inCert = true;
+                pemBuilder.Clear();
+            }
+            else if (line.Contains("END CERTIFICATE") && inCert)
+            {
+                inCert = false;
+                byte[] der = Convert.FromBase64String(pemBuilder.ToString());
+                result.Add(LoadCertificate(der));
+            }
+            else if (inCert)
+            {
+                pemBuilder.Append(line);
+            }
+        }
+
+        return result;
     }
 }

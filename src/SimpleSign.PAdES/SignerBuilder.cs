@@ -39,6 +39,8 @@ public sealed class SignerBuilder
     private readonly bool _enforcePdfA;
     private readonly SignatureMetadata? _metadata;
     private readonly bool _padesAttributes;
+    private readonly ITimestampClientFactory? _tsaFactory;
+    private readonly ILtvEmbedder? _ltvEmbedder;
 
     internal SignerBuilder(Stream inputPdf, ILogger? logger = null)
     {
@@ -48,6 +50,19 @@ public sealed class SignerBuilder
         _httpClientProvider = DefaultHttpClientProvider.Instance;
         _logger = logger ?? NullLogger.Instance;
         _padesAttributes = true;
+        CountryExtensions = [];
+    }
+
+    internal SignerBuilder(Stream inputPdf, ITimestampClientFactory tsaFactory, ILtvEmbedder ltvEmbedder, ILogger? logger = null)
+    {
+        _inputPdf = inputPdf;
+        _hashAlgorithm = HashAlgorithmName.SHA256;
+        _fieldOptions = new SignatureFieldOptions();
+        _httpClientProvider = DefaultHttpClientProvider.Instance;
+        _logger = logger ?? NullLogger.Instance;
+        _padesAttributes = true;
+        _tsaFactory = tsaFactory;
+        _ltvEmbedder = ltvEmbedder;
         CountryExtensions = [];
     }
 
@@ -92,6 +107,8 @@ public sealed class SignerBuilder
         _enforcePdfA = enforcePdfA;
         _metadata = metadata;
         _padesAttributes = padesAttributes;
+        _tsaFactory = null;
+        _ltvEmbedder = null;
         CountryExtensions = countryExtensions ?? [];
     }
 
@@ -550,8 +567,10 @@ public sealed class SignerBuilder
         if (_tsaUrl is not null)
         {
             _logger.TimestampRequested(opId, _tsaUrl);
-            var tsaClient = new TimestampClient(
-                _tsaHttpClient ?? _httpClient ?? _httpClientProvider.GetClient(), _tsaUrl, _logger);
+            var tsaClient = _tsaFactory is not null
+                ? _tsaFactory.Create(_tsaUrl)
+                : new TimestampClient(
+                    _tsaHttpClient ?? _httpClient ?? _httpClientProvider.GetClient(), _tsaUrl, _logger);
             timestampTokenBytes = await tsaClient.GetTimestampAsync(
                 TimestampClient.ExtractSignatureValue(cms), effectiveHash, cancellationToken).ConfigureAwait(false);
             cms = TimestampClient.EmbedTimestampInCms(cms, timestampTokenBytes);
@@ -571,7 +590,7 @@ public sealed class SignerBuilder
             await outputStream.ReadExactlyAsync(signedPdf, cancellationToken).ConfigureAwait(false);
 
             var httpClient = _httpClient ?? _httpClientProvider.GetClient();
-            var ltvEmbedder = new LtvEmbedder(httpClient, _logger);
+            var ltvEmbedder = _ltvEmbedder ?? new LtvEmbedder(httpClient, _logger);
 
             // Build certificate chain for LTV embedding
             var chain = _chain?.ToList() ?? [];

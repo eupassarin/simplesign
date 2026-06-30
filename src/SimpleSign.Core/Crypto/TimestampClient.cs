@@ -13,7 +13,7 @@ namespace SimpleSign.Core.Crypto;
 /// RFC 3161 client for timestamp authority (TSA).
 /// Async-first, compatible with ITI-BR TSA and other PAdES providers.
 /// </summary>
-public sealed class TimestampClient
+public sealed class TimestampClient : ITimestampClient
 {
     private const int NonceByteLength = 16;
 

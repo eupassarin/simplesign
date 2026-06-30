@@ -249,7 +249,7 @@ public sealed class DeferredSignerBuilder
         };
 
         return await DeferredSigner.CompleteAsync(
-            sessionData, rawSignature, completeOptions, _logger, cancellationToken).ConfigureAwait(false);
+            sessionData, rawSignature, completeOptions, _logger, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     #endregion

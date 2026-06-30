@@ -118,7 +118,7 @@ internal static class TimestampDataExtractor
                 var serialBytes = reader.ReadInteger();
                 serialNumber = Convert.ToHexString(serialBytes.ToByteArray());
             }
-            catch { /* optional field */ }
+            catch (AsnContentException) { /* optional field */ }
         }
 
         // genTime (GeneralizedTime)
@@ -129,7 +129,7 @@ internal static class TimestampDataExtractor
             {
                 genTime = reader.ReadGeneralizedTime();
             }
-            catch { /* parsing failure */ }
+            catch (AsnContentException) { /* parsing failure */ }
         }
 
         return (genTime, hashOid, policyOid, serialNumber);

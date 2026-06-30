@@ -31,6 +31,7 @@ public static class DocTimeStampWriter
     /// <param name="hashAlgorithm">Hash algorithm (default: SHA-256).</param>
     /// <param name="pdfALevel">Detected PDF/A level for annotation flag selection.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="tsaFactory">Optional TSA client factory for DI integration.</param>
     /// <returns>The PDF bytes with the DocTimeStamp appended.</returns>
     public static async Task<byte[]> AppendDocTimeStampAsync(
         byte[] signedPdf,
@@ -38,6 +39,7 @@ public static class DocTimeStampWriter
         HttpClient httpClient,
         HashAlgorithmName? hashAlgorithm = null,
         PdfALevel? pdfALevel = null,
+        ITimestampClientFactory? tsaFactory = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(signedPdf);
@@ -274,7 +276,9 @@ public static class DocTimeStampWriter
         Array.Copy(pdfBytes, (int)byteRange2Offset, signedBytes, (int)byteRange1Length, (int)byteRange2Length);
 
         // Request timestamp from TSA
-        var tsaClient = new TimestampClient(httpClient, tsaUrl);
+        var tsaClient = tsaFactory is not null
+            ? tsaFactory.Create(tsaUrl)
+            : new TimestampClient(httpClient, tsaUrl);
         byte[] timestampToken = await tsaClient.GetTimestampAsync(signedBytes, hashAlg, cancellationToken).ConfigureAwait(false);
 
         if (timestampToken.Length > contentsReservedBytes)

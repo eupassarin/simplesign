@@ -94,28 +94,31 @@ public sealed class IcpBrasilChainValidator
 
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
+    private readonly ICertificateChainService _certChainService;
 
     /// <param name="httpClient">
-    /// <see cref="HttpClient"/> instance for downloading ICP-Brasil chain certificates.
-    /// In ASP.NET Core, inject via <c>IHttpClientFactory.CreateClient()</c> to avoid socket exhaustion.
-    /// If null, uses the shared instance from <see cref="DefaultHttpClientProvider"/>.
+    /// <see cref="HttpClient"/> instance for AIA downloads and OCSP/CRL fetch.
+    /// If null, uses the shared static instance from <see cref="DefaultHttpClientProvider"/>.
     /// </param>
-    /// <param name="logger">Optional logger for structured diagnostics.</param>
-    public IcpBrasilChainValidator(HttpClient? httpClient = null, ILogger? logger = null)
+    /// <param name="logger">Optional logger for diagnostic messages.</param>
+    /// <param name="certChainService">Optional certificate chain service for AIA chasing.</param>
+    public IcpBrasilChainValidator(HttpClient? httpClient = null, ILogger? logger = null, ICertificateChainService? certChainService = null)
     {
         _httpClient = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _logger = logger ?? NullLogger.Instance;
+        _certChainService = certChainService ?? new CertificateChainService();
     }
 
     /// <summary>
     /// Creates a validator using a custom <see cref="IHttpClientProvider"/>.
     /// Use this in ASP.NET Core to integrate with <c>IHttpClientFactory</c>.
     /// </summary>
-    public IcpBrasilChainValidator(IHttpClientProvider httpClientProvider, ILogger? logger = null)
+    public IcpBrasilChainValidator(IHttpClientProvider httpClientProvider, ILogger? logger = null, ICertificateChainService? certChainService = null)
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         _httpClient = httpClientProvider.GetClient();
         _logger = logger ?? NullLogger.Instance;
+        _certChainService = certChainService ?? new CertificateChainService();
     }
 
     /// <summary>
@@ -636,7 +639,7 @@ public sealed class IcpBrasilChainValidator
         return chain;
     }
 
-    private static (List<IcpBrasilChainElement> Elements, bool HasRevocationUnknown) ProcessChainErrors(
+    private (List<IcpBrasilChainElement> Elements, bool HasRevocationUnknown) ProcessChainErrors(
         X509Chain chain,
         List<string> errors)
     {
@@ -678,7 +681,7 @@ public sealed class IcpBrasilChainValidator
 
             foreach (var err in elementErrors)
             {
-                errors.Add($"[{CertificateChainUtility.ShortName(chainElement.Certificate.Subject)}] {err}");
+                errors.Add($"[{_certChainService.ShortName(chainElement.Certificate.Subject)}] {err}");
             }
         }
 
@@ -728,7 +731,7 @@ public sealed class IcpBrasilChainValidator
         IReadOnlyList<X509Certificate2>? extraCerts,
         List<string> warnings,
         CancellationToken ct)
-        => CertificateChainUtility.DownloadAiaCertsAsync(_httpClient, cert, extraCerts, warnings, ct);
+        => _certChainService.DownloadAiaCertsAsync(_httpClient, cert, extraCerts, warnings, ct);
 
     private static bool ContainsOid(byte[] data, string oid, ILogger? logger = null)
     {

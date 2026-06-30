@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Revocation;
 
 namespace SimpleSign.Core.Validation;
@@ -11,13 +12,13 @@ namespace SimpleSign.Core.Validation;
 /// Checks certificate revocation status via embedded CRLs, OCSP, and online CRL.
 /// Follows the priority: embedded DSS CRLs → OCSP → online CRL.
 /// </summary>
-internal sealed class RevocationChecker
+internal sealed class RevocationChecker : IRevocationChecker
 {
-    private readonly OcspClient _ocspClient;
-    private readonly CrlClient _crlClient;
+    private readonly IOcspClient _ocspClient;
+    private readonly ICrlClient _crlClient;
     private readonly ILogger _logger;
 
-    internal RevocationChecker(OcspClient ocspClient, CrlClient crlClient, ILogger? logger = null)
+    internal RevocationChecker(IOcspClient ocspClient, ICrlClient crlClient, ILogger? logger = null)
     {
         _ocspClient = ocspClient;
         _crlClient = crlClient;
@@ -31,7 +32,8 @@ internal sealed class RevocationChecker
     /// <exception cref="ValidationException">
     /// No OCSP or CRL URL found — revocation status is indeterminate.
     /// </exception>
-    internal Task<(bool IsNotRevoked, RevocationSource Source)> CheckRevocationAsync(
+    /// <inheritdoc />
+    public Task<(bool IsNotRevoked, RevocationSource Source)> CheckRevocationAsync(
         X509Certificate2 cert,
         IReadOnlyList<X509Certificate2> chain,
         IReadOnlyList<byte[]> embeddedCrls,
@@ -39,14 +41,8 @@ internal sealed class RevocationChecker
         DateTimeOffset? signingTime = null) =>
         CheckRevocationAsync(cert, chain, embeddedCrls, [], ct, signingTime);
 
-    /// <summary>
-    /// Checks if a certificate has been revoked using available revocation mechanisms including embedded OCSPs.
-    /// Priority: embedded DSS OCSPs → embedded DSS CRLs → online OCSP → online CRL.
-    /// </summary>
-    /// <exception cref="ValidationException">
-    /// No OCSP or CRL URL found — revocation status is indeterminate.
-    /// </exception>
-    internal async Task<(bool IsNotRevoked, RevocationSource Source)> CheckRevocationAsync(
+    /// <inheritdoc />
+    public async Task<(bool IsNotRevoked, RevocationSource Source)> CheckRevocationAsync(
         X509Certificate2 cert,
         IReadOnlyList<X509Certificate2> chain,
         IReadOnlyList<byte[]> embeddedCrls,
@@ -58,9 +54,7 @@ internal sealed class RevocationChecker
         if (embeddedOcsps.Count > 0)
         {
             _logger.CheckingEmbeddedOcsps(embeddedOcsps.Count, cert.Subject);
-            var issuerCert = chain.FirstOrDefault(c =>
-                c.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData)) ??
-                chain.FirstOrDefault(c => string.Equals(c.Subject, cert.Issuer, StringComparison.OrdinalIgnoreCase));
+            var issuerCert = chain.FindIssuerOf(cert);
             foreach (var ocspBytes in embeddedOcsps)
             {
                 try
@@ -87,9 +81,7 @@ internal sealed class RevocationChecker
         if (embeddedCrls.Count > 0)
         {
             _logger.CheckingEmbeddedCrls(embeddedCrls.Count, cert.Subject);
-            var issuerCert = chain.FirstOrDefault(c =>
-                c.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData)) ??
-                chain.FirstOrDefault(c => string.Equals(c.Subject, cert.Issuer, StringComparison.OrdinalIgnoreCase));
+            var issuerCert = chain.FindIssuerOf(cert);
             foreach (var crlBytes in embeddedCrls)
             {
                 try

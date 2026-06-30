@@ -14,18 +14,20 @@ namespace SimpleSign.Core.Revocation;
 /// CRL (Certificate Revocation List) client for certificate revocation checking.
 /// Downloads CRLs, checks serial numbers, and verifies CRL signatures.
 /// </summary>
-internal sealed class CrlClient
+public sealed class CrlClient : ICrlClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
 
+    /// <summary>Creates a CRL client with the specified HTTP client and optional logger.</summary>
     public CrlClient(HttpClient httpClient, ILogger? logger = null)
     {
         _httpClient = httpClient;
         _logger = logger ?? NullLogger.Instance;
     }
 
-    internal async Task<bool> CheckCrlAsync(X509Certificate2 cert, string crlUrl, CancellationToken ct)
+    /// <inheritdoc />
+    public async Task<bool> CheckCrlAsync(X509Certificate2 cert, string crlUrl, CancellationToken ct)
     {
         _logger.CrlDownloading(crlUrl);
         var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, ct: ct).ConfigureAwait(false)

@@ -1,12 +1,16 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using SimpleSign.Core.Crypto;
 using SimpleSign.Core.DependencyInjection;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
+using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
+using SimpleSign.Pdf;
 
 // ReSharper disable once CheckNamespace — standard .NET convention for DI extensions
 namespace SimpleSign.PAdES.DependencyInjection;
@@ -85,17 +89,72 @@ public static class SimpleSignServiceCollectionExtensions
             });
         }
 
+        // Core revocation services
+        services.TryAddSingleton<IOcspClient>(sp =>
+        {
+            var http = sp.GetRequiredService<IHttpClientProvider>().GetClient();
+            return new OcspClient(http, sp.GetService<ILogger<OcspClient>>());
+        });
+        services.TryAddSingleton<ICrlClient>(sp =>
+        {
+            var http = sp.GetRequiredService<IHttpClientProvider>().GetClient();
+            return new CrlClient(http, sp.GetService<ILogger<CrlClient>>());
+        });
+        services.TryAddSingleton<IRevocationChecker>(sp =>
+        {
+            var ocsp = sp.GetRequiredService<IOcspClient>();
+            var crl = sp.GetRequiredService<ICrlClient>();
+            return new RevocationChecker(ocsp, crl, sp.GetService<ILogger<RevocationChecker>>());
+        });
+
+        // Certificate chain service
+        services.TryAddSingleton<ICertificateChainService, CertificateChainService>();
+
+        // PDF structure reader
+        services.TryAddSingleton<IPdfStructureReader, PdfStructureReaderService>();
+
+        // Crypto verifier
+        services.TryAddSingleton<ICryptoVerifier, CryptoVerifierService>();
+
+        // CMS parser
+        services.TryAddSingleton<ICmsParser, CmsParserService>();
+
+        // Timestamp validator
+        services.TryAddSingleton<ITimestampValidator, TimestampValidatorService>();
+
+        // Conformance detector
+        services.TryAddSingleton<IConformanceDetector>(sp => new ConformanceDetectorService());
+
+        // Integrity verifier
+        services.TryAddSingleton<IIntegrityVerifier, IntegrityVerifierService>();
+
+        // PDF signature inspector
+        services.TryAddSingleton<IPdfSignatureInspector, PdfSignatureInspectorService>();
+
+        // PAdES extractor
+        services.TryAddSingleton<IPadesExtractor, PadesExtractorService>();
+
+        // TSA client factory
+        services.TryAddSingleton<ITimestampClientFactory>(sp =>
+            new TimestampClientFactory(
+                sp.GetRequiredService<IHttpClientProvider>(),
+                sp.GetService<ILogger<TimestampClientFactory>>()));
+
         // Validator — collects any registered ITrustAnchorProvider instances
-        services.TryAddTransient(sp => new PdfSignatureValidator(
+        services.TryAddTransient<IPdfSignatureValidator>(sp => new PdfSignatureValidator(
             sp.GetRequiredService<IHttpClientProvider>(),
+            sp.GetRequiredService<IRevocationChecker>(),
             sp.GetService<ValidationOptions>(),
             sp.GetService<ILogger<PdfSignatureValidator>>(),
             sp.GetServices<ITrustAnchorProvider>()));
+        services.TryAddTransient(sp => (PdfSignatureValidator)sp.GetRequiredService<IPdfSignatureValidator>());
 
         // LTV embedder
-        services.TryAddTransient(sp => new LtvEmbedder(
+        services.TryAddTransient<ILtvEmbedder>(sp => new LtvEmbedder(
+            sp.GetRequiredService<IOcspClient>(),
             sp.GetRequiredService<IHttpClientProvider>(),
             sp.GetService<ILogger<LtvEmbedder>>()));
+        services.TryAddTransient(sp => (LtvEmbedder)sp.GetRequiredService<ILtvEmbedder>());
 
         return services;
     }

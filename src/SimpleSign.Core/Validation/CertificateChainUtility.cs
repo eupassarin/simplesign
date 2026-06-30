@@ -109,6 +109,19 @@ internal static class CertificateChainUtility
         {
             foreach (var c in p7bCol)
             { yield return c; }
+            yield break;
+        }
+
+        // Fourth fallback: PEM-encoded certificate(s) — common for trust store bundles.
+        X509Certificate2Collection? pemCol = null;
+        try
+        { pemCol = CertificateLoader.LoadPemCertificates(bytes); }
+        catch (CryptographicException ex) { logger?.CertificateLoadingFailed(ex.Message); }
+
+        if (pemCol is not null && pemCol.Count > 0)
+        {
+            foreach (var c in pemCol)
+            { yield return c; }
         }
     }
 

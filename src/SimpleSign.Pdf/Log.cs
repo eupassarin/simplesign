@@ -29,10 +29,6 @@ internal static partial class Log
         Message = "Reading PDF signature fields from {Size} byte stream")]
     internal static partial void PdfReadingSignatureFields(this ILogger logger, long size);
 
-    [LoggerMessage(EventId = 3021, Level = LogLevel.Debug,
-        Message = "PDF xref located at offset {Offset}, {EntryCount} entries")]
-    internal static partial void PdfXrefLocated(this ILogger logger, long offset, int entryCount);
-
     [LoggerMessage(EventId = 3022, Level = LogLevel.Debug,
         Message = "Found {FieldCount} signature field(s) in PDF")]
     internal static partial void PdfSignatureFieldsFound(this ILogger logger, int fieldCount);

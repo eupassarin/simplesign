@@ -82,6 +82,47 @@ public sealed class SignatureAppearance
     /// </summary>
     public IReadOnlyList<string>? ExtraLines { get; init; }
 
+    /// <summary>Initializes a new signature appearance with default values.</summary>
+    public SignatureAppearance()
+    {
+    }
+
+    /// <summary>
+    /// Internal copy constructor that copies all property values from source.
+    /// </summary>
+    private SignatureAppearance(SignatureAppearance source) : this()
+    {
+        Page = source.Page;
+        X = source.X;
+        Y = source.Y;
+        AutoPosition = source.AutoPosition;
+        ShowDate = source.ShowDate;
+        ShowReason = source.ShowReason;
+        ShowLocation = source.ShowLocation;
+        BackgroundImageJpeg = source.BackgroundImageJpeg;
+        BackgroundImagePng = source.BackgroundImagePng;
+        CustomFontSize = source.CustomFontSize;
+        CustomLabelFontSize = source.CustomLabelFontSize;
+        BaseFontName = source.BaseFontName;
+        TextColor = source.TextColor;
+        BorderColor = source.BorderColor;
+        BorderWidth = source.BorderWidth;
+        VerificationUrl = source.VerificationUrl;
+        ExtraLines = source.ExtraLines;
+    }
+
+    /// <summary>Returns a clone with the PNG background image set.</summary>
+    public SignatureAppearance WithBackgroundImagePng(byte[] imageBytes) =>
+        new(this) { BackgroundImagePng = imageBytes };
+
+    /// <summary>Returns a clone with the JPEG background image set.</summary>
+    public SignatureAppearance WithBackgroundImageJpeg(byte[] imageBytes) =>
+        new(this) { BackgroundImageJpeg = imageBytes };
+
+    /// <summary>Returns a clone with extra lines.</summary>
+    public SignatureAppearance WithExtraLines(IReadOnlyList<string> extraLines) =>
+        new(this) { ExtraLines = extraLines };
+
     /// <summary>
     /// Creates an auto-positioned signature appearance. Signatures are placed left-to-right
     /// at the bottom of the page, wrapping to a new row when the line is full.

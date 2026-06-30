@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 
@@ -24,6 +25,7 @@ public static class LtvDataCollector
     /// <param name="signerCert">The signer certificate.</param>
     /// <param name="chainCertificates">Optional intermediate certificates.</param>
     /// <param name="logger">Optional logger.</param>
+    /// <param name="ocspClient">Optional OCSP client for DI integration.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Collected certificate raw data, OCSP responses, and CRLs.</returns>
     public static async Task<LtvCollectionResult> CollectAsync(
@@ -31,6 +33,7 @@ public static class LtvDataCollector
         X509Certificate2 signerCert,
         IReadOnlyList<X509Certificate2>? chainCertificates,
         ILogger? logger,
+        IOcspClient? ocspClient = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -52,12 +55,11 @@ public static class LtvDataCollector
         var crls = new List<byte[]>();
         var extraResponderCerts = new List<X509Certificate2>();
 
-        var ocspClient = new OcspClient(httpClient, logger);
+        var ocsp = ocspClient ?? new OcspClient(httpClient, logger);
 
         foreach (var cert in allCerts)
         {
-            var issuer = allCerts.FirstOrDefault(c =>
-                c.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData));
+            var issuer = allCerts.FindIssuerOf(cert);
 
             // Try OCSP first (preferred per ETSI TS 119 172)
             string? ocspUrl = OcspClient.GetOcspUrl(cert);
@@ -65,7 +67,7 @@ public static class LtvDataCollector
             {
                 try
                 {
-                    var result = await ocspClient.FetchOcspResponseAsync(cert, issuer, ocspUrl, cancellationToken)
+                    var result = await ocsp.FetchOcspResponseAsync(cert, issuer, ocspUrl, cancellationToken)
                         .ConfigureAwait(false);
                     ocspResponses.Add(result.ResponseBytes);
                     foreach (var rc in result.ResponderCertificates)

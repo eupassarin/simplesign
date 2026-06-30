@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Pdf;
@@ -18,10 +19,11 @@ namespace SimpleSign.PAdES.Signing;
 /// The resulting PDF can be validated offline even after certificate expiration.
 /// Conforms to PAdES Part 4 (ETSI EN 319 142-1), Annex A.
 /// </summary>
-public sealed class LtvEmbedder
+public sealed class LtvEmbedder : ILtvEmbedder
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
+    private readonly IOcspClient? _ocspClient;
 
     /// <param name="httpClient">
     /// <see cref="HttpClient"/> instance for downloading CRL/OCSP.
@@ -47,6 +49,17 @@ public sealed class LtvEmbedder
     }
 
     /// <summary>
+    /// Creates an embedder with injected OCSP client.
+    /// </summary>
+    public LtvEmbedder(IOcspClient ocspClient, IHttpClientProvider httpClientProvider, ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(httpClientProvider);
+        _httpClient = httpClientProvider.GetClient();
+        _ocspClient = ocspClient;
+        _logger = logger ?? NullLogger.Instance;
+    }
+
+    /// <summary>
     /// Collects revocation data (CRL + OCSP) from all certificates in the chain
     /// and embeds them in the PDF as an incremental update (DSS dictionary with VRI).
     /// </summary>
@@ -68,7 +81,7 @@ public sealed class LtvEmbedder
         var crlData = new List<byte[]>();
         var ocspData = new List<byte[]>();
         var allCerts = new List<X509Certificate2>(certificateChain);
-        var ocspClient = new OcspClient(_httpClient, _logger);
+        var ocspClient = _ocspClient ?? new OcspClient(_httpClient, _logger);
 
         if (timestampTokenBytes is { Length: > 0 })
         {
@@ -141,7 +154,7 @@ public sealed class LtvEmbedder
                 {
                     try
                     {
-                        var issuerCert = allCertsSnapshot.FirstOrDefault(c => c.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData));
+                        var issuerCert = allCertsSnapshot.FindIssuerOf(cert);
                         var ocspResult = await ocspClient.FetchOcspResponseAsync(cert, issuerCert, ocspUrl, ct).ConfigureAwait(false);
                         ocspBag.Add(ocspResult.ResponseBytes);
 
@@ -288,7 +301,7 @@ public sealed class LtvEmbedder
     /// Conformance Checker compute SHA-1 over the complete /Contents bytes and look for a
     /// matching VRI key; stripping the padding would produce a different hash and break matching.
     /// </summary>
-    internal static List<string> ExtractSignatureContentHashes(byte[] pdf)
+    internal static List<string> ExtractSignatureContentHashes(byte[] pdf, ILogger? logger = null)
     {
         var hashes = new List<string>();
         var span = pdf.AsSpan();
@@ -334,8 +347,9 @@ public sealed class LtvEmbedder
                         hashes.Add(Convert.ToHexString(sha1));
                     }
                 }
-                catch (FormatException)
+                catch (FormatException ex)
                 {
+                    (logger ?? NullLogger.Instance).LogWarning("Failed to decode hex string for VRI key: {Message}", ex.Message);
                 }
             }
 

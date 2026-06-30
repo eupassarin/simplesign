@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using QRCoder;
 
@@ -528,5 +527,5 @@ internal static class SignatureAppearanceRenderer
     }
 
     /// <summary>Formats a float with '.' decimal separator regardless of system locale.</summary>
-    internal static string F(float value) => value.ToString("F2", CultureInfo.InvariantCulture);
+    internal static string F(float value) => PdfFormatting.F(value);
 }

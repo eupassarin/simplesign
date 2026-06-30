@@ -130,8 +130,20 @@ public static class Oids
     /// <summary>id-cti-ets-proofOfOrigin — signer is the author.</summary>
     public const string ProofOfOrigin = "1.2.840.113549.1.9.16.6.1";
 
+    /// <summary>id-cti-ets-proofOfReceipt — signer acknowledges receipt.</summary>
+    public const string ProofOfReceipt = "1.2.840.113549.1.9.16.6.2";
+
+    /// <summary>id-cti-ets-proofOfDelivery — signer confirms delivery.</summary>
+    public const string ProofOfDelivery = "1.2.840.113549.1.9.16.6.3";
+
+    /// <summary>id-cti-ets-proofOfSender — signer confirms sending.</summary>
+    public const string ProofOfSender = "1.2.840.113549.1.9.16.6.4";
+
     /// <summary>id-cti-ets-proofOfApproval — signer approves the content.</summary>
     public const string ProofOfApproval = "1.2.840.113549.1.9.16.6.5";
+
+    /// <summary>id-cti-ets-proofOfCreation — signer created the content.</summary>
+    public const string ProofOfCreation = "1.2.840.113549.1.9.16.6.6";
 
     /// <summary>
     /// SimpleSign signature manifest — JSON-encoded AEA evidence (name, CPF, email, IP, auth method).

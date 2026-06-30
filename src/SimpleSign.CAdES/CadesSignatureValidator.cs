@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Validation;
 
 namespace SimpleSign.CAdES;
@@ -51,18 +52,27 @@ public sealed class CadesValidationResult
 /// verifies content integrity, cryptographic signature, certificate chain,
 /// timestamp (if present), and LTV data (if present).
 /// </summary>
-public sealed class CadesSignatureValidator
+public sealed class CadesSignatureValidator : ICadesSignatureValidator
 {
     private readonly ValidationOptions _options;
     private readonly ILogger? _logger;
+    private readonly ICryptoVerifier _cryptoVerifier;
+    private readonly ICmsParser _cmsParser;
+    private readonly ITimestampValidator _timestampValidator;
 
     /// <summary>Creates a validator with the specified options.</summary>
     public CadesSignatureValidator(
         ValidationOptions? options = null,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        ICryptoVerifier? cryptoVerifier = null,
+        ICmsParser? cmsParser = null,
+        ITimestampValidator? timestampValidator = null)
     {
         _options = options ?? new ValidationOptions();
         _logger = logger;
+        _cryptoVerifier = cryptoVerifier ?? new CryptoVerifierService();
+        _cmsParser = cmsParser ?? new CmsParserService();
+        _timestampValidator = timestampValidator ?? new TimestampValidatorService();
     }
 
     /// <summary>
@@ -87,7 +97,7 @@ public sealed class CadesSignatureValidator
         CmsSignedData? cmsData;
         try
         {
-            cmsData = CmsParser.Parse(cmsBytes, _logger);
+            cmsData = _cmsParser.Parse(cmsBytes, _logger);
         }
         catch (Exception ex)
         {
@@ -114,7 +124,7 @@ public sealed class CadesSignatureValidator
         bool integrityValid = VerifyContentHash(originalData, cmsData, errors);
 
         // 3. Verify cryptographic signature
-        bool sigValid = CryptoVerifier.VerifySignature(cmsData, _logger);
+        bool sigValid = _cryptoVerifier.VerifySignature(cmsData, _logger);
         if (!sigValid)
         {
             errors.Add("Cryptographic signature verification failed.");
@@ -123,7 +133,7 @@ public sealed class CadesSignatureValidator
         // 4. Validate signingCertificateV2 binding
         if (cmsData.SigningCertificateHash is not null && cmsData.SignerCertificate is not null)
         {
-            CryptoVerifier.ValidateSigningCertV2(cmsData, errors, _logger);
+            _cryptoVerifier.ValidateSigningCertV2(cmsData, errors, _logger);
         }
 
         // 5. Certificate chain validation
@@ -133,7 +143,7 @@ public sealed class CadesSignatureValidator
         bool? tsValid = null;
         if (cmsData.SignatureTimestampToken is not null)
         {
-            tsValid = TimestampValidator.Validate(cmsData, warnings, logger: _logger);
+            tsValid = _timestampValidator.Validate(cmsData, warnings, logger: _logger);
         }
 
         // 7. LTV data validation (CertificateValues + RevocationValues)
@@ -246,7 +256,7 @@ public sealed class CadesSignatureValidator
 
         foreach (var cert in anchors)
         {
-            if (cert.Subject == cert.Issuer)
+            if (cert.IsSelfSigned())
             {
                 chain.ChainPolicy.CustomTrustStore.Add(cert);
             }

@@ -1,3 +1,5 @@
+using System.Formats.Asn1;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace SimpleSign.Core.Inspection;
@@ -109,7 +111,7 @@ public sealed class CertificateInfo
                 return rsa.KeySize;
             }
         }
-        catch { /* not RSA */ }
+        catch (CryptographicException) { /* not RSA */ }
 
         try
         {
@@ -119,7 +121,7 @@ public sealed class CertificateInfo
                 return ecdsa.KeySize;
             }
         }
-        catch { /* not ECDSA */ }
+        catch (CryptographicException) { /* not ECDSA */ }
 
         return null;
     }
@@ -237,7 +239,7 @@ public sealed class CertificateInfo
                 }
             }
         }
-        catch { /* best-effort extraction */ }
+        catch (AsnContentException) { /* best-effort extraction */ }
     }
 
     private static string? TryParseCdp(byte[] rawData)
@@ -280,7 +282,7 @@ public sealed class CertificateInfo
                 }
             }
         }
-        catch { /* best-effort extraction */ }
+        catch (AsnContentException) { /* best-effort extraction */ }
 
         return null;
     }

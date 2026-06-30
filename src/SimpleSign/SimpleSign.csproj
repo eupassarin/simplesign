@@ -15,6 +15,7 @@
     <ProjectReference Include="..\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
     <ProjectReference Include="..\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
     <ProjectReference Include="..\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
   </ItemGroup>
 
 </Project>

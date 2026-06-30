@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Validation;
 
@@ -36,6 +37,7 @@ public sealed partial class GovBrChainValidator
 
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
+    private readonly ICertificateChainService _certChainService;
 
     /// <param name="httpClient">
     /// <see cref="HttpClient"/> instance for network calls.
@@ -43,21 +45,24 @@ public sealed partial class GovBrChainValidator
     /// If null, uses the shared instance from <see cref="DefaultHttpClientProvider"/>.
     /// </param>
     /// <param name="logger">Optional logger for structured diagnostics.</param>
-    public GovBrChainValidator(HttpClient? httpClient = null, ILogger? logger = null)
+    /// <param name="certChainService">Optional certificate chain service for AIA chasing.</param>
+    public GovBrChainValidator(HttpClient? httpClient = null, ILogger? logger = null, ICertificateChainService? certChainService = null)
     {
         _httpClient = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _logger = logger ?? NullLogger.Instance;
+        _certChainService = certChainService ?? new CertificateChainService();
     }
 
     /// <summary>
     /// Creates a validator using a custom <see cref="IHttpClientProvider"/>.
     /// Use this in ASP.NET Core to integrate with <c>IHttpClientFactory</c>.
     /// </summary>
-    public GovBrChainValidator(IHttpClientProvider httpClientProvider, ILogger? logger = null)
+    public GovBrChainValidator(IHttpClientProvider httpClientProvider, ILogger? logger = null, ICertificateChainService? certChainService = null)
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         _httpClient = httpClientProvider.GetClient();
         _logger = logger ?? NullLogger.Instance;
+        _certChainService = certChainService ?? new CertificateChainService();
     }
 
     /// <summary>
@@ -353,7 +358,7 @@ public sealed partial class GovBrChainValidator
     /// into the provided <paramref name="errors"/> list.
     /// Returns the element list and whether any revocation-unknown status was encountered.
     /// </summary>
-    private static (List<GovBrChainElement> Elements, bool HasRevocationUnknown) BuildChainElementResults(
+    private (List<GovBrChainElement> Elements, bool HasRevocationUnknown) BuildChainElementResults(
         X509Chain chain,
         List<string> errors)
     {
@@ -395,7 +400,7 @@ public sealed partial class GovBrChainValidator
 
             foreach (var err in elementErrors)
             {
-                errors.Add($"[{CertificateChainUtility.ShortName(chainElement.Certificate.Subject)}] {err}");
+                errors.Add($"[{_certChainService.ShortName(chainElement.Certificate.Subject)}] {err}");
             }
         }
 
@@ -406,10 +411,10 @@ public sealed partial class GovBrChainValidator
         X509Certificate2 cert,
         List<string> warnings,
         CancellationToken ct)
-        => CertificateChainUtility.DownloadAiaCertsAsync(_httpClient, cert, extraCerts: null, warnings, ct);
+        => _certChainService.DownloadAiaCertsAsync(_httpClient, cert, extraCerts: null, warnings, ct);
 
     private static bool IsRootCert(X509Certificate2 cert) =>
-        cert.Subject == cert.Issuer;
+        cert.IsSelfSigned();
 
     private static string? ExtractCpfFallback(byte[] sanRawData)
     {

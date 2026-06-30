@@ -30,14 +30,53 @@ namespace SimpleSign.PAdES.Validation;
 ///     Console.WriteLine($"{r.FieldName}: Valid={r.IsValid}, Signer={r.SignerName}");
 /// </code>
 /// </example>
-public sealed class PdfSignatureValidator
+public sealed class PdfSignatureValidator : IPdfSignatureValidator
 {
     private readonly ValidationOptions _options;
-    private readonly RevocationChecker _revocationChecker;
+    private readonly IRevocationChecker _revocationChecker;
+    private readonly ICertificateChainService _certChainService;
+    private readonly ICryptoVerifier _cryptoVerifier;
+    private readonly IIntegrityVerifier _integrityVerifier;
+    private readonly ICmsParser _cmsParser;
+    private readonly ITimestampValidator _timestampValidator;
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly IReadOnlyList<ITrustAnchorProvider> _trustAnchorProviders;
     private readonly IReadOnlyList<IChainValidationProvider> _chainValidationProviders;
+
+    /// <summary>
+    /// Creates a validator with injected revocation checker and trust anchor providers.
+    /// This is the recommended constructor when using DI.
+    /// </summary>
+    public PdfSignatureValidator(
+        IHttpClientProvider httpClientProvider,
+        IRevocationChecker revocationChecker,
+        ValidationOptions? options = null,
+        ILogger<PdfSignatureValidator>? logger = null,
+        IEnumerable<ITrustAnchorProvider>? trustAnchorProviders = null,
+        IEnumerable<IChainValidationProvider>? chainValidationProviders = null,
+        ICertificateChainService? certChainService = null,
+        ICryptoVerifier? cryptoVerifier = null,
+        IIntegrityVerifier? integrityVerifier = null,
+        ICmsParser? cmsParser = null,
+        ITimestampValidator? timestampValidator = null)
+    {
+        ArgumentNullException.ThrowIfNull(httpClientProvider);
+        ArgumentNullException.ThrowIfNull(revocationChecker);
+        _options = options ?? ValidationOptions.Default;
+        var client = httpClientProvider.GetClient();
+        _httpClient = client;
+        _logger = logger ?? NullLogger<PdfSignatureValidator>.Instance;
+        _revocationChecker = revocationChecker;
+        _certChainService = certChainService ?? new CertificateChainService();
+        _cryptoVerifier = cryptoVerifier ?? new CryptoVerifierService();
+        _integrityVerifier = integrityVerifier ?? new IntegrityVerifierService();
+        _cmsParser = cmsParser ?? new CmsParserService();
+        _timestampValidator = timestampValidator ?? new TimestampValidatorService();
+        _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
+            ?? LoadDefaultTrustAnchorProviders();
+        _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
+    }
 
     /// <param name="options">Validation options. If null, uses <see cref="ValidationOptions.Default"/>.</param>
     /// <param name="httpClient">
@@ -77,6 +116,11 @@ public sealed class PdfSignatureValidator
         var client = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _httpClient = client;
         _revocationChecker = new RevocationChecker(new OcspClient(client, _logger), new CrlClient(client, _logger), _logger);
+        _certChainService = new CertificateChainService();
+        _cryptoVerifier = new CryptoVerifierService();
+        _integrityVerifier = new IntegrityVerifierService();
+        _cmsParser = new CmsParserService();
+        _timestampValidator = new TimestampValidatorService();
         _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
             ?? LoadDefaultTrustAnchorProviders();
         _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
@@ -100,6 +144,11 @@ public sealed class PdfSignatureValidator
         _httpClient = client;
         _logger = logger ?? NullLogger<PdfSignatureValidator>.Instance;
         _revocationChecker = new RevocationChecker(new OcspClient(client, _logger), new CrlClient(client, _logger), _logger);
+        _certChainService = new CertificateChainService();
+        _cryptoVerifier = new CryptoVerifierService();
+        _integrityVerifier = new IntegrityVerifierService();
+        _cmsParser = new CmsParserService();
+        _timestampValidator = new TimestampValidatorService();
         _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
             ?? LoadDefaultTrustAnchorProviders();
         _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
@@ -297,7 +346,7 @@ public sealed class PdfSignatureValidator
         CmsSignedData? cmsData;
         try
         {
-            cmsData = CmsParser.Parse(field.ContentsBytes, _logger);
+            cmsData = _cmsParser.Parse(field.ContentsBytes, _logger);
         }
         // S2221: intentional broad catch — validation pipeline converts exceptions to error messages
         catch (Exception ex)
@@ -327,14 +376,14 @@ public sealed class PdfSignatureValidator
         }
 
         // 2. Integrity (ByteRange + document hash)
-        bool integrityValid = await IntegrityVerifier.ValidateByteRangeAsync(
+        bool integrityValid = await _integrityVerifier.ValidateByteRangeAsync(
             pdfStream, field, cmsData, errors, warnings, cancellationToken, _logger, isLastSignature).ConfigureAwait(false);
 
         // 3. Cryptographic signature
         bool sigValid = ValidateSignatureStep(cmsData, errors);
 
         // 3a. signingCertificateV2 binding
-        CryptoVerifier.ValidateSigningCertV2(cmsData, errors, _logger);
+        _cryptoVerifier.ValidateSigningCertV2(cmsData, errors, _logger);
 
         // 4. Certificate chain
         bool chainValid = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
@@ -377,7 +426,7 @@ public sealed class PdfSignatureValidator
             ChainValidationMetadata = chainValidationResult?.Metadata,
             IsNotRevoked = notRevoked,
             RevocationSource = revocationSource,
-            HasValidTimestamp = TimestampValidator.Validate(cmsData, warnings, ValidateCertificateChain, _logger),
+            HasValidTimestamp = _timestampValidator.Validate(cmsData, warnings, ValidateCertificateChain, _logger),
             SigningTime = cmsData.SigningTime ?? field.PdfSigningTime,
             SignerCertificate = cmsData.SignerCertificate,
             EmbeddedCertificates = cmsData.Certificates,
@@ -410,7 +459,7 @@ public sealed class PdfSignatureValidator
         bool integrityValid = false;
         if (cmsData.TstMessageImprintHash is not null && cmsData.TstMessageImprintHashAlgOid is not null)
         {
-            integrityValid = await IntegrityVerifier.ValidateTimestampByteRangeAsync(
+            integrityValid = await _integrityVerifier.ValidateTimestampByteRangeAsync(
                 pdfStream, field, cmsData.TstMessageImprintHashAlgOid, cmsData.TstMessageImprintHash,
                 errors, warnings, isLastSignature, cancellationToken, _logger).ConfigureAwait(false);
         }
@@ -494,7 +543,7 @@ public sealed class PdfSignatureValidator
     {
         try
         {
-            bool sigValid = CryptoVerifier.VerifySignature(cmsData, _logger);
+            bool sigValid = _cryptoVerifier.VerifySignature(cmsData, _logger);
             if (!sigValid)
             {
                 _logger.SignatureInvalid();
@@ -525,7 +574,7 @@ public sealed class PdfSignatureValidator
         {
             // AIA chasing: on macOS/Linux, X509Chain.Build() does not automatically download
             // intermediate certificates via AIA. We do it explicitly and add them to ExtraStore.
-            var aiaCerts = await CertificateChainUtility.DownloadAiaCertsAsync(
+            var aiaCerts = await _certChainService.DownloadAiaCertsAsync(
                 _httpClient, cmsData.SignerCertificate, cmsData.Certificates, warnings, ct).ConfigureAwait(false);
 
             IReadOnlyList<X509Certificate2> allCerts = aiaCerts.Count > 0
@@ -670,7 +719,7 @@ public sealed class PdfSignatureValidator
         {
             foreach (var root in _options.TrustedRoots)
             {
-                if (root.Subject == root.Issuer)
+                if (root.IsSelfSigned())
                 {
                     chain.ChainPolicy.CustomTrustStore.Add(root);
                 }
@@ -797,7 +846,7 @@ public sealed class PdfSignatureValidator
         {
             foreach (var cert in provider.GetTrustAnchors())
             {
-                if (cert.Subject == cert.Issuer)
+                if (cert.IsSelfSigned())
                 {
                     chain.ChainPolicy.CustomTrustStore.Add(cert);
                 }

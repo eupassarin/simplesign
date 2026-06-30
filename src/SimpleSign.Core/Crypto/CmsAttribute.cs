@@ -36,7 +36,11 @@ public sealed class CmsAttribute
         string typeOid = type switch
         {
             CommitmentType.ProofOfOrigin => Oids.ProofOfOrigin,
+            CommitmentType.ProofOfReceipt => Oids.ProofOfReceipt,
+            CommitmentType.ProofOfDelivery => Oids.ProofOfDelivery,
+            CommitmentType.ProofOfSender => Oids.ProofOfSender,
             CommitmentType.ProofOfApproval => Oids.ProofOfApproval,
+            CommitmentType.ProofOfCreation => Oids.ProofOfCreation,
             _ => throw new ArgumentOutOfRangeException(nameof(type))
         };
 

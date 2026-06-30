@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 
 namespace SimpleSign.Core.Revocation;
@@ -13,11 +14,12 @@ namespace SimpleSign.Core.Revocation;
 /// OCSP (Online Certificate Status Protocol) client for certificate revocation checking.
 /// Builds OCSP requests, sends them, and verifies response signatures.
 /// </summary>
-internal sealed class OcspClient
+public sealed class OcspClient : IOcspClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
 
+    /// <summary>Creates an OCSP client with the specified HTTP client and optional logger.</summary>
     public OcspClient(HttpClient httpClient, ILogger? logger = null)
     {
         _httpClient = httpClient;
@@ -26,21 +28,21 @@ internal sealed class OcspClient
 
     #region Instance methods
 
-    internal async Task<bool> CheckOcspAsync(X509Certificate2 cert, string ocspUrl, CancellationToken ct)
+    /// <inheritdoc />
+    public async Task<bool> CheckOcspAsync(X509Certificate2 cert, string ocspUrl, CancellationToken ct)
     {
         var result = await FetchOcspResponseAsync(cert, issuerCert: null, ocspUrl, ct).ConfigureAwait(false);
         return result.IsValid;
     }
 
-    internal async Task<bool> CheckOcspWithChainAsync(
+    /// <inheritdoc />
+    public async Task<bool> CheckOcspWithChainAsync(
         X509Certificate2 cert,
         IReadOnlyList<X509Certificate2> chain,
         string ocspUrl,
         CancellationToken ct)
     {
-        var issuerCert = chain.FirstOrDefault(c =>
-            c.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData)) ??
-            chain.FirstOrDefault(c => string.Equals(c.Subject, cert.Issuer, StringComparison.OrdinalIgnoreCase));
+        var issuerCert = chain.FindIssuerOf(cert);
         if (issuerCert is null)
         {
             _logger.OcspIssuerCertNotFound(cert.Subject);
@@ -53,7 +55,8 @@ internal sealed class OcspClient
     /// Fetches an OCSP response and returns the revocation status, raw response bytes,
     /// and all responder certificates embedded in the response (for DSS inclusion).
     /// </summary>
-    internal async Task<OcspFetchResult> FetchOcspResponseAsync(
+    /// <inheritdoc />
+    public async Task<OcspFetchResult> FetchOcspResponseAsync(
         X509Certificate2 cert,
         X509Certificate2? issuerCert,
         string ocspUrl,
@@ -80,7 +83,8 @@ internal sealed class OcspClient
     /// Checks an embedded OCSP response against a certificate.
     /// Returns: true = good (not revoked), false = revoked, null = not relevant for this cert or unparseable.
     /// </summary>
-    internal bool? CheckEmbeddedOcspResponse(
+    /// <inheritdoc />
+    public bool? CheckEmbeddedOcspResponse(
         X509Certificate2 cert,
         X509Certificate2? issuerCert,
         byte[] ocspResponseBytes,
@@ -514,7 +518,7 @@ internal sealed class OcspClient
 /// Result of an OCSP fetch operation, including revocation status, raw response bytes,
 /// and all responder certificates found in the response.
 /// </summary>
-internal sealed record OcspFetchResult(
+public sealed record OcspFetchResult(
     bool IsValid,
     byte[] ResponseBytes,
     IReadOnlyList<X509Certificate2> ResponderCertificates);
