@@ -1,34 +1,28 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <NoWarn>$(NoWarn);CA1829;CA1861</NoWarn>
+    <NoWarn>$(NoWarn);CA1829;CA1861;IDE0005;IDE0019</NoWarn>
     <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>SimpleSign.XAdES.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="10.0.1">
-      <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Shouldly" Version="4.3.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Shouldly" Version="4.3.0" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\src\SimpleSign.Cli\SimpleSign.Cli.csproj" />
-    <ProjectReference Include="..\..\..\src\SimpleSign.Core\SimpleSign.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
-    <ProjectReference Include="..\..\..\src\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
-    <ProjectReference Include="..\..\..\src\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
     <ProjectReference Include="..\..\..\src\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
     <ProjectReference Include="..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>

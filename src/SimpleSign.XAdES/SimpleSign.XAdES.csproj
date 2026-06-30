@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.XAdES</AssemblyName>
+    <RootNamespace>SimpleSign.XAdES</RootNamespace>
+    <PackageId>SimpleSign.XAdES</PackageId>
+    <Description>Create and validate XAdES digital signatures (ETSI EN 319 132). Supports B-B, B-T, B-LT, and B-LTA conformance levels for XML documents. Uses System.Security.Cryptography and System.Security.Cryptography.Xml.</Description>
+    <Version>0.6.0</Version>
+    <NoWarn>$(NoWarn);CA1508</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="9.*" />
+  </ItemGroup>
+
+</Project>
