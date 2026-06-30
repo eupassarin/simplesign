@@ -5,7 +5,7 @@
 # Usage:
 #   curl -sL https://raw.githubusercontent.com/eupassarin/SimpleSign/main/scripts/install/install-cli.sh | bash
 #   ./install-cli.sh                   # latest release
-#   ./install-cli.sh 0.5.0            # specific version
+#   ./install-cli.sh 0.7.0            # specific version
 
 set -euo pipefail
 

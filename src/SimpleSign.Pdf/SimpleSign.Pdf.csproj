@@ -5,7 +5,7 @@
     <RootNamespace>SimpleSign.Pdf</RootNamespace>
     <PackageId>SimpleSign.Pdf</PackageId>
     <Description>PDF structure parsing and signature field extraction for the SimpleSign digital signature framework.</Description>
-    <Version>0.5.0</Version>
+    <Version>0.7.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

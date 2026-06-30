@@ -24,6 +24,8 @@ Update `<Version>` in all `.csproj` files:
 | `src/SimpleSign.Pdf/SimpleSign.Pdf.csproj` | PDF parser |
 | `src/SimpleSign.PAdES/SimpleSign.PAdES.csproj` | Main package |
 | `src/SimpleSign.Brasil/SimpleSign.Brasil.csproj` | ICP-Brasil |
+| `src/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
+| `src/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
 | `src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
 | `src/SimpleSign.HostSigner/SimpleSign.HostSigner.csproj` | Host signer |
 | `src/SimpleSign.Cli/SimpleSign.Cli.csproj` | CLI tool |
@@ -32,7 +34,7 @@ Update `<Version>` in all `.csproj` files:
 
 ```bash
 VERSION="X.Y.Z"
-OLD="0.5.0"
+OLD="0.7.0"
 sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   Directory.Build.props \
   src/SimpleSign/SimpleSign.csproj \
@@ -40,6 +42,8 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
   src/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
   src/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
+  src/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
+  src/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
   src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
   src/SimpleSign.HostSigner/SimpleSign.HostSigner.csproj \
   src/SimpleSign.Cli/SimpleSign.Cli.csproj
@@ -51,11 +55,11 @@ These files contain version strings that do NOT come from `<Version>` and must b
 
 | File | Location | What to update |
 |------|----------|----------------|
-| `src/SimpleSign.HostSigner/TrayContext.cs` | `Version = "0.5.0"` | Hardcoded version for health check API |
+| `src/SimpleSign.HostSigner/TrayContext.cs` | `Version = "0.7.0"` | Hardcoded version for health check API |
 | `src/SimpleSign.HostSigner/README.md` | Install examples, health check responses | All version strings |
 | `src/SimpleSign.HostSigner/webapp/src/pages/ApiPage.tsx` | Mock version strings in web UI | `"0.1.0-alpha"` → new version |
-| `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.5.0]` | Example version |
-| `RELEASING.md` | `OLD="0.5.0"` and `Current version: \`0.5.0\`` | Update both—this file |
+| `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.7.0]` | Example version |
+| `RELEASING.md` | `OLD="0.7.0"` and `Current version: \`0.7.0\`` | Update both—this file |
 
 Run to find any missed occurrences:
 
@@ -145,6 +149,8 @@ dotnet nuget push ./artifacts/SimpleSign.Core.X.Y.Z.nupkg --api-key $NUGET_KEY -
 dotnet nuget push ./artifacts/SimpleSign.Pdf.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.PAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.Brasil.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./artifacts/SimpleSign.CAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./artifacts/SimpleSign.XAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.HtmlToPdf.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 ```
@@ -165,4 +171,4 @@ NOTES
 - **MINOR** (0.x.0): New public API surface, deprecations
 - **MAJOR** (x.0.0): Breaking changes to public API
 
-Current version: `0.5.0`
+Current version: `0.7.0`

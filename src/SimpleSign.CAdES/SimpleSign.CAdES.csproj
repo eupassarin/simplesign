@@ -5,7 +5,7 @@
     <RootNamespace>SimpleSign.CAdES</RootNamespace>
     <PackageId>SimpleSign.CAdES</PackageId>
     <Description>Create and validate standalone CAdES digital signatures (ETSI EN 319 122). Supports B-B, B-T, B-LT, and B-LTA conformance levels. No BouncyCastle — uses only System.Security.Cryptography. Native AOT compatible.</Description>
-    <Version>0.5.0</Version>
+    <Version>0.7.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

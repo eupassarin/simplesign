@@ -7,6 +7,8 @@
             "src/SimpleSign.Core/SimpleSign.Core.csproj",
             "src/SimpleSign.Pdf/SimpleSign.Pdf.csproj",
             "src/SimpleSign.PAdES/SimpleSign.PAdES.csproj",
+            "src/SimpleSign.CAdES/SimpleSign.CAdES.csproj",
+            "src/SimpleSign.XAdES/SimpleSign.XAdES.csproj",
             "src/SimpleSign.Brasil/SimpleSign.Brasil.csproj",
             "src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj"
           ],

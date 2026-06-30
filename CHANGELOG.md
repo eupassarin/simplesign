@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-30
+
 ### Added
 
 - **`UnsignedSignatureProperties` wrapper** — XAdES unsigned properties now wrapped in `<UnsignedSignatureProperties>` per ETSI EN 319 132-1 §5.3. Backward-compatible: validator searches both nested and flat structures.
@@ -27,7 +29,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`SimpleSign.Core/Crypto/CmsAttribute.cs`** — new CommitmentType OIDs added.
 - **Fuzz harness for XAdES** — added `xades-sign` and `xades-validate` targets to the SharpFuzz-based fuzzer in `tests/fuzz/`.
 
-## [0.6.0] - 2026-06-19
+### Changed
+
+- **SOLID service interfaces** — 15 interfaces extracted across all projects for DI and testability:
+  - Core: `IOcspClient`, `ICrlClient`, `IRevocationChecker`, `ITimestampClient`, `ITimestampClientFactory`, `ICertificateChainService`, `ICryptoVerifier`, `ICmsParser`, `ITimestampValidator`
+  - PAdES: `IPdfSignatureValidator`, `IIntegrityVerifier`, `ILtvEmbedder`, `IConformanceDetector`, `IPdfSignatureInspector`, `IPadesExtractor`
+  - Pdf: `IPdfStructureReader` with `PdfStructureReaderService`
+  - CAdES: `ICadesSignatureValidator`
+  - XAdES: `IXadesSignatureValidator`
+- **DI registration** — `AddSimpleSign()` wires all services via `IServiceCollection`. New extension methods: `AddSimpleSignCades()`, `AddSimpleSignXades()`. All factories and implementations registered as transient or singleton via `TryAdd*`.
+- **CLI DI integration** — `SimpleSignTypeRegistrar` bridges Spectre.Console to `IServiceCollection`. All CLI commands (`sign`, `validate`, `validate-dir`, `inspect`, `extract`, `cades sign`, `cades validate`, `xades sign`, `xades validate`) use constructor injection instead of manual `new`.
+- **Brasil validators** — `GovBrChainValidator` and `IcpBrasilChainValidator` now accept `ICertificateChainService` via constructor injection.
+- **`InternalsVisibleTo` removed** — the `simplesign` CLI no longer accesses internal APIs from Core, Pdf, or PAdES assemblies. `SignatureAppearance.WithBackgroundImagePng`/`WithBackgroundImageJpeg`/`WithExtraLines` made `public`.
+- **`ICertificateChainService` extended** — added `LoadPkcs12FromFile` and `LoadPkcs12CollectionFromFile` methods for certificate loading.
+
+## [0.7.0] - 2026-06-30
 
 ### Added
 
@@ -331,6 +347,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HostSigner** — React/shadcn UI overhaul
 - **README** — comprehensive rewrite: lib-focused structure, real benchmark numbers, dependency clarity, merged enterprise features
 
+[0.7.0]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.7.0
 [0.6.0]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.6.0
 [0.5.0]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.5.0
 [0.4.0]: https://github.com/eupassarin/SimpleSign/releases/tag/v0.4.0

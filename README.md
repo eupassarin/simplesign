@@ -37,11 +37,13 @@ SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 
 
 ---
 
-## What's New in v0.6.0
+## What's New in v0.7.0
 
-**XAdES signatures** — `SimpleSign.XAdES` introduces XML digital signatures with full XAdES-B-B, B-T, B-LT, and B-LTA conformance levels. The same fluent builder pattern (`XadesSigner.Document().WithCertificate().SignAsync()`) used by PAdES and CAdES. Supports enveloped, detached, and enveloping forms, RSA-PSS and ECDSA, synthetic timestamps, and CLI commands (`xades sign`, `xades validate`). See [README section](#xades--xml-signatures) for details.
+**SOLID Refactoring & Dependency Injection** — 15 service interfaces extracted across all projects (`IOcspClient`, `ICrlClient`, `IRevocationChecker`, `ITimestampClient`, `ITimestampClientFactory`, `ICertificateChainService`, `ICryptoVerifier`, `ICmsParser`, `ITimestampValidator`, `IPdfStructureReader`, `IConformanceDetector`, `IPdfSignatureInspector`, `IPadesExtractor`, `ICadesSignatureValidator`, `IXadesSignatureValidator`). `AddSimpleSign()` now wires all services via `IServiceCollection`. CLI commands use constructor injection via `SimpleSignTypeRegistrar`.
 
-**Fluent CAdES Builder** — `CadesSignerBuilder` brings the same fluent immutable builder pattern used in PAdES to standalone CMS signatures. `DeferredSignerBuilder` renamed `WithSignatureAlgorithmOid()` → `WithSignatureAlgorithm()` for cross-API naming consistency (breaking). VRI compliance fix removes non-standard `/SHA256` key from DSS dictionaries. CancellationToken support added to chain validation. See the [full changelog](CHANGELOG.md) for details.
+**New NuGet packages** — `dotnet add package SimpleSign.CAdES` and `dotnet add package SimpleSign.XAdES` are now available as standalone packages. `AddSimpleSignCades()` and `AddSimpleSignXades()` extension methods register all services for DI.
+
+**XAdES enhancements** — `UnsignedSignatureProperties` wrapper per ETSI 319 132-1, expanded `CommitmentType` enum, `SignerRole` + `DataObjectFormat` support, EU DSS interop tests. See [full changelog](CHANGELOG.md).
 
 ---
 
@@ -55,6 +57,12 @@ dotnet add package SimpleSign
 
 # Brazilian PKI (ICP-Brasil + Gov.br)
 dotnet add package SimpleSign.Brasil
+
+# CAdES signatures (CMS/PKCS#7)
+dotnet add package SimpleSign.CAdES
+
+# XAdES signatures (XML-DSig)
+dotnet add package SimpleSign.XAdES
 
 # CLI tool
 dotnet tool install -g SimpleSign.Cli

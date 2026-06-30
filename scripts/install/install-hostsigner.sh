@@ -6,7 +6,7 @@
 # Usage:
 #   curl -sL https://raw.githubusercontent.com/eupassarin/SimpleSign/main/scripts/install/install-hostsigner.sh | bash
 #   ./install-hostsigner.sh                   # latest release
-#   ./install-hostsigner.sh 0.5.0            # specific version
+#   ./install-hostsigner.sh 0.7.0            # specific version
 
 set -euo pipefail
 

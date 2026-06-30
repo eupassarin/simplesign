@@ -4,7 +4,7 @@
 # Usage:
 #   irm https://raw.githubusercontent.com/eupassarin/SimpleSign/main/scripts/install/install-cli.ps1 | iex
 #   .\install-cli.ps1                     # latest release
-#   .\install-cli.ps1 -Version 0.5.0      # specific version
+#   .\install-cli.ps1 -Version 0.7.0      # specific version
 
 #Requires -Version 5.1
 param(

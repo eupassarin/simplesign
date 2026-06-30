@@ -1,10 +1,12 @@
 # SimpleSign
 
-**SimpleSign** is a .NET library for creating, inspecting, and validating **PAdES** (PDF Advanced Electronic Signatures) compliant digital signatures.
+**SimpleSign** is a .NET library for creating, inspecting, and validating **PAdES**, **CAdES**, and **XAdES** digital signatures.
 
 ## Features
 
 - **PAdES B-B, B-T, B-LT, B-LTA** conformance levels
+- **CAdES B-B, B-T, B-LT, B-LTA** detached CMS signatures
+- **XAdES B-B, B-T, B-LT, B-LTA** enveloped XML signatures
 - **Deferred signing** — hash on server, sign on client (private key never leaves the device)
 - **PDF inspection** — extract signature metadata, certificates, timestamps
 - **Signature validation** — integrity, chain, revocation, timestamp verification
@@ -37,6 +39,8 @@ byte[] signedPdf = await SimpleSigner
 | [`SimpleSign.Core`](xref:SimpleSign.Core) | Core cryptographic primitives (CMS, X.509, TSA) |
 | [`SimpleSign.Pdf`](xref:SimpleSign.Pdf) | Low-level PDF manipulation and signature structures |
 | [`SimpleSign.PAdES`](xref:SimpleSign.PAdES) | PAdES signing, validation, inspection |
+| [`SimpleSign.CAdES`](xref:SimpleSign.CAdES) | CAdES detached CMS signing and validation |
+| [`SimpleSign.XAdES`](xref:SimpleSign.XAdES) | XAdES enveloped XML signing and validation |
 | [`SimpleSign.Brasil`](xref:SimpleSign.Brasil) | ICP-Brasil trust anchors and certificate utilities |
 | [`SimpleSign.HtmlToPdf`](xref:SimpleSign.HtmlToPdf) | HTML-to-PDF conversion |
 | [`SimpleSign.Cli`](https://www.nuget.org/packages/SimpleSign.Cli) | CLI tool for signing, validation, inspection |

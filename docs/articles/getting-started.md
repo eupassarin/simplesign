@@ -11,6 +11,7 @@ dotnet add package SimpleSign
 # Or individual packages
 dotnet add package SimpleSign.PAdES    # PAdES signing, validation, inspection
 dotnet add package SimpleSign.CAdES    # standalone CMS/PKCS#7 signing & validation
+dotnet add package SimpleSign.XAdES    # XML-DSig signing & validation (XAdES)
 dotnet add package SimpleSign.Brasil   # ICP-Brasil trust anchors
 dotnet add package SimpleSign.HtmlToPdf # HTML-to-PDF conversion
 ```
@@ -23,6 +24,8 @@ SimpleSign (meta-package)
 │   ├── SimpleSign.Pdf      PDF structure parser (xref, objects, fields)
 │   └── SimpleSign.Core     Crypto primitives, CMS, TSA, revocation
 ├── SimpleSign.CAdES        standalone CMS/PKCS#7 signing & validation
+│   └── SimpleSign.Core     (shared)
+├── SimpleSign.XAdES        XML-DSig signing & validation (XAdES)
 │   └── SimpleSign.Core     (shared)
 
 SimpleSign.Brasil           ICP-Brasil + Gov.br + Lei 14.063  → depends on PAdES

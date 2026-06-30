@@ -5,7 +5,7 @@
     <RootNamespace>SimpleSign.PAdES</RootNamespace>
     <PackageId>SimpleSign.PAdES</PackageId>
     <Description>Sign, validate, and inspect PDF digital signatures (PAdES ETSI EN 319 142). Supports B-B, B-T, B-LT, B-LTA conformance levels. Fluent async API. No BouncyCastle — uses only System.Security.Cryptography. Native AOT compatible.</Description>
-    <Version>0.5.0</Version>
+    <Version>0.7.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

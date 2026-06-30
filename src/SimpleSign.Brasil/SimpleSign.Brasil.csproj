@@ -5,7 +5,7 @@
     <RootNamespace>SimpleSign.Brasil</RootNamespace>
     <PackageId>SimpleSign.Brasil</PackageId>
     <Description>Brazilian extensions for SimpleSign: ICP-Brasil chain validation, Gov.br trust anchors, and Advanced Electronic Signature (AEA) per Lei 14.063/2020.</Description>
-    <Version>0.5.0</Version>
+    <Version>0.7.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

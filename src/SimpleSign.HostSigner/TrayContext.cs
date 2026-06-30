@@ -7,7 +7,7 @@ namespace SimpleSign.HostSigner;
 internal sealed class TrayContext : ApplicationContext
 {
     internal const int Port = 21590;
-    internal const string Version = "0.5.0";
+    internal const string Version = "0.7.0";
     private const string GitHubRepo = "eupassarin/SimpleSign";
 
     private readonly NotifyIcon _tray;

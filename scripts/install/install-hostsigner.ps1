@@ -6,7 +6,7 @@
 # Usage:
 #   irm https://raw.githubusercontent.com/eupassarin/SimpleSign/main/scripts/install/install-hostsigner.ps1 | iex
 #   .\install-hostsigner.ps1                     # latest release
-#   .\install-hostsigner.ps1 -Version 0.5.0      # specific version
+#   .\install-hostsigner.ps1 -Version 0.7.0      # specific version
 
 #Requires -Version 5.1
 param(

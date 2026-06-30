@@ -5,7 +5,7 @@
     <RootNamespace>SimpleSign.HtmlToPdf</RootNamespace>
     <PackageId>SimpleSign.HtmlToPdf</PackageId>
     <Description>Pure .NET HTML-to-PDF converter for structured documents. Zero browser dependency. Supports headings, tables, lists, images, and basic CSS. Integrates with SimpleSign signing pipeline.</Description>
-    <Version>0.5.0</Version>
+    <Version>0.7.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
