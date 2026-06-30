@@ -2,7 +2,9 @@ using System.ComponentModel;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.CAdES;
+using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -11,6 +13,13 @@ namespace SimpleSign.Cli.Commands;
 [Description("Sign data with CAdES (CMS/PKCS#7 detached signature)")]
 internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 {
+    private readonly ICertificateChainService _certChainService;
+
+    public CadesSignCommand(ICertificateChainService certChainService)
+    {
+        _certChainService = certChainService;
+    }
+
     internal sealed class Settings : CommonSettings
     {
         [CommandArgument(0, "<input>")]
@@ -149,47 +158,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
             : throw new InvalidOperationException("No certificate found. Use --cert to specify a PFX file.");
     }
 
-    private static IReadOnlyList<X509Certificate2> LoadChainCertificates(string chainPath)
+    private IReadOnlyList<X509Certificate2> LoadChainCertificates(string chainPath)
     {
-        var certs = new List<X509Certificate2>();
         byte[] raw = File.ReadAllBytes(chainPath);
-
-        try
-        {
-            var single = new X509Certificate2(raw);
-            certs.Add(single);
-            return certs.AsReadOnly();
-        }
-        catch
-        {
-            // Try as PEM bundle
-        }
-
-        var text = System.Text.Encoding.ASCII.GetString(raw);
-        var reader = new StringReader(text);
-        var pemBuilder = new System.Text.StringBuilder();
-        bool inCert = false;
-
-        while (reader.ReadLine() is { } line)
-        {
-            if (line.Contains("BEGIN CERTIFICATE"))
-            {
-                inCert = true;
-                pemBuilder.Clear();
-            }
-            else if (line.Contains("END CERTIFICATE") && inCert)
-            {
-                inCert = false;
-                byte[] der = Convert.FromBase64String(pemBuilder.ToString());
-                certs.Add(new X509Certificate2(der));
-            }
-            else if (inCert)
-            {
-                pemBuilder.Append(line);
-            }
-        }
-
-        return certs.AsReadOnly();
+        var certs = _certChainService.LoadCertsFromBytes(raw);
+        return certs.ToList().AsReadOnly();
     }
 
     private static CadesLevel? ParseLevel(string? level) => level?.ToLowerInvariant() switch
@@ -201,13 +174,8 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         _ => null
     };
 
-    private static HashAlgorithmName? ParseHashAlgorithm(string? algo) => algo?.ToUpperInvariant() switch
-    {
-        "SHA256" => HashAlgorithmName.SHA256,
-        "SHA384" => HashAlgorithmName.SHA384,
-        "SHA512" => HashAlgorithmName.SHA512,
-        _ => null
-    };
+    private static HashAlgorithmName? ParseHashAlgorithm(string? algo) =>
+        HashAlgorithmHelper.TryParse(algo);
 
     private static CommitmentType? ParseCommitment(string? type) => type?.ToLowerInvariant() switch
     {

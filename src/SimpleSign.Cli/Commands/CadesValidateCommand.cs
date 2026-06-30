@@ -10,6 +10,13 @@ namespace SimpleSign.Cli.Commands;
 [Description("Validate a CAdES detached signature (CMS/PKCS#7)")]
 internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.Settings>
 {
+    private readonly ICertificateChainService _certChainService;
+
+    public CadesValidateCommand(ICertificateChainService certChainService)
+    {
+        _certChainService = certChainService;
+    }
+
     internal sealed class Settings : CommonSettings
     {
         [CommandArgument(0, "<signature>")]
@@ -119,49 +126,14 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
         return isValid ? 0 : 1;
     }
 
-    private static List<X509Certificate2>? LoadTrustAnchors(string? trustPath)
+    private List<X509Certificate2>? LoadTrustAnchors(string? trustPath)
     {
         if (trustPath is null)
         {
             return null;
         }
 
-        var certs = new List<X509Certificate2>();
         byte[] raw = File.ReadAllBytes(trustPath);
-
-        try
-        {
-            certs.Add(new X509Certificate2(raw));
-        }
-        catch
-        {
-            // Try PEM bundle
-        }
-
-        var text = System.Text.Encoding.ASCII.GetString(raw);
-        var reader = new StringReader(text);
-        var pemBuilder = new System.Text.StringBuilder();
-        bool inCert = false;
-
-        while (reader.ReadLine() is { } line)
-        {
-            if (line.Contains("BEGIN CERTIFICATE"))
-            {
-                inCert = true;
-                pemBuilder.Clear();
-            }
-            else if (line.Contains("END CERTIFICATE") && inCert)
-            {
-                inCert = false;
-                byte[] der = Convert.FromBase64String(pemBuilder.ToString());
-                certs.Add(new X509Certificate2(der));
-            }
-            else if (inCert)
-            {
-                pemBuilder.Append(line);
-            }
-        }
-
-        return certs;
+        return [.. _certChainService.LoadCertsFromBytes(raw)];
     }
 }

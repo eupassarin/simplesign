@@ -2,8 +2,9 @@ using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using SimpleSign.Brasil.Signing;
-using SimpleSign.Core.Crypto;
 using SimpleSign.Cli.Rendering;
+using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -13,6 +14,13 @@ namespace SimpleSign.Cli.Commands;
 [Description("Sign a PDF document")]
 internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
 {
+    private readonly ICertificateChainService _certChainService;
+
+    public SignCommand(ICertificateChainService certChainService)
+    {
+        _certChainService = certChainService;
+    }
+
     internal sealed class Settings : CommonSettings
     {
         [CommandArgument(0, "<input>")]
@@ -343,13 +351,13 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         return await ExecuteCertSigningAsync(settings, outputPath, loggerFactory, cancellationToken);
     }
 
-    private static async Task<(X509Certificate2 Cert, List<X509Certificate2> Chain)> LoadSigningCertificateAsync(
+    private async Task<(X509Certificate2 Cert, List<X509Certificate2> Chain)> LoadSigningCertificateAsync(
         Settings settings, CancellationToken cancellation)
     {
         if (!string.IsNullOrWhiteSpace(settings.Thumbprint))
         {
-            var storeName = ParseStoreName(settings.StoreName) ?? System.Security.Cryptography.X509Certificates.StoreName.My;
-            var storeLocation = ParseStoreLocation(settings.StoreLocation) ?? System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser;
+            var storeName = ParseStoreName(settings.StoreName) ?? StoreName.My;
+            var storeLocation = ParseStoreLocation(settings.StoreLocation) ?? StoreLocation.CurrentUser;
             using var sysStore = new SystemCertificateStore(storeName, storeLocation);
             var cert = sysStore.FindByThumbprint(settings.Thumbprint)
                 ?? throw new InvalidOperationException($"Certificate with thumbprint '{settings.Thumbprint}' not found in {storeName}/{storeLocation}.");
@@ -357,7 +365,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         }
 
         var password = await PasswordResolver.ResolveAsync(settings.Password);
-        var collection = CertificateLoader.LoadPkcs12CollectionFromFile(settings.CertPath!, password);
+        var collection = _certChainService.LoadPkcs12CollectionFromFile(settings.CertPath!, password);
         var signerCert = collection.OfType<X509Certificate2>().FirstOrDefault(c => c.HasPrivateKey)
             ?? throw new InvalidOperationException("No certificate with a private key was found in the PFX file.");
         var chainCerts = collection.OfType<X509Certificate2>()
@@ -366,12 +374,12 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         return (signerCert, chainCerts);
     }
 
-    internal static System.Security.Cryptography.X509Certificates.StoreName? ParseStoreName(string? value) => value?.ToLowerInvariant() switch
+    internal static StoreName? ParseStoreName(string? value) => value?.ToLowerInvariant() switch
     {
-        "my" => System.Security.Cryptography.X509Certificates.StoreName.My,
-        "root" => System.Security.Cryptography.X509Certificates.StoreName.Root,
-        "ca" => System.Security.Cryptography.X509Certificates.StoreName.CertificateAuthority,
-        "trustedpublisher" => System.Security.Cryptography.X509Certificates.StoreName.TrustedPublisher,
+        "my" => StoreName.My,
+        "root" => StoreName.Root,
+        "ca" => StoreName.CertificateAuthority,
+        "trustedpublisher" => StoreName.TrustedPublisher,
         _ => null
     };
 
@@ -386,14 +394,14 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             or "username-password" or "username_password";
     }
 
-    internal static System.Security.Cryptography.X509Certificates.StoreLocation? ParseStoreLocation(string? value) => value?.ToLowerInvariant() switch
+    internal static StoreLocation? ParseStoreLocation(string? value) => value?.ToLowerInvariant() switch
     {
-        "currentuser" => System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser,
-        "localmachine" => System.Security.Cryptography.X509Certificates.StoreLocation.LocalMachine,
+        "currentuser" => StoreLocation.CurrentUser,
+        "localmachine" => StoreLocation.LocalMachine,
         _ => null
     };
 
-    private static async Task<int> ExecuteCertSigningAsync(
+    private async Task<int> ExecuteCertSigningAsync(
         Settings settings, string outputPath, ILoggerFactory? loggerFactory, CancellationToken cancellation)
     {
         var (cert, chainCerts) = await LoadSigningCertificateAsync(settings, cancellation);

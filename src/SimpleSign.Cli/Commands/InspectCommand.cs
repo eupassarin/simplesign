@@ -13,6 +13,13 @@ namespace SimpleSign.Cli.Commands;
 [Description("Inspect signature metadata (no validation)")]
 internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
 {
+    private readonly IConformanceDetector _conformanceDetector;
+
+    public InspectCommand(IConformanceDetector conformanceDetector)
+    {
+        _conformanceDetector = conformanceDetector;
+    }
+
     internal sealed class Settings : CommonSettings
     {
         [CommandArgument(0, "<input>")]
@@ -72,7 +79,7 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
         return 0;
     }
 
-    private static void OutputTree(PdfInspectionResult result, string fileName)
+    private void OutputTree(PdfInspectionResult result, string fileName)
     {
         var doc = result.Document;
         var userSigs = result.Signatures.Where(s => !s.IsDocumentTimestamp).ToList();
@@ -132,7 +139,7 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
             else
             {
                 sigIdx++;
-                var level = ConformanceDetector.Detect(sig, doc, result.Signatures);
+                var level = _conformanceDetector.Detect(sig, doc, result.Signatures);
                 var sigNode = tree.AddNode($"[bold blue]Signature {sigIdx}/{userSigs.Count}:[/] {sig.FieldName}");
                 BuildSignatureNode(sigNode, sig, level);
             }

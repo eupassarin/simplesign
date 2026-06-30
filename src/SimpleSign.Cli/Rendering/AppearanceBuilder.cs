@@ -45,42 +45,8 @@ internal static class AppearanceBuilder
             var ext = Path.GetExtension(backgroundImage).ToLowerInvariant();
             appearance = ext switch
             {
-                ".png" => new SignatureAppearance
-                {
-                    AutoPosition = appearance.AutoPosition,
-                    Page = appearance.Page,
-                    X = appearance.X,
-                    Y = appearance.Y,
-                    ShowReason = appearance.ShowReason,
-                    ShowLocation = appearance.ShowLocation,
-                    ShowDate = appearance.ShowDate,
-                    VerificationUrl = appearance.VerificationUrl,
-                    BackgroundImagePng = imageBytes,
-                    CustomFontSize = appearance.CustomFontSize,
-                    CustomLabelFontSize = appearance.CustomLabelFontSize,
-                    BaseFontName = appearance.BaseFontName,
-                    TextColor = appearance.TextColor,
-                    BorderColor = appearance.BorderColor,
-                    BorderWidth = appearance.BorderWidth,
-                },
-                _ => new SignatureAppearance
-                {
-                    AutoPosition = appearance.AutoPosition,
-                    Page = appearance.Page,
-                    X = appearance.X,
-                    Y = appearance.Y,
-                    ShowReason = appearance.ShowReason,
-                    ShowLocation = appearance.ShowLocation,
-                    ShowDate = appearance.ShowDate,
-                    VerificationUrl = appearance.VerificationUrl,
-                    BackgroundImageJpeg = imageBytes,
-                    CustomFontSize = appearance.CustomFontSize,
-                    CustomLabelFontSize = appearance.CustomLabelFontSize,
-                    BaseFontName = appearance.BaseFontName,
-                    TextColor = appearance.TextColor,
-                    BorderColor = appearance.BorderColor,
-                    BorderWidth = appearance.BorderWidth,
-                }
+                ".png" => appearance.WithBackgroundImagePng(imageBytes),
+                _ => appearance.WithBackgroundImageJpeg(imageBytes),
             };
         }
 
@@ -90,26 +56,7 @@ internal static class AppearanceBuilder
     internal static SignatureAppearance AddAeaExtraLines(SignatureAppearance appearance, string signerName, string cpf)
     {
         var masked = AdvancedSignatureInfo.MaskCpf(cpf);
-        return new SignatureAppearance
-        {
-            AutoPosition = appearance.AutoPosition,
-            Page = appearance.Page,
-            X = appearance.X,
-            Y = appearance.Y,
-            ShowReason = appearance.ShowReason,
-            ShowLocation = appearance.ShowLocation,
-            ShowDate = appearance.ShowDate,
-            VerificationUrl = appearance.VerificationUrl,
-            BackgroundImagePng = appearance.BackgroundImagePng,
-            BackgroundImageJpeg = appearance.BackgroundImageJpeg,
-            CustomFontSize = appearance.CustomFontSize,
-            CustomLabelFontSize = appearance.CustomLabelFontSize,
-            BaseFontName = appearance.BaseFontName,
-            TextColor = appearance.TextColor,
-            BorderColor = appearance.BorderColor,
-            BorderWidth = appearance.BorderWidth,
-            ExtraLines = [signerName, $"CPF: {masked}"],
-        };
+        return appearance.WithExtraLines([signerName, $"CPF: {masked}"]);
     }
 
     internal static (float R, float G, float B)? ParseColor(string? value)

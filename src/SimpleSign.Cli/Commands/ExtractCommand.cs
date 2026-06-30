@@ -6,10 +6,16 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
-/// <summary>Extract CMS signatures from a signed PDF.</summary>
 [Description("Extract CMS signatures from a signed PDF")]
 internal sealed class ExtractCommand : AsyncCommand<ExtractCommand.Settings>
 {
+    private readonly IPadesExtractor _extractor;
+
+    public ExtractCommand(IPadesExtractor extractor)
+    {
+        _extractor = extractor;
+    }
+
     internal sealed class Settings : CommonSettings
     {
         [CommandArgument(0, "<input>")]
@@ -49,7 +55,7 @@ internal sealed class ExtractCommand : AsyncCommand<ExtractCommand.Settings>
         IReadOnlyList<PadesSignatureData> signatures;
         try
         {
-            signatures = await PadesExtractor.ExtractFromFileAsync(
+            signatures = await _extractor.ExtractFromFileAsync(
                 settings.InputPath, logger, cancellationToken);
         }
         catch (InvalidDataException ex)

@@ -1,9 +1,12 @@
 using System.ComponentModel;
-using System.Text.Json;
 using SimpleSign.Brasil;
 using SimpleSign.Brasil.Signing;
 using SimpleSign.Cli.Json;
 using SimpleSign.Cli.Rendering;
+using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
@@ -15,6 +18,41 @@ namespace SimpleSign.Cli.Commands;
 [Description("Validate PDF signatures")]
 internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 {
+    private readonly IHttpClientProvider _httpClientProvider;
+    private readonly IRevocationChecker _revocationChecker;
+    private readonly ICertificateChainService _certChainService;
+    private readonly ICryptoVerifier _cryptoVerifier;
+    private readonly IIntegrityVerifier _integrityVerifier;
+    private readonly ICmsParser _cmsParser;
+    private readonly ITimestampValidator _timestampValidator;
+    private readonly IPdfSignatureInspector _inspector;
+    private readonly IConformanceDetector _conformanceDetector;
+    private readonly IEnumerable<ITrustAnchorProvider> _trustAnchorProviders;
+
+    public ValidateCommand(
+        IHttpClientProvider httpClientProvider,
+        IRevocationChecker revocationChecker,
+        ICertificateChainService certChainService,
+        ICryptoVerifier cryptoVerifier,
+        IIntegrityVerifier integrityVerifier,
+        ICmsParser cmsParser,
+        ITimestampValidator timestampValidator,
+        IPdfSignatureInspector inspector,
+        IConformanceDetector conformanceDetector,
+        IEnumerable<ITrustAnchorProvider> trustAnchorProviders)
+    {
+        _httpClientProvider = httpClientProvider;
+        _revocationChecker = revocationChecker;
+        _certChainService = certChainService;
+        _cryptoVerifier = cryptoVerifier;
+        _integrityVerifier = integrityVerifier;
+        _cmsParser = cmsParser;
+        _timestampValidator = timestampValidator;
+        _inspector = inspector;
+        _conformanceDetector = conformanceDetector;
+        _trustAnchorProviders = trustAnchorProviders;
+    }
+
     internal sealed class Settings : CommonSettings
     {
         [CommandArgument(0, "<input>")]
@@ -49,17 +87,22 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         using var loggerFactory = settings.CreateLoggerFactory();
         var options = new ValidationOptions { CheckRevocation = !settings.NoRevocation };
         var logger = settings.CreateLogger<PdfSignatureValidator>();
-        var brasil = new BrasilExtension();
-        var validator = new PdfSignatureValidator(options, httpClient: null, logger: logger,
-            trustAnchorProviders: brasil.TrustAnchorProviders);
+        var validator = new PdfSignatureValidator(
+            _httpClientProvider, _revocationChecker, options, logger,
+            trustAnchorProviders: _trustAnchorProviders,
+            certChainService: _certChainService,
+            cryptoVerifier: _cryptoVerifier,
+            integrityVerifier: _integrityVerifier,
+            cmsParser: _cmsParser,
+            timestampValidator: _timestampValidator);
 
         await using var stream = File.OpenRead(settings.InputPath);
         var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);
 
         // Run inspection to get PAdES conformance levels and AEA info
         stream.Position = 0;
-        var inspection = await PdfSignatureInspector.InspectAsync(stream, cancellationToken: cancellationToken);
-        var conformanceLevels = ConformanceDetector.DetectAll(inspection)
+        var inspection = await _inspector.InspectAsync(stream, cancellationToken: cancellationToken);
+        var conformanceLevels = _conformanceDetector.DetectAll(inspection)
             .GroupBy(x => x.Signature.FieldName)
             .ToDictionary(g => g.Key, g => g.First().Level);
         var aeaInfo = inspection.Signatures
@@ -78,33 +121,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         }
         else if (settings.Simple)
         {
-            var fileName = Path.GetFileName(settings.InputPath);
-            var userSigs = results.Where(r => !r.IsDocumentTimestamp).ToList();
-            var validCount = userSigs.Count(r => r.IsValid);
-            var allValid = validCount == userSigs.Count;
-            var statusIcon = userSigs.Count == 0 ? "[yellow]?[/]" : (allValid ? "[green]✓[/]" : "[red]✗[/]");
-
-            AnsiConsole.MarkupLine($"{statusIcon} [bold]{fileName.EscapeMarkup()}[/]  {validCount}/{userSigs.Count} valid");
-
-            foreach (var r in results)
-            {
-                string icon;
-                if (r.IsDocumentTimestamp)
-                {
-                    icon = r.IsChainTrustWarning ? "[yellow]T[/]" : (r.IsValid ? "[green]T[/]" : "[red]T[/]");
-                }
-                else
-                {
-                    icon = r.IsValid ? "[green]✓[/]" : "[red]✗[/]";
-                }
-
-                var signer = (r.SignerName ?? "unknown").EscapeMarkup();
-                var level = conformanceLevels.TryGetValue(r.FieldName, out var l) ? $"  [dim]{Formatting.FormatLevel(l)}[/]" : string.Empty;
-                var time = r.SigningTime.HasValue ? $"  [dim]{r.SigningTime.Value:yyyy-MM-dd}[/]" : string.Empty;
-                var errSuffix = r.IsValid ? string.Empty : $"  [red]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "invalid")}[/]";
-
-                AnsiConsole.MarkupLine($"  {icon} {r.FieldName.EscapeMarkup()}  {signer}{level}{time}{errSuffix}");
-            }
+            OutputSimple(settings.InputPath, results, conformanceLevels);
         }
         else
         {
@@ -113,6 +130,47 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 
         bool hasInvalid = results.Any(r => !r.IsValid);
         return hasInvalid ? 1 : 0;
+    }
+
+    private static void OutputSimple(string inputPath, IReadOnlyList<SignatureValidationResult> results,
+        Dictionary<string, PAdESConformanceLevel> conformanceLevels)
+    {
+        var fileName = Path.GetFileName(inputPath);
+        var userSigs = results.Where(r => !r.IsDocumentTimestamp).ToList();
+        var validCount = userSigs.Count(r => r.IsValid);
+        var allValid = validCount == userSigs.Count;
+        var statusIcon = userSigs.Count == 0 ? "[yellow]?[/]" : (allValid ? "[green]✓[/]" : "[red]✗[/]");
+
+        AnsiConsole.MarkupLine($"{statusIcon} [bold]{fileName.EscapeMarkup()}[/]  {validCount}/{userSigs.Count} valid");
+
+        foreach (var r in results)
+        {
+            string icon;
+            if (r.IsDocumentTimestamp)
+            {
+                icon = r.IsChainTrustWarning ? "[yellow]T[/]" : (r.IsValid ? "[green]T[/]" : "[red]T[/]");
+            }
+            else
+            {
+                icon = r.IsValid ? "[green]✓[/]" : "[red]✗[/]";
+            }
+
+            var signer = (r.SignerName ?? "unknown").EscapeMarkup();
+            var level = conformanceLevels.TryGetValue(r.FieldName, out var l) ? $"  [dim]{Formatting.FormatLevel(l)}[/]" : string.Empty;
+            var time = r.SigningTime.HasValue ? $"  [dim]{r.SigningTime.Value:yyyy-MM-dd}[/]" : string.Empty;
+            var errSuffix = r.IsValid ? string.Empty : $"  [red]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "invalid")}[/]";
+
+            AnsiConsole.MarkupLine($"  {icon} {r.FieldName.EscapeMarkup()}  {signer}{level}{time}{errSuffix}");
+        }
+    }
+
+    private static void OutputJson(string inputPath, IReadOnlyList<SignatureValidationResult> results,
+        Dictionary<string, PAdESConformanceLevel> conformanceLevels)
+    {
+        var fileName = Path.GetFileName(inputPath);
+        var output = JsonMapper.MapValidation(fileName, results, conformanceLevels);
+        var json = System.Text.Json.JsonSerializer.Serialize(output, CliJsonContext.Default.ValidateOutput);
+        Console.WriteLine(json);
     }
 
     private static void OutputText(string inputPath, IReadOnlyList<SignatureValidationResult> results,
@@ -292,7 +350,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
                 }
             }
 
-            sigNode.AddNode($"Algorithm:    {(result.DigestAlgorithmName ?? result.DigestAlgorithmOid ?? "—").EscapeMarkup()}");
+            sigNode.AddNode($"Algorithm:    {(result.DigestAlgorithmName ?? result.DigestAlgorithmOid ?? "\u2014").EscapeMarkup()}");
 
             // Byte range, CMS data, embedded certs from inspection
             if (sig is not null)
@@ -323,7 +381,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 
             foreach (var error in result.Errors)
             {
-                sigNode.AddNode($"[yellow]⚠ {error.EscapeMarkup()}[/]");
+                sigNode.AddNode($"[yellow]\u26a0 {error.EscapeMarkup()}[/]");
             }
         }
 
@@ -356,7 +414,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
                 tsNode.AddNode($"TSA Cert:     [dim]{tsaCert.NotBefore:yyyy-MM-dd} \u2013 {tsaCert.NotAfter:yyyy-MM-dd}[/]");
             }
 
-            tsNode.AddNode($"Algorithm:    {(result.DigestAlgorithmName ?? result.DigestAlgorithmOid ?? "—").EscapeMarkup()}");
+            tsNode.AddNode($"Algorithm:    {(result.DigestAlgorithmName ?? result.DigestAlgorithmOid ?? "\u2014").EscapeMarkup()}");
             tsNode.AddNode($"Integrity:    {Check(result.IsIntegrityValid)}");
             tsNode.AddNode($"Signature:    {Check(result.IsSignatureValid)}");
 
@@ -399,7 +457,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 
             foreach (var error in result.Errors)
             {
-                tsNode.AddNode($"[yellow]⚠ {error.EscapeMarkup()}[/]");
+                tsNode.AddNode($"[yellow]\u26a0 {error.EscapeMarkup()}[/]");
             }
         }
 
@@ -408,20 +466,12 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         AnsiConsole.WriteLine();
     }
 
-    private static void OutputJson(string inputPath, IReadOnlyList<SignatureValidationResult> results,
-        Dictionary<string, PAdESConformanceLevel> conformanceLevels)
-    {
-        var output = JsonMapper.MapValidation(Path.GetFileName(inputPath), results, conformanceLevels);
-        Console.WriteLine(JsonSerializer.Serialize(output, CliJsonContext.Default.ValidateOutput));
-    }
-
     private static string Check(bool value, bool invert = false)
     {
         var display = invert ? !value : value;
         return display ? "[green]✓[/]" : "[red]✗[/]";
     }
 
-    /// <summary>Extracts the CN value from an X.500 distinguished name string.</summary>
     private static string GetCn(string distinguishedName)
     {
         var prefix = "CN=";

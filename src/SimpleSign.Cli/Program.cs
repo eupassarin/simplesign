@@ -1,8 +1,21 @@
+using Microsoft.Extensions.DependencyInjection;
+using SimpleSign.Brasil;
+using SimpleSign.CAdES;
+using SimpleSign.Cli;
 using SimpleSign.Cli.Commands;
+using SimpleSign.PAdES.DependencyInjection;
+using SimpleSign.XAdES;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-var app = new CommandApp();
+var services = new ServiceCollection();
+services.AddSimpleSign();
+services.AddSimpleSignBrasil();
+services.AddSimpleSignCades();
+services.AddSimpleSignXades();
+
+var registrar = new SimpleSignTypeRegistrar(services);
+var app = new CommandApp(registrar);
 ConfigureApp(app);
 return await app.RunAsync(args);
 
@@ -39,6 +52,14 @@ internal static partial class Program
                     .WithDescription("Sign data with CAdES (CMS/PKCS#7)");
                 cades.AddCommand<CadesValidateCommand>("validate")
                     .WithDescription("Validate a CAdES detached signature");
+            });
+
+            config.AddBranch("xades", xades =>
+            {
+                xades.AddCommand<XadesSignCommand>("sign")
+                    .WithDescription("Sign an XML document with XAdES");
+                xades.AddCommand<XadesValidateCommand>("validate")
+                    .WithDescription("Validate a signed XAdES XML document");
             });
 
             config.SetExceptionHandler((ex, _) =>

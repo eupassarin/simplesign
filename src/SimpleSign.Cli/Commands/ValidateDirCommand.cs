@@ -1,6 +1,10 @@
 using System.ComponentModel;
 using SimpleSign.Brasil;
 using SimpleSign.Cli.Rendering;
+using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
@@ -12,6 +16,41 @@ namespace SimpleSign.Cli.Commands;
 [Description("Validate all PDF signatures in a directory")]
 internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Settings>
 {
+    private readonly IHttpClientProvider _httpClientProvider;
+    private readonly IRevocationChecker _revocationChecker;
+    private readonly ICertificateChainService _certChainService;
+    private readonly ICryptoVerifier _cryptoVerifier;
+    private readonly IIntegrityVerifier _integrityVerifier;
+    private readonly ICmsParser _cmsParser;
+    private readonly ITimestampValidator _timestampValidator;
+    private readonly IPdfSignatureInspector _inspector;
+    private readonly IConformanceDetector _conformanceDetector;
+    private readonly IEnumerable<ITrustAnchorProvider> _trustAnchorProviders;
+
+    public ValidateDirCommand(
+        IHttpClientProvider httpClientProvider,
+        IRevocationChecker revocationChecker,
+        ICertificateChainService certChainService,
+        ICryptoVerifier cryptoVerifier,
+        IIntegrityVerifier integrityVerifier,
+        ICmsParser cmsParser,
+        ITimestampValidator timestampValidator,
+        IPdfSignatureInspector inspector,
+        IConformanceDetector conformanceDetector,
+        IEnumerable<ITrustAnchorProvider> trustAnchorProviders)
+    {
+        _httpClientProvider = httpClientProvider;
+        _revocationChecker = revocationChecker;
+        _certChainService = certChainService;
+        _cryptoVerifier = cryptoVerifier;
+        _integrityVerifier = integrityVerifier;
+        _cmsParser = cmsParser;
+        _timestampValidator = timestampValidator;
+        _inspector = inspector;
+        _conformanceDetector = conformanceDetector;
+        _trustAnchorProviders = trustAnchorProviders;
+    }
+
     internal sealed class Settings : CommonSettings
     {
         [CommandArgument(0, "<directory>")]
@@ -63,10 +102,15 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
 
         using var loggerFactory = settings.CreateLoggerFactory();
         var options = new ValidationOptions { CheckRevocation = !settings.NoRevocation };
-        var brasil = new BrasilExtension();
-        var validator = new PdfSignatureValidator(options, httpClient: null,
-            logger: settings.CreateLogger<PdfSignatureValidator>(),
-            trustAnchorProviders: brasil.TrustAnchorProviders);
+        var validator = new PdfSignatureValidator(
+            _httpClientProvider, _revocationChecker, options,
+            settings.CreateLogger<PdfSignatureValidator>(),
+            trustAnchorProviders: _trustAnchorProviders,
+            certChainService: _certChainService,
+            cryptoVerifier: _cryptoVerifier,
+            integrityVerifier: _integrityVerifier,
+            cmsParser: _cmsParser,
+            timestampValidator: _timestampValidator);
         var bulk = new BulkValidator(validator, maxConcurrency: settings.Concurrency,
             logger: loggerFactory?.CreateLogger("SimpleSign.BulkValidation"));
 
@@ -101,8 +145,8 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
             try
             {
                 await using var inspectStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
-                var inspection = await PdfSignatureInspector.InspectAsync(inspectStream, cancellationToken: cancellationToken).ConfigureAwait(false);
-                conformanceLevels = ConformanceDetector.DetectAll(inspection)
+                var inspection = await _inspector.InspectAsync(inspectStream, cancellationToken: cancellationToken).ConfigureAwait(false);
+                conformanceLevels = _conformanceDetector.DetectAll(inspection)
                     .GroupBy(x => x.Signature.FieldName)
                     .ToDictionary(g => g.Key, g => g.First().Level);
             }
