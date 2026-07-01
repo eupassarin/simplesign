@@ -5,8 +5,8 @@
 <h1 align="center">SimpleSign</h1>
 
 <p align="center">
-  <strong>PAdES digital signatures for .NET</strong><br/>
-  Sign, validate, and inspect PDFs — no BouncyCastle required.
+  <strong>Enterprise digital signatures for .NET</strong><br/>
+  PAdES · CAdES · XAdES — sign, validate, inspect.
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/github/actions/workflow/status/eupassarin/simplesign/ci.yml?style=flat-square&logo=github" alt="CI" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />
   <img src="https://img.shields.io/badge/AOT-Compatible-blueviolet?style=flat-square" alt="Native AOT" />
-  <img src="https://img.shields.io/badge/Tests-1%2C500%2B-brightgreen?style=flat-square" alt="1,500+ tests" />
+  <img src="https://img.shields.io/badge/Tests-1%2C695%2B-brightgreen?style=flat-square" alt="1,695+ tests" />
   <img src="https://img.shields.io/badge/No%20Crypto%20Deps-✓-blue?style=flat-square" alt="No third-party crypto dependencies" />
 </p>
 
@@ -23,23 +23,24 @@
 
 ## What is SimpleSign?
 
-SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 142) and **CAdES** (ETSI EN 319 122) digital signatures. All cryptography uses `System.Security.Cryptography` — no BouncyCastle, no third-party crypto dependencies.
+SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN 319 122), and **XAdES** (ETSI EN 319 132) digital signatures. All cryptography uses `System.Security.Cryptography` — no BouncyCastle, no third-party crypto dependencies. Native AOT compatible. 1,695+ tests. MIT licensed.
 
 ---
 
 ## Why SimpleSign?
 
 - **Zero third-party crypto** — all operations via BCL `System.Security.Cryptography`
+- **Dependency Injection** — 15+ interfaces, `AddSimpleSign()` wires everything
 - **Native AOT compatible** — no reflection, no `dynamic`, no `Assembly.Load`
 - **MIT licensed** — use anywhere, for anything, with no restrictions
-- **1,500+ tests** — comprehensive coverage, 0 warnings, CI-enforced quality gates
+- **1,695+ tests** — comprehensive coverage, 0 warnings, CI-enforced quality gates
 - **Multi-target** — .NET 8 and .NET 10 on Windows, macOS, and Linux
 
 ---
 
 ## What's New in v0.7.0
 
-**SOLID Refactoring & Dependency Injection** — 15 service interfaces extracted across all projects (`IOcspClient`, `ICrlClient`, `IRevocationChecker`, `ITimestampClient`, `ITimestampClientFactory`, `ICertificateChainService`, `ICryptoVerifier`, `ICmsParser`, `ITimestampValidator`, `IPdfStructureReader`, `IConformanceDetector`, `IPdfSignatureInspector`, `IPadesExtractor`, `ICadesSignatureValidator`, `IXadesSignatureValidator`). `AddSimpleSign()` now wires all services via `IServiceCollection`. CLI commands use constructor injection via `SimpleSignTypeRegistrar`.
+**SOLID Refactoring & Dependency Injection** — 15 service interfaces extracted across all projects (`IOcspClient`, `ICrlClient`, `IRevocationChecker`, `ITimestampClient`, `ITimestampClientFactory`, `ICertificateChainService`, `ICryptoVerifier`, `ICmsParser`, `ITimestampValidator`, `IPdfStructureReader`, `IConformanceDetector`, `IPdfSignatureInspector`, `IPadesExtractor`, `ICadesSignatureValidator`, `IXadesSignatureValidator`). `AddSimpleSign()` now wires all services via `IServiceCollection`. CLI commands use constructor injection via `SimpleSignServiceRegistry`.
 
 **New NuGet packages** — `dotnet add package SimpleSign.CAdES` and `dotnet add package SimpleSign.XAdES` are now available as standalone packages. `AddSimpleSignCades()` and `AddSimpleSignXades()` extension methods register all services for DI.
 
