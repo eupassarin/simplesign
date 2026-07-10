@@ -10,6 +10,7 @@ using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.Pdf;
+using SimpleSign.Pdf.Enums;
 using SimpleSign.Pdf.Exceptions;
 
 namespace SimpleSign.PAdES;
@@ -432,7 +433,37 @@ public sealed class SignerBuilder
         ArgumentNullException.ThrowIfNull(outputStream);
 
         var opId = _operationId ?? System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N")[..8];
+        var useExternal = _externalSigner is not null;
 
+        ValidateSigningPrerequisites(useExternal, opId);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        _logger.SigningStarted(opId, _certificate!.Subject, useExternal);
+
+        var effectiveHash = AlgorithmInference.ResolveEffectiveHashAlgorithm(
+            _certificate, _hashAlgorithm, _hashAlgorithmExplicitlySet, _signatureAlgorithmOid);
+
+        var (prepareResult, signedBytes, pdfALevel) = await PreparePdfForSigningAsync(outputStream, effectiveHash, cancellationToken).ConfigureAwait(false);
+
+        var cms = await BuildCmsSignatureAsync(signedBytes, effectiveHash, useExternal, cancellationToken).ConfigureAwait(false);
+
+        var timestampTokenBytes = await ApplyTimestampAsync(cms, effectiveHash, opId, cancellationToken).ConfigureAwait(false);
+        if (timestampTokenBytes is not null)
+        {
+            cms = TimestampClient.EmbedTimestampInCms(cms, timestampTokenBytes);
+            _logger.TimestampEmbedded(opId, timestampTokenBytes.Length);
+        }
+
+        await PdfSignatureWriter.FinalizeAsync(outputStream, prepareResult, cms, _logger, cancellationToken).ConfigureAwait(false);
+
+        var dssEmbedded = await ApplyLtvAndArchivalAsync(outputStream, timestampTokenBytes, effectiveHash, pdfALevel, opId, warnings, cancellationToken).ConfigureAwait(false);
+
+        _logger.SigningCompleted(opId, sw.ElapsedMilliseconds, outputStream.Length);
+        return dssEmbedded;
+    }
+
+    private void ValidateSigningPrerequisites(bool useExternal, string opId)
+    {
         if (_certificate is null)
         {
             throw new SigningException("Certificate is required. Call WithCertificate() or WithExternalSigner() before SignAsync().");
@@ -443,8 +474,6 @@ public sealed class SignerBuilder
             throw new SigningException("LTV requires a timestamp. Call WithTimestamp() before enabling LTV, or use WithArchivalTimestamp().");
         }
 
-        bool useExternal = _externalSigner is not null;
-
         if (!useExternal && !_certificate.HasPrivateKey)
         {
             throw new SigningException(
@@ -452,20 +481,6 @@ public sealed class SignerBuilder
                 "For A3 tokens or HSMs, use WithExternalSigner() instead of WithCertificate().");
         }
 
-        // Resolve the effective hash and signature OID:
-        //  - If the user explicitly called WithHashAlgorithm(), the user's choice wins.
-        //  - If an explicit signature OID was provided (e.g. via WithExternalSigner), infer hash
-        //    from it (RS512 → SHA512, etc.) before falling back to cert-based inference.
-        //  - Otherwise, infer from the cert (PSS params for PSS certs, key size for RSA PKCS#1).
-        //  - If the user called WithSignatureAlgorithm(oid), use it (validated at CMS build time).
-        //  - Otherwise, auto-detect the OID from the cert + effective hash.
-        HashAlgorithmName effectiveHash = AlgorithmInference.ResolveEffectiveHashAlgorithm(
-            _certificate, _hashAlgorithm, _hashAlgorithmExplicitlySet, _signatureAlgorithmOid);
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
-        _logger.SigningStarted(opId, _certificate.Subject, useExternal);
-        // Check certificate expiry
         if (_certificate.NotAfter < DateTime.UtcNow)
         {
             throw new CertificateValidationException(
@@ -474,14 +489,16 @@ public sealed class SignerBuilder
                 _certificate.Subject);
         }
 
-        // L1: verifies Key Usage — ICP-Brasil AD requires nonRepudiation (bit 1)
         var kuExt = _certificate.Extensions.OfType<X509KeyUsageExtension>().FirstOrDefault();
         if (kuExt is not null && !kuExt.KeyUsages.HasFlag(X509KeyUsageFlags.NonRepudiation))
         {
             _logger.NonRepudiationMissing(_certificate.Subject);
         }
+    }
 
-        // M4: verifies DocMDP — documents with a certification signature that prohibits changes
+    private async Task<(PdfSignaturePrepareResult, byte[], PdfALevel?)> PreparePdfForSigningAsync(
+        Stream outputStream, HashAlgorithmName effectiveHash, CancellationToken cancellationToken)
+    {
         _inputPdf.Seek(0, SeekOrigin.Begin);
         if (await PdfStructureReader.IsDocMdpLockedAsync(_inputPdf, logger: _logger, cancellationToken: cancellationToken).ConfigureAwait(false))
         {
@@ -489,11 +506,9 @@ public sealed class SignerBuilder
                 "This PDF has a certification signature (DocMDP) that prohibits further changes. Signing is not allowed.");
         }
 
-        // Detect PDF/A level for annotation flags and preservation check
         _inputPdf.Seek(0, SeekOrigin.Begin);
         var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(_inputPdf, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        // PDF/A preservation check
         if (_enforcePdfA)
         {
             var pdfAIssues = PdfAPreservationValidator.Validate(pdfALevel, _fieldOptions);
@@ -505,18 +520,20 @@ public sealed class SignerBuilder
             }
         }
 
-        // 1. Prepares the PDF (reserves space for the CMS)
         var prepareResult = await PdfSignatureWriter.PrepareAsync(
             _inputPdf, outputStream, _fieldOptions, _logger, pdfALevel: pdfALevel, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        // 2. Reads the bytes to be signed (ByteRange 1 + 2)
-        byte[] signedBytes = await PdfStructureReader.ReadSignedBytesAsync(
+        var signedBytes = await PdfStructureReader.ReadSignedBytesAsync(
             outputStream, prepareResult.ByteRange, logger: _logger, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        // 3. Build CAdES attributes
+        return (prepareResult, signedBytes, pdfALevel);
+    }
+
+    private async Task<byte[]> BuildCmsSignatureAsync(
+        byte[] signedBytes, HashAlgorithmName effectiveHash, bool useExternal, CancellationToken cancellationToken)
+    {
         List<CmsAttribute>? extraAttributes = null;
 
-        // Generic metadata attributes
         if (_metadata is not null)
         {
             extraAttributes = [CmsAttribute.CommitmentTypeIndication(_metadata.CommitmentType)];
@@ -531,105 +548,100 @@ public sealed class SignerBuilder
             }
         }
 
-        // 4. Builds the CMS/PKCS#7
-        byte[] cms;
         if (useExternal)
         {
-            string effectiveSigOid = _signatureAlgorithmOid
-                ?? DetectSignatureAlgorithmOid(_certificate, effectiveHash);
-            cms = await CmsSignatureBuilder.BuildAsync(
+            var effectiveSigOid = _signatureAlgorithmOid
+                ?? DetectSignatureAlgorithmOid(_certificate!, effectiveHash);
+            return await CmsSignatureBuilder.BuildAsync(
                 signedBytes,
-                _certificate,
+                _certificate!,
                 _externalSigner!,
                 effectiveSigOid,
                 effectiveHash,
                 extraCertificates: _chain,
                 extraAttributes: extraAttributes,
                 padesAttributes: _padesAttributes,
-                logger: _logger).ConfigureAwait(false);
+                logger: _logger,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        var sigOid = _signatureAlgorithmOid;
+        return CmsSignatureBuilder.Build(
+            signedBytes,
+            _certificate!,
+            effectiveHash,
+            extraCertificates: _chain,
+            extraAttributes: extraAttributes,
+            padesAttributes: _padesAttributes,
+            signatureAlgorithmOid: sigOid,
+            logger: _logger);
+    }
+
+    private async Task<byte[]?> ApplyTimestampAsync(
+        byte[] cms, HashAlgorithmName effectiveHash, string opId, CancellationToken cancellationToken)
+    {
+        if (_tsaUrl is null)
+        {
+            return null;
+        }
+
+        _logger.TimestampRequested(opId, _tsaUrl);
+        var tsaClient = _tsaFactory is not null
+            ? _tsaFactory.Create(_tsaUrl)
+            : new TimestampClient(
+                _tsaHttpClient ?? _httpClient ?? _httpClientProvider.GetClient(), _tsaUrl, _logger);
+        return await tsaClient.GetTimestampAsync(
+            TimestampClient.ExtractSignatureValue(cms), effectiveHash, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ApplyLtvAndArchivalAsync(
+        Stream outputStream, byte[]? timestampTokenBytes, HashAlgorithmName effectiveHash,
+        PdfALevel? pdfALevel, string opId, List<string>? warnings, CancellationToken cancellationToken)
+    {
+        if (!_enableLtv)
+        {
+            return false;
+        }
+
+        _logger.LtvEmbedding(opId);
+        outputStream.Seek(0, SeekOrigin.Begin);
+        var signedPdf = new byte[outputStream.Length];
+        await outputStream.ReadExactlyAsync(signedPdf, cancellationToken).ConfigureAwait(false);
+
+        var httpClient = _httpClient ?? _httpClientProvider.GetClient();
+        var ltvEmbedder = _ltvEmbedder ?? new LtvEmbedder(httpClient, _logger);
+
+        var chain = _chain?.ToList() ?? [];
+        if (!chain.Any(c => c.Thumbprint == _certificate!.Thumbprint))
+        {
+            chain.Insert(0, _certificate!);
+        }
+
+        var ltvPdf = await ltvEmbedder.EmbedLtvDataAsync(signedPdf, chain, timestampTokenBytes, cancellationToken).ConfigureAwait(false);
+
+        var dssEmbedded = !ReferenceEquals(ltvPdf, signedPdf);
+        if (!dssEmbedded)
+        {
+            _logger.LtvEmbeddingFailed(opId);
+            warnings?.Add("LTV was requested but no revocation data could be collected — DSS not embedded. PDF remains at PAdES B-T level.");
+        }
+
+        if (_archivalTsaUrl is not null)
+        {
+            _logger.ArchivalTimestampAppending(opId, _archivalTsaUrl);
+            ltvPdf = await DocTimeStampWriter.AppendDocTimeStampAsync(
+                ltvPdf, _archivalTsaUrl, _tsaHttpClient ?? _httpClient ?? _httpClientProvider.GetClient(),
+                effectiveHash, pdfALevel: pdfALevel, cancellationToken: cancellationToken).ConfigureAwait(false);
+            _logger.ArchivalTimestampComplete(opId);
         }
         else
         {
-            string? effectiveSigOid = _signatureAlgorithmOid;
-            cms = CmsSignatureBuilder.Build(
-                signedBytes,
-                _certificate,
-                effectiveHash,
-                extraCertificates: _chain,
-                extraAttributes: extraAttributes,
-                padesAttributes: _padesAttributes,
-                signatureAlgorithmOid: effectiveSigOid,
-                logger: _logger);
+            _logger.LtvEmbeddedNoArchival(opId);
         }
 
-        // 4. Applies timestamp, if configured
-        byte[]? timestampTokenBytes = null;
-        if (_tsaUrl is not null)
-        {
-            _logger.TimestampRequested(opId, _tsaUrl);
-            var tsaClient = _tsaFactory is not null
-                ? _tsaFactory.Create(_tsaUrl)
-                : new TimestampClient(
-                    _tsaHttpClient ?? _httpClient ?? _httpClientProvider.GetClient(), _tsaUrl, _logger);
-            timestampTokenBytes = await tsaClient.GetTimestampAsync(
-                TimestampClient.ExtractSignatureValue(cms), effectiveHash, cancellationToken).ConfigureAwait(false);
-            cms = TimestampClient.EmbedTimestampInCms(cms, timestampTokenBytes);
-            _logger.TimestampEmbedded(opId, timestampTokenBytes.Length);
-        }
-
-        // 5. Inserts the CMS into the PDF
-        await PdfSignatureWriter.FinalizeAsync(outputStream, prepareResult, cms, _logger, cancellationToken).ConfigureAwait(false);
-
-        // 6. Embed LTV data (DSS with CRLs, OCSP responses, VRI) if enabled
-        bool dssEmbedded = false;
-        if (_enableLtv)
-        {
-            _logger.LtvEmbedding(opId);
-            outputStream.Seek(0, SeekOrigin.Begin);
-            byte[] signedPdf = new byte[outputStream.Length];
-            await outputStream.ReadExactlyAsync(signedPdf, cancellationToken).ConfigureAwait(false);
-
-            var httpClient = _httpClient ?? _httpClientProvider.GetClient();
-            var ltvEmbedder = _ltvEmbedder ?? new LtvEmbedder(httpClient, _logger);
-
-            // Build certificate chain for LTV embedding
-            var chain = _chain?.ToList() ?? [];
-            if (!chain.Any(c => c.Thumbprint == _certificate!.Thumbprint))
-            {
-                chain.Insert(0, _certificate!);
-            }
-
-            byte[] ltvPdf = await ltvEmbedder.EmbedLtvDataAsync(signedPdf, chain, timestampTokenBytes, cancellationToken).ConfigureAwait(false);
-
-            // Detect whether DSS was actually embedded (EmbedLtvDataAsync returns the original
-            // reference when revocation data was unavailable — no data, no DSS, same object back).
-            dssEmbedded = !ReferenceEquals(ltvPdf, signedPdf);
-            if (!dssEmbedded)
-            {
-                _logger.LtvEmbeddingFailed(opId);
-                warnings?.Add("LTV was requested but no revocation data could be collected — DSS not embedded. PDF remains at PAdES B-T level.");
-            }
-
-            // 7. Append DocTimeStamp if archival timestamp is configured
-            if (_archivalTsaUrl is not null)
-            {
-                _logger.ArchivalTimestampAppending(opId, _archivalTsaUrl);
-                ltvPdf = await DocTimeStampWriter.AppendDocTimeStampAsync(
-                    ltvPdf, _archivalTsaUrl, _tsaHttpClient ?? _httpClient ?? _httpClientProvider.GetClient(),
-                    effectiveHash, pdfALevel: pdfALevel, cancellationToken: cancellationToken).ConfigureAwait(false);
-                _logger.ArchivalTimestampComplete(opId);
-            }
-            else
-            {
-                _logger.LtvEmbeddedNoArchival(opId);
-            }
-
-            outputStream.Seek(0, SeekOrigin.Begin);
-            outputStream.SetLength(0);
-            await outputStream.WriteAsync(ltvPdf, cancellationToken).ConfigureAwait(false);
-        }
-
-        _logger.SigningCompleted(opId, sw.ElapsedMilliseconds, outputStream.Length);
+        outputStream.Seek(0, SeekOrigin.Begin);
+        outputStream.SetLength(0);
+        await outputStream.WriteAsync(ltvPdf, cancellationToken).ConfigureAwait(false);
 
         return dssEmbedded;
     }

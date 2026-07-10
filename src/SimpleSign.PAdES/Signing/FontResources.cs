@@ -12,7 +12,7 @@ namespace SimpleSign.PAdES.Signing;
 internal static class FontResources
 {
     private static byte[]? _ttfData;
-    private static byte[]? _compressedTtf;
+    private static readonly Lazy<byte[]> s_compressedTtf = new(CompressTtf, LazyThreadSafetyMode.ExecutionAndPublication);
 
     private const string ResourceName = "SimpleSign.PAdES.Signing.LiberationSans-subset.ttf";
 
@@ -30,23 +30,17 @@ internal static class FontResources
     internal static byte[] TtfData => _ttfData ??= LoadTtf();
 
     /// <summary>TTF data compressed with FlateDecode (ready for PDF stream).</summary>
-    internal static byte[] CompressedTtf
-    {
-        get
-        {
-            if (_compressedTtf is not null)
-            {
-                return _compressedTtf;
-            }
+    internal static byte[] CompressedTtf => s_compressedTtf.Value;
 
-            var raw = TtfData;
-            using var ms = new MemoryStream();
-            using (var zs = new ZLibStream(ms, CompressionLevel.SmallestSize))
-            {
-                zs.Write(raw, 0, raw.Length);
-            }
-            return _compressedTtf = ms.ToArray();
+    private static byte[] CompressTtf()
+    {
+        var raw = TtfData;
+        using var ms = new MemoryStream();
+        using (var zs = new ZLibStream(ms, CompressionLevel.SmallestSize))
+        {
+            zs.Write(raw, 0, raw.Length);
         }
+        return ms.ToArray();
     }
 
     internal const int UnitsPerEm = 2048;

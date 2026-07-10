@@ -132,7 +132,7 @@ public static class DocTimeStampWriter
         }
 
         // Write all objects to output
-        var output = new MemoryStream();
+        using var output = new MemoryStream();
         output.Write(signedPdf);
         IncrementalUpdateUtility.EnsureTrailingEol(output);
 

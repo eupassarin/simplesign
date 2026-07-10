@@ -46,7 +46,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     /// <summary>Validates a signed XAdES XML document against optional trust anchors.</summary>
     public XadesValidationResult Validate(
         byte[] signedXml,
-        IEnumerable<X509Certificate2>? trustAnchors = null)
+        IEnumerable<X509Certificate2>? trustAnchors = null,
+        byte[]? originalData = null)
     {
         ArgumentNullException.ThrowIfNull(signedXml);
         var errors = new List<string>();
@@ -108,7 +109,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         // The enveloped transform should remove Signature elements from the node set
         // but doesn't in current .NET. At signing time, tempSig was in the document.
         // We rebuild the signing-time document structure for CheckSignature to work.
-        bool sigValid = VerifyWithSignedXml(doc, sigElement, ns, errors);
+        bool sigValid = VerifyWithSignedXml(doc, sigElement, ns, errors, originalData);
 
         if (!sigValid)
         {
@@ -261,6 +262,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
             return chainValid;
         }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
         {
             errors.Add($"Certificate chain validation threw: {ex.Message}");
@@ -272,7 +274,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlDocument doc,
         XmlElement sigElement,
         XmlNamespaceManager ns,
-        List<string> errors)
+        List<string> errors,
+        byte[]? originalData = null)
     {
         try
         {
@@ -334,6 +337,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             {
                 rawCert = DecodeBase64(certEl);
             }
+            // S2221: intentional -- validation pipeline converts exceptions to error messages
             catch (Exception ex)
             {
                 errors.Add($"Failed to parse certificate: {ex.Message}");
@@ -368,8 +372,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             }
 
             // Step 2: Verify reference digests
-            return VerifyReferenceDigests(doc, sigElement, signedInfoEl, ns, errors);
+            return VerifyReferenceDigests(doc, sigElement, signedInfoEl, ns, errors, originalData);
         }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
         {
             errors.Add($"XMLDSig verification threw: {ex.Message}");
@@ -382,7 +387,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlElement sigElement,
         XmlElement signedInfoEl,
         XmlNamespaceManager ns,
-        List<string> errors)
+        List<string> errors,
+        byte[]? originalData = null)
     {
         bool allValid = true;
         var refNodes = signedInfoEl.SelectNodes("ds:Reference", ns);
@@ -413,9 +419,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             {
                 hashAlg = XmlDSigUrls.GetHashAlgorithmFromUri(digestMethodUri);
             }
-            catch (Exception)
+            // S2221: intentional -- validation pipeline converts exceptions to error messages
+            catch (Exception ex)
             {
-                errors.Add($"Unsupported digest method '{digestMethodUri}' in reference URI='{uri}'.");
+                errors.Add($"Unsupported digest method '{digestMethodUri}' in reference URI='{uri}': {ex.Message}");
                 allValid = false;
                 continue;
             }
@@ -426,9 +433,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             {
                 expectedDigest = Convert.FromBase64String(expectedDigestBase64);
             }
-            catch (Exception)
+            // S2221: intentional -- validation pipeline converts exceptions to error messages
+            catch (Exception ex)
             {
-                errors.Add($"Invalid DigestValue in reference URI='{uri}'.");
+                errors.Add($"Invalid DigestValue in reference URI='{uri}': {ex.Message}");
                 allValid = false;
                 continue;
             }
@@ -436,8 +444,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             byte[] actualDigest;
             try
             {
-                actualDigest = ComputeReferenceDigest(doc, sigElement, refEl, hashAlg, ns);
+                actualDigest = ComputeReferenceDigest(doc, sigElement, refEl, hashAlg, ns, originalData);
             }
+            // S2221: intentional -- validation pipeline converts exceptions to error messages
             catch (Exception ex)
             {
                 errors.Add($"Failed to compute digest for '{uri}': {ex.Message}");
@@ -460,7 +469,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlElement sigElement,
         XmlElement refEl,
         HashAlgorithmName hashAlg,
-        XmlNamespaceManager ns)
+        XmlNamespaceManager ns,
+        byte[]? originalData = null)
     {
         string uri = refEl.GetAttribute("URI") ?? string.Empty;
 
@@ -476,7 +486,43 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             return ComputeFragmentDigest(doc, id, hashAlg);
         }
 
-        throw new NotSupportedException($"Reference URI scheme not supported: '{uri}'.");
+        if (originalData is not null && originalData.Length > 0)
+        {
+            return XmlCompatibleHashData(originalData, refEl, ns, hashAlg);
+        }
+
+        throw new NotSupportedException(
+            $"Reference URI scheme not supported: '{uri}'. Provide original data via the originalData parameter for Detached form validation.");
+    }
+
+    private static byte[] XmlCompatibleHashData(
+        byte[] data,
+        XmlElement refEl,
+        XmlNamespaceManager ns,
+        HashAlgorithmName hashAlg)
+    {
+        bool hasExcC14N = false;
+        var transforms = refEl.SelectNodes("ds:Transforms/ds:Transform", ns);
+        if (transforms is not null)
+        {
+            foreach (XmlElement t in transforms)
+            {
+                if (t.GetAttribute("Algorithm") == XmlDSigUrls.ExcC14N)
+                {
+                    hasExcC14N = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasExcC14N)
+        {
+            var dataDoc = new XmlDocument { PreserveWhitespace = true };
+            dataDoc.Load(new MemoryStream(data));
+            return CryptoUtility.ComputeHash(CanonicalizeDocument(dataDoc), hashAlg);
+        }
+
+        return CryptoUtility.ComputeHash(data, hashAlg);
     }
 
     private static bool HasEnvelopedTransform(XmlElement refEl, XmlNamespaceManager ns)
@@ -626,6 +672,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 #pragma warning restore CA2000
 #endif
                                     }
+                                    // S2221: intentional -- validation pipeline converts exceptions to error messages
                                     catch (Exception ex)
                                     {
                                         warnings.Add($"Failed to load certificate from SigningCertificateV2: {ex.Message}");
@@ -694,6 +741,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             return new X509Certificate2(rawCert);
 #pragma warning restore SYSLIB0057
         }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
         {
             warnings.Add($"Failed to extract signer certificate from KeyInfo: {ex.Message}");
@@ -736,6 +784,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         {
             return XmlDSigUrls.GetHashAlgorithmFromUri(alg);
         }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception)
         {
             return HashAlgorithmName.SHA256;
@@ -772,9 +821,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         {
             timestampToken = DecodeBase64(encTs);
         }
-        catch (Exception)
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
+        catch (Exception ex)
         {
-            warnings.Add("EncapsulatedTimeStamp contains invalid base64.");
+            warnings.Add($"EncapsulatedTimeStamp contains invalid base64: {ex.Message}");
             return false;
         }
 
@@ -866,9 +916,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         {
             timestampToken = DecodeBase64(encTs);
         }
-        catch (Exception)
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
+        catch (Exception ex)
         {
-            warnings.Add("ArchiveTimeStamp EncapsulatedTimeStamp contains invalid base64.");
+            warnings.Add($"ArchiveTimeStamp EncapsulatedTimeStamp contains invalid base64: {ex.Message}");
             return false;
         }
 
@@ -977,9 +1028,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                         using var _ = new X509Certificate2(rawData);
 #endif
                     }
-                    catch (Exception)
+                    // S2221: intentional -- validation pipeline converts exceptions to error messages
+                    catch (Exception ex)
                     {
-                        warnings.Add("CertificateValues contains invalid X.509 certificate data.");
+                        warnings.Add($"CertificateValues contains invalid X.509 certificate data: {ex.Message}");
                         return false;
                     }
                 }
@@ -989,6 +1041,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                     warnings.Add("CertificateValues does not include the signer certificate.");
                 }
             }
+            // S2221: intentional -- validation pipeline converts exceptions to error messages
             catch (Exception ex)
             {
                 warnings.Add($"Failed to validate CertificateValues: {ex.Message}");
@@ -1016,9 +1069,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                                 ocspData, System.Formats.Asn1.AsnEncodingRules.DER);
                             reader.ReadSequence(); // OCSP response is a SEQUENCE
                         }
-                        catch (Exception)
+                        // S2221: intentional -- validation pipeline converts exceptions to error messages
+                        catch (Exception ex)
                         {
-                            warnings.Add("EncapsulatedOCSPValue contains invalid data.");
+                            warnings.Add($"EncapsulatedOCSPValue contains invalid data: {ex.Message}");
                             revValuesValid = false;
                         }
                     }
@@ -1038,14 +1092,16 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                             var reader = new System.Formats.Asn1.AsnReader(crlData, System.Formats.Asn1.AsnEncodingRules.DER);
                             reader.ReadSequence();
                         }
-                        catch (Exception)
+                        // S2221: intentional -- validation pipeline converts exceptions to error messages
+                        catch (Exception ex)
                         {
-                            warnings.Add("EncapsulatedCRLValue contains invalid data.");
+                            warnings.Add($"EncapsulatedCRLValue contains invalid data: {ex.Message}");
                             revValuesValid = false;
                         }
                     }
                 }
             }
+            // S2221: intentional -- validation pipeline converts exceptions to error messages
             catch (Exception ex)
             {
                 warnings.Add($"Failed to validate RevocationValues: {ex.Message}");

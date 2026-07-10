@@ -29,6 +29,9 @@ public sealed class CrlClient : ICrlClient
     /// <inheritdoc />
     public async Task<bool> CheckCrlAsync(X509Certificate2 cert, string crlUrl, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(cert);
+        ArgumentException.ThrowIfNullOrWhiteSpace(crlUrl);
+
         _logger.CrlDownloading(crlUrl);
         var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, ct: ct).ConfigureAwait(false)
             ?? throw new HttpRequestException($"CRL download failed after retries: {crlUrl}");

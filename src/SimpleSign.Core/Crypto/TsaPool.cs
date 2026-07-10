@@ -62,6 +62,8 @@ public sealed class TsaPool
         HttpClient httpClient,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(httpClient);
+
         var startIndex = Volatile.Read(ref _primaryIndex);
         Exception? lastException = null;
 

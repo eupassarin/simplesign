@@ -62,6 +62,9 @@ public sealed class OcspClient : IOcspClient
         string ocspUrl,
         CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(cert);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ocspUrl);
+
         byte[] ocspRequest = BuildOcspRequest(cert, issuerCert);
         using var content = new ByteArrayContent(ocspRequest);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/ocsp-request");

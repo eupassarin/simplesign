@@ -372,7 +372,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
         int dssObjNum = nextObj;
         int catalogObjNum = FindRootObjectNumber(signedPdf);
 
-        var result = new MemoryStream();
+        using var result = new MemoryStream();
         result.Write(signedPdf);
         IncrementalUpdateUtility.EnsureTrailingEol(result);
 

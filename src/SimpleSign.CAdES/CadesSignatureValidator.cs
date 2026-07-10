@@ -99,6 +99,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         {
             cmsData = _cmsParser.Parse(cmsBytes, _logger);
         }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
         {
             errors.Add($"Failed to parse CMS: {ex.Message}");
@@ -240,6 +241,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
             return built;
         }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
         {
             errors.Add($"Chain validation error: {ex.Message}");
@@ -322,6 +324,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
                 warnings.Add("CAdES-B-LT: CertificateValues does not include signer certificate.");
             }
         }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
         {
             warnings.Add($"CAdES-B-LT: Failed to validate CertificateValues: {ex.Message}");
@@ -363,6 +366,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             warnings.Add("CAdES-B-LTA: Archive timestamp present but cryptographic validation requires TSA trust configuration.");
             return true;
         }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
         {
             warnings.Add($"CAdES-B-LTA: Failed to validate archive timestamp: {ex.Message}");

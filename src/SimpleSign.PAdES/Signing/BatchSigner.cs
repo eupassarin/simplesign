@@ -92,6 +92,9 @@ public sealed class BatchSigner : IAsyncDisposable
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task SignAsync(Stream pdfStream, Stream outputStream, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(pdfStream);
+        ArgumentNullException.ThrowIfNull(outputStream);
+
         var sw = Stopwatch.StartNew();
         try
         {

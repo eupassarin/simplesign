@@ -338,12 +338,39 @@ public sealed class PdfSignatureWriter
             throw new ArgumentException($"CMS bytes ({cmsBytes.Length}) exceed reserved space ({prepareResult.ContentsReservedBytes}).", nameof(cmsBytes));
         }
 
-        string hexSignature = Convert.ToHexString(cmsBytes).PadRight(prepareResult.ContentsReservedBytes * 2, '0');
         outputStream.Seek(prepareResult.ContentsHexOffset, SeekOrigin.Begin);
-        await outputStream.WriteAsync(Encoding.Latin1.GetBytes(hexSignature), cancellationToken).ConfigureAwait(false);
+        WriteHexPadded(outputStream, cmsBytes, prepareResult.ContentsReservedBytes);
+        await outputStream.FlushAsync(cancellationToken).ConfigureAwait(false);
         outputStream.Seek(0L, SeekOrigin.End);
-        (logger ?? NullLogger.Instance).PdfFinalized(hexSignature.Length, prepareResult.ContentsReservedBytes * 2);
+        (logger ?? NullLogger.Instance).PdfFinalized(cmsBytes.Length * 2, prepareResult.ContentsReservedBytes * 2);
     }
+
+    private static void WriteHexPadded(Stream stream, byte[] data, int reservedBytes)
+    {
+        int totalHexLen = reservedBytes * 2;
+        byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(totalHexLen);
+        try
+        {
+            for (int i = 0; i < data.Length; i++)
+            {
+                buffer[i * 2] = HexChar(data[i] >> 4);
+                buffer[(i * 2) + 1] = HexChar(data[i] & 0xF);
+            }
+
+            for (int i = data.Length * 2; i < totalHexLen; i++)
+            {
+                buffer[i] = (byte)'0';
+            }
+
+            stream.Write(buffer, 0, totalHexLen);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static byte HexChar(int value) => (byte)(value < 10 ? '0' + value : 'A' + (value - 10));
 
     // ── Private: I/O helpers ─────────────────────────────────────────────────
 
