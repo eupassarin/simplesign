@@ -1,8 +1,13 @@
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.DependencyInjection;
+using SimpleSign.Brasil;
+using SimpleSign.CAdES;
 using SimpleSign.Core.Validation;
+using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
+using SimpleSign.XAdES;
 using Shouldly;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -30,12 +35,24 @@ public sealed class CommandPipelineTests : IDisposable
         }
     }
 
+    private static CommandApp CreateConfiguredApp()
+    {
+        var services = new ServiceCollection();
+        services.AddSimpleSign();
+        services.AddSimpleSignBrasil();
+        services.AddSimpleSignCades();
+        services.AddSimpleSignXades();
+        var registry = new SimpleSignServiceRegistry(services);
+        var app = new CommandApp(registry);
+        Program.ConfigureApp(app);
+        return app;
+    }
+
     [Fact]
     public async Task Version_ReturnsZero()
     {
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, ["version"]);
         result.ShouldBe(0);
     }
@@ -47,8 +64,7 @@ public sealed class CommandPipelineTests : IDisposable
         File.WriteAllBytes(pdfPath, CreateMinimalPdf());
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, ["extract", pdfPath]);
 
         result.ShouldBe(0);
@@ -70,8 +86,7 @@ public sealed class CommandPipelineTests : IDisposable
         var outputPath = Path.Combine(_tempDir, "signed.pdf");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "sign", pdfPath,
             "--cert", certPath,
@@ -100,8 +115,7 @@ public sealed class CommandPipelineTests : IDisposable
 
         var signedPath = Path.Combine(_tempDir, "signed.pdf");
 
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
 
         using (new ConsoleCapture())
         {
@@ -127,8 +141,7 @@ public sealed class CommandPipelineTests : IDisposable
         File.WriteAllBytes(pdfPath, CreateMinimalPdf());
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, ["sign", pdfPath]);
 
         result.ShouldNotBe(0);
@@ -147,8 +160,7 @@ public sealed class CommandPipelineTests : IDisposable
         }
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "sign", pdfPath,
             "--cert", certPath,
@@ -172,8 +184,7 @@ public sealed class CommandPipelineTests : IDisposable
         }
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "sign", pdfPath,
             "--cert", certPath,
@@ -197,8 +208,7 @@ public sealed class CommandPipelineTests : IDisposable
         }
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "sign", pdfPath,
             "--cert", certPath,
@@ -222,8 +232,7 @@ public sealed class CommandPipelineTests : IDisposable
         }
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "sign", pdfPath,
             "--cert", certPath,
@@ -249,8 +258,7 @@ public sealed class CommandPipelineTests : IDisposable
         var outputPath = Path.Combine(_tempDir, "signed.pdf");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var signResult = await Program.RunWithAsync(app, [
             "sign", pdfPath,
             "--cert", certPath,
@@ -274,8 +282,7 @@ public sealed class CommandPipelineTests : IDisposable
         File.WriteAllBytes(pdfPath, CreateMinimalPdf());
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, ["validate", pdfPath]);
 
         result.ShouldBe(0);
@@ -293,8 +300,7 @@ public sealed class CommandPipelineTests : IDisposable
 
         var signedPath = Path.Combine(_tempDir, "signed.pdf");
 
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
 
         using (new ConsoleCapture())
         {
@@ -327,8 +333,7 @@ public sealed class CommandPipelineTests : IDisposable
         var missingPath = Path.Combine(_tempDir, "nonexistent.pdf");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, ["validate", missingPath]);
 
         result.ShouldNotBe(0);

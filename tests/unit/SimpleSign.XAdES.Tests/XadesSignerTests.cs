@@ -860,10 +860,10 @@ public sealed class XadesSignerTests
     }
 
     [Fact]
-    public async Task Builder_WithFormDetached_ThrowsNotSupported()
+    public async Task Builder_WithFormDetached_WithoutDataUri_Throws()
     {
         string xml = "<?xml version=\"1.0\"?><doc>detached</doc>";
-        await Should.ThrowAsync<NotSupportedException>(() =>
+        await Should.ThrowAsync<ArgumentException>(() =>
             XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
                 .WithCertificate(s_cert)
                 .WithForm(XadesForm.Detached)
@@ -871,14 +871,48 @@ public sealed class XadesSignerTests
     }
 
     [Fact]
-    public async Task Builder_WithFormEnveloping_ThrowsNotSupported()
+    public async Task Builder_WithFormDetached_ProducesValidSignature()
     {
-        string xml = "<?xml version=\"1.0\"?><doc>enveloping</doc>";
-        await Should.ThrowAsync<NotSupportedException>(() =>
-            XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
-                .WithCertificate(s_cert)
-                .WithForm(XadesForm.Enveloping)
-                .SignAsync());
+        string xml = "<?xml version=\"1.0\"?><root><data>detached content</data></root>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithForm(XadesForm.Detached)
+            .WithDataUri("document.xml")
+            .SignAsync();
+
+        signed.ShouldNotBeNull();
+        signed.Length.ShouldBeGreaterThan(0);
+
+        var validator = new XadesSignatureValidator();
+        var result = validator.Validate(signed, originalData: xmlBytes, trustAnchors: [s_cert]);
+
+        result.IsSignatureValid.ShouldBeTrue();
+        result.IsIntegrityValid.ShouldBeTrue();
+        result.Errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Builder_WithFormEnveloping_ProducesValidSignature()
+    {
+        string xml = "<?xml version=\"1.0\"?><root><data>enveloping content</data></root>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithForm(XadesForm.Enveloping)
+            .SignAsync();
+
+        signed.ShouldNotBeNull();
+        signed.Length.ShouldBeGreaterThan(0);
+
+        var validator = new XadesSignatureValidator();
+        var result = validator.Validate(signed, trustAnchors: [s_cert]);
+
+        result.IsSignatureValid.ShouldBeTrue();
+        result.IsIntegrityValid.ShouldBeTrue();
+        result.Errors.ShouldBeEmpty();
     }
 
     [Fact]
@@ -1195,6 +1229,131 @@ public sealed class XadesSignerTests
         var result = new XadesSignatureValidator().Validate(System.Text.Encoding.UTF8.GetBytes(xml));
         Assert.Contains(result.Warnings, w => w.Contains("no XAdES") || w.Contains("SignedProperties"));
         Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public async Task SignAsync_DetachedForm_ProducesValidSignature()
+    {
+        string xml = "<?xml version=\"1.0\"?><doc><item>data</item></doc>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert, new XadesSigningOptions
+        {
+            Form = XadesForm.Detached,
+            DataUri = "document.xml"
+        });
+
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert], originalData: xmlBytes);
+        result.IsSignatureValid.ShouldBeTrue();
+        result.Errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SignAsync_EnvelopingForm_ProducesValidSignature()
+    {
+        string xml = "<?xml version=\"1.0\"?><doc><item>data</item></doc>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert, new XadesSigningOptions
+        {
+            Form = XadesForm.Enveloping
+        });
+
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert]);
+        result.IsSignatureValid.ShouldBeTrue();
+        result.Errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Validate_DetachedForm_WithoutOriginalData_Fails()
+    {
+        string xml = "<?xml version=\"1.0\"?><doc><item>data</item></doc>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert, new XadesSigningOptions
+        {
+            Form = XadesForm.Detached,
+            DataUri = "document.xml"
+        });
+
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert]);
+        result.IsSignatureValid.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task SignAsync_DetachedForm_WithEcdsa_ProducesValidSignature()
+    {
+        string xml = "<?xml version=\"1.0\"?><doc><item>ecdsa detached</item></doc>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_ecdsaCert, new XadesSigningOptions
+        {
+            Form = XadesForm.Detached,
+            DataUri = "data.xml"
+        });
+
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_ecdsaCert], originalData: xmlBytes);
+        result.IsSignatureValid.ShouldBeTrue();
+        result.Errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SignAsync_EnvelopingForm_WithEcdsa_ProducesValidSignature()
+    {
+        string xml = "<?xml version=\"1.0\"?><doc><item>ecdsa enveloping</item></doc>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_ecdsaCert, new XadesSigningOptions
+        {
+            Form = XadesForm.Enveloping
+        });
+
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_ecdsaCert]);
+        result.IsSignatureValid.ShouldBeTrue();
+        result.Errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SignAsync_DetachedForm_ExternalSigner_ProducesValidSignature()
+    {
+        string xml = "<?xml version=\"1.0\"?><doc><item>ext detached</item></doc>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithForm(XadesForm.Detached)
+            .WithDataUri("file.xml")
+            .WithExternalSigner(s_cert, async data =>
+            {
+                using RSA rsa = s_cert.GetRSAPrivateKey()!;
+                return rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            }, "1.2.840.113549.1.1.11")
+            .SignAsync();
+
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert], originalData: xmlBytes);
+        result.IsSignatureValid.ShouldBeTrue();
+        result.Errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SignAsync_EnvelopingForm_ExternalSigner_ProducesValidSignature()
+    {
+        string xml = "<?xml version=\"1.0\"?><doc><item>ext enveloping</item></doc>";
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithForm(XadesForm.Enveloping)
+            .WithExternalSigner(s_cert, async data =>
+            {
+                using RSA rsa = s_cert.GetRSAPrivateKey()!;
+                return rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            }, "1.2.840.113549.1.1.11")
+            .SignAsync();
+
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert]);
+        result.IsSignatureValid.ShouldBeTrue();
+        result.Errors.ShouldBeEmpty();
     }
 
     private static System.Xml.XmlElement EnsureTestUnsignedSignatureProperties(

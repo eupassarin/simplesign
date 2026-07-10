@@ -1,5 +1,10 @@
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.DependencyInjection;
+using SimpleSign.Brasil;
+using SimpleSign.CAdES;
+using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.TestHelpers;
+using SimpleSign.XAdES;
 using Shouldly;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -27,6 +32,19 @@ public sealed class XadesCommandPipelineTests : IDisposable
         }
     }
 
+    private static CommandApp CreateConfiguredApp()
+    {
+        var services = new ServiceCollection();
+        services.AddSimpleSign();
+        services.AddSimpleSignBrasil();
+        services.AddSimpleSignCades();
+        services.AddSimpleSignXades();
+        var registry = new SimpleSignServiceRegistry(services);
+        var app = new CommandApp(registry);
+        Program.ConfigureApp(app);
+        return app;
+    }
+
     [Fact]
     public async Task Sign_WithSelfSignedCert_CreatesOutputFile()
     {
@@ -42,8 +60,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         var outputPath = Path.Combine(_tempDir, "signed.xml");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "sign", xmlPath,
             "--cert", certPath,
@@ -70,8 +87,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         }
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "sign", xmlPath,
             "--cert", certPath,
@@ -95,8 +111,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         }
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "sign", xmlPath,
             "--cert", certPath,
@@ -120,8 +135,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         }
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "sign", xmlPath,
             "--cert", certPath,
@@ -138,8 +152,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         var missingPath = Path.Combine(_tempDir, "nonexistent.xml");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "sign", missingPath
         ]);
@@ -163,8 +176,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
 
         var signedPath = Path.Combine(_tempDir, "signed.xml");
 
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
 
         // Sign
         using (new ConsoleCapture())
@@ -203,8 +215,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         var outputPath = Path.Combine(_tempDir, "signed.xml");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "sign", xmlPath,
             "--cert", certPath,
@@ -232,8 +243,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         var outputPath = Path.Combine(_tempDir, "signed.xml");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "sign", xmlPath,
             "--cert", certPath,
@@ -260,8 +270,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         var outputPath = Path.Combine(_tempDir, "signed.xml");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "sign", xmlPath,
             "--cert", certPath,
@@ -279,8 +288,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         var missingPath = Path.Combine(_tempDir, "nonexistent.xml");
 
         using var capture = new ConsoleCapture();
-        var app = new CommandApp();
-        Program.ConfigureApp(app);
+        var app = CreateConfiguredApp();
         var result = await Program.RunWithAsync(app, [
             "xades", "validate", missingPath
         ]);
@@ -304,8 +312,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
             var outputPath = Path.Combine(_tempDir, $"signed-{alias}.xml");
 
             using var capture = new ConsoleCapture();
-            var app = new CommandApp();
-            Program.ConfigureApp(app);
+            var app = CreateConfiguredApp();
             var result = await Program.RunWithAsync(app, [
                 "xades", "sign", xmlPath,
                 "--cert", certPath,
@@ -317,6 +324,67 @@ public sealed class XadesCommandPipelineTests : IDisposable
             result.ShouldBe(0, $"Level alias '{alias}' should succeed");
             File.Exists(outputPath).ShouldBeTrue($"Output for '{alias}' should exist");
         }
+    }
+
+    [Fact]
+    public async Task Sign_WithDetachedForm_CreatesOutputFile()
+    {
+        var xmlPath = Path.Combine(_tempDir, "input.xml");
+        File.WriteAllText(xmlPath, "<?xml version=\"1.0\"?><doc>detached</doc>");
+
+        var certPath = Path.Combine(_tempDir, "cert.pfx");
+        using (var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Detached CLI, O=Tests"))
+        {
+            File.WriteAllBytes(certPath, cert.Export(X509ContentType.Pfx, "test"));
+        }
+
+        var outputPath = Path.Combine(_tempDir, "signed.xml");
+
+        using var capture = new ConsoleCapture();
+        var app = CreateConfiguredApp();
+        var result = await Program.RunWithAsync(app, [
+            "xades", "sign", xmlPath,
+            "--cert", certPath,
+            "--password", "test",
+            "--output", outputPath,
+            "--form", "detached",
+            "--data-uri", "data.xml"
+        ]);
+
+        result.ShouldBe(0);
+        File.Exists(outputPath).ShouldBeTrue();
+        var bytes = await File.ReadAllBytesAsync(outputPath);
+        bytes.Length.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Sign_WithEnvelopingForm_CreatesOutputFile()
+    {
+        var xmlPath = Path.Combine(_tempDir, "input.xml");
+        File.WriteAllText(xmlPath, "<?xml version=\"1.0\"?><doc>enveloping</doc>");
+
+        var certPath = Path.Combine(_tempDir, "cert.pfx");
+        using (var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Enveloping CLI, O=Tests"))
+        {
+            File.WriteAllBytes(certPath, cert.Export(X509ContentType.Pfx, "test"));
+        }
+
+        var outputPath = Path.Combine(_tempDir, "signed.xml");
+
+        using var capture = new ConsoleCapture();
+        var app = CreateConfiguredApp();
+        var result = await Program.RunWithAsync(app, [
+            "xades", "sign", xmlPath,
+            "--cert", certPath,
+            "--password", "test",
+            "--output", outputPath,
+            "--form", "enveloping"
+        ]);
+
+        result.ShouldBe(0);
+        File.Exists(outputPath).ShouldBeTrue();
+        var bytes = await File.ReadAllBytesAsync(outputPath);
+        bytes.Length.ShouldBeGreaterThan(0);
     }
 }
 

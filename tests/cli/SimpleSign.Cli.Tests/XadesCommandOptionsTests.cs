@@ -86,6 +86,50 @@ public sealed class XadesCommandOptionsTests
     }
 
     [Fact]
+    public void ValidateCommand_AcceptsDetachedWithDataUri()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "<doc/>");
+            var settings = new XadesSignCommand.Settings
+            {
+                InputPath = path,
+                Form = "detached",
+                DataUri = "doc.xml"
+            };
+            var result = settings.Validate();
+            result.Successful.ShouldBeTrue();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ValidateCommand_RejectsDetachedWithoutDataUri()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "<doc/>");
+            var settings = new XadesSignCommand.Settings
+            {
+                InputPath = path,
+                Form = "detached"
+            };
+            var result = settings.Validate();
+            result.Successful.ShouldBeFalse();
+            result.Message.ShouldBe("--data-uri is required when using --form detached");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void ValidateCommand_RejectsMissingCertFile()
     {
         var path = Path.GetTempFileName();

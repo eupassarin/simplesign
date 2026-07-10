@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SharpFuzz;
+using SimpleSign.CAdES;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Inspection;
 using SimpleSign.Core.Revocation;
@@ -16,7 +17,7 @@ namespace SimpleSign.Fuzz;
 /// and ensures the parser doesn't crash, hang, or throw uncaught exceptions outside the
 /// expected exception types.
 ///
-/// Targets: dss, timestamp, ocsp, pdf, cms, validator, xref
+/// Targets: dss, timestamp, ocsp, pdf, cms, validator, xref, xades-sign, xades-validate, cades-sign
 /// </summary>
 internal static class Program
 {
@@ -27,7 +28,7 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("Usage: dotnet run -c Release -- <dss|timestamp|ocsp|pdf|cms|validator|xref|xades-sign|xades-validate>");
+            Console.Error.WriteLine("Usage: dotnet run -c Release -- <dss|timestamp|ocsp|pdf|cms|validator|xref|xades-sign|xades-validate|cades-sign>");
             return 1;
         }
 
@@ -42,6 +43,7 @@ internal static class Program
             "xref" => FuzzXrefParser,
             "xades-sign" => FuzzXadesSign,
             "xades-validate" => FuzzXadesValidate,
+            "cades-sign" => FuzzCadesSign,
             _ => throw new ArgumentException($"Unknown target: {args[0]}")
         };
 
@@ -183,6 +185,17 @@ internal static class Program
         {
             var validator = new XadesSignatureValidator();
             _ = validator.Validate(data);
+        }
+        catch (Exception ex) when (IsExpectedException(ex)) { }
+    }
+
+    /// <summary>Fuzz CAdES signing with random data input.</summary>
+    private static void FuzzCadesSign(byte[] data)
+    {
+        try
+        {
+            _ = CadesSigner.SignAsync(data, FuzzSignerCert)
+                .GetAwaiter().GetResult();
         }
         catch (Exception ex) when (IsExpectedException(ex)) { }
     }

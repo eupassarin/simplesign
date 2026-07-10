@@ -18,6 +18,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SimpleSign.Core\SimpleSign.Core.csproj" />
     <ProjectReference Include="..\..\src\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\src\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
+    <ProjectReference Include="..\..\src\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
     <ProjectReference Include="..\..\tests\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>
 
