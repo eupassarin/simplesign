@@ -5,6 +5,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Show version information.</summary>
 [Description("Show version information")]
 internal sealed class VersionCommand : Command<CommonSettings>
 {

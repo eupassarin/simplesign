@@ -15,6 +15,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Validate PDF signatures.</summary>
 [Description("Validate PDF signatures")]
 internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 {
@@ -53,20 +54,25 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         _trustAnchorProviders = trustAnchorProviders;
     }
 
+    /// <summary>Validate command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Input PDF file to validate.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input PDF file to validate")]
         public string InputPath { get; init; } = null!;
 
+        /// <summary>Skip CRL/OCSP revocation checks.</summary>
         [CommandOption("--no-revocation")]
         [Description("Skip CRL/OCSP revocation checks")]
         public bool NoRevocation { get; init; }
 
+        /// <summary>Output as JSON (machine-readable).</summary>
         [CommandOption("--json")]
         [Description("Output as JSON (machine-readable)")]
         public bool Json { get; init; }
 
+        /// <summary>One-line summary per signature instead of full tree.</summary>
         [CommandOption("--simple")]
         [Description("One-line summary per signature instead of full tree")]
         public bool Simple { get; init; }

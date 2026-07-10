@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - UNRELEASED
+
+### Added
+
+- **CAdES-Enveloped (.p7m)** — `CadesContentType` enum (`Detached`, `Enveloped`) with `WithContentType()` on the builder. CLISupport via `--content-type detached|enveloped`. When Enveloped, the original data is embedded as `eContent` in the CMS SignedData.
+- **JSON output for CAdES/XAdES validation** — `--json` flag on `cades validate` and `xades validate` commands, using source-generated JSON serialization (AOT-safe).
+- **CAdES signing fuzz target** — new `cades-sign` fuzz target in the SharpFuzz harness (10 total targets).
+- **CAdES validator tests** — 10 new tests in `CadesSignatureValidatorTests.cs` covering detached, enveloped, tampered, chain validation, and level detection.
+- **XAdES validator tests** — 10 new tests in `XadesSignatureValidatorTests.cs` covering enveloped, detached, enveloping forms with chain, integrity, and level validation.
+- **CAdES benchmarks** — 6 new benchmarks in `CadesBenchmarks.cs` (signing detached/enveloped at 1KB/100KB + validation).
+- **XAdES benchmarks** — 6 new benchmarks in `XadesBenchmarks.cs` (signing all 3 forms + validation).
+- **CLI stdin/pipe support** — all sign and validate commands accept `-` as input path to read from stdin.
+- **`XadesSignerBuilder.WithOperationId()`** — added for consistency with CAdES and PAdES builders.
+
+### Changed
+
+- **README** — updated CAdES section to mention enveloped mode (.p7m); added enveloped example and CLI `--content-type` example.
+
+### Improved
+
+- **XML documentation** — added `/// <summary>` docs to all CLI command classes and settings properties (128 members), PdfKeys constants (16), and Brasil extension providers (14). XML doc coverage: 76% → 95%.
+- **Error resilience** — added `ex.Message` to silent catch blocks in XAdES validator; added S2221 justification comments to all `catch(Exception)` in CAdES and XAdES validators.
+- **Performance** — replaced `Convert.ToHexString` + `Encoding.Latin1.GetBytes` double allocation in `PdfSignatureWriter.FinalizeAsync` with span-based hex output using `ArrayPool<byte>` (~64 KB saved per signature).
+- **WebHtmlToPdf sample** — restored missing Program.cs and .csproj; now a functional minimal web API.
+- **CLI archive timestamp bug** — fixed `HasValue` typo in XAdES validate output (was checking `.HasValue` twice instead of `.Value`).
+- **CLI pipeline tests** — fixed DI integration after SOLID refactoring; all 154 CLI tests pass.
+
 ## [0.7.0] - 2026-06-30
 
 ### Added

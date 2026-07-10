@@ -6,7 +6,7 @@
 
 - **PAdES B-B, B-T, B-LT, B-LTA** conformance levels
 - **CAdES B-B, B-T, B-LT, B-LTA** detached CMS signatures
-- **XAdES B-B, B-T, B-LT, B-LTA** enveloped XML signatures
+- **XAdES B-B, B-T, B-LT, B-LTA** XML signatures (enveloped, detached, enveloping)
 - **Deferred signing** — hash on server, sign on client (private key never leaves the device)
 - **PDF inspection** — extract signature metadata, certificates, timestamps
 - **Signature validation** — integrity, chain, revocation, timestamp verification
@@ -40,7 +40,7 @@ byte[] signedPdf = await SimpleSigner
 | [`SimpleSign.Pdf`](xref:SimpleSign.Pdf) | Low-level PDF manipulation and signature structures |
 | [`SimpleSign.PAdES`](xref:SimpleSign.PAdES) | PAdES signing, validation, inspection |
 | [`SimpleSign.CAdES`](xref:SimpleSign.CAdES) | CAdES detached CMS signing and validation |
-| [`SimpleSign.XAdES`](xref:SimpleSign.XAdES) | XAdES enveloped XML signing and validation |
+| [`SimpleSign.XAdES`](xref:SimpleSign.XAdES) | XAdES XML signing and validation (enveloped, detached, enveloping) |
 | [`SimpleSign.Brasil`](xref:SimpleSign.Brasil) | ICP-Brasil trust anchors and certificate utilities |
 | [`SimpleSign.HtmlToPdf`](xref:SimpleSign.HtmlToPdf) | HTML-to-PDF conversion |
 | [`SimpleSign.Cli`](https://www.nuget.org/packages/SimpleSign.Cli) | CLI tool for signing, validation, inspection |

@@ -13,6 +13,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Validate all PDF signatures in a directory.</summary>
 [Description("Validate all PDF signatures in a directory")]
 internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Settings>
 {
@@ -51,24 +52,30 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
         _trustAnchorProviders = trustAnchorProviders;
     }
 
+    /// <summary>Validate directory command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Directory containing PDF files to validate.</summary>
         [CommandArgument(0, "<directory>")]
         [Description("Directory containing PDF files to validate")]
         public string DirectoryPath { get; init; } = null!;
 
+        /// <summary>Skip CRL/OCSP revocation checks.</summary>
         [CommandOption("--no-revocation")]
         [Description("Skip CRL/OCSP revocation checks")]
         public bool NoRevocation { get; init; }
 
+        /// <summary>Maximum concurrent validations (default: 4).</summary>
         [CommandOption("--concurrency")]
         [Description("Maximum concurrent validations (default: 4)")]
         public int Concurrency { get; init; } = 4;
 
+        /// <summary>File search pattern (default: *.pdf).</summary>
         [CommandOption("--pattern")]
         [Description("File search pattern (default: *.pdf)")]
         public string Pattern { get; init; } = "*.pdf";
 
+        /// <summary>Search subdirectories recursively.</summary>
         [CommandOption("--recurse|-r")]
         [Description("Search subdirectories recursively")]
         public bool Recurse { get; init; }

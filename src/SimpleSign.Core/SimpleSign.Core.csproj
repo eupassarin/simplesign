@@ -5,6 +5,7 @@
     <RootNamespace>SimpleSign.Core</RootNamespace>
     <PackageId>SimpleSign.Core</PackageId>
     <Description>Core cryptographic primitives, certificate management, timestamping, and revocation checking for the SimpleSign digital signature framework.</Description>
+    <PackageTags>cryptography;cms;timestamp;ocsp;crl;x509;certificate;digital-signature;native-aot</PackageTags>
     <Version>0.7.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

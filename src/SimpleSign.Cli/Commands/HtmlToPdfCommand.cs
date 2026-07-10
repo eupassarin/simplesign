@@ -7,52 +7,65 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Convert an HTML file to PDF.</summary>
 [Description("Convert an HTML file to PDF")]
 internal sealed class HtmlToPdfCommand : AsyncCommand<HtmlToPdfCommand.Settings>
 {
+    /// <summary>HTML to PDF command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Input HTML file.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input HTML file")]
         public string InputPath { get; init; } = null!;
 
+        /// <summary>Output PDF file (default: input.pdf).</summary>
         [CommandOption("--output|-o <PATH>")]
         [Description("Output PDF file (default: <input>.pdf)")]
         public string? OutputPath { get; init; }
 
+        /// <summary>Page size: A4, Letter, Legal, A3 (default: A4).</summary>
         [CommandOption("--page-size|-s <SIZE>")]
         [Description("Page size: A4, Letter, Legal, A3 (default: A4)")]
         [DefaultValue("A4")]
         public string PageSizeStr { get; init; } = "A4";
 
+        /// <summary>Uniform page margin in points (default: 40).</summary>
         [CommandOption("--margin <PT>")]
         [Description("Uniform page margin in points (default: 40)")]
         public float? Margin { get; init; }
 
+        /// <summary>Top margin in points.</summary>
         [CommandOption("--margin-top <PT>")]
         [Description("Top margin in points")]
         public float? MarginTop { get; init; }
 
+        /// <summary>Right margin in points.</summary>
         [CommandOption("--margin-right <PT>")]
         [Description("Right margin in points")]
         public float? MarginRight { get; init; }
 
+        /// <summary>Bottom margin in points.</summary>
         [CommandOption("--margin-bottom <PT>")]
         [Description("Bottom margin in points")]
         public float? MarginBottom { get; init; }
 
+        /// <summary>Left margin in points.</summary>
         [CommandOption("--margin-left <PT>")]
         [Description("Left margin in points")]
         public float? MarginLeft { get; init; }
 
+        /// <summary>Additional CSS file to apply.</summary>
         [CommandOption("--css <PATH>")]
         [Description("Additional CSS file to apply")]
         public string? CssPath { get; init; }
 
+        /// <summary>PDF document title.</summary>
         [CommandOption("--title <TEXT>")]
         [Description("PDF document title")]
         public string? Title { get; init; }
 
+        /// <summary>PDF document author.</summary>
         [CommandOption("--author <TEXT>")]
         [Description("PDF document author")]
         public string? Author { get; init; }

@@ -5,11 +5,14 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Explain PDF signature terms and fields.</summary>
 [Description("Explain PDF signature terms and fields")]
 internal sealed class ExplainCommand : Command<ExplainCommand.Settings>
 {
+    /// <summary>Explain command settings.</summary>
     internal sealed class Settings : CommandSettings
     {
+        /// <summary>Term to look up (e.g., 'ByteRange', 'DSS', 'PAdES B-LTA'). Omit for full glossary.</summary>
         [CommandArgument(0, "[term]")]
         [Description("Term to look up (e.g., 'ByteRange', 'DSS', 'PAdES B-LTA'). Omit for full glossary.")]
         public string? Term { get; init; }

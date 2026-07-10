@@ -13,9 +13,10 @@
   <img src="https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4?style=flat-square&logo=dotnet" alt=".NET 8 | 10" />
   <img src="https://img.shields.io/nuget/v/SimpleSign?style=flat-square&logo=nuget" alt="NuGet" />
   <img src="https://img.shields.io/github/actions/workflow/status/eupassarin/simplesign/ci.yml?style=flat-square&logo=github" alt="CI" />
+  <a href="https://codecov.io/gh/eupassarin/SimpleSign"><img src="https://codecov.io/gh/eupassarin/SimpleSign/branch/main/graph/badge.svg" alt="codecov" /></a>
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />
   <img src="https://img.shields.io/badge/AOT-Compatible-blueviolet?style=flat-square" alt="Native AOT" />
-  <img src="https://img.shields.io/badge/Tests-1%2C695%2B-brightgreen?style=flat-square" alt="1,695+ tests" />
+  <img src="https://img.shields.io/badge/Tests-1%2C750%2B-brightgreen?style=flat-square" alt="1,750+ tests" />
   <img src="https://img.shields.io/badge/No%20Crypto%20Deps-✓-blue?style=flat-square" alt="No third-party crypto dependencies" />
 </p>
 
@@ -130,7 +131,8 @@ foreach (var r in results)
 
 ### CAdES — Standalone CMS Signatures
 
-Create and validate detached CAdES signatures (CMS/PKCS#7 SignedData) for any binary data using the fluent builder API:
+Create and validate CAdES signatures (CMS/PKCS#7 SignedData) for any binary data using the fluent builder API.
+Supports both **detached** (.p7s) and **enveloped** (.p7m) content types:
 
 ```csharp
 using SimpleSign.CAdES;
@@ -168,6 +170,14 @@ var cmsBlta = await CadesSigner
     .SignAsync();
 
 File.WriteAllBytes("document.pdf.p7s", cms);
+
+// Enveloped mode — data embedded inside the CMS (.p7m)
+var cmsEnveloped = await CadesSigner
+    .Document(data)
+    .WithCertificate(certificate)
+    .WithContentType(CadesContentType.Enveloped)
+    .SignAsync();
+File.WriteAllBytes("document.pdf.p7m", cmsEnveloped);
 ```
 
 ### Validate CAdES Signatures
@@ -230,6 +240,25 @@ var signedBlta = await XadesSigner
     .SignAsync();
 
 File.WriteAllBytes("invoice-signed.xml", signed);
+
+// Detached form (signature in separate file, data referenced by URI)
+var detached = await XadesSigner
+    .Document(xml)
+    .WithCertificate(certificate)
+    .WithForm(XadesForm.Detached)
+    .WithDataUri("invoice.xml")
+    .WithLevel(XadesLevel.Basic)
+    .SignAsync();
+File.WriteAllBytes("invoice-signed.xml", detached);
+
+// Enveloping form (data wrapped inside the signature)
+var enveloping = await XadesSigner
+    .Document(xml)
+    .WithCertificate(certificate)
+    .WithForm(XadesForm.Enveloping)
+    .WithLevel(XadesLevel.Basic)
+    .SignAsync();
+File.WriteAllBytes("invoice-signed.xml", enveloping);
 ```
 
 ### Validate XAdES Signatures
@@ -555,11 +584,40 @@ simplesign cades sign document.pdf --cert mycert.pfx \
 simplesign cades sign document.pdf --cert mycert.pfx \
     --tsa http://timestamp.digicert.com --level archive
 
-# Validate a CAdES detached signature
+# Enveloped mode — data embedded inside the CMS (.p7m)
+simplesign cades sign document.pdf --cert mycert.pfx --content-type enveloped
+
+# Validate a CAdES signature
 simplesign cades validate document.pdf.p7s --data document.pdf
 
 # Validate with custom trust anchors
 simplesign cades validate document.pdf.p7s --data document.pdf --trust root-ca.pem
+```
+
+### XAdES Signatures
+
+```bash
+# XAdES-B-B enveloped (default form)
+simplesign xades sign invoice.xml --cert mycert.pfx
+
+# XAdES-B-T detached
+simplesign xades sign data.xml --cert mycert.pfx \
+    --tsa http://timestamp.digicert.com --level timestamped \
+    --form detached --data-uri data.xml
+
+# XAdES-B-LT enveloping
+simplesign xades sign data.xml --cert mycert.pfx \
+    --tsa http://timestamp.digicert.com --level longterm \
+    --form enveloping --chain chain.pem
+
+# Validate a XAdES signature
+simplesign xades validate signed.xml
+
+# Validate detached with original data
+simplesign xades validate signed.xml --data data.xml
+
+# Validate with custom trust anchors
+simplesign xades validate signed.xml --trust root-ca.pem
 ```
 
 ### Validation Output

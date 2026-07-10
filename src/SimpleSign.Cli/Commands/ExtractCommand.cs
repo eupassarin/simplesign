@@ -6,6 +6,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Extract CMS signatures from a signed PDF.</summary>
 [Description("Extract CMS signatures from a signed PDF")]
 internal sealed class ExtractCommand : AsyncCommand<ExtractCommand.Settings>
 {
@@ -16,16 +17,20 @@ internal sealed class ExtractCommand : AsyncCommand<ExtractCommand.Settings>
         _extractor = extractor;
     }
 
+    /// <summary>Extract command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Signed PDF file.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Signed PDF file")]
         public string InputPath { get; init; } = null!;
 
+        /// <summary>Output directory (default: current directory).</summary>
         [CommandOption("--output-dir|-o <DIR>")]
         [Description("Output directory (default: current directory)")]
         public string? OutputDir { get; init; }
 
+        /// <summary>Skip saving PDF revision files.</summary>
         [CommandOption("--no-revision")]
         [Description("Skip saving PDF revision files")]
         public bool NoRevision { get; init; }

@@ -10,6 +10,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Inspect signature metadata (no validation).</summary>
 [Description("Inspect signature metadata (no validation)")]
 internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
 {
@@ -20,20 +21,25 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
         _conformanceDetector = conformanceDetector;
     }
 
+    /// <summary>Inspect command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Input PDF file to inspect.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input PDF file to inspect")]
         public string InputPath { get; init; } = null!;
 
+        /// <summary>Output as JSON (machine-readable).</summary>
         [CommandOption("--json")]
         [Description("Output as JSON (machine-readable)")]
         public bool Json { get; init; }
 
+        /// <summary>Show raw PDF object structure of signatures.</summary>
         [CommandOption("--structure|-s")]
         [Description("Show raw PDF object structure of signatures")]
         public bool Structure { get; init; }
 
+        /// <summary>Add inline explanations to the structure dump (use with --structure).</summary>
         [CommandOption("--explain")]
         [Description("Add inline explanations to the structure dump (use with --structure)")]
         public bool Explain { get; init; }

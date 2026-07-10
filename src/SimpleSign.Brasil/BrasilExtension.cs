@@ -52,8 +52,11 @@ internal sealed class IcpBrasilTrustAnchorProvider : ITrustAnchorProvider
     private readonly Lazy<IReadOnlyList<X509Certificate2>> _certs = new(
         () => IcpBrasilChainValidator.LoadBundledAcRaizCerts());
 
+    /// <inheritdoc />
     public string RegionCode => "BR";
+    /// <inheritdoc />
     public string DisplayName => "ICP-Brasil";
+    /// <inheritdoc />
     public IReadOnlyList<X509Certificate2> GetTrustAnchors() => _certs.Value;
 }
 
@@ -62,8 +65,11 @@ internal sealed class GovBrTrustAnchorProvider : ITrustAnchorProvider
     private readonly Lazy<IReadOnlyList<X509Certificate2>> _certs = new(
         () => GovBrChainValidator.LoadBundledGovBrCerts());
 
+    /// <inheritdoc />
     public string RegionCode => "BR";
+    /// <inheritdoc />
     public string DisplayName => "Gov.br";
+    /// <inheritdoc />
     public IReadOnlyList<X509Certificate2> GetTrustAnchors() => _certs.Value;
 }
 
@@ -78,11 +84,14 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
         _validator = new IcpBrasilChainValidator(httpClient, logger);
     }
 
+    /// <inheritdoc />
     public string RegionCode => "BR";
 
+    /// <inheritdoc />
     public bool CanValidate(X509Certificate2 certificate) =>
         IcpBrasilChainValidator.IsIcpBrasilCertificate(certificate);
 
+    /// <inheritdoc />
     public async Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain = null)
     {
         var result = await _validator.ValidateAsync(certificate, chain).ConfigureAwait(false);
@@ -115,11 +124,14 @@ internal sealed class GovBrChainValidationProvider : IChainValidationProvider
         _validator = new GovBrChainValidator(httpClient, logger);
     }
 
+    /// <inheritdoc />
     public string RegionCode => "BR";
 
+    /// <inheritdoc />
     public bool CanValidate(X509Certificate2 certificate) =>
         GovBrChainValidator.IsGovBrCertificate(certificate);
 
+    /// <inheritdoc />
     public async Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain = null)
     {
         var result = await _validator.ValidateAsync(certificate, chain).ConfigureAwait(false);
