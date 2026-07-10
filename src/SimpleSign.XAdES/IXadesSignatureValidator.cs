@@ -6,7 +6,11 @@ namespace SimpleSign.XAdES;
 public interface IXadesSignatureValidator
 {
     /// <summary>Validates a signed XAdES XML document against optional trust anchors.</summary>
+    /// <param name="signedXml">The signed XML document.</param>
+    /// <param name="trustAnchors">Optional trust anchor certificates for chain validation.</param>
+    /// <param name="originalData">Original data for Detached form validation. Required when the signature references external data.</param>
     XadesValidationResult Validate(
         byte[] signedXml,
-        IEnumerable<X509Certificate2>? trustAnchors = null);
+        IEnumerable<X509Certificate2>? trustAnchors = null,
+        byte[]? originalData = null);
 }

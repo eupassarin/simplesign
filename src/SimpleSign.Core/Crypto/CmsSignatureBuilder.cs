@@ -37,6 +37,7 @@ public sealed class CmsSignatureBuilder
     /// Primary use case: forcing RSASSA-PSS on an <c>rsaEncryption</c> certificate.
     /// </param>
     /// <param name="logger">Optional logger for debug diagnostics.</param>
+    /// <param name="eContent">Optional embedded content for enveloped mode (null = detached).</param>
     public static byte[] Build(
         ReadOnlySpan<byte> dataToSign,
         X509Certificate2 certificate,
@@ -46,7 +47,8 @@ public sealed class CmsSignatureBuilder
         IReadOnlyList<CmsAttribute>? extraAttributes = null,
         bool padesAttributes = true,
         string? signatureAlgorithmOid = null,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        byte[]? eContent = null)
     {
         ArgumentNullException.ThrowIfNull(certificate);
 
@@ -75,7 +77,7 @@ public sealed class CmsSignatureBuilder
 
         (logger ?? NullLogger.Instance).CmsBuildStarted(digestOid, signatureOid, certificate.Subject);
         return BuildSignedData(digestOid, signatureOid, hashAlgorithm, signedAttrs, signature, certificate, allCerts,
-            extraAttributes?.Count ?? 0, logger);
+            extraAttributes?.Count ?? 0, logger, eContent);
     }
 
     /// <summary>
@@ -103,6 +105,7 @@ public sealed class CmsSignatureBuilder
     /// without PAdES-specific attributes.
     /// </param>
     /// <param name="logger">Optional logger for debug diagnostics.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     public static async Task<byte[]> BuildAsync(
         ReadOnlyMemory<byte> dataToSign,
         X509Certificate2 certificate,
@@ -113,11 +116,13 @@ public sealed class CmsSignatureBuilder
         IReadOnlyList<X509Certificate2>? extraCertificates = null,
         IReadOnlyList<CmsAttribute>? extraAttributes = null,
         bool padesAttributes = true,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(certificate);
         ArgumentNullException.ThrowIfNull(externalSigner);
         ArgumentException.ThrowIfNullOrWhiteSpace(signatureAlgorithmOid);
+        cancellationToken.ThrowIfCancellationRequested();
 
         ValidateSignatureAlgorithmCompatibility(certificate, signatureAlgorithmOid);
 
@@ -160,6 +165,7 @@ public sealed class CmsSignatureBuilder
     /// <param name="allCerts">All certificates to embed (signer + intermediates).</param>
     /// <param name="extraAttributeCount">Count of extra signed attributes (for logging).</param>
     /// <param name="logger">Optional logger.</param>
+    /// <param name="eContent">Optional embedded content for enveloped CAdES (null = detached).</param>
     public static byte[] BuildSignedData(
         string digestOid,
         string signatureOid,
@@ -169,7 +175,8 @@ public sealed class CmsSignatureBuilder
         X509Certificate2 signerCert,
         List<X509Certificate2> allCerts,
         int extraAttributeCount = 0,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        byte[]? eContent = null)
     {
         var log = logger ?? NullLogger.Instance;
         log.CmsSignedAttributesBuilt(signedAttrs.Length, extraAttributeCount);
@@ -211,7 +218,10 @@ public sealed class CmsSignatureBuilder
                     using (writer.PushSequence())
                     {
                         writer.WriteObjectIdentifier(Oids.Data);
-                        // Detached: no embedded content
+                        if (eContent is not null)
+                        {
+                            writer.WriteOctetString(eContent);
+                        }
                     }
 
                     // certificates [0] IMPLICIT SET

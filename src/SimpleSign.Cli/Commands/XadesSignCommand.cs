@@ -11,6 +11,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Sign an XML document with XAdES (B-B, B-T, B-LT, B-LTA).</summary>
 [Description("Sign an XML document with XAdES (B-B, B-T, B-LT, B-LTA)")]
 internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
 {
@@ -21,59 +22,78 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         _certChainService = certChainService;
     }
 
+    /// <summary>XAdES sign command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>XML file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("XML file to sign")]
         public string InputPath { get; init; } = null!;
 
+        /// <summary>PKCS#12 certificate file (.pfx/.p12).</summary>
         [CommandOption("--cert|-c <PATH>")]
         [Description("PKCS#12 certificate file (.pfx/.p12)")]
         public string? CertPath { get; init; }
 
+        /// <summary>Certificate password (omit for interactive prompt).</summary>
         [CommandOption("--password|-p <PASSWORD>")]
         [Description("Certificate password (omit for interactive prompt)")]
         public string? Password { get; init; }
 
+        /// <summary>Output signed XML file (default: input.signed.xml).</summary>
         [CommandOption("--output|-o <PATH>")]
         [Description("Output signed XML file (default: <input>.signed.xml)")]
         public string? OutputPath { get; init; }
 
+        /// <summary>TSA URL for timestamp (B-T or higher).</summary>
         [CommandOption("--tsa <URL>")]
         [Description("TSA URL for timestamp (B-T or higher)")]
         public string? TsaUrl { get; init; }
 
+        /// <summary>XAdES level: basic, timestamped, longterm, archive (default: basic).</summary>
         [CommandOption("--level <LEVEL>")]
         [Description("XAdES level: basic, timestamped, longterm, archive (default: basic)")]
         public string? Level { get; init; }
 
+        /// <summary>Hash algorithm: SHA256, SHA384, SHA512 (default: SHA256).</summary>
         [CommandOption("--hash|-H <ALGO>")]
         [Description("Hash algorithm: SHA256, SHA384, SHA512 (default: SHA256)")]
         public string? HashAlgorithm { get; init; }
 
+        /// <summary>Commitment type: ProofOfOrigin, ProofOfReceipt, ProofOfDelivery, ProofOfSender, ProofOfApproval, ProofOfCreation.</summary>
         [CommandOption("--commitment <TYPE>")]
         [Description("Commitment type: ProofOfOrigin, ProofOfReceipt, ProofOfDelivery, ProofOfSender, ProofOfApproval, ProofOfCreation")]
         public string? Commitment { get; init; }
 
+        /// <summary>Signature policy OID.</summary>
         [CommandOption("--policy-oid <OID>")]
         [Description("Signature policy OID")]
         public string? PolicyOid { get; init; }
 
+        /// <summary>Signature policy URI.</summary>
         [CommandOption("--policy-uri <URI>")]
         [Description("Signature policy URI")]
         public string? PolicyUri { get; init; }
 
+        /// <summary>Claimed signer role (may be specified multiple times).</summary>
         [CommandOption("--signer-role <ROLE>")]
         [Description("Claimed signer role (may be specified multiple times)")]
         public string[]? SignerRoles { get; init; }
 
+        /// <summary>PEM/DER file with intermediate CA certificates.</summary>
         [CommandOption("--chain <PATH>")]
         [Description("PEM/DER file with intermediate CA certificates")]
         public string? ChainPath { get; init; }
 
+        /// <summary>XAdES form: enveloped, detached, enveloping (default: enveloped).</summary>
         [CommandOption("--form <FORM>")]
         [Description("XAdES form: enveloped, detached, enveloping (default: enveloped)")]
         public string? Form { get; init; }
+
+        /// <summary>Data URI for Detached form (e.g., 'document.xml'). Required when --form detached.</summary>
+        [CommandOption("--data-uri <URI>")]
+        [Description("Data URI for Detached form (e.g., 'document.xml'). Required when --form detached.")]
+        public string? DataUri { get; init; }
 
         public override ValidationResult Validate()
         {
@@ -102,6 +122,12 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
                 return ValidationResult.Error($"Invalid form: {Form}. Valid: enveloped, detached, enveloping");
             }
 
+            var parsedForm = ParseForm(Form) ?? XadesForm.Enveloped;
+            if (parsedForm == XadesForm.Detached && string.IsNullOrWhiteSpace(DataUri))
+            {
+                return ValidationResult.Error("--data-uri is required when using --form detached");
+            }
+
             return ValidationResult.Success();
         }
     }
@@ -109,7 +135,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
     protected override async Task<int> ExecuteAsync(
         CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        byte[] xmlData = await File.ReadAllBytesAsync(settings.InputPath, cancellationToken);
+        byte[] xmlData = await CommonSettings.ReadInputBytesAsync(settings.InputPath, cancellationToken);
 
         using X509Certificate2 cert = await LoadCertificateAsync(settings, cancellationToken);
 
@@ -128,6 +154,10 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         if (settings.TsaUrl is not null)
         {
             builder = builder.WithTimestamp(settings.TsaUrl);
+        }
+        if (settings.DataUri is not null)
+        {
+            builder = builder.WithDataUri(settings.DataUri);
         }
         if (commitment.HasValue)
         {

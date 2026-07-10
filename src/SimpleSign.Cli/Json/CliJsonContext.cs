@@ -11,6 +11,8 @@ namespace SimpleSign.Cli.Json;
     DefaultIgnoreCondition = JsonIgnoreCondition.Never)]
 [JsonSerializable(typeof(ValidateOutput))]
 [JsonSerializable(typeof(InspectOutput))]
+[JsonSerializable(typeof(CadesValidateOutput))]
+[JsonSerializable(typeof(XadesValidateOutput))]
 internal sealed partial class CliJsonContext : JsonSerializerContext;
 
 // ─── Validate DTOs ───────────────────────────────────────────────────
@@ -172,4 +174,47 @@ internal sealed class ManifestDto
     public string? Institution { get; init; }
     public string? Cnpj { get; init; }
     public string? Commitment { get; init; }
+}
+
+// ─── CAdES Validate DTO ───────────────────────────────────────────────
+
+internal sealed class CadesValidateOutput
+{
+    public string File { get; init; } = string.Empty;
+    public bool IsValid { get; init; }
+    public bool IsSignatureValid { get; init; }
+    public bool IsIntegrityValid { get; init; }
+    public bool IsCertificateChainValid { get; init; }
+    public bool? HasValidTimestamp { get; init; }
+    public bool? IsLtvDataValid { get; init; }
+    public bool? HasValidArchiveTimestamp { get; init; }
+    public string? Signer { get; init; }
+    public string? Issuer { get; init; }
+    public string? Serial { get; init; }
+    public string? Thumbprint { get; init; }
+    public DateTimeOffset? SigningTime { get; init; }
+    public List<string> Errors { get; init; } = [];
+    public List<string> Warnings { get; init; } = [];
+}
+
+// ─── XAdES Validate DTO ───────────────────────────────────────────────
+
+internal sealed class XadesValidateOutput
+{
+    public string File { get; init; } = string.Empty;
+    public bool IsValid { get; init; }
+    public bool IsSignatureValid { get; init; }
+    public bool IsIntegrityValid { get; init; }
+    public bool IsCertificateChainValid { get; init; }
+    public bool? HasValidSignatureTimeStamp { get; init; }
+    public bool? IsLtvDataValid { get; init; }
+    public bool? HasValidArchiveTimeStamp { get; init; }
+    public string? Signer { get; init; }
+    public string? Issuer { get; init; }
+    public string? Serial { get; init; }
+    public string? Thumbprint { get; init; }
+    public DateTimeOffset? SigningTime { get; init; }
+    public string? DetectedLevel { get; init; }
+    public List<string> Errors { get; init; } = [];
+    public List<string> Warnings { get; init; } = [];
 }

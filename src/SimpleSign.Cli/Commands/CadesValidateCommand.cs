@@ -1,12 +1,15 @@
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using SimpleSign.CAdES;
+using SimpleSign.Cli.Json;
 using SimpleSign.Core.Validation;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Validate a CAdES detached signature (CMS/PKCS#7).</summary>
 [Description("Validate a CAdES detached signature (CMS/PKCS#7)")]
 internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.Settings>
 {
@@ -17,19 +20,28 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
         _certChainService = certChainService;
     }
 
+    /// <summary>CAdES validate command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>CAdES signature file (.p7s).</summary>
         [CommandArgument(0, "<signature>")]
         [Description("CAdES signature file (.p7s)")]
         public string SignaturePath { get; init; } = null!;
 
+        /// <summary>Original data file (required for detached signatures).</summary>
         [CommandOption("--data|-d <PATH>")]
         [Description("Original data file (required for detached signatures)")]
         public string? DataPath { get; init; }
 
+        /// <summary>Trust anchor certificate(s) — PEM or DER.</summary>
         [CommandOption("--trust <PATH>")]
         [Description("Trust anchor certificate(s) — PEM or DER")]
         public string? TrustPath { get; init; }
+
+        /// <summary>Output validation result as JSON instead of a table.</summary>
+        [CommandOption("--json")]
+        [Description("Output result as JSON")]
+        public bool Json { get; init; }
 
         public override ValidationResult Validate()
         {
@@ -50,12 +62,12 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
     protected override async Task<int> ExecuteAsync(
         CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        byte[] cmsBytes = await File.ReadAllBytesAsync(settings.SignaturePath, cancellationToken);
+        byte[] cmsBytes = await CommonSettings.ReadInputBytesAsync(settings.SignaturePath, cancellationToken);
 
         byte[]? originalData = null;
         if (settings.DataPath is not null)
         {
-            originalData = await File.ReadAllBytesAsync(settings.DataPath, cancellationToken);
+            originalData = await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
         }
 
         var trustAnchors = LoadTrustAnchors(settings.TrustPath);
@@ -67,6 +79,30 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             cmsBytes,
             originalData ?? throw new InvalidOperationException("Original data file is required. Use --data <path>."),
             trustAnchors);
+
+        if (settings.Json)
+        {
+            var output = new CadesValidateOutput
+            {
+                File = settings.SignaturePath,
+                IsValid = result.IsValid,
+                IsSignatureValid = result.IsSignatureValid,
+                IsIntegrityValid = result.IsIntegrityValid,
+                IsCertificateChainValid = result.IsCertificateChainValid,
+                HasValidTimestamp = result.HasValidTimestamp,
+                IsLtvDataValid = result.IsLtvDataValid,
+                HasValidArchiveTimestamp = result.HasValidArchiveTimestamp,
+                Signer = result.SignerCertificate?.Subject,
+                Issuer = result.SignerCertificate?.Issuer,
+                Serial = result.SignerCertificate?.SerialNumber,
+                Thumbprint = result.SignerCertificate?.Thumbprint,
+                SigningTime = result.SigningTime,
+                Errors = [.. result.Errors],
+                Warnings = [.. result.Warnings],
+            };
+            Console.WriteLine(JsonSerializer.Serialize(output, CliJsonContext.Default.CadesValidateOutput));
+            return result.IsValid ? 0 : 1;
+        }
 
         var table = new Table();
         table.AddColumn("Check");

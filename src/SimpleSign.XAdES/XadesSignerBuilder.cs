@@ -28,6 +28,7 @@ public sealed class XadesSignerBuilder
     private readonly XadesLevel _level;
     private readonly XadesForm _form;
     private readonly Func<byte[], Task<byte[]>>? _externalSigner;
+    private readonly string? _dataUri;
     private readonly CommitmentType? _commitmentType;
     private readonly string? _signaturePolicyOid;
     private readonly string? _signaturePolicyUri;
@@ -63,6 +64,7 @@ public sealed class XadesSignerBuilder
         string? signatureAlgorithmOid, string? tsaUrl,
         HttpClient? tsaHttpClient, HttpClient? revocationHttpClient,
         DateTimeOffset? signingTime, XadesLevel level, XadesForm form,
+        string? dataUri,
         Func<byte[], Task<byte[]>>? externalSigner,
         CommitmentType? commitmentType, string? signaturePolicyOid,
         string? signaturePolicyUri, IReadOnlyList<string>? signerRoles,
@@ -81,6 +83,7 @@ public sealed class XadesSignerBuilder
         _signingTime = signingTime;
         _level = level;
         _form = form;
+        _dataUri = dataUri;
         _externalSigner = externalSigner;
         _commitmentType = commitmentType;
         _signaturePolicyOid = signaturePolicyOid;
@@ -102,6 +105,7 @@ public sealed class XadesSignerBuilder
         HttpClient? revocationHttpClient = null,
         DateTimeOffset? signingTime = null, XadesLevel? level = null,
         XadesForm? form = null,
+        string? dataUri = null,
         Func<byte[], Task<byte[]>>? externalSigner = null,
         CommitmentType? commitmentType = null,
         string? signaturePolicyOid = null,
@@ -118,6 +122,7 @@ public sealed class XadesSignerBuilder
             tsaUrl ?? _tsaUrl, tsaHttpClient ?? _tsaHttpClient,
             revocationHttpClient ?? _revocationHttpClient,
             signingTime ?? _signingTime, level ?? _level, form ?? _form,
+            dataUri ?? _dataUri,
             externalSigner ?? _externalSigner,
             commitmentType ?? _commitmentType,
             signaturePolicyOid ?? _signaturePolicyOid,
@@ -208,16 +213,22 @@ public sealed class XadesSignerBuilder
     /// <summary>Sets the XAdES conformance level (Basic, Timestamped, LongTerm, Archive).</summary>
     public XadesSignerBuilder WithLevel(XadesLevel level) => With(level: level);
 
-    /// <summary>Sets the XAdES signature packaging form (only Enveloped is supported).</summary>
-    public XadesSignerBuilder WithForm(XadesForm form)
+    /// <summary>Sets an operation ID for log correlation.</summary>
+    public XadesSignerBuilder WithOperationId(string operationId)
     {
-        if (form != XadesForm.Enveloped)
-        {
-            throw new NotSupportedException(
-                $"XAdES form '{form}' is not supported. Only XadesForm.Enveloped is implemented.");
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
+        return With(operationId: operationId);
+    }
 
-        return With(form: form);
+    /// <summary>Sets the XAdES signature packaging form (Enveloped, Detached, Enveloping).</summary>
+    public XadesSignerBuilder WithForm(XadesForm form) =>
+        With(form: form);
+
+    /// <summary>Sets the data URI for Detached form signatures.</summary>
+    public XadesSignerBuilder WithDataUri(string dataUri)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataUri);
+        return With(dataUri: dataUri);
     }
 
     /// <summary>Sets the explicit signing time (default: UTC now).</summary>
@@ -333,7 +344,7 @@ public sealed class XadesSignerBuilder
         byte[] signedXml = XadesSignatureBuilder.BuildSignature(
             _xmlData, certificate, hashAlg, signingTime, _extraCertificates,
             _commitmentType, _signaturePolicyOid, _signaturePolicyUri,
-            sigAlgOid, _form, _signerRoles, _dataObjectFormat, _logger);
+            sigAlgOid, _form, _signerRoles, _dataObjectFormat, _logger, _dataUri);
 
         if (_level >= XadesLevel.Timestamped && _tsaUrl is not null)
         {
@@ -367,7 +378,8 @@ public sealed class XadesSignerBuilder
             _commitmentType, _signaturePolicyOid, _signaturePolicyUri,
             sigAlgOid, _signerRoles, _dataObjectFormat,
             out string signedPropertiesId,
-            out byte[] signedInfoXml);
+            out byte[] signedInfoXml,
+            out string? dataObjectId, _dataUri);
 
         _logger.Log(LogLevel.Debug, "XAdES external signer invoked.");
         byte[] signature = await _externalSigner!(signedInfoBytes).ConfigureAwait(false);
@@ -380,7 +392,7 @@ public sealed class XadesSignerBuilder
             _xmlData, certificate, hashAlg, signingTime, _extraCertificates,
             _commitmentType, _signaturePolicyOid, _signaturePolicyUri,
             sigAlgOid, signedInfoXml, signature, signedPropertiesId,
-            _signerRoles, _dataObjectFormat);
+            _signerRoles, _dataObjectFormat, _form, _dataUri, dataObjectId);
 
         if (_level >= XadesLevel.Timestamped && _tsaUrl is not null)
         {

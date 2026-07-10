@@ -50,7 +50,8 @@ public static class CadesSigner
         var builder = Document(data, logger)
             .WithCertificate(certificate)
             .WithHashAlgorithm(options.HashAlgorithm)
-            .WithLevel(options.Level);
+            .WithLevel(options.Level)
+            .WithContentType(options.ContentType);
 
         if (options.SignatureAlgorithmOid is not null)
         {
@@ -117,7 +118,8 @@ public static class CadesSigner
         var builder = Document(data, logger)
             .WithExternalSigner(certificate, externalSigner, signatureAlgorithmOid)
             .WithHashAlgorithm(options.HashAlgorithm)
-            .WithLevel(options.Level);
+            .WithLevel(options.Level)
+            .WithContentType(options.ContentType);
 
         if (options.SigningTime.HasValue)
         {

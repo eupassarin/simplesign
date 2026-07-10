@@ -11,6 +11,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Sign a PDF document.</summary>
 [Description("Sign a PDF document")]
 internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
 {
@@ -21,180 +22,225 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         _certChainService = certChainService;
     }
 
+    /// <summary>Sign command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Input PDF file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input PDF file to sign")]
         public string InputPath { get; init; } = null!;
 
+        /// <summary>PKCS#12 certificate file (.pfx/.p12).</summary>
         [CommandOption("--cert|-c <PATH>")]
         [Description("PKCS#12 certificate file (.pfx/.p12)")]
         public string? CertPath { get; init; }
 
+        /// <summary>Certificate password.</summary>
         [CommandOption("--password|-p <PASSWORD>")]
         [Description("Certificate password")]
         public string? Password { get; init; }
 
+        /// <summary>OS certificate store name: My (default), Root, CA, TrustedPublisher. Requires --thumbprint.</summary>
         [CommandOption("--store <NAME>")]
         [Description("OS certificate store name: My (default), Root, CA, TrustedPublisher. Requires --thumbprint.")]
         public string? StoreName { get; init; }
 
+        /// <summary>OS store location: CurrentUser (default) or LocalMachine. Requires --thumbprint.</summary>
         [CommandOption("--store-location <LOC>")]
         [Description("OS store location: CurrentUser (default) or LocalMachine. Requires --thumbprint.")]
         public string? StoreLocation { get; init; }
 
+        /// <summary>Certificate thumbprint in OS certificate store (alternative to --cert).</summary>
         [CommandOption("--thumbprint <HEX>")]
         [Description("Certificate thumbprint in OS certificate store (alternative to --cert)")]
         public string? Thumbprint { get; init; }
 
+        /// <summary>Output file (default: input_signed.pdf).</summary>
         [CommandOption("--output|-o <PATH>")]
         [Description("Output file (default: input_signed.pdf)")]
         public string? OutputPath { get; init; }
 
+        /// <summary>TSA URL for RFC 3161 timestamping.</summary>
         [CommandOption("--tsa|-t <URL>")]
         [Description("TSA URL for RFC 3161 timestamping")]
         public string? TsaUrl { get; init; }
 
+        /// <summary>Signing reason.</summary>
         [CommandOption("--reason <TEXT>")]
         [Description("Signing reason")]
         public string? Reason { get; init; }
 
+        /// <summary>Signing location.</summary>
         [CommandOption("--location <TEXT>")]
         [Description("Signing location")]
         public string? Location { get; init; }
 
+        /// <summary>Contact information.</summary>
         [CommandOption("--contact <TEXT>")]
         [Description("Contact information")]
         public string? Contact { get; init; }
 
+        /// <summary>Override signer name (default: certificate CN).</summary>
         [CommandOption("--signer-name <NAME>")]
         [Description("Override signer name (default: certificate CN)")]
         public string? SignerName { get; init; }
 
+        /// <summary>Enable LTV — embed revocation data (requires --tsa).</summary>
         [CommandOption("--ltv")]
         [Description("Enable LTV — embed revocation data (requires --tsa)")]
         public bool Ltv { get; init; }
 
+        /// <summary>Enable archival timestamp / B-LTA (implies --ltv).</summary>
         [CommandOption("--archival")]
         [Description("Enable archival timestamp / B-LTA (implies --ltv)")]
         public bool Archival { get; init; }
 
+        /// <summary>Hash algorithm: SHA256 (default), SHA384, SHA512, SHA3-256, SHA3-384, SHA3-512.</summary>
         [CommandOption("--hash <ALGORITHM>")]
         [Description("Hash algorithm: SHA256 (default), SHA384, SHA512, SHA3-256, SHA3-384, SHA3-512")]
         public string? Hash { get; init; }
 
+        /// <summary>Custom signature field name (default: Signature1).</summary>
         [CommandOption("--field-name <NAME>")]
         [Description("Custom signature field name (default: Signature1)")]
         public string? FieldName { get; init; }
 
+        /// <summary>Sign a pre-existing empty signature field.</summary>
         [CommandOption("--existing-field <NAME>")]
         [Description("Sign a pre-existing empty signature field")]
         public string? ExistingField { get; init; }
 
+        /// <summary>Create certification (DocMDP) signature: no-changes, form-filling (default), annotations.</summary>
         [CommandOption("--certify <LEVEL>")]
         [Description("Create certification (DocMDP) signature: no-changes, form-filling (default), annotations")]
         public string? Certify { get; init; }
 
+        /// <summary>Signature sub-filter: etsi-cades-detached (default) or adbe-pkcs7-detached.</summary>
         [CommandOption("--sub-filter <VALUE>")]
         [Description("Signature sub-filter: etsi-cades-detached (default) or adbe-pkcs7-detached")]
         public string? SubFilter { get; init; }
 
+        /// <summary>Signature algorithm: rsa-pkcs1 (default) or rsassa-pss.</summary>
         [CommandOption("--signature-algorithm <ALGO>")]
         [Description("Signature algorithm: rsa-pkcs1 (default) or rsassa-pss")]
         public string? SignatureAlgorithm { get; init; }
 
+        /// <summary>Use adbe.pkcs7.detached without PAdES attributes (legacy compatibility).</summary>
         [CommandOption("--legacy-cms")]
         [Description("Use adbe.pkcs7.detached without PAdES attributes (legacy compatibility)")]
         public bool LegacyCms { get; init; }
 
+        /// <summary>Preserve PDF/A conformance.</summary>
         [CommandOption("--pdfa")]
         [Description("Preserve PDF/A conformance")]
         public bool PdfA { get; init; }
 
+        /// <summary>Add visible signature stamp (auto-positioned).</summary>
         [CommandOption("--visible")]
         [Description("Add visible signature stamp (auto-positioned)")]
         public bool Visible { get; init; }
 
+        /// <summary>Page for visible signature (default: 1).</summary>
         [CommandOption("--page <NUMBER>")]
         [Description("Page for visible signature (default: 1)")]
         public int? Page { get; init; }
 
+        /// <summary>X coordinate for visible signature in points.</summary>
         [CommandOption("--pos-x <POINTS>")]
         [Description("X coordinate for visible signature in points")]
         public float? X { get; init; }
 
+        /// <summary>Y coordinate for visible signature in points.</summary>
         [CommandOption("--pos-y <POINTS>")]
         [Description("Y coordinate for visible signature in points")]
         public float? Y { get; init; }
 
+        /// <summary>Background image for visible signature (JPEG or PNG).</summary>
         [CommandOption("--background-image <PATH>")]
         [Description("Background image for visible signature (JPEG or PNG)")]
         public string? BackgroundImage { get; init; }
 
+        /// <summary>Verification URL — renders QR code in visible signature.</summary>
         [CommandOption("--qr-url <URL>")]
         [Description("Verification URL — renders QR code in visible signature")]
         public string? QrUrl { get; init; }
 
+        /// <summary>Font size for signer name in points (default: 7).</summary>
         [CommandOption("--font-size <PT>")]
         [Description("Font size for signer name in points (default: 7)")]
         public float? FontSize { get; init; }
 
+        /// <summary>Font size for labels in points (default: 6).</summary>
         [CommandOption("--label-font-size <PT>")]
         [Description("Font size for labels in points (default: 6)")]
         public float? LabelFontSize { get; init; }
 
+        /// <summary>Text color as RGB values 0-1, e.g. 0.5,0.5,0.5.</summary>
         [CommandOption("--text-color <R,G,B>")]
         [Description("Text color as RGB values 0-1, e.g. 0.5,0.5,0.5")]
         public string? TextColor { get; init; }
 
+        /// <summary>Base14 font: Helvetica (default), Times-Roman, Courier, Helvetica-Bold.</summary>
         [CommandOption("--font <NAME>")]
         [Description("Base14 font: Helvetica (default), Times-Roman, Courier, Helvetica-Bold")]
         public string? Font { get; init; }
 
+        /// <summary>Border color as RGB values 0-1, e.g. 0.2,0.2,0.2.</summary>
         [CommandOption("--border-color <R,G,B>")]
         [Description("Border color as RGB values 0-1, e.g. 0.2,0.2,0.2")]
         public string? BorderColor { get; init; }
 
+        /// <summary>Border width in points (default: 0.5, requires --border-color).</summary>
         [CommandOption("--border-width <PT>")]
         [Description("Border width in points (default: 0.5, requires --border-color)")]
         public float? BorderWidth { get; init; }
 
+        /// <summary>Hide signing date in visible signature.</summary>
         [CommandOption("--no-date")]
         [Description("Hide signing date in visible signature")]
         public bool NoDate { get; init; }
 
+        /// <summary>Advanced Electronic Signature (AEA) per Lei 14.063/2020. Requires --cpf and --signer-name.</summary>
         [CommandOption("--brasil")]
         [Description("Advanced Electronic Signature (AEA) per Lei 14.063/2020. Requires --cpf and --signer-name.")]
         public bool Brasil { get; init; }
 
+        /// <summary>CPF (11 digits, no punctuation) for AEA.</summary>
         [CommandOption("--cpf <CPF>")]
         [Description("CPF (11 digits, no punctuation) for AEA")]
         public string? Cpf { get; init; }
 
+        /// <summary>Authentication method for AEA: digital-certificate (default), gov-br, institutional-login, facial-biometrics, token-otp, username-password.</summary>
         [CommandOption("--auth-method <METHOD>")]
         [Description("Authentication method for AEA: digital-certificate (default), gov-br, institutional-login, facial-biometrics, token-otp, username-password")]
         public string? AuthMethod { get; init; }
 
+        /// <summary>Signer email for AEA.</summary>
         [CommandOption("--signer-email <EMAIL>")]
         [Description("Signer email for AEA")]
         public string? SignerEmail { get; init; }
 
+        /// <summary>Institution name for AEA.</summary>
         [CommandOption("--institution <NAME>")]
         [Description("Institution name for AEA")]
         public string? Institution { get; init; }
 
+        /// <summary>Institution CNPJ (14 digits) for AEA.</summary>
         [CommandOption("--institution-cnpj <CNPJ>")]
         [Description("Institution CNPJ (14 digits) for AEA")]
         public string? InstitutionCnpj { get; init; }
 
+        /// <summary>Commitment type for AEA: approval (default) or origin.</summary>
         [CommandOption("--commitment <TYPE>")]
         [Description("Commitment type for AEA: approval (default) or origin")]
         public string? Commitment { get; init; }
 
+        /// <summary>Signature policy OID for AEA.</summary>
         [CommandOption("--policy-oid <OID>")]
         [Description("Signature policy OID for AEA")]
         public string? PolicyOid { get; init; }
 
+        /// <summary>Signature policy URI for AEA.</summary>
         [CommandOption("--policy-uri <URI>")]
         [Description("Signature policy URI for AEA")]
         public string? PolicyUri { get; init; }

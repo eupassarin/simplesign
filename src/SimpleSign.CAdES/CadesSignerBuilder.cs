@@ -35,12 +35,14 @@ public sealed class CadesSignerBuilder
     private readonly ILogger _logger;
     private readonly ITimestampClientFactory? _tsaFactory;
     private readonly ICmsParser? _cmsParser;
+    private readonly CadesContentType _contentType;
 
     internal CadesSignerBuilder(byte[] data, ILogger? logger = null)
     {
         _data = data;
         _hashAlgorithm = HashAlgorithmName.SHA256;
         _logger = logger ?? NullLogger.Instance;
+        _contentType = CadesContentType.Detached;
     }
 
     internal CadesSignerBuilder(byte[] data, ITimestampClientFactory tsaFactory, ILogger? logger = null)
@@ -49,6 +51,7 @@ public sealed class CadesSignerBuilder
         _hashAlgorithm = HashAlgorithmName.SHA256;
         _logger = logger ?? NullLogger.Instance;
         _tsaFactory = tsaFactory;
+        _contentType = CadesContentType.Detached;
     }
 
     internal CadesSignerBuilder(byte[] data, ITimestampClientFactory tsaFactory, ICmsParser cmsParser, ILogger? logger = null)
@@ -58,6 +61,7 @@ public sealed class CadesSignerBuilder
         _logger = logger ?? NullLogger.Instance;
         _tsaFactory = tsaFactory;
         _cmsParser = cmsParser;
+        _contentType = CadesContentType.Detached;
     }
 
     private CadesSignerBuilder(
@@ -77,7 +81,8 @@ public sealed class CadesSignerBuilder
         CommitmentType? commitmentType,
         string? signaturePolicyOid,
         string? signaturePolicyUri,
-        ILogger logger)
+        ILogger logger,
+        CadesContentType contentType)
     {
         _data = data;
         _certificate = certificate;
@@ -98,6 +103,7 @@ public sealed class CadesSignerBuilder
         _logger = logger;
         _tsaFactory = null;
         _cmsParser = null;
+        _contentType = contentType;
     }
 
     private CadesSignerBuilder With(
@@ -116,7 +122,8 @@ public sealed class CadesSignerBuilder
         CommitmentType? commitmentType = null,
         string? signaturePolicyOid = null,
         string? signaturePolicyUri = null,
-        ILogger? logger = null) =>
+        ILogger? logger = null,
+        CadesContentType? contentType = null) =>
         new(
             _data,
             certificate ?? _certificate,
@@ -134,7 +141,8 @@ public sealed class CadesSignerBuilder
             commitmentType ?? _commitmentType,
             signaturePolicyOid ?? _signaturePolicyOid,
             signaturePolicyUri ?? _signaturePolicyUri,
-            logger ?? _logger);
+            logger ?? _logger,
+            contentType ?? _contentType);
 
     /// <summary>Sets the signer's certificate (must have a private key for local signing).</summary>
     public CadesSignerBuilder WithCertificate(X509Certificate2 certificate)
@@ -215,6 +223,10 @@ public sealed class CadesSignerBuilder
     /// <summary>Sets the CAdES conformance level explicitly.</summary>
     public CadesSignerBuilder WithLevel(CadesLevel level) =>
         With(level: level);
+
+    /// <summary>Sets the content type. Detached = .p7s (default), Enveloped = .p7m with embedded data.</summary>
+    public CadesSignerBuilder WithContentType(CadesContentType contentType) =>
+        With(contentType: contentType);
 
     /// <summary>Sets an explicit signing time. Default: UTC now.</summary>
     public CadesSignerBuilder WithSigningTime(DateTimeOffset signingTime) =>
@@ -319,13 +331,15 @@ public sealed class CadesSignerBuilder
             ?? CryptoUtility.DetectSignatureAlgorithmOid(certificate, hashAlg);
 
         var extraAttributes = BuildSignedAttributesInternal();
+        byte[]? eContent = _contentType == CadesContentType.Enveloped ? _data : null;
 
         byte[] cms = CmsSignatureBuilder.Build(
             _data, certificate, hashAlg, signingTime,
             _extraCertificates, extraAttributes,
             padesAttributes: false,
             signatureAlgorithmOid: sigAlgOid,
-            logger: _logger);
+            logger: _logger,
+            eContent: eContent);
 
         if (_level >= CadesLevel.Timestamped && _tsaUrl is not null)
         {
@@ -369,10 +383,12 @@ public sealed class CadesSignerBuilder
         }
 
         List<X509Certificate2> allCerts = [certificate, .. (_extraCertificates ?? [])];
+        byte[]? eContent = _contentType == CadesContentType.Enveloped ? _data : null;
 
         byte[] cms = CmsSignatureBuilder.BuildSignedData(
             digestOid, sigAlgOid, hashAlg, signedAttrs,
-            signature, certificate, allCerts);
+            signature, certificate, allCerts,
+            eContent: eContent);
 
         if (_level >= CadesLevel.Timestamped && _tsaUrl is not null)
         {

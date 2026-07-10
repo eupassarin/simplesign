@@ -10,7 +10,8 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
-[Description("Sign data with CAdES (CMS/PKCS#7 detached signature)")]
+/// <summary>Sign data with CAdES (CMS/PKCS#7 signature).</summary>
+[Description("Sign data with CAdES (CMS/PKCS#7 signature)")]
 internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 {
     private readonly ICertificateChainService _certChainService;
@@ -20,51 +21,68 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         _certChainService = certChainService;
     }
 
+    /// <summary>CAdES sign command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Input data file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input data file to sign")]
         public string InputPath { get; init; } = null!;
 
+        /// <summary>PKCS#12 certificate file (.pfx/.p12).</summary>
         [CommandOption("--cert|-c <PATH>")]
         [Description("PKCS#12 certificate file (.pfx/.p12)")]
         public string? CertPath { get; init; }
 
+        /// <summary>Certificate password (omit for interactive prompt).</summary>
         [CommandOption("--password|-p <PASSWORD>")]
         [Description("Certificate password (omit for interactive prompt)")]
         public string? Password { get; init; }
 
+        /// <summary>Output signature file (default: input.p7s).</summary>
         [CommandOption("--output|-o <PATH>")]
         [Description("Output signature file (default: <input>.p7s)")]
         public string? OutputPath { get; init; }
 
+        /// <summary>TSA URL for timestamp (CAdES-B-T or higher).</summary>
         [CommandOption("--tsa <URL>")]
         [Description("TSA URL for timestamp (CAdES-B-T or higher)")]
         public string? TsaUrl { get; init; }
 
+        /// <summary>CAdES conformance level: basic, timestamped, longterm, archive (default: basic).</summary>
         [CommandOption("--level <LEVEL>")]
         [Description("CAdES conformance level: basic, timestamped, longterm, archive (default: basic)")]
         public string? Level { get; init; }
 
+        /// <summary>Hash algorithm: SHA256, SHA384, SHA512 (default: SHA256).</summary>
         [CommandOption("--hash|-H <ALGO>")]
         [Description("Hash algorithm: SHA256, SHA384, SHA512 (default: SHA256)")]
         public string? HashAlgorithm { get; init; }
 
+        /// <summary>Commitment type: ProofOfOrigin, ProofOfApproval.</summary>
         [CommandOption("--commitment <TYPE>")]
         [Description("Commitment type: ProofOfOrigin, ProofOfApproval")]
         public string? Commitment { get; init; }
 
+        /// <summary>Signature policy OID.</summary>
         [CommandOption("--policy-oid <OID>")]
         [Description("Signature policy OID")]
         public string? PolicyOid { get; init; }
 
+        /// <summary>Signature policy URI.</summary>
         [CommandOption("--policy-uri <URI>")]
         [Description("Signature policy URI")]
         public string? PolicyUri { get; init; }
 
+        /// <summary>PEM/DER file with intermediate CA certificates.</summary>
         [CommandOption("--chain <PATH>")]
         [Description("PEM/DER file with intermediate CA certificates")]
         public string? ChainPath { get; init; }
+
+        /// <summary>Content type: detached (.p7s, default) or enveloped (.p7m).</summary>
+        [CommandOption("--content-type <TYPE>")]
+        [Description("Content type: detached (.p7s, default) or enveloped (.p7m)")]
+        public string? ContentType { get; init; }
 
         public override ValidationResult Validate()
         {
@@ -88,6 +106,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
                 return ValidationResult.Error($"Invalid hash algorithm: {HashAlgorithm}. Valid: SHA256, SHA384, SHA512");
             }
 
+            if (ContentType is not null && !ParseContentType(ContentType).HasValue)
+            {
+                return ValidationResult.Error($"Invalid content type: {ContentType}. Valid: detached, enveloped");
+            }
+
             return ValidationResult.Success();
         }
     }
@@ -95,19 +118,21 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
     protected override async Task<int> ExecuteAsync(
         CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        byte[] data = await File.ReadAllBytesAsync(settings.InputPath, cancellationToken);
+        byte[] data = await CommonSettings.ReadInputBytesAsync(settings.InputPath, cancellationToken);
 
         using X509Certificate2 cert = await LoadCertificateAsync(settings, cancellationToken);
 
         var level = ParseLevel(settings.Level) ?? CadesLevel.Basic;
         var hashAlg = ParseHashAlgorithm(settings.HashAlgorithm) ?? HashAlgorithmName.SHA256;
         var commitment = settings.Commitment is not null ? ParseCommitment(settings.Commitment) : null;
+        var contentType = ParseContentType(settings.ContentType) ?? CadesContentType.Detached;
 
         var logger = settings.CreateLogger<CadesSignCommand>();
         var builder = CadesSigner.Document(data, logger)
             .WithCertificate(cert)
             .WithHashAlgorithm(hashAlg)
-            .WithLevel(level);
+            .WithLevel(level)
+            .WithContentType(contentType);
 
         if (settings.TsaUrl is not null)
         {
@@ -128,7 +153,8 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 
         byte[] cms = await builder.SignAsync(cancellationToken);
 
-        string outputPath = settings.OutputPath ?? settings.InputPath + ".p7s";
+        string outputPath = settings.OutputPath
+            ?? settings.InputPath + (contentType == CadesContentType.Enveloped ? ".p7m" : ".p7s");
         await File.WriteAllBytesAsync(outputPath, cms, cancellationToken);
 
         AnsiConsole.MarkupLine($"[green]CAdES signature saved to:[/] {outputPath}");
@@ -181,6 +207,13 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
     {
         "proofoforigin" or "origin" => CommitmentType.ProofOfOrigin,
         "proofofapproval" or "approval" => CommitmentType.ProofOfApproval,
+        _ => null
+    };
+
+    private static CadesContentType? ParseContentType(string? type) => type?.ToLowerInvariant() switch
+    {
+        "detached" => CadesContentType.Detached,
+        "enveloped" => CadesContentType.Enveloped,
         _ => null
     };
 }

@@ -46,6 +46,9 @@ public sealed class XadesSigningOptions
     /// <summary>Signer role claims (e.g., "Manager", "Approver").</summary>
     public IReadOnlyList<string>? SignerRoles { get; init; }
 
+    /// <summary>Data URI for Detached form signatures. Required when Form is Detached.</summary>
+    public string? DataUri { get; init; }
+
     /// <summary>Data object format (object reference URI + MIME type).</summary>
     public DataObjectFormat? DataObjectFormat { get; init; }
 }

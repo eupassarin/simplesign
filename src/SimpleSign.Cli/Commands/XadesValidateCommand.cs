@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+using SimpleSign.Cli.Json;
 using SimpleSign.Core.Validation;
 using SimpleSign.XAdES;
 using Spectre.Console;
@@ -7,6 +9,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
+/// <summary>Validate a signed XAdES XML document.</summary>
 [Description("Validate a signed XAdES XML document")]
 internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.Settings>
 {
@@ -17,19 +20,28 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         _certChainService = certChainService;
     }
 
+    /// <summary>XAdES validate command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Signed XML file.</summary>
         [CommandArgument(0, "<signature>")]
         [Description("Signed XML file")]
         public string SignaturePath { get; init; } = null!;
 
+        /// <summary>Trust anchor certificate(s) — PEM or DER.</summary>
         [CommandOption("--trust <PATH>")]
         [Description("Trust anchor certificate(s) — PEM or DER")]
         public string? TrustPath { get; init; }
 
+        /// <summary>Enable online revocation checking (OCSP/CRL).</summary>
         [CommandOption("--check-revocation")]
         [Description("Enable online revocation checking (OCSP/CRL)")]
         public bool CheckRevocation { get; init; }
+
+        /// <summary>Output validation result as JSON instead of a table.</summary>
+        [CommandOption("--json")]
+        [Description("Output result as JSON")]
+        public bool Json { get; init; }
 
         public override ValidationResult Validate()
         {
@@ -45,13 +57,38 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
     protected override async Task<int> ExecuteAsync(
         CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        byte[] signedXml = await File.ReadAllBytesAsync(settings.SignaturePath, cancellationToken);
+        byte[] signedXml = await CommonSettings.ReadInputBytesAsync(settings.SignaturePath, cancellationToken);
 
         var trustAnchors = LoadTrustAnchors(settings.TrustPath);
 
         var validator = new XadesSignatureValidator(
             new ValidationOptions { CheckRevocation = settings.CheckRevocation });
         var result = validator.Validate(signedXml, trustAnchors: trustAnchors);
+
+        if (settings.Json)
+        {
+            var output = new XadesValidateOutput
+            {
+                File = settings.SignaturePath,
+                IsValid = result.IsValid,
+                IsSignatureValid = result.IsSignatureValid,
+                IsIntegrityValid = result.IsIntegrityValid,
+                IsCertificateChainValid = result.IsCertificateChainValid,
+                HasValidSignatureTimeStamp = result.HasValidSignatureTimeStamp,
+                IsLtvDataValid = result.IsLtvDataValid,
+                HasValidArchiveTimeStamp = result.HasValidArchiveTimeStamp,
+                Signer = result.SignerCertificate?.Subject,
+                Issuer = result.SignerCertificate?.Issuer,
+                Serial = result.SignerCertificate?.SerialNumber,
+                Thumbprint = result.SignerCertificate?.Thumbprint,
+                SigningTime = result.SigningTime,
+                DetectedLevel = result.DetectedLevel.ToString(),
+                Errors = [.. result.Errors],
+                Warnings = [.. result.Warnings],
+            };
+            Console.WriteLine(JsonSerializer.Serialize(output, CliJsonContext.Default.XadesValidateOutput));
+            return result.IsValid ? 0 : 1;
+        }
 
         var table = new Table();
         table.AddColumn("Check");
@@ -82,7 +119,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
 
         if (result.HasValidArchiveTimeStamp.HasValue)
         {
-            table.AddRow("Archive timestamp", result.HasValidArchiveTimeStamp.HasValue ? "[green]OK[/]" : "[red]FAIL[/]");
+            table.AddRow("Archive timestamp", result.HasValidArchiveTimeStamp.Value ? "[green]OK[/]" : "[red]FAIL[/]");
         }
 
         if (result.SignerCertificate is not null)

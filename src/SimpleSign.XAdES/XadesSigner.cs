@@ -6,7 +6,7 @@ namespace SimpleSign.XAdES;
 
 /// <summary>
 /// Creates XAdES digital signatures (ETSI EN 319 132) for XML documents.
-/// Supports only enveloped form.
+/// Supports enveloped, detached, and enveloping XML signatures.
 /// </summary>
 [RequiresUnreferencedCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
 [RequiresDynamicCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
@@ -41,6 +41,11 @@ public static class XadesSigner
             .WithHashAlgorithm(options.HashAlgorithm)
             .WithLevel(options.Level)
             .WithForm(options.Form);
+
+        if (options.DataUri is not null)
+        {
+            builder = builder.WithDataUri(options.DataUri);
+        }
 
         if (options.SignatureAlgorithmOid is not null)
         {

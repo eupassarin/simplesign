@@ -39,4 +39,7 @@ public sealed class CadesSigningOptions
 
     /// <summary>CAdES conformance level. Default: B-B.</summary>
     public CadesLevel Level { get; init; } = CadesLevel.Basic;
+
+    /// <summary>Content type: Detached (no data embedded, .p7s) or Enveloped (data embedded, .p7m). Default: Detached.</summary>
+    public CadesContentType ContentType { get; init; } = CadesContentType.Detached;
 }
