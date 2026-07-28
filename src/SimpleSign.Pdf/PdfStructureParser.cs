@@ -354,6 +354,91 @@ internal static class PdfStructureParser
     }
 
     /// <summary>
+    /// Finds the Nth page object number (1-based) by traversing Catalog → /Pages → /Kids.
+    /// Returns -1 if the page number exceeds the document's page count.
+    /// </summary>
+    internal static int FindNthPageObjNum(ReadOnlySpan<byte> data, int pageNumber)
+    {
+        if (pageNumber < 1)
+        {
+            return -1;
+        }
+
+        int catalogObjNum = FindRootObjectNumber(data);
+        if (catalogObjNum <= 0)
+        {
+            return -1;
+        }
+
+        string? catalogText = GetObjectContent(data, catalogObjNum);
+        if (catalogText == null)
+        {
+            return -1;
+        }
+
+        int pagesObjNum = ExtractObjReference(catalogText, "/Pages");
+        if (pagesObjNum <= 0)
+        {
+            return -1;
+        }
+
+        string? pagesText = GetObjectContent(data, pagesObjNum);
+        if (pagesText == null)
+        {
+            return -1;
+        }
+
+        int kidsPos = pagesText.IndexOf(PdfKeys.Kids, StringComparison.Ordinal);
+        if (kidsPos < 0)
+        {
+            return -1;
+        }
+
+        int bracketStart = pagesText.IndexOf('[', kidsPos);
+        if (bracketStart < 0)
+        {
+            return -1;
+        }
+
+        int count = 0;
+        int cursor = bracketStart + 1;
+        while (cursor < pagesText.Length && count < pageNumber)
+        {
+            while (cursor < pagesText.Length && !char.IsDigit(pagesText[cursor]))
+            {
+                cursor++;
+            }
+
+            if (cursor >= pagesText.Length)
+            {
+                break;
+            }
+
+            int numStart = cursor;
+            while (cursor < pagesText.Length && char.IsDigit(pagesText[cursor]))
+            {
+                cursor++;
+            }
+
+            if (numStart < cursor && int.TryParse(pagesText.AsSpan(numStart, cursor - numStart), out int objNum))
+            {
+                while (cursor < pagesText.Length && pagesText[cursor] != '\n' && pagesText[cursor] != '\r' && pagesText[cursor] != ']')
+                {
+                    cursor++;
+                }
+
+                count++;
+                if (count == pageNumber)
+                {
+                    return objNum;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
     /// Gets the text content of a PDF object, trying regular object bytes first,
     /// then falling back to ObjStm extraction.
     /// </summary>

@@ -6,6 +6,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
+using SimpleSign.TestHelpers;
 using Xunit;
 namespace SimpleSign.PAdES.Tests.Signing;
 
@@ -295,5 +296,37 @@ public sealed class SignatureAppearanceEndToEndTests
             r.IsIntegrityValid.ShouldBeTrue();
             r.IsSignatureValid.ShouldBeTrue();
         }
+    }
+
+    [Fact]
+    public async Task SignAsync_Page2Appearance_WidgetAttachesToCorrectPage()
+    {
+        using X509Certificate2 cert = CreateRsaCert("CN=Page Selector");
+        byte[] pdf = TestPdfFactory.CreateThreePagePdf();
+        byte[] signed = await SimpleSigner.Document(pdf)
+            .WithCertificate(cert)
+            .WithAppearance(new SignatureAppearance { Page = 2, X = 50, Y = 50, AutoPosition = false })
+            .SignAsync();
+        using MemoryStream ms = new MemoryStream(signed);
+        IReadOnlyList<SignatureValidationResult> results = await ValidatorTrusting(cert).ValidateAsync(ms);
+        results.Count.ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SignAsync_Page3Appearance_WidgetAttachesToCorrectPage()
+    {
+        using X509Certificate2 cert = CreateRsaCert("CN=Page 3 Signer");
+        byte[] pdf = TestPdfFactory.CreateThreePagePdf();
+        byte[] signed = await SimpleSigner.Document(pdf)
+            .WithCertificate(cert)
+            .WithAppearance(new SignatureAppearance { Page = 3, X = 50, Y = 50, AutoPosition = false })
+            .SignAsync();
+        using MemoryStream ms = new MemoryStream(signed);
+        IReadOnlyList<SignatureValidationResult> results = await ValidatorTrusting(cert).ValidateAsync(ms);
+        results.Count.ShouldBe(1);
+        results[0].IsIntegrityValid.ShouldBeTrue();
+        results[0].IsSignatureValid.ShouldBeTrue();
     }
 }

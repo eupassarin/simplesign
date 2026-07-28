@@ -104,10 +104,48 @@ public sealed class PdfSignatureWriter
             }
         }
 
-        // Step 3: Locate the first page object.
-        // Always needed so the widget annotation is added to /Annots (required for Adobe Reader's signature panel).
+        // Step 3: Locate the target page object for the widget annotation.
         bool hasAppearance = options.Appearance != null;
-        var (pageObjNum, pageObjDictStart, pageObjDictEnd) = PdfStructureParser.FindFirstPageObject(inputMem.Span);
+        int targetPage = options.Appearance?.Page ?? 1;
+        int pageObjNum;
+        int pageObjDictStart;
+        int pageObjDictEnd;
+
+        if (targetPage > 1)
+        {
+            pageObjNum = PdfStructureParser.FindNthPageObjNum(inputMem.Span, targetPage);
+            if (pageObjNum > 0)
+            {
+                var (objStart, objEnd) = PdfStructureParser.FindObjectBytes(inputMem.Span, pageObjNum);
+                if (objStart >= 0)
+                {
+                    pageObjDictStart = -1;
+                    for (int pos = objStart; pos < objEnd - 1; pos++)
+                    {
+                        if (inputMem.Span[pos] == (byte)'<' && inputMem.Span[pos + 1] == (byte)'<')
+                        {
+                            pageObjDictStart = pos;
+                            break;
+                        }
+                    }
+                    pageObjDictEnd = objEnd;
+                }
+                else
+                {
+                    pageObjDictStart = -1;
+                    pageObjDictEnd = -1;
+                }
+            }
+            else
+            {
+                (pageObjNum, pageObjDictStart, pageObjDictEnd) = (-1, -1, -1);
+            }
+        }
+        else
+        {
+            (pageObjNum, pageObjDictStart, pageObjDictEnd) = PdfStructureParser.FindFirstPageObject(inputMem.Span);
+        }
+
         (logger ?? NullLogger.Instance).PdfStructureParsed(nextObjNum, $"{pageObjNum} 0 R");
         if (hasAppearance && pageObjNum <= 0)
         {
