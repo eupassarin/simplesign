@@ -222,7 +222,8 @@ public sealed class PdfSignatureWriter
         long acroFormObjOffset = fieldObjOffset + fieldDictBytes.Length;
 
         await outputStream.WriteAsync(sigDictBytes, cancellationToken).ConfigureAwait(false);
-        (logger ?? NullLogger.Instance).PdfSigDictWritten(sigObjOffset, sigObjOffset + sigDictText.IndexOf(PdfKeys.ByteRange, StringComparison.Ordinal));
+        int byteRangePos = sigDictText.IndexOf(PdfKeys.ByteRange, StringComparison.Ordinal);
+        (logger ?? NullLogger.Instance).PdfSigDictWritten(sigObjOffset, sigObjOffset + byteRangePos);
         await outputStream.WriteAsync(fieldDictBytes, cancellationToken).ConfigureAwait(false);
         await outputStream.WriteAsync(acroFormBytes, cancellationToken).ConfigureAwait(false);
 
