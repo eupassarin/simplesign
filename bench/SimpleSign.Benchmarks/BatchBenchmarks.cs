@@ -37,7 +37,7 @@ public class BatchBenchmarks
         int count = 0;
         foreach (var pdf in _pdfs)
         {
-            _ = await SimpleSigner.Document(pdf).WithCertificate(_cert).SignAsync();
+            _ = await PadesSigner.Document(pdf).WithCertificate(_cert).SignAsync();
             count++;
         }
         return count;

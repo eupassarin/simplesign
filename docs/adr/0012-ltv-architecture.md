@@ -119,4 +119,10 @@ The DSS is appended as an incremental PDF update:
 | **Pre-built DSS (caller provides all data)** | No network dependency | Complex caller API, defeats automation | Rejected |
 | **Parallel fetch (all certs simultaneously)** | Faster execution | Rate limiting, connection scaling | Postponed (future optimisation) |
 
-**Status:** Accepted. The iterative stabilisation loop is the canonical LTV embedding strategy. B-LT requires `.WithTimestamp()` + `.WithLtv()`. B-LTA additionally requires `.WithArchivalTimestamp()`. PAdES levels are enforced at the `SignerBuilder` level with `InvalidOperationException` if called out of sequence.
+**Status:** Accepted (superseded in part by ADR 0015)
+
+The iterative stabilisation loop is the canonical LTV embedding strategy. Since v0.8.0:
+
+- B-LT/B-LTA are requested through one complete profile: `AdesBaselineProfile.LongTerm(timestampOptions, longTermValidationOptions)` / `AdesBaselineProfile.Archive(...)`. The old capability sequence (`WithTimestamp()` → `WithLtv()` → `WithArchivalTimestamp()`) was removed; level dependencies are encoded in the profile factories.
+- Level fulfillment is strict: if the produced DSS lacks revocation material (certificate values **and** OCSP/CRL values), signing throws `SigningException` unless the profile opts into `SigningLevelFailureBehavior.ReturnLowerLevel`, in which case the detailed result reports the downgraded achieved level and structured warnings.
+- Result truthfulness: `HasLongTermValidationMaterial` and `AchievedLevel` are derived from inspecting the produced DSS (`DssExtractor`), not from configuration flags or the requested level.

@@ -26,7 +26,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-itext");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES SHA384 iText Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA384)
             .SignAsync();
@@ -39,7 +39,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-itext");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES SHA512 iText Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA512)
             .SignAsync();
@@ -52,7 +52,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-itext");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP256, "CN=PAdES ECDSA P256 iText Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .SignAsync();
         await ValidateWithIText(signed, "ecdsa-p256");
@@ -64,7 +64,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-itext");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP384, "CN=PAdES ECDSA P384 iText Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .SignAsync();
         await ValidateWithIText(signed, "ecdsa-p384");
@@ -80,7 +80,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-eu-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES SHA384 EU DSS Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA384)
             .SignAsync();
@@ -93,7 +93,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-eu-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES SHA512 EU DSS Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA512)
             .SignAsync();
@@ -106,7 +106,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-eu-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP256, "CN=PAdES ECDSA P256 EU DSS Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .SignAsync();
         await ValidateWithEuDss(signed, "ecdsa-p256");
@@ -118,7 +118,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-eu-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP384, "CN=PAdES ECDSA P384 EU DSS Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .SignAsync();
         await ValidateWithEuDss(signed, "ecdsa-p384");
@@ -134,7 +134,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES SHA384 pyHanko Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA384)
             .SignAsync();
@@ -147,7 +147,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES SHA512 pyHanko Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA512)
             .SignAsync();
@@ -160,7 +160,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP256, "CN=PAdES ECDSA P256 pyHanko Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .SignAsync();
         await ValidateWithPyHanko(signed, "ecdsa-p256");
@@ -172,7 +172,7 @@ public sealed class PadesCrossValidatorTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP384, "CN=PAdES ECDSA P384 pyHanko Cross");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .SignAsync();
         await ValidateWithPyHanko(signed, "ecdsa-p384");

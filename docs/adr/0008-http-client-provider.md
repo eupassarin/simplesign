@@ -35,13 +35,29 @@ Single-method interface — intentionally minimal to be AOT-safe and trimmable.
 
 Two built-in implementations are provided: `DefaultHttpClientProvider` (static singleton for simple scenarios) and `HttpClientFactoryProvider` (ASP.NET Core DI, wraps `IHttpClientFactory`).
 
-### 3. Per-operation client slots
+### 3. Scoped provider slots with deterministic precedence
 
-TSA operations get a dedicated `HttpClient` (via `WithTimestamp(url, httpClient)`). Revocation (OCSP/CRL/AIA) uses the general provider or default. This separation prevents TSA authentication from leaking to revocation calls.
+Since v0.8.0, all formats use `IHttpClientProvider` with a builder-wide fallback and optional operation-scoped overrides carried inside the shared option values (see ADR 0015):
+
+```text
+Archive timestamp endpoint:
+  ArchiveTimestampOptions.Endpoint -> TimestampOptions.Endpoint
+
+Signature timestamp client:
+  TimestampOptions.HttpClientProvider -> builder-wide provider
+
+Certificate / AIA / OCSP / CRL retrieval:
+  LongTermValidationOptions.HttpClientProvider -> builder-wide provider
+
+Archive timestamp client:
+  ArchiveTimestampOptions.HttpClientProvider -> TimestampOptions.HttpClientProvider -> builder-wide provider
+```
+
+The builder-wide provider is set via `WithHttpClientProvider(provider)` and defaults to `DefaultHttpClientProvider`. `SingleClientProvider` adapts a non-owned `HttpClient` (e.g. for proxies, testing, mTLS). This separation prevents TSA authentication from leaking to revocation calls.
 
 ### Lazy resolution
 
-`IHttpClientProvider.GetClient()` is called at **signing time**, not at configuration time. This enables factory-style providers that create fresh clients per call (e.g., rotating bearer tokens, certificate authentication per operation).
+`IHttpClientProvider.GetClient()` is called at **signing time**, not at configuration time. This enables factory-style providers that create fresh clients per call (e.g., rotating bearer tokens, certificate authentication per operation). Caller-supplied providers and clients are never disposed by the signer.
 
 ### DI auto-detection
 
@@ -54,8 +70,9 @@ TSA operations get a dedicated `HttpClient` (via `WithTimestamp(url, httpClient)
 - Simple console apps work with zero configuration (static default)
 - AOT-safe: no reflection-based DI inspection, minimal interface surface
 - Lazy resolution enables dynamic credential rotation
-- Provider is preserved through all builder methods (`WithLtv()`, `WithArchivalTimestamp()`, etc.)
+- Provider is preserved through all builder methods (carried in the dependency bundle)
 - Breaking change in 0.5.0: `WithTimestamp(url, httpClient)` scope narrowed to TSA only
+- Breaking change in 0.8.0: direct `HttpClient` methods (`WithHttpClient`, `WithRevocationHttpClient`, `WithTimestamp(url, client)`) replaced by the provider model above
 
 **Alternatives considered:**
 

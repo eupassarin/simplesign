@@ -21,7 +21,7 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-itext");
         var pdf = MultiPagePdf(10);
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Complex 10-Page iText");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);
@@ -50,7 +50,7 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-dss");
         var pdf = MultiPagePdf(5);
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Complex MultiPage pyHanko");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);
@@ -82,9 +82,9 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=Complex Triple Signer 2");
         using var cert3 = TestCertificateFactory.CreateSelfSignedCert("CN=Complex Triple Signer 3");
 
-        var once = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var twice = await SimpleSigner.Document(once).WithCertificate(cert2).SignAsync();
-        var thrice = await SimpleSigner.Document(twice).WithCertificate(cert3).SignAsync();
+        var once = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var twice = await PadesSigner.Document(once).WithCertificate(cert2).SignAsync();
+        var thrice = await PadesSigner.Document(twice).WithCertificate(cert3).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), thrice);
@@ -115,8 +115,8 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=Complex EU DSS Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=Complex EU DSS Signer 2");
 
-        var once = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var twice = await SimpleSigner.Document(once).WithCertificate(cert2).SignAsync();
+        var once = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var twice = await PadesSigner.Document(once).WithCertificate(cert2).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), twice);
@@ -148,8 +148,8 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=Complex Pdfbox Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=Complex Pdfbox Signer 2");
 
-        var once = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var twice = await SimpleSigner.Document(once).WithCertificate(cert2).SignAsync();
+        var once = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var twice = await PadesSigner.Document(once).WithCertificate(cert2).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), twice);
@@ -179,7 +179,7 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         var pdf = MinimalXRefStreamPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XRef Stream Test");
 
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);
@@ -205,7 +205,7 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         var pdf = MinimalXRefStreamPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XRef Stream pyHanko");
 
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);
@@ -230,7 +230,7 @@ public sealed class ComplexPdfInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-itext");
         var pdf = MultiPagePdf(50);
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Complex 50-Page Stress");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);

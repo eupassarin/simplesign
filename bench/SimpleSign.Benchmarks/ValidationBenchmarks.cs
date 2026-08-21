@@ -53,7 +53,7 @@ public class ValidationBenchmarks
         byte[] pdfBytes = PdfHelper.BuildMinimalPdf();
 
         // Sign PDF once
-        _signedPdf1Sig = await SimpleSigner.Document(pdfBytes)
+        _signedPdf1Sig = await PadesSigner.Document(pdfBytes)
             .WithCertificate(simpleCert)
             .SignAsync();
 
@@ -61,14 +61,14 @@ public class ValidationBenchmarks
         byte[] multiSig = pdfBytes;
         for (int i = 0; i < 5; i++)
         {
-            multiSig = await SimpleSigner.Document(multiSig)
+            multiSig = await PadesSigner.Document(multiSig)
                 .WithCertificate(simpleCert)
                 .SignAsync();
         }
         _signedPdf5Sigs = multiSig;
 
         // Sign with chain cert
-        _signedPdfWithChain = await SimpleSigner.Document(pdfBytes)
+        _signedPdfWithChain = await PadesSigner.Document(pdfBytes)
             .WithCertificate(endWithKey)
             .SignAsync();
 

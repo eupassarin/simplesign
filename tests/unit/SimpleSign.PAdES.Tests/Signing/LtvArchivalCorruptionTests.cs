@@ -112,7 +112,7 @@ public sealed class LtvArchivalCorruptionTests
     {
         byte[] pdf = BuildPdfWithPage();
         using var cert = CreateCertWithCrlUrl();
-        byte[] signedPdf = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        byte[] signedPdf = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         using var httpClient = BuildMockCrlClient();
         var embedder = new LtvEmbedder(httpClient);
@@ -140,7 +140,7 @@ public sealed class LtvArchivalCorruptionTests
     {
         byte[] pdf = BuildPdfWithPage();
         using var cert = CreateCertWithCrlUrl();
-        byte[] signedPdf = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        byte[] signedPdf = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         using var httpClient = BuildMockCrlClient();
         var embedder = new LtvEmbedder(httpClient);
@@ -180,7 +180,7 @@ public sealed class LtvArchivalCorruptionTests
 
         byte[] pdf = await File.ReadAllBytesAsync(fixturePath);
         using var cert = CreateCertWithCrlUrl();
-        byte[] signedPdf = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        byte[] signedPdf = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         using var httpClient = BuildMockCrlClient();
         var embedder = new LtvEmbedder(httpClient);
@@ -204,7 +204,7 @@ public sealed class LtvArchivalCorruptionTests
     {
         byte[] pdf = BuildPdfWithPage();
         using var cert = CreateCertWithCrlUrl();
-        byte[] signedPdf = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        byte[] signedPdf = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         using var httpClient = BuildMockCrlClient();
         var embedder = new LtvEmbedder(httpClient);

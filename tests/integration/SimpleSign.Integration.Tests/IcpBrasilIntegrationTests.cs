@@ -94,7 +94,7 @@ public sealed class IcpBrasilIntegrationTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdfBytes = await File.ReadAllBytesAsync(FixturePath(Fixture));
 
-        byte[] signedPdf = await SimpleSigner
+        byte[] signedPdf = await PadesSigner
             .Document(pdfBytes)
             .WithCertificate(cert)
             .SignAsync();

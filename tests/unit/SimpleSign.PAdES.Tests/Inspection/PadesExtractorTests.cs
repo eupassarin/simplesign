@@ -64,7 +64,7 @@ public sealed class PadesExtractorTests : IDisposable
     public async Task ExtractAsync_DoubleSigned_ReturnsTwoSignatures()
     {
         byte[] firstSigned = await SignMinimalPdfAsync();
-        byte[] doubleSigned = await SimpleSigner
+        byte[] doubleSigned = await PadesSigner
             .Document(firstSigned)
             .WithCertificate(_cert)
             .SignAsync();
@@ -255,7 +255,7 @@ public sealed class PadesExtractorTests : IDisposable
     public async Task ExtractAsync_DoubleSigned_IncreasingRevisionSizes()
     {
         byte[] firstSigned = await SignMinimalPdfAsync();
-        byte[] doubleSigned = await SimpleSigner
+        byte[] doubleSigned = await PadesSigner
             .Document(firstSigned)
             .WithCertificate(_cert)
             .SignAsync();
@@ -312,7 +312,7 @@ public sealed class PadesExtractorTests : IDisposable
 
     private async Task<byte[]> SignMinimalPdfAsync()
     {
-        return await SimpleSigner
+        return await PadesSigner
             .Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(_cert)
             .SignAsync();

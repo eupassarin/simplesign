@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Shouldly;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.TestHelpers;
@@ -96,12 +98,13 @@ public sealed class LtaInteropTests(ITestOutputHelper output)
     private static async Task<byte[]> CreateLtaSignatureAsync()
     {
         var pdf = MinimalPdf();
-        using var pki = new SyntheticPki();
-        return await SimpleSigner.Document(pdf)
+        using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
+        return await PadesSigner.Document(pdf)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
-            .WithTimestamp("http://timestamp.digicert.com")
-            .WithLtv()
-            .WithArchivalTimestamp()
+            .WithLevel(AdesBaselineProfile.Archive(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignAsync();
     }
 

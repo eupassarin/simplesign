@@ -29,7 +29,7 @@ public class FeatureBenchmarks
     [Benchmark(Baseline = true, Description = "Plain sign (PAdES-B-B)")]
     public async Task<byte[]> PlainSign()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .SignAsync();
     }
@@ -37,7 +37,7 @@ public class FeatureBenchmarks
     [Benchmark(Description = "Sign + visual appearance")]
     public async Task<byte[]> SignWithAppearance()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .WithAppearance(SignatureAppearance.Auto())
             .SignAsync();
@@ -46,7 +46,7 @@ public class FeatureBenchmarks
     [Benchmark(Description = "Sign + metadata (name/reason/location)")]
     public async Task<byte[]> SignWithMetadata()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .WithMetadata("Benchmark Signer", "Performance test", "Lab")
             .SignAsync();
@@ -55,7 +55,7 @@ public class FeatureBenchmarks
     [Benchmark(Description = "Sign + appearance + metadata")]
     public async Task<byte[]> SignWithAppearanceAndMetadata()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .WithAppearance(SignatureAppearance.Auto())
             .WithMetadata("Benchmark Signer", "Performance test", "Lab")
@@ -65,7 +65,7 @@ public class FeatureBenchmarks
     [Benchmark(Description = "Sign + certification (NoChanges)")]
     public async Task<byte[]> SignWithCertification()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .AsCertification(CertificationLevel.NoChanges)
             .SignAsync();
@@ -74,7 +74,7 @@ public class FeatureBenchmarks
     [Benchmark(Description = "Sign + PDF/A preservation")]
     public async Task<byte[]> SignWithPdfA()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .WithPdfAPreservation()
             .SignAsync();

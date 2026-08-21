@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Shouldly;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
@@ -21,7 +23,7 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES iText Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
         await ValidatePdfWithIText(signed, "pades-bb");
     }
 
@@ -32,8 +34,8 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=iText Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=iText Signer 2");
-        var signed1 = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+        var signed1 = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
         await ValidatePdfWithIText(signed2, "pades-double-signed");
     }
 
@@ -43,7 +45,7 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Visual iText");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAppearance(SignatureAppearance.Auto())
             .WithMetadata("Test Signer", "iText interop", "Brazil")
@@ -57,7 +59,7 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Metadata iText");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithMetadata("André Almeida", "Contract review", "Vitória")
             .SignAsync();
@@ -86,7 +88,7 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Structure iText");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);
@@ -110,8 +112,14 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
     {
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
-        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES LTV iText");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).WithTimestamp("http://timestamp.digicert.com").WithLtv().SignAsync();
+        using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
+        var signed = await PadesSigner.Document(pdf)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
+            .SignAsync();
         await ValidatePdfWithIText(signed, "pades-ltv");
     }
 
@@ -121,7 +129,7 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES ADBE iText");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithSubFilter(PdfSignatureSubFilter.AdbePkcs7Detached)
             .SignAsync();

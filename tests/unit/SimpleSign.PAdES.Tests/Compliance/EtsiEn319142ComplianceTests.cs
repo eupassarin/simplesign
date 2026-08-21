@@ -37,7 +37,7 @@ public sealed class EtsiEn319142ComplianceTests
         HashAlgorithmName? hash = null)
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=ETSI Test Signer, O=Tests");
-        var builder = SimpleSigner.Document(MinimalPdf()).WithCertificate(cert);
+        var builder = PadesSigner.Document(MinimalPdf()).WithCertificate(cert);
         if (hash.HasValue)
             builder = builder.WithHashAlgorithm(hash.Value);
         var signed = await builder.SignAsync();
@@ -392,7 +392,7 @@ public sealed class EtsiEn319142ComplianceTests
     public async Task Validation_SigningCertV2_Hash_Matches_Signer_Certificate()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=CertBinding Test");
-        var signed = await SimpleSigner.Document(MinimalPdf()).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(MinimalPdf()).WithCertificate(cert).SignAsync();
 
         var sigs = await PadesExtractor.ExtractAsync(signed);
         var cms = CmsParser.Parse(sigs[0].CmsSignature);
@@ -504,7 +504,7 @@ public sealed class EtsiEn319142ComplianceTests
     public async Task BB_SignerCertificate_Embedded_In_Cms()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Embedded Cert Test");
-        var signed = await SimpleSigner.Document(MinimalPdf()).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(MinimalPdf()).WithCertificate(cert).SignAsync();
 
         var sigs = await PadesExtractor.ExtractAsync(signed);
         var cms = CmsParser.Parse(sigs[0].CmsSignature);
@@ -526,7 +526,7 @@ public sealed class EtsiEn319142ComplianceTests
         var sig = inspection.Signatures[0];
 
         sig.HasSigningCertificateV2.ShouldBeTrue(
-            "SimpleSigner includes signingCertificateV2 per PAdES-B-B");
+            "PadesSigner includes signingCertificateV2 per PAdES-B-B");
         sig.SubFilter.ShouldBe("ETSI.CAdES.detached");
 
         var level = ConformanceDetector.Detect(sig, inspection.Document, inspection.Signatures);
@@ -539,7 +539,7 @@ public sealed class EtsiEn319142ComplianceTests
     private static async Task<PdfInspectionResult> SignAndGetInspectionAsync()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Inspector Test");
-        var signed = await SimpleSigner.Document(MinimalPdf()).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(MinimalPdf()).WithCertificate(cert).SignAsync();
         using var ms = new MemoryStream(signed, writable: false);
         return await PdfSignatureInspector.InspectAsync(ms);
     }

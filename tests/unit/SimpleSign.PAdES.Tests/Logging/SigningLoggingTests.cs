@@ -55,8 +55,8 @@ public sealed class SigningLoggingTests : IDisposable
     {
         var logger = new FakeLogger();
 
-        var signed = await SimpleSigner
-            .Document(CreateMinimalPdf(), logger)
+        var signed = await PadesSigner
+            .Document(CreateMinimalPdf()).WithLogger(logger)
             .WithCertificate(_cert)
             .SignAsync();
 
@@ -70,8 +70,8 @@ public sealed class SigningLoggingTests : IDisposable
     {
         var logger = new FakeLogger();
 
-        await SimpleSigner
-            .Document(CreateMinimalPdf(), logger)
+        await PadesSigner
+            .Document(CreateMinimalPdf()).WithLogger(logger)
             .WithCertificate(_cert)
             .SignAsync();
 
@@ -83,8 +83,8 @@ public sealed class SigningLoggingTests : IDisposable
     [Fact(DisplayName = "PAdES: Signing with null logger does not throw")]
     public async Task SignAsync_NullLogger_DoesNotThrow()
     {
-        var act = async () => await SimpleSigner
-            .Document(CreateMinimalPdf(), logger: null)
+        var act = async () => await PadesSigner
+            .Document(CreateMinimalPdf())
             .WithCertificate(_cert)
             .SignAsync();
 
@@ -99,7 +99,7 @@ public sealed class SigningLoggingTests : IDisposable
         var logger = new FakeLogger<PdfSignatureValidator>();
 
         // Sign a PDF first so there's a signature field
-        var signed = await SimpleSigner
+        var signed = await PadesSigner
             .Document(CreateMinimalPdf())
             .WithCertificate(_cert)
             .SignAsync();
@@ -133,8 +133,8 @@ public sealed class SigningLoggingTests : IDisposable
     {
         var logger = new FakeLogger();
 
-        await SimpleSigner
-            .Document(CreateMinimalPdf(), logger)
+        await PadesSigner
+            .Document(CreateMinimalPdf()).WithLogger(logger)
             .WithCertificate(_cert)
             .SignAsync();
 

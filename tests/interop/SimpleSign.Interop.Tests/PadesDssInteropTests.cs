@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Signing;
@@ -27,7 +29,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Interop Signer");
 
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         // Extract CMS from the signed PDF
         using var stream = new MemoryStream(signed);
@@ -45,19 +47,21 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
 
         var pdf = MinimalPdf();
-        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES LTV Interop");
+        using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
 
-        var signed = await SimpleSigner.Document(pdf)
-            .WithCertificate(cert)
-            .WithTimestamp("http://timestamp.digicert.com")
-            .WithLtv()
+        var signed = await PadesSigner.Document(pdf)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignAsync();
 
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
         var sig = signatures[0];
 
-        await ValidateDetachedCms(sig.CmsSignature, sig.SignedData, cert, "pades-bb-ltv");
+        await ValidateDetachedCms(sig.CmsSignature, sig.SignedData, pki.Leaf, "pades-bb-ltv");
     }
 
     [SkippableFact(DisplayName = "Double-signed PAdES — both CMS signatures validate under OpenSSL")]
@@ -69,8 +73,8 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Signer 2");
 
-        var signed1 = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+        var signed1 = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
 
         using var stream = new MemoryStream(signed2);
         var signatures = await PadesExtractor.ExtractAsync(stream);
@@ -90,7 +94,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Inspect Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
@@ -123,7 +127,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES SHA384 Interop", 2048, HashAlgorithmName.SHA384);
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA384)
             .SignAsync();
@@ -139,7 +143,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES SHA512 Interop", 2048, HashAlgorithmName.SHA512);
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA512)
             .SignAsync();
@@ -155,7 +159,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP256, "CN=PAdES ECDSA P256 Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
         signatures.Count().ShouldBeGreaterThan(0);
@@ -168,7 +172,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP384, "CN=PAdES ECDSA P384 Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
         using var stream = new MemoryStream(signed);
         var signatures = await PadesExtractor.ExtractAsync(stream);
         signatures.Count().ShouldBeGreaterThan(0);
@@ -181,7 +185,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES pyHanko Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = Path.Combine(Path.GetTempPath(), $"simplesign-interop-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
@@ -209,7 +213,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Structure Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = Path.Combine(Path.GetTempPath(), $"simplesign-interop-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
@@ -236,7 +240,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfPdfboxUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES pdfbox Verify Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmp = Path.Combine(Path.GetTempPath(), $"simplesign-interop-{Guid.NewGuid():N}.pdf");
         await File.WriteAllBytesAsync(tmp, signed);
@@ -270,7 +274,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Visual Interop");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAppearance(SignatureAppearance.Auto())
             .WithMetadata("Visual Signer", "Interop test", "Brazil")
@@ -299,7 +303,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfPdfboxUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Visual pdfbox Interop");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAppearance(new SignatureAppearance
             {
@@ -344,7 +348,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Certification Interop");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .AsCertification(CertificationLevel.NoChanges)
             .SignAsync();
@@ -361,7 +365,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES Metadata Interop");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithMetadata("André Almeida", "Contract approval", "Vitória, ES")
             .SignAsync();
@@ -388,7 +392,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfPdfboxUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES PDF/A Interop");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithPdfAPreservation()
             .SignAsync();
@@ -467,7 +471,7 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES ADBE Interop");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithSubFilter(PdfSignatureSubFilter.AdbePkcs7Detached)
             .SignAsync();
@@ -482,11 +486,13 @@ public sealed class PadesDssInteropTests(ITestOutputHelper output)
     {
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
-        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES LTV Structure Interop");
-        var signed = await SimpleSigner.Document(pdf)
-            .WithCertificate(cert)
-            .WithTimestamp("http://timestamp.digicert.com")
-            .WithLtv()
+        using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
+        var signed = await PadesSigner.Document(pdf)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignAsync();
 
         var tmpDir = Path.Combine(Path.GetTempPath(), $"simplesign-interop-{Guid.NewGuid():N}");

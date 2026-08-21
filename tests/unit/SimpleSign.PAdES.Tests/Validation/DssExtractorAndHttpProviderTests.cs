@@ -145,7 +145,7 @@ public sealed class DssExtractorAndHttpProviderTests
     {
         using var cert = CreateCert();
         var pdf = CreateMinimalPdf();
-        var builder = SimpleSigner.Document(pdf).WithCertificate(cert);
+        var builder = PadesSigner.Document(pdf).WithCertificate(cert);
         var provider = DefaultHttpClientProvider.Instance;
 
         var newBuilder = builder.WithHttpClientProvider(provider);

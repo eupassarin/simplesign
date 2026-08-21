@@ -51,7 +51,7 @@ public sealed class Sha3SigningTests
 
         using var cert = CreateRsaCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        using var stream = new MemoryStream(await SimpleSigner
+        using var stream = new MemoryStream(await PadesSigner
             .Document(pdf).WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA3_256)
             .SignAsync());
@@ -70,7 +70,7 @@ public sealed class Sha3SigningTests
 
         using var cert = CreateRsaCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        using var stream = new MemoryStream(await SimpleSigner
+        using var stream = new MemoryStream(await PadesSigner
             .Document(pdf).WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA3_384)
             .SignAsync());
@@ -89,7 +89,7 @@ public sealed class Sha3SigningTests
 
         using var cert = CreateRsaCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        using var stream = new MemoryStream(await SimpleSigner
+        using var stream = new MemoryStream(await PadesSigner
             .Document(pdf).WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA3_512)
             .SignAsync());
@@ -110,9 +110,9 @@ public sealed class Sha3SigningTests
         using var cert2 = CreateRsaCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
 
-        var once = await SimpleSigner.Document(pdf).WithCertificate(cert1)
+        var once = await PadesSigner.Document(pdf).WithCertificate(cert1)
             .WithHashAlgorithm(HashAlgorithmName.SHA3_256).WithFieldName("Sig1").SignAsync();
-        using var stream = new MemoryStream(await SimpleSigner.Document(once).WithCertificate(cert2)
+        using var stream = new MemoryStream(await PadesSigner.Document(once).WithCertificate(cert2)
             .WithHashAlgorithm(HashAlgorithmName.SHA3_384).WithFieldName("Sig2").SignAsync());
 
         var results = await ValidatorTrusting(cert1, cert2).ValidateAsync(stream);
@@ -130,7 +130,7 @@ public sealed class Sha3SigningTests
         Skip.If(!IsSha3Available(), "SHA-3 not supported on this platform/runtime");
 
         using var cert = CreateRsaCert();
-        byte[] signed = await SimpleSigner
+        byte[] signed = await PadesSigner
             .Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA3_256)
             .SignAsync();
@@ -153,7 +153,7 @@ public sealed class Sha3SigningTests
         using var cert = CertificateLoader.LoadPkcs12(raw.Export(X509ContentType.Pfx, "export"), "export");
 
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        using var stream = new MemoryStream(await SimpleSigner
+        using var stream = new MemoryStream(await PadesSigner
             .Document(pdf).WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA3_256)
             .SignAsync());

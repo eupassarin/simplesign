@@ -21,7 +21,7 @@ public sealed class PdfboxInteropTests
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=pdfbox Interop Signer");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         await ValidateWithPdfbox(signed, "pades-bb");
     }
@@ -35,8 +35,8 @@ public sealed class PdfboxInteropTests
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=pdfbox Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=pdfbox Signer 2");
 
-        var signed1 = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+        var signed1 = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
 
         await ValidateWithPdfbox(signed2, "pades-double-signed");
     }

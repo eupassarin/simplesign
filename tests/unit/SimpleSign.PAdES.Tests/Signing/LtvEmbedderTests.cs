@@ -297,7 +297,7 @@ public sealed class LtvEmbedderTests
 
         // Sign the PDF so LtvEmbedder has a signed PDF to work with
         using var cert = CreateCertWithCrlUrl();
-        byte[] signedPdf = await SimpleSigner.Document(pdf)
+        byte[] signedPdf = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .SignAsync();
 
@@ -476,10 +476,12 @@ public sealed class LtvEmbedderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        byte[] signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
-        var embedder = new LtvEmbedder();
-        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signed, [cert]);
+        using HttpClient httpClient = MockHttpHandler.ForGetBytes([48, 6, 2, 1, 0], HttpStatusCode.OK);
+        var embedder = new LtvEmbedder(httpClient);
+        using X509Certificate2 crlCert = CreateCertWithCrlUrl();
+        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signed, [cert, crlCert]);
 
         string pdfText = Encoding.Latin1.GetString(ltvPdf);
         Assert.DoesNotContain("/SHA256", pdfText, StringComparison.Ordinal);
@@ -490,10 +492,12 @@ public sealed class LtvEmbedderTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        byte[] signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
-        var embedder = new LtvEmbedder();
-        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signed, [cert]);
+        using HttpClient httpClient = MockHttpHandler.ForGetBytes([48, 6, 2, 1, 0], HttpStatusCode.OK);
+        var embedder = new LtvEmbedder(httpClient);
+        using X509Certificate2 crlCert = CreateCertWithCrlUrl();
+        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signed, [cert, crlCert]);
 
         string pdfText = Encoding.Latin1.GetString(ltvPdf);
         int vriStart = pdfText.IndexOf("/Type /VRI", StringComparison.Ordinal);

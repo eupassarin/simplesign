@@ -15,16 +15,18 @@ Working examples demonstrating common digital signature scenarios.
 ### Sign a PDF
 
 ```csharp
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 
 var pdf = File.ReadAllBytes("contract.pdf");
 var cert = new X509Certificate2("cert.pfx", "password");
 
-byte[] signed = await SimpleSigner
+byte[] signed = await PadesSigner
     .Document(pdf)
     .WithCertificate(cert)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLtv()
+    .WithLevel(AdesBaselineProfile.LongTerm(
+        new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+        new LongTermValidationOptions()))
     .SignAsync();
 
 File.WriteAllBytes("signed.pdf", signed);

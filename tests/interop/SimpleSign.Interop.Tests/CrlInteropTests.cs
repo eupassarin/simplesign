@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Shouldly;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
@@ -23,11 +25,13 @@ public sealed class CrlInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
-            .WithTimestamp("http://timestamp.digicert.com")
-            .WithLtv()
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignAsync();
 
         // Inspect signed PDF — DSS should exist
@@ -63,11 +67,13 @@ public sealed class CrlInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
-            .WithTimestamp("http://timestamp.digicert.com")
-            .WithLtv()
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignAsync();
 
         var tmpDir = CreateTempDir();

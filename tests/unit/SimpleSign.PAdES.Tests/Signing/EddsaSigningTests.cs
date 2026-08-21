@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
@@ -30,14 +31,14 @@ public sealed class EddsaSigningTests
         var pdf = TestPdfFactory.CreateMinimalPdf();
 
         using var key = c!.GetECDsaPrivateKey()!;
-        byte[] signed = await SimpleSigner.Document(pdf)
+        byte[] signed = await PadesSigner.Document(pdf)
             .WithCertificate(c)
             .WithHashAlgorithm(HashAlgorithmName.SHA256)
-            .WithExternalSigner(c, async hash =>
+            .WithExternalSigner(c, new FuncExternalSigner(async hash =>
             {
                 byte[] sig = key.SignHash(hash, DSASignatureFormat.Rfc3279DerSequence);
                 return await Task.FromResult(sig);
-            })
+            }))
             .SignAsync();
 
         using var stream = new MemoryStream(signed);
@@ -57,14 +58,14 @@ public sealed class EddsaSigningTests
         var pdf = TestPdfFactory.CreateMinimalPdf();
 
         using var key = c!.GetECDsaPrivateKey()!;
-        byte[] signed = await SimpleSigner.Document(pdf)
+        byte[] signed = await PadesSigner.Document(pdf)
             .WithCertificate(c)
             .WithHashAlgorithm(HashAlgorithmName.SHA3_256)
-            .WithExternalSigner(c, async hash =>
+            .WithExternalSigner(c, new FuncExternalSigner(async hash =>
             {
                 byte[] sig = key.SignHash(hash, DSASignatureFormat.Rfc3279DerSequence);
                 return await Task.FromResult(sig);
-            })
+            }))
             .SignAsync();
 
         using var stream = new MemoryStream(signed);
@@ -84,13 +85,13 @@ public sealed class EddsaSigningTests
         var pdf = TestPdfFactory.CreateMinimalPdf();
 
         using var key = c!.GetECDsaPrivateKey()!;
-        byte[] signed = await SimpleSigner.Document(pdf)
+        byte[] signed = await PadesSigner.Document(pdf)
             .WithCertificate(c)
-            .WithExternalSigner(c, async hash =>
+            .WithExternalSigner(c, new FuncExternalSigner(async hash =>
             {
                 byte[] sig = key.SignHash(hash, DSASignatureFormat.Rfc3279DerSequence);
                 return await Task.FromResult(sig);
-            })
+            }))
             .SignAsync();
 
         using var stream = new MemoryStream(signed);
@@ -108,13 +109,13 @@ public sealed class EddsaSigningTests
 
         using var c = cert;
         using var key = c!.GetECDsaPrivateKey()!;
-        byte[] signed = await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(c)
-            .WithExternalSigner(c, async hash =>
+            .WithExternalSigner(c, new FuncExternalSigner(async hash =>
             {
                 byte[] sig = key.SignHash(hash, DSASignatureFormat.Rfc3279DerSequence);
                 return await Task.FromResult(sig);
-            })
+            }))
             .SignAsync();
 
         signed[50] ^= 0xFF;

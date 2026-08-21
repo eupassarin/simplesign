@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
 
@@ -37,7 +38,7 @@ internal static class SigningService
         var cert = matches[0];
         var pdfBytes = await File.ReadAllBytesAsync(options.FilePath);
 
-        var builder = SimpleSigner
+        var builder = PadesSigner
             .Document(pdfBytes)
             .WithCertificate(cert);
 
@@ -50,10 +51,16 @@ internal static class SigningService
         };
         builder = builder.WithHashAlgorithm(hashAlg);
 
-        // Timestamp
+        // Timestamp / LTV / archival — one complete baseline profile
         if (!string.IsNullOrEmpty(options.TsaUrl))
         {
-            builder = builder.WithTimestamp(options.TsaUrl);
+            bool ltv = options.EnableLtv || options.ArchivalTimestamp;
+            var timestampOptions = new TimestampOptions(new Uri(options.TsaUrl));
+            builder = builder.WithLevel(!ltv
+                ? AdesBaselineProfile.Timestamped(timestampOptions)
+                : options.ArchivalTimestamp
+                    ? AdesBaselineProfile.Archive(timestampOptions, new LongTermValidationOptions())
+                    : AdesBaselineProfile.LongTerm(timestampOptions, new LongTermValidationOptions()));
         }
 
         // Metadata
@@ -73,17 +80,7 @@ internal static class SigningService
             builder = builder.WithFieldName(options.FieldName);
         }
 
-        // LTV
-        if (options.EnableLtv)
-        {
-            builder = builder.WithLtv();
-        }
-
-        // Archival timestamp
-        if (options.ArchivalTimestamp)
-        {
-            builder = builder.WithArchivalTimestamp(options.TsaUrl);
-        }
+        // LTV / archival timestamp are part of the baseline profile configured above.
 
         // PDF/A preservation
         if (options.PreservePdfA)

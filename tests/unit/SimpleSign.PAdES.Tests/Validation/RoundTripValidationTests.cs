@@ -62,7 +62,7 @@ public sealed class RoundTripValidationTests
                 keySize: 2048, hashAlgorithm: hash);
 
         var pdf = MinimalPdf();
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(hash)
             .SignAsync();
@@ -94,7 +94,7 @@ public sealed class RoundTripValidationTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=RT-Adbe");
         var pdf = MinimalPdf();
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var opts = new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false };
         var validator = new PdfSignatureValidator(opts, httpClient: null, logger: null,
@@ -123,8 +123,8 @@ public sealed class RoundTripValidationTests
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=RT-Signer2");
 
         var pdf = MinimalPdf();
-        var signed1 = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+        var signed1 = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
 
         var opts = new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false };
         var validator = new PdfSignatureValidator(opts, httpClient: null, logger: null,
@@ -165,7 +165,7 @@ public sealed class RoundTripValidationTests
         {
             var cert = TestCertificateFactory.CreateSelfSignedCert($"CN=RT-Multi-{i}");
             certs.Add(cert);
-            current = await SimpleSigner.Document(current).WithCertificate(cert).SignAsync();
+            current = await PadesSigner.Document(current).WithCertificate(cert).SignAsync();
         }
 
         var opts = new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false };
@@ -195,7 +195,7 @@ public sealed class RoundTripValidationTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=RT-TamperTest");
         var pdf = MinimalPdf();
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         // Flip a byte well inside the PDF body (after the 8-byte %PDF-x.y header) but
         // still within the ByteRange (which covers the whole document except /Contents).
@@ -223,7 +223,7 @@ public sealed class RoundTripValidationTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=RT-AppendTest");
         var pdf = MinimalPdf();
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         // Append arbitrary bytes outside the signed region
         var appended = signed.Concat("UNSIGNED TRAILING GARBAGE"u8.ToArray()).ToArray();
@@ -252,7 +252,7 @@ public sealed class RoundTripValidationTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Metadata Test Signer");
         var pdf = MinimalPdf();
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var opts = new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false };
         var validator = new PdfSignatureValidator(opts, httpClient: null, logger: null,

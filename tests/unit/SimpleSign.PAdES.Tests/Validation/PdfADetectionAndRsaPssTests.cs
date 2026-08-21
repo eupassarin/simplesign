@@ -164,7 +164,7 @@ public sealed class PdfADetectionAndRsaPssTests
     public async Task SignAndValidate_RsaPss_RoundTrips()
     {
         using var cert = CreatePssCert();
-        byte[] signedPdf = await SimpleSigner.Document(CreateMinimalPdf())
+        byte[] signedPdf = await PadesSigner.Document(CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 
@@ -221,7 +221,7 @@ public sealed class PdfADetectionAndRsaPssTests
         _ = expectedSaltLength; // documented in test name + CmsBuilder_PssCert_WritesPssParams
 
         using var cert = CreatePssCert(hash);
-        byte[] signedPdf = await SimpleSigner.Document(CreateMinimalPdf())
+        byte[] signedPdf = await PadesSigner.Document(CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 

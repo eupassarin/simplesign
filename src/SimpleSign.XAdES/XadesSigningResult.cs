@@ -1,20 +1,36 @@
+using SimpleSign.Core.Signing;
+
 namespace SimpleSign.XAdES;
 
-/// <summary>Result of a XAdES signing operation, returned by <see cref="XadesSignerBuilder.SignWithDetailsAsync"/>.</summary>
-public sealed class XadesSigningResult
+/// <summary>
+/// Detailed result of a XAdES signing operation, returned by
+/// <see cref="XadesSignerBuilder.SignWithDetailsAsync"/>.
+/// </summary>
+/// <remarks>
+/// The <c>Has*</c> properties and <see cref="ISigningResult.AchievedLevel"/> describe
+/// properties established in the produced artifact, never configuration flags or
+/// pipeline steps that were merely attempted.
+/// </remarks>
+public sealed record XadesSigningResult : ISigningResult
 {
     /// <summary>The signed XML bytes.</summary>
-    public byte[] SignedXml { get; init; } = [];
+    public required byte[] SignedArtifact { get; init; }
 
-    /// <summary>Whether a timestamp token was applied (XAdES-B-T or higher).</summary>
-    public bool TimestampApplied { get; init; }
+    /// <inheritdoc/>
+    public AdesBaselineLevel RequestedLevel { get; init; }
 
-    /// <summary>Whether long-term validation data was embedded (XAdES-B-LT or higher).</summary>
-    public bool LtvDataEmbedded { get; init; }
+    /// <inheritdoc/>
+    public AdesBaselineLevel AchievedLevel { get; init; }
 
-    /// <summary>Whether an archive timestamp was applied (XAdES-B-LTA).</summary>
-    public bool ArchiveTimestampApplied { get; init; }
+    /// <inheritdoc/>
+    public bool HasSignatureTimestamp { get; init; }
 
-    /// <summary>Non-critical warnings.</summary>
-    public IReadOnlyList<string> Warnings { get; init; } = [];
+    /// <inheritdoc/>
+    public bool HasLongTermValidationMaterial { get; init; }
+
+    /// <inheritdoc/>
+    public bool HasArchiveTimestamp { get; init; }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<SigningWarning> Warnings { get; init; } = [];
 }

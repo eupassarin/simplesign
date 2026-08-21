@@ -20,7 +20,7 @@ public sealed class SyntheticPkiPadesEndToEndTests
         using var pki = new SyntheticPki();
 
         byte[] pdf = MinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf)
+        byte[] signed = await PadesSigner.Document(pdf)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .SignAsync();
 
@@ -48,7 +48,7 @@ public sealed class SyntheticPkiPadesEndToEndTests
         using var otherPki = new SyntheticPki();
 
         byte[] pdf = MinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf)
+        byte[] signed = await PadesSigner.Document(pdf)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .SignAsync();
 

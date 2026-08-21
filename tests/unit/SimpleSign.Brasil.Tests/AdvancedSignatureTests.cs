@@ -154,7 +154,7 @@ public sealed class AdvancedSignatureTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var pdf = CreateMinimalPdf();
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(new AdvancedSignatureInfo
             {
@@ -193,7 +193,7 @@ public sealed class AdvancedSignatureTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var pdf = CreateMinimalPdf();
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(new AdvancedSignatureInfo
             {
@@ -221,7 +221,7 @@ public sealed class AdvancedSignatureTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var pdf = CreateMinimalPdf();
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(new AdvancedSignatureInfo
             {
@@ -242,7 +242,7 @@ public sealed class AdvancedSignatureTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var pdf = CreateMinimalPdf();
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(new AdvancedSignatureInfo
             {
@@ -267,7 +267,7 @@ public sealed class AdvancedSignatureTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var pdf = CreateMinimalPdf();
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(new AdvancedSignatureInfo
             {
@@ -297,7 +297,7 @@ public sealed class AdvancedSignatureTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var pdf = CreateMinimalPdf();
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(new AdvancedSignatureInfo
             {
@@ -335,7 +335,7 @@ public sealed class AdvancedSignatureTests
     public void WithAdvancedSignature_NullInfo_Throws()
     {
         var pdf = CreateMinimalPdf();
-        var act = () => SimpleSigner.Document(pdf).WithAdvancedSignature(null!);
+        var act = () => PadesSigner.Document(pdf).WithAdvancedSignature(null!);
         Should.Throw<ArgumentNullException>(act);
     }
 
@@ -480,7 +480,7 @@ public sealed class AdvancedSignatureTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
         var pdf = CreateMinimalPdf();
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(new AdvancedSignatureInfo
             {

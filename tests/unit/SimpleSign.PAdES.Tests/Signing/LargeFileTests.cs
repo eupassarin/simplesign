@@ -63,7 +63,7 @@ public sealed class LargeFileTests
         return Encoding.ASCII.GetBytes(sb.ToString());
     }
 
-    [Fact(DisplayName = "SimpleSigner signs large PDF successfully")]
+    [Fact(DisplayName = "PadesSigner signs large PDF successfully")]
     [Trait("Category", "LargeFile")]
     public async Task SimpleSigner_LargePdf_SignsSuccessfully()
     {
@@ -72,7 +72,7 @@ public sealed class LargeFileTests
 
         largePdf.Length.ShouldBeGreaterThanOrEqualTo(1_000_000);
 
-        var signed = await SimpleSigner.Document(largePdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(largePdf).WithCertificate(cert).SignAsync();
 
         signed.ShouldNotBeNull();
         signed.ShouldNotBeEmpty();
@@ -108,7 +108,7 @@ public sealed class LargeFileTests
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=LargeFile Test");
         var pdfBytes = CreateMinimalPdf();
 
-        var signed = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
 
         using var stream = new MemoryStream(signed);
         var validator = new PdfSignatureValidator(new ValidationOptions

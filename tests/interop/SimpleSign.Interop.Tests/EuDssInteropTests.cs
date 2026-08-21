@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Shouldly;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
@@ -23,7 +25,7 @@ public sealed class EuDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES EU DSS Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
         await ValidatePdfWithEuDss(signed, "pades-bb");
     }
 
@@ -32,8 +34,14 @@ public sealed class EuDssInteropTests(ITestOutputHelper output)
     {
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
-        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES LTV EU DSS Interop");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).WithTimestamp("http://timestamp.digicert.com").WithLtv().SignAsync();
+        using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
+        var signed = await PadesSigner.Document(pdf)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
+            .SignAsync();
         await ValidatePdfWithEuDss(signed, "pades-bb-ltv");
     }
 
@@ -44,8 +52,8 @@ public sealed class EuDssInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=EU DSS Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=EU DSS Signer 2");
-        var signed1 = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+        var signed1 = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
         await ValidatePdfWithEuDss(signed2, "pades-double-signed");
     }
 
@@ -55,7 +63,7 @@ public sealed class EuDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PAdES ADBE EU DSS");
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithSubFilter(PdfSignatureSubFilter.AdbePkcs7Detached)
             .SignAsync();

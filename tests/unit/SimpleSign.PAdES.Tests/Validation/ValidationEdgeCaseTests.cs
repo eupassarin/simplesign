@@ -54,7 +54,7 @@ public sealed class ValidationEdgeCaseTests
     {
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdfBytes = BuildMinimalPdf();
-        byte[] buffer = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+        byte[] buffer = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
         ValidationOptions options = new ValidationOptions
         {
             CheckRevocation = false
@@ -70,7 +70,7 @@ public sealed class ValidationEdgeCaseTests
     {
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdfBytes = BuildMinimalPdf();
-        byte[] buffer = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+        byte[] buffer = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
         ValidationOptions options = new ValidationOptions
         {
             CheckRevocation = false,
@@ -93,7 +93,7 @@ public sealed class ValidationEdgeCaseTests
         using X509Certificate2 leafPub = certificateRequest.Create(ca, DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1), [16, 32]);
         using X509Certificate2 leaf = CertificateLoader.LoadPkcs12(leafPub.CopyWithPrivateKey(leafRsa).Export(X509ContentType.Pfx, "test-export"), "test-export");
         byte[] pdfBytes = BuildMinimalPdf();
-        byte[] buffer = await SimpleSigner.Document(pdfBytes).WithCertificate(leaf).SignAsync();
+        byte[] buffer = await PadesSigner.Document(pdfBytes).WithCertificate(leaf).SignAsync();
         ValidationOptions options = new ValidationOptions
         {
             CheckRevocation = false,
@@ -224,7 +224,7 @@ public sealed class ValidationEdgeCaseTests
     {
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdfBytes = BuildMinimalPdf();
-        byte[] signedPdf = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+        byte[] signedPdf = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
         PdfSignatureValidator validator = new PdfSignatureValidator(new ValidationOptions
         {
             CheckRevocation = false
@@ -368,7 +368,7 @@ public sealed class ValidationEdgeCaseTests
         // This MUST NOT make the signature invalid — indeterminate ≠ revoked.
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdfBytes = BuildMinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+        byte[] signed = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
 
         var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = true });
         var results = await validator.ValidateAsync(new MemoryStream(signed));
@@ -389,8 +389,8 @@ public sealed class ValidationEdgeCaseTests
         // and should NOT produce any warning or error.
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdfBytes = BuildMinimalPdf();
-        byte[] firstSign = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
-        byte[] secondSign = await SimpleSigner.Document(firstSign).WithCertificate(cert).SignAsync();
+        byte[] firstSign = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+        byte[] secondSign = await PadesSigner.Document(firstSign).WithCertificate(cert).SignAsync();
 
         var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false });
         var results = await validator.ValidateAsync(new MemoryStream(secondSign));

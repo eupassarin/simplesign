@@ -40,7 +40,7 @@ The simplest way to sign a PDF:
 using SimpleSign.PAdES;
 
 // From a byte array
-var signedPdf = await SimpleSigner
+var signedPdf = await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(certificate)
     .SignAsync();
@@ -48,7 +48,7 @@ var signedPdf = await SimpleSigner
 File.WriteAllBytes("contract-signed.pdf", signedPdf);
 
 // Or from a file path (async I/O)
-var builder = await SimpleSigner.DocumentAsync("contract.pdf");
+var builder = await PadesSigner.DocumentAsync("contract.pdf");
 var signedPdf2 = await builder
     .WithCertificate(certificate)
     .SignAsync();
@@ -61,10 +61,14 @@ This creates a **PAdES B-B** (basic) signature.
 Include an RFC 3161 timestamp from a trusted TSA:
 
 ```csharp
-var signedPdf = await SimpleSigner
+using SimpleSign.Core.Signing;
+using SimpleSign.PAdES;
+
+var signedPdf = await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(cert)
-    .WithTimestamp("http://timestamp.digicert.com")
+    .WithLevel(AdesBaselineProfile.Timestamped(
+        new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
     .SignAsync();
 ```
 
@@ -73,12 +77,23 @@ var signedPdf = await SimpleSigner
 Embed CRL/OCSP responses so the signature can be validated even after the certificate expires:
 
 ```csharp
-var signedPdf = await SimpleSigner
+using SimpleSign.Core.Signing;
+using SimpleSign.PAdES;
+
+var tsa = new TimestampOptions(new Uri("http://timestamp.digicert.com"));
+
+// B-LT — embed revocation data
+var signedBlt = await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(cert)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLtv()                    // Embed revocation data (B-LT)
-    .WithArchivalTimestamp()      // Add archive timestamp (B-LTA)
+    .WithLevel(AdesBaselineProfile.LongTerm(tsa, new LongTermValidationOptions()))
+    .SignAsync();
+
+// B-LTA — add an archive timestamp (reuses the signature TSA by default)
+var signedBlta = await PadesSigner
+    .Document(pdfBytes)
+    .WithCertificate(cert)
+    .WithLevel(AdesBaselineProfile.Archive(tsa, new LongTermValidationOptions()))
     .SignAsync();
 ```
 
@@ -97,7 +112,7 @@ var appearance = new SignatureAppearance
     VerificationUrl = "https://verify.example.com/abc123"
 };
 
-await SimpleSigner
+await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(cert)
     .WithAppearance(appearance)

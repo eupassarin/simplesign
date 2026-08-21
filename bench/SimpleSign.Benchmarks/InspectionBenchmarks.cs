@@ -18,19 +18,19 @@ public class InspectionBenchmarks
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Bench Inspection");
         var template = PdfHelper.BuildMinimalPdf();
 
-        _pdf1Sig = await SimpleSigner.Document(template).WithCertificate(cert).SignAsync();
+        _pdf1Sig = await PadesSigner.Document(template).WithCertificate(cert).SignAsync();
 
         byte[] multi = template;
         for (int i = 0; i < 5; i++)
         {
-            multi = await SimpleSigner.Document(multi).WithCertificate(cert).SignAsync();
+            multi = await PadesSigner.Document(multi).WithCertificate(cert).SignAsync();
         }
         _pdf5Sigs = multi;
 
         multi = template;
         for (int i = 0; i < 10; i++)
         {
-            multi = await SimpleSigner.Document(multi).WithCertificate(cert).SignAsync();
+            multi = await PadesSigner.Document(multi).WithCertificate(cert).SignAsync();
         }
         _pdf10Sigs = multi;
     }

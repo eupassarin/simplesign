@@ -17,7 +17,7 @@ public sealed class DocMdpAndAppearanceTests
     [Fact(DisplayName = "AsCertification returns new builder instance")]
     public void AsCertification_ReturnsNewInstance()
     {
-        var builder = SimpleSigner.Document([0x25]);
+        var builder = PadesSigner.Document([0x25]);
         var builder2 = builder.AsCertification(CertificationLevel.NoChanges);
         builder2.ShouldNotBeSameAs(builder);
     }
@@ -25,7 +25,7 @@ public sealed class DocMdpAndAppearanceTests
     [Fact(DisplayName = "Default AsCertification uses FormFilling")]
     public void AsCertification_DefaultLevel_IsFormFilling()
     {
-        var builder = SimpleSigner.Document([0x25]);
+        var builder = PadesSigner.Document([0x25]);
         var builder2 = builder.AsCertification();
         builder2.ShouldNotBeNull();
     }
@@ -41,7 +41,7 @@ public sealed class DocMdpAndAppearanceTests
     [Fact(DisplayName = "WithExistingField returns new instance")]
     public void WithExistingField_ReturnsNewInstance()
     {
-        var builder = SimpleSigner.Document([0x25]);
+        var builder = PadesSigner.Document([0x25]);
         var builder2 = builder.WithExistingField("Signature1");
         builder2.ShouldNotBeSameAs(builder);
     }
@@ -49,7 +49,7 @@ public sealed class DocMdpAndAppearanceTests
     [Fact(DisplayName = "WithExistingField with null name throws exception")]
     public void WithExistingField_NullName_ThrowsArgument()
     {
-        var builder = SimpleSigner.Document([0x25]);
+        var builder = PadesSigner.Document([0x25]);
         var act = () => builder.WithExistingField(null!);
         Should.Throw<ArgumentException>(act);
     }
@@ -57,7 +57,7 @@ public sealed class DocMdpAndAppearanceTests
     [Fact(DisplayName = "WithExistingField with empty name throws exception")]
     public void WithExistingField_EmptyName_ThrowsArgument()
     {
-        var builder = SimpleSigner.Document([0x25]);
+        var builder = PadesSigner.Document([0x25]);
         var act = () => builder.WithExistingField("");
         Should.Throw<ArgumentException>(act);
     }

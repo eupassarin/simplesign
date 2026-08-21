@@ -745,7 +745,7 @@ public sealed class Iso32000ComplianceTests
     {
         using var cert = CreateRsaCert();
         byte[] pdf = BuildMinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf).WithCertificate(cert)
+        byte[] signed = await PadesSigner.Document(pdf).WithCertificate(cert)
             .AsCertification(CertificationLevel.NoChanges)
             .SignAsync();
 
@@ -759,7 +759,7 @@ public sealed class Iso32000ComplianceTests
     {
         using var cert = CreateRsaCert();
         byte[] pdf = BuildMinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf).WithCertificate(cert)
+        byte[] signed = await PadesSigner.Document(pdf).WithCertificate(cert)
             .AsCertification(CertificationLevel.FormFilling)
             .SignAsync();
 
@@ -773,7 +773,7 @@ public sealed class Iso32000ComplianceTests
     {
         using var cert = CreateRsaCert();
         byte[] pdf = BuildMinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf).WithCertificate(cert)
+        byte[] signed = await PadesSigner.Document(pdf).WithCertificate(cert)
             .AsCertification(CertificationLevel.FormFillingAndAnnotations)
             .SignAsync();
 
@@ -787,7 +787,7 @@ public sealed class Iso32000ComplianceTests
     {
         using var cert = CreateRsaCert();
         byte[] pdf = BuildMinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        byte[] signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         using var stream = new MemoryStream(signed);
         bool locked = await PdfStructureReader.IsDocMdpLockedAsync(stream);

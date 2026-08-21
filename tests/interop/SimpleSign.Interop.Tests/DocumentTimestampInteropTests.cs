@@ -76,7 +76,7 @@ public sealed class DocumentTimestampInteropTests(ITestOutputHelper output)
         // First sign
         var pdf = MinimalPdf();
         using var cert = SimpleSign.TestHelpers.TestCertificateFactory.CreateSelfSignedCert("CN=DTS Test Signer");
-        var signed = await SimpleSign.PAdES.SimpleSigner.Document(pdf)
+        var signed = await SimpleSign.PAdES.PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .SignAsync();
 

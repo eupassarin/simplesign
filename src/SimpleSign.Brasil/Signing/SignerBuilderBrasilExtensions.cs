@@ -5,7 +5,7 @@ using SimpleSign.PAdES;
 namespace SimpleSign.Brasil.Signing;
 
 /// <summary>
-/// Extension methods that add Brazil-specific AEA signing capabilities to <see cref="SignerBuilder"/>.
+/// Extension methods that add Brazil-specific AEA signing capabilities to <see cref="PadesSignerBuilder"/>.
 /// </summary>
 public static class SignerBuilderBrasilExtensions
 {
@@ -16,7 +16,7 @@ public static class SignerBuilderBrasilExtensions
     /// </summary>
     /// <param name="builder">The signer builder to configure.</param>
     /// <param name="info">AEA metadata with signer name, CPF, auth method, and optional policy.</param>
-    public static SignerBuilder WithAdvancedSignature(this SignerBuilder builder, AdvancedSignatureInfo info)
+    public static PadesSignerBuilder WithAdvancedSignature(this PadesSignerBuilder builder, AdvancedSignatureInfo info)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(info);

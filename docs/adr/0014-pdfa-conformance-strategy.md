@@ -37,7 +37,7 @@ Detection is purely byte-level (text search for XML tags in the raw bytes) — n
 
 ### 2. Pre-signing validation (`PdfAPreservationValidator`)
 
-Before any PDF modification, `PdfAPreservationValidator` checks whether the requested signing options are compatible with the detected PDF/A level. Activated by `SignerBuilder.WithPdfAPreservation()`.
+Before any PDF modification, `PdfAPreservationValidator` checks whether the requested signing options are compatible with the detected PDF/A level. Activated by `PadesSignerBuilder.WithPdfAPreservation()`.
 
 **Check 1 — SubFilter (PDF/A-1 only):**
 

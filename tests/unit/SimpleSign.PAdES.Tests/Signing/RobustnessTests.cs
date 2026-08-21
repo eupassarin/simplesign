@@ -53,13 +53,13 @@ public sealed class RobustnessTests
     {
         using X509Certificate2 cert = CreateCert();
         byte[] pdfBytes = BuildMinimalPdf();
-        byte[] signed1 = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithFieldName("Sig1")
+        byte[] signed1 = await PadesSigner.Document(pdfBytes).WithCertificate(cert).WithFieldName("Sig1")
             .SignAsync();
         using MemoryStream stream1 = new MemoryStream(signed1);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream1);
         readOnlyList.Count().ShouldBe(1, "");
         readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
-        using MemoryStream stream2 = new MemoryStream(await SimpleSigner.Document(signed1).WithCertificate(cert).WithFieldName("Sig2")
+        using MemoryStream stream2 = new MemoryStream(await PadesSigner.Document(signed1).WithCertificate(cert).WithFieldName("Sig2")
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> actualValue = await ValidatorTrusting(cert).ValidateAsync(stream2);
         actualValue.Count().ShouldBe(2, "");
@@ -88,7 +88,7 @@ public sealed class RobustnessTests
     {
         using X509Certificate2 cert = CreateCert();
         string signerName = new string('A', 500);
-        byte[] array = await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(signerName)
+        byte[] array = await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(signerName)
             .SignAsync();
         array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
@@ -102,7 +102,7 @@ public sealed class RobustnessTests
     {
         using X509Certificate2 cert = CreateCert();
         string reason = new string('R', 1000);
-        byte[] array = await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(null, reason)
+        byte[] array = await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(null, reason)
             .SignAsync();
         array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
@@ -118,7 +118,7 @@ public sealed class RobustnessTests
     public async Task Robustness_UnicodeSignerName_DoesNotCrash(string unicodeName)
     {
         using X509Certificate2 cert = CreateCert();
-        byte[] array = await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(unicodeName)
+        byte[] array = await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithMetadata(unicodeName)
             .SignAsync();
         array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
@@ -177,7 +177,7 @@ public sealed class RobustnessTests
     public async Task Robustness_ValidateSameStreamTwice_SameResults()
     {
         using X509Certificate2 cert = CreateCert();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
         PdfSignatureValidator validator = ValidatorTrusting(cert);
         IReadOnlyList<SignatureValidationResult> results1 = await validator.ValidateAsync(stream);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await validator.ValidateAsync(stream);
@@ -197,7 +197,7 @@ public sealed class RobustnessTests
         {
             byte[][] array = signedPdfs;
             int num = i;
-            array[num] = await SimpleSigner.Document(pdf).WithCertificate(cert).WithFieldName($"ParallelSig{i}")
+            array[num] = await PadesSigner.Document(pdf).WithCertificate(cert).WithFieldName($"ParallelSig{i}")
                 .SignAsync();
         }
         PdfSignatureValidator validator = ValidatorTrusting(cert);
@@ -220,7 +220,7 @@ public sealed class RobustnessTests
     public async Task Robustness_VerySmallNetworkTimeout_IntegrityStillWorks()
     {
         using X509Certificate2 cert = CreateCert();
-        byte[] buffer = await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync();
+        byte[] buffer = await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync();
         ValidationOptions options = new ValidationOptions
         {
             CheckRevocation = false,
@@ -240,7 +240,7 @@ public sealed class RobustnessTests
     {
         using X509Certificate2 cert = CreateCert();
         byte[] pdfBytes = BuildHeaderOnlyPdf();
-        byte[] array = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
+        byte[] array = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
         array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
@@ -256,7 +256,7 @@ public sealed class RobustnessTests
         byte[] array2 = array;
         for (int i = 1; i <= 4; i++)
         {
-            array2 = await SimpleSigner.Document(array2).WithCertificate(cert).WithFieldName($"Sig{i}")
+            array2 = await PadesSigner.Document(array2).WithCertificate(cert).WithFieldName($"Sig{i}")
                 .SignAsync();
         }
         using MemoryStream stream = new MemoryStream(array2);
@@ -320,7 +320,7 @@ public sealed class RobustnessTests
         try
         {
             byte[] pdf = BuildMinimalPdf();
-            Func<Task<byte[]>> action = () => SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+            Func<Task<byte[]>> action = () => PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
             var ex = await Should.ThrowAsync<CertificateValidationException>(async () => await action());
             ex.Message.ShouldContain("expired");
         }

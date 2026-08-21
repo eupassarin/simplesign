@@ -55,7 +55,7 @@ public class AlgorithmBenchmarks
     [BenchmarkCategory("PAdES"), Benchmark(Baseline = true, Description = "RSA-2048 / SHA-256")]
     public async Task<byte[]> PAdES_Rsa2048_Sha256()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_rsaCert2048)
             .WithHashAlgorithm(HashAlgorithmName.SHA256)
             .SignAsync();
@@ -64,7 +64,7 @@ public class AlgorithmBenchmarks
     [BenchmarkCategory("PAdES"), Benchmark(Description = "RSA-4096 / SHA-256")]
     public async Task<byte[]> PAdES_Rsa4096_Sha256()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_rsaCert4096)
             .WithHashAlgorithm(HashAlgorithmName.SHA256)
             .SignAsync();
@@ -73,7 +73,7 @@ public class AlgorithmBenchmarks
     [BenchmarkCategory("PAdES"), Benchmark(Description = "RSA-2048 / SHA-512")]
     public async Task<byte[]> PAdES_Rsa2048_Sha512()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_rsaCert2048)
             .WithHashAlgorithm(HashAlgorithmName.SHA512)
             .SignAsync();
@@ -82,7 +82,7 @@ public class AlgorithmBenchmarks
     [BenchmarkCategory("PAdES"), Benchmark(Description = "ECDSA-P256 / SHA-256")]
     public async Task<byte[]> PAdES_EcdsaP256_Sha256()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_ecdsaP256Cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA256)
             .SignAsync();
@@ -91,7 +91,7 @@ public class AlgorithmBenchmarks
     [BenchmarkCategory("PAdES"), Benchmark(Description = "ECDSA-P384 / SHA-384")]
     public async Task<byte[]> PAdES_EcdsaP384_Sha384()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_ecdsaP384Cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA384)
             .SignAsync();

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using SimpleSign.Brasil.Signing;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
 using Spectre.Console;
@@ -447,6 +448,30 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         _ => null
     };
 
+    private static AdesBaselineProfile BuildBaselineProfile(Settings settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.TsaUrl))
+        {
+            return AdesBaselineProfile.Basic();
+        }
+
+        var timestampOptions = new TimestampOptions(new Uri(settings.TsaUrl));
+        bool ltv = settings.Ltv || settings.Archival;
+
+        if (!ltv)
+        {
+            return AdesBaselineProfile.Timestamped(timestampOptions);
+        }
+
+        var validationOptions = new LongTermValidationOptions();
+        if (settings.Archival)
+        {
+            return AdesBaselineProfile.Archive(timestampOptions, validationOptions);
+        }
+
+        return AdesBaselineProfile.LongTerm(timestampOptions, validationOptions);
+    }
+
     private async Task<int> ExecuteCertSigningAsync(
         Settings settings, string outputPath, ILoggerFactory? loggerFactory, CancellationToken cancellation)
     {
@@ -463,13 +488,25 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 {
                     var pdfBytes = await File.ReadAllBytesAsync(settings.InputPath);
                     ILogger? logger = loggerFactory?.CreateLogger("SimpleSign.Signing");
-                    var builder = chainCerts.Count > 0
-                        ? SimpleSigner.Document(pdfBytes, logger).WithCertificate(cert, chainCerts)
-                        : SimpleSigner.Document(pdfBytes, logger).WithCertificate(cert);
+                    PadesSignerBuilder builder;
+                    if (chainCerts.Count > 0)
+                    {
+                        builder = PadesSigner.Document(pdfBytes).WithCertificate(cert, chainCerts);
+                    }
+                    else
+                    {
+                        builder = PadesSigner.Document(pdfBytes).WithCertificate(cert);
+                    }
+
+                    if (logger is not null)
+                    {
+                        builder = builder.WithLogger(logger);
+                    }
 
                     if (settings.TsaUrl is not null)
                     {
-                        builder = builder.WithTimestamp(settings.TsaUrl);
+                        var profile = BuildBaselineProfile(settings);
+                        builder = builder.WithLevel(profile);
                     }
 
                     if (settings.Hash is not null)
@@ -576,19 +613,9 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                         builder = builder.WithPdfAPreservation();
                     }
 
-                    if (settings.Ltv)
-                    {
-                        builder = builder.WithLtv();
-                    }
-
-                    if (settings.Archival)
-                    {
-                        builder = builder.WithArchivalTimestamp();
-                    }
-
                     var result = await builder.SignWithDetailsAsync();
-                    signed = result.Pdf;
-                    dssEmbedded = result.DssEmbedded;
+                    signed = result.SignedArtifact;
+                    dssEmbedded = result.HasLongTermValidationMaterial;
                 });
 
             await File.WriteAllBytesAsync(outputPath, signed, cancellation);

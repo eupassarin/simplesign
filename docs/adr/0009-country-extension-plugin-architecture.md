@@ -49,7 +49,7 @@ services.AddSingleton<ITrustAnchorProvider, GovBrTrustAnchorProvider>();
 
 **Non-DI path:**
 ```csharp
-SimpleSigner.Document(pdf)
+PadesSigner.Document(pdf)
     .WithCountryExtension<BrasilExtension>()
     .WithCertificate(cert)
     .SignAsync();
@@ -60,7 +60,7 @@ SimpleSigner.Document(pdf)
 | Layer | Extension point consumed | Mechanism |
 |---|---|---|
 | **Validation** | `ITrustAnchorProvider` | DI collection injected into `PdfSignatureValidator` constructor; roots loaded into `X509Chain.CustomTrustStore` |
-| **Validation** | `IChainValidationProvider` | Construction injection into `PdfSignatureValidator` (or via `SignerBuilder.CountryExtensions`); first matching provider enriches `SignatureValidationResult` with `PolicyLevel`, `SignerId`, `SignerIdType`, `ChainValidationRegion`, and `ChainValidationMetadata` |
+| **Validation** | `IChainValidationProvider` | Construction injection into `PdfSignatureValidator` (or via `PadesSignerBuilder.CountryExtensions`); first matching provider enriches `SignatureValidationResult` with `PolicyLevel`, `SignerId`, `SignerIdType`, `ChainValidationRegion`, and `ChainValidationMetadata` |
 | **Signing** | Brazil-specific metadata | `WithAdvancedSignature()` extension maps `AdvancedSignatureInfo` → `SignatureMetadata` → CMS signed attributes (no provider indirection) |
 | **Inspection** | None (OID hard-coded) | `CmsParser` recognises manifest OID directly; no provider needed |
 
@@ -80,4 +80,4 @@ SimpleSigner.Document(pdf)
 | **No plug-in (hard-coded per country)** | Fast to implement first country | Impossible to extend, violates OCP | Rejected |
 | **Attribute-based discovery** | Zero-config for new assemblies | Reflection, AOT incompatible | Rejected |
 
-**Status:** Accepted. The two-interface composite is the canonical extension mechanism. `WithCountryExtension<T>()` on `SignerBuilder` provides both DI and builder-based registration paths. `PdfSignatureValidator` consumes both `ITrustAnchorProvider` and `IChainValidationProvider` via constructor injection or `ICountryExtension` aggregator.
+**Status:** Accepted. The two-interface composite is the canonical extension mechanism. `WithCountryExtension<T>()` on `PadesSignerBuilder` provides both DI and builder-based registration paths. `PdfSignatureValidator` consumes both `ITrustAnchorProvider` and `IChainValidationProvider` via constructor injection or `ICountryExtension` aggregator.

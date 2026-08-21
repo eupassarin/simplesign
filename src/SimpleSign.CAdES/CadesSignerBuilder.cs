@@ -11,361 +11,450 @@ namespace SimpleSign.CAdES;
 
 /// <summary>
 /// Immutable fluent builder for CAdES signatures (ETSI EN 319 122).
-/// Created via <c>new CadesSignerBuilder(data)</c> and configured with
+/// Created via <c>CadesSigner.Document(data)</c> and configured with
 /// <c>With*</c> methods that return a new builder instance.
 /// </summary>
 public sealed class CadesSignerBuilder
 {
     private readonly byte[] _data;
-    private readonly X509Certificate2? _certificate;
-    private readonly IReadOnlyList<X509Certificate2>? _extraCertificates;
-    private readonly HashAlgorithmName _hashAlgorithm;
-    private readonly bool _hashAlgorithmExplicitlySet;
-    private readonly string? _signatureAlgorithmOid;
-    private readonly string? _tsaUrl;
-    private readonly HttpClient? _tsaHttpClient;
-    private readonly HttpClient? _revocationHttpClient;
-    private readonly DateTimeOffset? _signingTime;
-    private readonly CadesLevel _level;
-    private readonly string? _operationId;
-    private readonly Func<byte[], Task<byte[]>>? _externalSigner;
-    private readonly CommitmentType? _commitmentType;
-    private readonly string? _signaturePolicyOid;
-    private readonly string? _signaturePolicyUri;
-    private readonly ILogger _logger;
-    private readonly ITimestampClientFactory? _tsaFactory;
-    private readonly ICmsParser? _cmsParser;
-    private readonly CadesContentType _contentType;
+    private readonly CadesSigningOptions _options;
 
     internal CadesSignerBuilder(byte[] data, ILogger? logger = null)
     {
-        _data = data;
-        _hashAlgorithm = HashAlgorithmName.SHA256;
-        _logger = logger ?? NullLogger.Instance;
-        _contentType = CadesContentType.Detached;
+        _data = (byte[])data.Clone();
+        _options = new CadesSigningOptions(
+            Credential: null,
+            HashAlgorithm: HashAlgorithmName.SHA256,
+            HashAlgorithmExplicitlySet: false,
+            SignatureAlgorithmOid: null,
+            SigningTime: null,
+            Profile: AdesBaselineProfile.Basic(),
+            OperationId: null,
+            CommitmentType: null,
+            SignaturePolicyOid: null,
+            SignaturePolicyUri: null,
+            ContentType: CadesContentType.Detached,
+            Dependencies: new CadesDependencies(null, null, logger ?? NullLogger.Instance, DefaultHttpClientProvider.Instance));
     }
 
     internal CadesSignerBuilder(byte[] data, ITimestampClientFactory tsaFactory, ILogger? logger = null)
     {
-        _data = data;
-        _hashAlgorithm = HashAlgorithmName.SHA256;
-        _logger = logger ?? NullLogger.Instance;
-        _tsaFactory = tsaFactory;
-        _contentType = CadesContentType.Detached;
+        _data = (byte[])data.Clone();
+        _options = new CadesSigningOptions(
+            Credential: null,
+            HashAlgorithm: HashAlgorithmName.SHA256,
+            HashAlgorithmExplicitlySet: false,
+            SignatureAlgorithmOid: null,
+            SigningTime: null,
+            Profile: AdesBaselineProfile.Basic(),
+            OperationId: null,
+            CommitmentType: null,
+            SignaturePolicyOid: null,
+            SignaturePolicyUri: null,
+            ContentType: CadesContentType.Detached,
+            Dependencies: new CadesDependencies(tsaFactory, null, logger ?? NullLogger.Instance, DefaultHttpClientProvider.Instance));
     }
 
     internal CadesSignerBuilder(byte[] data, ITimestampClientFactory tsaFactory, ICmsParser cmsParser, ILogger? logger = null)
     {
-        _data = data;
-        _hashAlgorithm = HashAlgorithmName.SHA256;
-        _logger = logger ?? NullLogger.Instance;
-        _tsaFactory = tsaFactory;
-        _cmsParser = cmsParser;
-        _contentType = CadesContentType.Detached;
+        _data = (byte[])data.Clone();
+        _options = new CadesSigningOptions(
+            Credential: null,
+            HashAlgorithm: HashAlgorithmName.SHA256,
+            HashAlgorithmExplicitlySet: false,
+            SignatureAlgorithmOid: null,
+            SigningTime: null,
+            Profile: AdesBaselineProfile.Basic(),
+            OperationId: null,
+            CommitmentType: null,
+            SignaturePolicyOid: null,
+            SignaturePolicyUri: null,
+            ContentType: CadesContentType.Detached,
+            Dependencies: new CadesDependencies(tsaFactory, cmsParser, logger ?? NullLogger.Instance, DefaultHttpClientProvider.Instance));
     }
 
-    private CadesSignerBuilder(
-        byte[] data,
-        X509Certificate2? certificate,
-        IReadOnlyList<X509Certificate2>? extraCertificates,
-        HashAlgorithmName hashAlgorithm,
-        bool hashAlgorithmExplicitlySet,
-        string? signatureAlgorithmOid,
-        string? tsaUrl,
-        HttpClient? tsaHttpClient,
-        HttpClient? revocationHttpClient,
-        DateTimeOffset? signingTime,
-        CadesLevel level,
-        string? operationId,
-        Func<byte[], Task<byte[]>>? externalSigner,
-        CommitmentType? commitmentType,
-        string? signaturePolicyOid,
-        string? signaturePolicyUri,
-        ILogger logger,
-        CadesContentType contentType)
+    private CadesSignerBuilder(byte[] data, CadesSigningOptions options)
     {
         _data = data;
-        _certificate = certificate;
-        _extraCertificates = extraCertificates;
-        _hashAlgorithm = hashAlgorithm;
-        _hashAlgorithmExplicitlySet = hashAlgorithmExplicitlySet;
-        _signatureAlgorithmOid = signatureAlgorithmOid;
-        _tsaUrl = tsaUrl;
-        _tsaHttpClient = tsaHttpClient;
-        _revocationHttpClient = revocationHttpClient;
-        _signingTime = signingTime;
-        _level = level;
-        _operationId = operationId;
-        _externalSigner = externalSigner;
-        _commitmentType = commitmentType;
-        _signaturePolicyOid = signaturePolicyOid;
-        _signaturePolicyUri = signaturePolicyUri;
-        _logger = logger;
-        _tsaFactory = null;
-        _cmsParser = null;
-        _contentType = contentType;
+        _options = options;
     }
 
-    private CadesSignerBuilder With(
-        X509Certificate2? certificate = null,
-        IReadOnlyList<X509Certificate2>? extraCertificates = null,
-        HashAlgorithmName? hashAlgorithm = null,
-        bool? hashAlgorithmExplicitlySet = null,
-        string? signatureAlgorithmOid = null,
-        string? tsaUrl = null,
-        HttpClient? tsaHttpClient = null,
-        HttpClient? revocationHttpClient = null,
-        DateTimeOffset? signingTime = null,
-        CadesLevel? level = null,
-        string? operationId = null,
-        Func<byte[], Task<byte[]>>? externalSigner = null,
-        CommitmentType? commitmentType = null,
-        string? signaturePolicyOid = null,
-        string? signaturePolicyUri = null,
-        ILogger? logger = null,
-        CadesContentType? contentType = null) =>
-        new(
-            _data,
-            certificate ?? _certificate,
-            extraCertificates ?? _extraCertificates,
-            hashAlgorithm ?? _hashAlgorithm,
-            hashAlgorithmExplicitlySet ?? _hashAlgorithmExplicitlySet,
-            signatureAlgorithmOid ?? _signatureAlgorithmOid,
-            tsaUrl ?? _tsaUrl,
-            tsaHttpClient ?? _tsaHttpClient,
-            revocationHttpClient ?? _revocationHttpClient,
-            signingTime ?? _signingTime,
-            level ?? _level,
-            operationId ?? _operationId,
-            externalSigner ?? _externalSigner,
-            commitmentType ?? _commitmentType,
-            signaturePolicyOid ?? _signaturePolicyOid,
-            signaturePolicyUri ?? _signaturePolicyUri,
-            logger ?? _logger,
-            contentType ?? _contentType);
-
     /// <summary>Sets the signer's certificate (must have a private key for local signing).</summary>
+    /// <param name="certificate">The signing certificate.</param>
+    /// <returns>A new builder with the local credential configured.</returns>
     public CadesSignerBuilder WithCertificate(X509Certificate2 certificate)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        return With(certificate: certificate, externalSigner: null);
+        return WithCredential(new CadesLocalCredential(certificate, []));
     }
 
-    /// <summary>Sets the signer's certificate with an additional certificate chain.</summary>
+    /// <summary>Sets the signer's certificate and its chain.</summary>
+    /// <param name="certificate">The signing certificate.</param>
+    /// <param name="chain">
+    /// Intermediate CA certificates, ordered from the issuer of <paramref name="certificate"/>
+    /// up to (but not including) the root. May be empty. The collection is defensively copied.
+    /// </param>
+    /// <returns>A new builder with the local credential configured.</returns>
     public CadesSignerBuilder WithCertificate(
         X509Certificate2 certificate,
-        IReadOnlyList<X509Certificate2> extraCertificates)
+        IReadOnlyList<X509Certificate2> chain)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        ArgumentNullException.ThrowIfNull(extraCertificates);
-        return With(certificate: certificate, extraCertificates: extraCertificates, externalSigner: null);
+        ArgumentNullException.ThrowIfNull(chain);
+        return WithCredential(new CadesLocalCredential(certificate, CopyChain(chain)));
     }
 
-    /// <summary>Uses an external signing delegate (HSM, cloud KMS, A3 token).</summary>
+    /// <summary>Uses an external signer (HSM, cloud KMS, A3 token).</summary>
+    /// <param name="certificate">The signer's public certificate (private key NOT required).</param>
+    /// <param name="signer">The external signer implementation.</param>
+    /// <returns>A new builder with the external credential configured.</returns>
     public CadesSignerBuilder WithExternalSigner(
         X509Certificate2 certificate,
-        Func<byte[], Task<byte[]>> externalSigner,
-        string signatureAlgorithmOid)
+        IExternalSigner signer)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        ArgumentNullException.ThrowIfNull(externalSigner);
-        ArgumentException.ThrowIfNullOrWhiteSpace(signatureAlgorithmOid);
-        CmsSignatureBuilder.ValidateSignatureAlgorithmCompatibility(certificate, signatureAlgorithmOid);
-        return With(certificate: certificate, externalSigner: externalSigner,
-            signatureAlgorithmOid: signatureAlgorithmOid);
+        ArgumentNullException.ThrowIfNull(signer);
+        return WithCredential(new CadesExternalCredential(certificate, [], signer));
     }
 
-    /// <summary>
-    /// Uses an external signing delegate with auto-detected signature algorithm OID.
-    /// </summary>
+    /// <summary>Uses an external signer with a pre-fetched certificate chain.</summary>
+    /// <param name="certificate">The signer's public certificate (private key NOT required).</param>
+    /// <param name="signer">The external signer implementation.</param>
+    /// <param name="chain">
+    /// Intermediate CA certificates, ordered from the issuer of <paramref name="certificate"/>
+    /// up to (but not including) the root. May be empty. The collection is defensively copied.
+    /// </param>
+    /// <returns>A new builder with the external credential configured.</returns>
     public CadesSignerBuilder WithExternalSigner(
         X509Certificate2 certificate,
-        Func<byte[], Task<byte[]>> externalSigner)
+        IExternalSigner signer,
+        IReadOnlyList<X509Certificate2> chain)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        ArgumentNullException.ThrowIfNull(externalSigner);
-        string sigAlgOid = _signatureAlgorithmOid ?? CryptoUtility.DetectSignatureAlgorithmOid(certificate, _hashAlgorithm);
-        CmsSignatureBuilder.ValidateSignatureAlgorithmCompatibility(certificate, sigAlgOid);
-        return With(certificate: certificate, externalSigner: externalSigner,
-            signatureAlgorithmOid: sigAlgOid);
+        ArgumentNullException.ThrowIfNull(signer);
+        ArgumentNullException.ThrowIfNull(chain);
+        return WithCredential(new CadesExternalCredential(certificate, CopyChain(chain), signer));
     }
 
     /// <summary>Explicitly sets the hash algorithm. Default: SHA-256.</summary>
+    /// <param name="algorithm">The hash algorithm.</param>
+    /// <returns>A new builder with the hash algorithm configured.</returns>
     public CadesSignerBuilder WithHashAlgorithm(HashAlgorithmName algorithm) =>
-        With(hashAlgorithm: algorithm, hashAlgorithmExplicitlySet: true);
+        With(_options with { HashAlgorithm = algorithm, HashAlgorithmExplicitlySet = true });
 
     /// <summary>Explicitly sets the signature algorithm OID.</summary>
+    /// <param name="signatureAlgorithmOid">The signature algorithm OID.</param>
+    /// <returns>A new builder with the signature algorithm configured.</returns>
     public CadesSignerBuilder WithSignatureAlgorithm(string signatureAlgorithmOid)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(signatureAlgorithmOid);
-        return With(signatureAlgorithmOid: signatureAlgorithmOid);
+        return With(_options with { SignatureAlgorithmOid = signatureAlgorithmOid });
+    }
+
+    /// <summary>Sets an explicit claimed signing time. Default: UTC now.</summary>
+    /// <param name="signingTime">The claimed signing time.</param>
+    /// <returns>A new builder with the signing time configured.</returns>
+    public CadesSignerBuilder WithSigningTime(DateTimeOffset signingTime) =>
+        With(_options with { SigningTime = signingTime });
+
+    /// <summary>
+    /// Replaces the complete baseline profile. The requested ETSI level and all of its
+    /// dependencies travel together in one immutable value; no other method changes the level.
+    /// </summary>
+    /// <param name="profile">The complete baseline profile (B-B, B-T, B-LT, or B-LTA).</param>
+    /// <returns>A new builder with the profile configured.</returns>
+    public CadesSignerBuilder WithLevel(AdesBaselineProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return With(_options with { Profile = profile });
     }
 
     /// <summary>
-    /// Enables timestamp from a Time Stamp Authority.
-    /// Sets the CAdES level to at least <see cref="CadesLevel.Timestamped"/>.
+    /// Sets a builder-wide <see cref="IHttpClientProvider"/> used as the fallback for all
+    /// network operations that do not carry their own scoped provider (timestamp,
+    /// long-term validation material, archive timestamp).
     /// </summary>
-    public CadesSignerBuilder WithTimestamp(string tsaUrl)
+    /// <param name="provider">The HTTP client provider.</param>
+    /// <returns>A new builder with the provider configured.</returns>
+    public CadesSignerBuilder WithHttpClientProvider(IHttpClientProvider provider)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(tsaUrl);
-        return With(tsaUrl: tsaUrl, level: _level >= CadesLevel.Timestamped ? _level : CadesLevel.Timestamped);
+        ArgumentNullException.ThrowIfNull(provider);
+        return With(_options with
+        {
+            Dependencies = _options.Dependencies with { HttpClientProvider = provider }
+        });
     }
-
-    /// <summary>Enables timestamp with a specific HttpClient.</summary>
-    public CadesSignerBuilder WithTimestamp(string tsaUrl, HttpClient httpClient)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(tsaUrl);
-        ArgumentNullException.ThrowIfNull(httpClient);
-        return With(tsaUrl: tsaUrl, tsaHttpClient: httpClient,
-            level: _level >= CadesLevel.Timestamped ? _level : CadesLevel.Timestamped);
-    }
-
-    /// <summary>Sets the CAdES conformance level explicitly.</summary>
-    public CadesSignerBuilder WithLevel(CadesLevel level) =>
-        With(level: level);
 
     /// <summary>Sets the content type. Detached = .p7s (default), Enveloped = .p7m with embedded data.</summary>
+    /// <param name="contentType">The CAdES content type.</param>
+    /// <returns>A new builder with the content type configured.</returns>
     public CadesSignerBuilder WithContentType(CadesContentType contentType) =>
-        With(contentType: contentType);
-
-    /// <summary>Sets an explicit signing time. Default: UTC now.</summary>
-    public CadesSignerBuilder WithSigningTime(DateTimeOffset signingTime) =>
-        With(signingTime: signingTime);
+        With(_options with { ContentType = contentType });
 
     /// <summary>
     /// Sets an operation ID for log correlation (appears in all log messages
     /// produced by this signing operation).
     /// </summary>
+    /// <param name="operationId">The operation ID.</param>
+    /// <returns>A new builder with the operation ID configured.</returns>
     public CadesSignerBuilder WithOperationId(string operationId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
-        return With(operationId: operationId);
-    }
-
-    /// <summary>Sets the HttpClient used for TSA requests.</summary>
-    public CadesSignerBuilder WithHttpClient(HttpClient httpClient)
-    {
-        ArgumentNullException.ThrowIfNull(httpClient);
-        return With(tsaHttpClient: httpClient);
-    }
-
-    /// <summary>Sets a dedicated HttpClient for OCSP/CRL revocation checks.</summary>
-    public CadesSignerBuilder WithRevocationHttpClient(HttpClient httpClient)
-    {
-        ArgumentNullException.ThrowIfNull(httpClient);
-        return With(revocationHttpClient: httpClient);
+        return With(_options with { OperationId = operationId });
     }
 
     /// <summary>Sets the commitment type indication (e.g. ProofOfOrigin, ProofOfApproval).</summary>
+    /// <param name="commitmentType">The commitment type.</param>
+    /// <returns>A new builder with the commitment type configured.</returns>
     public CadesSignerBuilder WithCommitmentType(CommitmentType commitmentType) =>
-        With(commitmentType: commitmentType);
+        With(_options with { CommitmentType = commitmentType });
 
     /// <summary>Sets the signature policy identifier and optional URI.</summary>
+    /// <param name="oid">The signature policy OID.</param>
+    /// <param name="uri">Optional policy document URI.</param>
+    /// <returns>A new builder with the signature policy configured.</returns>
     public CadesSignerBuilder WithSignaturePolicy(string oid, string? uri = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(oid);
-        return With(signaturePolicyOid: oid, signaturePolicyUri: uri);
+        return With(_options with { SignaturePolicyOid = oid, SignaturePolicyUri = uri });
     }
 
     /// <summary>Sets the logger for diagnostic output.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <returns>A new builder with the logger configured.</returns>
     public CadesSignerBuilder WithLogger(ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
-        return With(logger: logger);
+        return With(_options with
+        {
+            Dependencies = _options.Dependencies with { Logger = logger }
+        });
     }
 
     /// <summary>Signs the data and returns the DER-encoded CMS/PKCS#7 SignedData.</summary>
+    /// <remarks>
+    /// Throws <see cref="SigningException"/> when the requested level profile is
+    /// configured for best-effort downgrades; use
+    /// <see cref="SignWithDetailsAsync(CancellationToken)"/> in that case.
+    /// </remarks>
+    /// <returns>The DER-encoded CMS signature bytes.</returns>
     public async Task<byte[]> SignAsync(CancellationToken cancellationToken = default)
     {
+        EnsureStrictProfile();
         var result = await SignWithDetailsAsync(cancellationToken).ConfigureAwait(false);
-        return result.Cms;
+        return result.SignedArtifact;
     }
 
     /// <summary>
-    /// Signs the data and returns a structured result with the CMS bytes and
-    /// metadata about applied protection levels and warnings.
+    /// Signs the data and returns a structured result with the CMS bytes, requested and
+    /// achieved baseline levels, actual feature flags, and warnings.
     /// </summary>
+    /// <returns>The detailed CAdES signing result.</returns>
     public async Task<CadesSigningResult> SignWithDetailsAsync(
         CancellationToken cancellationToken = default)
     {
-        if (_certificate is null)
-        {
-            throw new InvalidOperationException(
-                "Certificate not set. Call WithCertificate() or WithExternalSigner() before signing.");
-        }
+        var credential = _options.Credential
+            ?? throw new SigningException(
+                "Certificate not set. Call WithCertificate() or WithExternalSigner() before signing.",
+                SigningErrorReason.CredentialMissing);
+        var certificate = GetCertificate(credential);
+        var chain = GetChain(credential);
+        var profile = _options.Profile;
 
-        var warnings = new List<string>();
+        ValidatePrerequisites(credential);
+
+        var warnings = new List<SigningWarning>();
+        var hashAlg = _options.HashAlgorithm;
+        string sigAlgOid = _options.SignatureAlgorithmOid
+            ?? CryptoUtility.DetectSignatureAlgorithmOid(certificate, hashAlg);
+        CmsSignatureBuilder.ValidateSignatureAlgorithmCompatibility(certificate, sigAlgOid);
 
         byte[] cms;
-        if (_externalSigner is not null)
+        if (credential is CadesExternalCredential external)
         {
-            cms = await SignExternalCoreAsync(warnings, cancellationToken).ConfigureAwait(false);
+            cms = await SignExternalCoreAsync(external, certificate, chain, sigAlgOid, cancellationToken).ConfigureAwait(false);
         }
         else
         {
-            if (!_certificate.HasPrivateKey)
-            {
-                throw new ArgumentException(
-                    "Certificate must have a private key for local signing. Use WithExternalSigner() instead.");
-            }
-            cms = await SignLocalCoreAsync(warnings, cancellationToken).ConfigureAwait(false);
+            cms = SignLocalCore(certificate, chain, sigAlgOid);
         }
+
+        byte[]? timestampTokenBytes = null;
+        if (profile.Timestamp is not null)
+        {
+            try
+            {
+                timestampTokenBytes = await ApplyTimestampAsync(cms, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
+                {
+                    throw new SigningException(
+                        $"Signature timestamp request failed: {ex.Message}",
+                        SigningErrorReason.NetworkFailure,
+                        ex);
+                }
+
+                AddDowngradeWarnings(warnings, SigningWarningCode.SignatureTimestampUnavailable,
+                    $"Signature timestamp could not be applied: {ex.Message}");
+            }
+
+            if (timestampTokenBytes is not null)
+            {
+                cms = TimestampClient.EmbedTimestampInCms(cms, timestampTokenBytes);
+            }
+        }
+
+        bool hasLtvMaterial = false;
+        if (timestampTokenBytes is not null && profile.Level >= AdesBaselineLevel.LongTerm)
+        {
+            byte[]? ltvCms = await ApplyLtvAsync(cms, certificate, chain, cancellationToken).ConfigureAwait(false);
+            if (ltvCms is not null)
+            {
+                cms = ltvCms;
+                hasLtvMaterial = true;
+            }
+            else
+            {
+                AddDowngradeWarnings(warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
+                    "LTV was requested but no certificate and revocation data could be collected.");
+            }
+        }
+
+        bool hasArchiveTimestamp = false;
+        if (hasLtvMaterial && profile.Level >= AdesBaselineLevel.Archive)
+        {
+            try
+            {
+                cms = await ApplyArchiveTimestampAsync(cms, hashAlg, profile, cancellationToken).ConfigureAwait(false);
+                hasArchiveTimestamp = true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
+                {
+                    throw new SigningException(
+                        $"Archive timestamp request failed: {ex.Message}",
+                        SigningErrorReason.NetworkFailure,
+                        ex);
+                }
+
+                AddDowngradeWarnings(warnings, SigningWarningCode.ArchiveTimestampUnavailable,
+                    $"Archive timestamp could not be applied: {ex.Message}");
+            }
+        }
+
+        var achieved = ComputeAchievedLevel(timestampTokenBytes, hasLtvMaterial, hasArchiveTimestamp);
 
         return new CadesSigningResult
         {
-            Cms = cms,
-            TimestampApplied = _level >= CadesLevel.Timestamped && _tsaUrl is not null,
-            LtvDataEmbedded = _level >= CadesLevel.LongTerm,
-            ArchiveTimestampApplied = _level >= CadesLevel.Archive && _tsaUrl is not null,
-            Warnings = warnings
+            SignedArtifact = cms,
+            RequestedLevel = profile.Level,
+            AchievedLevel = achieved,
+            HasSignatureTimestamp = timestampTokenBytes is not null,
+            HasLongTermValidationMaterial = hasLtvMaterial,
+            HasArchiveTimestamp = hasArchiveTimestamp,
+            Warnings = warnings.AsReadOnly()
         };
     }
 
-    private async Task<byte[]> SignLocalCoreAsync(
-        List<string> warnings, CancellationToken ct)
+    private static AdesBaselineLevel ComputeAchievedLevel(
+        byte[]? timestampTokenBytes,
+        bool hasLtvMaterial,
+        bool hasArchiveTimestamp)
     {
-        var certificate = _certificate!;
-        var signingTime = _signingTime ?? DateTimeOffset.UtcNow;
-        var hashAlg = _hashAlgorithm;
-        string sigAlgOid = _signatureAlgorithmOid
-            ?? CryptoUtility.DetectSignatureAlgorithmOid(certificate, hashAlg);
+        if (timestampTokenBytes is null)
+        {
+            return AdesBaselineLevel.Basic;
+        }
 
+        if (!hasLtvMaterial)
+        {
+            return AdesBaselineLevel.Timestamped;
+        }
+
+        return hasArchiveTimestamp ? AdesBaselineLevel.Archive : AdesBaselineLevel.LongTerm;
+    }
+
+    private static void AddDowngradeWarnings(List<SigningWarning> warnings, SigningWarningCode code, string message)
+    {
+        warnings.Add(new SigningWarning(code, message));
+        warnings.Add(new SigningWarning(
+            SigningWarningCode.LevelDowngraded,
+            "The requested baseline level could not be achieved; the artifact was downgraded."));
+    }
+
+    private void EnsureStrictProfile()
+    {
+        if (_options.Profile.FailureBehavior == SigningLevelFailureBehavior.ReturnLowerLevel)
+        {
+            throw new SigningException(
+                "The configured baseline profile allows best-effort level downgrades. " +
+                "Use SignWithDetailsAsync() so the achieved level and warnings are reported.",
+                SigningErrorReason.DowngradeRequiresDetailedResult);
+        }
+    }
+
+    private static void ValidatePrerequisites(CadesSigningCredential credential)
+    {
+        if (credential is not CadesExternalCredential && !GetCertificate(credential).HasPrivateKey)
+        {
+            throw new SigningException(
+                "Certificate must have a private key for local signing. Use WithExternalSigner() instead.",
+                SigningErrorReason.PrivateKeyMissing);
+        }
+    }
+
+    private static X509Certificate2 GetCertificate(CadesSigningCredential credential) => credential switch
+    {
+        CadesLocalCredential c => c.Certificate,
+        CadesExternalCredential c => c.Certificate,
+        _ => throw new InvalidOperationException($"Unknown signing credential type: {credential.GetType().Name}")
+    };
+
+    private static IReadOnlyList<X509Certificate2> GetChain(CadesSigningCredential credential) => credential switch
+    {
+        CadesLocalCredential c => c.Chain,
+        CadesExternalCredential c => c.Chain,
+        _ => throw new InvalidOperationException($"Unknown signing credential type: {credential.GetType().Name}")
+    };
+
+    private byte[] SignLocalCore(
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        string sigAlgOid)
+    {
+        var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
         var extraAttributes = BuildSignedAttributesInternal();
-        byte[]? eContent = _contentType == CadesContentType.Enveloped ? _data : null;
+        byte[]? eContent = _options.ContentType == CadesContentType.Enveloped ? _data : null;
 
-        byte[] cms = CmsSignatureBuilder.Build(
-            _data, certificate, hashAlg, signingTime,
-            _extraCertificates, extraAttributes,
+        return CmsSignatureBuilder.Build(
+            _data, certificate, _options.HashAlgorithm, signingTime,
+            chain, extraAttributes,
             padesAttributes: false,
             signatureAlgorithmOid: sigAlgOid,
-            logger: _logger,
+            logger: _options.Dependencies.Logger,
             eContent: eContent);
-
-        if (_level >= CadesLevel.Timestamped && _tsaUrl is not null)
-        {
-            cms = await ApplyTimestampAsync(cms, hashAlg, ct).ConfigureAwait(false);
-        }
-
-        if (_level >= CadesLevel.LongTerm)
-        {
-            cms = await ApplyLtvAsync(cms, certificate, ct).ConfigureAwait(false);
-        }
-
-        if (_level >= CadesLevel.Archive && _tsaUrl is not null)
-        {
-            cms = await ApplyArchiveTimestampAsync(cms, hashAlg, ct).ConfigureAwait(false);
-        }
-
-        return cms;
     }
 
     private async Task<byte[]> SignExternalCoreAsync(
-        List<string> warnings, CancellationToken ct)
+        CadesExternalCredential external,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        string sigAlgOid,
+        CancellationToken cancellationToken)
     {
-        var certificate = _certificate!;
-        var signingTime = _signingTime ?? DateTimeOffset.UtcNow;
-        var hashAlg = _hashAlgorithm;
-        var sigAlgOid = _signatureAlgorithmOid!;
+        var hashAlg = _options.HashAlgorithm;
+        var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
         string digestOid = CmsSignatureBuilder.GetDigestOid(hashAlg);
 
         byte[] contentHash = CmsSignatureBuilder.ComputeHash(_data, hashAlg);
@@ -375,91 +464,89 @@ public sealed class CadesSignerBuilder
             contentHash, digestOid, signingTime, certificate, extraAttributes,
             padesAttributes: false);
 
-        _logger.Log(LogLevel.Debug, "CAdES external signer invoked.");
-        byte[] signature = await _externalSigner!(signedAttrs).ConfigureAwait(false);
-        if (signature is null || signature.Length == 0)
+        var request = new ExternalSigningRequest(
+            signedAttrs,
+            hashAlg,
+            sigAlgOid,
+            ExternalSigningPayloadKind.CmsSignedAttributes,
+            _options.OperationId);
+        ReadOnlyMemory<byte> signature = await external.Signer.SignAsync(request, cancellationToken).ConfigureAwait(false);
+        if (signature.Length == 0)
         {
-            throw new InvalidOperationException("External signer returned null or empty signature.");
+            throw new SigningException(
+                "External signer returned an empty signature.",
+                SigningErrorReason.ExternalSignerReturnedEmpty);
         }
 
-        List<X509Certificate2> allCerts = [certificate, .. (_extraCertificates ?? [])];
-        byte[]? eContent = _contentType == CadesContentType.Enveloped ? _data : null;
+        List<X509Certificate2> allCerts = [certificate, .. chain];
+        byte[]? eContent = _options.ContentType == CadesContentType.Enveloped ? _data : null;
 
-        byte[] cms = CmsSignatureBuilder.BuildSignedData(
+        return CmsSignatureBuilder.BuildSignedData(
             digestOid, sigAlgOid, hashAlg, signedAttrs,
-            signature, certificate, allCerts,
+            signature.ToArray(), certificate, allCerts,
             eContent: eContent);
-
-        if (_level >= CadesLevel.Timestamped && _tsaUrl is not null)
-        {
-            cms = await ApplyTimestampAsync(cms, hashAlg, ct).ConfigureAwait(false);
-        }
-
-        if (_level >= CadesLevel.LongTerm)
-        {
-            cms = await ApplyLtvAsync(cms, certificate, ct).ConfigureAwait(false);
-        }
-
-        if (_level >= CadesLevel.Archive && _tsaUrl is not null)
-        {
-            cms = await ApplyArchiveTimestampAsync(cms, hashAlg, ct).ConfigureAwait(false);
-        }
-
-        return cms;
     }
 
     private IReadOnlyList<CmsAttribute>? BuildSignedAttributesInternal()
     {
         var attrs = new List<CmsAttribute>();
 
-        if (_commitmentType.HasValue)
+        if (_options.CommitmentType.HasValue)
         {
-            attrs.Add(CmsAttribute.CommitmentTypeIndication(_commitmentType.Value));
+            attrs.Add(CmsAttribute.CommitmentTypeIndication(_options.CommitmentType.Value));
         }
 
-        if (_signaturePolicyOid is not null)
+        if (_options.SignaturePolicyOid is not null)
         {
             attrs.Add(CmsAttribute.SignaturePolicyIdentifier(
-                _signaturePolicyOid, _signaturePolicyUri));
+                _options.SignaturePolicyOid, _options.SignaturePolicyUri));
         }
 
         return attrs.Count > 0 ? attrs : null;
     }
 
-    private async Task<byte[]> ApplyTimestampAsync(
-        byte[] cms, HashAlgorithmName hashAlg, CancellationToken ct)
+    private async Task<byte[]?> ApplyTimestampAsync(
+        byte[] cms,
+        HashAlgorithmName hashAlg,
+        TimestampOptions timestampOptions,
+        CancellationToken cancellationToken)
     {
-        var httpClient = _tsaHttpClient ?? DefaultHttpClientProvider.Instance.GetClient();
-        var tsaClient = _tsaFactory is not null
-            ? _tsaFactory.Create(_tsaUrl!)
-            : new TimestampClient(httpClient, _tsaUrl!, _logger);
+        var tsaClient = CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
         byte[] tsToken = await tsaClient.GetTimestampAsync(
-            TimestampClient.ExtractSignatureValue(cms), hashAlg, ct).ConfigureAwait(false);
+            TimestampClient.ExtractSignatureValue(cms), hashAlg, cancellationToken).ConfigureAwait(false);
         return TimestampClient.EmbedTimestampInCms(cms, tsToken);
     }
 
-    private async Task<byte[]> ApplyLtvAsync(
-        byte[] cms, X509Certificate2? certificate, CancellationToken ct)
+    private ITimestampClient CreateTimestampClient(string endpoint, IHttpClientProvider? scopedProvider)
     {
-        if (certificate is null)
+        if (_options.Dependencies.TsaFactory is not null)
         {
-            return cms;
+            return _options.Dependencies.TsaFactory.Create(endpoint);
         }
 
-        var cmsData = _cmsParser is not null
-            ? _cmsParser.Parse(cms, _logger)
-            : CmsParser.Parse(cms, _logger);
+        var provider = scopedProvider ?? _options.Dependencies.HttpClientProvider;
+        return new TimestampClient(provider.GetClient(), endpoint, _options.Dependencies.Logger);
+    }
+
+    private async Task<byte[]?> ApplyLtvAsync(
+        byte[] cms,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        CancellationToken cancellationToken)
+    {
+        var profile = _options.Profile;
+        var logger = _options.Dependencies.Logger;
+        var cmsData = _options.Dependencies.CmsParser is not null
+            ? _options.Dependencies.CmsParser.Parse(cms, logger)
+            : CmsParser.Parse(cms, logger);
         byte[]? timestampToken = cmsData?.SignatureTimestampToken;
 
         var allKnownCerts = new List<X509Certificate2> { certificate };
-        if (_extraCertificates is not null)
+        foreach (var cert in chain)
         {
-            foreach (var cert in _extraCertificates)
+            if (!allKnownCerts.Any(c => c.Thumbprint == cert.Thumbprint))
             {
-                if (!allKnownCerts.Any(c => c.Thumbprint == cert.Thumbprint))
-                {
-                    allKnownCerts.Add(cert);
-                }
+                allKnownCerts.Add(cert);
             }
         }
 
@@ -475,15 +562,26 @@ public sealed class CadesSignerBuilder
             }
         }
 
-        var httpClient = _revocationHttpClient
-            ?? _tsaHttpClient
-            ?? DefaultHttpClientProvider.Instance.GetClient();
-
+        var ltvProvider = profile.LongTermValidation!.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
         var ltvData = await LtvDataCollector.CollectAsync(
-            httpClient, certificate, allKnownCerts, _logger, cancellationToken: ct).ConfigureAwait(false);
+            ltvProvider.GetClient(), certificate, allKnownCerts, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        bool hasLtvMaterial = ltvData.CertificateRawData.Count > 0
+            && (ltvData.OcspResponses.Count > 0 || ltvData.Crls.Count > 0);
+        if (!hasLtvMaterial)
+        {
+            if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
+            {
+                throw new SigningException(
+                    "LTV was requested but no certificate and revocation data could be collected. " +
+                    "The requested B-LT/B-LTA level cannot be produced.",
+                    SigningErrorReason.LevelNotAchievable);
+            }
+
+            return null;
+        }
 
         var unsignedAttrs = new List<CmsAttribute>();
-
         if (ltvData.CertificateRawData.Count > 0)
         {
             unsignedAttrs.Add(CmsAttribute.CertValues([.. ltvData.CertificateRawData]));
@@ -496,24 +594,25 @@ public sealed class CadesSignerBuilder
                 ltvData.Crls.Count > 0 ? [.. ltvData.Crls] : null));
         }
 
-        if (unsignedAttrs.Count > 0)
-        {
-            cms = CmsSignatureBuilder.AddUnsignedAttributes(cms, unsignedAttrs);
-        }
-
-        return cms;
+        return unsignedAttrs.Count > 0
+            ? CmsSignatureBuilder.AddUnsignedAttributes(cms, unsignedAttrs)
+            : cms;
     }
 
     private async Task<byte[]> ApplyArchiveTimestampAsync(
-        byte[] cms, HashAlgorithmName hashAlg, CancellationToken ct)
+        byte[] cms,
+        HashAlgorithmName hashAlg,
+        AdesBaselineProfile profile,
+        CancellationToken cancellationToken)
     {
-        var httpClient = _tsaHttpClient ?? DefaultHttpClientProvider.Instance.GetClient();
-        var tsaClient = _tsaFactory is not null
-            ? _tsaFactory.Create(_tsaUrl!)
-            : new TimestampClient(httpClient, _tsaUrl!, _logger);
+        var archiveOptions = profile.ArchiveTimestamp;
+        var timestampOptions = profile.Timestamp!;
+        var endpoint = archiveOptions?.Endpoint ?? timestampOptions.Endpoint;
+        var scopedProvider = archiveOptions?.HttpClientProvider ?? timestampOptions.HttpClientProvider;
 
+        var tsaClient = CreateTimestampClient(endpoint.ToString(), scopedProvider);
         byte[] cmsHash = CryptoUtility.ComputeHash(cms, hashAlg);
-        byte[] tsToken = await tsaClient.GetTimestampAsync(cmsHash, hashAlg, ct).ConfigureAwait(false);
+        byte[] tsToken = await tsaClient.GetTimestampAsync(cmsHash, hashAlg, cancellationToken).ConfigureAwait(false);
 
         return CmsSignatureBuilder.AddUnsignedAttributes(cms,
         [
@@ -521,4 +620,12 @@ public sealed class CadesSignerBuilder
         ]);
     }
 
+    private CadesSignerBuilder WithCredential(CadesSigningCredential credential) =>
+        With(_options with { Credential = credential });
+
+    private CadesSignerBuilder With(CadesSigningOptions options) =>
+        new(_data, options);
+
+    private static IReadOnlyList<X509Certificate2> CopyChain(IReadOnlyList<X509Certificate2> chain) =>
+        chain.ToList().AsReadOnly();
 }

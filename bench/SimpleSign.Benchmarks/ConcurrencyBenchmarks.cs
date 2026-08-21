@@ -33,7 +33,7 @@ public class ConcurrencyBenchmarks
     {
         for (int i = 0; i < OperationsPerRun; i++)
         {
-            _ = await SimpleSigner.Document(_pdfBytes)
+            _ = await PadesSigner.Document(_pdfBytes)
                 .WithCertificate(_cert)
                 .SignAsync();
         }
@@ -60,7 +60,7 @@ public class ConcurrencyBenchmarks
                 await semaphore.WaitAsync();
                 try
                 {
-                    var result = await SimpleSigner.Document(_pdfBytes)
+                    var result = await PadesSigner.Document(_pdfBytes)
                         .WithCertificate(_cert)
                         .SignAsync();
                     _ = result.Length;

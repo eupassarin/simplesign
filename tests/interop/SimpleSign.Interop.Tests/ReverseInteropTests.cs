@@ -384,7 +384,7 @@ public sealed class ReverseInteropTests(ITestOutputHelper output)
             using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=SimpleSign Second Signer");
             var signed1Bytes = await File.ReadAllBytesAsync(Path.Combine(tmpDir, "signed1.pdf"));
 
-            var doubleSigned = await SimpleSigner
+            var doubleSigned = await PadesSigner
                 .Document(signed1Bytes)
                 .WithCertificate(cert2)
                 .SignAsync();

@@ -36,7 +36,7 @@ public sealed class StressTests : IDisposable
 
         for (int i = 0; i < iterations; i++)
         {
-            var signed = await SimpleSigner
+            var signed = await PadesSigner
                 .Document(_pdf)
                 .WithCertificate(_cert)
                 .SignAsync();
@@ -68,7 +68,7 @@ public sealed class StressTests : IDisposable
             await semaphore.WaitAsync();
             try
             {
-                var signed = await SimpleSigner
+                var signed = await PadesSigner
                     .Document(_pdf)
                     .WithCertificate(_cert)
                     .SignAsync();
@@ -96,7 +96,7 @@ public sealed class StressTests : IDisposable
 
         for (int i = 0; i < 100; i++)
         {
-            currentPdf = await SimpleSigner
+            currentPdf = await PadesSigner
                 .Document(currentPdf)
                 .WithCertificate(_cert)
                 .SignAsync();

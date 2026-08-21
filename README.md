@@ -91,14 +91,16 @@ dotnet tool install -g SimpleSign.Cli
 ### Sign a PDF (PAdES)
 
 ```csharp
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 
 var pdfBytes = File.ReadAllBytes("contract.pdf");
-var signedPdf = await SimpleSigner
+var signedPdf = await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(certificate)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLtv()
+    .WithLevel(AdesBaselineProfile.LongTerm(
+        new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+        new LongTermValidationOptions()))
     .SignAsync();
 
 File.WriteAllBytes("contract-signed.pdf", signedPdf);
@@ -136,8 +138,10 @@ Supports both **detached** (.p7s) and **enveloped** (.p7m) content types:
 
 ```csharp
 using SimpleSign.CAdES;
+using SimpleSign.Core.Signing;
 
 var data = File.ReadAllBytes("document.pdf");
+var tsa = new Uri("http://timestamp.digicert.com");
 
 // CAdES-B-B (basic)
 var cms = await CadesSigner
@@ -149,24 +153,23 @@ var cms = await CadesSigner
 var cmsBt = await CadesSigner
     .Document(data)
     .WithCertificate(certificate)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLevel(CadesLevel.Timestamped)
+    .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(tsa)))
     .SignAsync();
 
 // CAdES-B-LT (long-term with LTV data)
 var cmsBlt = await CadesSigner
     .Document(data)
     .WithCertificate(certificate, chain)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLevel(CadesLevel.LongTerm)
+    .WithLevel(AdesBaselineProfile.LongTerm(
+        new TimestampOptions(tsa), new LongTermValidationOptions()))
     .SignAsync();
 
 // CAdES-B-LTA (archival timestamp)
 var cmsBlta = await CadesSigner
     .Document(data)
     .WithCertificate(certificate)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLevel(CadesLevel.Archive)
+    .WithLevel(AdesBaselineProfile.Archive(
+        new TimestampOptions(tsa), new LongTermValidationOptions()))
     .SignAsync();
 
 File.WriteAllBytes("document.pdf.p7s", cms);
@@ -205,9 +208,11 @@ Console.WriteLine($"Valid: {result.IsValid}");
 Sign and validate XML documents with XAdES (ETSI EN 319 132) using the same fluent builder API:
 
 ```csharp
+using SimpleSign.Core.Signing;
 using SimpleSign.XAdES;
 
 var xml = File.ReadAllBytes("invoice.xml");
+var tsa = new Uri("http://timestamp.digicert.com");
 
 // XAdES-B-B (basic)
 var signed = await XadesSigner
@@ -219,24 +224,23 @@ var signed = await XadesSigner
 var signedBt = await XadesSigner
     .Document(xml)
     .WithCertificate(certificate)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLevel(XadesLevel.Timestamped)
+    .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(tsa)))
     .SignAsync();
 
 // XAdES-B-LT (long-term with LTV data)
 var signedBlt = await XadesSigner
     .Document(xml)
     .WithCertificate(certificate, chain)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLevel(XadesLevel.LongTerm)
+    .WithLevel(AdesBaselineProfile.LongTerm(
+        new TimestampOptions(tsa), new LongTermValidationOptions()))
     .SignAsync();
 
 // XAdES-B-LTA (archival timestamp)
 var signedBlta = await XadesSigner
     .Document(xml)
     .WithCertificate(certificate)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLevel(XadesLevel.Archive)
+    .WithLevel(AdesBaselineProfile.Archive(
+        new TimestampOptions(tsa), new LongTermValidationOptions()))
     .SignAsync();
 
 File.WriteAllBytes("invoice-signed.xml", signed);
@@ -247,7 +251,7 @@ var detached = await XadesSigner
     .WithCertificate(certificate)
     .WithForm(XadesForm.Detached)
     .WithDataUri("invoice.xml")
-    .WithLevel(XadesLevel.Basic)
+    .WithLevel(AdesBaselineProfile.Basic())
     .SignAsync();
 File.WriteAllBytes("invoice-signed.xml", detached);
 
@@ -256,7 +260,7 @@ var enveloping = await XadesSigner
     .Document(xml)
     .WithCertificate(certificate)
     .WithForm(XadesForm.Enveloping)
-    .WithLevel(XadesLevel.Basic)
+    .WithLevel(AdesBaselineProfile.Basic())
     .SignAsync();
 File.WriteAllBytes("invoice-signed.xml", enveloping);
 ```
@@ -289,13 +293,16 @@ Console.WriteLine($"Valid: {result.IsValid}");
 Sign PDFs with full European standard compliance, from basic signatures to long-term archival:
 
 ```csharp
-var signed = await SimpleSigner
+using SimpleSign.Core.Signing;
+using SimpleSign.PAdES;
+
+var signed = await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(cert)
     .WithMetadata(signerName: "Jane Doe", reason: "Approval", location: "New York")
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLtv()                    // Embed CRL/OCSP for offline validation
-    .WithArchivalTimestamp()      // PAdES B-LTA — valid for decades
+    .WithLevel(AdesBaselineProfile.Archive(      // PAdES B-LTA — valid for decades
+        new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+        new LongTermValidationOptions()))         // Embeds CRL/OCSP for offline validation
     .WithHashAlgorithm(HashAlgorithmName.SHA512)
     .SignAsync();
 ```
@@ -303,14 +310,14 @@ var signed = await SimpleSigner
 | Capability | API |
 |---|---|
 | Basic signature (B-B) | `.WithCertificate(cert).SignAsync()` |
-| Timestamp (B-T) | `.WithTimestamp(tsaUrl)` |
-| Long-term validation (B-LT) | `.WithLtv()` |
-| Archival (B-LTA) | `.WithArchivalTimestamp()` |
+| Timestamp (B-T) | `.WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(tsaUrl))))` |
+| Long-term validation (B-LT) | `.WithLevel(AdesBaselineProfile.LongTerm(new TimestampOptions(new Uri(tsaUrl)), new LongTermValidationOptions()))` |
+| Archival (B-LTA) | `.WithLevel(AdesBaselineProfile.Archive(new TimestampOptions(new Uri(tsaUrl)), new LongTermValidationOptions()))` |
 | Document certification (DocMDP) | `.AsCertification(level)` |
 | PDF/A preservation | `.WithPdfAPreservation()` |
 | Visible signature with QR code | `.WithAppearance(appearance)` |
-| External signer (HSM, KMS) | `.WithExternalSigner(cert, signerFunc)` |
-| Custom HTTP client | `.WithHttpClient(client)` / `.WithTimestamp(url, client)` |
+| External signer (HSM, KMS) | `.WithExternalSigner(cert, signer)` (`IExternalSigner` / `FuncExternalSigner`) |
+| Custom HTTP client | `.WithHttpClientProvider(provider)` / scoped providers in `TimestampOptions` |
 | Existing field | `.WithExistingField("SignHere")` |
 | Deferred (2-phase) | `DeferredSigner.PrepareAsync()` → `CompleteAsync()` |
 | Batch (parallel) | `BatchSigner.Create(cert).Build()` |
@@ -329,7 +336,7 @@ var appearance = new SignatureAppearance
     ExtraLines = ["Department: Legal", "Ref: DOC-2025-001"]
 };
 
-await SimpleSigner
+await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(cert)
     .WithAppearance(appearance)
@@ -376,8 +383,8 @@ Sign multiple documents in parallel with shared resources:
 
 ```csharp
 var batch = BatchSigner.Create(cert)
-    .WithTimestamp("http://timestamp.digicert.com")
-    .WithLtv()
+    .WithMetadata(signerName: "Jane Doe", reason: "Batch approval")
+    .WithMaxConcurrency(4)
     .Build();
 
 // Sign a single document
@@ -519,7 +526,7 @@ var info = new AdvancedSignatureInfo
     InstitutionName = "TCE-ES",
     InstitutionCnpj = "12345678000190"
 };
-// Embed via SignerBuilder.WithSignatureManifest()
+// Embed via PadesSignerBuilder.WithAdvancedSignature()
 ```
 
 ### Trust Anchors for Validation
@@ -665,8 +672,8 @@ contract-signed.pdf  1/1 valid
 |---|---|
 | Custom trust anchors | `ITrustAnchorProvider` |
 | Custom hash algorithm | `HashAlgorithmName` parameter |
-| External signer (HSM/KMS) | `Func<byte[], Task<byte[]>>` callback |
-| Custom HTTP | `IHttpClientProvider` / `HttpClient` injection |
+| External signer (HSM/KMS) | `IExternalSigner` / `FuncExternalSigner` callback |
+| Custom HTTP | `IHttpClientProvider` / `SingleClientProvider` / `HttpClient` injection |
 | Custom logging | `ILogger<T>` injection |
 | Country extensions | `ICountryExtension` |
 | Chain validation | `IChainValidationProvider` |

@@ -108,9 +108,9 @@ public sealed class VeraPdfInteropTests(ITestOutputHelper output)
     /// appearance to satisfy the /AP dictionary requirement (ISO 19005-1 §6.9).
     /// PDF/A-2b/3b use the default ETSI.CAdES.detached with invisible signatures.
     /// </summary>
-    private static SignerBuilder BuildSigner(byte[] pdf, X509Certificate2 cert, string flavour)
+    private static PadesSignerBuilder BuildSigner(byte[] pdf, X509Certificate2 cert, string flavour)
     {
-        var builder = SimpleSigner
+        var builder = PadesSigner
             .Document(pdf)
             .WithCertificate(cert)
             .WithPdfAPreservation();
@@ -213,7 +213,7 @@ public sealed class VeraPdfInteropTests(ITestOutputHelper output)
         byte[] pdf = LoadEmbedded("PDF_A-3b-6-8-t02-pass-a.pdf");
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=veraPDF Tamper");
 
-        byte[] signed = await SimpleSigner
+        byte[] signed = await PadesSigner
             .Document(pdf)
             .WithCertificate(cert)
             .WithPdfAPreservation()

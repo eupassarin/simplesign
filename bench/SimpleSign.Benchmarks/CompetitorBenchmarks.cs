@@ -58,7 +58,7 @@ public class CompetitorBenchmarks
     [Benchmark(Baseline = true, Description = "SimpleSign PAdES-B-B")]
     public async Task<byte[]> SimpleSignBaseline()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_simpleSignCert)
             .SignAsync();
     }

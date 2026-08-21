@@ -101,7 +101,9 @@ internal static partial class DssExtractor
         }
 
         var objMarker = Encoding.ASCII.GetBytes($"{dssObjNum} 0 obj");
-        int objIdx = IndexOfBytes(data, objMarker);
+        // Incremental updates append revisions; the latest definition of an object
+        // number wins (xref chain semantics), so resolve the LAST occurrence.
+        int objIdx = LastIndexOfBytes(data, objMarker);
         if (objIdx < 0)
         {
             return null;
@@ -162,7 +164,8 @@ internal static partial class DssExtractor
                 foreach (var objRef in ParseObjRefs(arraySlice))
                 {
                     var crlObjMarker = Encoding.ASCII.GetBytes($"{objRef} 0 obj");
-                    int crlObjIdx = IndexOfBytes(data, crlObjMarker);
+                    // Resolve the latest definition of the object (incremental update semantics).
+                    int crlObjIdx = LastIndexOfBytes(data, crlObjMarker);
                     if (crlObjIdx < 0)
                     {
                         continue;
@@ -222,6 +225,23 @@ internal static partial class DssExtractor
     internal static int IndexOfBytes(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle)
     {
         for (int i = 0; i <= haystack.Length - needle.Length; i++)
+        {
+            if (haystack[i..].StartsWith(needle))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Finds the LAST occurrence of <paramref name="needle"/> in <paramref name="haystack"/>.
+    /// Used to resolve object definitions in incremental PDF updates, where the latest
+    /// revision's definition of an object number wins.
+    /// </summary>
+    internal static int LastIndexOfBytes(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle)
+    {
+        for (int i = haystack.Length - needle.Length; i >= 0; i--)
         {
             if (haystack[i..].StartsWith(needle))
             {
@@ -367,7 +387,8 @@ internal static partial class DssExtractor
     private static VriData? ExtractVriEntryData(ReadOnlySpan<byte> pdfData, int vriObjNum)
     {
         var objMarker = Encoding.ASCII.GetBytes($"{vriObjNum} 0 obj");
-        int objIdx = IndexOfBytes(pdfData, objMarker);
+        // Resolve the latest definition of the object (incremental update semantics).
+        int objIdx = LastIndexOfBytes(pdfData, objMarker);
         if (objIdx < 0)
         {
             return null;
@@ -467,7 +488,8 @@ internal static partial class DssExtractor
     private static byte[]? ExtractStreamByObjNum(ReadOnlySpan<byte> pdfData, int objNum)
     {
         var objMarker = Encoding.ASCII.GetBytes($"{objNum} 0 obj");
-        int objIdx = IndexOfBytes(pdfData, objMarker);
+        // Resolve the latest definition of the object (incremental update semantics).
+        int objIdx = LastIndexOfBytes(pdfData, objMarker);
         if (objIdx < 0)
         {
             return null;

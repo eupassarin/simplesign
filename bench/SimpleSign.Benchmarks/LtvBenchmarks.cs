@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using BenchmarkDotNet.Attributes;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.TestHelpers;
 
@@ -24,38 +25,40 @@ public class LtvBenchmarks
     [Benchmark(Baseline = true, Description = "PAdES-B-B (no timestamp, no LTV)")]
     public async Task<byte[]> Baseline()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .SignAsync();
     }
 
     [Benchmark(Description = "PAdES-B-T (with timestamp)")]
-    public async Task<byte[]> WithTimestamp()
+    public async Task<byte[]> BaselineT()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
-            .WithTimestamp("http://timestamp.digicert.com")
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
             .SignAsync();
     }
 
     [Benchmark(Description = "PAdES-B-LT (timestamp + LTV)")]
-    public async Task<byte[]> WithLtv()
+    public async Task<byte[]> BaselineLt()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
-            .WithTimestamp("http://timestamp.digicert.com")
-            .WithLtv()
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions()))
             .SignAsync();
     }
 
     [Benchmark(Description = "PAdES-B-LTA (timestamp + LTV + archival)")]
-    public async Task<byte[]> WithArchivalTimestamp()
+    public async Task<byte[]> BaselineLta()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
-            .WithTimestamp("http://timestamp.digicert.com")
-            .WithLtv()
-            .WithArchivalTimestamp()
+            .WithLevel(AdesBaselineProfile.Archive(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions()))
             .SignAsync();
     }
 }

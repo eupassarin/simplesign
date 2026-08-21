@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
@@ -14,7 +16,7 @@ namespace SimpleSign.PAdES.Tests.Signing;
 
 /// <summary>
 /// Tests for public APIs without coverage.
-/// Covers: SimpleSigner.Document(string), SignerBuilder.WithTimestamp(string, HttpClient),
+/// Covers: PadesSigner.DocumentAsync(string), Timestamped profile with a custom HttpClient,
 /// PdfStructureReader, LtvEmbedder, BatchValidationResult, SignatureValidationResult,
 /// EncryptedPdfException, and concurrent signing.
 /// </summary>
@@ -48,7 +50,7 @@ public sealed class MissingCoverageTests
         try
         {
             await File.WriteAllBytesAsync(tempFile, TestPdfFactory.CreateMinimalPdf());
-            (await SimpleSigner.DocumentAsync(tempFile)).ShouldNotBeNull("");
+            (await PadesSigner.DocumentAsync(tempFile)).ShouldNotBeNull("");
         }
         finally
         {
@@ -60,21 +62,23 @@ public sealed class MissingCoverageTests
     public async Task DocumentAsync_NonExistentPath_ThrowsFileNotFoundException()
     {
         string fakePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".pdf");
-        await Assert.ThrowsAsync<FileNotFoundException>(() => SimpleSigner.DocumentAsync(fakePath));
+        await Assert.ThrowsAsync<FileNotFoundException>(() => PadesSigner.DocumentAsync(fakePath));
     }
 
     [Fact(DisplayName = "DocumentAsync(string) with empty string throws ArgumentException")]
     public async Task DocumentAsync_EmptyString_ThrowsArgumentException()
     {
-        Func<Task<SignerBuilder>> action = () => SimpleSigner.DocumentAsync("");
+        Func<Task<PadesSignerBuilder>> action = () => PadesSigner.DocumentAsync("");
         await Should.ThrowAsync<ArgumentException>(async () => await action());
     }
 
-    [Fact(DisplayName = "WithTimestamp(url, HttpClient) accepts custom HttpClient without error")]
-    public void WithTimestamp_CustomHttpClient_BuildsWithoutError()
+    [Fact(DisplayName = "Timestamped profile with custom HttpClient builds without error")]
+    public void TimestampedProfile_CustomHttpClient_BuildsWithoutError()
     {
         using HttpClient httpClient = new HttpClient();
-        SignerBuilder actualValue = SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithTimestamp("http://tsa.example.com", httpClient);
+        PadesSignerBuilder actualValue = PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(httpClient))));
         actualValue.ShouldNotBeNull("");
     }
 
@@ -89,7 +93,7 @@ public sealed class MissingCoverageTests
     public async Task IsDocMdpLockedAsync_CertificationNoChanges_ReturnsTrue()
     {
         using X509Certificate2 cert = CreateRsaCert();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).AsCertification(CertificationLevel.NoChanges)
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).AsCertification(CertificationLevel.NoChanges)
             .SignAsync());
         (await PdfStructureReader.IsDocMdpLockedAsync(stream)).ShouldBeTrue("");
     }
@@ -98,7 +102,7 @@ public sealed class MissingCoverageTests
     public async Task IsDocMdpLockedAsync_RegularSignature_ReturnsFalse()
     {
         using X509Certificate2 cert = CreateRsaCert();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync());
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync());
         (await PdfStructureReader.IsDocMdpLockedAsync(stream)).ShouldBeFalse("");
     }
 
@@ -113,7 +117,7 @@ public sealed class MissingCoverageTests
     public async Task DetectPdfALevelAsync_SignedPdf_DoesNotThrow()
     {
         using X509Certificate2 cert = CreateRsaCert();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync());
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync());
         (await PdfStructureReader.DetectPdfALevelAsync(stream)).ShouldBe(PdfALevel.None, "");
     }
 
@@ -121,7 +125,7 @@ public sealed class MissingCoverageTests
     public async Task ExtractSignatureContentHashes_SignedPdf_ReturnsNonEmptyList()
     {
         using X509Certificate2 cert = CreateRsaCert();
-        List<string> list = LtvEmbedder.ExtractSignatureContentHashes(await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync());
+        List<string> list = LtvEmbedder.ExtractSignatureContentHashes(await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync());
         list.ShouldNotBeEmpty();
         foreach (var h in list)
         {
@@ -179,7 +183,7 @@ public sealed class MissingCoverageTests
         X509Certificate2 cert = CreateRsaCert();
         try
         {
-            using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync());
+            using MemoryStream stream = new MemoryStream(await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync());
             IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
             readOnlyList.Count().ShouldBe(1, "");
             readOnlyList[0].EmbeddedCertificates.ShouldNotBeEmpty("");
@@ -236,8 +240,8 @@ public sealed class MissingCoverageTests
         using X509Certificate2 cert1 = CreateRsaCert("CN=Concurrent A, C=BR");
         using X509Certificate2 cert2 = CreateRsaCert("CN=Concurrent B, C=BR");
         byte[] pdfBytes = TestPdfFactory.CreateMinimalPdf();
-        Task<byte[]> task = SimpleSigner.Document(pdfBytes).WithCertificate(cert1).SignAsync();
-        Task<byte[]> task2 = SimpleSigner.Document(pdfBytes).WithCertificate(cert2).SignAsync();
+        Task<byte[]> task = PadesSigner.Document(pdfBytes).WithCertificate(cert1).SignAsync();
+        Task<byte[]> task2 = PadesSigner.Document(pdfBytes).WithCertificate(cert2).SignAsync();
         byte[][] results = await Task.WhenAll(task, task2);
         results[0].ShouldNotBeEmpty("");
         results[1].ShouldNotBeEmpty("");

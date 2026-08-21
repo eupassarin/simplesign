@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Constants;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -36,14 +37,14 @@ public sealed class Rfc8933EddsaCmsComplianceTests
     {
         using var key = cert.GetECDsaPrivateKey()!;
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        byte[] signed = await SimpleSigner.Document(pdf)
+        byte[] signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(hash)
-            .WithExternalSigner(cert, async h =>
+            .WithExternalSigner(cert, new FuncExternalSigner(async h =>
             {
                 byte[] sig = key.SignHash(h, DSASignatureFormat.Rfc3279DerSequence);
                 return await Task.FromResult(sig);
-            })
+            }))
             .SignAsync();
 
         var sigs = await PadesExtractor.ExtractAsync(signed);

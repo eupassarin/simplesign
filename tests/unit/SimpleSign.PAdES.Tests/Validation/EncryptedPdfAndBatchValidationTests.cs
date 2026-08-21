@@ -107,7 +107,7 @@ public sealed class EncryptedPdfAndBatchValidationTests
     public async Task ValidateBatchAsync_MultiplePdfs_ReturnsResultForEach()
     {
         using var cert = CreateCert();
-        byte[] signedPdf = await SimpleSigner.Document(CreateMinimalPdf())
+        byte[] signedPdf = await PadesSigner.Document(CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 
@@ -158,7 +158,7 @@ public sealed class EncryptedPdfAndBatchValidationTests
     public async Task ValidateBatchAsync_PreservesIndex()
     {
         using var cert = CreateCert();
-        byte[] signedPdf = await SimpleSigner.Document(CreateMinimalPdf())
+        byte[] signedPdf = await PadesSigner.Document(CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 

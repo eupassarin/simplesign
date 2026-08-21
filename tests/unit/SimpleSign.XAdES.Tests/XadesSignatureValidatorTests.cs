@@ -2,6 +2,7 @@ using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
 using SimpleSign.XAdES;
@@ -164,7 +165,7 @@ public sealed class XadesSignatureValidatorTests
     {
         byte[] signed = await XadesSigner.Document(s_xmlBytes)
             .WithCertificate(s_cert)
-            .WithLevel(XadesLevel.Basic)
+            .WithLevel(AdesBaselineProfile.Basic())
             .SignAsync();
 
         var validator = new XadesSignatureValidator(new ValidationOptions { CheckRevocation = false });

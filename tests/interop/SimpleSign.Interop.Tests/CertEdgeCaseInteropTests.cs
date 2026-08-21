@@ -24,7 +24,7 @@ public sealed class CertEdgeCaseInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-itext");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=4096-bit RSA", 4096, HashAlgorithmName.SHA256);
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);
@@ -53,7 +53,7 @@ public sealed class CertEdgeCaseInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable("simplesign-eu-dss");
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=4096-bit RSA EU DSS", 4096, HashAlgorithmName.SHA256);
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);
@@ -87,7 +87,7 @@ public sealed class CertEdgeCaseInteropTests(ITestOutputHelper output)
         using (root)
         {
             var pdf = MinimalPdf();
-            var signed = await SimpleSigner.Document(pdf)
+            var signed = await PadesSigner.Document(pdf)
                 .WithCertificate(leaf)
                 .SignAsync();
 

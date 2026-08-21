@@ -5,7 +5,7 @@
     <!-- Override TargetFrameworks from Directory.Build.props — dotnet tools require exactly one TFM -->
     <TargetFrameworks>net8.0</TargetFrameworks>
     <TargetFramework>net8.0</TargetFramework>
-    <Version>0.7.1</Version>
+    <Version>0.8.0</Version>
     <AssemblyName>simplesign</AssemblyName>
     <PackageId>SimpleSign.Cli</PackageId>
     <Description>SimpleSign CLI — sign, validate, and inspect PDF and CAdES digital signatures from the terminal.</Description>

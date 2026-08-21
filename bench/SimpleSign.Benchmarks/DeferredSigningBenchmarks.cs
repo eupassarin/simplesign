@@ -48,7 +48,7 @@ public class DeferredSigningBenchmarks
     [Benchmark(Baseline = true, Description = "Direct sign (single-phase baseline)")]
     public async Task<byte[]> DirectSign()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .SignAsync();
     }

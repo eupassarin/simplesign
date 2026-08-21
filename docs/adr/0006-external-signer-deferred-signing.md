@@ -16,19 +16,17 @@ Traditional signing libraries assume the private key is loaded into process memo
 **Decision:**
 Two complementary patterns, both supporting AOT compatibility:
 
-### 1. External Signer (`WithExternalSigner` callback)
+### 1. External Signer (`WithExternalSigner` + `IExternalSigner`)
 
 For scenarios where the caller controls the full signing operation:
 
 ```csharp
-.WithExternalSigner(async (hash, hashAlgorithm, cert) =>
-{
-    // Sign hash with external key, return CMS signature bytes
-    return await hsm.SignAsync(hash, hashAlgorithm);
-})
+.WithExternalSigner(cert, signer)
+// signer : IExternalSigner
+// ValueTask<ReadOnlyMemory<byte>> SignAsync(ExternalSigningRequest request, CancellationToken ct)
 ```
 
-The callback receives the computed hash + algorithm and must return a complete DER-encoded CMS `SignedData`. SimpleSign embeds the returned CMS into the PDF.
+The signer receives an explicit `ExternalSigningRequest` carrying the payload bytes (CMS signed attributes for PAdES/CAdES; canonicalized XML `SignedInfo` for XAdES — distinguished by `PayloadKind`), the fully resolved hash algorithm, the signature algorithm OID, and the operation ID. It returns raw signature bytes (RSA PKCS#1 v1.5, ECDSA DER SEQUENCE { r, s }, or raw EdDSA bytes). Legacy delegates are adapted via `FuncExternalSigner`. Algorithm inference and compatibility validation happen at terminal execution, after all fluent calls, so configuration order cannot freeze mismatched digest/signature pairs. See ADR 0015.
 
 ### 2. Deferred Signing (`DeferredSigner.PrepareAsync` + `CompleteAsync`)
 
@@ -50,11 +48,11 @@ The `sessionData` is an opaque blob that encodes the PDF state between phases. T
 **Consequences:**
 
 - Private key isolation: key never enters SimpleSign process memory
-- AOT-safe: callbacks use `Func<>` delegates, no dynamic invocation
+- AOT-safe: `IExternalSigner` is a plain interface, no dynamic invocation
 - `DeferredSigner` requires stateful session management (opaque blob approach chosen over session IDs to avoid server-side storage dependency)
-- Algorithm inference: both paths auto-detect hash algorithm from certificate unless overridden
-- Timestamp hash: `CompleteAsync` derives timestamp hash from the CMS digest OID
-- External signer must produce CMS — caller needs ASN.1/DER knowledge
+- Algorithm inference: resolved at terminal execution from the certificate and configuration
+- Timestamp hash: derived from the fully resolved signing hash
+- External signer returns a raw signature — SimpleSign constructs the CMS/XML container
 - Deferred session data is not encrypted (caller is responsible for secure storage)
 - EdDSA (Ed25519/Ed448) only supported via external signer path (no BCL API for direct EdDSA signing)
 

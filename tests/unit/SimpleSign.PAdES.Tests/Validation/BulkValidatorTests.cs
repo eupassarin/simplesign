@@ -21,7 +21,7 @@ public sealed class BulkValidatorTests
 
     private static async Task<byte[]> SignPdf(X509Certificate2 cert)
     {
-        return await SimpleSigner.Document(CreateMinimalPdf())
+        return await PadesSigner.Document(CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
     }

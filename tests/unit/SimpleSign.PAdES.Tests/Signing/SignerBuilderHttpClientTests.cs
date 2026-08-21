@@ -1,5 +1,6 @@
 using Shouldly;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 using Xunit;
 
@@ -23,7 +24,7 @@ public sealed class SignerBuilderHttpClientTests
     public void WithHttpClientProvider_ProviderCalledAtSignTime_NotBuildTime()
     {
         var provider = new RecordingHttpClientProvider();
-        var builder = SimpleSigner.Document([0x25, 0x50, 0x44, 0x46]).WithHttpClientProvider(provider);
+        var builder = PadesSigner.Document([0x25, 0x50, 0x44, 0x46]).WithHttpClientProvider(provider);
 
         provider.CallCount.ShouldBe(0);
 
@@ -38,27 +39,33 @@ public sealed class SignerBuilderHttpClientTests
     public void WithHttpClientProvider_IsLazy()
     {
         var provider = new RecordingHttpClientProvider();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
-            .WithTimestamp("http://tsa.example.com")
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://tsa.example.com"))))
             .WithHttpClientProvider(provider)
-            .WithLtv();
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://tsa.example.com")),
+                new LongTermValidationOptions()));
 
         provider.CallCount.ShouldBe(0);
     }
 
-    [Fact(DisplayName = "WithLtv preserves IHttpClientProvider")]
-    public void WithLtv_PreservesHttpClientProvider()
+    [Fact(DisplayName = "WithLevel LongTerm preserves IHttpClientProvider")]
+    public void WithLevel_LongTerm_PreservesHttpClientProvider()
     {
         var provider = new RecordingHttpClientProvider();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
-            .WithTimestamp("http://tsa.example.com")
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://tsa.example.com"))))
             .WithHttpClientProvider(provider)
             .WithOperationId("op1")
             .WithPdfAPreservation()
             .WithMetadata(signerName: "Test")
-            .WithLtv();
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://tsa.example.com")),
+                new LongTermValidationOptions()));
 
         provider.CallCount.ShouldBe(0);
     }
@@ -67,7 +74,7 @@ public sealed class SignerBuilderHttpClientTests
     public void WithMetadata_PreservesHttpClientProvider()
     {
         var provider = new RecordingHttpClientProvider();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
             .WithHttpClientProvider(provider)
             .WithMetadata(signerName: "Test");
@@ -79,7 +86,7 @@ public sealed class SignerBuilderHttpClientTests
     public void WithOperationId_PreservesHttpClientProvider()
     {
         var provider = new RecordingHttpClientProvider();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
             .WithHttpClientProvider(provider)
             .WithOperationId("op1");
@@ -91,7 +98,7 @@ public sealed class SignerBuilderHttpClientTests
     public void WithPdfAPreservation_PreservesHttpClientProvider()
     {
         var provider = new RecordingHttpClientProvider();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
             .WithHttpClientProvider(provider)
             .WithPdfAPreservation();
@@ -103,7 +110,7 @@ public sealed class SignerBuilderHttpClientTests
     public void WithLegacyCms_PreservesHttpClientProvider()
     {
         var provider = new RecordingHttpClientProvider();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
             .WithHttpClientProvider(provider)
             .WithLegacyCms();
@@ -115,7 +122,7 @@ public sealed class SignerBuilderHttpClientTests
     public void WithSubFilter_PreservesHttpClientProvider()
     {
         var provider = new RecordingHttpClientProvider();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
             .WithHttpClientProvider(provider)
             .WithSubFilter(PdfSignatureSubFilter.AdbePkcs7Detached);
@@ -123,29 +130,29 @@ public sealed class SignerBuilderHttpClientTests
         provider.CallCount.ShouldBe(0);
     }
 
-    [Fact(DisplayName = "WithArchivalTimestamp preserves IHttpClientProvider")]
-    public void WithArchivalTimestamp_PreservesHttpClientProvider()
+    [Fact(DisplayName = "WithLevel Archive preserves IHttpClientProvider")]
+    public void WithLevel_Archive_PreservesHttpClientProvider()
     {
         var provider = new RecordingHttpClientProvider();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
-            .WithTimestamp("http://tsa.example.com")
-            .WithHttpClientProvider(provider)
-            .WithLtv()
-            .WithArchivalTimestamp();
+            .WithLevel(AdesBaselineProfile.Archive(
+                new TimestampOptions(new Uri("http://tsa.example.com")),
+                new LongTermValidationOptions()))
+            .WithHttpClientProvider(provider);
 
         provider.CallCount.ShouldBe(0);
     }
 
-    [Fact(DisplayName = "WithHttpClient does not call the provider")]
-    public void WithHttpClient_ProviderNotCalled()
+    [Fact(DisplayName = "WithHttpClientProvider does not call the provider")]
+    public void WithHttpClientProvider_ProviderNotCalled()
     {
         var provider = new RecordingHttpClientProvider();
         var httpClient = new HttpClient();
-        SimpleSigner
+        PadesSigner
             .Document([0x25, 0x50, 0x44, 0x46])
             .WithHttpClientProvider(provider)
-            .WithHttpClient(httpClient);
+            .WithHttpClientProvider(new SingleClientProvider(httpClient));
 
         provider.CallCount.ShouldBe(0);
     }

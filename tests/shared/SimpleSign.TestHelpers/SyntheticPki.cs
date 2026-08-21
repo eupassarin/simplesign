@@ -197,6 +197,24 @@ public sealed class SyntheticPki : IDisposable
     /// <summary>Returns intermediates only (for embedding in CMS extra-certs).</summary>
     public X509Certificate2[] IntermediatesAndRoot() => [IntermediateCa, RootCa];
 
+    /// <summary>
+    /// Builds a DER-encoded CRL signed by the intermediate CA covering the leaf certificate.
+    /// Serves as realistic revocation data for LTV collection in tests that require
+    /// B-LT/B-LTA material. Pair with a local HTTP handler answering the CDP URL.
+    /// </summary>
+    public byte[] BuildLeafCrl()
+    {
+        var builder = new CertificateRevocationListBuilder();
+        builder.AddEntry(Leaf, DateTimeOffset.UtcNow.AddDays(-1));
+        return builder.Build(
+            IntermediateCa,
+            new System.Numerics.BigInteger(0x0C0D),
+            DateTimeOffset.UtcNow.AddDays(30),
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1,
+            DateTimeOffset.UtcNow.AddDays(-1));
+    }
+
     public void Dispose()
     {
         Leaf.Dispose();

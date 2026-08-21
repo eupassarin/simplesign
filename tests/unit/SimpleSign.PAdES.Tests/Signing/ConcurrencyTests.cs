@@ -47,11 +47,11 @@ public sealed class ConcurrencyTests : IAsyncLifetime
         }
     }
 
-    [Fact(DisplayName = "SimpleSigner parallel signing — thread safe")]
+    [Fact(DisplayName = "PadesSigner parallel signing — thread safe")]
     public async Task SimpleSigner_ParallelSigning_ThreadSafe()
     {
         var tasks = Enumerable.Range(0, 5)
-            .Select(_ => SimpleSigner.Document(MinimalPdf).WithCertificate(_cert).SignAsync())
+            .Select(_ => PadesSigner.Document(MinimalPdf).WithCertificate(_cert).SignAsync())
             .ToArray();
 
         var results = await Task.WhenAll(tasks);

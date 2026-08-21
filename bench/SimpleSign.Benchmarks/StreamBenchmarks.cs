@@ -43,7 +43,7 @@ public class StreamBenchmarks
     [Benchmark(Baseline = true, Description = "byte[] → byte[] (baseline)")]
     public async Task<byte[]> ByteArray_InOut()
     {
-        return await SimpleSigner.Document(_pdfBytes)
+        return await PadesSigner.Document(_pdfBytes)
             .WithCertificate(_cert)
             .SignAsync();
     }
@@ -53,7 +53,7 @@ public class StreamBenchmarks
     {
         using var input = new MemoryStream(_pdfBytes);
         using var output = new MemoryStream();
-        await SimpleSigner.Document(input)
+        await PadesSigner.Document(input)
             .WithCertificate(_cert)
             .SignAsync(output);
         return (int)output.Length;
@@ -70,7 +70,7 @@ public class StreamBenchmarks
         {
             await using var input = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             await using var output = new FileStream(outputPath, FileMode.Create, FileAccess.ReadWrite);
-            await SimpleSigner.Document(input)
+            await PadesSigner.Document(input)
                 .WithCertificate(_cert)
                 .SignAsync(output);
             return (int)output.Length;

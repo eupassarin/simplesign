@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
@@ -36,9 +38,9 @@ public sealed class PadesTStandaloneTests
     {
         using var cert = CreateRsaCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        using var stream = new MemoryStream(await SimpleSigner
+        using var stream = new MemoryStream(await PadesSigner
             .Document(pdf).WithCertificate(cert)
-            .WithTimestamp("http://timestamp.digicert.com")
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
             .SignAsync());
 
         var results = await ValidatorNoRevocation(cert).ValidateAsync(stream);
@@ -52,9 +54,9 @@ public sealed class PadesTStandaloneTests
     {
         using var cert = CreateRsaCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        byte[] signed = await SimpleSigner
+        byte[] signed = await PadesSigner
             .Document(pdf).WithCertificate(cert)
-            .WithTimestamp("http://timestamp.digicert.com")
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
             .SignAsync();
 
         var info = await PdfSignatureInspector.InspectAsync(new MemoryStream(signed));
@@ -67,9 +69,9 @@ public sealed class PadesTStandaloneTests
     {
         using var cert = CreateRsaCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        byte[] signed = await SimpleSigner
+        byte[] signed = await PadesSigner
             .Document(pdf).WithCertificate(cert)
-            .WithTimestamp("http://timestamp.digicert.com")
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
             .SignAsync();
 
         var info = await PdfSignatureInspector.InspectAsync(new MemoryStream(signed));
@@ -81,20 +83,31 @@ public sealed class PadesTStandaloneTests
     {
         using var cert = CreateRsaCert();
         byte[] pdf = TestPdfFactory.CreateMinimalPdf();
-        byte[] signed = await SimpleSigner
+        // A failing revocation provider guarantees no revocation material can be
+        // collected (B-LT requires revocation values), so the best-effort downgrade
+        // stays at B-T with a real signature timestamp and no DSS.
+        using var failingRevocation = MockHttpHandler.Failing();
+        var result = await PadesSigner
             .Document(pdf).WithCertificate(cert)
-            .WithTimestamp("http://timestamp.digicert.com")
-            .WithLtv()
-            .SignAsync();
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(failingRevocation)),
+                failureBehavior: SigningLevelFailureBehavior.ReturnLowerLevel))
+            .SignWithDetailsAsync();
 
-        var results = await ValidatorNoRevocation(cert).ValidateAsync(new MemoryStream(signed));
+        // Self-signed certs have no revocation endpoints, so LTV cannot be embedded.
+        // With best-effort downgrade the artifact stays at B-T and the downgrade is reported.
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        result.HasLongTermValidationMaterial.ShouldBeFalse();
+        result.Warnings.ShouldContain(w => w.Code == SigningWarningCode.LevelDowngraded);
+
+        var results = await ValidatorNoRevocation(cert).ValidateAsync(new MemoryStream(result.SignedArtifact));
         results.Count.ShouldBe(1);
         results[0].IsIntegrityValid.ShouldBeTrue();
         results[0].IsSignatureValid.ShouldBeTrue();
 
-        var info = await PdfSignatureInspector.InspectAsync(new MemoryStream(signed));
-        // Self-signed certs have no revocation endpoints, so LTV cannot be embedded.
-        // Conformance stays at BaselineT when no revocation data is available.
+        var info = await PdfSignatureInspector.InspectAsync(new MemoryStream(result.SignedArtifact));
+        info.Document.SecurityStore.ShouldBeNull();
         var level = ConformanceDetector.Detect(info.Signatures[0], info.Document, info.Signatures);
         level.ShouldBe(PAdESConformanceLevel.BaselineT);
     }

@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Shouldly;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.TestHelpers;
 using SimpleSign.XAdES;
 using Xunit;
@@ -17,8 +19,9 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
         SkipIfDockerUnavailable();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XAdES EU DSS Interop");
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><id>42</id></doc>";
-        byte[] signed = await XadesSigner.SignAsync(
-            System.Text.Encoding.UTF8.GetBytes(xml), cert);
+        byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+            .WithCertificate(cert)
+            .SignAsync();
         await ValidateXmlWithEuDss(signed, "xades-bb");
     }
 
@@ -30,22 +33,26 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><data>test</data></doc>";
         var result = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
             .WithCertificate(cert)
-            .WithLevel(XadesLevel.Timestamped)
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
             .SignWithDetailsAsync();
-        await ValidateXmlWithEuDss(result.SignedXml, "xades-b-t");
+        await ValidateXmlWithEuDss(result.SignedArtifact, "xades-b-t");
     }
 
     [SkippableFact(DisplayName = "XAdES-B-LT validates under EU DSS")]
     public async Task XadesBLT_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
-        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XAdES B-LT EU DSS");
+        using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><ltv>yes</ltv></doc>";
         var result = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
-            .WithCertificate(cert)
-            .WithLevel(XadesLevel.LongTerm)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignWithDetailsAsync();
-        await ValidateXmlWithEuDss(result.SignedXml, "xades-b-lt");
+        await ValidateXmlWithEuDss(result.SignedArtifact, "xades-b-lt");
     }
 
     [SkippableFact(DisplayName = "XAdES double-signed validates under EU DSS")]
@@ -56,8 +63,8 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=XAdES Signer 2");
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>multi</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
-        byte[] signed1 = await XadesSigner.SignAsync(xmlBytes, cert1);
-        byte[] signed2 = await XadesSigner.SignAsync(signed1, cert2);
+        byte[] signed1 = await XadesSigner.Document(xmlBytes).WithCertificate(cert1).SignAsync();
+        byte[] signed2 = await XadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
         await ValidateXmlWithEuDss(signed2, "xades-double-signed");
     }
 
@@ -87,25 +94,29 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
             .WithCertificate(cert)
             .WithForm(XadesForm.Detached)
             .WithDataUri("data.xml")
-            .WithLevel(XadesLevel.Timestamped)
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
             .SignWithDetailsAsync();
-        await ValidateXmlWithEuDssDetached(result.SignedXml, xmlBytes, "xades-bt-detached");
+        await ValidateXmlWithEuDssDetached(result.SignedArtifact, xmlBytes, "xades-bt-detached");
     }
 
     [SkippableFact(DisplayName = "XAdES-B-LT Detached validates under EU DSS")]
     public async Task XadesBLT_Detached_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
-        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XAdES B-LT Detached EU DSS");
+        using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><ltv>detached</ltv></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
         var result = await XadesSigner.Document(xmlBytes)
-            .WithCertificate(cert)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .WithForm(XadesForm.Detached)
             .WithDataUri("data.xml")
-            .WithLevel(XadesLevel.LongTerm)
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignWithDetailsAsync();
-        await ValidateXmlWithEuDssDetached(result.SignedXml, xmlBytes, "xades-blt-detached");
+        await ValidateXmlWithEuDssDetached(result.SignedArtifact, xmlBytes, "xades-blt-detached");
     }
 
     [SkippableFact(DisplayName = "XAdES-B-B Enveloping validates under EU DSS")]
@@ -132,24 +143,28 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
         var result = await XadesSigner.Document(xmlBytes)
             .WithCertificate(cert)
             .WithForm(XadesForm.Enveloping)
-            .WithLevel(XadesLevel.Timestamped)
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
             .SignWithDetailsAsync();
-        await ValidateXmlWithEuDss(result.SignedXml, "xades-bt-enveloping");
+        await ValidateXmlWithEuDss(result.SignedArtifact, "xades-bt-enveloping");
     }
 
     [SkippableFact(DisplayName = "XAdES-B-LT Enveloping validates under EU DSS")]
     public async Task XadesBLT_Enveloping_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
-        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XAdES B-LT Enveloping EU DSS");
+        using var pki = new SyntheticPki(crlDistributionPoint: "http://crl.example.com/test-ca.crl");
+        using var crlClient = TestRevocation.BuildCrlClient(pki.BuildLeafCrl());
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><ltv>env</ltv></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
         var result = await XadesSigner.Document(xmlBytes)
-            .WithCertificate(cert)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .WithForm(XadesForm.Enveloping)
-            .WithLevel(XadesLevel.LongTerm)
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignWithDetailsAsync();
-        await ValidateXmlWithEuDss(result.SignedXml, "xades-blt-enveloping");
+        await ValidateXmlWithEuDss(result.SignedArtifact, "xades-blt-enveloping");
     }
 
     private static void SkipIfDockerUnavailable()

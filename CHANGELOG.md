@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cross-format signing contract** — shared `AdesBaselineProfile` (factories `Basic`, `Timestamped`, `LongTerm`, `Archive`) with cumulative level dependencies encoded in types; `AdesBaselineLevel`, `TimestampOptions`, `LongTermValidationOptions`, `ArchiveTimestampOptions`, `SigningLevelFailureBehavior`, `ISigningResult`, `SigningWarning`/`SigningWarningCode`, `SigningErrorReason`, `IExternalSigner`/`ExternalSigningRequest`/`ExternalSigningPayloadKind` in `SimpleSign.Core`.
+- **`PadesSigner` / `PadesSignerBuilder`** — format-qualified PAdES entry point and builder (`Document`, `DocumentAsync`, `WithLogger`, `WithLevel`, `WithSigningTime`, `WithHttpClientProvider`, chain-capable external signers).
+- **Strict level fulfillment** — the requested baseline level is a postcondition; B-LT/B-LTA without collectible material throw `SigningException` unless the profile opts into `SigningLevelFailureBehavior.ReturnLowerLevel` (requires `SignWithDetailsAsync`).
+- **Truthful results across formats** — `RequestedLevel`, `AchievedLevel`, `HasSignatureTimestamp`, `HasLongTermValidationMaterial`, `HasArchiveTimestamp`, and structured `SigningWarning` warnings on `PadesSigningResult`, `CadesSigningResult`, and `XadesSigningResult`.
+- **Explicit external-signing request** — `IExternalSigner.SignAsync(ExternalSigningRequest, …)` carries payload kind, resolved algorithms, and operation ID; `FuncExternalSigner` adapts legacy delegates; algorithm resolution moved to terminal execution (order-independent).
+- **Provider-based HTTP configuration for all formats** — `WithHttpClientProvider`, scoped providers in `TimestampOptions`/`LongTermValidationOptions`/`ArchiveTimestampOptions`, `SingleClientProvider` adapter; deterministic scoped-over-builder-wide precedence.
+- **Cross-format contract test suite** — `tests/unit/SimpleSign.Contracts.Tests` (43 tests) covering profile factories, strict/downgrade semantics, atomic profile replacement, credential replacement, defensive copying, lazy provider resolution, and external-signer request contents.
 - **CAdES-Enveloped (.p7m)** — `CadesContentType` enum (`Detached`, `Enveloped`) with `WithContentType()` on the builder. CLISupport via `--content-type detached|enveloped`. When Enveloped, the original data is embedded as `eContent` in the CMS SignedData.
 - **JSON output for CAdES/XAdES validation** — `--json` flag on `cades validate` and `xades validate` commands, using source-generated JSON serialization (AOT-safe).
 - **CAdES signing fuzz target** — new `cades-sign` fuzz target in the SharpFuzz harness (10 total targets).
@@ -17,10 +24,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CAdES benchmarks** — 6 new benchmarks in `CadesBenchmarks.cs` (signing detached/enveloped at 1KB/100KB + validation).
 - **XAdES benchmarks** — 6 new benchmarks in `XadesBenchmarks.cs` (signing all 3 forms + validation).
 - **CLI stdin/pipe support** — all sign and validate commands accept `-` as input path to read from stdin.
-- **`XadesSignerBuilder.WithOperationId()`** — added for consistency with CAdES and PAdES builders.
+
+### Breaking changes
+
+- **Removed legacy signing surface** (migration guide: `docs/migration/v0.7-to-v0.8.md`):
+  - `SimpleSigner` / `SignerBuilder` → `PadesSigner` / `PadesSignerBuilder`.
+  - `WithTimestamp`, `WithLtv`, `WithArchivalTimestamp`, `WithHttpClient`, `WithRevocationHttpClient` → `WithLevel(AdesBaselineProfile)` + provider-based options.
+  - CAdES/XAdES enum-based `WithLevel` and `WithTimestamp`; `CadesSigningOptions`/`XadesSigningOptions` and the static `SignAsync` shortcuts → builder + profile.
+  - `PdfSigningResult.Pdf`/`DssEmbedded`, `CadesSigningResult.Cms`/`TimestampApplied`/`LtvDataEmbedded`/`ArchiveTimestampApplied`, `XadesSigningResult.SignedXml`/… → `SignedArtifact` + `ISigningResult` members.
+  - `Func<byte[], Task<byte[]>>` external signers → `IExternalSigner` (use `FuncExternalSigner` to adapt).
+  - Error behavior: signing configuration failures throw `SigningException` with `SigningErrorReason` across formats.
+- **Strict level postcondition** — B-LT/B-LTA requests that cannot be fulfilled now throw by default instead of silently producing a lower-level artifact.
+- **Truthful feature flags** — PAdES basic signatures report `HasLongTermValidationMaterial == false`; CAdES/XAdES flags derive from the produced artifact, not the requested enum.
 
 ### Changed
 
+- **Builders use record-based immutable state** — injected collaborators (TSA factory, LTV embedder, CMS parser) survive every fluent call; credentials are mutually exclusive states; collections are defensively copied; byte-array inputs are snapshotted.
+- **ADRs** — new ADR 0015 (cross-format signing contract); ADRs 0006, 0008, 0010, and 0012 updated to the profile/provider/external-signer model.
 - **README** — updated CAdES section to mention enveloped mode (.p7m); added enveloped example and CLI `--content-type` example.
 
 ### Improved

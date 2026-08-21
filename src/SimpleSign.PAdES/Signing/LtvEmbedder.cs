@@ -243,15 +243,12 @@ public sealed class LtvEmbedder : ILtvEmbedder
             }
         }
 
-        // If no revocation data found AND no certificates to embed, return early
-        // (but still append EOL if needed for proper incremental update chaining)
-        if (crlData is [] && ocspData is [] && allCerts is [])
+        // If no revocation data was collected, do not embed a certificate-only DSS:
+        // B-LT material requires revocation values (ETSI EN 319 142), and a cert-only
+        // DSS would misreport the achieved level. Preserve the EOL invariant instead.
+        if (crlData is [] && ocspData is [])
         {
             _logger.LtvNoRevocationDataCollected();
-            // v0.4.0: even when no LTV data is embedded, the source PDF must end
-            // with an EOL marker so any downstream incremental update is LF-preceded.
-            // Avoid a full double-copy: check the last byte and only allocate when
-            // the trailing EOL is actually missing.
             signedPdf = EnsureTrailingEol(signedPdf);
             return signedPdf;
         }
@@ -260,20 +257,6 @@ public sealed class LtvEmbedder : ILtvEmbedder
 
         // Extract signature /Contents hashes for VRI (SHA-1 per ISO 32000-2 §12.8.4.4)
         var signatureHashes = ExtractSignatureContentHashes(signedPdf);
-
-        if (crlData is [] && ocspData is [])
-        {
-            _logger.LtvNoRevocationDataCollected();
-            // Only certificates are available — only worth embedding a DSS if there are
-            // actual signatures to key VRI entries against (e.g. self-signed cert scenario).
-            // Without signatures there is nothing to reference; return early and preserve
-            // the EOL invariant the same way the "no data at all" path does.
-            if (signatureHashes.Count == 0)
-            {
-                signedPdf = EnsureTrailingEol(signedPdf);
-                return signedPdf;
-            }
-        }
 
         // Parse existing DSS for merge (multi-signature support)
         var existingDss = Validation.DssExtractor.ParseExistingDss(signedPdf);

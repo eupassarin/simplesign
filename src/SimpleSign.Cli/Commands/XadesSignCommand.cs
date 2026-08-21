@@ -139,7 +139,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
 
         using X509Certificate2 cert = await LoadCertificateAsync(settings, cancellationToken);
 
-        var level = ParseLevel(settings.Level) ?? XadesLevel.Basic;
+        var level = ParseLevel(settings.Level) ?? AdesBaselineLevel.Basic;
         var hashAlg = ParseHashAlgorithm(settings.HashAlgorithm) ?? HashAlgorithmName.SHA256;
         var form = ParseForm(settings.Form) ?? XadesForm.Enveloped;
         var commitment = settings.Commitment is not null ? ParseCommitment(settings.Commitment) : null;
@@ -148,12 +148,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         var builder = XadesSigner.Document(xmlData, logger)
             .WithCertificate(cert)
             .WithHashAlgorithm(hashAlg)
-            .WithLevel(level)
             .WithForm(form);
 
-        if (settings.TsaUrl is not null)
+        if (settings.TsaUrl is not null && level >= AdesBaselineLevel.Timestamped)
         {
-            builder = builder.WithTimestamp(settings.TsaUrl);
+            builder = builder.WithLevel(BuildBaselineProfile(settings.TsaUrl, level));
         }
         if (settings.DataUri is not null)
         {
@@ -215,12 +214,23 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         return certs.ToList().AsReadOnly();
     }
 
-    private static XadesLevel? ParseLevel(string? level) => level?.ToLowerInvariant() switch
+    private static AdesBaselineProfile BuildBaselineProfile(string tsaUrl, AdesBaselineLevel level)
     {
-        "basic" or "b-b" => XadesLevel.Basic,
-        "timestamped" or "b-t" => XadesLevel.Timestamped,
-        "longterm" or "b-lt" => XadesLevel.LongTerm,
-        "archive" or "b-lta" => XadesLevel.Archive,
+        var timestampOptions = new TimestampOptions(new Uri(tsaUrl));
+        return level switch
+        {
+            AdesBaselineLevel.Timestamped => AdesBaselineProfile.Timestamped(timestampOptions),
+            AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(timestampOptions, new LongTermValidationOptions()),
+            _ => AdesBaselineProfile.Archive(timestampOptions, new LongTermValidationOptions())
+        };
+    }
+
+    private static AdesBaselineLevel? ParseLevel(string? level) => level?.ToLowerInvariant() switch
+    {
+        "basic" or "b-b" => AdesBaselineLevel.Basic,
+        "timestamped" or "b-t" => AdesBaselineLevel.Timestamped,
+        "longterm" or "b-lt" => AdesBaselineLevel.LongTerm,
+        "archive" or "b-lta" => AdesBaselineLevel.Archive,
         _ => null
     };
 

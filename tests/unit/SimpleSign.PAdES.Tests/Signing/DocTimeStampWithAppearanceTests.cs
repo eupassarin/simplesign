@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using Shouldly;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.Pdf;
 using SimpleSign.TestHelpers;
@@ -82,9 +84,9 @@ public sealed class DocTimeStampWithAppearanceTests
         byte[] pdf = BuildPdfWithPage();
         var httpClient = BuildMockTsaClient();
 
-        byte[] signedPdf = await SimpleSigner.Document(pdf)
+        byte[] signedPdf = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
-            .WithTimestamp("http://tsa.example.com", httpClient)
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(httpClient))))
             .WithAppearance(new SignatureAppearance { X = 20, Y = 20 })
             .SignAsync();
 
@@ -148,9 +150,9 @@ public sealed class DocTimeStampWithAppearanceTests
         // This is the exact flow the CLI uses: Sign + LTV + DocTimeStamp
         // Skip LTV since it requires real network for CRL/OCSP
         // Instead, directly exercise the DocTimeStamp on the signed PDF
-        byte[] signedPdf = await SimpleSigner.Document(pdf)
+        byte[] signedPdf = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
-            .WithTimestamp("http://tsa.example.com", httpClient)
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(httpClient))))
             .WithAppearance(new SignatureAppearance
             {
                 X = 50,
@@ -191,9 +193,9 @@ public sealed class DocTimeStampWithAppearanceTests
         byte[] pdf = BuildPdfWithPage();
         var httpClient = BuildMockTsaClient();
 
-        byte[] signedPdf = await SimpleSigner.Document(pdf)
+        byte[] signedPdf = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
-            .WithTimestamp("http://tsa.example.com", httpClient)
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(httpClient))))
             .WithAppearance(new SignatureAppearance { X = 10, Y = 10 })
             .SignAsync();
 
@@ -245,9 +247,9 @@ public sealed class DocTimeStampWithAppearanceTests
         var httpClient = BuildMockTsaClient();
 
         // Step 1: Sign with visible appearance (same as HostSigner flow)
-        byte[] signedPdf = await SimpleSigner.Document(pdf)
+        byte[] signedPdf = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
-            .WithTimestamp("http://tsa.example.com", httpClient)
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(httpClient))))
             .WithAppearance(new SignatureAppearance { X = 20, Y = 20, Page = 1 })
             .SignAsync();
 
@@ -304,9 +306,9 @@ public sealed class DocTimeStampWithAppearanceTests
         var httpClient = BuildMockTsaClient();
 
         // Sign with visible appearance
-        byte[] signedPdf = await SimpleSigner.Document(pdf)
+        byte[] signedPdf = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
-            .WithTimestamp("http://tsa.example.com", httpClient)
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(httpClient))))
             .WithAppearance(new SignatureAppearance { X = 50, Y = 50, Page = 1 })
             .SignAsync();
 

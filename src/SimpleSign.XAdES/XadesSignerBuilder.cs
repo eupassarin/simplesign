@@ -16,450 +16,575 @@ namespace SimpleSign.XAdES;
 public sealed class XadesSignerBuilder
 {
     private readonly byte[] _xmlData;
-    private readonly X509Certificate2? _certificate;
-    private readonly IReadOnlyList<X509Certificate2>? _extraCertificates;
-    private readonly HashAlgorithmName _hashAlgorithm;
-    private readonly bool _hashAlgorithmExplicitlySet;
-    private readonly string? _signatureAlgorithmOid;
-    private readonly string? _tsaUrl;
-    private readonly HttpClient? _tsaHttpClient;
-    private readonly HttpClient? _revocationHttpClient;
-    private readonly DateTimeOffset? _signingTime;
-    private readonly XadesLevel _level;
-    private readonly XadesForm _form;
-    private readonly Func<byte[], Task<byte[]>>? _externalSigner;
-    private readonly string? _dataUri;
-    private readonly CommitmentType? _commitmentType;
-    private readonly string? _signaturePolicyOid;
-    private readonly string? _signaturePolicyUri;
-    private readonly IReadOnlyList<string>? _signerRoles;
-    private readonly DataObjectFormat? _dataObjectFormat;
-    private readonly string? _operationId;
-    private readonly ILogger _logger;
-    private readonly ITimestampClientFactory? _tsaFactory;
+    private readonly XadesSigningOptions _options;
 
     internal XadesSignerBuilder(byte[] xmlData, ILogger? logger = null)
     {
-        _xmlData = xmlData;
-        _hashAlgorithm = HashAlgorithmName.SHA256;
-        _hashAlgorithmExplicitlySet = false;
-        _form = XadesForm.Enveloped;
-        _logger = logger ?? NullLogger.Instance;
+        _xmlData = (byte[])xmlData.Clone();
+        _options = new XadesSigningOptions(
+            Credential: null,
+            HashAlgorithm: HashAlgorithmName.SHA256,
+            HashAlgorithmExplicitlySet: false,
+            SignatureAlgorithmOid: null,
+            SigningTime: null,
+            Profile: AdesBaselineProfile.Basic(),
+            Form: XadesForm.Enveloped,
+            DataUri: null,
+            CommitmentType: null,
+            SignaturePolicyOid: null,
+            SignaturePolicyUri: null,
+            SignerRoles: null,
+            DataObjectFormat: null,
+            OperationId: null,
+            Dependencies: new XadesDependencies(null, logger ?? NullLogger.Instance, DefaultHttpClientProvider.Instance));
     }
 
     internal XadesSignerBuilder(byte[] xmlData, ITimestampClientFactory tsaFactory, ILogger? logger = null)
     {
-        _xmlData = xmlData;
-        _hashAlgorithm = HashAlgorithmName.SHA256;
-        _hashAlgorithmExplicitlySet = false;
-        _form = XadesForm.Enveloped;
-        _logger = logger ?? NullLogger.Instance;
-        _tsaFactory = tsaFactory;
+        _xmlData = (byte[])xmlData.Clone();
+        _options = new XadesSigningOptions(
+            Credential: null,
+            HashAlgorithm: HashAlgorithmName.SHA256,
+            HashAlgorithmExplicitlySet: false,
+            SignatureAlgorithmOid: null,
+            SigningTime: null,
+            Profile: AdesBaselineProfile.Basic(),
+            Form: XadesForm.Enveloped,
+            DataUri: null,
+            CommitmentType: null,
+            SignaturePolicyOid: null,
+            SignaturePolicyUri: null,
+            SignerRoles: null,
+            DataObjectFormat: null,
+            OperationId: null,
+            Dependencies: new XadesDependencies(tsaFactory, logger ?? NullLogger.Instance, DefaultHttpClientProvider.Instance));
     }
 
-    private XadesSignerBuilder(
-        byte[] xmlData, X509Certificate2? certificate,
-        IReadOnlyList<X509Certificate2>? extraCertificates,
-        HashAlgorithmName hashAlgorithm, bool hashAlgorithmExplicitlySet,
-        string? signatureAlgorithmOid, string? tsaUrl,
-        HttpClient? tsaHttpClient, HttpClient? revocationHttpClient,
-        DateTimeOffset? signingTime, XadesLevel level, XadesForm form,
-        string? dataUri,
-        Func<byte[], Task<byte[]>>? externalSigner,
-        CommitmentType? commitmentType, string? signaturePolicyOid,
-        string? signaturePolicyUri, IReadOnlyList<string>? signerRoles,
-        DataObjectFormat? dataObjectFormat, string? operationId,
-        ILogger logger)
+    private XadesSignerBuilder(byte[] xmlData, XadesSigningOptions options)
     {
         _xmlData = xmlData;
-        _certificate = certificate;
-        _extraCertificates = extraCertificates;
-        _hashAlgorithm = hashAlgorithm;
-        _hashAlgorithmExplicitlySet = hashAlgorithmExplicitlySet;
-        _signatureAlgorithmOid = signatureAlgorithmOid;
-        _tsaUrl = tsaUrl;
-        _tsaHttpClient = tsaHttpClient;
-        _revocationHttpClient = revocationHttpClient;
-        _signingTime = signingTime;
-        _level = level;
-        _form = form;
-        _dataUri = dataUri;
-        _externalSigner = externalSigner;
-        _commitmentType = commitmentType;
-        _signaturePolicyOid = signaturePolicyOid;
-        _signaturePolicyUri = signaturePolicyUri;
-        _signerRoles = signerRoles;
-        _dataObjectFormat = dataObjectFormat;
-        _operationId = operationId;
-        _logger = logger;
-        _tsaFactory = null;
+        _options = options;
     }
 
-    private XadesSignerBuilder With(
-        X509Certificate2? certificate = null,
-        IReadOnlyList<X509Certificate2>? extraCertificates = null,
-        HashAlgorithmName? hashAlgorithm = null,
-        bool? hashAlgorithmExplicitlySet = null,
-        string? signatureAlgorithmOid = null, string? tsaUrl = null,
-        HttpClient? tsaHttpClient = null,
-        HttpClient? revocationHttpClient = null,
-        DateTimeOffset? signingTime = null, XadesLevel? level = null,
-        XadesForm? form = null,
-        string? dataUri = null,
-        Func<byte[], Task<byte[]>>? externalSigner = null,
-        CommitmentType? commitmentType = null,
-        string? signaturePolicyOid = null,
-        string? signaturePolicyUri = null,
-        IReadOnlyList<string>? signerRoles = null,
-        DataObjectFormat? dataObjectFormat = null,
-        string? operationId = null,
-        ILogger? logger = null) =>
-        new(_xmlData, certificate ?? _certificate,
-            extraCertificates ?? _extraCertificates,
-            hashAlgorithm ?? _hashAlgorithm,
-            hashAlgorithmExplicitlySet ?? _hashAlgorithmExplicitlySet,
-            signatureAlgorithmOid ?? _signatureAlgorithmOid,
-            tsaUrl ?? _tsaUrl, tsaHttpClient ?? _tsaHttpClient,
-            revocationHttpClient ?? _revocationHttpClient,
-            signingTime ?? _signingTime, level ?? _level, form ?? _form,
-            dataUri ?? _dataUri,
-            externalSigner ?? _externalSigner,
-            commitmentType ?? _commitmentType,
-            signaturePolicyOid ?? _signaturePolicyOid,
-            signaturePolicyUri ?? _signaturePolicyUri,
-            signerRoles ?? _signerRoles,
-            dataObjectFormat ?? _dataObjectFormat,
-            operationId ?? _operationId,
-            logger ?? _logger);
-
     /// <summary>Sets the signing certificate (must have a private key for local signing).</summary>
+    /// <param name="certificate">The signing certificate.</param>
+    /// <returns>A new builder with the local credential configured.</returns>
     public XadesSignerBuilder WithCertificate(X509Certificate2 certificate)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        return With(certificate: certificate, externalSigner: null);
+        return WithCredential(new XadesLocalCredential(certificate, []));
     }
 
-    /// <summary>Sets the signing certificate and extra intermediate CA certificates.</summary>
+    /// <summary>Sets the signing certificate and its chain.</summary>
+    /// <param name="certificate">The signing certificate.</param>
+    /// <param name="chain">
+    /// Intermediate CA certificates, ordered from the issuer of <paramref name="certificate"/>
+    /// up to (but not including) the root. May be empty. The collection is defensively copied.
+    /// </param>
+    /// <returns>A new builder with the local credential configured.</returns>
     public XadesSignerBuilder WithCertificate(
         X509Certificate2 certificate,
-        IReadOnlyList<X509Certificate2> extraCertificates)
+        IReadOnlyList<X509Certificate2> chain)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        ArgumentNullException.ThrowIfNull(extraCertificates);
-        return With(certificate: certificate, extraCertificates: extraCertificates, externalSigner: null);
+        ArgumentNullException.ThrowIfNull(chain);
+        return WithCredential(new XadesLocalCredential(certificate, CopyChain(chain)));
     }
 
-    /// <summary>
-    /// Configures external signing. The delegate receives the raw data to sign
-    /// and returns the signature bytes. Requires explicit signatureAlgorithmOid.
-    /// </summary>
+    /// <summary>Configures external signing (HSM, cloud KMS, A3 token).</summary>
+    /// <param name="certificate">The signer's public certificate (private key NOT required).</param>
+    /// <param name="signer">The external signer implementation.</param>
+    /// <returns>A new builder with the external credential configured.</returns>
     public XadesSignerBuilder WithExternalSigner(
         X509Certificate2 certificate,
-        Func<byte[], Task<byte[]>> externalSigner,
-        string signatureAlgorithmOid)
+        IExternalSigner signer)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        ArgumentNullException.ThrowIfNull(externalSigner);
-        ArgumentException.ThrowIfNullOrWhiteSpace(signatureAlgorithmOid);
-        CmsSignatureBuilder.ValidateSignatureAlgorithmCompatibility(certificate, signatureAlgorithmOid);
-        return With(certificate: certificate, externalSigner: externalSigner,
-            signatureAlgorithmOid: signatureAlgorithmOid);
+        ArgumentNullException.ThrowIfNull(signer);
+        return WithCredential(new XadesExternalCredential(certificate, [], signer));
     }
 
-    /// <summary>
-    /// Configures external signing with auto-detected signature algorithm OID.
-    /// The delegate receives the raw data to sign and returns the signature bytes.
-    /// </summary>
+    /// <summary>Configures external signing with a pre-fetched certificate chain.</summary>
+    /// <param name="certificate">The signer's public certificate (private key NOT required).</param>
+    /// <param name="signer">The external signer implementation.</param>
+    /// <param name="chain">
+    /// Intermediate CA certificates, ordered from the issuer of <paramref name="certificate"/>
+    /// up to (but not including) the root. May be empty. The collection is defensively copied.
+    /// </param>
+    /// <returns>A new builder with the external credential configured.</returns>
     public XadesSignerBuilder WithExternalSigner(
         X509Certificate2 certificate,
-        Func<byte[], Task<byte[]>> externalSigner)
+        IExternalSigner signer,
+        IReadOnlyList<X509Certificate2> chain)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        ArgumentNullException.ThrowIfNull(externalSigner);
-        string sigAlgOid = _signatureAlgorithmOid ?? CryptoUtility.DetectSignatureAlgorithmOid(certificate, _hashAlgorithm);
-        CmsSignatureBuilder.ValidateSignatureAlgorithmCompatibility(certificate, sigAlgOid);
-        return With(certificate: certificate, externalSigner: externalSigner,
-            signatureAlgorithmOid: sigAlgOid);
+        ArgumentNullException.ThrowIfNull(signer);
+        ArgumentNullException.ThrowIfNull(chain);
+        return WithCredential(new XadesExternalCredential(certificate, CopyChain(chain), signer));
     }
 
     /// <summary>Sets the hash algorithm (default: SHA-256).</summary>
+    /// <param name="algorithm">The hash algorithm.</param>
+    /// <returns>A new builder with the hash algorithm configured.</returns>
     public XadesSignerBuilder WithHashAlgorithm(HashAlgorithmName algorithm) =>
-        With(hashAlgorithm: algorithm, hashAlgorithmExplicitlySet: true);
+        With(_options with { HashAlgorithm = algorithm, HashAlgorithmExplicitlySet = true });
 
     /// <summary>Sets an explicit signature algorithm OID (e.g. RSA PKCS#1, RSA-PSS, ECDSA).</summary>
+    /// <param name="signatureAlgorithmOid">The signature algorithm OID.</param>
+    /// <returns>A new builder with the signature algorithm configured.</returns>
     public XadesSignerBuilder WithSignatureAlgorithm(string signatureAlgorithmOid)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(signatureAlgorithmOid);
-        return With(signatureAlgorithmOid: signatureAlgorithmOid);
+        return With(_options with { SignatureAlgorithmOid = signatureAlgorithmOid });
     }
 
-    /// <summary>Configures a TSA URL and auto-escalates the level to Timestamped.</summary>
-    public XadesSignerBuilder WithTimestamp(string tsaUrl)
+    /// <summary>
+    /// Replaces the complete baseline profile. The requested ETSI level and all of its
+    /// dependencies travel together in one immutable value; no other method changes the level.
+    /// </summary>
+    /// <param name="profile">The complete baseline profile (B-B, B-T, B-LT, or B-LTA).</param>
+    /// <returns>A new builder with the profile configured.</returns>
+    public XadesSignerBuilder WithLevel(AdesBaselineProfile profile)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(tsaUrl);
-        return With(tsaUrl: tsaUrl,
-            level: _level >= XadesLevel.Timestamped ? _level : XadesLevel.Timestamped);
+        ArgumentNullException.ThrowIfNull(profile);
+        return With(_options with { Profile = profile });
     }
 
-    /// <summary>Configures a TSA URL with a custom HttpClient and auto-escalates level.</summary>
-    public XadesSignerBuilder WithTimestamp(string tsaUrl, HttpClient httpClient)
+    /// <summary>
+    /// Sets a builder-wide <see cref="IHttpClientProvider"/> used as the fallback for all
+    /// network operations that do not carry their own scoped provider (timestamp,
+    /// long-term validation material, archive timestamp).
+    /// </summary>
+    /// <param name="provider">The HTTP client provider.</param>
+    /// <returns>A new builder with the provider configured.</returns>
+    public XadesSignerBuilder WithHttpClientProvider(IHttpClientProvider provider)
     {
-        ArgumentNullException.ThrowIfNull(httpClient);
-        ArgumentException.ThrowIfNullOrWhiteSpace(tsaUrl);
-        return With(tsaUrl: tsaUrl, tsaHttpClient: httpClient,
-            level: _level >= XadesLevel.Timestamped ? _level : XadesLevel.Timestamped);
+        ArgumentNullException.ThrowIfNull(provider);
+        return With(_options with
+        {
+            Dependencies = _options.Dependencies with { HttpClientProvider = provider }
+        });
     }
-
-    /// <summary>Sets the XAdES conformance level (Basic, Timestamped, LongTerm, Archive).</summary>
-    public XadesSignerBuilder WithLevel(XadesLevel level) => With(level: level);
 
     /// <summary>Sets an operation ID for log correlation.</summary>
+    /// <param name="operationId">The operation ID.</param>
+    /// <returns>A new builder with the operation ID configured.</returns>
     public XadesSignerBuilder WithOperationId(string operationId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
-        return With(operationId: operationId);
+        return With(_options with { OperationId = operationId });
     }
 
     /// <summary>Sets the XAdES signature packaging form (Enveloped, Detached, Enveloping).</summary>
+    /// <param name="form">The XAdES packaging form.</param>
+    /// <returns>A new builder with the form configured.</returns>
     public XadesSignerBuilder WithForm(XadesForm form) =>
-        With(form: form);
+        With(_options with { Form = form });
 
     /// <summary>Sets the data URI for Detached form signatures.</summary>
+    /// <param name="dataUri">The data object URI.</param>
+    /// <returns>A new builder with the data URI configured.</returns>
     public XadesSignerBuilder WithDataUri(string dataUri)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataUri);
-        return With(dataUri: dataUri);
+        return With(_options with { DataUri = dataUri });
     }
 
-    /// <summary>Sets the explicit signing time (default: UTC now).</summary>
+    /// <summary>Sets the explicit claimed signing time (default: UTC now).</summary>
+    /// <param name="signingTime">The claimed signing time.</param>
+    /// <returns>A new builder with the signing time configured.</returns>
     public XadesSignerBuilder WithSigningTime(DateTimeOffset signingTime) =>
-        With(signingTime: signingTime);
-
-    /// <summary>Sets the HttpClient used for TSA and revocation requests.</summary>
-    public XadesSignerBuilder WithHttpClient(HttpClient httpClient)
-    {
-        ArgumentNullException.ThrowIfNull(httpClient);
-        return With(tsaHttpClient: httpClient);
-    }
-
-    /// <summary>Sets a separate HttpClient for OCSP/CRL revocation fetching.</summary>
-    public XadesSignerBuilder WithRevocationHttpClient(HttpClient httpClient)
-    {
-        ArgumentNullException.ThrowIfNull(httpClient);
-        return With(revocationHttpClient: httpClient);
-    }
+        With(_options with { SigningTime = signingTime });
 
     /// <summary>Sets the commitment type indication (e.g. ProofOfOrigin, ProofOfApproval).</summary>
+    /// <param name="commitmentType">The commitment type.</param>
+    /// <returns>A new builder with the commitment type configured.</returns>
     public XadesSignerBuilder WithCommitmentType(CommitmentType commitmentType) =>
-        With(commitmentType: commitmentType);
+        With(_options with { CommitmentType = commitmentType });
 
     /// <summary>Sets the signature policy OID and optional policy document URI.</summary>
+    /// <param name="oid">The signature policy OID.</param>
+    /// <param name="uri">Optional policy document URI.</param>
+    /// <returns>A new builder with the signature policy configured.</returns>
     public XadesSignerBuilder WithSignaturePolicy(string oid, string? uri = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(oid);
-        return With(signaturePolicyOid: oid, signaturePolicyUri: uri);
+        return With(_options with { SignaturePolicyOid = oid, SignaturePolicyUri = uri });
     }
 
     /// <summary>Set claimed signer role(s) (e.g., "Manager", "Approver").</summary>
+    /// <param name="roles">The signer roles. The collection is defensively copied.</param>
+    /// <returns>A new builder with the signer roles configured.</returns>
     public XadesSignerBuilder WithSignerRoles(IReadOnlyList<string> roles)
     {
         ArgumentNullException.ThrowIfNull(roles);
-        return With(signerRoles: roles);
+        return With(_options with { SignerRoles = roles.ToList().AsReadOnly() });
     }
 
     /// <summary>Set a single claimed signer role.</summary>
+    /// <param name="role">The signer role.</param>
+    /// <returns>A new builder with the signer role configured.</returns>
     public XadesSignerBuilder WithSignerRole(string role)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(role);
-        return With(signerRoles: [role]);
+        return With(_options with { SignerRoles = [role] });
     }
 
     /// <summary>Set the data object format (MIME type + object reference URI).</summary>
+    /// <param name="format">The data object format.</param>
+    /// <returns>A new builder with the data object format configured.</returns>
     public XadesSignerBuilder WithDataObjectFormat(DataObjectFormat format)
     {
         ArgumentNullException.ThrowIfNull(format);
-        return With(dataObjectFormat: format);
+        return With(_options with { DataObjectFormat = format });
     }
 
     /// <summary>Sets a logger for diagnostic output.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <returns>A new builder with the logger configured.</returns>
     public XadesSignerBuilder WithLogger(ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
-        return With(logger: logger);
+        return With(_options with
+        {
+            Dependencies = _options.Dependencies with { Logger = logger }
+        });
     }
 
     /// <summary>Signs the XML document and returns the signed bytes.</summary>
+    /// <remarks>
+    /// Throws <see cref="SigningException"/> when the requested level profile is
+    /// configured for best-effort downgrades; use
+    /// <see cref="SignWithDetailsAsync(CancellationToken)"/> in that case.
+    /// </remarks>
+    /// <returns>The signed XML bytes.</returns>
     public async Task<byte[]> SignAsync(CancellationToken cancellationToken = default)
     {
+        EnsureStrictProfile();
         var result = await SignWithDetailsAsync(cancellationToken).ConfigureAwait(false);
-        return result.SignedXml;
+        return result.SignedArtifact;
     }
 
-    /// <summary>Signs the XML document and returns a detailed result with level flags and warnings.</summary>
+    /// <summary>Signs the XML document and returns a detailed result with level facts and warnings.</summary>
+    /// <returns>The detailed XAdES signing result.</returns>
     public async Task<XadesSigningResult> SignWithDetailsAsync(
         CancellationToken cancellationToken = default)
     {
-        if (_certificate is null)
-        {
-            throw new InvalidOperationException(
-                "Certificate not set. Call WithCertificate() or WithExternalSigner() before signing.");
-        }
+        var credential = _options.Credential
+            ?? throw new SigningException(
+                "Certificate not set. Call WithCertificate() or WithExternalSigner() before signing.",
+                SigningErrorReason.CredentialMissing);
+        var certificate = GetCertificate(credential);
+        var chain = GetChain(credential);
+        var profile = _options.Profile;
 
-        var warnings = new List<string>();
+        ValidatePrerequisites(credential);
+
+        var warnings = new List<SigningWarning>();
+        var hashAlg = _options.HashAlgorithm;
+        string sigAlgOid = _options.SignatureAlgorithmOid
+            ?? CryptoUtility.DetectSignatureAlgorithmOid(certificate, hashAlg);
+        CmsSignatureBuilder.ValidateSignatureAlgorithmCompatibility(certificate, sigAlgOid);
+
         byte[] signedXml;
-
-        if (_externalSigner is not null)
+        if (credential is XadesExternalCredential external)
         {
-            signedXml = await SignExternalCoreAsync(warnings, cancellationToken).ConfigureAwait(false);
+            signedXml = await SignExternalCoreAsync(external, certificate, chain, sigAlgOid, cancellationToken).ConfigureAwait(false);
         }
         else
         {
-            if (!_certificate.HasPrivateKey)
+            signedXml = SignLocalCore(certificate, chain, sigAlgOid);
+        }
+
+        byte[]? timestampTokenBytes = null;
+        if (profile.Timestamp is not null)
+        {
+            try
             {
-                throw new ArgumentException(
-                    "Certificate must have a private key for local signing. Use WithExternalSigner() instead.");
+                timestampTokenBytes = await ApplyTimestampAsync(signedXml, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
+                {
+                    throw new SigningException(
+                        $"Signature timestamp request failed: {ex.Message}",
+                        SigningErrorReason.NetworkFailure,
+                        ex);
+                }
+
+                AddDowngradeWarnings(warnings, SigningWarningCode.SignatureTimestampUnavailable,
+                    $"Signature timestamp could not be applied: {ex.Message}");
             }
 
-            signedXml = await SignLocalCoreAsync(warnings, cancellationToken).ConfigureAwait(false);
+            if (timestampTokenBytes is not null)
+            {
+                signedXml = XadesSignatureBuilder.EmbedSignatureTimeStamp(signedXml, timestampTokenBytes);
+            }
         }
+
+        bool hasLtvMaterial = false;
+        if (timestampTokenBytes is not null && profile.Level >= AdesBaselineLevel.LongTerm)
+        {
+            byte[]? ltvXml = await ApplyLtvAsync(signedXml, certificate, chain, cancellationToken).ConfigureAwait(false);
+            if (ltvXml is not null)
+            {
+                signedXml = ltvXml;
+                hasLtvMaterial = true;
+            }
+            else
+            {
+                AddDowngradeWarnings(warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
+                    "LTV was requested but no certificate and revocation data could be collected.");
+            }
+        }
+
+        bool hasArchiveTimestamp = false;
+        if (hasLtvMaterial && profile.Level >= AdesBaselineLevel.Archive)
+        {
+            try
+            {
+                signedXml = await ApplyArchiveTimestampAsync(signedXml, hashAlg, profile, cancellationToken).ConfigureAwait(false);
+                hasArchiveTimestamp = true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
+                {
+                    throw new SigningException(
+                        $"Archive timestamp request failed: {ex.Message}",
+                        SigningErrorReason.NetworkFailure,
+                        ex);
+                }
+
+                AddDowngradeWarnings(warnings, SigningWarningCode.ArchiveTimestampUnavailable,
+                    $"Archive timestamp could not be applied: {ex.Message}");
+            }
+        }
+
+        var achieved = ComputeAchievedLevel(timestampTokenBytes, hasLtvMaterial, hasArchiveTimestamp);
 
         return new XadesSigningResult
         {
-            SignedXml = signedXml,
-            TimestampApplied = _level >= XadesLevel.Timestamped && _tsaUrl is not null,
-            LtvDataEmbedded = _level >= XadesLevel.LongTerm,
-            ArchiveTimestampApplied = _level >= XadesLevel.Archive && _tsaUrl is not null,
-            Warnings = warnings
+            SignedArtifact = signedXml,
+            RequestedLevel = profile.Level,
+            AchievedLevel = achieved,
+            HasSignatureTimestamp = timestampTokenBytes is not null,
+            HasLongTermValidationMaterial = hasLtvMaterial,
+            HasArchiveTimestamp = hasArchiveTimestamp,
+            Warnings = warnings.AsReadOnly()
         };
     }
 
-    private async Task<byte[]> SignLocalCoreAsync(List<string> warnings, CancellationToken ct)
+    private static AdesBaselineLevel ComputeAchievedLevel(
+        byte[]? timestampTokenBytes,
+        bool hasLtvMaterial,
+        bool hasArchiveTimestamp)
     {
-        var certificate = _certificate!;
-        var signingTime = _signingTime ?? DateTimeOffset.UtcNow;
-        var hashAlg = _hashAlgorithm;
-        string sigAlgOid = _signatureAlgorithmOid
-            ?? CryptoUtility.DetectSignatureAlgorithmOid(certificate, hashAlg);
-
-        byte[] signedXml = XadesSignatureBuilder.BuildSignature(
-            _xmlData, certificate, hashAlg, signingTime, _extraCertificates,
-            _commitmentType, _signaturePolicyOid, _signaturePolicyUri,
-            sigAlgOid, _form, _signerRoles, _dataObjectFormat, _logger, _dataUri);
-
-        if (_level >= XadesLevel.Timestamped && _tsaUrl is not null)
+        if (timestampTokenBytes is null)
         {
-            signedXml = await ApplyTimestampAsync(signedXml, hashAlg, ct).ConfigureAwait(false);
+            return AdesBaselineLevel.Basic;
         }
 
-        if (_level >= XadesLevel.LongTerm)
+        if (!hasLtvMaterial)
         {
-            signedXml = await ApplyLtvAsync(signedXml, certificate, ct).ConfigureAwait(false);
+            return AdesBaselineLevel.Timestamped;
         }
 
-        if (_level >= XadesLevel.Archive && _tsaUrl is not null)
-        {
-            signedXml = await ApplyArchiveTimestampAsync(signedXml, hashAlg, ct).ConfigureAwait(false);
-        }
-
-        return signedXml;
+        return hasArchiveTimestamp ? AdesBaselineLevel.Archive : AdesBaselineLevel.LongTerm;
     }
 
-    private async Task<byte[]> SignExternalCoreAsync(List<string> warnings, CancellationToken ct)
+    private static void AddDowngradeWarnings(List<SigningWarning> warnings, SigningWarningCode code, string message)
     {
-        var certificate = _certificate!;
-        var signingTime = _signingTime ?? DateTimeOffset.UtcNow;
-        var hashAlg = _hashAlgorithm;
-        var sigAlgOid = _signatureAlgorithmOid!;
+        warnings.Add(new SigningWarning(code, message));
+        warnings.Add(new SigningWarning(
+            SigningWarningCode.LevelDowngraded,
+            "The requested baseline level could not be achieved; the artifact was downgraded."));
+    }
 
-        // Build the SignedInfo to hash — returns canonicalized bytes for external signing
-        // plus the XML-serialized SignedInfo for embedding in the final document
+    private void EnsureStrictProfile()
+    {
+        if (_options.Profile.FailureBehavior == SigningLevelFailureBehavior.ReturnLowerLevel)
+        {
+            throw new SigningException(
+                "The configured baseline profile allows best-effort level downgrades. " +
+                "Use SignWithDetailsAsync() so the achieved level and warnings are reported.",
+                SigningErrorReason.DowngradeRequiresDetailedResult);
+        }
+    }
+
+    private static void ValidatePrerequisites(XadesSigningCredential credential)
+    {
+        if (credential is not XadesExternalCredential && !GetCertificate(credential).HasPrivateKey)
+        {
+            throw new SigningException(
+                "Certificate must have a private key for local signing. Use WithExternalSigner() instead.",
+                SigningErrorReason.PrivateKeyMissing);
+        }
+    }
+
+    private static X509Certificate2 GetCertificate(XadesSigningCredential credential) => credential switch
+    {
+        XadesLocalCredential c => c.Certificate,
+        XadesExternalCredential c => c.Certificate,
+        _ => throw new InvalidOperationException($"Unknown signing credential type: {credential.GetType().Name}")
+    };
+
+    private static IReadOnlyList<X509Certificate2> GetChain(XadesSigningCredential credential) => credential switch
+    {
+        XadesLocalCredential c => c.Chain,
+        XadesExternalCredential c => c.Chain,
+        _ => throw new InvalidOperationException($"Unknown signing credential type: {credential.GetType().Name}")
+    };
+
+    private byte[] SignLocalCore(
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        string sigAlgOid)
+    {
+        var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
+        return XadesSignatureBuilder.BuildSignature(
+            _xmlData, certificate, _options.HashAlgorithm, signingTime, chain,
+            _options.CommitmentType, _options.SignaturePolicyOid, _options.SignaturePolicyUri,
+            sigAlgOid, _options.Form, _options.SignerRoles, _options.DataObjectFormat,
+            _options.Dependencies.Logger, _options.DataUri);
+    }
+
+    private async Task<byte[]> SignExternalCoreAsync(
+        XadesExternalCredential external,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        string sigAlgOid,
+        CancellationToken cancellationToken)
+    {
+        var hashAlg = _options.HashAlgorithm;
+        var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
+
         byte[] signedInfoBytes = XadesSignatureBuilder.BuildSignedInfoToHash(
-            _xmlData, certificate, hashAlg, signingTime, _form,
-            _commitmentType, _signaturePolicyOid, _signaturePolicyUri,
-            sigAlgOid, _signerRoles, _dataObjectFormat,
+            _xmlData, certificate, hashAlg, signingTime, _options.Form,
+            _options.CommitmentType, _options.SignaturePolicyOid, _options.SignaturePolicyUri,
+            sigAlgOid, _options.SignerRoles, _options.DataObjectFormat,
             out string signedPropertiesId,
             out byte[] signedInfoXml,
-            out string? dataObjectId, _dataUri);
+            out string? dataObjectId, _options.DataUri);
 
-        _logger.Log(LogLevel.Debug, "XAdES external signer invoked.");
-        byte[] signature = await _externalSigner!(signedInfoBytes).ConfigureAwait(false);
-        if (signature is null || signature.Length == 0)
+        var request = new ExternalSigningRequest(
+            signedInfoBytes,
+            hashAlg,
+            sigAlgOid,
+            ExternalSigningPayloadKind.XmlCanonicalizedSignedInfo,
+            _options.OperationId);
+        ReadOnlyMemory<byte> signature = await external.Signer.SignAsync(request, cancellationToken).ConfigureAwait(false);
+        if (signature.Length == 0)
         {
-            throw new InvalidOperationException("External signer returned null or empty signature.");
+            throw new SigningException(
+                "External signer returned an empty signature.",
+                SigningErrorReason.ExternalSignerReturnedEmpty);
         }
 
-        byte[] signedXml = XadesSignatureBuilder.CompleteWithExternalSignature(
-            _xmlData, certificate, hashAlg, signingTime, _extraCertificates,
-            _commitmentType, _signaturePolicyOid, _signaturePolicyUri,
-            sigAlgOid, signedInfoXml, signature, signedPropertiesId,
-            _signerRoles, _dataObjectFormat, _form, _dataUri, dataObjectId);
-
-        if (_level >= XadesLevel.Timestamped && _tsaUrl is not null)
-        {
-            signedXml = await ApplyTimestampAsync(signedXml, hashAlg, ct).ConfigureAwait(false);
-        }
-
-        if (_level >= XadesLevel.LongTerm)
-        {
-            signedXml = await ApplyLtvAsync(signedXml, certificate, ct).ConfigureAwait(false);
-        }
-
-        if (_level >= XadesLevel.Archive && _tsaUrl is not null)
-        {
-            signedXml = await ApplyArchiveTimestampAsync(signedXml, hashAlg, ct).ConfigureAwait(false);
-        }
-
-        return signedXml;
+        return XadesSignatureBuilder.CompleteWithExternalSignature(
+            _xmlData, certificate, hashAlg, signingTime, chain,
+            _options.CommitmentType, _options.SignaturePolicyOid, _options.SignaturePolicyUri,
+            sigAlgOid, signedInfoXml, signature.ToArray(), signedPropertiesId,
+            _options.SignerRoles, _options.DataObjectFormat, _options.Form, _options.DataUri, dataObjectId);
     }
 
-    private async Task<byte[]> ApplyTimestampAsync(byte[] signedXml, HashAlgorithmName hashAlg, CancellationToken ct)
+    private async Task<byte[]?> ApplyTimestampAsync(
+        byte[] signedXml,
+        HashAlgorithmName hashAlg,
+        TimestampOptions timestampOptions,
+        CancellationToken cancellationToken)
     {
-        var httpClient = _tsaHttpClient ?? DefaultHttpClientProvider.Instance.GetClient();
-        var tsaClient = _tsaFactory is not null
-            ? _tsaFactory.Create(_tsaUrl!)
-            : new TimestampClient(httpClient, _tsaUrl!, _logger);
-
-        // Extract SignatureValue from signed XML for timestamping
+        var tsaClient = CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
         var sigValue = XadesSignatureBuilder.ExtractSignatureValue(signedXml);
-        byte[] tsToken = await tsaClient.GetTimestampAsync(sigValue, hashAlg, ct).ConfigureAwait(false);
+        byte[] tsToken = await tsaClient.GetTimestampAsync(sigValue, hashAlg, cancellationToken).ConfigureAwait(false);
 
         return XadesSignatureBuilder.EmbedSignatureTimeStamp(signedXml, tsToken);
     }
 
-    private async Task<byte[]> ApplyLtvAsync(byte[] signedXml, X509Certificate2 certificate, CancellationToken ct)
+    private ITimestampClient CreateTimestampClient(string endpoint, IHttpClientProvider? scopedProvider)
     {
-        var httpClient = _revocationHttpClient
-            ?? _tsaHttpClient
-            ?? DefaultHttpClientProvider.Instance.GetClient();
+        if (_options.Dependencies.TsaFactory is not null)
+        {
+            return _options.Dependencies.TsaFactory.Create(endpoint);
+        }
+
+        var provider = scopedProvider ?? _options.Dependencies.HttpClientProvider;
+        return new TimestampClient(provider.GetClient(), endpoint, _options.Dependencies.Logger);
+    }
+
+    private async Task<byte[]?> ApplyLtvAsync(
+        byte[] signedXml,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        CancellationToken cancellationToken)
+    {
+        var profile = _options.Profile;
+        var logger = _options.Dependencies.Logger;
+        var ltvProvider = profile.LongTermValidation!.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
 
         var chainCerts = new List<X509Certificate2> { certificate };
-        if (_extraCertificates is not null)
+        foreach (var c in chain)
         {
-            foreach (var c in _extraCertificates)
+            if (!chainCerts.Any(x => x.Thumbprint == c.Thumbprint))
             {
-                if (!chainCerts.Any(x => x.Thumbprint == c.Thumbprint))
-                {
-                    chainCerts.Add(c);
-                }
+                chainCerts.Add(c);
             }
         }
 
         var ltvData = await LtvDataCollector.CollectAsync(
-            httpClient, certificate, chainCerts, _logger, cancellationToken: ct).ConfigureAwait(false);
+            ltvProvider.GetClient(), certificate, chainCerts, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        bool hasLtvMaterial = ltvData.CertificateRawData.Count > 0
+            && (ltvData.OcspResponses.Count > 0 || ltvData.Crls.Count > 0);
+        if (!hasLtvMaterial)
+        {
+            if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
+            {
+                throw new SigningException(
+                    "LTV was requested but no certificate and revocation data could be collected. " +
+                    "The requested B-LT/B-LTA level cannot be produced.",
+                    SigningErrorReason.LevelNotAchievable);
+            }
+
+            return null;
+        }
 
         return XadesSignatureBuilder.EmbedLtvData(signedXml, ltvData);
     }
 
-    private async Task<byte[]> ApplyArchiveTimestampAsync(byte[] signedXml, HashAlgorithmName hashAlg, CancellationToken ct)
+    private async Task<byte[]> ApplyArchiveTimestampAsync(
+        byte[] signedXml,
+        HashAlgorithmName hashAlg,
+        AdesBaselineProfile profile,
+        CancellationToken cancellationToken)
     {
-        var httpClient = _tsaHttpClient ?? DefaultHttpClientProvider.Instance.GetClient();
-        var tsaClient = _tsaFactory is not null
-            ? _tsaFactory.Create(_tsaUrl!)
-            : new TimestampClient(httpClient, _tsaUrl!, _logger);
+        var archiveOptions = profile.ArchiveTimestamp;
+        var timestampOptions = profile.Timestamp!;
+        var endpoint = archiveOptions?.Endpoint ?? timestampOptions.Endpoint;
+        var scopedProvider = archiveOptions?.HttpClientProvider ?? timestampOptions.HttpClientProvider;
 
+        var tsaClient = CreateTimestampClient(endpoint.ToString(), scopedProvider);
         byte[] xmlHash = CryptoUtility.ComputeHash(signedXml, hashAlg);
-        byte[] tsToken = await tsaClient.GetTimestampAsync(xmlHash, hashAlg, ct).ConfigureAwait(false);
+        byte[] tsToken = await tsaClient.GetTimestampAsync(xmlHash, hashAlg, cancellationToken).ConfigureAwait(false);
 
         return XadesSignatureBuilder.EmbedArchiveTimeStamp(signedXml, tsToken);
     }
+
+    private XadesSignerBuilder WithCredential(XadesSigningCredential credential) =>
+        With(_options with { Credential = credential });
+
+    private XadesSignerBuilder With(XadesSigningOptions options) =>
+        new(_xmlData, options);
+
+    private static IReadOnlyList<X509Certificate2> CopyChain(IReadOnlyList<X509Certificate2> chain) =>
+        chain.ToList().AsReadOnly();
 }

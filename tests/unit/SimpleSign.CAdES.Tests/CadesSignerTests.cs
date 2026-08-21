@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
@@ -21,7 +22,7 @@ public sealed class CadesSignerTests : IDisposable
     {
         _cert = TestCertificateFactory.CreateSelfSignedCert();
         _data = "Hello, CAdES!"u8.ToArray();
-        _pki = new SyntheticPki();
+        _pki = new SyntheticPki("http://mock-tsa.example.com/crl");
     }
 
     public void Dispose()
@@ -33,7 +34,9 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task SignAsync_Basic_CreatesValidCms()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
 
         Assert.NotNull(cms);
         Assert.True(cms.Length > 100, "CMS should be substantial in size");
@@ -51,7 +54,9 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task SignAsync_Basic_HashMatchesOriginalData()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
 
         var parsed = CmsParser.Parse(cms);
         var expectedHash = SHA256.HashData(_data);
@@ -110,14 +115,14 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task SignAsync_ExternalSigner_CreatesValidCms()
     {
-        var cms = await CadesSigner.SignAsync(
-            _data, _cert,
-            async signedAttrs =>
+        var cms = await CadesSigner.Document(_data)
+            .WithExternalSigner(_cert, new FuncExternalSigner(async signedAttrs =>
             {
                 using var key = _cert.GetRSAPrivateKey()!;
                 return await Task.FromResult(key.SignData(signedAttrs, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-            },
-            Core.Constants.Oids.RsaSha256);
+            }))
+            .WithSignatureAlgorithm(Core.Constants.Oids.RsaSha256)
+            .SignAsync();
 
         Assert.NotNull(cms);
         Assert.True(cms.Length > 100);
@@ -129,7 +134,9 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task SignAndValidate_Roundtrip_Succeeds()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
 
         var validator = new CadesSignatureValidator(
             new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false });
@@ -145,7 +152,9 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task Validate_TamperedData_DetectsIntegrityFailure()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
         var tamperedData = "Tampered!"u8.ToArray();
 
         var validator = new CadesSignatureValidator(
@@ -161,7 +170,9 @@ public sealed class CadesSignerTests : IDisposable
     [Fact]
     public async Task Validate_InvalidCertificateChain_ReportsChainFailure()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
 
         var validator = new CadesSignatureValidator(
             new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false });
@@ -176,7 +187,9 @@ public sealed class CadesSignerTests : IDisposable
     {
         using var ecdsaCert = TestCertificateFactory.CreateEcdsaCert();
 
-        var cms = await CadesSigner.SignAsync(_data, ecdsaCert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(ecdsaCert)
+            .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
         Assert.NotNull(parsed.SignerCertificate);
@@ -198,8 +211,9 @@ public sealed class CadesSignerTests : IDisposable
 
         var cms = await CadesSigner.Document(_data)
             .WithCertificate(_cert, [_pki.IntermediateCa])
-            .WithLevel(CadesLevel.LongTerm)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient)),
+                new LongTermValidationOptions(new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
@@ -209,20 +223,17 @@ public sealed class CadesSignerTests : IDisposable
     }
 
     [Fact]
-    public async Task SignAsync_LongTerm_DoesNotRequireRevocationForSelfSigned()
+    public async Task SignAsync_LongTerm_WithoutRevocationData_ThrowsSigningException()
     {
         var mockTsa = BuildMockTsaHandler();
         using var tsaHttpClient = new HttpClient(mockTsa);
 
-        var cms = await CadesSigner.Document(_data)
+        await Assert.ThrowsAsync<SigningException>(() => CadesSigner.Document(_data)
             .WithCertificate(_cert)
-            .WithLevel(CadesLevel.LongTerm)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
-            .SignAsync();
-        var parsed = CmsParser.Parse(cms);
-
-        Assert.NotNull(parsed.SignatureTimestampToken);
-        Assert.NotNull(parsed.UnsignedAttributes);
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient)),
+                new LongTermValidationOptions(new SingleClientProvider(tsaHttpClient))))
+            .SignAsync());
     }
 
     [Fact]
@@ -232,9 +243,10 @@ public sealed class CadesSignerTests : IDisposable
         using var tsaHttpClient = new HttpClient(mockTsa);
 
         var cms = await CadesSigner.Document(_data)
-            .WithCertificate(_cert)
-            .WithLevel(CadesLevel.Archive)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithCertificate(_cert, [_pki.IntermediateCa])
+            .WithLevel(AdesBaselineProfile.Archive(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient)),
+                new LongTermValidationOptions(new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
         var parsed = CmsParser.Parse(cms);
 
@@ -253,8 +265,9 @@ public sealed class CadesSignerTests : IDisposable
 
         var cms = await CadesSigner.Document(_data)
             .WithCertificate(_cert, [_pki.IntermediateCa])
-            .WithLevel(CadesLevel.LongTerm)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient)),
+                new LongTermValidationOptions(new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
 
         var directParsed = CmsParser.Parse(cms);
@@ -276,7 +289,9 @@ public sealed class CadesSignerTests : IDisposable
     public async Task CmsParser_ParsesUnsignedAttributes()
     {
         // Create a minimal CMS with unsigned attributes to verify parsing
-        var cmsNoUnsigned = await CadesSigner.SignAsync(_data, _cert);
+        var cmsNoUnsigned = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
         var parsedNoUnsigned = CmsParser.Parse(cmsNoUnsigned);
         Assert.Null(parsedNoUnsigned.UnsignedAttributes);
 
@@ -285,8 +300,8 @@ public sealed class CadesSignerTests : IDisposable
         using var tsaHttpClient = new HttpClient(mockTsa);
         var cmsWithUnsigned = await CadesSigner.Document(_data)
             .WithCertificate(_cert)
-            .WithLevel(CadesLevel.Timestamped)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
         var parsedWithUnsigned = CmsParser.Parse(cmsWithUnsigned);
 

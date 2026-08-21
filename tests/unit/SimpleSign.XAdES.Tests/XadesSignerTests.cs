@@ -44,7 +44,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><id>123</id><content>test</content></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         signed.ShouldNotBeNull();
         signed.Length.ShouldBeGreaterThan(xmlBytes.Length);
@@ -65,13 +67,15 @@ public sealed class XadesSignerTests
 
         var result = await XadesSigner.Document(xmlBytes)
             .WithCertificate(s_cert)
-            .WithLevel(XadesLevel.Basic)
+            .WithLevel(AdesBaselineProfile.Basic())
             .SignWithDetailsAsync();
 
-        result.SignedXml.ShouldNotBeNull();
-        result.TimestampApplied.ShouldBeFalse();
-        result.LtvDataEmbedded.ShouldBeFalse();
-        result.ArchiveTimestampApplied.ShouldBeFalse();
+        result.SignedArtifact.ShouldNotBeNull();
+        result.HasSignatureTimestamp.ShouldBeFalse();
+        result.HasLongTermValidationMaterial.ShouldBeFalse();
+        result.HasArchiveTimestamp.ShouldBeFalse();
+        result.RequestedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
     }
 
     [Fact]
@@ -96,13 +100,13 @@ public sealed class XadesSignerTests
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
         byte[] signed = await XadesSigner.Document(xmlBytes)
-            .WithExternalSigner(s_cert,
+            .WithExternalSigner(s_cert, new FuncExternalSigner(
                 async data =>
                 {
                     using var rsa = s_cert.GetRSAPrivateKey()!;
                     return await Task.FromResult(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-                },
-                "1.2.840.113549.1.1.11")
+                }))
+            .WithSignatureAlgorithm("1.2.840.113549.1.1.11")
             .SignAsync();
 
         var validator = new XadesSignatureValidator();
@@ -139,15 +143,15 @@ public sealed class XadesSignerTests
         var result = await XadesSigner.Document(xmlBytes)
             .WithCertificate(s_cert)
             .WithHashAlgorithm(System.Security.Cryptography.HashAlgorithmName.SHA384)
-            .WithLevel(XadesLevel.Basic)
+            .WithLevel(AdesBaselineProfile.Basic())
             .WithForm(XadesForm.Enveloped)
             .WithSigningTime(new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero))
             .WithCommitmentType(global::SimpleSign.Core.Signing.CommitmentType.ProofOfOrigin)
             .WithSignaturePolicy("1.2.3.4.5", "https://example.com/policy")
             .SignWithDetailsAsync();
 
-        result.SignedXml.ShouldNotBeNull();
-        string signedText = System.Text.Encoding.UTF8.GetString(result.SignedXml);
+        result.SignedArtifact.ShouldNotBeNull();
+        string signedText = System.Text.Encoding.UTF8.GetString(result.SignedArtifact);
         signedText.ShouldContain("1.2.840.113549.1.9.16.6.1");
         signedText.ShouldContain("2026-06-15T12:00:00Z");
     }
@@ -168,8 +172,8 @@ public sealed class XadesSignerTests
             })
             .SignWithDetailsAsync();
 
-        result.SignedXml.ShouldNotBeNull();
-        string signedText = System.Text.Encoding.UTF8.GetString(result.SignedXml);
+        result.SignedArtifact.ShouldNotBeNull();
+        string signedText = System.Text.Encoding.UTF8.GetString(result.SignedArtifact);
         signedText.ShouldContain("SignerRole");
         signedText.ShouldContain("ClaimedRoles");
         signedText.ShouldContain("ClaimedRole");
@@ -186,7 +190,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>roundtrip</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         var signedStr = System.Text.Encoding.UTF8.GetString(signed);
         var validator = new XadesSignatureValidator();
@@ -230,7 +236,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>timestamp test</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Extract signature value and embed a synthetic timestamp token
         byte[] tsXml = EmbedSyntheticTimestamp(signed);
@@ -249,7 +257,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>bad ts</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Create a token with a DIFFERENT signature value hash
         byte[] tsXml = EmbedSyntheticTimestamp(signed, tamperHash: true);
@@ -270,7 +280,7 @@ public sealed class XadesSignerTests
 
         byte[] signed = await XadesSigner.Document(xmlBytes)
             .WithCertificate(s_cert)
-            .WithLevel(XadesLevel.Basic)
+            .WithLevel(AdesBaselineProfile.Basic())
             .SignAsync();
 
         var validator = new XadesSignatureValidator();
@@ -286,7 +296,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>malformed ts</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Use XML manipulation to embed a SignatureTimeStamp with garbage token
         byte[] tsXml = EmbedMalformedTimestamp(signed);
@@ -304,7 +316,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>ltv test</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Add CertificateValues with the signer cert and RevocationValues with
         // a dummy but structurally valid OCSP response
@@ -561,7 +575,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>b-t test</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Embed a synthetic RFC 3161 timestamp token (B-T)
         byte[] tsXml = EmbedSyntheticTimestamp(signed);
@@ -581,7 +597,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>b-lt test</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Inject synthetic LTV data (CertificateValues + RevocationValues)
         byte[] ltvXml = await Task.Run(() =>
@@ -642,7 +660,9 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>b-lta test</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert);
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Inject LTV data first (same as LongTerm test)
         byte[] ltvXml;
@@ -751,21 +771,25 @@ public sealed class XadesSignerTests
         // B-B
         var bbResult = await XadesSigner.Document(xmlBytes)
             .WithCertificate(s_cert)
-            .WithLevel(XadesLevel.Basic)
+            .WithLevel(AdesBaselineProfile.Basic())
             .SignWithDetailsAsync();
 
-        bbResult.TimestampApplied.ShouldBeFalse();
-        bbResult.LtvDataEmbedded.ShouldBeFalse();
-        bbResult.ArchiveTimestampApplied.ShouldBeFalse();
+        bbResult.HasSignatureTimestamp.ShouldBeFalse();
+        bbResult.HasLongTermValidationMaterial.ShouldBeFalse();
+        bbResult.HasArchiveTimestamp.ShouldBeFalse();
+        bbResult.RequestedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        bbResult.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
 
         // Basic (no explicit level)
         var defaultResult = await XadesSigner.Document(xmlBytes)
             .WithCertificate(s_cert)
             .SignWithDetailsAsync();
 
-        defaultResult.TimestampApplied.ShouldBeFalse();
-        defaultResult.LtvDataEmbedded.ShouldBeFalse();
-        defaultResult.ArchiveTimestampApplied.ShouldBeFalse();
+        defaultResult.HasSignatureTimestamp.ShouldBeFalse();
+        defaultResult.HasLongTermValidationMaterial.ShouldBeFalse();
+        defaultResult.HasArchiveTimestamp.ShouldBeFalse();
+        defaultResult.RequestedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        defaultResult.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
     }
 
     [Fact]
@@ -815,13 +839,13 @@ public sealed class XadesSignerTests
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
         byte[] signed = await XadesSigner.Document(xmlBytes)
-            .WithExternalSigner(s_cert,
+            .WithExternalSigner(s_cert, new FuncExternalSigner(
                 async data =>
                 {
                     using var rsa = s_cert.GetRSAPrivateKey()!;
                     return await Task.FromResult(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-                },
-                "1.2.840.113549.1.1.11")
+                }))
+            .WithSignatureAlgorithm("1.2.840.113549.1.1.11")
             .SignAsync();
 
         var validator = new XadesSignatureValidator();
@@ -841,22 +865,14 @@ public sealed class XadesSignerTests
         Should.Throw<ArgumentNullException>(() => XadesSigner.Document(null!));
 
     [Fact]
-    public async Task XadesSigner_SignAsync_NullData_Throws() =>
-        await Should.ThrowAsync<ArgumentNullException>(() => XadesSigner.SignAsync(null!, s_cert));
-
-    [Fact]
-    public async Task XadesSigner_SignAsync_NullCert_Throws()
-    {
-        byte[] data = "test"u8.ToArray();
-        await Should.ThrowAsync<ArgumentNullException>(() => XadesSigner.SignAsync(data, null!));
-    }
-
-    [Fact]
     public async Task XadesSigner_SignAsync_CertWithoutPrivateKey_Throws()
     {
         string xml = "<?xml version=\"1.0\"?><doc>no key</doc>";
-        await Should.ThrowAsync<ArgumentException>(() =>
-            XadesSigner.SignAsync(System.Text.Encoding.UTF8.GetBytes(xml), s_certNoKey));
+        var ex = await Should.ThrowAsync<SigningException>(() =>
+            XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+                .WithCertificate(s_certNoKey)
+                .SignAsync());
+        ex.Reason.ShouldBe(SigningErrorReason.PrivateKeyMissing);
     }
 
     [Fact]
@@ -919,8 +935,9 @@ public sealed class XadesSignerTests
     public async Task Builder_SignWithDetails_NoCertificate_Throws()
     {
         string xml = "<?xml version=\"1.0\"?><doc>no cert</doc>";
-        await Should.ThrowAsync<InvalidOperationException>(() =>
+        var ex = await Should.ThrowAsync<SigningException>(() =>
             XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml)).SignAsync());
+        ex.Reason.ShouldBe(SigningErrorReason.CredentialMissing);
     }
 
     [Fact]
@@ -929,41 +946,42 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\"?><doc>null cb</doc>";
         Should.Throw<ArgumentNullException>(() =>
             XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
-                .WithExternalSigner(s_cert, null!, "1.2.840.113549.1.1.11"));
+                .WithExternalSigner(s_cert, null!));
     }
 
     [Fact]
-    public void Builder_WithExternalSigner_EmptyOid_Throws()
+    public void Builder_WithSignatureAlgorithm_EmptyOid_Throws()
     {
         string xml = "<?xml version=\"1.0\"?><doc>empty oid</doc>";
         Should.Throw<ArgumentException>(() =>
             XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
-                .WithExternalSigner(s_cert, async d => d, ""));
+                .WithSignatureAlgorithm(""));
     }
 
     [Fact]
     public async Task Builder_ExternalSigner_ReturnsNull_Throws()
     {
         string xml = "<?xml version=\"1.0\"?><doc>null sig</doc>";
-        await Should.ThrowAsync<InvalidOperationException>(() =>
+        var ex = await Should.ThrowAsync<SigningException>(() =>
             XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
-                .WithExternalSigner(s_cert, _ => Task.FromResult<byte[]>(null!), "1.2.840.113549.1.1.11")
+                .WithExternalSigner(s_cert, new FuncExternalSigner(_ => Task.FromResult<byte[]>(null!)))
+                .WithSignatureAlgorithm("1.2.840.113549.1.1.11")
                 .SignAsync());
+        ex.Reason.ShouldBe(SigningErrorReason.ExternalSignerReturnedEmpty);
     }
 
     [Fact]
-    public void Builder_WithTimestamp_NullUrl_Throws()
+    public void TimestampOptions_NullEndpoint_Throws()
     {
-        string xml = "<?xml version=\"1.0\"?><doc>ts null</doc>";
-        Should.Throw<ArgumentException>(() =>
-            XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml)).WithTimestamp(null!));
+        Should.Throw<ArgumentNullException>(() =>
+            new TimestampOptions(null!));
     }
 
     [Fact]
-    public void Builder_WithTimestamp_EmptyUrl_Throws()
+    public void TimestampOptions_RelativeEndpoint_Throws()
     {
         Should.Throw<ArgumentException>(() =>
-            XadesSigner.Document([]).WithTimestamp(""));
+            new TimestampOptions(new Uri("tsa", UriKind.Relative)));
     }
 
     [Fact]
@@ -1002,17 +1020,19 @@ public sealed class XadesSignerTests
     }
 
     [Fact]
-    public void Builder_WithHttpClient_Null_Throws()
+    public void Builder_WithHttpClientProvider_Null_Throws()
     {
         Should.Throw<ArgumentNullException>(() =>
-            XadesSigner.Document([]).WithHttpClient(null!));
+            XadesSigner.Document([]).WithHttpClientProvider(null!));
     }
 
     [Fact]
-    public void Builder_WithRevocationHttpClient_Null_Throws()
+    public void Profile_LongTerm_NullValidationOptions_Throws()
     {
         Should.Throw<ArgumentNullException>(() =>
-            XadesSigner.Document([]).WithRevocationHttpClient(null!));
+            AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("https://tsa.example.com")),
+                null!));
     }
 
     [Fact]
@@ -1130,7 +1150,9 @@ public sealed class XadesSignerTests
     public async Task Validate_DigestMismatch_ReturnsFalse()
     {
         string xml = "<?xml version=\"1.0\"?><doc>original</doc>";
-        byte[] signed = await XadesSigner.SignAsync(System.Text.Encoding.UTF8.GetBytes(xml), s_cert);
+        byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Tamper the document content (not the signature) so reference digest won't match
         string text = System.Text.Encoding.UTF8.GetString(signed);
@@ -1145,7 +1167,9 @@ public sealed class XadesSignerTests
     public async Task Validate_SignatureValueMissing_ReturnsFalse()
     {
         string xml = "<?xml version=\"1.0\"?><doc>no sigval</doc>";
-        byte[] signed = await XadesSigner.SignAsync(System.Text.Encoding.UTF8.GetBytes(xml), s_cert);
+        byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         // Remove SignatureValue element
         string text = System.Text.Encoding.UTF8.GetString(signed);
@@ -1166,7 +1190,9 @@ public sealed class XadesSignerTests
     public async Task Validate_SignedInfoMissingSignatureMethod_ReturnsFalse()
     {
         string xml = "<?xml version=\"1.0\"?><doc>no sigmethod</doc>";
-        byte[] signed = await XadesSigner.SignAsync(System.Text.Encoding.UTF8.GetBytes(xml), s_cert);
+        byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         string text = System.Text.Encoding.UTF8.GetString(signed);
         var doc = new System.Xml.XmlDocument();
@@ -1188,7 +1214,9 @@ public sealed class XadesSignerTests
         using RSA otherKey = RSA.Create(2048);
         var otherCert = TestCertificateFactory.CreateSelfSignedCert("CN=Other, O=Tests");
         string xml = "<?xml version=\"1.0\"?><doc>wrong anchor</doc>";
-        byte[] signed = await XadesSigner.SignAsync(System.Text.Encoding.UTF8.GetBytes(xml), s_cert);
+        byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [otherCert]);
         Assert.False(result.IsCertificateChainValid);
@@ -1198,7 +1226,9 @@ public sealed class XadesSignerTests
     public async Task Validate_QualifyingPropertiesTargetMismatch_Warns()
     {
         string xml = "<?xml version=\"1.0\"?><doc>qp mismatch</doc>";
-        byte[] signed = await XadesSigner.SignAsync(System.Text.Encoding.UTF8.GetBytes(xml), s_cert);
+        byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         string text = System.Text.Encoding.UTF8.GetString(signed);
         text = text.Replace("Target=\"#", "Target=\"#wrong-");
@@ -1211,7 +1241,9 @@ public sealed class XadesSignerTests
     public async Task Validate_SignedPropertiesReferenceTypeMissing_Warns()
     {
         string xml = "<?xml version=\"1.0\"?><doc>missing type</doc>";
-        byte[] signed = await XadesSigner.SignAsync(System.Text.Encoding.UTF8.GetBytes(xml), s_cert);
+        byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+            .WithCertificate(s_cert)
+            .SignAsync();
 
         string text = System.Text.Encoding.UTF8.GetString(signed);
         text = text.Replace("Type=\"http://uri.etsi.org/01903#SignedProperties\"", "");
@@ -1237,11 +1269,11 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\"?><doc><item>data</item></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert, new XadesSigningOptions
-        {
-            Form = XadesForm.Detached,
-            DataUri = "document.xml"
-        });
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithForm(XadesForm.Detached)
+            .WithDataUri("document.xml")
+            .SignAsync();
 
         var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert], originalData: xmlBytes);
         result.IsSignatureValid.ShouldBeTrue();
@@ -1254,10 +1286,10 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\"?><doc><item>data</item></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert, new XadesSigningOptions
-        {
-            Form = XadesForm.Enveloping
-        });
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithForm(XadesForm.Enveloping)
+            .SignAsync();
 
         var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert]);
         result.IsSignatureValid.ShouldBeTrue();
@@ -1270,11 +1302,11 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\"?><doc><item>data</item></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_cert, new XadesSigningOptions
-        {
-            Form = XadesForm.Detached,
-            DataUri = "document.xml"
-        });
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithForm(XadesForm.Detached)
+            .WithDataUri("document.xml")
+            .SignAsync();
 
         var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert]);
         result.IsSignatureValid.ShouldBeFalse();
@@ -1286,11 +1318,11 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\"?><doc><item>ecdsa detached</item></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_ecdsaCert, new XadesSigningOptions
-        {
-            Form = XadesForm.Detached,
-            DataUri = "data.xml"
-        });
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_ecdsaCert)
+            .WithForm(XadesForm.Detached)
+            .WithDataUri("data.xml")
+            .SignAsync();
 
         var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_ecdsaCert], originalData: xmlBytes);
         result.IsSignatureValid.ShouldBeTrue();
@@ -1303,10 +1335,10 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\"?><doc><item>ecdsa enveloping</item></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        byte[] signed = await XadesSigner.SignAsync(xmlBytes, s_ecdsaCert, new XadesSigningOptions
-        {
-            Form = XadesForm.Enveloping
-        });
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_ecdsaCert)
+            .WithForm(XadesForm.Enveloping)
+            .SignAsync();
 
         var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_ecdsaCert]);
         result.IsSignatureValid.ShouldBeTrue();
@@ -1323,11 +1355,12 @@ public sealed class XadesSignerTests
             .WithCertificate(s_cert)
             .WithForm(XadesForm.Detached)
             .WithDataUri("file.xml")
-            .WithExternalSigner(s_cert, async data =>
+            .WithExternalSigner(s_cert, new FuncExternalSigner(async data =>
             {
                 using RSA rsa = s_cert.GetRSAPrivateKey()!;
                 return rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            }, "1.2.840.113549.1.1.11")
+            }))
+            .WithSignatureAlgorithm("1.2.840.113549.1.1.11")
             .SignAsync();
 
         var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert], originalData: xmlBytes);
@@ -1344,11 +1377,12 @@ public sealed class XadesSignerTests
         byte[] signed = await XadesSigner.Document(xmlBytes)
             .WithCertificate(s_cert)
             .WithForm(XadesForm.Enveloping)
-            .WithExternalSigner(s_cert, async data =>
+            .WithExternalSigner(s_cert, new FuncExternalSigner(async data =>
             {
                 using RSA rsa = s_cert.GetRSAPrivateKey()!;
                 return rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            }, "1.2.840.113549.1.1.11")
+            }))
+            .WithSignatureAlgorithm("1.2.840.113549.1.1.11")
             .SignAsync();
 
         var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert]);

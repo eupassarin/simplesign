@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Shouldly;
 using SimpleSign.Core.Constants;
+using SimpleSign.Core.Signing;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -12,7 +13,7 @@ namespace SimpleSign.PAdES.Tests.Signing;
 /// <summary>
 /// Tests for v0.3.4 algorithm-inference fixes:
 ///   - Gap 1: PSS cert's RSASSA-PSS-params (RFC 4055 §3.1) honoured when inferring hash.
-///   - Gap 2: <see cref="SignerBuilder.WithSignatureAlgorithm"/> forces PSS on
+///   - Gap 2: <see cref="PadesSignerBuilder.WithSignatureAlgorithm"/> forces PSS on
 ///     rsaEncryption certs; <c>CmsSignatureBuilder.ValidateSignatureAlgorithmCompatibility</c>
 ///     throws on key-family mismatches.
 ///   - Gap 3: RSA PKCS#1 keys ≥ 3072 bits get SHA-384 by default; smaller keys get SHA-256.
@@ -28,7 +29,7 @@ public sealed class AlgorithmInferenceTests
     public async Task SignAsync_PssCertWithSha512Params_DefaultHash_ResolvesSha512()
     {
         using var cert = TestCertificateFactory.CreatePssSelfSignedCert(HashAlgorithmName.SHA512);
-        byte[] signed = await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 
@@ -39,7 +40,7 @@ public sealed class AlgorithmInferenceTests
     public async Task SignAsync_PssCertWithSha384Params_DefaultHash_ResolvesSha384()
     {
         using var cert = TestCertificateFactory.CreatePssSelfSignedCert(HashAlgorithmName.SHA384);
-        byte[] signed = await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 
@@ -50,7 +51,7 @@ public sealed class AlgorithmInferenceTests
     public async Task SignAsync_PssCert_UserOverridesHash_UsesUserChoice()
     {
         using var cert = TestCertificateFactory.CreatePssSelfSignedCert(HashAlgorithmName.SHA512);
-        byte[] signed = await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA256)
             .SignAsync();
@@ -65,7 +66,7 @@ public sealed class AlgorithmInferenceTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert(
             "CN=Large RSA, O=Tests", keySize: 4096, hashAlgorithm: HashAlgorithmName.SHA256);
-        byte[] signed = await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 
@@ -76,7 +77,7 @@ public sealed class AlgorithmInferenceTests
     public async Task SignAsync_Rsa2048Bit_DefaultHash_UsesSha256()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        byte[] signed = await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 
@@ -88,7 +89,7 @@ public sealed class AlgorithmInferenceTests
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert(
             "CN=Large RSA, O=Tests", keySize: 4096, hashAlgorithm: HashAlgorithmName.SHA256);
-        byte[] signed = await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA256)
             .SignAsync();
@@ -102,7 +103,7 @@ public sealed class AlgorithmInferenceTests
     public async Task WithSignatureAlgorithm_PssOnRsaEncryptionCert_AppliesPss()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        byte[] signed = await SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .WithSignatureAlgorithm(Oids.RsaPss)
             .SignAsync();
@@ -114,7 +115,7 @@ public sealed class AlgorithmInferenceTests
     public async Task WithSignatureAlgorithm_RsaPkcs1OnEcdsaCert_Throws()
     {
         using var cert = TestCertificateFactory.CreateEcdsaCert();
-        Func<Task> act = () => SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        Func<Task> act = () => PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .WithSignatureAlgorithm(Oids.RsaSha256)
             .SignAsync();
@@ -127,7 +128,7 @@ public sealed class AlgorithmInferenceTests
     public async Task WithSignatureAlgorithm_EcdsaOnRsaCert_Throws()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        Func<Task> act = () => SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        Func<Task> act = () => PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .WithSignatureAlgorithm(Oids.EcdsaSha256)
             .SignAsync();
@@ -139,7 +140,7 @@ public sealed class AlgorithmInferenceTests
     [Fact(DisplayName = "WithSignatureAlgorithm(null/whitespace) → throws ArgumentException at builder time")]
     public void WithSignatureAlgorithm_NullOrWhitespace_Throws()
     {
-        var builder = SimpleSigner.Document(TestPdfFactory.CreateMinimalPdf())
+        var builder = PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(TestCertificateFactory.CreateSelfSignedCert());
 
         Should.Throw<ArgumentException>(() => builder.WithSignatureAlgorithm(""));
@@ -157,11 +158,11 @@ public sealed class AlgorithmInferenceTests
         using var cert = TestCertificateFactory.CreatePssSelfSignedCert(HashAlgorithmName.SHA384);
         using RSA rsaKey = cert.GetRSAPrivateKey()!;
 
-        byte[] signed = await SimpleSigner
+        byte[] signed = await PadesSigner
             .Document(TestPdfFactory.CreateMinimalPdf())
             .WithSignatureAlgorithm(Oids.RsaSha512)
-            .WithExternalSigner(cert, signedAttrs =>
-                Task.FromResult(rsaKey.SignData(signedAttrs, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)))
+            .WithExternalSigner(cert, new FuncExternalSigner(signedAttrs =>
+                Task.FromResult(rsaKey.SignData(signedAttrs, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))))
             .SignAsync();
 
         byte[] cms = ExtractCmsFromPdf(signed);
@@ -176,11 +177,11 @@ public sealed class AlgorithmInferenceTests
         using RSA rsaKey = cert.GetRSAPrivateKey()!;
         var chain = new List<X509Certificate2>();
 
-        byte[] signed = await SimpleSigner
+        byte[] signed = await PadesSigner
             .Document(TestPdfFactory.CreateMinimalPdf())
             .WithSignatureAlgorithm(Oids.RsaSha512)
             .WithExternalSigner(cert,
-                signedAttrs => Task.FromResult(rsaKey.SignData(signedAttrs, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1)),
+                new FuncExternalSigner(signedAttrs => Task.FromResult(rsaKey.SignData(signedAttrs, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1))),
                 chain)
             .SignAsync();
 

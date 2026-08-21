@@ -43,7 +43,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert("CN=Auditor, O=TCE, C=BR");
         byte[] pdfBytes = BuildPdfWithPage();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithMetadata("Auditor", "Teste de aparência")
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(pdfBytes).WithCertificate(cert).WithMetadata("Auditor", "Teste de aparência")
             .WithAppearance(new SignatureAppearance
             {
                 X = 20f,
@@ -61,8 +61,8 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         byte[] pdf = BuildPdfWithPage();
-        byte[] signedNoApp = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
-        (await SimpleSigner.Document(pdf).WithCertificate(cert).WithAppearance(new SignatureAppearance())
+        byte[] signedNoApp = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        (await PadesSigner.Document(pdf).WithCertificate(cert).WithAppearance(new SignatureAppearance())
             .SignAsync()).Length.ShouldBeGreaterThan(signedNoApp.Length, "signature with appearance includes XObject and updated page");
     }
 
@@ -71,7 +71,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         byte[] pdfBytes = BuildPdfWithPage();
-        byte[] bytes = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithAppearance(new SignatureAppearance
+        byte[] bytes = await PadesSigner.Document(pdfBytes).WithCertificate(cert).WithAppearance(new SignatureAppearance
         {
             X = 10f,
             Y = 10f
@@ -86,7 +86,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert("CN=Testador, C=BR");
         byte[] pdfBytes = BuildPdfWithPage();
-        byte[] bytes = await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithMetadata("Testador")
+        byte[] bytes = await PadesSigner.Document(pdfBytes).WithCertificate(cert).WithMetadata("Testador")
             .WithAppearance(new SignatureAppearance())
             .SignAsync();
         string actualValue = Encoding.Latin1.GetString(bytes);
@@ -101,7 +101,7 @@ public sealed class SignatureAppearanceEndToEndTests
         using X509Certificate2 cert1 = CreateRsaCert("CN=Primeiro, C=BR");
         using X509Certificate2 cert2 = CreateRsaCert("CN=Segundo, C=BR");
         byte[] pdfBytes = BuildPdfWithPage();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(await SimpleSigner.Document(pdfBytes).WithCertificate(cert1).WithFieldName("Sig1")
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(await PadesSigner.Document(pdfBytes).WithCertificate(cert1).WithFieldName("Sig1")
             .WithAppearance(new SignatureAppearance
             {
                 X = 10f,
@@ -129,7 +129,7 @@ public sealed class SignatureAppearanceEndToEndTests
         X509Certificate2 cert = CreateRsaCert();
         try
         {
-            Func<SignerBuilder> func = () => SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithAppearance(null!);
+            Func<PadesSignerBuilder> func = () => PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).WithAppearance(null!);
             Should.Throw<ArgumentNullException>(func);
         }
         finally
@@ -155,7 +155,7 @@ public sealed class SignatureAppearanceEndToEndTests
     public async Task ValidateAsync_SignedPdf_SignerNamePopulated()
     {
         using X509Certificate2 cert = CreateRsaCert("CN=Fulano de Tal, O=Orgao, C=BR");
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
         (await ValidatorTrusting(cert).ValidateAsync(stream))[0].SignerName.ShouldBe("Fulano de Tal", "");
     }
 
@@ -163,7 +163,7 @@ public sealed class SignatureAppearanceEndToEndTests
     public async Task ValidateAsync_SignedPdf_SubFilterPopulated()
     {
         using X509Certificate2 cert = CreateRsaCert();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
         (await ValidatorTrusting(cert).ValidateAsync(stream))[0].SubFilter.ShouldBe("ETSI.CAdES.detached", "");
     }
 
@@ -171,7 +171,7 @@ public sealed class SignatureAppearanceEndToEndTests
     public async Task ValidateAsync_SignedPdf_DigestAlgorithmOidPopulated()
     {
         using X509Certificate2 cert = CreateRsaCert();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync());
         (await ValidatorTrusting(cert).ValidateAsync(stream))[0].DigestAlgorithmOid.ShouldBe("2.16.840.1.101.3.4.2.1", "");
     }
 
@@ -180,7 +180,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         DateTimeOffset before = DateTimeOffset.UtcNow.AddSeconds(-2.0);
-        byte[] buffer = await SimpleSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync();
+        byte[] buffer = await PadesSigner.Document(BuildMinimalPdf()).WithCertificate(cert).SignAsync();
         DateTimeOffset after = DateTimeOffset.UtcNow.AddSeconds(2.0);
         using MemoryStream stream = new MemoryStream(buffer);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
@@ -194,7 +194,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         byte[] pdfBytes = BuildMinimalPdf();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert).WithFieldName("EtsiSig")
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(pdfBytes).WithCertificate(cert).WithFieldName("EtsiSig")
             .SignAsync());
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(cert).ValidateAsync(stream);
         readOnlyList[0].IsIntegrityValid.ShouldBeTrue("");
@@ -206,7 +206,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         byte[] pdfBytes = BuildPdfWithPage();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(pdfBytes).WithCertificate(cert)
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(pdfBytes).WithCertificate(cert)
             .WithAppearance(new SignatureAppearance
             {
                 X = 20f,
@@ -225,7 +225,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         byte[] pdfBytes = BuildPdfWithPage();
-        byte[] withQr = await SimpleSigner.Document(pdfBytes).WithCertificate(cert)
+        byte[] withQr = await PadesSigner.Document(pdfBytes).WithCertificate(cert)
             .WithAppearance(new SignatureAppearance
             {
                 X = 20f,
@@ -233,7 +233,7 @@ public sealed class SignatureAppearanceEndToEndTests
                 VerificationUrl = "https://verify.example.com/doc-123"
             })
             .SignAsync();
-        byte[] withoutQr = await SimpleSigner.Document(pdfBytes).WithCertificate(cert)
+        byte[] withoutQr = await PadesSigner.Document(pdfBytes).WithCertificate(cert)
             .WithAppearance(new SignatureAppearance
             {
                 X = 20f,
@@ -248,7 +248,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         byte[] pdfBytes = BuildPdfWithPage();
-        byte[] signed = await SimpleSigner.Document(pdfBytes).WithCertificate(cert)
+        byte[] signed = await PadesSigner.Document(pdfBytes).WithCertificate(cert)
             .WithAppearance(new SignatureAppearance
             {
                 X = 20f,
@@ -265,7 +265,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert();
         byte[] pdfBytes = BuildPdfWithPage();
-        byte[] signed = await SimpleSigner.Document(pdfBytes).WithCertificate(cert)
+        byte[] signed = await PadesSigner.Document(pdfBytes).WithCertificate(cert)
             .WithAppearance(new SignatureAppearance
             {
                 X = 20f,
@@ -283,7 +283,7 @@ public sealed class SignatureAppearanceEndToEndTests
         using X509Certificate2 cert1 = CreateRsaCert("CN=QR First");
         using X509Certificate2 cert2 = CreateRsaCert("CN=QR Second");
         byte[] pdf = BuildPdfWithPage();
-        using MemoryStream stream = new MemoryStream(await SimpleSigner.Document(await SimpleSigner.Document(pdf)
+        using MemoryStream stream = new MemoryStream(await PadesSigner.Document(await PadesSigner.Document(pdf)
             .WithCertificate(cert1).WithFieldName("Sig1")
             .WithAppearance(new SignatureAppearance { X = 10f, Y = 10f, VerificationUrl = "https://verify.example.com/1" })
             .SignAsync()).WithCertificate(cert2).WithFieldName("Sig2")
@@ -303,7 +303,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert("CN=Page Selector");
         byte[] pdf = TestPdfFactory.CreateThreePagePdf();
-        byte[] signed = await SimpleSigner.Document(pdf)
+        byte[] signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAppearance(new SignatureAppearance { Page = 2, X = 50, Y = 50, AutoPosition = false })
             .SignAsync();
@@ -319,7 +319,7 @@ public sealed class SignatureAppearanceEndToEndTests
     {
         using X509Certificate2 cert = CreateRsaCert("CN=Page 3 Signer");
         byte[] pdf = TestPdfFactory.CreateThreePagePdf();
-        byte[] signed = await SimpleSigner.Document(pdf)
+        byte[] signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAppearance(new SignatureAppearance { Page = 3, X = 50, Y = 50, AutoPosition = false })
             .SignAsync();

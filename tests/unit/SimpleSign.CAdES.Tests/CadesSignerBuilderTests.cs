@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestHelpers;
 using Shouldly;
@@ -21,7 +22,7 @@ public sealed class CadesSignerBuilderTests : IDisposable
     {
         _cert = TestCertificateFactory.CreateSelfSignedCert();
         _data = "test data for signing"u8.ToArray();
-        _pki = new SyntheticPki();
+        _pki = new SyntheticPki("http://mock-tsa.example.com/crl");
     }
 
     public void Dispose()
@@ -51,7 +52,7 @@ public sealed class CadesSignerBuilderTests : IDisposable
     {
         var cms = await CadesSigner.Document(_data)
             .WithCertificate(_cert)
-            .WithLevel(CadesLevel.Basic)
+            .WithLevel(AdesBaselineProfile.Basic())
             .SignAsync();
 
         var parsed = CmsParser.Parse(cms);
@@ -68,8 +69,8 @@ public sealed class CadesSignerBuilderTests : IDisposable
 
         var cms = await CadesSigner.Document(_data)
             .WithCertificate(_cert)
-            .WithLevel(CadesLevel.Timestamped)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
 
         var parsed = CmsParser.Parse(cms);
@@ -84,9 +85,10 @@ public sealed class CadesSignerBuilderTests : IDisposable
         using var tsaHttpClient = new HttpClient(mockTsa);
 
         var cms = await CadesSigner.Document(_data)
-            .WithCertificate(_cert)
-            .WithLevel(CadesLevel.LongTerm)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithCertificate(_cert, [_pki.IntermediateCa])
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient)),
+                new LongTermValidationOptions(new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
 
         var parsed = CmsParser.Parse(cms);
@@ -102,9 +104,10 @@ public sealed class CadesSignerBuilderTests : IDisposable
         using var tsaHttpClient = new HttpClient(mockTsa);
 
         var cms = await CadesSigner.Document(_data)
-            .WithCertificate(_cert)
-            .WithLevel(CadesLevel.Archive)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithCertificate(_cert, [_pki.IntermediateCa])
+            .WithLevel(AdesBaselineProfile.Archive(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient)),
+                new LongTermValidationOptions(new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
 
         var parsed = CmsParser.Parse(cms);
@@ -121,10 +124,12 @@ public sealed class CadesSignerBuilderTests : IDisposable
             .WithCertificate(_cert)
             .SignWithDetailsAsync();
 
-        result.Cms.ShouldNotBeNull();
-        result.TimestampApplied.ShouldBeFalse();
-        result.LtvDataEmbedded.ShouldBeFalse();
-        result.ArchiveTimestampApplied.ShouldBeFalse();
+        result.SignedArtifact.ShouldNotBeNull();
+        result.RequestedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        result.HasSignatureTimestamp.ShouldBeFalse();
+        result.HasLongTermValidationMaterial.ShouldBeFalse();
+        result.HasArchiveTimestamp.ShouldBeFalse();
         result.Warnings.ShouldNotBeNull();
     }
 
@@ -183,9 +188,9 @@ public sealed class CadesSignerBuilderTests : IDisposable
     }
 
     [Fact]
-    public async Task SignAsync_NoCertificate_ThrowsInvalidOperationException()
+    public async Task SignAsync_NoCertificate_ThrowsSigningException()
     {
-        await Should.ThrowAsync<InvalidOperationException>(async () =>
+        await Should.ThrowAsync<SigningException>(async () =>
         {
             await CadesSigner.Document(_data).SignAsync();
         });
@@ -195,12 +200,13 @@ public sealed class CadesSignerBuilderTests : IDisposable
     public async Task SignAsync_WithExternalSigner_ReturnsValidSignature()
     {
         var cms = await CadesSigner.Document(_data)
-            .WithExternalSigner(_cert, async signedAttrs =>
+            .WithExternalSigner(_cert, new FuncExternalSigner(async signedAttrs =>
             {
                 using var key = _cert.GetRSAPrivateKey()!;
                 return await Task.FromResult(
                     key.SignData(signedAttrs, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-            }, Oids.RsaSha256)
+            }))
+            .WithSignatureAlgorithm(Oids.RsaSha256)
             .SignAsync();
 
         cms.ShouldNotBeNull();
@@ -215,30 +221,31 @@ public sealed class CadesSignerBuilderTests : IDisposable
     public async Task SignAsync_ExternalSignerWithDetails_ReturnsCorrectMetadata()
     {
         var result = await CadesSigner.Document(_data)
-            .WithExternalSigner(_cert, async signedAttrs =>
+            .WithExternalSigner(_cert, new FuncExternalSigner(async signedAttrs =>
             {
                 using var key = _cert.GetRSAPrivateKey()!;
                 return await Task.FromResult(
                     key.SignData(signedAttrs, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-            }, Oids.RsaSha256)
+            }))
+            .WithSignatureAlgorithm(Oids.RsaSha256)
             .SignWithDetailsAsync();
 
-        result.Cms.ShouldNotBeNull();
-        result.TimestampApplied.ShouldBeFalse();
-        result.LtvDataEmbedded.ShouldBeFalse();
-        result.ArchiveTimestampApplied.ShouldBeFalse();
+        result.SignedArtifact.ShouldNotBeNull();
+        result.HasSignatureTimestamp.ShouldBeFalse();
+        result.HasLongTermValidationMaterial.ShouldBeFalse();
+        result.HasArchiveTimestamp.ShouldBeFalse();
     }
 
     [Fact]
     public async Task SignAsync_ExternalSignerAutoDetectOid_ReturnsValidSignature()
     {
         var cms = await CadesSigner.Document(_data)
-            .WithExternalSigner(_cert, async signedAttrs =>
+            .WithExternalSigner(_cert, new FuncExternalSigner(async signedAttrs =>
             {
                 using var key = _cert.GetRSAPrivateKey()!;
                 return await Task.FromResult(
                     key.SignData(signedAttrs, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-            })
+            }))
             .SignAsync();
 
         cms.ShouldNotBeNull();
@@ -293,8 +300,9 @@ public sealed class CadesSignerBuilderTests : IDisposable
 
         var cms = await CadesSigner.Document(_data)
             .WithCertificate(_cert, [_pki.IntermediateCa])
-            .WithLevel(CadesLevel.LongTerm)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithLevel(AdesBaselineProfile.LongTerm(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient)),
+                new LongTermValidationOptions(new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
 
         var parsed = CmsParser.Parse(cms);
@@ -302,17 +310,22 @@ public sealed class CadesSignerBuilderTests : IDisposable
     }
 
     [Fact]
-    public async Task SignAsync_WithTimestampAutoLevel_AppliesTimestamp()
+    public async Task SignWithDetailsAsync_TimestampedProfile_ReportsTimestampedLevels()
     {
         var mockTsa = BuildMockTsaHandler();
         using var tsaHttpClient = new HttpClient(mockTsa);
 
-        var cms = await CadesSigner.Document(_data)
+        var result = await CadesSigner.Document(_data)
             .WithCertificate(_cert)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
-            .SignAsync();
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient))))
+            .SignWithDetailsAsync();
 
-        var parsed = CmsParser.Parse(cms);
+        result.RequestedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        result.HasSignatureTimestamp.ShouldBeTrue();
+
+        var parsed = CmsParser.Parse(result.SignedArtifact);
         parsed.SignatureTimestampToken.ShouldNotBeNull();
     }
 

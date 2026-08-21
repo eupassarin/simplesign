@@ -37,7 +37,7 @@ public sealed class BrasilInteropTests(ITestOutputHelper output)
             CommitmentType = SimpleSign.Core.Signing.CommitmentType.ProofOfApproval,
         };
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(aeaInfo)
             .SignAsync();
@@ -68,7 +68,7 @@ public sealed class BrasilInteropTests(ITestOutputHelper output)
             PolicyUri = "http://politicas.icpbrasil.gov.br/PA_AD_RB_v2_3.der",
         };
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithAdvancedSignature(aeaInfo)
             .SignAsync();

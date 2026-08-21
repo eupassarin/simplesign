@@ -24,11 +24,10 @@ dotnet add package SimpleSign.PAdES
 using SimpleSign.PAdES;
 
 // Sign a PDF
-byte[] signedPdf = await SimpleSigner
+byte[] signedPdf = await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(certificate)
-    .WithSignerName("John Doe")
-    .WithReason("Approval")
+    .WithMetadata(signerName: "John Doe", reason: "Approval")
     .SignAsync();
 ```
 

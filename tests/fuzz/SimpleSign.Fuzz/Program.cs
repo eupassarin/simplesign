@@ -172,7 +172,9 @@ internal static class Program
     {
         try
         {
-            _ = XadesSigner.SignAsync(data, FuzzSignerCert)
+            _ = XadesSigner.Document(data)
+                .WithCertificate(FuzzSignerCert)
+                .SignAsync()
                 .GetAwaiter().GetResult();
         }
         catch (Exception ex) when (IsExpectedException(ex)) { }
@@ -194,7 +196,9 @@ internal static class Program
     {
         try
         {
-            _ = CadesSigner.SignAsync(data, FuzzSignerCert)
+            _ = CadesSigner.Document(data)
+                .WithCertificate(FuzzSignerCert)
+                .SignAsync()
                 .GetAwaiter().GetResult();
         }
         catch (Exception ex) when (IsExpectedException(ex)) { }

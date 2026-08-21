@@ -6,10 +6,14 @@
     <PackageId>SimpleSign.XAdES</PackageId>
     <Description>Create and validate XAdES digital signatures (ETSI EN 319 132). Supports B-B, B-T, B-LT, and B-LTA conformance levels for XML documents. Uses System.Security.Cryptography and System.Security.Cryptography.Xml.</Description>
     <PackageTags>xades;xml-dsig;xml-signature;digital-signature;electronic-signature;etsi;timestamp</PackageTags>
-    <Version>0.7.1</Version>
+    <Version>0.8.0</Version>
     <NoWarn>$(NoWarn);CA1508</NoWarn>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Contracts.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />

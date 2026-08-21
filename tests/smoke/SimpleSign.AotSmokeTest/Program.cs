@@ -16,7 +16,7 @@ try
 {
     // PAdES sign
     var pdf = CreateMinimalPdf();
-    var signedPdf = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+    var signedPdf = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
     Console.WriteLine($"[PASS] PAdES: signed {pdf.Length}B → {signedPdf.Length}B");
 
     // Inspect

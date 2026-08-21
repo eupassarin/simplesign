@@ -23,12 +23,12 @@ public class ParsingBenchmarks
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Bench Parsing");
         _unsignedPdf = PdfHelper.BuildMinimalPdf();
 
-        _signedPdf1 = await SimpleSigner.Document(_unsignedPdf).WithCertificate(cert).SignAsync();
+        _signedPdf1 = await PadesSigner.Document(_unsignedPdf).WithCertificate(cert).SignAsync();
 
         byte[] multi = _unsignedPdf;
         for (int i = 0; i < 5; i++)
         {
-            multi = await SimpleSigner.Document(multi).WithCertificate(cert).SignAsync();
+            multi = await PadesSigner.Document(multi).WithCertificate(cert).SignAsync();
         }
 
         _signedPdf5 = multi;

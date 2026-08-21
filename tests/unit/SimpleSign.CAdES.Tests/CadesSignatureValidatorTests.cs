@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
 using Shouldly;
@@ -24,7 +26,9 @@ public sealed class CadesSignatureValidatorTests : IDisposable
     [Fact]
     public async Task Validate_ValidDetachedSignature_ReturnsValid()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
 
         var validator = new CadesSignatureValidator(
             new ValidationOptions { CheckRevocation = false });
@@ -51,7 +55,9 @@ public sealed class CadesSignatureValidatorTests : IDisposable
     [Fact]
     public async Task Validate_WrongData_DetachedSignature_ReturnsInvalid()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
         var wrongData = "Wrong data!"u8.ToArray();
 
         var validator = new CadesSignatureValidator(
@@ -64,7 +70,9 @@ public sealed class CadesSignatureValidatorTests : IDisposable
     [Fact]
     public async Task Validate_TamperedCms_ReturnsInvalid()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
         var tampered = (byte[])cms.Clone();
         tampered[^1] ^= 0xFF;
 
@@ -93,7 +101,9 @@ public sealed class CadesSignatureValidatorTests : IDisposable
     [Fact]
     public async Task Validate_UntrustedChain_ReturnsInvalid()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
         using var wrongAnchor = TestCertificateFactory.CreateSelfSignedCert("CN=Wrong Anchor");
 
         var validator = new CadesSignatureValidator(
@@ -126,7 +136,9 @@ public sealed class CadesSignatureValidatorTests : IDisposable
     [Fact]
     public async Task Validate_DetectedLevel_Basic()
     {
-        var cms = await CadesSigner.SignAsync(_data, _cert);
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
 
         var validator = new CadesSignatureValidator(
             new ValidationOptions { CheckRevocation = false });
@@ -144,8 +156,8 @@ public sealed class CadesSignatureValidatorTests : IDisposable
 
         var cms = await CadesSigner.Document(_data)
             .WithCertificate(_cert)
-            .WithLevel(CadesLevel.Timestamped)
-            .WithTimestamp("http://mock-tsa.example.com", tsaHttpClient)
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(tsaHttpClient))))
             .SignAsync();
 
         var validator = new CadesSignatureValidator(

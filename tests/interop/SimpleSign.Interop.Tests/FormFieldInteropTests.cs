@@ -23,7 +23,7 @@ public sealed class FormFieldInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Form Field Signer");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithFieldName("Sig1")
             .SignAsync();
@@ -57,7 +57,7 @@ public sealed class FormFieldInteropTests(ITestOutputHelper output)
         var pdf = PdfWithEmptySignatureField("Signature1");
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Existing Field Signer");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithExistingField("Signature1")
             .SignAsync();

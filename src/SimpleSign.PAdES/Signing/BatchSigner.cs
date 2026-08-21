@@ -20,8 +20,7 @@ public sealed class BatchSigner : IAsyncDisposable
     private readonly Func<byte[], Task<byte[]>>? _externalSigner;
     private readonly string? _externalSignerOid;
     private readonly string? _tsaUrl;
-    private readonly HttpClient _httpClient;
-    private readonly bool _ownsHttpClient;
+    private readonly IHttpClientProvider _httpClientProvider;
     private readonly ILogger _logger;
     private readonly HashAlgorithmName _hashAlgorithm;
     private readonly string? _signerName;
@@ -52,17 +51,7 @@ public sealed class BatchSigner : IAsyncDisposable
         _archivalTsaUrl = builder.ArchivalTsaUrl;
         _maxConcurrency = builder.MaxConcurrency;
         _logger = builder.Logger ?? NullLogger.Instance;
-
-        if (builder.HttpClientProvider is not null)
-        {
-            _httpClient = builder.HttpClientProvider.GetClient();
-            _ownsHttpClient = false;
-        }
-        else
-        {
-            _httpClient = DefaultHttpClientProvider.Instance.GetClient();
-            _ownsHttpClient = false;
-        }
+        _httpClientProvider = builder.HttpClientProvider ?? DefaultHttpClientProvider.Instance;
     }
 
     /// <summary>Creates a new <see cref="BatchSignerBuilder"/> for configuring the batch signer.</summary>
@@ -98,7 +87,7 @@ public sealed class BatchSigner : IAsyncDisposable
         var sw = Stopwatch.StartNew();
         try
         {
-            var builder = ConfigureBuilder(SimpleSigner.Document(pdfStream, _logger));
+            var builder = ConfigureBuilder(PadesSigner.Document(pdfStream));
             await builder.SignAsync(outputStream, cancellationToken).ConfigureAwait(false);
             Interlocked.Increment(ref _successCount);
         }
@@ -125,7 +114,7 @@ public sealed class BatchSigner : IAsyncDisposable
         var sw = Stopwatch.StartNew();
         try
         {
-            var builder = ConfigureBuilder(SimpleSigner.Document(pdfBytes, _logger));
+            var builder = ConfigureBuilder(PadesSigner.Document(pdfBytes));
             var result = await builder.SignAsync(cancellationToken).ConfigureAwait(false);
             Interlocked.Increment(ref _successCount);
             return result;
@@ -196,13 +185,15 @@ public sealed class BatchSigner : IAsyncDisposable
         }
     }
 
-    private SignerBuilder ConfigureBuilder(SignerBuilder builder)
+    private PadesSignerBuilder ConfigureBuilder(PadesSignerBuilder builder)
     {
         if (_externalSigner is not null)
         {
-            builder = _externalSignerOid is not null
-                ? builder.WithExternalSigner(_certificate, _externalSigner, _externalSignerOid)
-                : builder.WithExternalSigner(_certificate, _externalSigner);
+            builder = builder.WithExternalSigner(_certificate, new FuncExternalSigner(_externalSigner), _chain ?? []);
+            if (_externalSignerOid is not null)
+            {
+                builder = builder.WithSignatureAlgorithm(_externalSignerOid);
+            }
         }
         else if (_chain is not null)
         {
@@ -217,8 +208,19 @@ public sealed class BatchSigner : IAsyncDisposable
 
         if (_tsaUrl is not null)
         {
-            builder = builder.WithTimestamp(_tsaUrl, _httpClient);
+            var timestampOptions = new TimestampOptions(new Uri(_tsaUrl));
+            var profile = _enableLtv
+                ? _archivalTsaUrl is not null
+                    ? AdesBaselineProfile.Archive(
+                        timestampOptions,
+                        new LongTermValidationOptions(),
+                        new ArchiveTimestampOptions(new Uri(_archivalTsaUrl)))
+                    : AdesBaselineProfile.LongTerm(timestampOptions, new LongTermValidationOptions())
+                : AdesBaselineProfile.Timestamped(timestampOptions);
+            builder = builder.WithLevel(profile);
         }
+
+        builder = builder.WithHttpClientProvider(_httpClientProvider);
 
         if (_signerName is not null || _reason is not null || _location is not null)
         {
@@ -230,29 +232,11 @@ public sealed class BatchSigner : IAsyncDisposable
             builder = builder.WithAppearance(_appearance);
         }
 
-        if (_enableLtv)
-        {
-            builder = builder.WithLtv();
-        }
-
-        if (_archivalTsaUrl is not null)
-        {
-            builder = builder.WithArchivalTimestamp(_archivalTsaUrl);
-        }
-
         return builder;
     }
 
     /// <inheritdoc/>
-    public ValueTask DisposeAsync()
-    {
-        if (_ownsHttpClient)
-        {
-            _httpClient.Dispose();
-        }
-
-        return ValueTask.CompletedTask;
-    }
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     /// <summary>
     /// Resets the success/failure counters and average elapsed time.

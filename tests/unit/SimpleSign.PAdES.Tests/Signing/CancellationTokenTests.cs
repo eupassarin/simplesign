@@ -33,7 +33,7 @@ public sealed class CancellationTokenTests : IDisposable
     [Fact(DisplayName = "SignerBuilder.SignAsync(canceledToken) throws OperationCanceledException")]
     public async Task SignerBuilder_SignAsync_Bytes_CanceledToken_Throws()
     {
-        Func<Task> act = () => SimpleSigner
+        Func<Task> act = () => PadesSigner
             .Document(MinimalPdf)
             .WithCertificate(_cert)
             .SignAsync(CanceledToken);
@@ -46,7 +46,7 @@ public sealed class CancellationTokenTests : IDisposable
     {
         using var output = new MemoryStream();
 
-        Func<Task> act = () => SimpleSigner
+        Func<Task> act = () => PadesSigner
             .Document(MinimalPdf)
             .WithCertificate(_cert)
             .SignAsync(output, CanceledToken);

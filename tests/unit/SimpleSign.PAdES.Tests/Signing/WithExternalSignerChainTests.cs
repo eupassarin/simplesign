@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Shouldly;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
@@ -89,16 +90,16 @@ public sealed class WithExternalSignerChainTests
         IReadOnlyList<X509Certificate2>? chain = null,
         string? signatureAlgorithmOid = null)
     {
-        return await SimpleSigner.Document(pdf)
+        return await PadesSigner.Document(pdf)
             .WithExternalSigner(
                 signerCert,
-                data =>
+                new FuncExternalSigner(data =>
                 {
                     using var rsa = signerCert.GetRSAPrivateKey()!;
                     return Task.FromResult(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-                },
-                signatureAlgorithmOid ?? "1.2.840.113549.1.1.11",
+                }),
                 chain ?? [])
+            .WithSignatureAlgorithm(signatureAlgorithmOid ?? "1.2.840.113549.1.1.11")
             .SignAsync();
     }
 
@@ -116,34 +117,33 @@ public sealed class WithExternalSignerChainTests
     [Fact(DisplayName = "WithExternalSigner (explicit OID + chain) with null cert throws")]
     public void WithExternalSigner_OidChain_NullCert_Throws()
     {
-        var builder = SimpleSigner.Document([0x25, 0x50, 0x44, 0x46]);
+        var builder = PadesSigner.Document([0x25, 0x50, 0x44, 0x46]);
         Assert.Throws<ArgumentNullException>(() =>
             builder.WithExternalSigner(
                 null!,
-                _ => Task.FromResult(Array.Empty<byte>()),
-                "1.2.840.113549.1.1.11",
-                []));
+                new FuncExternalSigner(_ => Task.FromResult(Array.Empty<byte>())),
+                [])
+            .WithSignatureAlgorithm("1.2.840.113549.1.1.11"));
     }
 
     [Fact(DisplayName = "WithExternalSigner (explicit OID + chain) with null delegate throws")]
     public void WithExternalSigner_OidChain_NullDelegate_Throws()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var builder = SimpleSigner.Document([0x25, 0x50, 0x44, 0x46]);
+        var builder = PadesSigner.Document([0x25, 0x50, 0x44, 0x46]);
         Assert.Throws<ArgumentNullException>(() =>
-            builder.WithExternalSigner(cert, null!, "1.2.840.113549.1.1.11", []));
+            builder.WithExternalSigner(cert, null!, []));
     }
 
     [Fact(DisplayName = "WithExternalSigner (explicit OID + chain) with null chain throws")]
     public void WithExternalSigner_OidChain_NullChain_Throws()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var builder = SimpleSigner.Document([0x25, 0x50, 0x44, 0x46]);
+        var builder = PadesSigner.Document([0x25, 0x50, 0x44, 0x46]);
         Assert.Throws<ArgumentNullException>(() =>
             builder.WithExternalSigner(
                 cert,
-                _ => Task.FromResult(Array.Empty<byte>()),
-                "1.2.840.113549.1.1.11",
+                new FuncExternalSigner(_ => Task.FromResult(Array.Empty<byte>())),
                 null!));
     }
 
@@ -151,23 +151,23 @@ public sealed class WithExternalSignerChainTests
     public void WithExternalSigner_OidChain_EmptyOid_Throws()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var builder = SimpleSigner.Document([0x25, 0x50, 0x44, 0x46]);
+        var builder = PadesSigner.Document([0x25, 0x50, 0x44, 0x46]);
         Assert.Throws<ArgumentException>(() =>
             builder.WithExternalSigner(
                 cert,
-                _ => Task.FromResult(Array.Empty<byte>()),
-                "   ",
-                []));
+                new FuncExternalSigner(_ => Task.FromResult(Array.Empty<byte>())),
+                [])
+            .WithSignatureAlgorithm("   "));
     }
 
     [Fact(DisplayName = "WithExternalSigner (auto-detect + chain) with null chain throws")]
     public void WithExternalSigner_AutoChain_NullChain_Throws()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var builder = SimpleSigner.Document([0x25, 0x50, 0x44, 0x46]);
+        var builder = PadesSigner.Document([0x25, 0x50, 0x44, 0x46]);
         IReadOnlyList<X509Certificate2>? nullChain = null;
         Assert.Throws<ArgumentNullException>(() =>
-            builder.WithExternalSigner(cert, _ => Task.FromResult(Array.Empty<byte>()), nullChain!));
+            builder.WithExternalSigner(cert, new FuncExternalSigner(_ => Task.FromResult(Array.Empty<byte>())), nullChain!));
     }
 
     // ── Builder shape / chain storage ────────────────────────────────────────
@@ -176,16 +176,17 @@ public sealed class WithExternalSignerChainTests
     public void WithExternalSigner_Chain_ReturnsNewInstance()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var builder = SimpleSigner.Document([0x25, 0x50, 0x44, 0x46]);
+        var builder = PadesSigner.Document([0x25, 0x50, 0x44, 0x46]);
         var builder2 = builder.WithExternalSigner(
             cert,
-            _ => Task.FromResult(Array.Empty<byte>()),
-            "1.2.840.113549.1.1.11",
-            []);
+            new FuncExternalSigner(_ => Task.FromResult(Array.Empty<byte>())),
+            [])
+            .WithSignatureAlgorithm("1.2.840.113549.1.1.11");
 
         builder.ShouldNotBeSameAs(builder2);
         // Must remain chainable with other builder methods
-        var builder3 = builder2.WithTimestamp("http://tsa.example.com");
+        var builder3 = builder2.WithLevel(AdesBaselineProfile.Timestamped(
+            new TimestampOptions(new Uri("http://tsa.example.com"))));
         builder3.ShouldNotBeSameAs(builder2);
     }
 
@@ -193,10 +194,10 @@ public sealed class WithExternalSignerChainTests
     public void WithExternalSigner_AutoChain_ReturnsNewInstance()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var builder = SimpleSigner.Document([0x25, 0x50, 0x44, 0x46]);
+        var builder = PadesSigner.Document([0x25, 0x50, 0x44, 0x46]);
         var builder2 = builder.WithExternalSigner(
             cert,
-            _ => Task.FromResult(Array.Empty<byte>()),
+            new FuncExternalSigner(_ => Task.FromResult(Array.Empty<byte>())),
             []);
 
         builder.ShouldNotBeSameAs(builder2);
@@ -253,14 +254,14 @@ public sealed class WithExternalSignerChainTests
         using (leaf)
         {
             // Use the auto-detect overload (no explicit OID).
-            byte[] signed = await SimpleSigner.Document(BuildMinimalPdf())
+            byte[] signed = await PadesSigner.Document(BuildMinimalPdf())
                 .WithExternalSigner(
                     leaf,
-                    data =>
+                    new FuncExternalSigner(data =>
                     {
                         using var rsa = leaf.GetRSAPrivateKey()!;
                         return Task.FromResult(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-                    },
+                    }),
                     [ca])
                 .SignAsync();
 

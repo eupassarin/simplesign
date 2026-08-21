@@ -181,7 +181,7 @@ public sealed class PdfSignatureValidatorTests
         using (new MemoryStream(array))
         {
             using MemoryStream outputStream = new MemoryStream();
-            await SimpleSigner.Document(array).WithCertificate(cert).SignAsync(outputStream);
+            await PadesSigner.Document(array).WithCertificate(cert).SignAsync(outputStream);
             byte[] array2 = outputStream.ToArray();
             array2[50] ^= byte.MaxValue;
             using MemoryStream tamperedStream = new MemoryStream(array2);
@@ -201,7 +201,7 @@ public sealed class PdfSignatureValidatorTests
         using X509Certificate2 cert = CreateRsaCertWithKey();
         byte[] pdfBytes = BuildMinimalPdfForSigning();
         using MemoryStream outputStream = new MemoryStream();
-        await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
+        await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
         byte[] buffer = outputStream.ToArray();
         using MemoryStream signedStream = new MemoryStream(buffer);
         PdfSignatureValidator pdfSignatureValidator = new PdfSignatureValidator(new ValidationOptions
@@ -319,7 +319,7 @@ public sealed class PdfSignatureValidatorTests
             byte[] buffer = BuildMinimalPdfForSigning();
             MemoryStream input = new MemoryStream(buffer);
             MemoryStream output = new MemoryStream();
-            Func<Task> action = () => SimpleSigner.Document(input).WithCertificate(cert).SignAsync(output);
+            Func<Task> action = () => PadesSigner.Document(input).WithCertificate(cert).SignAsync(output);
             await Should.NotThrowAsync(action);
         }
         finally
@@ -386,7 +386,7 @@ public sealed class PdfSignatureValidatorTests
         using X509Certificate2 cert = CreateRsaCertWithKey();
         byte[] pdfBytes = BuildMinimalPdfForSigning();
         using MemoryStream outputStream = new MemoryStream();
-        await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
+        await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
 
         var mockProvider = new Mock<IChainValidationProvider>();
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
@@ -423,7 +423,7 @@ public sealed class PdfSignatureValidatorTests
         using X509Certificate2 cert = CreateRsaCertWithKey();
         byte[] pdfBytes = BuildMinimalPdfForSigning();
         using MemoryStream outputStream = new MemoryStream();
-        await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
+        await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
 
         var mockProvider = new Mock<IChainValidationProvider>();
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
@@ -455,7 +455,7 @@ public sealed class PdfSignatureValidatorTests
         using X509Certificate2 cert = CreateRsaCertWithKey();
         byte[] pdfBytes = BuildMinimalPdfForSigning();
         using MemoryStream outputStream = new MemoryStream();
-        await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
+        await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
 
         var mockProvider = new Mock<IChainValidationProvider>();
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
@@ -486,7 +486,7 @@ public sealed class PdfSignatureValidatorTests
         using X509Certificate2 cert = CreateRsaCertWithKey();
         byte[] pdfBytes = BuildMinimalPdfForSigning();
         using MemoryStream outputStream = new MemoryStream();
-        await SimpleSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
+        await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
 
         var mockProvider = new Mock<IChainValidationProvider>();
         mockProvider.Setup(p => p.RegionCode).Returns("XX");

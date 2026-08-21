@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.PAdES</PackageId>
     <Description>Sign, validate, and inspect PDF digital signatures (PAdES ETSI EN 319 142). Supports B-B, B-T, B-LT, B-LTA conformance levels. Fluent async API. No BouncyCastle — uses only System.Security.Cryptography. Native AOT compatible.</Description>
     <PackageTags>pdf;pades;digital-signature;electronic-signature;sign-pdf;pdf-signing;validate-signature;etsi;timestamp;native-aot</PackageTags>
-    <Version>0.7.1</Version>
+    <Version>0.8.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
@@ -19,6 +19,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleSign.Brasil" />
     <InternalsVisibleTo Include="SimpleSign.PAdES.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Contracts.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Brasil.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Fuzz" />
   </ItemGroup>

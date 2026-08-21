@@ -25,7 +25,7 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Tampered PAdES DSS");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tampered = TamperPdfContents(signed);
 
@@ -64,7 +64,7 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Tampered PAdES EOF");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         // Append extra bytes after %%EOF to break byte range coverage
         var tampered = new byte[signed.Length + 100];
@@ -107,7 +107,7 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Tampered PAdES iText");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tampered = TamperPdfContents(signed);
 
@@ -143,7 +143,7 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Tampered PAdES EU DSS");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tampered = TamperPdfContents(signed);
 
@@ -182,7 +182,7 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Tampered ByteRange");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         // Corrupt /ByteRange in the signature dictionary by modifying one digit
         var text = System.Text.Encoding.Latin1.GetString(signed);
@@ -210,7 +210,7 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Tampered Xref");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         // Corrupt an "n" entry in the xref table after the original objects
         var text = System.Text.Encoding.Latin1.GetString(signed);
@@ -247,7 +247,7 @@ public sealed class TamperedInteropTests(ITestOutputHelper output)
 
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Tampered Contents");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var text = System.Text.Encoding.Latin1.GetString(signed);
         var closeIdx = text.LastIndexOf('>');

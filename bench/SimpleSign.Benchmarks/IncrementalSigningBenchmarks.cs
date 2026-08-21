@@ -25,10 +25,10 @@ public class IncrementalSigningBenchmarks
         _cert = TestCertificateFactory.CreateSelfSignedCert("CN=Bench Incremental");
         _pdfUnsigned = PdfHelper.BuildMinimalPdf();
 
-        _pdf1Sig = await SimpleSigner.Document(_pdfUnsigned).WithCertificate(_cert).SignAsync();
-        _pdf2Sigs = await SimpleSigner.Document(_pdf1Sig).WithCertificate(_cert).SignAsync();
-        _pdf3Sigs = await SimpleSigner.Document(_pdf2Sigs).WithCertificate(_cert).SignAsync();
-        _pdf4Sigs = await SimpleSigner.Document(_pdf3Sigs).WithCertificate(_cert).SignAsync();
+        _pdf1Sig = await PadesSigner.Document(_pdfUnsigned).WithCertificate(_cert).SignAsync();
+        _pdf2Sigs = await PadesSigner.Document(_pdf1Sig).WithCertificate(_cert).SignAsync();
+        _pdf3Sigs = await PadesSigner.Document(_pdf2Sigs).WithCertificate(_cert).SignAsync();
+        _pdf4Sigs = await PadesSigner.Document(_pdf3Sigs).WithCertificate(_cert).SignAsync();
     }
 
     [GlobalCleanup]
@@ -36,21 +36,21 @@ public class IncrementalSigningBenchmarks
 
     [Benchmark(Baseline = true, Description = "Add 1st signature (unsigned → 1 sig)")]
     public async Task<byte[]> Sign_1st() =>
-        await SimpleSigner.Document(_pdfUnsigned).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdfUnsigned).WithCertificate(_cert).SignAsync();
 
     [Benchmark(Description = "Add 2nd signature (1 sig → 2 sigs)")]
     public async Task<byte[]> Sign_2nd() =>
-        await SimpleSigner.Document(_pdf1Sig).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdf1Sig).WithCertificate(_cert).SignAsync();
 
     [Benchmark(Description = "Add 3rd signature (2 sigs → 3 sigs)")]
     public async Task<byte[]> Sign_3rd() =>
-        await SimpleSigner.Document(_pdf2Sigs).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdf2Sigs).WithCertificate(_cert).SignAsync();
 
     [Benchmark(Description = "Add 4th signature (3 sigs → 4 sigs)")]
     public async Task<byte[]> Sign_4th() =>
-        await SimpleSigner.Document(_pdf3Sigs).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdf3Sigs).WithCertificate(_cert).SignAsync();
 
     [Benchmark(Description = "Add 5th signature (4 sigs → 5 sigs)")]
     public async Task<byte[]> Sign_5th() =>
-        await SimpleSigner.Document(_pdf4Sigs).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdf4Sigs).WithCertificate(_cert).SignAsync();
 }

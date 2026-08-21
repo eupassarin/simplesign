@@ -34,8 +34,8 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=Incremental Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=Incremental Signer 2");
 
-        var signed1 = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+        var signed1 = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
 
         // Verify both signatures are extractable
         using var stream = new MemoryStream(signed2);
@@ -75,8 +75,8 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=Incr OpenSSL Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=Incr OpenSSL Signer 2");
 
-        var signed1 = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+        var signed1 = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
 
         using var stream = new MemoryStream(signed2);
         var signatures = await PadesExtractor.ExtractAsync(stream);
@@ -95,8 +95,8 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=Incr Pdfbox Signer 1");
         using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=Incr Pdfbox Signer 2");
 
-        var signed1 = await SimpleSigner.Document(pdf).WithCertificate(cert1).SignAsync();
-        var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+        var signed1 = await PadesSigner.Document(pdf).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed2);
@@ -126,7 +126,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         // Sign using Stream API
         using var inputStream = new MemoryStream(pdf);
         using var outputStream = new MemoryStream();
-        await SimpleSigner.Document(inputStream).WithCertificate(cert).SignAsync(outputStream);
+        await PadesSigner.Document(inputStream).WithCertificate(cert).SignAsync(outputStream);
         var signed = outputStream.ToArray();
 
         signed.ShouldNotBeEmpty("stream signing should produce output");
@@ -162,7 +162,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
 
         using var inputStream = new MemoryStream(pdf);
         using var outputStream = new MemoryStream();
-        await SimpleSigner.Document(inputStream).WithCertificate(cert).SignAsync(outputStream);
+        await PadesSigner.Document(inputStream).WithCertificate(cert).SignAsync(outputStream);
         var signed = outputStream.ToArray();
 
         using var sigStream = new MemoryStream(signed);
@@ -179,7 +179,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=DocMDP Certifier");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .AsCertification(CertificationLevel.NoChanges)
             .SignAsync();
@@ -209,7 +209,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=DocMDP iText Certifier");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .AsCertification(CertificationLevel.FormFilling)
             .SignAsync();
@@ -239,7 +239,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=ByteRange Coverage");
 
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         // Local check: ByteRange[0] should be 0 and ByteRange[2]+ByteRange[3] should == file length
         using var ms = new MemoryStream(signed);
@@ -280,7 +280,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
 
         try
         {
-            var signed = await SimpleSigner.Document(truncated).WithCertificate(cert).SignAsync();
+            var signed = await PadesSigner.Document(truncated).WithCertificate(cert).SignAsync();
             // If the signer is resilient and produces output, that's acceptable
             signed.ShouldNotBeEmpty("if signing succeeds on truncated input, output should be non-empty");
         }
@@ -302,7 +302,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
 
         try
         {
-            var signed = await SimpleSigner.Document(noXref).WithCertificate(cert).SignAsync();
+            var signed = await PadesSigner.Document(noXref).WithCertificate(cert).SignAsync();
             signed.ShouldNotBeEmpty("if signing succeeds on PDF without xref, output should be non-empty");
         }
         catch (Exception ex)
@@ -330,7 +330,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         // sign successfully or throw a descriptive exception
         try
         {
-            var signed = await SimpleSigner.Document(withGarbage).WithCertificate(cert).SignAsync();
+            var signed = await PadesSigner.Document(withGarbage).WithCertificate(cert).SignAsync();
             signed.ShouldNotBeEmpty("if signing succeeds, output should be non-empty");
         }
         catch (Exception ex)
@@ -352,7 +352,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         output.WriteLine($"Generated 200-page PDF: {pdf.Length:N0} bytes");
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Large Doc Stress");
 
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
         output.WriteLine($"Signed PDF: {signed.Length:N0} bytes");
 
         // Verify ByteRange locally
@@ -389,7 +389,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
 
         var pdf = MultiPagePdf(200);
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Large Doc iText");
-        var signed = await SimpleSigner.Document(pdf).WithCertificate(cert).SignAsync();
+        var signed = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();
 
         var tmpDir = CreateTempDir();
         await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed.pdf"), signed);
@@ -439,7 +439,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PDF/A Preservation Interop");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithPdfAPreservation()
             .SignAsync();
@@ -470,7 +470,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=PDF/A pyHanko Interop");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithPdfAPreservation()
             .SignAsync();
@@ -503,7 +503,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=RSA4096 SHA512 Interop", 4096, HashAlgorithmName.SHA512);
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA512)
             .SignAsync();
@@ -522,7 +522,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateEcdsaCert(ECCurve.NamedCurves.nistP384, "CN=ECDSA P384 SHA384 Interop");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithHashAlgorithm(HashAlgorithmName.SHA384)
             .SignAsync();
@@ -602,7 +602,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
 
             // Step 2: SimpleSign adds second signature
             var pyhankoSigned = await File.ReadAllBytesAsync(Path.Combine(tmpDir, "pyhanko-signed.pdf"));
-            var doubleSigned = await SimpleSigner.Document(pyhankoSigned).WithCertificate(cert2).SignAsync();
+            var doubleSigned = await PadesSigner.Document(pyhankoSigned).WithCertificate(cert2).SignAsync();
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "double-signed.pdf"), doubleSigned);
 
             // Step 3: Validate both with pyHanko
@@ -655,7 +655,7 @@ public sealed class ExpandedInteropTests(ITestOutputHelper output)
 
             // Step 2: SimpleSign adds second signature
             var signed1 = await File.ReadAllBytesAsync(Path.Combine(tmpDir, "signed1.pdf"));
-            var signed2 = await SimpleSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+            var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
             await File.WriteAllBytesAsync(Path.Combine(tmpDir, "signed2.pdf"), signed2);
 
             // Step 3: pyHanko adds third signature (use unique field name to avoid conflict)

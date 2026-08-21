@@ -23,7 +23,7 @@ public sealed class UnicodeInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Unicode CJK Interop");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithMetadata("テスト署名者") // Japanese
             .SignAsync();
@@ -55,7 +55,7 @@ public sealed class UnicodeInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Unicode Arabic Interop");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithMetadata(reason: "سبب التوقيع")
             .SignAsync();
@@ -88,7 +88,7 @@ public sealed class UnicodeInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Unicode Emoji Interop");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithMetadata(location: "📍 São Paulo")
             .SignAsync();
@@ -121,7 +121,7 @@ public sealed class UnicodeInteropTests(ITestOutputHelper output)
         var pdf = MinimalPdf();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Unicode Accented Interop");
 
-        var signed = await SimpleSigner.Document(pdf)
+        var signed = await PadesSigner.Document(pdf)
             .WithCertificate(cert)
             .WithMetadata("Ñoño María", "Ação de teste", "São José")
             .SignAsync();

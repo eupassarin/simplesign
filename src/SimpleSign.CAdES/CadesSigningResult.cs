@@ -1,23 +1,36 @@
+using SimpleSign.Core.Signing;
+
 namespace SimpleSign.CAdES;
 
 /// <summary>
-/// Result of a CAdES signing operation, returned by <see cref="CadesSignerBuilder.SignWithDetailsAsync"/>.
-/// Includes the serialized CMS signature and metadata about applied protection levels.
+/// Detailed result of a CAdES signing operation, returned by
+/// <see cref="CadesSignerBuilder.SignWithDetailsAsync"/>.
 /// </summary>
-public sealed class CadesSigningResult
+/// <remarks>
+/// The <c>Has*</c> properties and <see cref="ISigningResult.AchievedLevel"/> describe
+/// properties established in the produced artifact, never configuration flags or
+/// pipeline steps that were merely attempted.
+/// </remarks>
+public sealed record CadesSigningResult : ISigningResult
 {
-    /// <summary>DER-encoded CMS/PKCS#7 SignedData (detached).</summary>
-    public byte[] Cms { get; init; } = [];
+    /// <summary>DER-encoded CMS/PKCS#7 SignedData.</summary>
+    public required byte[] SignedArtifact { get; init; }
 
-    /// <summary>Whether a timestamp token was applied (CAdES-B-T or higher).</summary>
-    public bool TimestampApplied { get; init; }
+    /// <inheritdoc/>
+    public AdesBaselineLevel RequestedLevel { get; init; }
 
-    /// <summary>Whether long-term validation data (cert values + revocation) was embedded (CAdES-B-LT or higher).</summary>
-    public bool LtvDataEmbedded { get; init; }
+    /// <inheritdoc/>
+    public AdesBaselineLevel AchievedLevel { get; init; }
 
-    /// <summary>Whether an archive timestamp was applied (CAdES-B-LTA).</summary>
-    public bool ArchiveTimestampApplied { get; init; }
+    /// <inheritdoc/>
+    public bool HasSignatureTimestamp { get; init; }
 
-    /// <summary>Non-critical warnings (e.g., TSA certificate chain unavailable).</summary>
-    public IReadOnlyList<string> Warnings { get; init; } = [];
+    /// <inheritdoc/>
+    public bool HasLongTermValidationMaterial { get; init; }
+
+    /// <inheritdoc/>
+    public bool HasArchiveTimestamp { get; init; }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<SigningWarning> Warnings { get; init; } = [];
 }

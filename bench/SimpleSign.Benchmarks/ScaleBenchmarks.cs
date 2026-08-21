@@ -33,19 +33,19 @@ public class ScaleBenchmarks
 
     [Benchmark(Description = "PAdES sign 1 KB PDF")]
     public async Task<byte[]> Sign_1KB() =>
-        await SimpleSigner.Document(_pdf1KB).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdf1KB).WithCertificate(_cert).SignAsync();
 
     [Benchmark(Description = "PAdES sign 100 KB PDF")]
     public async Task<byte[]> Sign_100KB() =>
-        await SimpleSigner.Document(_pdf100KB).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdf100KB).WithCertificate(_cert).SignAsync();
 
     [Benchmark(Description = "PAdES sign 1 MB PDF")]
     public async Task<byte[]> Sign_1MB() =>
-        await SimpleSigner.Document(_pdf1MB).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdf1MB).WithCertificate(_cert).SignAsync();
 
     [Benchmark(Description = "PAdES sign 10 MB PDF")]
     public async Task<byte[]> Sign_10MB() =>
-        await SimpleSigner.Document(_pdf10MB).WithCertificate(_cert).SignAsync();
+        await PadesSigner.Document(_pdf10MB).WithCertificate(_cert).SignAsync();
 
     /// <summary>
     /// Builds a minimal valid PDF with a stream object padded to reach the target size.

@@ -66,7 +66,7 @@ public sealed class PdfAConformanceTests
     private static async Task<(byte[] OutputBytes, string OutputText)> PrepareSignedPdfWithCert(
         byte[] pdfBytes, X509Certificate2 cert)
     {
-        byte[] signed = await SimpleSigner.Document(pdfBytes)
+        byte[] signed = await PadesSigner.Document(pdfBytes)
             .WithCertificate(cert)
             .SignAsync();
         return (signed, Encoding.Latin1.GetString(signed));
@@ -345,7 +345,7 @@ public sealed class PdfAConformanceTests
     {
         // Use CreateSelfSignedCert which preserves the private key (unlike CreateLeafCert).
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Test Signer, O=Tests");
-        byte[] signedPdf = await SimpleSigner.Document(BuildMinimalPdf())
+        byte[] signedPdf = await PadesSigner.Document(BuildMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 
@@ -378,7 +378,7 @@ public sealed class PdfAConformanceTests
     {
         // Build a pre-signed PDF with a bare %%EOF (no trailing \n).
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Test Signer, O=Tests");
-        byte[] signedPdf = await SimpleSigner.Document(BuildMinimalPdf())
+        byte[] signedPdf = await PadesSigner.Document(BuildMinimalPdf())
             .WithCertificate(cert)
             .SignAsync();
 
