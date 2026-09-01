@@ -39,13 +39,23 @@ SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 
 
 ---
 
-## What's New in v0.7.0
+## What's New in v0.8.0
 
-**SOLID Refactoring & Dependency Injection** — 15 service interfaces extracted across all projects (`IOcspClient`, `ICrlClient`, `IRevocationChecker`, `ITimestampClient`, `ITimestampClientFactory`, `ICertificateChainService`, `ICryptoVerifier`, `ICmsParser`, `ITimestampValidator`, `IPdfStructureReader`, `IConformanceDetector`, `IPdfSignatureInspector`, `IPadesExtractor`, `ICadesSignatureValidator`, `IXadesSignatureValidator`). `AddSimpleSign()` now wires all services via `IServiceCollection`. CLI commands use constructor injection via `SimpleSignServiceRegistry`.
+**Cross-format signing contract** — a single `AdesBaselineProfile` model (`Basic`, `Timestamped`, `LongTerm`, `Archive`) now drives all three signing formats through `PadesSigner`, `CadesSigner`, and `XadesSigner`. Levels are cumulative and encoded in the types; the requested level is a postcondition — `SignAsync()` enforces it strictly, while `SignWithDetailsAsync()` can downgrade and surface structured warnings.
 
-**New NuGet packages** — `dotnet add package SimpleSign.CAdES` and `dotnet add package SimpleSign.XAdES` are now available as standalone packages. `AddSimpleSignCades()` and `AddSimpleSignXades()` extension methods register all services for DI.
+**Truthful results** — every signing returns an `ISigningResult` with `RequestedLevel`, `AchievedLevel`, `HasSignatureTimestamp`, `HasLongTermValidationMaterial`, `HasArchiveTimestamp`, and `SigningWarning`s instead of guessable feature flags.
 
-**XAdES enhancements** — `UnsignedSignatureProperties` wrapper per ETSI 319 132-1, expanded `CommitmentType` enum, `SignerRole` + `DataObjectFormat` support, EU DSS interop tests. See [full changelog](CHANGELOG.md).
+**Explicit external signing** — `IExternalSigner.SignAsync(ExternalSigningRequest, …)` carries the payload kind, resolved algorithms, and operation ID; `FuncExternalSigner` adapts legacy delegates. Works with HSMs, cloud KMS, and A3 tokens across all formats.
+
+**Provider-based HTTP configuration** — `.WithHttpClientProvider(...)` plus scoped providers in `TimestampOptions`, `LongTermValidationOptions`, and `ArchiveTimestampOptions`, with deterministic precedence.
+
+**CAdES-Enveloped (.p7m)** — embed the original data inside the CMS payload via `WithContentType(CadesContentType.Enveloped)`.
+
+**CLI improvements** — JSON output for `cades validate` / `xades validate` (`--json`) and stdin/pipe input (path `-`) for all sign and validate commands.
+
+**Hardened signing invariants** — expired certificates are rejected before signing in every format, pre-cancelled tokens never reach the external signer, and `WithSigningTime` now also drives the `/M` entry of the PAdES signature dictionary (including existing fields).
+
+See the [full changelog](CHANGELOG.md) for the detailed list, including the breaking-changes migration guide for v0.7 → v0.8.
 
 ---
 
@@ -317,6 +327,7 @@ var signed = await PadesSigner
 | PDF/A preservation | `.WithPdfAPreservation()` |
 | Visible signature with QR code | `.WithAppearance(appearance)` |
 | External signer (HSM, KMS) | `.WithExternalSigner(cert, signer)` (`IExternalSigner` / `FuncExternalSigner`) |
+| Custom signing time | `.WithSigningTime(dateTimeOffset)` — drives the signature dictionary `/M` entry |
 | Custom HTTP client | `.WithHttpClientProvider(provider)` / scoped providers in `TimestampOptions` |
 | Existing field | `.WithExistingField("SignHere")` |
 | Deferred (2-phase) | `DeferredSigner.PrepareAsync()` → `CompleteAsync()` |
