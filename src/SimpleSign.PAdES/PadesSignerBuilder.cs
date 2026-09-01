@@ -705,7 +705,8 @@ public sealed class PadesSignerBuilder
         }
 
         var prepareResult = await PdfSignatureWriter.PrepareAsync(
-            _inputPdf, outputStream, _options.Field, _options.Dependencies.Logger, pdfALevel: pdfALevel, cancellationToken: cancellationToken).ConfigureAwait(false);
+            _inputPdf, outputStream, _options.Field, _options.Dependencies.Logger, pdfALevel: pdfALevel,
+            signingTime: _options.SigningTime, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var signedBytes = await PdfStructureReader.ReadSignedBytesAsync(
             outputStream, prepareResult.ByteRange, logger: _options.Dependencies.Logger, cancellationToken: cancellationToken).ConfigureAwait(false);

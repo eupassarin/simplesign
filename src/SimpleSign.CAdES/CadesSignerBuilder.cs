@@ -6,6 +6,7 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
 
 namespace SimpleSign.CAdES;
 
@@ -406,11 +407,20 @@ public sealed class CadesSignerBuilder
 
     private static void ValidatePrerequisites(CadesSigningCredential credential)
     {
-        if (credential is not CadesExternalCredential && !GetCertificate(credential).HasPrivateKey)
+        var certificate = GetCertificate(credential);
+        if (credential is not CadesExternalCredential && !certificate.HasPrivateKey)
         {
             throw new SigningException(
                 "Certificate must have a private key for local signing. Use WithExternalSigner() instead.",
                 SigningErrorReason.PrivateKeyMissing);
+        }
+
+        if (certificate.NotAfter < DateTime.UtcNow)
+        {
+            throw new CertificateValidationException(
+                $"Certificate '{certificate.Subject}' expired on {certificate.NotAfter:yyyy-MM-dd HH:mm:ss} UTC. Cannot sign with an expired certificate.",
+                certificate.Thumbprint,
+                certificate.Subject);
         }
     }
 
@@ -453,6 +463,7 @@ public sealed class CadesSignerBuilder
         string sigAlgOid,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var hashAlg = _options.HashAlgorithm;
         var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
         string digestOid = CmsSignatureBuilder.GetDigestOid(hashAlg);

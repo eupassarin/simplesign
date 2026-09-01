@@ -330,6 +330,176 @@ public sealed class DependencyAndLifecycleContractTests
         result.HasArchiveTimestamp.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task ExpiredCertificate_FailsOnAllFormats(string format)
+    {
+        using var cert = CreateExpiredCertificate();
+
+        await Should.ThrowAsync<CertificateValidationException>(
+            () => SignWithCertificateAsync(format, cert, AdesBaselineProfile.Basic()));
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task WithSigningTime_ReflectedInProducedArtifact(string format)
+    {
+        using var cert = ContractFixtures.CreateSignerCertificate();
+        var signingTime = new DateTimeOffset(2024, 3, 15, 10, 30, 0, TimeSpan.Zero);
+
+        ISigningResult result = await SignWithSigningTimeAsync(format, cert, signingTime);
+
+        switch (format)
+        {
+            case "pades":
+                System.Text.Encoding.Latin1.GetString(result is PadesSigningResult pades ? pades.SignedArtifact : [])
+                    .ShouldContain("/M (D:20240315103000+00'00')");
+                break;
+            case "cades":
+                var parsed = CmsParser.Parse(((CadesSigningResult)result).SignedArtifact);
+                parsed.SigningTime.ShouldNotBeNull();
+                parsed.SigningTime!.Value.ShouldBe(signingTime);
+                break;
+            case "xades":
+                System.Text.Encoding.UTF8.GetString(((XadesSigningResult)result).SignedArtifact)
+                    .ShouldContain("2024-03-15T10:30:00Z");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(format));
+        }
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task PreCancelledToken_ThrowsBeforeInvokingExternalSigner(string format)
+    {
+        using var cert = ContractFixtures.CreateSignerCertificate();
+        var signer = new CountingOnlySigner();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => SignWithExternalSignerAsync(format, cert, signer, cts.Token));
+
+        signer.Invoked.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    public async Task InjectedLogger_SurvivesFluentCalls(string format)
+    {
+        using var cert = ContractFixtures.CreateSignerCertificate();
+        var logger = new RecordingLogger();
+
+        await SignWithInjectedLoggerAsync(format, cert, logger);
+
+        logger.EntryCount.ShouldBeGreaterThan(0);
+    }
+
+    [Fact(DisplayName = "XAdES: mutating the input array after Document() does not affect signing")]
+    public async Task Xades_InputArraySnapshot_MutationAfterDocument_StillSigns()
+    {
+        using var cert = ContractFixtures.CreateSignerCertificate();
+        byte[] xml = (byte[])ContractFixtures.XmlDocument.Clone();
+        var builder = XadesSigner.Document(xml).WithCertificate(cert);
+        xml[0] = (byte)'?'; // invalidate the caller-owned array
+
+        byte[] signed = await builder.SignAsync();
+
+        System.Text.Encoding.UTF8.GetString(signed).ShouldContain("<root>");
+    }
+
+    [Fact(DisplayName = "CAdES: mutating the input array after Document() does not affect the signed digest")]
+    public async Task Cades_InputArraySnapshot_MutationAfterDocument_SignsOriginalContent()
+    {
+        using var cert = ContractFixtures.CreateSignerCertificate();
+        byte[] content = (byte[])ContractFixtures.BinaryContent.Clone();
+        var builder = CadesSigner.Document(content).WithCertificate(cert);
+        content[0] = (byte)'X'; // mutate the caller-owned array
+
+        byte[] signed = await builder.SignAsync();
+        var parsed = CmsParser.Parse(signed);
+
+        byte[] expectedDigest = System.Security.Cryptography.SHA256.HashData(ContractFixtures.BinaryContent);
+        parsed.MessageDigest.ShouldNotBeNull();
+        parsed.MessageDigest!.ShouldBe(expectedDigest);
+    }
+
+    private static async Task<ISigningResult> SignWithExternalSignerAsync(
+        string format, X509Certificate2 cert, IExternalSigner signer, CancellationToken cancellationToken)
+    {
+        return format switch
+        {
+            "pades" => await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
+                .WithExternalSigner(cert, signer)
+                .SignWithDetailsAsync(cancellationToken),
+            "cades" => await CadesSigner.Document(ContractFixtures.BinaryContent)
+                .WithExternalSigner(cert, signer)
+                .SignWithDetailsAsync(cancellationToken),
+            "xades" => await XadesSigner.Document(ContractFixtures.XmlDocument)
+                .WithExternalSigner(cert, signer)
+                .SignWithDetailsAsync(cancellationToken),
+            _ => throw new ArgumentOutOfRangeException(nameof(format))
+        };
+    }
+
+    private static async Task<ISigningResult> SignWithSigningTimeAsync(
+        string format, X509Certificate2 cert, DateTimeOffset signingTime)
+    {
+        return format switch
+        {
+            "pades" => await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
+                .WithCertificate(cert)
+                .WithSigningTime(signingTime)
+                .SignWithDetailsAsync(),
+            "cades" => await CadesSigner.Document(ContractFixtures.BinaryContent)
+                .WithCertificate(cert)
+                .WithSigningTime(signingTime)
+                .SignWithDetailsAsync(),
+            "xades" => await XadesSigner.Document(ContractFixtures.XmlDocument)
+                .WithCertificate(cert)
+                .WithSigningTime(signingTime)
+                .SignWithDetailsAsync(),
+            _ => throw new ArgumentOutOfRangeException(nameof(format))
+        };
+    }
+
+    private static async Task SignWithInjectedLoggerAsync(
+        string format, X509Certificate2 cert, ILogger logger)
+    {
+        switch (format)
+        {
+            case "pades":
+                var padesBuilder = new PadesSignerBuilder(
+                    new MemoryStream(TestPdfFactory.CreateMinimalPdf()), logger)
+                    .WithCertificate(cert)
+                    .WithOperationId("logger-1");
+                await padesBuilder.SignAsync();
+                break;
+            case "cades":
+                var cadesBuilder = new CadesSignerBuilder(ContractFixtures.BinaryContent, logger)
+                    .WithCertificate(cert)
+                    .WithOperationId("logger-1");
+                await cadesBuilder.SignAsync();
+                break;
+            case "xades":
+                var xadesBuilder = new XadesSignerBuilder(ContractFixtures.XmlDocument, logger)
+                    .WithCertificate(cert)
+                    .WithOperationId("logger-1");
+                await xadesBuilder.SignAsync();
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(format));
+        }
+    }
+
     private static X509Certificate2 CreateExpiredCertificate()
     {
         using RSA key = RSA.Create(2048);
@@ -430,5 +600,27 @@ public sealed class DependencyAndLifecycleContractTests
             Invoked = true;
             throw new InvalidOperationException("The builder-wide provider should never be used.");
         }
+    }
+
+    private sealed class CountingOnlySigner : IExternalSigner
+    {
+        public bool Invoked { get; private set; }
+
+        public ValueTask<ReadOnlyMemory<byte>> SignAsync(ExternalSigningRequest request, CancellationToken cancellationToken)
+        {
+            Invoked = true;
+            return ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
+        }
+    }
+
+    private sealed class RecordingLogger : ILogger
+    {
+        public int EntryCount { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) => EntryCount++;
     }
 }

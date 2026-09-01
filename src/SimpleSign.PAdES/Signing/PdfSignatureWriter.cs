@@ -27,7 +27,7 @@ public sealed class PdfSignatureWriter
     /// catalog, optional appearance, cross-reference table, and trailer to the output stream.
     /// The ByteRange placeholder is then back-filled with actual offsets.
     /// </summary>
-    public static async Task<PdfSignaturePrepareResult> PrepareAsync(Stream inputPdf, Stream outputStream, SignatureFieldOptions options, ILogger? logger = null, PdfALevel? pdfALevel = null, CancellationToken cancellationToken = default(CancellationToken))
+    public static async Task<PdfSignaturePrepareResult> PrepareAsync(Stream inputPdf, Stream outputStream, SignatureFieldOptions options, ILogger? logger = null, PdfALevel? pdfALevel = null, DateTimeOffset? signingTime = null, CancellationToken cancellationToken = default(CancellationToken))
     {
         ArgumentNullException.ThrowIfNull(inputPdf, nameof(inputPdf));
         ArgumentNullException.ThrowIfNull(outputStream, nameof(outputStream));
@@ -48,7 +48,7 @@ public sealed class PdfSignatureWriter
         // Step 1b: If signing an existing field, use the dedicated path.
         if (!string.IsNullOrEmpty(options.ExistingFieldName))
         {
-            return await PrepareExistingFieldAsync(outputStream, inputPdf, inputMem, options, cancellationToken).ConfigureAwait(false);
+            return await PrepareExistingFieldAsync(outputStream, inputPdf, inputMem, options, cancellationToken, signingTime).ConfigureAwait(false);
         }
 
         // Step 2: Determine the next available object number.
@@ -166,7 +166,7 @@ public sealed class PdfSignatureWriter
         int fontFileObjNum = appObjNum + 2;
         int fontDescriptorObjNum = appObjNum + 3;
         int contentsHexLength = options.ContentsReservedBytes * 2;
-        DateTime sigNow = DateTime.UtcNow;
+        DateTime sigNow = (signingTime ?? DateTimeOffset.UtcNow).UtcDateTime;
 
         // Compute appearance dimensions and auto-position if requested.
         float appWidth = 0f, appHeight = 0f;
@@ -414,7 +414,7 @@ public sealed class PdfSignatureWriter
     // ── Private: I/O helpers ─────────────────────────────────────────────────
 
     private static async Task<PdfSignaturePrepareResult> PrepareExistingFieldAsync(
-        Stream outputStream, Stream inputPdf, Memory<byte> inputMem, SignatureFieldOptions options, CancellationToken cancellationToken)
+        Stream outputStream, Stream inputPdf, Memory<byte> inputMem, SignatureFieldOptions options, CancellationToken cancellationToken, DateTimeOffset? signingTime = null)
     {
         int fieldObjNum = PdfStructureParser.FindEmptySignatureField(inputMem.Span, options.ExistingFieldName!);
         if (fieldObjNum < 0)
@@ -427,7 +427,7 @@ public sealed class PdfSignatureWriter
         int nextObjNum = PdfStructureParser.DetermineNextObjectNumber(inputMem.Span);
         int sigObjNum = nextObjNum;
         int contentsHexLength = options.ContentsReservedBytes * 2;
-        DateTime sigNow = DateTime.UtcNow;
+        DateTime sigNow = (signingTime ?? DateTimeOffset.UtcNow).UtcDateTime;
 
         // Build signature dictionary
         string sigDictText = BuildSignatureDictionary(sigObjNum, options, contentsHexLength, sigNow);

@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Improved
 
+- **Signing-time propagation (PAdES)** — `WithSigningTime` now also drives the `/M` entry of the signature dictionary (including signing into an existing empty field); previously `/M` always reflected `UtcNow`.
+- **Expired-certificate rejection (CAdES/XAdES)** — signing with an expired certificate now throws `CertificateValidationException` before any signature is produced (PAdES already rejected expired certs through the core validation pipeline).
+- **Cancellation responsiveness (CAdES/XAdES)** — a pre-cancelled token is honored before the signature is computed, so `OperationCanceledException` is thrown without invoking the external signer.
+- **Expanded contract test suite** — 6 new invariants in `tests/unit/SimpleSign.Contracts.Tests` covering expired certs across all formats, signing-time propagation, pre-cancelled tokens, injected-logger survival across fluent calls, and byte-array input snapshot semantics.
 - **XML documentation** — added `/// <summary>` docs to all CLI command classes and settings properties (128 members), PdfKeys constants (16), and Brasil extension providers (14). XML doc coverage: 76% → 95%.
 - **Error resilience** — added `ex.Message` to silent catch blocks in XAdES validator; added S2221 justification comments to all `catch(Exception)` in CAdES and XAdES validators.
 - **Performance** — replaced `Convert.ToHexString` + `Encoding.Latin1.GetBytes` double allocation in `PdfSignatureWriter.FinalizeAsync` with span-based hex output using `ArrayPool<byte>` (~64 KB saved per signature).

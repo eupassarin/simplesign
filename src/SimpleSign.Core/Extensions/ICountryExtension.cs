@@ -3,7 +3,7 @@ namespace SimpleSign.Core.Extensions;
 /// <summary>
 /// Aggregates all country/regulation-specific extension points into a single registration unit.
 /// Implement this interface to provide a complete country package (e.g., SimpleSign.Brasil, SimpleSign.EU).
-/// Register via <c>SignerBuilder.WithCountryExtension&lt;T&gt;()</c> or DI.
+/// Register via <c>PadesSignerBuilder.WithCountryExtension&lt;T&gt;()</c> or DI.
 /// </summary>
 public interface ICountryExtension
 {
