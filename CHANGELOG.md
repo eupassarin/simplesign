@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **XAdES ETSI interoperability** — corrected XMLDSIG element ordering, ESS `IssuerSerialV2` encoding, unsigned-property reuse, and co-signature transforms so all XAdES baseline forms validate under EU DSS.
 - **Signature inspection accuracy** — report the signature field's real AcroForm `/T` value instead of a synthetic object-number name.
 - **Deterministic validation tests** — use offline TSA/AIA fixtures, make Docker availability probes concurrency-safe, and avoid persistent Windows key-store imports for in-memory PKCS#12 data.
+- **PAdES multi-signature timestamp association** — B-LT DSS updates now preserve historical VRI mappings and create a VRI only for the newly added signature, so each signature retains its own `/TS` token and validation data.
 
 ## [0.8.0] - 2026-09-02
 

@@ -79,11 +79,23 @@ internal static partial class DssExtractor
     internal static ReadOnlyMemory<byte>? FindDssDictionary(ReadOnlySpan<byte> data)
     {
         var dssKey = "/DSS "u8;
-        int dssIdx = IndexOfBytes(data, dssKey);
-        if (dssIdx < 0)
+        int catalogObjNum = PdfStructureParser.FindRootObjectNumber(data);
+        var (catalogStart, catalogEnd) = PdfStructureParser.FindObjectBytes(data, catalogObjNum);
+        if (catalogStart < 0)
         {
             return null;
         }
+
+        // A PDF may contain several historical catalog revisions. Resolve /DSS from the
+        // latest active catalog rather than taking the first /DSS token in the file.
+        ReadOnlySpan<byte> catalog = data[catalogStart..catalogEnd];
+        int relativeDssIdx = IndexOfBytes(catalog, dssKey);
+        if (relativeDssIdx < 0)
+        {
+            return null;
+        }
+
+        int dssIdx = catalogStart + relativeDssIdx;
 
         int numStart = dssIdx + dssKey.Length;
         int numEnd = numStart;

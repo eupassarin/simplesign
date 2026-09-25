@@ -132,6 +132,27 @@ public sealed class DssExtractorTests
         sliceText.ShouldContain("/CRLs [10 0 R]");
     }
 
+    [Fact(DisplayName = "FindDssDictionary resolves DSS from the latest catalog revision")]
+    public void FindDssDictionary_IncrementalCatalog_UsesActiveDssReference()
+    {
+        const string body =
+            "%PDF-1.7\n" +
+            "1 0 obj << /Type /Catalog /DSS 5 0 R >> endobj\n" +
+            "5 0 obj << /VRI << /OLD 6 0 R >> >> endobj\n" +
+            "1 0 obj << /Type /Catalog /DSS 9 0 R >> endobj\n" +
+            "9 0 obj << /VRI << /CURRENT 10 0 R >> >> endobj\n" +
+            "trailer << /Root 1 0 R >>\n" +
+            "%%EOF";
+        var data = Encoding.ASCII.GetBytes(body);
+
+        var slice = DssExtractor.FindDssDictionary(data);
+
+        slice.ShouldNotBeNull();
+        string sliceText = Encoding.ASCII.GetString(slice!.Value.Span);
+        sliceText.ShouldContain("/CURRENT 10 0 R");
+        sliceText.ShouldNotContain("/OLD 6 0 R");
+    }
+
     // ── TryReadDssDataAsync (entry point) ───────────────────────────────────
 
     [Fact(DisplayName = "TryReadDssDataAsync returns empty when stream is not a PDF")]

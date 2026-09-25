@@ -1,10 +1,15 @@
+using System.Formats.Asn1;
+using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Shouldly;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
+using SimpleSign.PAdES.Validation;
 using SimpleSign.Pdf;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -23,7 +28,9 @@ public sealed class LtvEmbedderTests
     /// contains an HTTP URL so that <see cref="LtvEmbedder" /> will attempt
     /// to download a CRL.
     /// </summary>
-    private static X509Certificate2 CreateCertWithCrlUrl(string url = "http://crl.test/root.crl")
+    private static X509Certificate2 CreateCertWithCrlUrl(
+        string url = "http://crl.test/root.crl",
+        bool includePrivateKey = true)
     {
         using RSA key = RSA.Create(2048);
         CertificateRequest certificateRequest = new CertificateRequest("CN=CRL Test", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -95,7 +102,16 @@ public sealed class LtvEmbedderTests
         byte[] rawData = array2;
         certificateRequest.CertificateExtensions.Add(new X509Extension("2.5.29.31", rawData, critical: false));
         X509Certificate2 x509Certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
-        return CertificateLoader.LoadPkcs12(x509Certificate.Export(X509ContentType.Pfx, "test-export"), "test-export");
+        if (includePrivateKey)
+        {
+            byte[] pkcs12 = x509Certificate.Export(X509ContentType.Pfx, "test-export");
+            x509Certificate.Dispose();
+            return CertificateLoader.LoadPkcs12(pkcs12, "test-export");
+        }
+
+        byte[] publicCertificate = x509Certificate.Export(X509ContentType.Cert);
+        x509Certificate.Dispose();
+        return CertificateLoader.LoadCertificate(publicCertificate);
     }
 
     [Fact(DisplayName = "Constructor accepts HttpClient")]
@@ -471,6 +487,90 @@ public sealed class LtvEmbedderTests
         return writer.Encode();
     }
 
+    private static byte[] BuildFakeTimestampToken(byte marker = 0x01)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            writer.WriteObjectIdentifier("1.2.840.113549.1.7.2");
+            using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
+            {
+                writer.WriteOctetString([marker, 0x02, 0x03]);
+            }
+        }
+
+        return writer.Encode();
+    }
+
+    private static byte[] BuildFakeTimestampResponse(byte[] timestampToken)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            using (writer.PushSequence())
+            {
+                writer.WriteInteger(0);
+            }
+
+            writer.WriteEncodedValue(timestampToken);
+        }
+
+        return writer.Encode();
+    }
+
+    private static HttpClient BuildLtvHttpClient(byte[] timestampToken)
+    {
+        byte[] timestampResponse = BuildFakeTimestampResponse(timestampToken);
+        byte[] crl = BuildFakeCrl();
+        return new HttpClient(new MockHttpHandler(request =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(request.Method == HttpMethod.Post ? timestampResponse : crl)
+            };
+            if (request.Method == HttpMethod.Post)
+            {
+                response.Content.Headers.ContentType =
+                    new System.Net.Http.Headers.MediaTypeHeaderValue("application/timestamp-reply");
+            }
+
+            return Task.FromResult(response);
+        }));
+    }
+
+    private static byte[] ExtractVriTimestamp(byte[] pdf, int vriObjNum)
+    {
+        var (vriStart, vriEnd) = PdfStructureParser.FindObjectBytes(pdf, vriObjNum);
+        vriStart.ShouldBeGreaterThanOrEqualTo(0);
+        string vriText = Encoding.Latin1.GetString(pdf.AsSpan(vriStart, vriEnd - vriStart));
+        int tsPosition = vriText.IndexOf("/TS ", StringComparison.Ordinal);
+        tsPosition.ShouldBeGreaterThanOrEqualTo(0);
+
+        int cursor = tsPosition + "/TS ".Length;
+        int tsObjNum = 0;
+        while (cursor < vriText.Length && char.IsDigit(vriText[cursor]))
+        {
+            tsObjNum = (tsObjNum * 10) + (vriText[cursor] - '0');
+            cursor++;
+        }
+        tsObjNum.ShouldBeGreaterThan(0);
+
+        var (tsStart, tsEnd) = PdfStructureParser.FindObjectBytes(pdf, tsObjNum);
+        tsStart.ShouldBeGreaterThanOrEqualTo(0);
+        ReadOnlySpan<byte> tsObject = pdf.AsSpan(tsStart, tsEnd - tsStart);
+        int streamPosition = tsObject.IndexOf("stream\n"u8);
+        streamPosition.ShouldBeGreaterThanOrEqualTo(0);
+        int streamStart = streamPosition + "stream\n".Length;
+        int streamLength = tsObject[streamStart..].IndexOf("\nendstream"u8);
+        streamLength.ShouldBeGreaterThan(0);
+
+        using var compressed = new MemoryStream(tsObject.Slice(streamStart, streamLength).ToArray());
+        using var zlib = new ZLibStream(compressed, CompressionMode.Decompress);
+        using var uncompressed = new MemoryStream();
+        zlib.CopyTo(uncompressed);
+        return uncompressed.ToArray();
+    }
+
     [Fact(DisplayName = "VRI dictionary contains no /SHA256 key")]
     public async Task EmbedLtvDataAsync_VriDictionary_ContainsNoSha256Key()
     {
@@ -532,5 +632,61 @@ public sealed class LtvEmbedderTests
 
             pos = end;
         }
+    }
+
+    [Fact(DisplayName = "Incremental B-LT signatures preserve their own VRI timestamp mappings")]
+    public async Task SignAsync_IncrementalLongTermSignatures_PreserveHistoricalVriTimestampMappings()
+    {
+        byte[] timestamp1 = BuildFakeTimestampToken(0x11);
+        byte[] timestamp2 = BuildFakeTimestampToken(0x22);
+        using var signer = TestCertificateFactory.CreateSelfSignedCert("CN=Incremental B-LT Signer");
+        using X509Certificate2 revocationCert = CreateCertWithCrlUrl(includePrivateKey: false);
+        using HttpClient httpClient1 = BuildLtvHttpClient(timestamp1);
+        using HttpClient httpClient2 = BuildLtvHttpClient(timestamp2);
+        using HttpClient crlClient1 = MockHttpHandler.ForGetBytes(BuildFakeCrl(), HttpStatusCode.OK);
+        using HttpClient crlClient2 = MockHttpHandler.ForGetBytes(BuildFakeCrl(), HttpStatusCode.OK);
+
+        var firstProvider = new SingleClientProvider(httpClient1);
+        byte[] firstTimestamped = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+            .WithCertificate(signer)
+            .WithFieldName("Signature1")
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://tsa.example.com"), firstProvider)))
+            .SignAsync();
+        var firstEmbedder = new LtvEmbedder(crlClient1);
+        byte[] firstLongTerm = await firstEmbedder.EmbedLtvDataAsync(
+            firstTimestamped,
+            [revocationCert],
+            timestamp1);
+
+        List<string> firstHashes = LtvEmbedder.ExtractSignatureContentHashes(firstLongTerm);
+        firstHashes.Count.ShouldBe(1);
+        ExistingDssData firstDss = DssExtractor.ParseExistingDss(firstLongTerm);
+        int firstVriObjNum = firstDss.VriEntries[firstHashes[0]];
+        ExtractVriTimestamp(firstLongTerm, firstVriObjNum).ShouldBe(timestamp1);
+
+        var secondProvider = new SingleClientProvider(httpClient2);
+        byte[] secondTimestamped = await PadesSigner.Document(firstLongTerm)
+            .WithCertificate(signer)
+            .WithFieldName("Signature2")
+            .WithLevel(AdesBaselineProfile.Timestamped(
+                new TimestampOptions(new Uri("http://tsa.example.com"), secondProvider)))
+            .SignAsync();
+        var secondEmbedder = new LtvEmbedder(crlClient2);
+        byte[] secondLongTerm = await secondEmbedder.EmbedLtvDataAsync(
+            secondTimestamped,
+            [revocationCert],
+            timestamp2);
+
+        List<string> finalHashes = LtvEmbedder.ExtractSignatureContentHashes(secondLongTerm);
+        finalHashes.Count.ShouldBe(2);
+        ExistingDssData finalDss = DssExtractor.ParseExistingDss(secondLongTerm);
+        finalDss.VriEntries.Count.ShouldBe(2);
+        finalDss.VriEntries[finalHashes[0]].ShouldBe(firstVriObjNum,
+            "the active DSS must preserve the historical VRI object mapping");
+        ExtractVriTimestamp(secondLongTerm, finalDss.VriEntries[finalHashes[0]])
+            .ShouldBe(timestamp1, "signature 1 must retain timestamp 1");
+        ExtractVriTimestamp(secondLongTerm, finalDss.VriEntries[finalHashes[1]])
+            .ShouldBe(timestamp2, "signature 2 must reference only timestamp 2");
     }
 }

@@ -65,7 +65,9 @@ public sealed class LtvEmbedder : ILtvEmbedder
     /// </summary>
     /// <param name="signedPdf">The signed PDF bytes.</param>
     /// <param name="certificateChain">Full certificate chain (signer + intermediates + root).</param>
-    /// <param name="timestampTokenBytes">Optional raw DER bytes of the signature timestamp token (for VRI /TS).</param>
+    /// <param name="timestampTokenBytes">
+    /// Optional raw DER bytes of the most recently added signature's timestamp token (for VRI /TS).
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The PDF bytes with embedded LTV data.</returns>
     public async Task<byte[]> EmbedLtvDataAsync(
@@ -403,9 +405,19 @@ public sealed class LtvEmbedder : ILtvEmbedder
             result.Write(footer);
         }
 
-        // Write /TS stream object for timestamp token if provided
+        // The validation material and timestamp supplied to this invocation belong to the
+        // signature that was just added, which is the last signature in the incremental PDF.
+        // Historical VRI mappings are immutable: replacing them would discard their original
+        // per-signature /TS and validation-data associations.
+        string? currentSignatureHash = signatureHashes.Count > 0 ? signatureHashes[^1] : null;
+        bool createCurrentVri = currentSignatureHash is not null
+            && !existingDss.VriEntries.ContainsKey(currentSignatureHash);
+
+        // Write /TS only when a new current-signature VRI will reference it. If the current
+        // signature already has a VRI, preserve that mapping instead of creating an orphaned
+        // timestamp stream or destructively rebuilding the VRI.
         string? tsRef = null;
-        if (timestampTokenBytes is { Length: > 0 })
+        if (createCurrentVri && timestampTokenBytes is { Length: > 0 })
         {
             int tsObjNum = nextObjNum++;
             xrefMap[tsObjNum] = result.Position;
@@ -420,9 +432,12 @@ public sealed class LtvEmbedder : ILtvEmbedder
             tsRef = $"{tsObjNum} 0 R";
         }
 
-        // Build VRI dictionaries (one per signature)
+        // Build a VRI only for the newly added signature. Existing mappings remain active and
+        // continue to reference the validation material and timestamp collected for their own
+        // signatures. Validation material collected in this pass cannot safely be attributed to
+        // historical signatures merely because their hashes are present in the document.
         var vriEntries = new List<(string Hash, int ObjNum)>();
-        foreach (var sha1Hash in signatureHashes)
+        if (createCurrentVri)
         {
             int vriObjNum = nextObjNum++;
             long vriOffset = result.Position;
@@ -457,7 +472,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
             vriSb.Append(">>\nendobj\n");
             result.Write(System.Text.Encoding.Latin1.GetBytes(vriSb.ToString()));
 
-            vriEntries.Add((sha1Hash, vriObjNum));
+            vriEntries.Add((currentSignatureHash!, vriObjNum));
         }
 
         // Write DSS dictionary — merge existing refs with new refs
@@ -470,20 +485,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
         var allCertRefs = MergeRefs(existingDss.CertObjRefs, certRefs);
 
         var allVriEntries = new List<(string Hash, int ObjNum)>(existingDss.VriEntries.Count + vriEntries.Count);
-        var newVriHashes = new HashSet<string>(vriEntries.Count, StringComparer.OrdinalIgnoreCase);
-        foreach (var (hash, _) in vriEntries)
-        {
-            newVriHashes.Add(hash);
-        }
-
-        foreach (var (hash, objNum) in existingDss.VriEntries)
-        {
-            if (!newVriHashes.Contains(hash))
-            {
-                allVriEntries.Add((hash, objNum));
-            }
-        }
-
+        allVriEntries.AddRange(existingDss.VriEntries.Select(entry => (entry.Key, entry.Value)));
         allVriEntries.AddRange(vriEntries);
 
         var dssSb = new System.Text.StringBuilder();
