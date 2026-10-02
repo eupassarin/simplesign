@@ -21,6 +21,7 @@ public sealed class CrlInteropTests(ITestOutputHelper output)
     public async Task PadesLtCrl_DssContainsCrl()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
 
         var pdf = MinimalPdf();
         using var pki = TestRevocation.CreatePki();
@@ -29,7 +30,7 @@ public sealed class CrlInteropTests(ITestOutputHelper output)
         var signed = await PadesSigner.Document(pdf)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .WithLevel(AdesBaselineProfile.LongTerm(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                TestTimestamp.Options(tsaClient),
                 new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignAsync();
 
@@ -63,6 +64,7 @@ public sealed class CrlInteropTests(ITestOutputHelper output)
     public async Task PadesLtCrl_PyHankoValidates()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
 
         var pdf = MinimalPdf();
         using var pki = TestRevocation.CreatePki();
@@ -71,7 +73,7 @@ public sealed class CrlInteropTests(ITestOutputHelper output)
         var signed = await PadesSigner.Document(pdf)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .WithLevel(AdesBaselineProfile.LongTerm(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                TestTimestamp.Options(tsaClient),
                 new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignAsync();
 

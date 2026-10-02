@@ -44,7 +44,7 @@ SimpleSign is built to survive the real world — legacy PDFs from Adobe, iText,
 | PDF with **double signature + LTV + archival timestamp** | ✅ Full PAdES-LTA round-trip |
 | Adding signature to **already-certified** PDF | ✅ Respects DocMDP |
 
-## Interop Test Coverage (18 test files, ~150 scenarios)
+## Interop Test Coverage
 
 ### Forward Interop (SimpleSign → External Validators)
 
@@ -55,11 +55,12 @@ SimpleSign is built to survive the real world — legacy PDFs from Adobe, iText,
 | `PadesCrossValidatorTests.cs` | Cross-algorithm (SHA-384/512, ECDSA P-256/P-384) | iText, EU DSS, pyHanko |
 | `ITextInteropTests.cs` | PAdES-B signatures (B-B, B-T, B-LT, B-LTA), incremental | iText 9 |
 | `EuDssInteropTests.cs` | B-B, B-T, B-LT, B-LTA round-trip | EU DSS |
+| `XadesEuDssInteropTests.cs` | XML baseline levels across enveloped, detached, and enveloping forms | EU DSS |
 | `ComplexPdfInteropTests.cs` | Multi-signature, ObjStm, compressed xref, linearized | pyHanko, iText, EU DSS, pdfbox |
 | `CertEdgeCaseInteropTests.cs` | Large keys (4096-bit RSA), certificate chains | iText, EU DSS, OpenSSL, xmlsec1 |
-| `LtaInteropTests.cs` | PAdES-LTA archival timestamps with full LTV | iText, EU DSS |
+| `LtaInteropTests.cs` | PAdES-LTA archival timestamps with full LTV | iText, EU DSS, pyHanko |
 | `CrlInteropTests.cs` | CRL-based revocation in PAdES-LT DSS | pyHanko, EU DSS |
-| `DocumentTimestampInteropTests.cs` | Standalone RFC 3161 document timestamps | pyHanko |
+| `DocumentTimestampInteropTests.cs` | Standalone RFC 3161 document timestamps and opt-in live TSA acceptance | pyHanko, EU DSS |
 | `FormFieldInteropTests.cs` | Named AcroForm field signing | pyHanko |
 | `UnicodeInteropTests.cs` | CJK, Arabic, emoji, accented metadata | pyHanko |
 | `BrasilInteropTests.cs` | AEA Lei 14.063, ICP-Brasil policy OIDs | OpenSSL |
@@ -98,4 +99,33 @@ SimpleSign is built to survive the real world — legacy PDFs from Adobe, iText,
 
 ## Docker-Based CI Tests
 
-All interop tests run in Docker containers in CI (EU DSS, iText validator, PDFBox, veraPDF, OpenSSL, pyHanko, xmlsec1) — see [`tests/interop/`](https://github.com/eupassarin/SimpleSign/tree/main/tests/interop) for details.
+The interop suite combines offline corpus checks and locally generated artifacts
+with Docker-based external validation. CI uses EU DSS, iText, PDFBox, veraPDF,
+OpenSSL, pyHanko, and xmlsec1; Docker-dependent checks skip when Docker or the
+required validator image is missing. See [`tests/interop/`](https://github.com/eupassarin/SimpleSign/tree/main/tests/interop) for the fixtures and validator setup.
+
+Routine timestamped PAdES/XAdES builder and document-timestamp tests use the shared
+`TestTimestamp` HTTP fixture. It signs an RFC 3161 response bound to each request's
+hash OID, imprint, and nonce, without contacting a public TSA. Its self-signed TSA
+is test evidence; successful external integrity checks do not establish public
+TSA trust. CMS `SignedData` uses version 3 for TSTInfo so independent parsers
+interpret the token as CMS. The static EU DSS corpus supplies independent vectors
+and negative cases alongside these locally generated artifacts.
+
+Run the routine suite with:
+
+```bash
+dotnet test tests/interop/SimpleSign.Interop.Tests --filter "Category!=LiveTsa"
+```
+
+### Live TSA checks
+
+Enable the live document-timestamp check by setting
+`SIMPLESIGN_LIVE_TSA_URL` to an RFC 3161 endpoint and running:
+
+```bash
+dotnet test tests/interop/SimpleSign.Interop.Tests --filter "Category=LiveTsa"
+```
+
+Without the environment variable the live check skips. It checks token acceptance
+and PDF timestamp inspection, not a TSA trust-policy verdict.

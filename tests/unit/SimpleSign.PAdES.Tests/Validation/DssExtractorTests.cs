@@ -13,6 +13,24 @@ namespace SimpleSign.PAdES.Tests.Validation;
 [Trait("Category", "Unit")]
 public sealed class DssExtractorTests
 {
+    [Fact]
+    public async Task TryReadDssDataAsync_ObjectNumberSuffixInLaterRevision_UsesLatestExactObject()
+    {
+        const string body = "%PDF-1.7\n"
+            + "1 0 obj << /Type /Catalog /DSS 5 0 R >> endobj\n"
+            + "5 0 obj << /CRLs [6 0 R] >> endobj\n"
+            + "6 0 obj << /Length 3 >>\nstream\nOLD\nendstream\nendobj\n"
+            + "6 0 obj << /Length 3 >>\nstream\nNEW\nendstream\nendobj\n"
+            + "16 0 obj << /Length 3 >>\nstream\nBAD\nendstream\nendobj\n"
+            + "trailer << /Root 1 0 R >>\n%%EOF";
+        using var stream = new MemoryStream(Encoding.ASCII.GetBytes(body));
+
+        var crls = await DssExtractor.TryReadDssDataAsync(stream, CancellationToken.None);
+
+        crls.Count.ShouldBe(1);
+        crls[0].ShouldBe("NEW"u8.ToArray());
+    }
+
     // ── IndexOfBytes / IndexOfBytesFrom ─────────────────────────────────────
 
     [Fact(DisplayName = "IndexOfBytes finds first occurrence")]

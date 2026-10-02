@@ -141,13 +141,15 @@ public sealed class SignerBuilderEdgeCaseTests
             SignerName = "Old signer",
             Reason = "Old reason",
             Location = "Old location",
-            ContactInfo = "Old contact"
+            ContactInfo = "Old contact",
+            FieldName = "PreservedField"
         };
         var metadata = new SignatureMetadata { SignerName = "New signer" };
 
         byte[] signedPdf = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(cert)
             .WithFieldOptions(field)
+            .WithMetadata(new SignatureMetadata { SignerName = "Intermediate signer", Reason = "Intermediate reason" })
             .WithMetadata(metadata)
             .SignAsync();
 
@@ -157,6 +159,9 @@ public sealed class SignerBuilderEdgeCaseTests
         text.ShouldNotContain("Old reason");
         text.ShouldNotContain("Old location");
         text.ShouldNotContain("Old contact");
+        text.ShouldNotContain("Intermediate signer");
+        text.ShouldNotContain("Intermediate reason");
+        text.ShouldContain("PreservedField");
     }
 
     [Fact(DisplayName = "WithExternalSigner wraps a delegate failure with a stable reason")]

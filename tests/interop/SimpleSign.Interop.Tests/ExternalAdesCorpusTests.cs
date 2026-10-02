@@ -59,7 +59,7 @@ public sealed class ExternalAdesCorpusTests
     {
         CadesValidationResult result = ValidateCades("cades/cades-blt-ltv.p7s", []);
 
-        result.IsLtvDataValid.ShouldBe(true);
+        result.IsLtvDataValid.ShouldBe(true, Describe(result));
     }
 
     /// <summary>An external CAdES-B-LTA vector validates its ETSI ATSHashIndexV3 archive timestamp.</summary>

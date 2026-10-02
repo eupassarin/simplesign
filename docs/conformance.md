@@ -4,7 +4,9 @@
 
 SimpleSign implements PAdES, CAdES, and XAdES digital signatures with conformance
 boundaries documented below. This document details compliance with ISO, ETSI, RFC, and
-Brazilian (ICP-Brasil) specifications.
+Brazilian (ICP-Brasil) specifications for the current source tree. Consult the
+[release history](https://github.com/eupassarin/SimpleSign/blob/main/CHANGELOG.md) and release-tagged documentation for the
+implementation delivered in a particular package version.
 
 ## ISO 32000-1:2008 Compliance
 
@@ -48,6 +50,12 @@ SimpleSign is designed with PDF 2.0 alignment in mind. The digital signature sub
 
 ## Conformance Matrix
 
+Baseline signing claims require checked artifact integrity and applicable embedded
+evidence. They do not establish signer-chain or TSA trust; those depend on the
+validation trust anchors and policy. XAdES `DetectedLevel` reports observed
+elements, while its optional timestamp/LTV/archive fields report checked outcomes.
+See [inspection and validation](articles/inspection-validation.md) for these distinctions.
+
 | Standard | Levels | Status | Notes |
 |---|---|---|---|
 | **ISO 32000-1:2008** | Signature subsystem | ✅ | 46 unit tests per section (see above) |
@@ -55,7 +63,7 @@ SimpleSign is designed with PDF 2.0 alignment in mind. The digital signature sub
 | **PAdES** (ETSI EN 319 142) | B-B (Basic) | ✅ | CMS + `signingCertificateV2` |
 | | B-T (Timestamp) | ✅ | RFC 3161 timestamp token |
 | | B-LT (Long-Term) | ✅ | DSS dictionary with CRL/OCSP |
-| | B-LTA (Archive) | ✅ | Document timestamp for decade-long validity |
+| | B-LTA (Archive) | ✅ | Document timestamp with checked PDF byte-range coverage |
 | | DocMDP (Certification) | ✅ | Three permission levels (P=1, 2, 3) |
 | | PDF/A preservation | ✅ | Detects and preserves 1a/1b/2a/2b/2u/3a/3b/3u/4a/4b/4u/4e |
 | **DOC-ICP-15** | AD-RB (Referência Básica) | ✅ | CMS + signingCertificateV2, ICP-Brasil chain |
@@ -64,9 +72,9 @@ SimpleSign is designed with PDF 2.0 alignment in mind. The digital signature sub
 | **RFC 5652** | CMS SignedData | ✅ | Full compliance (§5.1–5.6), detached signatures |
 | **ETSI EN 319 142-1** | PAdES core (B-B, B-T, B-LT, B-LTA) | ✅ | Signature creation & augmentation |
 | **ETSI EN 319 142-2** | PAdES extended (LTV, archival) | ✅ | DSS/VRI + document timestamps |
-| **ETSI EN 319 122-1** | CAdES B-B, B-T, B-LT, B-LTA | ✅ | RFC 3161 binding, per-path LTV evidence, `archiveTimestampV3` + `ATSHashIndexV3` |
+| **ETSI EN 319 122-1** | CAdES B-B, B-T, B-LT, B-LTA | ✅ | RFC 3161 binding, authenticated root CMS validation sets (RFC 5940 OCSP), `archiveTimestampV3` + `ATSHashIndexV3` |
 | **ETSI EN 319 132-1** | XAdES B-B, B-T, B-LT, B-LTA | ✅ | ETSI archive preimage; XMLDSig reference processing; same-document distributed unsigned properties and counter-signatures |
-| **RFC 8702** | SHA-3 OIDs in CMS | ✅ | id-sha3-256/384/512, id-rsassa-pkcs1-v1_5-with-sha3-256/384/512, id-ecdsa-with-sha3-256/384/512 |
+| **RFC 9688** | SHA-3 OIDs and parameters in CMS | ✅ | id-sha3-256/384/512, id-rsassa-pkcs1-v1_5-with-sha3-256/384/512, id-ecdsa-with-sha3-256/384/512 |
 | **RFC 8933** | EdDSA in CMS | ⏳ | OIDs are recognized, but signing is deferred until raw external output is verifiable on every target |
 | **RFC 8032** | EdDSA algorithm | ⏳ | Ed25519/Ed448 signing is not advertised in v0.9.0 |
 | **RFC 8410** | EdDSA X.509 identifiers | ✅ | OIDs 1.3.101.112 (Ed25519) / 1.3.101.113 (Ed448) |

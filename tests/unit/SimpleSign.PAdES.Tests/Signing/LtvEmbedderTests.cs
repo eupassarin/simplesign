@@ -143,6 +143,26 @@ public sealed class LtvEmbedderTests
         LtvEmbedder.HasCompleteEvidence(dss, [firstCertificate, secondCertificate]).ShouldBeFalse();
     }
 
+    [Fact(DisplayName = "DSS evidence requires issuer signed CRLs for the full chain")]
+    public void HasCompleteEvidence_InvalidOrMissingCrl_ReturnsFalse()
+    {
+        using var pki = new SyntheticPki();
+        byte[] leafCrl = pki.BuildLeafCrl();
+        byte[] intermediateCrl = pki.BuildIntermediateCrl();
+        var certificates = pki.Chain().Select(cert => cert.RawData).ToArray();
+        var vri = new Dictionary<string, VriData>();
+
+        var complete = new DssValidationData([leafCrl, intermediateCrl], [], certificates, vri);
+        LtvEmbedder.HasCompleteEvidence(complete, pki.Chain()).ShouldBeTrue();
+
+        var missing = new DssValidationData([leafCrl], [], certificates, vri);
+        LtvEmbedder.HasCompleteEvidence(missing, pki.Chain()).ShouldBeFalse();
+
+        leafCrl[^1] ^= 0x01;
+        var damaged = new DssValidationData([leafCrl, intermediateCrl], [], certificates, vri);
+        LtvEmbedder.HasCompleteEvidence(damaged, pki.Chain()).ShouldBeFalse();
+    }
+
     [Fact(DisplayName = "Null PDF throws ArgumentNullException")]
     public async Task EmbedLtvDataAsync_NullPdf_ThrowsArgumentNullException()
     {

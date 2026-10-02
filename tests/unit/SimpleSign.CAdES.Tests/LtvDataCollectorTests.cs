@@ -222,4 +222,27 @@ public sealed class LtvDataCollectorTests : IDisposable
             e.Thumbprint == pki.Leaf.Thumbprint && !e.IsComplete &&
             e.RevocationEvidenceKind == LtvRevocationEvidenceKind.None);
     }
+
+    [Fact]
+    public async Task CollectAsync_CancellationDuringOcsp_DoesNotFetchCrl()
+    {
+        using var pki = new SyntheticPki(
+            crlDistributionPoint: "http://198.51.100.1/crl",
+            ocspResponder: "http://198.51.100.1/ocsp");
+        using var cts = new CancellationTokenSource();
+        var requestedPaths = new List<string>();
+        using var httpClient = new HttpClient(new MockHttpHandler(request =>
+        {
+            requestedPaths.Add(request.RequestUri!.AbsolutePath);
+            cts.Cancel();
+            return Task.FromCanceled<HttpResponseMessage>(cts.Token);
+        }));
+
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            LtvDataCollector.CollectAsync(
+                httpClient, pki.Leaf, pki.IntermediatesAndRoot(), null,
+                cancellationToken: cts.Token));
+
+        requestedPaths.ShouldHaveSingleItem().ShouldBe("/ocsp");
+    }
 }

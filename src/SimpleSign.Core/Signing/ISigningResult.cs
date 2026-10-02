@@ -7,32 +7,35 @@ namespace SimpleSign.Core.Signing;
 /// The <c>Has*</c> properties describe properties established in the produced artifact,
 /// never pipeline operations that were merely attempted. <see cref="AchievedLevel"/>
 /// is classified from the strongest complete set of established properties, never from
-/// the requested enum or attempted steps. These facts are not a full signature-validity
-/// or TSA-trust verdict; trust conclusions belong to the validation APIs.
+/// the requested enum or attempted steps. Completed signatures undergo cryptographic
+/// signature and content-integrity read-back. Embedded-evidence applicability and
+/// authenticity are distinct from certificate-chain and TSA trust; trust-anchor and
+/// policy conclusions belong to the validation APIs.
 /// </remarks>
 public interface ISigningResult
 {
     /// <summary>The baseline level requested by the caller.</summary>
     AdesBaselineLevel RequestedLevel { get; }
 
-    /// <summary>The strongest baseline structure actually created in the produced artifact.</summary>
+    /// <summary>The strongest baseline level established by checked evidence in the completed artifact.</summary>
     AdesBaselineLevel AchievedLevel { get; }
 
     /// <summary>
-    /// Whether an RFC 3161 response accepted by the creation pipeline and covering the
-    /// signature value was embedded in the produced artifact.
+    /// Whether an embedded RFC 3161 token has checked cryptographic integrity and
+    /// covers the format-required signature timestamp input, independently of TSA trust.
     /// </summary>
     bool HasSignatureTimestamp { get; }
 
     /// <summary>
-    /// Whether the certificate and revocation material required for the B-LT structure
-    /// was actually included, not merely that at least one certificate or response was added.
+    /// Whether the embedded certificate and revocation material required for B-LT
+    /// has checked applicability, authenticity, and path coverage, independently of
+    /// certificate-chain trust.
     /// </summary>
     bool HasLongTermValidationMaterial { get; }
 
     /// <summary>
-    /// Whether an archive timestamp accepted by the creation pipeline and calculated over
-    /// the format-required coverage was embedded.
+    /// Whether an embedded archive timestamp has checked cryptographic integrity and
+    /// format-required archive coverage, independently of TSA trust.
     /// </summary>
     bool HasArchiveTimestamp { get; }
 

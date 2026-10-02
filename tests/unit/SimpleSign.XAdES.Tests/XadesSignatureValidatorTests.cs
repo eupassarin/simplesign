@@ -27,6 +27,8 @@ public sealed class XadesSignatureValidatorTests
     private static X509Certificate2 CreateTsaCert(RSA key)
     {
         var req = new CertificateRequest("CN=Test TSA, O=Tests", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+            new OidCollection { new Oid("1.3.6.1.5.5.7.3.8") }, critical: true));
         var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
         return X509CertificateLoader.LoadCertificate(cert.RawData);
     }
@@ -326,6 +328,17 @@ public sealed class XadesSignatureValidatorTests
                     w.WriteObjectIdentifier("1.2.840.113549.1.9.4");
                     using (w.PushSetOf())
                     { w.WriteOctetString(SHA256.HashData(tstInfoBytes)); }
+                }
+                using (w.PushSequence())
+                {
+                    w.WriteObjectIdentifier("1.2.840.113549.1.9.16.2.47");
+                    using (w.PushSetOf())
+                    using (w.PushSequence())
+                    using (w.PushSequence())
+                    using (w.PushSequence())
+                    {
+                        w.WriteOctetString(SHA256.HashData(signerCert.RawData));
+                    }
                 }
             }
             signedAttrsBytes = w.Encode();

@@ -116,10 +116,9 @@ internal static partial class DssExtractor
             return null;
         }
 
-        var objMarker = Encoding.ASCII.GetBytes($"{dssObjNum} 0 obj");
-        // Incremental updates append revisions; the latest definition of an object
-        // number wins (xref chain semantics), so resolve the LAST occurrence.
-        int objIdx = LastIndexOfBytes(data, objMarker);
+        // A substring search for "6 0 obj" can select "16 0 obj" in a later
+        // revision. Resolve the latest complete object header instead.
+        var (objIdx, _) = PdfStructureParser.FindObjectBytes(data, dssObjNum);
         if (objIdx < 0)
         {
             return null;
@@ -179,9 +178,7 @@ internal static partial class DssExtractor
                 var arraySlice = dssDictSlice[arrayStart..arrayEnd];
                 foreach (var objRef in ParseObjRefs(arraySlice))
                 {
-                    var crlObjMarker = Encoding.ASCII.GetBytes($"{objRef} 0 obj");
-                    // Resolve the latest definition of the object (incremental update semantics).
-                    int crlObjIdx = LastIndexOfBytes(data, crlObjMarker);
+                    var (crlObjIdx, _) = PdfStructureParser.FindObjectBytes(data, objRef);
                     if (crlObjIdx < 0)
                     {
                         continue;
@@ -402,9 +399,7 @@ internal static partial class DssExtractor
     /// </summary>
     private static VriData? ExtractVriEntryData(ReadOnlySpan<byte> pdfData, int vriObjNum)
     {
-        var objMarker = Encoding.ASCII.GetBytes($"{vriObjNum} 0 obj");
-        // Resolve the latest definition of the object (incremental update semantics).
-        int objIdx = LastIndexOfBytes(pdfData, objMarker);
+        var (objIdx, _) = PdfStructureParser.FindObjectBytes(pdfData, vriObjNum);
         if (objIdx < 0)
         {
             return null;
@@ -503,9 +498,7 @@ internal static partial class DssExtractor
     /// </summary>
     private static byte[]? ExtractStreamByObjNum(ReadOnlySpan<byte> pdfData, int objNum)
     {
-        var objMarker = Encoding.ASCII.GetBytes($"{objNum} 0 obj");
-        // Resolve the latest definition of the object (incremental update semantics).
-        int objIdx = LastIndexOfBytes(pdfData, objMarker);
+        var (objIdx, _) = PdfStructureParser.FindObjectBytes(pdfData, objNum);
         if (objIdx < 0)
         {
             return null;

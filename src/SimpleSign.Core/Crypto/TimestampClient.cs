@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
 
 namespace SimpleSign.Core.Crypto;
 
@@ -150,7 +151,10 @@ public sealed class TimestampClient : ITimestampClient
                 using (writer.PushSequence()) // AlgorithmIdentifier
                 {
                     writer.WriteObjectIdentifier(hashOid);
-                    writer.WriteNull();
+                    if (CmsSignatureBuilder.DigestAlgorithmUsesNullParameter(hashOid))
+                    {
+                        writer.WriteNull();
+                    }
                 }
                 writer.WriteOctetString(hash);
             }
@@ -331,6 +335,7 @@ public sealed class TimestampClient : ITimestampClient
 
             if (requestNonce is null)
             {
+                VerifyTokenIntegrity(tokenBytes);
                 return;
             }
 
@@ -345,6 +350,7 @@ public sealed class TimestampClient : ITimestampClient
                 throw new TimestampException(
                     $"Timestamp nonce mismatch: expected {requestNonce.Value}, got {responseNonce}. Possible replay attack.");
             }
+            VerifyTokenIntegrity(tokenBytes);
         }
         catch (TimestampException)
         {
@@ -353,6 +359,16 @@ public sealed class TimestampClient : ITimestampClient
         catch (AsnContentException ex)
         {
             throw new TimestampException("TSA response contains malformed ASN.1.", ex);
+        }
+    }
+
+    private static void VerifyTokenIntegrity(byte[] tokenBytes)
+    {
+        var warnings = new List<string>();
+        if (!TimestampValidator.VerifyTokenSignature(tokenBytes, warnings))
+        {
+            throw new TimestampException("TSA token signature or signed content is invalid: "
+                + string.Join("; ", warnings));
         }
     }
     #endregion

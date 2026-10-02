@@ -1,10 +1,11 @@
 # ADR 0016: Verifiable AdES Level Fulfillment
 
-**Status:** Accepted (v0.9.0)
+**Status:** Accepted
 
 **Context:**
 
-ADR 0015 established a shared PAdES, CAdES, and XAdES signing contract in v0.8.0.
+[ADR 0015](0015-cross-format-signing-contract.md) defines the shared PAdES, CAdES,
+and XAdES signing contract.
 The model is retained: immutable format-qualified builders, `AdesBaselineProfile`,
 scoped HTTP providers, explicit external signing, and `ISigningResult` remain the
 right public architecture. A level reported as achieved, however, must describe the
@@ -19,17 +20,23 @@ The following standards are normative for this work:
 
 ## Decision
 
-v0.9.0 is a controlled breaking release. It ships only when every level advertised
-for a supported format is structurally inspectable and cryptographically bound to
-the correct data. Trust-policy evaluation of a TSA remains validation work, but
-signing must validate the response binding and embed evidence completely.
+Treat achieved baseline levels as verified postconditions: every achieved level
+must be inspectable and cryptographically bound to the correct data.
+The requirements below define that contract.
 
-### P0 — release blockers
+Signing establishes base-signature integrity, timestamp binding, embedded-evidence
+applicability, and archive coverage. Signer-chain trust and TSA trust require
+validation anchors and policy; embedding a root candidate does not establish trust.
+
+### Artifact guarantees
 
 1. **Bind every TSA response to its request.** `TimestampClient` shall require a
    CMS `SignedData` token carrying `TSTInfo`, the expected message-imprint OID and
-   bytes, and the exact request nonce. Any structural, imprint, algorithm, or nonce
-   mismatch fails closed.
+   bytes, and the exact request nonce. The token must carry a matching TSA signer
+   certificate, authenticated TSTInfo signed attributes (`contentType`,
+   `messageDigest`, and signing-certificate binding), a valid CMS signature, and
+   the exclusive critical timestamping EKU. Structural, cryptographic, imprint,
+   algorithm, and nonce mismatches fail closed independently of TSA trust.
 2. **Embed the RFC 3161 token once.** CAdES and XAdES timestamp helpers return raw
    token bytes; their callers embed those bytes once. The embedded token is the same
    token later used to collect TSA validation material.
@@ -40,20 +47,31 @@ signing must validate the response binding and embed evidence completely.
 4. **Require complete LTV evidence.** Collection records certificate, issuer,
    revocation evidence, responder certificates, and absence reason for each signer
    and prior-TSA path. OCSP-to-CRL fallback is per certificate; cancellation is
-   never converted into a downgrade.
-5. **Inspect the final artifact.** `HasSignatureTimestamp`,
+   never converted into a downgrade. Required non-root paths need an embedded
+   issuer and applicable, authenticated OCSP or CRL evidence with usable validity
+   bounds. Cryptographically self-signed root candidates and authorized OCSP
+   no-check responders do not need their own revocation objects.
+
+   CAdES baseline output uses root `SignedData` certificate and revocation sets,
+   including RFC 5940 OCSP choices. Legacy CAdES-XL unsigned validation attributes
+   remain readable. These root sets participate in the existing
+   `archiveTimestampV3`/`ATSHashIndexV3` archive construction.
+
+5. **Validate the final artifact.** `HasSignatureTimestamp`,
    `HasLongTermValidationMaterial`, `HasArchiveTimestamp`, and `AchievedLevel` are
    based on format-specific final-artifact inspection, not on successful helper
-   calls or requested configuration. PAdES verifies the embedded DocTimeStamp
-   message imprint against its PDF byte range; CAdES/XAdES verify the archive
-   timestamp against their respective ETSI preimages. CAdES/XAdES retain the
-   collection ledger and require the final artifact to contain every collected
-   certificate and revocation object before treating LTV material as present.
+   calls or requested configuration. The completed base signature and content
+   integrity must verify before returning a result. PAdES checks the embedded
+   DocTimeStamp token and its PDF byte-range binding; CAdES/XAdES check the archive
+   token and their respective ETSI preimages. The collection ledger establishes
+   embedding completeness, while independent evidence checks establish
+   applicability and authenticity before reporting B-LT/B-LTA.
 6. **Prove the contract externally.** Builder-produced B-T, B-LT, and B-LTA tests
-   use captured TSA tokens and static independent CAdES/XAdES vectors. A validator
-   cannot use its generator as its sole oracle.
+   use signed local RFC 3161 responses bound to each request alongside static
+   independent CAdES/XAdES vectors and negative cases. Live TSA checks are opt-in.
+   A validator cannot use its generator as its sole oracle.
 
-For v0.9.0, XAdES B-LTA supports the signer-produced topology plus ETSI distributed
+XAdES B-LTA supports the signer-produced topology plus ETSI distributed
 unsigned properties addressed by same-document bare-name `Include` references and
 preceding counter-signatures. Distributed `Include` processing preserves declared
 order and removes comments before canonicalization. External `Include` resources,
@@ -62,15 +80,17 @@ safe subset fail closed during archive inspection; they never claim B-LTA. CAdES
 archive verification processes every `SignerInfo` in a CMS SignedData structure;
 the signer currently emits one document signer.
 
-### P1 — terminal-contract completion
+### Terminal contract
 
-1. Replace independently selectable hash and signature OID values with a shared
-   resolved signing-algorithm value. It includes scheme, container OID, digest, and
+1. Resolve hash and signature OID selections through a shared signing-algorithm
+   value. It includes scheme, container OID, digest, and
    for RSA-PSS the MGF algorithm/digest, salt length, and trailer field.
-2. Extend `ExternalSigningRequest` with that resolved value. Verify external output
-   against the certificate public key before packaging it, and document PKCS#1 v1.5,
-   PSS, ECDSA DER, and EdDSA raw encodings separately. v0.9.0 explicitly rejects
-   EdDSA signing until that raw output can be verified consistently on every target.
+2. Include that resolved value in `ExternalSigningRequest`. Verify external output
+   against the certificate public key before packaging it, and specify PKCS#1 v1.5,
+   PSS, ECDSA DER, and EdDSA raw encodings separately. Accept a signing scheme only
+   when its output can be verified consistently on every supported target; this
+   requirement excludes EdDSA signing while equivalent raw-output verification is
+   unavailable.
 3. Reject contradictory combined OID/digest configurations. Allow PSS with a
    conventional `rsaEncryption` key; enforce restrictions only when an
    `id-RSASSA-PSS` public-key identifier contains parameters. Do not confuse absent
@@ -84,20 +104,21 @@ the signer currently emits one document signer.
    Replace nullable clone updates with explicit clearable values. Stream-backed PAdES
    builder lineages are single-use and destination streams are transactional.
 
-### P2 — consistency and documentation
+### API consistency
 
 1. `TimestampOptions` and `ArchiveTimestampOptions` accept only absolute HTTP(S)
    endpoints, matching the transport implementation.
-2. Update ADR 0015, ADR 0006, ADR 0010, ADR 0012, README, CHANGELOG, and the v0.8 →
-   v0.9 migration guide after implementation. The migration guide must show resolved
-   algorithm/PSS selection, external signing, stricter levels, and PAdES lifecycle.
-3. CAdES/XAdES configure logging only through `WithLogger`. The redundant
-   `Document(..., ILogger?)` overload was removed so every format has the same entry
-   and fluent-configuration vocabulary.
-4. Keep true CAdES streaming deferred. A buffering facade does not deliver streaming
-   semantics and is unrelated to evidence correctness.
-5. Do not restore v0.7 adapters. Their removal was an intentional v0.8.0 breaking
-   change, not a correctness defect.
+2. Keep reference documentation and examples aligned with the current source.
+   Algorithm/PSS selection, external signing, level guarantees, and PAdES lifecycle
+   must remain consistent across the API reference and examples.
+3. CAdES/XAdES configure logging only through `WithLogger`, giving every format the
+   same entry and fluent-configuration vocabulary without redundant logger-bearing
+   `Document` overloads.
+4. CAdES stream APIs must provide actual streaming semantics. A buffering facade
+   does not satisfy that requirement and is unrelated to evidence correctness.
+5. Keep one canonical profile-based signing surface. Compatibility adapters for
+   independent capability methods, level enums, and static options would duplicate
+   configuration paths without strengthening artifact guarantees.
 
 ## Consequences
 
@@ -107,16 +128,21 @@ the signer currently emits one document signer.
 - CAdES B-LTA (including archive-index processing for every CMS `SignerInfo`) and the
   supported XAdES B-LTA topologies use
   standards-defined preimages and validate their embedded token coverage.
-- The new algorithm model is a public breaking change necessary to eliminate
-  ambiguous PSS requests and inconsistent format-specific inference.
-- Full trust and policy validation remains outside signing, but request/token binding
-  and embedded-evidence completeness are mandatory signing invariants.
+- A shared resolved-algorithm model eliminates ambiguous PSS requests and
+  inconsistent format-specific inference; callers must provide compatible
+  algorithm selections.
+- Evidence applicability and authenticity are signing invariants. Signer-chain
+  trust and TSA trust remain separate validation outcomes.
+- XAdES `DetectedLevel` describes observed unsigned-property elements even when
+  they fail validation. Timestamp/LTV/archive outcomes must be checked alongside
+  fundamental signature and integrity results; `IsValid` alone does not establish
+  that all optional baseline properties passed.
 
 ## Alternatives considered
 
 | Alternative | Verdict |
 | --- | --- |
-| Keep B-LTA best effort and add warnings | Rejected: a warning cannot make a false conformance claim truthful. |
-| Restore v0.7 compatibility adapters | Rejected: adapters do not repair timestamp, archive, or LTV evidence. |
+| Report requested B-LTA despite incomplete evidence, with warnings | Rejected: a warning cannot make a false conformance claim truthful. |
+| Maintain parallel legacy signing surfaces | Rejected: duplicate configuration paths do not repair timestamp, archive, or LTV evidence. |
 | Treat raw serialized CMS/XML as archive input | Rejected: neither format matches its ETSI archive construction. |
 | Add buffering CAdES streams | Rejected: no actual streaming benefit and distracts from correctness. |

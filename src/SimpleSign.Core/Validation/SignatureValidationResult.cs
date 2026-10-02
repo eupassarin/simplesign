@@ -19,14 +19,17 @@ public sealed class SignatureValidationResult
     /// <summary>The certificate chain is valid and trusted.</summary>
     public bool IsCertificateChainValid { get; init; }
 
-    /// <summary>The certificate was not revoked at the time of signing.</summary>
+    /// <summary>No revocation was established. Consult <see cref="RevocationSource"/> to distinguish confirmed good, unchecked, and indeterminate status.</summary>
     public bool IsNotRevoked { get; init; }
 
     /// <summary>How the revocation status was determined.</summary>
     public RevocationSource RevocationSource { get; init; }
 
-    /// <summary>The timestamp (if present) is valid.</summary>
+    /// <summary>The signature timestamp's cryptographic integrity and message imprint are valid, independent of TSA trust.</summary>
     public bool? HasValidTimestamp { get; init; }
+
+    /// <summary>Whether the TSA chain is trusted; null when the token is absent, invalid, or no trust policy was evaluated.</summary>
+    public bool? IsTsaTrusted { get; init; }
 
     /// <summary>Signing date/time (from SigningTime or from the timestamp).</summary>
     public DateTimeOffset? SigningTime { get; init; }
@@ -110,14 +113,15 @@ public sealed class SignatureValidationResult
     /// </summary>
     public IReadOnlyDictionary<string, string>? ChainValidationMetadata { get; init; }
 
-    /// <summary>Indicates whether the signature is considered valid as a whole.</summary>
+    /// <summary>Indicates whether integrity, signature, configured chain trust, and revocation policy pass. Indeterminate revocation prevents validity.</summary>
     public bool IsValid =>
-        IsIntegrityValid && IsSignatureValid && (IsCertificateChainValid || IsChainTrustWarning) && IsNotRevoked;
+        IsIntegrityValid && IsSignatureValid && (IsCertificateChainValid || IsChainTrustWarning) && IsNotRevoked
+        && RevocationSource != global::SimpleSign.Core.Validation.RevocationSource.Indeterminate;
 
     /// <summary>Errors found during validation.</summary>
     public IReadOnlyList<string> Errors { get; init; } = [];
 
-    /// <summary>Non-blocking warnings.</summary>
+    /// <summary>Diagnostic warnings. Consult the validation outcomes and <see cref="RevocationSource"/> when determining validity.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 
     /// <inheritdoc/>

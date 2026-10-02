@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Improved
+
+- XAdES documentation distinguishes structural `DetectedLevel` from checked
+  timestamp, LTV, and archive outcomes. Negative artifact tests cover properties
+  that are present but invalid without weakening base-signature checks.
+- Routine timestamped interop tests now share a signed offline TSA fixture using
+  CMS version 3 for TSTInfo, as required for independent parser compatibility; live
+  RFC 3161 checking is opt-in through `SIMPLESIGN_LIVE_TSA_URL` and `Category=LiveTsa`.
+- Validation timeout fixtures use a literal test IP so DNS resolution cannot
+  consume the timeout budget before requests reach the mock HTTP handler.
+
+### Fixed
+
+- PAdES validation now applies `NetworkTimeout` to AIA, OCSP, CRL, and chain URL
+  retrieval, and propagates caller cancellation through validation and batches.
+  Indeterminate revocation prevents overall validity; CLI output distinguishes
+  unknown and unchecked status, with `revoked: null` in JSON for both.
+- RFC 3161 tokens now require a matching TSA signer certificate, authenticated
+  TSTInfo signed attributes, signing-certificate binding, and valid CMS signature
+  before receipt or artifact validation accepts them. Timestamp integrity and TSA
+  chain trust are reported separately; SHA-3 token digests are supported.
+- SHA-3 digest identifiers in CMS and timestamp requests now omit ASN.1 parameters
+  as required by RFC 9688. ECDSA with SHA-3 also omits signature parameters, while
+  RSA with SHA-3 retains `NULL`.
+- PAdES, CAdES, and XAdES signing now revalidate the completed signature and
+  content integrity before returning a result. Reported timestamp, LTV, and
+  archive levels require checked evidence on the newly added signature, while
+  certificate trust remains independent of artifact integrity.
+- CAdES and XAdES archive timestamps now require a valid TSA CMS signature;
+  PAdES DSS lookup distinguishes complete object numbers across PDF revisions.
+- PAdES, CAdES, and XAdES B-LT evidence checks now require an embedded issuer and
+  applicable, signed OCSP or CRL evidence for required non-root certificates before
+  reporting long-term validation material. Revoked, expired, or mismatched evidence
+  cannot satisfy signing read-back; certificate-path trust remains a separate check.
+- CAdES-B-LT and B-LTA now embed collected certificates and CRLs in the root CMS
+  `SignedData` sets and encode OCSP responses as RFC 5940 revocation choices. The
+  final-artifact check reads those sets before reporting LTV coverage.
+- CMS encapsulated content uses the required explicit wrapper, and added unsigned
+  attributes use DER `SET OF` ordering. Validation still recognizes legacy CAdES-XL
+  certificate and revocation attributes in existing signatures.
+
 ## [0.9.0] - 2026-09-30
 
 ### Security

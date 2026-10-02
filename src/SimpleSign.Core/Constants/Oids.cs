@@ -121,6 +121,9 @@ public static class Oids
     /// <summary>id-aa-signatureTimeStampToken (RFC 3161) — timestamp token on the signature value.</summary>
     public const string SignatureTimestampToken = "1.2.840.113549.1.9.16.2.14";
 
+    /// <summary>RFC 3161 TSTInfo encapsulated content type.</summary>
+    public const string TimestampInfoContentType = "1.2.840.113549.1.9.16.1.4";
+
     /// <summary>id-aa-ets-commitmentType (RFC 5126 §5.11.1) — commitment type indication.</summary>
     public const string CommitmentTypeIndication = "1.2.840.113549.1.9.16.2.16";
 

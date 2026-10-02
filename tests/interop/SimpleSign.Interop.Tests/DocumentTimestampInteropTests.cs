@@ -16,15 +16,31 @@ namespace SimpleSign.Interop.Tests;
 [Trait("Category", "Interop")]
 public sealed class DocumentTimestampInteropTests(ITestOutputHelper output)
 {
+    [SkippableFact(DisplayName = "Opt-in live TSA — standalone DTS is detected")]
+    [Trait("Category", "LiveTsa")]
+    public async Task StandaloneDts_LiveTsa_InspectorDetects()
+    {
+        string? endpoint = Environment.GetEnvironmentVariable("SIMPLESIGN_LIVE_TSA_URL");
+        Skip.If(string.IsNullOrWhiteSpace(endpoint), "Set SIMPLESIGN_LIVE_TSA_URL to enable a live RFC 3161 check.");
+
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        byte[] timestamped = await DocTimeStampWriter.AppendDocTimeStampAsync(
+            MinimalPdf(), endpoint!, httpClient, HashAlgorithmName.SHA256);
+
+        using var stream = new MemoryStream(timestamped);
+        var result = await PdfSignatureInspector.InspectAsync(stream);
+        result.Signatures.ShouldContain(s => s.SubFilter == "ETSI.RFC3161" && s.Timestamp != null);
+    }
+
     [SkippableFact(DisplayName = "Standalone DTS (no user signature) — pyHanko detects DocTimeStamp")]
     public async Task StandaloneDts_PyHankoDetects()
     {
         SkipIfDockerUnavailable("simplesign-dss");
         var pdf = MinimalPdf();
 
-        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        using var httpClient = TestTimestamp.CreateClient();
         var timestamped = await DocTimeStampWriter.AppendDocTimeStampAsync(
-            pdf, "http://timestamp.digicert.com", httpClient,
+            pdf, TestTimestamp.Endpoint, httpClient,
             HashAlgorithmName.SHA256);
 
         var tmpDir = CreateTempDir();
@@ -54,9 +70,9 @@ public sealed class DocumentTimestampInteropTests(ITestOutputHelper output)
     {
         var pdf = MinimalPdf();
 
-        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        using var httpClient = TestTimestamp.CreateClient();
         var timestamped = await DocTimeStampWriter.AppendDocTimeStampAsync(
-            pdf, "http://timestamp.digicert.com", httpClient,
+            pdf, TestTimestamp.Endpoint, httpClient,
             HashAlgorithmName.SHA256);
 
         using var stream = new MemoryStream(timestamped);
@@ -83,9 +99,9 @@ public sealed class DocumentTimestampInteropTests(ITestOutputHelper output)
             .SignAsync();
 
         // Then append DTS
-        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        using var httpClient = TestTimestamp.CreateClient();
         var timestamped = await DocTimeStampWriter.AppendDocTimeStampAsync(
-            signed, "http://timestamp.digicert.com", httpClient,
+            signed, TestTimestamp.Endpoint, httpClient,
             HashAlgorithmName.SHA256);
 
         // Validate with EU DSS

@@ -29,12 +29,13 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
     public async Task XadesBT_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XAdES B-T EU DSS");
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><data>test</data></doc>";
         var result = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
             .WithCertificate(cert)
             .WithLevel(AdesBaselineProfile.Timestamped(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
+                TestTimestamp.Options(tsaClient)))
             .SignWithDetailsAsync();
         await ValidateXmlWithEuDss(result.SignedArtifact, "xades-b-t");
     }
@@ -43,13 +44,14 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
     public async Task XadesBLT_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
         using var pki = TestRevocation.CreatePki();
         using var crlClient = TestRevocation.BuildCrlClient(pki);
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><ltv>yes</ltv></doc>";
         var result = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .WithLevel(AdesBaselineProfile.LongTerm(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                TestTimestamp.Options(tsaClient),
                 new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignWithDetailsAsync();
         await ValidateXmlWithEuDss(result.SignedArtifact, "xades-b-lt");
@@ -87,6 +89,7 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
     public async Task XadesBT_Detached_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XAdES B-T Detached EU DSS");
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><data>timestamped</data></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
@@ -95,7 +98,7 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
             .WithForm(XadesForm.Detached)
             .WithDataUri("data.xml")
             .WithLevel(AdesBaselineProfile.Timestamped(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
+                TestTimestamp.Options(tsaClient)))
             .SignWithDetailsAsync();
         await ValidateXmlWithEuDssDetached(result.SignedArtifact, xmlBytes, "xades-bt-detached");
     }
@@ -104,6 +107,7 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
     public async Task XadesBLT_Detached_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
         using var pki = TestRevocation.CreatePki();
         using var crlClient = TestRevocation.BuildCrlClient(pki);
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><ltv>detached</ltv></doc>";
@@ -113,7 +117,7 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
             .WithForm(XadesForm.Detached)
             .WithDataUri("data.xml")
             .WithLevel(AdesBaselineProfile.LongTerm(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                TestTimestamp.Options(tsaClient),
                 new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignWithDetailsAsync();
         await ValidateXmlWithEuDssDetached(result.SignedArtifact, xmlBytes, "xades-blt-detached");
@@ -137,6 +141,7 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
     public async Task XadesBT_Enveloping_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=XAdES B-T Enveloping EU DSS");
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><data>ts env</data></doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
@@ -144,7 +149,7 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
             .WithCertificate(cert)
             .WithForm(XadesForm.Enveloping)
             .WithLevel(AdesBaselineProfile.Timestamped(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com"))))
+                TestTimestamp.Options(tsaClient)))
             .SignWithDetailsAsync();
         await ValidateXmlWithEuDss(result.SignedArtifact, "xades-bt-enveloping");
     }
@@ -153,6 +158,7 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
     public async Task XadesBLT_Enveloping_ValidatesWithEuDss()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
         using var pki = TestRevocation.CreatePki();
         using var crlClient = TestRevocation.BuildCrlClient(pki);
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc><ltv>env</ltv></doc>";
@@ -161,7 +167,7 @@ public sealed class XadesEuDssInteropTests(ITestOutputHelper output)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .WithForm(XadesForm.Enveloping)
             .WithLevel(AdesBaselineProfile.LongTerm(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                TestTimestamp.Options(tsaClient),
                 new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignWithDetailsAsync();
         await ValidateXmlWithEuDss(result.SignedArtifact, "xades-blt-enveloping");

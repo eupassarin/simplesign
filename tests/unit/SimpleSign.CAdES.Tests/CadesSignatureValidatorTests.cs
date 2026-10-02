@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Constants;
+using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
@@ -146,6 +148,41 @@ public sealed class CadesSignatureValidatorTests : IDisposable
 
         result.HasValidTimestamp.ShouldBeNull();
         result.IsLtvDataValid.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Validate_IncompleteLegacyUnsignedValidationAttributes_DoesNotClaimLtv()
+    {
+        byte[] cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
+        byte[] legacy = CmsSignatureBuilder.AddUnsignedAttributes(cms,
+        [
+            CmsAttribute.Raw(Oids.CertValues, [0x30, 0x00]),
+        ]);
+
+        var result = new CadesSignatureValidator(
+            new ValidationOptions { CheckRevocation = false }).Validate(legacy, _data, [_cert]);
+
+        result.IsLtvDataValid.ShouldBe(false);
+    }
+
+    [Fact]
+    public async Task ReadValidationMaterial_RootOcspChoice_ExtractsResponse()
+    {
+        byte[] cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
+        byte[] ocspResponse = [0x30, 0x03, 0x02, 0x01, 0x01];
+        byte[] withOcsp = CmsSignatureBuilder.AddValidationMaterial(
+            cms, [_cert.RawData], [], [ocspResponse]);
+
+        CadesValidationMaterial material = CadesValidationMaterial.Read(withOcsp);
+
+        material.HasRevocationSet.ShouldBeTrue();
+        material.Certificates.ShouldContain(cert => cert.SequenceEqual(_cert.RawData));
+        material.OcspResponses.ShouldContain(response => response.SequenceEqual(ocspResponse));
+        material.Crls.ShouldBeEmpty();
     }
 
     [Fact]

@@ -36,6 +36,8 @@ public sealed class XadesSignerTests
     private static X509Certificate2 CreateTsaCert(RSA key)
     {
         var req = new CertificateRequest("CN=Test TSA, O=Tests", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+            new OidCollection { new Oid("1.3.6.1.5.5.7.3.8") }, critical: true));
         var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
         return X509CertificateLoader.LoadCertificate(cert.RawData);
     }
@@ -291,6 +293,10 @@ public sealed class XadesSignerTests
         string diag = "Errors: " + string.Join("; ", result.Errors) +
                        " | Warnings: " + string.Join("; ", result.Warnings);
         result.HasValidSignatureTimeStamp.ShouldBe(false, diag);
+        result.DetectedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        result.IsSignatureValid.ShouldBeTrue(diag);
+        result.IsIntegrityValid.ShouldBeTrue(diag);
+        result.IsTsaTrusted.ShouldBeNull(diag);
     }
 
     [Fact]
@@ -329,10 +335,14 @@ public sealed class XadesSignerTests
 
         string diag = "Warnings: " + string.Join("; ", result.Warnings);
         result.HasValidSignatureTimeStamp.ShouldBe(false, diag);
+        result.DetectedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        result.IsSignatureValid.ShouldBeTrue(diag);
+        result.IsIntegrityValid.ShouldBeTrue(diag);
+        result.IsTsaTrusted.ShouldBeNull(diag);
     }
 
     [Fact]
-    public async Task Validate_LtvDataPresent_ReturnsValid()
+    public async Task Validate_MalformedLtvData_ReturnsInvalid()
     {
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>ltv test</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
@@ -393,8 +403,10 @@ public sealed class XadesSignerTests
 
         string diag = "Errors: " + string.Join("; ", result.Errors) +
                        " | Warnings: " + string.Join("; ", result.Warnings);
-        result.IsLtvDataValid.ShouldBe(true, diag);
+        result.IsLtvDataValid.ShouldBe(false, diag);
         result.DetectedLevel.ShouldBe(AdesBaselineLevel.LongTerm);
+        result.IsSignatureValid.ShouldBeTrue(diag);
+        result.IsIntegrityValid.ShouldBeTrue(diag);
     }
 
     private static byte[] EmbedMalformedTimestamp(byte[] signedXml)
@@ -529,6 +541,17 @@ public sealed class XadesSignerTests
                     using (w.PushSetOf())
                     { w.WriteOctetString(SHA256.HashData(tstInfoBytes)); }
                 }
+                using (w.PushSequence())
+                {
+                    w.WriteObjectIdentifier("1.2.840.113549.1.9.16.2.47");
+                    using (w.PushSetOf())
+                    using (w.PushSequence())
+                    using (w.PushSequence())
+                    using (w.PushSequence())
+                    {
+                        w.WriteOctetString(SHA256.HashData(signerCert.RawData));
+                    }
+                }
             }
             signedAttrsBytes = w.Encode();
         }
@@ -613,7 +636,7 @@ public sealed class XadesSignerTests
     }
 
     [Fact]
-    public async Task SignThenValidate_LongTerm_ReturnsLtvValid()
+    public async Task SignThenValidate_MalformedLongTermEvidence_ReturnsLtvInvalid()
     {
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>b-lt test</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
@@ -671,7 +694,7 @@ public sealed class XadesSignerTests
 
         string diag = "Errors: " + string.Join("; ", result.Errors) +
                        " | Warnings: " + string.Join("; ", result.Warnings);
-        result.IsLtvDataValid.ShouldBe(true, diag);
+        result.IsLtvDataValid.ShouldBe(false, diag);
         result.DetectedLevel.ShouldBe(AdesBaselineLevel.LongTerm);
     }
 
@@ -781,6 +804,8 @@ public sealed class XadesSignerTests
                        " | Warnings: " + string.Join("; ", result.Warnings);
         result.HasValidArchiveTimeStamp.ShouldBe(false, diag);
         result.DetectedLevel.ShouldBe(AdesBaselineLevel.Archive);
+        result.IsSignatureValid.ShouldBeTrue(diag);
+        result.IsIntegrityValid.ShouldBeTrue(diag);
     }
 
     [Fact]
@@ -905,17 +930,19 @@ public sealed class XadesSignerTests
     [Fact]
     public async Task HasLtvData_RequiresEveryCollectedCertificateAndRevocationObject()
     {
+        using var pki = new SyntheticPki();
         byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes("<doc>ltv inspection</doc>"))
             .WithCertificate(s_cert)
             .SignAsync();
         var evidence = new LtvCollectionResult(
-            CertificateRawData: [[0x30, 0x01, 0x01], [0x30, 0x01, 0x02]],
-            OcspResponses: [[0x30, 0x01, 0x03]],
-            Crls: [[0x30, 0x01, 0x04]],
+            CertificateRawData: [s_cert.RawData, pki.Leaf.RawData, pki.IntermediateCa.RawData, pki.RootCa.RawData],
+            OcspResponses: [],
+            Crls: [pki.BuildLeafCrl(), pki.BuildIntermediateCrl()],
             CertificateEvidence:
             [
-                new LtvCertificateEvidence("signer", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Ocsp },
-                new LtvCertificateEvidence("tsa", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Crl },
+                new LtvCertificateEvidence("signer", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.NotRequired },
+                new LtvCertificateEvidence("leaf", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Crl },
+                new LtvCertificateEvidence("intermediate", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Crl },
             ]);
         byte[] withLtv = XadesSignatureBuilder.EmbedLtvData(signed, evidence);
 

@@ -6,7 +6,7 @@ namespace SimpleSign.Core.Validation;
 /// </summary>
 public enum RevocationSource
 {
-    /// <summary>Revocation check was not performed (disabled or certificate had no revocation URLs).</summary>
+    /// <summary>Revocation check was not performed (disabled or no signer certificate was available).</summary>
     None,
 
     /// <summary>Revocation was verified using a CRL embedded in the PDF's DSS dictionary (offline).</summary>

@@ -95,6 +95,80 @@ public sealed class CadesSignerBuilderTests : IDisposable
         exception.Reason.ShouldBe(SigningErrorReason.LevelNotAchievable);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SignWithDetailsAsync_WithCrlEvidence_EmbedsRootValidationSets(bool archive)
+    {
+        const string leafCrlUrl = "http://198.51.100.1/leaf.crl";
+        const string intermediateCrlUrl = "http://198.51.100.1/intermediate.crl";
+        using var pki = new SyntheticPki(
+            crlDistributionPoint: leafCrlUrl,
+            intermediateCrlDistributionPoint: intermediateCrlUrl);
+        byte[] leafCrl = pki.BuildLeafCrl();
+        byte[] intermediateCrl = pki.BuildIntermediateCrl();
+        using var httpClient = new HttpClient(new MockHttpHandler(async request =>
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                byte[] requestBytes = await request.Content!.ReadAsByteArrayAsync();
+                var response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(TimestampTestResponseBuilder.CreateForRequest(requestBytes))
+                };
+                response.Content.Headers.ContentType =
+                    new MediaTypeHeaderValue("application/timestamp-reply");
+                return response;
+            }
+
+            byte[]? crl = request.RequestUri?.ToString() switch
+            {
+                leafCrlUrl => leafCrl,
+                intermediateCrlUrl => intermediateCrl,
+                _ => null,
+            };
+            return crl is null
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(crl)
+                };
+        }));
+        var provider = new SingleClientProvider(httpClient);
+        var timestamp = new TimestampOptions(new Uri("http://mock-tsa.example.com"), provider);
+        var ltv = new LongTermValidationOptions(provider);
+        var profile = archive
+            ? AdesBaselineProfile.Archive(timestamp, ltv)
+            : AdesBaselineProfile.LongTerm(timestamp, ltv);
+
+        CadesSigningResult result = await CadesSigner.Document(_data)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .WithLevel(profile)
+            .SignWithDetailsAsync();
+
+        result.AchievedLevel.ShouldBe(archive ? AdesBaselineLevel.Archive : AdesBaselineLevel.LongTerm);
+        result.HasLongTermValidationMaterial.ShouldBeTrue();
+        result.HasArchiveTimestamp.ShouldBe(archive);
+        CmsSignedData parsed = CmsParser.Parse(result.SignedArtifact);
+        parsed.UnsignedAttributes.ShouldNotBeNull();
+        parsed.UnsignedAttributes.ContainsKey(Oids.CertValues).ShouldBeFalse();
+        parsed.UnsignedAttributes.ContainsKey(Oids.RevocationValues).ShouldBeFalse();
+        CadesValidationMaterial embedded = CadesValidationMaterial.Read(result.SignedArtifact);
+        embedded.Certificates.ShouldContain(cert => cert.SequenceEqual(pki.Leaf.RawData));
+        embedded.Certificates.ShouldContain(cert => cert.SequenceEqual(pki.IntermediateCa.RawData));
+        embedded.Certificates.ShouldContain(cert => cert.SequenceEqual(pki.RootCa.RawData));
+        embedded.Crls.ShouldContain(crl => crl.SequenceEqual(leafCrl));
+        embedded.Crls.ShouldContain(crl => crl.SequenceEqual(intermediateCrl));
+        var validation = new CadesSignatureValidator().Validate(result.SignedArtifact, _data);
+        validation.IsSignatureValid.ShouldBeTrue();
+        validation.IsIntegrityValid.ShouldBeTrue();
+        validation.IsLtvDataValid.ShouldBe(true);
+        if (archive)
+        {
+            validation.HasValidArchiveTimestamp.ShouldBe(true);
+        }
+    }
+
     [Fact]
     public async Task SignAsync_WithLevelArchive_WithoutCollectibleRevocationData_Throws()
     {
@@ -140,30 +214,27 @@ public sealed class CadesSignerBuilderTests : IDisposable
         byte[] cms = await CadesSigner.Document(_data)
             .WithCertificate(_cert)
             .SignAsync();
+        byte[] leafCrl = _pki.BuildLeafCrl();
+        byte[] intermediateCrl = _pki.BuildIntermediateCrl();
         var evidence = new LtvCollectionResult(
-            CertificateRawData: [[0x30, 0x01, 0x01], [0x30, 0x01, 0x02]],
-            OcspResponses: [[0x30, 0x01, 0x03]],
-            Crls: [[0x30, 0x01, 0x04]],
+            CertificateRawData: [_cert.RawData, _pki.Leaf.RawData, _pki.IntermediateCa.RawData, _pki.RootCa.RawData],
+            OcspResponses: [],
+            Crls: [leafCrl, intermediateCrl],
             CertificateEvidence:
             [
-                new LtvCertificateEvidence("signer", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Ocsp },
-                new LtvCertificateEvidence("tsa", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Crl },
+                new LtvCertificateEvidence("signer", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.NotRequired },
+                new LtvCertificateEvidence("leaf", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Crl },
+                new LtvCertificateEvidence("intermediate", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Crl },
             ]);
-        byte[] withLtv = CmsSignatureBuilder.AddUnsignedAttributes(cms,
-        [
-            CmsAttribute.CertValues([.. evidence.CertificateRawData]),
-            CmsAttribute.RevocationValues([.. evidence.OcspResponses], [.. evidence.Crls]),
-        ]);
+        byte[] withLtv = CmsSignatureBuilder.AddValidationMaterial(
+            cms, evidence.CertificateRawData, evidence.Crls, evidence.OcspResponses);
 
-        CadesSignerBuilder.HasExpectedLtvEvidence(CmsParser.Parse(withLtv), evidence).ShouldBeTrue();
+        CadesSignerBuilder.HasExpectedLtvEvidence(withLtv, evidence).ShouldBeTrue();
 
-        byte[] incomplete = CmsSignatureBuilder.AddUnsignedAttributes(cms,
-        [
-            CmsAttribute.CertValues([.. evidence.CertificateRawData]),
-            CmsAttribute.RevocationValues([.. evidence.OcspResponses]),
-        ]);
+        byte[] incomplete = CmsSignatureBuilder.AddValidationMaterial(
+            cms, evidence.CertificateRawData, [leafCrl], evidence.OcspResponses);
 
-        CadesSignerBuilder.HasExpectedLtvEvidence(CmsParser.Parse(incomplete), evidence).ShouldBeFalse();
+        CadesSignerBuilder.HasExpectedLtvEvidence(incomplete, evidence).ShouldBeFalse();
     }
 
     [Fact]

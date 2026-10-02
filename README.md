@@ -26,6 +26,10 @@
 
 SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN 319 122), and **XAdES** (ETSI EN 319 132) digital signatures. All cryptography uses `System.Security.Cryptography` — no BouncyCastle, no third-party crypto dependencies. Native AOT compatible. 1,695+ tests. MIT licensed.
 
+This README describes the current source tree. For released-package behavior, use
+its release-tagged documentation; the [changelog](CHANGELOG.md) records delivered
+changes and work under `Unreleased`.
+
 ---
 
 ## Why SimpleSign?
@@ -145,7 +149,12 @@ foreach (var r in results)
 ### CAdES — Standalone CMS Signatures
 
 Create and validate CAdES signatures (CMS/PKCS#7 SignedData) for any binary data using the fluent builder API.
-Supports both **detached** (.p7s) and **enveloped** (.p7m) content types:
+Supports both **detached** (.p7s) and **enveloped** (.p7m) content types.
+B-LT/B-LTA certificates and CRLs are stored in the root CMS `SignedData` sets,
+with OCSP responses encoded as RFC 5940 revocation choices. Validation also reads
+legacy CAdES-XL certificate and revocation unsigned attributes.
+
+Choose the baseline profile and content type when signing:
 
 ```csharp
 using SimpleSign.CAdES;
@@ -289,12 +298,20 @@ Console.WriteLine($"Signer: {result.SignerCertificate?.Subject}");
 Console.WriteLine($"Signature: {result.IsSignatureValid}");
 Console.WriteLine($"Integrity: {result.IsIntegrityValid}");
 Console.WriteLine($"Chain: {result.IsCertificateChainValid}");
-Console.WriteLine($"Level: {result.DetectedLevel}");
-Console.WriteLine($"Timestamp: {result.HasValidSignatureTimeStamp}");
-Console.WriteLine($"LTV: {result.IsLtvDataValid}");
-Console.WriteLine($"Archive TS: {result.HasValidArchiveTimeStamp}");
+Console.WriteLine($"Observed level: {result.DetectedLevel}");
+Console.WriteLine($"Timestamp valid: {result.HasValidSignatureTimeStamp}");
+Console.WriteLine($"LTV evidence valid: {result.IsLtvDataValid}");
+Console.WriteLine($"Archive valid: {result.HasValidArchiveTimeStamp}");
+Console.WriteLine($"TSA trusted: {result.IsTsaTrusted}");
 Console.WriteLine($"Valid: {result.IsValid}");
 ```
+
+`DetectedLevel` reports observed XML elements, including properties that fail
+validation. A malformed timestamp can report `Timestamped` while
+`HasValidSignatureTimeStamp` is false. Check the timestamp, LTV, and archive
+outcomes for the required baseline level; `IsValid` combines fundamental
+signature, integrity, and signer-chain checks. `IsTsaTrusted` reports the separate
+signature-TSA trust outcome.
 
 ---
 
@@ -366,18 +383,29 @@ await PadesSigner
 
 ### Validation
 
-Validate signatures with detailed results:
+Signing revalidates the completed base signature and content integrity before
+returning a result. `SignWithDetailsAsync` reports `RequestedLevel`, `AchievedLevel`,
+and checked timestamp/LTV/archive facts. Strict success fulfills the requested
+level; an explicit `ReturnLowerLevel` profile permits enrichment failures to return
+a lower level with structured warnings. Base-signature failures and cancellation
+still fail, and byte-only `SignAsync` accepts strict profiles only.
+
+Embedded-evidence checks authenticate OCSP/CRL signatures, certificate association,
+responder authorization, and usable validity bounds. Signer-chain trust and TSA
+trust depend on validation anchors and policy. Evaluate them with detailed results:
 
 ```csharp
 var pdfResults = await new PdfSignatureValidator(options).ValidateAsync(stream);
 ```
 
 Each result includes:
+
 - `IsIntegrityValid` — byte-range hash matches (no tampering)
 - `IsSignatureValid` — cryptographic signature verifies against public key
 - `IsCertificateChainValid` — chain builds to a trusted root
-- `HasValidTimestamp` — RFC 3161 token is valid (bool?)
-- `IsValid` — all checks pass
+- `HasValidTimestamp` — RFC 3161 token signature, signed content, and imprint verify (bool?)
+- `IsTsaTrusted` — TSA certificate passes the evaluated chain and timestamping-purpose policy (bool?; null when the token is absent, invalid, or unchecked)
+- `IsValid` — integrity, signature, configured chain trust, and revocation policy pass
 - `SignerName`, `SigningTime`, `DigestAlgorithmOid`, `SubFilter`, `Warnings`
 
 ---

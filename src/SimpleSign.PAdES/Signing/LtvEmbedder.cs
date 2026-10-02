@@ -9,6 +9,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Validation;
 using SimpleSign.Pdf;
 
 namespace SimpleSign.PAdES.Signing;
@@ -284,45 +285,40 @@ public sealed class LtvEmbedder : ILtvEmbedder
         Validation.DssValidationData dss,
         IReadOnlyList<X509Certificate2> requiredCertificates)
     {
-        foreach (var certificate in requiredCertificates)
+        var embeddedCertificates = new List<X509Certificate2>();
+        try
         {
-            if (!dss.GlobalCerts.Any(raw => raw.AsSpan().SequenceEqual(certificate.RawData)))
+            foreach (byte[] raw in dss.GlobalCerts)
             {
-                return false;
+#if NET10_0_OR_GREATER
+                embeddedCertificates.Add(X509CertificateLoader.LoadCertificate(raw));
+#else
+                embeddedCertificates.Add(new X509Certificate2(raw));
+#endif
             }
 
-            if (certificate.IsSelfSigned())
+            using var httpClient = new HttpClient();
+            return EmbeddedRevocationEvidence.CoversAll(
+                requiredCertificates, embeddedCertificates, dss.GlobalOcsps, dss.GlobalCrls,
+                DateTimeOffset.UtcNow, new OcspClient(httpClient));
+        }
+        catch (Exception ex) when (ex is CryptographicException or InvalidDataException)
+        {
+            return false;
+        }
+        finally
+        {
+            foreach (var certificate in embeddedCertificates)
             {
-                continue;
-            }
-
-            bool hasCrl = dss.GlobalCrls.Any(crl => IsCrlIssuedFor(crl, certificate));
-            bool hasOcsp = dss.GlobalOcsps.Any(ocsp => IsValidOcspFor(ocsp, certificate));
-            if (!hasCrl && !hasOcsp)
-            {
-                return false;
+                certificate.Dispose();
             }
         }
-
-        return requiredCertificates.Count > 0;
     }
 
     private static bool IsCrlIssuedFor(byte[] crl, X509Certificate2 certificate)
     {
         byte[]? issuer = CrlClient.ExtractCrlIssuerDn(crl);
         return issuer is not null && issuer.AsSpan().SequenceEqual(certificate.IssuerName.RawData);
-    }
-
-    private static bool IsValidOcspFor(byte[] ocsp, X509Certificate2 certificate)
-    {
-        try
-        {
-            return OcspClient.ParseOcspResponse(ocsp, certificate, NullLogger.Instance);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or System.Formats.Asn1.AsnContentException or CryptographicException)
-        {
-            return false;
-        }
     }
 
     private static byte[] EnsureTrailingEol(byte[] data)

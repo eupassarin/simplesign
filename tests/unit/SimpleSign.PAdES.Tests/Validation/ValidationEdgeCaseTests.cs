@@ -57,12 +57,15 @@ public sealed class ValidationEdgeCaseTests
         byte[] buffer = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
         ValidationOptions options = new ValidationOptions
         {
-            CheckRevocation = false
+            CheckRevocation = false,
+            TrustedRoots = [cert]
         };
         PdfSignatureValidator pdfSignatureValidator = new PdfSignatureValidator(options);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await pdfSignatureValidator.ValidateAsync(new MemoryStream(buffer));
         readOnlyList.Count().ShouldBe(1, "");
         readOnlyList[0].IsNotRevoked.ShouldBeTrue("revocation check is disabled");
+        readOnlyList[0].RevocationSource.ShouldBe(RevocationSource.None);
+        readOnlyList[0].IsValid.ShouldBeTrue();
     }
 
     [Fact(DisplayName = "TrustSystemRoots=false without TrustedRoots rejects certificate chain")]
@@ -361,22 +364,25 @@ public sealed class ValidationEdgeCaseTests
         crlUrl.ShouldBeNull("certificate has no CDP extension either");
     }
 
-    [Fact(DisplayName = "CheckRevocation=true with self-signed cert treats indeterminate as warning, not error")]
-    public async Task ValidateAsync_CheckRevocationTrue_IndeterminateIsWarningNotError()
+    [Fact(DisplayName = "Indeterminate revocation prevents overall validity without claiming revocation")]
+    public async Task ValidateAsync_CheckRevocationTrue_IndeterminatePreventsOverallValidity()
     {
         // Self-signed cert has no OCSP/CRL URLs → revocation is indeterminate.
-        // This MUST NOT make the signature invalid — indeterminate ≠ revoked.
         using X509Certificate2 cert = TestCertificateFactory.CreateSelfSignedCert();
         byte[] pdfBytes = BuildMinimalPdf();
         byte[] signed = await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync();
 
-        var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = true });
+        var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = true, TrustedRoots = [cert] });
         var results = await validator.ValidateAsync(new MemoryStream(signed));
 
         results.Count().ShouldBe(1);
         var r = results[0];
         r.IsNotRevoked.ShouldBeTrue("indeterminate revocation (no OCSP/CRL URL) must NOT be treated as revoked");
         r.RevocationSource.ShouldBe(RevocationSource.Indeterminate);
+        r.IsIntegrityValid.ShouldBeTrue();
+        r.IsSignatureValid.ShouldBeTrue();
+        r.IsCertificateChainValid.ShouldBeTrue();
+        r.IsValid.ShouldBeFalse();
         r.Warnings.ShouldContain(w => w.Contains("Revocation check could not be completed"),
             "indeterminate revocation should produce a warning");
     }

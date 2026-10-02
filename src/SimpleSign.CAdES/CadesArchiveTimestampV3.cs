@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
 
 namespace SimpleSign.CAdES;
 
@@ -69,6 +70,12 @@ internal static class CadesArchiveTimestampV3
             if (archiveToken is null)
             {
                 warnings.Add("CAdES-B-LTA: archiveTimestampV3 is missing.");
+                return false;
+            }
+
+            if (!TimestampValidator.VerifyTokenSignature(archiveToken))
+            {
+                warnings.Add("CAdES-B-LTA: archive timestamp token CMS signature is invalid.");
                 return false;
             }
 

@@ -9,10 +9,37 @@ namespace SimpleSign.Core.Validation;
 
 /// <summary>
 /// Validates RFC 3161 timestamp tokens embedded in CMS signatures.
-/// Verifies TSA signature, nonce, and extracts timestamp date.
+/// Verifies TSA signature and signed-content binding, and extracts timestamp date.
+/// Request nonce binding is checked by <see cref="TimestampClient"/> when receiving a response.
 /// </summary>
 public static class TimestampValidator
 {
+    /// <summary>Verifies a token's CMS signature and its binding to the signed TSTInfo, without evaluating TSA trust.</summary>
+    public static bool VerifyTokenSignature(byte[] timestampToken)
+        => VerifyTokenSignature(timestampToken, []);
+
+    /// <summary>Verifies token integrity and reports why verification failed.</summary>
+    public static bool VerifyTokenSignature(byte[] timestampToken, List<string> warnings)
+    {
+        ArgumentNullException.ThrowIfNull(timestampToken);
+        ArgumentNullException.ThrowIfNull(warnings);
+        try
+        {
+            byte[]? tstInfo = ExtractTstInfo(timestampToken);
+            if (tstInfo is null)
+            {
+                warnings.Add("Timestamp token does not contain TSTInfo.");
+                return false;
+            }
+
+            return VerifyTsaSignature(ExtractTsaCertificatesAndSigner(timestampToken), tstInfo, warnings);
+        }
+        catch (Exception ex) when (ex is AsnContentException or CryptographicException or InvalidOperationException or NotSupportedException)
+        {
+            warnings.Add($"Timestamp token integrity check failed: {ex.Message}");
+            return false;
+        }
+    }
 
     /// <summary>
     /// Delegate for certificate chain validation, allowing the caller to supply its own implementation.
@@ -23,8 +50,43 @@ public static class TimestampValidator
         List<string> errors,
         List<string> warnings);
 
+    /// <summary>Validates token integrity and reports the optional TSA trust decision separately.</summary>
+    public static TimestampTokenValidationResult ValidateWithTrust(
+        byte[] timestampToken,
+        byte[] signatureValueBytes,
+        DateTimeOffset? signingTime,
+        List<string> warnings,
+        CertificateChainValidatorDelegate? validateChain = null,
+        ILogger? logger = null)
+    {
+        bool? trusted = null;
+        CertificateChainValidatorDelegate? capturedPolicy = validateChain is null ? null :
+            (certificate, certificates, errors, chainWarnings) =>
+            {
+                try
+                {
+                    trusted = HasTimestampingEku(certificate, errors)
+                        && validateChain(certificate, certificates, errors, chainWarnings);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"TSA trust evaluation failed: {ex.Message}");
+                    trusted = false;
+                }
+                return trusted.Value;
+            };
+        bool? integrity = Validate(timestampToken, signatureValueBytes, signingTime,
+            warnings, capturedPolicy, logger);
+        return new TimestampTokenValidationResult
+        {
+            IsIntegrityValid = integrity,
+            IsTsaTrusted = integrity == true ? trusted : null
+        };
+    }
+
     private sealed record ParsedTsaSignerInfo(
         List<X509Certificate2> Certificates,
+        bool SignerCertificateMatched,
         byte[]? SignedAttrs,
         byte[]? Signature,
         string? DigestOid,
@@ -66,7 +128,7 @@ public static class TimestampValidator
 
             var tsaData = ExtractTsaCertificatesAndSigner(timestampToken, logger);
 
-            if (!VerifyTsaSignature(tsaData, warnings))
+            if (!VerifyTsaSignature(tsaData, tstInfoBytes, warnings))
             {
                 return false;
             }
@@ -99,18 +161,37 @@ public static class TimestampValidator
             {
                 var tsaErrors = new List<string>();
                 var tsaWarnings = new List<string>();
-                validateChain(tsaData.Certificates[0], tsaData.Certificates, tsaErrors, tsaWarnings);
+                bool chainValid;
+                try
+                {
+                    chainValid = validateChain(
+                        tsaData.Certificates[0], tsaData.Certificates, tsaErrors, tsaWarnings);
+                }
+                catch (Exception ex)
+                {
+                    tsaErrors.Add($"Trust evaluation failed: {ex.Message}");
+                    chainValid = false;
+                }
                 foreach (var w in tsaWarnings)
                 {
                     warnings.Add($"TSA: {w}");
                 }
                 foreach (var e in tsaErrors)
                 {
-                    warnings.Add($"TSA chain: {e}"); // reports as warning (not a fatal error)
+                    warnings.Add($"TSA chain: {e}");
+                }
+                if (!chainValid)
+                {
+                    warnings.Add("TSA certificate chain is not trusted; token integrity was verified independently.");
                 }
             }
 
             return true;
+        }
+        catch (NotSupportedException ex)
+        {
+            warnings.Add($"Unsupported timestamp token algorithm: {ex.Message}");
+            return false;
         }
         // S2221: intentional — timestamp validation reports parsing failures as warnings
         catch (Exception ex)
@@ -147,7 +228,10 @@ public static class TimestampValidator
         // The token is a CMS SignedData containing a TSTInfo as encapContentInfo
         var tokenReader = new AsnReader(timestampToken, AsnEncodingRules.BER);
         var contentInfo = tokenReader.ReadSequence();
-        _ = contentInfo.ReadObjectIdentifier(); // OID signedData
+        if (contentInfo.ReadObjectIdentifier() != Oids.SignedData)
+        {
+            return null;
+        }
 
         var wrapper = contentInfo.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true));
         var signedData = wrapper.ReadSequence();
@@ -156,7 +240,10 @@ public static class TimestampValidator
 
         // encapContentInfo: { OID id-ct-TSTInfo, [0] EXPLICIT OCTET STRING }
         var encap = signedData.ReadSequence();
-        _ = encap.ReadObjectIdentifier(); // id-ct-TSTInfo = 1.2.840.113549.1.9.16.1.4
+        if (encap.ReadObjectIdentifier() != Oids.TimestampInfoContentType)
+        {
+            return null;
+        }
 
         if (!encap.HasData)
         {
@@ -234,11 +321,13 @@ public static class TimestampValidator
         catch (AsnContentException ex) { logger?.TsaDataExtractionFailed(ex.Message); }
 
         // Identify signer cert from embedded certificates via issuerAndSerialNumber
-        if (tsaCerts.Count > 1 && !signerIssuerRaw.IsEmpty)
+        bool signerCertificateMatched = false;
+        if (tsaCerts.Count > 0 && !signerIssuerRaw.IsEmpty)
         {
             var signerCert = tsaCerts.FirstOrDefault(c =>
                 c.IssuerName.RawData.AsSpan().SequenceEqual(signerIssuerRaw.Span) &&
                 c.SerialNumberBytes.Span.SequenceEqual(signerSerialBytes.Span));
+            signerCertificateMatched = signerCert is not null;
             if (signerCert is not null && tsaCerts[0] != signerCert)
             {
                 // Move signer cert to position [0] so VerifyTsaSignature uses the correct one
@@ -248,14 +337,18 @@ public static class TimestampValidator
             }
         }
 
-        return new ParsedTsaSignerInfo(tsaCerts, tsaSignerInfoSignedAttrs, tsaSignerInfoSignature, tsaSignerDigestOid, tsaSignerSigAlgOid, tsaSignerSigAlgParams);
+        return new ParsedTsaSignerInfo(tsaCerts, signerCertificateMatched,
+            tsaSignerInfoSignedAttrs, tsaSignerInfoSignature, tsaSignerDigestOid,
+            tsaSignerSigAlgOid, tsaSignerSigAlgParams);
     }
 
-    private static bool VerifyTsaSignature(ParsedTsaSignerInfo tsaData, List<string> warnings)
+    private static bool VerifyTsaSignature(ParsedTsaSignerInfo tsaData, byte[] tstInfoBytes, List<string> warnings)
     {
-        if (tsaData.Certificates is [] || tsaData.SignedAttrs is null || tsaData.Signature is null)
+        if (tsaData.Certificates is [] || !tsaData.SignerCertificateMatched
+            || tsaData.SignedAttrs is null || tsaData.Signature is null)
         {
-            return false; // nothing to verify
+            warnings.Add("TSA signer certificate or signed attributes are missing.");
+            return false;
         }
 
         // Convert implicit [0] back to SET OF for verification (RFC 5652 §5.4)
@@ -265,13 +358,22 @@ public static class TimestampValidator
             attrsForVerify[0] = Asn1Tags.SetOf; // IMPLICIT [0] → SET OF
         }
 
-        var tsaHashAlg = (tsaData.DigestOid ?? Oids.Sha256) switch
+        if (!VerifyTsaSignedAttributes(attrsForVerify, tstInfoBytes, tsaData.DigestOid,
+            tsaData.Certificates[0], warnings))
+        {
+            return false;
+        }
+
+        var tsaHashAlg = tsaData.DigestOid switch
         {
             Oids.Sha256 => HashAlgorithmName.SHA256,
             Oids.Sha384 => HashAlgorithmName.SHA384,
             Oids.Sha512 => HashAlgorithmName.SHA512,
             Oids.Sha1 => HashAlgorithmName.SHA1,
-            _ => HashAlgorithmName.SHA256
+            Oids.Sha3_256 => HashAlgorithmName.SHA3_256,
+            Oids.Sha3_384 => HashAlgorithmName.SHA3_384,
+            Oids.Sha3_512 => HashAlgorithmName.SHA3_512,
+            _ => throw new NotSupportedException("Unsupported TSA signer digest algorithm.")
         };
 
         // For RSA-PSS, the RSASSA-PSS-params are authoritative (RFC 4055 §3.1) — override
@@ -279,11 +381,38 @@ public static class TimestampValidator
         // parameters when present.
         if (tsaData.SignatureAlgOid == Oids.RsaPss && tsaData.SignatureAlgParams is not null)
         {
-            tsaHashAlg = CryptoUtility.ParsePssHashAlgorithm(tsaData.SignatureAlgParams);
+            if (CryptoUtility.ParsePssHashAlgorithm(tsaData.SignatureAlgParams) != tsaHashAlg)
+            {
+                warnings.Add("TSA signature and signer digest algorithms disagree.");
+                return false;
+            }
+        }
+
+        bool rsaAlgorithm = tsaData.SignatureAlgOid is Oids.RsaEncryption or Oids.RsaPss
+            or Oids.RsaSha1 or Oids.RsaSha256 or Oids.RsaSha384 or Oids.RsaSha512
+            or Oids.RsaSha3_256 or Oids.RsaSha3_384 or Oids.RsaSha3_512;
+        bool ecdsaAlgorithm = tsaData.SignatureAlgOid is Oids.EcdsaSha256 or Oids.EcdsaSha384
+            or Oids.EcdsaSha512 or Oids.EcdsaSha3_256 or Oids.EcdsaSha3_384 or Oids.EcdsaSha3_512;
+        bool algorithmMatchesDigest = tsaData.SignatureAlgOid switch
+        {
+            Oids.RsaEncryption or Oids.RsaPss => true,
+            Oids.RsaSha1 => tsaHashAlg == HashAlgorithmName.SHA1,
+            Oids.RsaSha256 or Oids.EcdsaSha256 => tsaHashAlg == HashAlgorithmName.SHA256,
+            Oids.RsaSha384 or Oids.EcdsaSha384 => tsaHashAlg == HashAlgorithmName.SHA384,
+            Oids.RsaSha512 or Oids.EcdsaSha512 => tsaHashAlg == HashAlgorithmName.SHA512,
+            Oids.RsaSha3_256 or Oids.EcdsaSha3_256 => tsaHashAlg == HashAlgorithmName.SHA3_256,
+            Oids.RsaSha3_384 or Oids.EcdsaSha3_384 => tsaHashAlg == HashAlgorithmName.SHA3_384,
+            Oids.RsaSha3_512 or Oids.EcdsaSha3_512 => tsaHashAlg == HashAlgorithmName.SHA3_512,
+            _ => false
+        };
+        if (!algorithmMatchesDigest)
+        {
+            warnings.Add("TSA signature algorithm does not match the signer digest.");
+            return false;
         }
 
         bool tsaSigValid = false;
-        using (var rsa = tsaData.Certificates[0].GetRSAPublicKey())
+        using (var rsa = rsaAlgorithm ? tsaData.Certificates[0].GetRSAPublicKey() : null)
         {
             if (rsa is not null)
             {
@@ -295,7 +424,7 @@ public static class TimestampValidator
         }
         if (!tsaSigValid)
         {
-            using var ecdsa = tsaData.Certificates[0].GetECDsaPublicKey();
+            using var ecdsa = ecdsaAlgorithm ? tsaData.Certificates[0].GetECDsaPublicKey() : null;
             if (ecdsa is not null)
             {
                 // CMS encodes ECDSA signatures as DER (RFC 3279 §2.2.3), not the default IEEE P1363
@@ -314,6 +443,109 @@ public static class TimestampValidator
         }
 
         return true;
+    }
+
+    private static bool VerifyTsaSignedAttributes(
+        byte[] signedAttributes,
+        byte[] tstInfoBytes,
+        string? digestOid,
+        X509Certificate2 signerCertificate,
+        List<string> warnings)
+    {
+        bool contentTypeValid = false;
+        bool messageDigestValid = false;
+        bool signingCertificatePresent = false;
+        bool signingCertificateValid = true;
+        var seenRequiredAttributes = new HashSet<string>(StringComparer.Ordinal);
+        var attributes = new AsnReader(signedAttributes, AsnEncodingRules.DER).ReadSetOf();
+        while (attributes.HasData)
+        {
+            var attribute = attributes.ReadSequence();
+            string oid = attribute.ReadObjectIdentifier();
+            var values = attribute.ReadSetOf();
+            if (!values.HasData)
+            {
+                return false;
+            }
+            if (oid == Oids.ContentType)
+            {
+                contentTypeValid = seenRequiredAttributes.Add(oid)
+                    && values.ReadObjectIdentifier() == Oids.TimestampInfoContentType
+                    && !values.HasData;
+            }
+            else if (oid == Oids.MessageDigest)
+            {
+                byte[] expected = digestOid switch
+                {
+                    Oids.Sha1 => SHA1.HashData(tstInfoBytes),
+                    Oids.Sha256 => SHA256.HashData(tstInfoBytes),
+                    Oids.Sha384 => SHA384.HashData(tstInfoBytes),
+                    Oids.Sha512 => SHA512.HashData(tstInfoBytes),
+                    Oids.Sha3_256 => SHA3_256.HashData(tstInfoBytes),
+                    Oids.Sha3_384 => SHA3_384.HashData(tstInfoBytes),
+                    Oids.Sha3_512 => SHA3_512.HashData(tstInfoBytes),
+                    _ => []
+                };
+                byte[] actual = values.ReadOctetString();
+                messageDigestValid = seenRequiredAttributes.Add(oid)
+                    && expected.Length == actual.Length
+                    && CryptographicOperations.FixedTimeEquals(expected, actual)
+                    && !values.HasData;
+            }
+            else if (oid is Oids.SigningCertificate or Oids.SigningCertificateV2)
+            {
+                var signingCertificate = values.ReadSequence();
+                var certs = signingCertificate.ReadSequence();
+                var certIdentifier = certs.ReadSequence();
+                string hashOid = Oids.Sha1;
+                if (oid == Oids.SigningCertificateV2)
+                {
+                    hashOid = Oids.Sha256;
+                    if (certIdentifier.PeekTag().HasSameClassAndValue(Asn1Tag.Sequence))
+                    {
+                        var algorithm = certIdentifier.ReadSequence();
+                        hashOid = algorithm.ReadObjectIdentifier();
+                    }
+                }
+                byte[] actual = certIdentifier.ReadOctetString();
+                byte[] expected = hashOid switch
+                {
+                    Oids.Sha1 => SHA1.HashData(signerCertificate.RawData),
+                    Oids.Sha256 => SHA256.HashData(signerCertificate.RawData),
+                    Oids.Sha384 => SHA384.HashData(signerCertificate.RawData),
+                    Oids.Sha512 => SHA512.HashData(signerCertificate.RawData),
+                    Oids.Sha3_256 => SHA3_256.HashData(signerCertificate.RawData),
+                    Oids.Sha3_384 => SHA3_384.HashData(signerCertificate.RawData),
+                    Oids.Sha3_512 => SHA3_512.HashData(signerCertificate.RawData),
+                    _ => []
+                };
+                signingCertificatePresent = true;
+                signingCertificateValid &= seenRequiredAttributes.Add(oid)
+                    && expected.Length == actual.Length
+                    && CryptographicOperations.FixedTimeEquals(expected, actual)
+                    && !values.HasData;
+            }
+        }
+
+        if (!contentTypeValid || !messageDigestValid || !signingCertificatePresent || !signingCertificateValid)
+        {
+            warnings.Add("TSA signed attributes do not bind TSTInfo and the TSA certificate.");
+            return false;
+        }
+        return true;
+    }
+
+    private static bool HasTimestampingEku(X509Certificate2? certificate, List<string> errors)
+    {
+        var eku = certificate?.Extensions.OfType<X509EnhancedKeyUsageExtension>().FirstOrDefault();
+        if (eku is not null && eku.Critical && eku.EnhancedKeyUsages.Count == 1
+            && eku.EnhancedKeyUsages[0]?.Value == "1.3.6.1.5.5.7.3.8")
+        {
+            return true;
+        }
+
+        errors.Add("TSA certificate lacks the critical, exclusive timeStamping EKU.");
+        return false;
     }
 
     private static bool ValidateHashMatch(byte[] tstInfoBytes, byte[] signatureValueBytes, List<string> warnings, out AsnReader tstInfo)
@@ -336,6 +568,9 @@ public static class TimestampValidator
             Oids.Sha384 => SHA384.HashData(signatureValueBytes),
             Oids.Sha512 => SHA512.HashData(signatureValueBytes),
             Oids.Sha1 => SHA1.HashData(signatureValueBytes),
+            Oids.Sha3_256 => SHA3_256.HashData(signatureValueBytes),
+            Oids.Sha3_384 => SHA3_384.HashData(signatureValueBytes),
+            Oids.Sha3_512 => SHA3_512.HashData(signatureValueBytes),
             _ => throw new NotSupportedException($"Timestamp hash OID {hashOid} not supported.")
         };
 

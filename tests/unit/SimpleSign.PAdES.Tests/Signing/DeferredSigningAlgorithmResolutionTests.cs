@@ -108,6 +108,37 @@ public sealed class DeferredSigningAlgorithmResolutionTests
         digestOid.ShouldBe(Oids.Sha256);
     }
 
+    [Fact(DisplayName = "Deferred CMS ending in zero retains its final encoded byte")]
+    public async Task CompleteAsync_CmsEndingInZero_DigestOidRemainsReadable()
+    {
+        using var cert = TestCertificateFactory.CreatePssSelfSignedCert(HashAlgorithmName.SHA512);
+        var prepared = await DeferredSigningEngineTestAdapter.PrepareAsync(TestPdfFactory.CreateMinimalPdf(), cert);
+        using RSA signingKey = cert.GetRSAPrivateKey()!;
+        RSASignaturePadding padding = prepared.SignatureAlgorithmOid == Oids.RsaPss
+            ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1;
+        byte[] signature = signingKey.SignData(prepared.HashToSign, HashAlgorithmName.SHA256, padding);
+        byte[] signedPdf = await DeferredSigningEngineTestAdapter.CompleteAsync(prepared.SessionData, signature);
+
+        int contentsOffset = signedPdf.AsSpan().LastIndexOf("/Contents"u8);
+        contentsOffset.ShouldBeGreaterThanOrEqualTo(0);
+        int hexStart = contentsOffset + "/Contents"u8.Length;
+        while (signedPdf[hexStart] != (byte)'<')
+        {
+            hexStart++;
+        }
+
+        hexStart++;
+        int hexEnd = signedPdf.AsSpan(hexStart).IndexOf((byte)'>') + hexStart;
+        byte[] paddedCms = Convert.FromHexString(
+            System.Text.Encoding.ASCII.GetString(signedPdf.AsSpan(hexStart, hexEnd - hexStart)));
+        int encodedLength = new AsnReader(paddedCms, AsnEncodingRules.BER).ReadEncodedValue().Length;
+        int finalOctetHex = hexStart + (encodedLength - 1) * 2;
+        signedPdf[finalOctetHex] = (byte)'0';
+        signedPdf[finalOctetHex + 1] = (byte)'0';
+
+        ExtractDeferredDigestOid(signedPdf).ShouldBe(Oids.Sha256);
+    }
+
     private static string ExtractDeferredDigestOid(byte[] signedPdf)
     {
         // Locate /Contents <hex...> in the PDF (the last occurrence is the new signature)
@@ -138,13 +169,9 @@ public sealed class DeferredSigningAlgorithmResolutionTests
         hexEnd += hexBegin;
 
         ReadOnlySpan<byte> hexSpan = data[hexBegin..hexEnd];
-        int cmsEnd = hexSpan.Length;
-        while (cmsEnd >= 2 && hexSpan[cmsEnd - 2] == (byte)'0' && hexSpan[cmsEnd - 1] == (byte)'0')
-        {
-            cmsEnd -= 2;
-        }
-
-        byte[] cmsBytes = new byte[cmsEnd / 2];
+        // The reserved /Contents space has zero padding, but the CMS itself can
+        // legitimately end in 0x00. ASN.1 lengths delimit the CMS during parsing.
+        byte[] cmsBytes = new byte[hexSpan.Length / 2];
         for (int i = 0; i < cmsBytes.Length; i++)
         {
             cmsBytes[i] = (byte)((HexDigit(hexSpan[2 * i]) << 4) | HexDigit(hexSpan[2 * i + 1]));

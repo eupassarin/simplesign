@@ -252,6 +252,7 @@ public sealed class PadesSignerBuilder
 
     /// <summary>
     /// Configures generic signer metadata for the signature.
+    /// Replaces signer, reason, location, and contact field values; omitted values clear earlier metadata.
     /// Use this for country-agnostic signing with structured metadata.
     /// For Brazil-specific signing, use <c>WithAdvancedSignature</c> from SimpleSign.Brasil.
     /// </summary>
@@ -604,7 +605,7 @@ public sealed class PadesSignerBuilder
             requiredLtvCertificates = BuildRequiredLtvCertificates(timestampTokenBytes, out disposableTsaCertificates);
         }
 
-        (bool HasTimestamp, bool HasLtvMaterial, bool HasArchiveTimestamp) artifactFacts;
+        (bool BaseSignatureValid, bool HasTimestamp, bool HasLtvMaterial, bool HasArchiveTimestamp) artifactFacts;
         try
         {
             artifactFacts = await InspectProducedArtifactAsync(
@@ -619,6 +620,13 @@ public sealed class PadesSignerBuilder
         {
             DisposeCertificates(disposableTsaCertificates);
         }
+        if (!artifactFacts.BaseSignatureValid)
+        {
+            throw new SigningException(
+                "The completed PDF signature or signed content failed read-back verification.",
+                SigningErrorReason.Unspecified);
+        }
+
         if (timestampTokenBytes is not null && !artifactFacts.HasTimestamp)
         {
             HandleArtifactInspectionFailure(
@@ -692,7 +700,7 @@ public sealed class PadesSignerBuilder
             "The requested baseline level could not be achieved; the artifact was downgraded."));
     }
 
-    private static async Task<(bool HasTimestamp, bool HasLtvMaterial, bool HasArchiveTimestamp)>
+    private static async Task<(bool BaseSignatureValid, bool HasTimestamp, bool HasLtvMaterial, bool HasArchiveTimestamp)>
         InspectProducedArtifactAsync(
             Stream outputStream,
             byte[]? expectedTimestampToken,
@@ -715,20 +723,37 @@ public sealed class PadesSignerBuilder
                 .Where(field => !field.IsDocumentTimestamp)
                 .OrderByDescending(field => field.ByteRange.ContentsOffset)
                 .FirstOrDefault();
+            using var validationStream = new MemoryStream(artifactBytes, writable: false);
+            var validator = new PdfSignatureValidator(new ValidationOptions
+            {
+                CheckRevocation = false,
+                TrustSystemRoots = false
+            });
+            var validationResults = await validator.ValidateAsync(
+                validationStream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var validatedSignature = signature is null ? null : validationResults.LastOrDefault(
+                result => !result.IsDocumentTimestamp && result.FieldName == signature.FieldName);
+            bool baseSignatureValid = validatedSignature is not null &&
+                validatedSignature.IsSignatureValid && validatedSignature.IsIntegrityValid;
             CmsSignedData? cms = signature is null ? null : CmsParser.Parse(signature.CmsRawData.ToArray());
-            bool hasTimestamp = expectedTimestampToken is not null && cms?.SignatureTimestampToken is not null &&
+            bool hasTimestamp = baseSignatureValid && expectedTimestampToken is not null &&
+                validatedSignature?.HasValidTimestamp == true && cms?.SignatureTimestampToken is not null &&
                 CryptographicOperations.FixedTimeEquals(cms.SignatureTimestampToken, expectedTimestampToken);
             bool hasLtvMaterial = false;
-            if (expectedLtvMaterial && requiredLtvCertificates is not null)
+            if (hasTimestamp && expectedLtvMaterial && requiredLtvCertificates is not null)
             {
                 using var dssStream = new MemoryStream(artifactBytes, writable: false);
                 var dss = await DssExtractor.TryReadFullDssDataAsync(dssStream, cancellationToken).ConfigureAwait(false);
                 hasLtvMaterial = LtvEmbedder.HasCompleteEvidence(dss, requiredLtvCertificates);
             }
-            bool hasArchiveTimestamp = expectedArchiveTimestamp && inspection.Signatures
+            bool hasArchiveTimestamp = hasLtvMaterial && expectedArchiveTimestamp && inspection.Signatures
                 .Where(field => field.IsDocumentTimestamp)
-                .Any(field => HasValidDocumentTimestampBinding(field, artifactBytes));
-            return (hasTimestamp, hasLtvMaterial, hasArchiveTimestamp);
+                .Where(field => signature is not null && field.ByteRange.ContentsOffset > signature.ByteRange.ContentsOffset)
+                .Any(field => validationResults.Any(result =>
+                    result.IsDocumentTimestamp && result.FieldName == field.FieldName &&
+                    result.IsSignatureValid && result.IsIntegrityValid) &&
+                    HasValidDocumentTimestampBinding(field, artifactBytes));
+            return (baseSignatureValid, hasTimestamp, hasLtvMaterial, hasArchiveTimestamp);
         }
         catch (OperationCanceledException)
         {
@@ -736,7 +761,7 @@ public sealed class PadesSignerBuilder
         }
         catch (Exception)
         {
-            return (false, false, false);
+            return (false, false, false, false);
         }
         finally
         {

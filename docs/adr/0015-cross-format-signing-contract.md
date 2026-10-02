@@ -1,6 +1,6 @@
 # ADR 0015: Cross-Format Signing Contract (PAdES, CAdES, XAdES)
 
-**Status:** Accepted (v0.8.0)
+**Status:** Accepted
 
 **Context:**
 SimpleSign exposes three signing APIs — PAdES, CAdES, and XAdES — that had converged on the same broad shape (`static entry point → immutable fluent builder → async terminal method`) but with inconsistent contracts:
@@ -18,7 +18,7 @@ Keep the immutable fluent-builder architecture, but define it as a real cross-fo
 
 2. **The requested level is a postcondition.** Successful strict signing reports the requested level as achieved. Failures adding level-enrichment material (signature timestamp, long-term validation material, archive timestamp) throw `SigningException` unless the profile explicitly opts into `SigningLevelFailureBehavior.ReturnLowerLevel`, in which case `SignWithDetailsAsync` reports requested level, achieved level, and structured warnings. The byte-only `SignAsync` rejects best-effort profiles.
 
-3. **Results report observed facts.** All three result types implement `ISigningResult` (`RequestedLevel`, `AchievedLevel`, `HasSignatureTimestamp`, `HasLongTermValidationMaterial`, `HasArchiveTimestamp`, `Warnings`). The v0.8 model established the result vocabulary; the stronger final-artifact and ETSI archive-coverage postcondition is specified by ADR 0016. `SigningWarning` carries a stable machine-readable code.
+3. **Results report observed facts.** All three result types implement `ISigningResult` (`RequestedLevel`, `AchievedLevel`, `HasSignatureTimestamp`, `HasLongTermValidationMaterial`, `HasArchiveTimestamp`, `Warnings`). These fields describe the produced artifact rather than requested configuration. `SigningWarning` carries a stable machine-readable code.
 
 4. **Credentials are mutually exclusive states.** `WithCertificate` and `WithExternalSigner` each replace the complete internal credential. External signers implement `IExternalSigner` and receive an explicit `ExternalSigningRequest` (payload bytes, resolved hash algorithm, signature algorithm OID, payload kind, operation ID). Algorithm resolution happens at terminal execution, so builder call order cannot freeze mismatched digest/OID pairs.
 
@@ -31,7 +31,7 @@ Keep the immutable fluent-builder architecture, but define it as a real cross-fo
 **Consequences:**
 - Strict level guarantees can change observable behavior: B-LT/B-LTA requests that previously "succeeded" without complete material now throw (or explicitly downgrade).
 - A shared contract vocabulary (`AdesBaselineProfile`, `ISigningResult`, `SigningWarning`, `IExternalSigner`, `SigningErrorReason`) lives in `SimpleSign.Core` and is used by all three format packages.
-- The legacy capability API (`WithTimestamp`/`WithLtv`/`WithArchivalTimestamp`, enum-based `WithLevel`, static options shortcuts, `SimpleSigner`/`SignerBuilder`) was removed in v0.8.0; see `docs/migration/v0.7-to-v0.8.md`.
+- A single profile-based signing surface replaces independent capability methods, enum-based level selection, and static options shortcuts. Maintaining parallel configuration surfaces would reintroduce contradictory states and format-specific behavior.
 - Cross-format invariants are guarded by `tests/unit/SimpleSign.Contracts.Tests`.
 - The AOT constraint is preserved: no reflection, no generic base builder, minimal interfaces.
 
@@ -40,6 +40,6 @@ Keep the immutable fluent-builder architecture, but define it as a real cross-fo
 | Approach | Pros | Cons | Verdict |
 |---|---|---|---|
 | **One universal signer builder** | Single entry point | PDF/XML/CMS differ too much; lowest-common-denominator API | Rejected |
-| **Three composable level methods (status quo)** | Familiar | Order-sensitive, contradictory state, silent B-LT without B-T | Rejected |
+| **Three composable level methods** | Familiar | Order-sensitive, contradictory state, silent B-LT without B-T | Rejected |
 | **Shared baseline profile (chosen)** | Cumulative dependencies encoded in types; level is a postcondition; one vocabulary | Migration cost; new concepts to learn | **Chosen** |
 | **Per-format result types only** | Format-native detail | No machine-readable cross-format reporting | Rejected (interface added instead) |

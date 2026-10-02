@@ -236,10 +236,18 @@ public sealed class SyntheticPki : IDisposable
     /// </summary>
     public byte[] BuildLeafCrl() => BuildCrl(IntermediateCa, _intermediateKey);
 
+    /// <summary>Builds an issuer-signed CRL that revokes the leaf certificate.</summary>
+    public byte[] BuildRevokedLeafCrl()
+    {
+        byte[] serial = Leaf.GetSerialNumber();
+        Array.Reverse(serial);
+        return BuildCrl(IntermediateCa, _intermediateKey, serial);
+    }
+
     /// <summary>Builds a DER-encoded CRL signed by the root CA covering the intermediate CA.</summary>
     public byte[] BuildIntermediateCrl() => BuildCrl(RootCa, _rootKey);
 
-    private static byte[] BuildCrl(X509Certificate2 issuer, RSA issuerKey)
+    private static byte[] BuildCrl(X509Certificate2 issuer, RSA issuerKey, byte[]? revokedSerial = null)
     {
         var tbsWriter = new AsnWriter(AsnEncodingRules.DER);
         using (tbsWriter.PushSequence())
@@ -253,6 +261,17 @@ public sealed class SyntheticPki : IDisposable
             tbsWriter.WriteEncodedValue(issuer.SubjectName.RawData);
             tbsWriter.WriteUtcTime(DateTimeOffset.UtcNow.AddDays(-1));
             tbsWriter.WriteUtcTime(DateTimeOffset.UtcNow.AddDays(30));
+            if (revokedSerial is not null)
+            {
+                using (tbsWriter.PushSequence())
+                {
+                    using (tbsWriter.PushSequence())
+                    {
+                        tbsWriter.WriteIntegerUnsigned(revokedSerial);
+                        tbsWriter.WriteUtcTime(DateTimeOffset.UtcNow.AddHours(-1));
+                    }
+                }
+            }
         }
 
         byte[] tbs = tbsWriter.Encode();

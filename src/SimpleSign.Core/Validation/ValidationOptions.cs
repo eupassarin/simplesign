@@ -12,7 +12,7 @@ public sealed class ValidationOptions
     /// <summary>Additional root certificates for trust (e.g., ICP-Brasil chain).</summary>
     public IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2>? TrustedRoots { get; init; }
 
-    /// <summary>Timeout for network operations (CRL/OCSP). Default: 10 seconds.</summary>
+    /// <summary>Timeout for AIA downloads, revocation checks (CRL/OCSP), and certificate-chain URL retrieval. Default: 10 seconds.</summary>
     public TimeSpan NetworkTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>Default instance with all options at their default values.</summary>

@@ -6,6 +6,7 @@ using System.Xml;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.XAdES.Constants;
 
@@ -245,17 +246,20 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
         // Timestamp validation
         bool? tsValid = null;
+        bool? tsaTrusted = null;
         if (extraction.HasSignatureTimeStamp)
         {
-            tsValid = ValidateSignatureTimeStamp(
+            TimestampTokenValidationResult timestamp = ValidateSignatureTimeStamp(
                 sigElement, ns, extraction.SigningTime, trustAnchors, warnings);
+            tsValid = timestamp.IsIntegrityValid;
+            tsaTrusted = timestamp.IsTsaTrusted;
         }
 
         // LTV data validation (CertificateValues + RevocationValues)
         bool? ltvValid = null;
         if (extraction.HasCertificateValues || extraction.HasRevocationValues)
         {
-            ltvValid = ValidateLtvData(sigElement, ns, signerCert, warnings);
+            ltvValid = ValidateLtvData(sigElement, ns, signerCert, extraction.SigningTime, warnings);
         }
 
         // Archive timestamp validation
@@ -276,6 +280,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             IsIntegrityValid = sigValid,
             IsCertificateChainValid = chainValid,
             HasValidSignatureTimeStamp = tsValid,
+            IsTsaTrusted = tsaTrusted,
             IsLtvDataValid = ltvValid,
             HasValidArchiveTimeStamp = archiveTsValid,
             SignerCertificate = signerCert,
@@ -882,7 +887,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
     }
 
-    private bool? ValidateSignatureTimeStamp(
+    private TimestampTokenValidationResult ValidateSignatureTimeStamp(
         XmlElement sigElement,
         XmlNamespaceManager ns,
         DateTimeOffset? signingTime,
@@ -896,14 +901,14 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
         if (tsEl is null)
         {
-            return null;
+            return new TimestampTokenValidationResult();
         }
 
         var encTs = tsEl.SelectSingleNode("xades:EncapsulatedTimeStamp", ns);
         if (encTs is null)
         {
             warnings.Add("SignatureTimeStamp element found but no EncapsulatedTimeStamp.");
-            return false;
+            return new TimestampTokenValidationResult { IsIntegrityValid = false };
         }
 
         byte[] timestampToken;
@@ -915,7 +920,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         catch (Exception ex)
         {
             warnings.Add($"EncapsulatedTimeStamp contains invalid base64: {ex.Message}");
-            return false;
+            return new TimestampTokenValidationResult { IsIntegrityValid = false };
         }
 
         TimestampValidator.CertificateChainValidatorDelegate? validateTsaChain = null;
@@ -941,6 +946,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                 {
                     chain.ChainPolicy.CustomTrustStore.Add(anchor);
                 }
+                foreach (var certificate in embeddedCerts)
+                {
+                    chain.ChainPolicy.ExtraStore.Add(certificate);
+                }
 
                 if (chain.Build(tsaCert))
                 {
@@ -965,11 +974,11 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         catch (Exception ex) when (ex is XmlException or InvalidOperationException or CryptographicException)
         {
             warnings.Add($"Could not canonicalize SignatureValue for SignatureTimeStamp: {ex.Message}");
-            return false;
+            return new TimestampTokenValidationResult { IsIntegrityValid = false };
         }
 
         var timestampWarnings = new List<string>();
-        bool? tsResult = _timestampValidator.Validate(
+        TimestampTokenValidationResult tsResult = _timestampValidator.ValidateWithTrust(
             timestampToken,
             canonicalizedSignatureValue,
             signingTime,
@@ -981,7 +990,11 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
         // If TimestampValidator returns null (e.g. parsing failure), treat as invalid
         // since the timestamp element is present but unverifiable.
-        return tsResult ?? false;
+        return new TimestampTokenValidationResult
+        {
+            IsIntegrityValid = tsResult.IsIntegrityValid ?? false,
+            IsTsaTrusted = tsResult.IsTsaTrusted
+        };
     }
 
     private static bool? ValidateArchiveTimeStamp(
@@ -1037,6 +1050,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlElement sigElement,
         XmlNamespaceManager ns,
         X509Certificate2? signerCert,
+        DateTimeOffset? signingTime,
         List<string> warnings)
     {
         var certValues = SelectByNestedPath(sigElement, ns,
@@ -1053,124 +1067,155 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
 
         bool revValuesValid = true;
+        var certificates = new List<X509Certificate2>();
+        var ocsps = new List<byte[]>();
+        var crls = new List<byte[]>();
 
-        // Validate CertificateValues
-        if (certValues is not null)
+        try
         {
-            try
+            // Validate CertificateValues
+            if (certValues is not null)
             {
-                var certNodes = certValues.SelectNodes("xades:EncapsulatedX509Certificate", ns);
-                if (certNodes is null || certNodes.Count == 0)
+                try
                 {
-                    warnings.Add("CertificateValues element is empty.");
-                    return false;
-                }
-
-                bool hasSigner = false;
-                foreach (XmlElement certEl in certNodes)
-                {
-                    try
+                    var certNodes = certValues.SelectNodes("xades:EncapsulatedX509Certificate", ns);
+                    if (certNodes is null || certNodes.Count == 0)
                     {
-                        byte[] rawData = DecodeBase64(certEl);
-                        if (signerCert is not null && rawData.AsSpan().SequenceEqual(signerCert.RawData))
-                        {
-                            hasSigner = true;
-                        }
-                        // Validate that the DER blob is parseable
-#if NET10_0_OR_GREATER
-                        using var _ = X509CertificateLoader.LoadCertificate(rawData);
-#else
-                        using var _ = new X509Certificate2(rawData);
-#endif
-                    }
-                    // S2221: intentional -- validation pipeline converts exceptions to error messages
-                    catch (Exception ex)
-                    {
-                        warnings.Add($"CertificateValues contains invalid X.509 certificate data: {ex.Message}");
+                        warnings.Add("CertificateValues element is empty.");
                         return false;
                     }
-                }
 
-                if (!hasSigner && signerCert is not null)
+                    bool hasSigner = false;
+                    foreach (XmlElement certEl in certNodes)
+                    {
+                        try
+                        {
+                            byte[] rawData = DecodeBase64(certEl);
+                            if (signerCert is not null && rawData.AsSpan().SequenceEqual(signerCert.RawData))
+                            {
+                                hasSigner = true;
+                            }
+                            // Validate that the DER blob is parseable
+#if NET10_0_OR_GREATER
+                            certificates.Add(X509CertificateLoader.LoadCertificate(rawData));
+#else
+                            certificates.Add(new X509Certificate2(rawData));
+#endif
+                        }
+                        // S2221: intentional -- validation pipeline converts exceptions to error messages
+                        catch (Exception ex)
+                        {
+                            warnings.Add($"CertificateValues contains invalid X.509 certificate data: {ex.Message}");
+                            return false;
+                        }
+                    }
+
+                    if (!hasSigner && signerCert is not null)
+                    {
+                        warnings.Add("CertificateValues does not include the signer certificate.");
+                    }
+                }
+                // S2221: intentional -- validation pipeline converts exceptions to error messages
+                catch (Exception ex)
                 {
-                    warnings.Add("CertificateValues does not include the signer certificate.");
+                    warnings.Add($"Failed to validate CertificateValues: {ex.Message}");
+                    return false;
                 }
             }
-            // S2221: intentional -- validation pipeline converts exceptions to error messages
-            catch (Exception ex)
+
+            // Validate RevocationValues
+            if (revValues is not null)
             {
-                warnings.Add($"Failed to validate CertificateValues: {ex.Message}");
+                try
+                {
+                    // Check OCSP responses
+                    var ocspNodes = revValues.SelectNodes(
+                        "xades:OCSPValues/xades:EncapsulatedOCSPValue", ns);
+                    if (ocspNodes is not null)
+                    {
+                        foreach (XmlElement ocspEl in ocspNodes)
+                        {
+                            try
+                            {
+                                byte[] ocspData = DecodeBase64(ocspEl);
+                                // Validate that the OCSP response is parseable DER
+                                var reader = new System.Formats.Asn1.AsnReader(
+                                    ocspData, System.Formats.Asn1.AsnEncodingRules.DER);
+                                reader.ReadSequence(); // OCSP response is a SEQUENCE
+                                ocsps.Add(ocspData);
+                            }
+                            // S2221: intentional -- validation pipeline converts exceptions to error messages
+                            catch (Exception ex)
+                            {
+                                warnings.Add($"EncapsulatedOCSPValue contains invalid data: {ex.Message}");
+                                revValuesValid = false;
+                            }
+                        }
+                    }
+
+                    // Check CRLs
+                    var crlNodes = revValues.SelectNodes(
+                        "xades:CRLValues/xades:EncapsulatedCRLValue", ns);
+                    if (crlNodes is not null)
+                    {
+                        foreach (XmlElement crlEl in crlNodes)
+                        {
+                            try
+                            {
+                                byte[] crlData = DecodeBase64(crlEl);
+                                // Validate that the CRL data is parseable as DER
+                                var reader = new System.Formats.Asn1.AsnReader(crlData, System.Formats.Asn1.AsnEncodingRules.DER);
+                                reader.ReadSequence();
+                                crls.Add(crlData);
+                            }
+                            // S2221: intentional -- validation pipeline converts exceptions to error messages
+                            catch (Exception ex)
+                            {
+                                warnings.Add($"EncapsulatedCRLValue contains invalid data: {ex.Message}");
+                                revValuesValid = false;
+                            }
+                        }
+                    }
+                }
+                // S2221: intentional -- validation pipeline converts exceptions to error messages
+                catch (Exception ex)
+                {
+                    warnings.Add($"Failed to validate RevocationValues: {ex.Message}");
+                    revValuesValid = false;
+                }
+            }
+
+            if (!revValuesValid)
+            {
+                warnings.Add("RevocationValues validation failed.");
                 return false;
             }
-        }
 
-        // Validate RevocationValues
-        if (revValues is not null)
-        {
-            try
+            if (certValues is null || revValues is null || certificates.Count == 0 ||
+                ocsps.Count == 0 && crls.Count == 0 ||
+                signerCert is not null && !certificates.Any(cert => cert.RawData.AsSpan().SequenceEqual(signerCert.RawData)))
             {
-                // Check OCSP responses
-                var ocspNodes = revValues.SelectNodes(
-                    "xades:OCSPValues/xades:EncapsulatedOCSPValue", ns);
-                if (ocspNodes is not null)
-                {
-                    foreach (XmlElement ocspEl in ocspNodes)
-                    {
-                        try
-                        {
-                            byte[] ocspData = DecodeBase64(ocspEl);
-                            // Validate that the OCSP response is parseable DER
-                            var reader = new System.Formats.Asn1.AsnReader(
-                                ocspData, System.Formats.Asn1.AsnEncodingRules.DER);
-                            reader.ReadSequence(); // OCSP response is a SEQUENCE
-                        }
-                        // S2221: intentional -- validation pipeline converts exceptions to error messages
-                        catch (Exception ex)
-                        {
-                            warnings.Add($"EncapsulatedOCSPValue contains invalid data: {ex.Message}");
-                            revValuesValid = false;
-                        }
-                    }
-                }
-
-                // Check CRLs
-                var crlNodes = revValues.SelectNodes(
-                    "xades:CRLValues/xades:EncapsulatedCRLValue", ns);
-                if (crlNodes is not null)
-                {
-                    foreach (XmlElement crlEl in crlNodes)
-                    {
-                        try
-                        {
-                            byte[] crlData = DecodeBase64(crlEl);
-                            // Validate that the CRL data is parseable as DER
-                            var reader = new System.Formats.Asn1.AsnReader(crlData, System.Formats.Asn1.AsnEncodingRules.DER);
-                            reader.ReadSequence();
-                        }
-                        // S2221: intentional -- validation pipeline converts exceptions to error messages
-                        catch (Exception ex)
-                        {
-                            warnings.Add($"EncapsulatedCRLValue contains invalid data: {ex.Message}");
-                            revValuesValid = false;
-                        }
-                    }
-                }
+                warnings.Add("XAdES-B-LT: Certificate or revocation values are incomplete.");
+                return false;
             }
-            // S2221: intentional -- validation pipeline converts exceptions to error messages
-            catch (Exception ex)
+
+            using var httpClient = new HttpClient();
+            if (!EmbeddedRevocationEvidence.CoversAll(
+                    certificates, ocsps, crls, signingTime ?? DateTimeOffset.UtcNow, new OcspClient(httpClient)))
             {
-                warnings.Add($"Failed to validate RevocationValues: {ex.Message}");
-                revValuesValid = false;
+                warnings.Add("XAdES-B-LT: Embedded revocation evidence is not authenticated or does not cover the certificate paths.");
+                return false;
+            }
+
+            return true;
+        }
+        finally
+        {
+            foreach (var certificate in certificates)
+            {
+                certificate.Dispose();
             }
         }
-
-        if (!revValuesValid)
-        {
-            warnings.Add("RevocationValues validation failed.");
-            return false;
-        }
-
-        return true;
     }
 
     private static XmlElement? SelectByNestedPath(

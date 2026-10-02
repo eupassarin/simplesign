@@ -7,6 +7,7 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Validation;
 
 namespace SimpleSign.Core.Revocation;
 
@@ -64,7 +65,6 @@ public sealed class OcspClient : IOcspClient
     {
         ArgumentNullException.ThrowIfNull(cert);
         ArgumentException.ThrowIfNullOrWhiteSpace(ocspUrl);
-
         byte[] ocspRequest = BuildOcspRequest(cert, issuerCert);
         using var content = new ByteArrayContent(ocspRequest);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/ocsp-request");
@@ -78,7 +78,7 @@ public sealed class OcspClient : IOcspClient
 
         byte[] ocspResponse = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
         _logger.OcspResponseReceived(ocspResponse.Length);
-        var (isValid, responderCerts) = ParseOcspResponseWithCerts(ocspResponse, cert, _logger);
+        var (isValid, responderCerts) = ParseOcspResponseWithCerts(ocspResponse, cert, _logger, issuerCert, DateTimeOffset.UtcNow);
         return new OcspFetchResult(isValid, ocspResponse, responderCerts);
     }
 
@@ -93,9 +93,27 @@ public sealed class OcspClient : IOcspClient
         byte[] ocspResponseBytes,
         DateTimeOffset? signingTime = null)
     {
+        if (issuerCert is null)
+        {
+            return null;
+        }
+
         try
         {
-            bool isValid = ParseOcspResponse(ocspResponseBytes, cert, _logger);
+            var responderCerts = new List<X509Certificate2>();
+            bool isValid;
+            try
+            {
+                (isValid, _) = ParseOcspResponseWithCertsCore(
+                    ocspResponseBytes, cert, responderCerts, _logger, issuerCert, signingTime);
+            }
+            finally
+            {
+                foreach (var responderCert in responderCerts)
+                {
+                    responderCert.Dispose();
+                }
+            }
             return isValid;
         }
         catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or AsnContentException or CryptographicException)
@@ -204,13 +222,14 @@ public sealed class OcspClient : IOcspClient
     /// the caller owns them and must include them in DSS for LTV.
     /// </summary>
     internal static (bool IsValid, IReadOnlyList<X509Certificate2> ResponderCertificates) ParseOcspResponseWithCerts(
-        byte[] ocspResponseBytes, X509Certificate2 cert, ILogger? logger = null)
+        byte[] ocspResponseBytes, X509Certificate2 cert, ILogger? logger = null,
+        X509Certificate2? issuerCert = null, DateTimeOffset? validationTime = null)
     {
         var responderCerts = new List<X509Certificate2>();
 
         try
         {
-            return ParseOcspResponseWithCertsCore(ocspResponseBytes, cert, responderCerts, logger);
+            return ParseOcspResponseWithCertsCore(ocspResponseBytes, cert, responderCerts, logger, issuerCert, validationTime);
         }
         catch
         {
@@ -224,7 +243,8 @@ public sealed class OcspClient : IOcspClient
     }
 
     private static (bool IsValid, IReadOnlyList<X509Certificate2> ResponderCertificates) ParseOcspResponseWithCertsCore(
-        byte[] ocspResponseBytes, X509Certificate2 cert, List<X509Certificate2> responderCerts, ILogger? logger)
+        byte[] ocspResponseBytes, X509Certificate2 cert, List<X509Certificate2> responderCerts, ILogger? logger,
+        X509Certificate2? issuerCert = null, DateTimeOffset? validationTime = null)
     {
         var reader = new AsnReader(ocspResponseBytes, AsnEncodingRules.BER);
         var ocspResponse = reader.ReadSequence();
@@ -240,16 +260,35 @@ public sealed class OcspClient : IOcspClient
         var (firstCert, allCerts) = ExtractResponderCerts(basicOcsp, logger);
         responderCerts.AddRange(allCerts);
 
-        if (firstCert is not null)
+        X509Certificate2? responder = issuerCert is null
+            ? firstCert
+            : allCerts.FirstOrDefault(candidate => ResponderIdMatches(tbsDataRaw, candidate))
+                ?? (ResponderIdMatches(tbsDataRaw, issuerCert) ? issuerCert : null);
+        if (responder is null && issuerCert is not null)
         {
-            bool sigValid = VerifyOcspSignature(firstCert, tbsDataRaw, signature, sigAlgOid, sigAlgParams, logger);
-            if (!sigValid)
-            {
-                throw new InvalidOperationException("OCSP response signature verification failed.");
-            }
+            throw new InvalidOperationException("OCSP response does not identify an issuer or embedded responder certificate.");
         }
 
-        return (FindMatchingCertStatus(tbsData, expectedIssuerNameHash, expectedSerialNumber, logger), responderCerts);
+        if (responder is not null && !VerifyOcspSignature(responder, tbsDataRaw, signature, sigAlgOid, sigAlgParams, logger))
+        {
+            throw new InvalidOperationException("OCSP response signature verification failed.");
+        }
+
+        if (issuerCert is not null && responder is not null && !IsAuthorizedResponder(responder, issuerCert, validationTime))
+        {
+            throw new InvalidOperationException("OCSP responder is not authorized by the certificate issuer.");
+        }
+
+        byte[]? expectedIssuerKeyHash = null;
+        if (issuerCert is not null)
+        {
+#pragma warning disable CA5350
+            expectedIssuerKeyHash = SHA1.HashData(ExtractPublicKeyBytes(issuerCert));
+#pragma warning restore CA5350
+        }
+
+        return (FindMatchingCertStatus(tbsData, expectedIssuerNameHash, expectedIssuerKeyHash,
+            expectedSerialNumber, validationTime, issuerCert is null, logger), responderCerts);
     }
 
     private static void ValidateOcspResponseStatus(AsnReader ocspResponse)
@@ -325,10 +364,71 @@ public sealed class OcspClient : IOcspClient
         return (firstCert, allCerts);
     }
 
+    private static bool IsAuthorizedResponder(
+        X509Certificate2 responder,
+        X509Certificate2 issuer,
+        DateTimeOffset? validationTime)
+    {
+        if (responder.RawData.AsSpan().SequenceEqual(issuer.RawData))
+        {
+            return true;
+        }
+
+        var eku = responder.Extensions.OfType<X509EnhancedKeyUsageExtension>().FirstOrDefault();
+        if (eku is null || !eku.EnhancedKeyUsages.Cast<Oid>()
+            .Any(usage => usage.Value == "1.3.6.1.5.5.7.3.9"))
+        {
+            return false;
+        }
+
+        return (!validationTime.HasValue ||
+                responder.NotBefore.ToUniversalTime() <= validationTime.Value.UtcDateTime &&
+                responder.NotAfter.ToUniversalTime() >= validationTime.Value.UtcDateTime) &&
+            EmbeddedRevocationEvidence.IsIssuedBy(responder, issuer);
+    }
+
+    private static bool ResponderIdMatches(byte[] tbsDataRaw, X509Certificate2 responder)
+    {
+        var responseData = new AsnReader(tbsDataRaw, AsnEncodingRules.BER).ReadSequence();
+        if (responseData.HasData && responseData.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))
+        {
+            _ = responseData.ReadEncodedValue();
+        }
+
+        var responderIdTag = responseData.PeekTag();
+        if (responderIdTag == new Asn1Tag(TagClass.ContextSpecific, 1, true))
+        {
+            var byName = responseData.ReadSequence(responderIdTag);
+            return byName.ReadEncodedValue().Span.SequenceEqual(responder.SubjectName.RawData);
+        }
+
+        if (responderIdTag == new Asn1Tag(TagClass.ContextSpecific, 2))
+        {
+#pragma warning disable CA5350
+            return responseData.ReadOctetString(new Asn1Tag(TagClass.ContextSpecific, 2))
+                .AsSpan().SequenceEqual(SHA1.HashData(ExtractPublicKeyBytes(responder)));
+#pragma warning restore CA5350
+        }
+
+        if (responderIdTag == new Asn1Tag(TagClass.ContextSpecific, 2, true))
+        {
+            var byKey = responseData.ReadSequence(responderIdTag);
+#pragma warning disable CA5350
+            return byKey.ReadOctetString().AsSpan().SequenceEqual(
+                SHA1.HashData(ExtractPublicKeyBytes(responder)));
+#pragma warning restore CA5350
+        }
+
+        return false;
+    }
+
     private static bool FindMatchingCertStatus(
         AsnReader tbsResponseData,
         byte[] expectedIssuerNameHash,
+        byte[]? expectedIssuerKeyHash,
         byte[] expectedSerialNumber,
+        DateTimeOffset? validationTime,
+        bool allowFirstStatusFallback,
         ILogger? logger)
     {
         if (tbsResponseData.HasData && tbsResponseData.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))
@@ -340,42 +440,63 @@ public sealed class OcspClient : IOcspClient
         tbsResponseData.ReadEncodedValue();
 
         var responses = tbsResponseData.ReadSequence();
-        int? firstCertStatus = null;
-        bool foundMatch = false;
+        int? firstStatus = null;
         while (responses.HasData)
         {
             var single = responses.ReadSequence();
             var certIdSeq = single.ReadSequence();
             certIdSeq.ReadSequence();
             byte[] respIssuerNameHash = certIdSeq.ReadOctetString();
-            certIdSeq.ReadOctetString();
-            var respSerialNumber = certIdSeq.ReadIntegerBytes().ToArray();
+            byte[] respIssuerKeyHash = certIdSeq.ReadOctetString();
+            var respSerialNumber = certIdSeq.ReadInteger();
 
             var certStatusTag = single.PeekTag();
             int? statusValue = certStatusTag.TagClass == TagClass.ContextSpecific ? certStatusTag.TagValue : null;
-            firstCertStatus ??= statusValue;
+            firstStatus ??= statusValue;
 
-            bool certIdMatches = respIssuerNameHash.AsSpan().SequenceEqual(expectedIssuerNameHash) &&
-                                 respSerialNumber.AsSpan().SequenceEqual(expectedSerialNumber);
+            bool certIdMatches = respIssuerNameHash.AsSpan().SequenceEqual(expectedIssuerNameHash)
+                && (expectedIssuerKeyHash is null || respIssuerKeyHash.AsSpan().SequenceEqual(expectedIssuerKeyHash))
+                && respSerialNumber == new System.Numerics.BigInteger(expectedSerialNumber, isUnsigned: true, isBigEndian: true);
             if (!certIdMatches)
             {
                 continue;
             }
 
-            foundMatch = true;
             if (statusValue.HasValue)
             {
+                _ = single.ReadEncodedValue();
+                if (validationTime.HasValue)
+                {
+                    var thisUpdate = single.ReadGeneralizedTime();
+                    if (thisUpdate > validationTime.Value)
+                    {
+                        throw new InvalidDataException("OCSP response was issued after the validation time.");
+                    }
+
+                    if (!single.HasData || single.PeekTag() != new Asn1Tag(TagClass.ContextSpecific, 0, true))
+                    {
+                        throw new InvalidDataException("OCSP response has no nextUpdate freshness bound.");
+                    }
+
+                    var nextUpdate = single.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true))
+                        .ReadGeneralizedTime();
+                    if (nextUpdate < validationTime.Value)
+                    {
+                        throw new InvalidDataException("OCSP response expired before the validation time.");
+                    }
+                }
+
                 return HandleCertStatus(statusValue.Value, logger);
             }
             break;
         }
 
-        if (!foundMatch && firstCertStatus.HasValue)
+        if (allowFirstStatusFallback && firstStatus.HasValue)
         {
-            return HandleCertStatus(firstCertStatus.Value, logger);
+            return HandleCertStatus(firstStatus.Value, logger);
         }
 
-        throw new InvalidDataException("OCSP response does not contain a valid certificate status.");
+        throw new InvalidDataException("OCSP response does not contain a matching certificate status.");
     }
 
     private static bool HandleCertStatus(int statusValue, ILogger? logger) => statusValue switch

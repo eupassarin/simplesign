@@ -1,8 +1,10 @@
+using System.Formats.Asn1;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
+using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestHelpers;
@@ -23,100 +25,7 @@ public sealed class TimestampClientTests
         byte[] requestBytes,
         bool alterImprint = false,
         bool alterNonce = false)
-    {
-        var requestReader = new System.Formats.Asn1.AsnReader(
-            requestBytes, System.Formats.Asn1.AsnEncodingRules.DER);
-        var request = requestReader.ReadSequence();
-        _ = request.ReadInteger();
-        var imprint = request.ReadSequence();
-        var algorithm = imprint.ReadSequence();
-        string hashOid = algorithm.ReadObjectIdentifier();
-        if (algorithm.HasData)
-        {
-            _ = algorithm.ReadEncodedValue();
-        }
-
-        byte[] hash = imprint.ReadOctetString();
-        var nonce = request.ReadInteger();
-        if (alterImprint)
-        {
-            hash[0] ^= 0xFF;
-        }
-
-        if (alterNonce)
-        {
-            nonce += 1;
-        }
-
-        var token = BuildTimestampToken(hashOid, hash, nonce);
-
-        var writer = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
-        using (writer.PushSequence()) // TimeStampResp
-        {
-            // PKIStatusInfo
-            using (writer.PushSequence())
-                writer.WriteInteger(0); // status = granted
-
-            writer.WriteEncodedValue(token);
-        }
-        return writer.Encode();
-    }
-
-    private static byte[] BuildTimestampToken(
-        string hashOid,
-        byte[] hash,
-        System.Numerics.BigInteger nonce)
-    {
-        var tstInfoWriter = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
-        using (tstInfoWriter.PushSequence())
-        {
-            tstInfoWriter.WriteInteger(1);
-            tstInfoWriter.WriteObjectIdentifier("1.2.3.4");
-            using (tstInfoWriter.PushSequence())
-            {
-                using (tstInfoWriter.PushSequence())
-                {
-                    tstInfoWriter.WriteObjectIdentifier(hashOid);
-                    tstInfoWriter.WriteNull();
-                }
-                tstInfoWriter.WriteOctetString(hash);
-            }
-            tstInfoWriter.WriteInteger(1);
-            tstInfoWriter.WriteGeneralizedTime(DateTimeOffset.UtcNow);
-            tstInfoWriter.WriteInteger(nonce);
-        }
-
-        byte[] tstInfo = tstInfoWriter.Encode();
-        var writer = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
-        using (writer.PushSequence())
-        {
-            writer.WriteObjectIdentifier("1.2.840.113549.1.7.2"); // id-signedData
-            using (writer.PushSequence(new System.Formats.Asn1.Asn1Tag(
-                System.Formats.Asn1.TagClass.ContextSpecific, 0, true)))
-            {
-                using (writer.PushSequence())
-                {
-                    writer.WriteInteger(1);
-                    using (writer.PushSetOf())
-                    {
-                    }
-                    using (writer.PushSequence())
-                    {
-                        writer.WriteObjectIdentifier("1.2.840.113549.1.9.16.1.4");
-                        using (writer.PushSequence(new System.Formats.Asn1.Asn1Tag(
-                            System.Formats.Asn1.TagClass.ContextSpecific, 0, true)))
-                        {
-                            writer.WriteOctetString(tstInfo);
-                        }
-                    }
-                    using (writer.PushSetOf())
-                    {
-                    }
-                }
-            }
-        }
-        return writer.Encode();
-    }
+        => TimestampTestResponseBuilder.CreateForRequest(requestBytes, alterImprint, alterNonce);
 
     private static HttpClient BuildMockHttpClient(byte[] responseBytes, HttpStatusCode statusCode = HttpStatusCode.OK)
     {
@@ -172,6 +81,12 @@ public sealed class TimestampClientTests
         var httpClient = new HttpClient(new MockHttpHandler(async request =>
         {
             byte[] requestBytes = await request.Content!.ReadAsByteArrayAsync();
+            var timestampRequest = new AsnReader(requestBytes, AsnEncodingRules.DER).ReadSequence();
+            _ = timestampRequest.ReadInteger();
+            var algorithm = timestampRequest.ReadSequence().ReadSequence();
+            algorithm.ReadObjectIdentifier().ShouldBe(Oids.Sha256);
+            algorithm.ReadNull();
+            algorithm.ThrowIfNotEmpty();
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(BuildTimestampResponseForRequest(requestBytes))
@@ -186,6 +101,50 @@ public sealed class TimestampClientTests
 
         token.ShouldNotBeNull();
         token.Length.ShouldBeGreaterThan(0);
+    }
+
+    [SkippableFact(DisplayName = "RFC 9688 timestamp requests omit SHA-3 message-imprint parameters")]
+    public async Task GetTimestampAsync_Sha3MessageImprint_OmitsParameters()
+    {
+        try
+        {
+            _ = SHA3_256.HashData("test"u8);
+        }
+        catch (PlatformNotSupportedException)
+        {
+            Skip.If(true, "SHA-3 not supported on this platform/runtime");
+        }
+
+        foreach ((HashAlgorithmName hash, string expectedOid) in new[]
+        {
+            (HashAlgorithmName.SHA3_256, Oids.Sha3_256),
+            (HashAlgorithmName.SHA3_384, Oids.Sha3_384),
+            (HashAlgorithmName.SHA3_512, Oids.Sha3_512)
+        })
+        {
+            using var httpClient = new HttpClient(new MockHttpHandler(async request =>
+            {
+                byte[] requestBytes = await request.Content!.ReadAsByteArrayAsync();
+                var reader = new AsnReader(requestBytes, AsnEncodingRules.DER);
+                var timestampRequest = reader.ReadSequence();
+                _ = timestampRequest.ReadInteger();
+                var imprint = timestampRequest.ReadSequence();
+                var algorithm = imprint.ReadSequence();
+                algorithm.ReadObjectIdentifier().ShouldBe(expectedOid);
+                algorithm.ThrowIfNotEmpty();
+
+                var response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(BuildTimestampResponseForRequest(requestBytes))
+                };
+                response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-reply");
+                return response;
+            }));
+            var client = new TimestampClient(httpClient, "http://tsa.example.com");
+
+            byte[] token = await client.GetTimestampAsync("imprint"u8.ToArray(), hash);
+            token.ShouldNotBeEmpty();
+        }
     }
 
     [Fact(DisplayName = "Timestamp response with a different message imprint is rejected")]
@@ -231,6 +190,11 @@ public sealed class TimestampClientTests
     {
         byte[] data = [0x01, 0x02, 0x03];
         byte[] token = TimestampTestResponseBuilder.CreateTokenForData(data, HashAlgorithmName.SHA256);
+
+        var contentInfo = new AsnReader(token, AsnEncodingRules.DER).ReadSequence();
+        contentInfo.ReadObjectIdentifier().ShouldBe("1.2.840.113549.1.7.2");
+        var signedData = contentInfo.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)).ReadSequence();
+        signedData.ReadInteger().ShouldBe(new System.Numerics.BigInteger(3), "TSTInfo content requires CMS SignedData version 3");
 
         TimestampClient.ValidateTimestampToken(token, data, HashAlgorithmName.SHA256);
     }

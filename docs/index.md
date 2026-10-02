@@ -2,6 +2,10 @@
 
 **SimpleSign** is a .NET library for creating, inspecting, and validating **PAdES**, **CAdES**, and **XAdES** digital signatures.
 
+This documentation describes the current source tree. Use release-tagged
+documentation for a released package and the [changelog](https://github.com/eupassarin/SimpleSign/blob/main/CHANGELOG.md) to
+distinguish delivered changes from work under `Unreleased`.
+
 ## Features
 
 - **PAdES B-B, B-T, B-LT, B-LTA** conformance levels

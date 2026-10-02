@@ -2,7 +2,8 @@
 
 Pure .NET, Native-AOT-oriented digital-signature library for PAdES, CAdES and XAdES.
 Targets .NET 8 and .NET 10, uses `System.Security.Cryptography`, and has no third-party
-cryptographic dependency.
+cryptographic dependency. This reference describes the current source tree;
+release-tagged documentation and `CHANGELOG.md` determine package-version availability.
 
 ## Canonical signing API
 
@@ -25,7 +26,9 @@ and external signing with `.WithExternalSigner(certificate, signer, chain)`. `IE
 receives `ExternalSigningRequest`, including resolved PSS parameters when applicable.
 
 `SignAsync` is strict. Best-effort enrichment requires `SignWithDetailsAsync` and an explicit
-`SigningLevelFailureBehavior.ReturnLowerLevel` profile.
+`SigningLevelFailureBehavior.ReturnLowerLevel` profile. Successful signing verifies
+the completed signature and reports checked artifact evidence. This does not establish
+signer-chain or TSA trust, which require validation anchors and policy.
 
 ## Important constraints
 
@@ -33,6 +36,8 @@ receives `ExternalSigningRequest`, including resolved PSS parameters when applic
 - RSA and ECDSA external signatures are verified before packaging; EdDSA signing is rejected.
 - Unsupported XMLDSig archive transforms and topologies fail closed.
 - CAdES does not expose a buffering stream facade; CAdES streaming is deferred.
+- XAdES `DetectedLevel` is structural; neither it nor `IsValid` establishes that
+  all timestamp, LTV, and archive checks passed. Inspect those validation outcomes.
 
 ## Repository guidance
 
@@ -41,5 +46,6 @@ receives `ExternalSigningRequest`, including resolved PSS parameters when applic
 - Interop suite: `dotnet test tests/interop/SimpleSign.Interop.Tests`
 - AOT smoke: `dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64 -f net10.0`
 
-See `README.md`, `docs/conformance.md`, `docs/interoperability.md`, and migration guides for
-supported topology details and release-specific breaking changes.
+See `llms-full.txt` for implementation rules, `README.md` for API examples,
+`docs/conformance.md` and `docs/interoperability.md` for format coverage, and migration
+guides for release-specific breaking changes.

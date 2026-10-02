@@ -111,13 +111,14 @@ public sealed class ITextInteropTests(ITestOutputHelper output)
     public async Task PadesLtv_ValidatesWithIText()
     {
         SkipIfDockerUnavailable();
+        using var tsaClient = TestTimestamp.CreateClient();
         var pdf = MinimalPdf();
         using var pki = TestRevocation.CreatePki();
         using var crlClient = TestRevocation.BuildCrlClient(pki);
         var signed = await PadesSigner.Document(pdf)
             .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
             .WithLevel(AdesBaselineProfile.LongTerm(
-                new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+                TestTimestamp.Options(tsaClient),
                 new LongTermValidationOptions(new SingleClientProvider(crlClient))))
             .SignAsync();
         await ValidatePdfWithIText(signed, "pades-ltv");

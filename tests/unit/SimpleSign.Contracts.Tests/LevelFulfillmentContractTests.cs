@@ -40,6 +40,129 @@ public sealed class LevelFulfillmentContractTests
     }
 
     [Theory]
+    [InlineData("pades", true)]
+    [InlineData("cades", true)]
+    [InlineData("xades", true)]
+    [InlineData("pades", false)]
+    [InlineData("cades", false)]
+    [InlineData("xades", false)]
+    public async Task CompletedTimestamp_WithTamperedSignedAttribute_RejectsInvalidLevel(string format, bool strict)
+    {
+        using var cert = ContractFixtures.CreateSignerCertificate();
+        using var tsaClient = new HttpClient(new MockHttpHandler(async request =>
+        {
+            byte[] requestBytes = await request.Content!.ReadAsByteArrayAsync();
+            byte[] responseBytes = TimestampTestResponseBuilder.CreateForRequest(requestBytes);
+            // id-messageDigest in the TSA SignerInfo signed attributes. The request
+            // imprint and nonce remain intact, so packaging accepts the response.
+            ReadOnlySpan<byte> messageDigestOid = [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86,
+                0xF7, 0x0D, 0x01, 0x09, 0x04];
+            int attributeOffset = responseBytes.AsSpan().IndexOf(messageDigestOid);
+            attributeOffset.ShouldBeGreaterThanOrEqualTo(0);
+            int digestOffset = responseBytes.AsSpan(attributeOffset + messageDigestOid.Length)
+                .IndexOf((ReadOnlySpan<byte>)[0x04, 0x20]);
+            digestOffset.ShouldBeGreaterThanOrEqualTo(0);
+            responseBytes[attributeOffset + messageDigestOid.Length + digestOffset + 2] ^= 1;
+            var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(responseBytes)
+            };
+            response.Content.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue("application/timestamp-reply");
+            return response;
+        }));
+
+        if (strict)
+        {
+            await Should.ThrowAsync<SigningException>(() => SignTimestampedAsync(format, cert, tsaClient, strict));
+        }
+        else
+        {
+            ISigningResult result = await SignTimestampedAsync(format, cert, tsaClient, strict);
+            result.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
+            result.HasSignatureTimestamp.ShouldBeFalse();
+            result.Warnings.ShouldContain(w => w.Code == SigningWarningCode.LevelDowngraded);
+        }
+    }
+
+    [Theory]
+    [InlineData("pades", true)]
+    [InlineData("cades", true)]
+    [InlineData("xades", true)]
+    [InlineData("pades", false)]
+    [InlineData("cades", false)]
+    [InlineData("xades", false)]
+    public async Task CompletedArchive_WithTamperedTokenSignature_RejectsInvalidLevel(string format, bool strict)
+    {
+        using var pki = new SyntheticPki(
+            crlDistributionPoint: "http://198.51.100.1/leaf.crl",
+            intermediateCrlDistributionPoint: "http://198.51.100.1/intermediate.crl");
+        using var crlClient = TestRevocationClient.BuildForUris(
+            (pki.CrlDistributionPoint!, pki.BuildLeafCrl()),
+            (pki.IntermediateCrlDistributionPoint!, pki.BuildIntermediateCrl()));
+        int timestampRequests = 0;
+        using var tsaClient = new HttpClient(new MockHttpHandler(async request =>
+        {
+            byte[] requestBytes = await request.Content!.ReadAsByteArrayAsync();
+            byte[] responseBytes = TimestampTestResponseBuilder.CreateForRequest(requestBytes);
+            if (Interlocked.Increment(ref timestampRequests) == 2)
+            {
+                responseBytes[^1] ^= 1;
+            }
+
+            var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(responseBytes)
+            };
+            response.Content.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue("application/timestamp-reply");
+            return response;
+        }));
+        var profile = AdesBaselineProfile.Archive(
+            TimestampOptionsWith(tsaClient),
+            new LongTermValidationOptions(new SingleClientProvider(crlClient)),
+            failureBehavior: strict ? SigningLevelFailureBehavior.Throw : SigningLevelFailureBehavior.ReturnLowerLevel);
+
+        if (strict)
+        {
+            await Should.ThrowAsync<SigningException>(
+                () => SignAsync(format, pki.Leaf, profile, pki.IntermediatesAndRoot()));
+        }
+        else
+        {
+            ISigningResult result = await SignAsync(format, pki.Leaf, profile, pki.IntermediatesAndRoot());
+            result.AchievedLevel.ShouldBe(AdesBaselineLevel.LongTerm,
+                $"TSA requests: {timestampRequests}; {string.Join("; ", result.Warnings.Select(w => w.Message))}");
+            result.HasArchiveTimestamp.ShouldBeFalse();
+            result.Warnings.ShouldContain(w => w.Code == SigningWarningCode.LevelDowngraded);
+        }
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("xades")]
+    public async Task TimestampedSigning_AfterExistingSignature_ValidatesNewSignature(string format)
+    {
+        using var cert = ContractFixtures.CreateSignerCertificate();
+        using var tsaClient = ContractFixtures.BuildMockTsaClient();
+        byte[] existing = format == "pades"
+            ? await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
+                .WithCertificate(cert).SignAsync()
+            : await XadesSigner.Document(ContractFixtures.XmlDocument)
+                .WithCertificate(cert).SignAsync();
+        var profile = AdesBaselineProfile.Timestamped(TimestampOptionsWith(tsaClient));
+
+        ISigningResult result = format == "pades"
+            ? await PadesSigner.Document(existing).WithCertificate(cert)
+                .WithLevel(profile).SignWithDetailsAsync()
+            : await XadesSigner.Document(existing).WithCertificate(cert)
+                .WithLevel(profile).SignWithDetailsAsync();
+
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        result.HasSignatureTimestamp.ShouldBeTrue();
+    }
+
+    [Theory]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]

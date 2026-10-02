@@ -1,6 +1,7 @@
 using System.Formats.Asn1;
 using System.Numerics;
 using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Crypto;
@@ -112,6 +113,75 @@ public sealed class Rfc5652CmsComplianceTests : IDisposable
         var encap = sd.ReadSequence();
         encap.ReadObjectIdentifier(); // eContentType
         encap.HasData.ShouldBeFalse("detached CMS MUST NOT embed eContent (RFC 5652 §5.2)");
+    }
+
+    [Fact]
+    public void SignedData_EnvelopedContent_UsesExplicitContextTag()
+    {
+        byte[] content = "encapsulated content"u8.ToArray();
+        CmsSignedData parsed = CmsParser.Parse(_cmsBytes);
+        byte[] cms = CmsSignatureBuilder.BuildSignedData(
+            OidSha256, parsed.SignatureAlgorithmOid, HashAlgorithmName.SHA256,
+            parsed.SignedAttrs!, parsed.Signature!, _cert, [_cert], eContent: content);
+        var signedData = OpenSignedData(cms);
+        _ = signedData.ReadInteger();
+        _ = signedData.ReadEncodedValue();
+        var encap = signedData.ReadSequence();
+        encap.ReadObjectIdentifier().ShouldBe(IdData);
+        var explicitContent = encap.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true));
+        explicitContent.ReadOctetString().ShouldBe(content);
+        explicitContent.ThrowIfNotEmpty();
+    }
+
+    [Fact]
+    public void SignedData_OcspRevocationInfo_UsesVersionFiveAndRootSet()
+    {
+        byte[] ocspResponse = [0x30, 0x03, 0x02, 0x01, 0x01];
+        byte[] cms = CmsSignatureBuilder.AddValidationMaterial(
+            _cmsBytes, [_cert.RawData], [], [ocspResponse]);
+        var signedData = OpenSignedData(cms);
+        signedData.ReadInteger().ShouldBe(new BigInteger(5));
+        _ = signedData.ReadEncodedValue();
+        _ = signedData.ReadEncodedValue();
+        _ = signedData.ReadEncodedValue(); // certificates [0]
+        var revocations = signedData.ReadSetOf(new Asn1Tag(TagClass.ContextSpecific, 1, true));
+        var other = revocations.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 1, true));
+        other.ReadObjectIdentifier().ShouldBe("1.3.6.1.5.5.7.16.2");
+        other.ReadEncodedValue().ToArray().ShouldBe(ocspResponse);
+        revocations.ThrowIfNotEmpty();
+        CmsParser.Parse(cms).UnsignedAttributes.ShouldBeNull();
+    }
+
+    [Fact]
+    public void SignedData_RootValidationMaterial_PreservesIndependentSignatureVerification()
+    {
+        byte[] ocspResponse = [0x30, 0x03, 0x02, 0x01, 0x01];
+        byte[] cms = CmsSignatureBuilder.AddValidationMaterial(
+            _cmsBytes, [_cert.RawData], [], [ocspResponse]);
+        var signedCms = new SignedCms(new ContentInfo("hello rfc5652"u8.ToArray()), detached: true);
+        signedCms.Decode(cms);
+
+        Should.NotThrow(() => signedCms.CheckSignature(verifySignatureOnly: true));
+    }
+
+    [Fact]
+    public void SignerInfo_UnsignedAttributes_AreDerSetOrdered()
+    {
+        byte[] cms = CmsSignatureBuilder.AddUnsignedAttributes(_cmsBytes,
+        [
+            CmsAttribute.Raw("1.2.3.20", [0x02, 0x01, 0x01]),
+            CmsAttribute.Raw("1.2.3.10", [0x02, 0x01, 0x02]),
+        ]);
+        var signerInfo = OpenSignerInfo(cms);
+        _ = signerInfo.ReadInteger();
+        _ = signerInfo.ReadEncodedValue();
+        _ = signerInfo.ReadEncodedValue();
+        _ = signerInfo.ReadEncodedValue();
+        _ = signerInfo.ReadEncodedValue();
+        _ = signerInfo.ReadEncodedValue();
+        var unsignedAttributes = signerInfo.ReadSetOf(new Asn1Tag(TagClass.ContextSpecific, 1, true));
+        unsignedAttributes.ReadSequence().ReadObjectIdentifier().ShouldBe("1.2.3.10");
+        unsignedAttributes.ReadSequence().ReadObjectIdentifier().ShouldBe("1.2.3.20");
     }
 
     [Fact(DisplayName = "§5.1 certificates field contains signer certificate")]

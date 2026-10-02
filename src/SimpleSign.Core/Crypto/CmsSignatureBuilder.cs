@@ -242,7 +242,10 @@ public sealed class CmsSignatureBuilder
                         using (writer.PushSequence())
                         {
                             writer.WriteObjectIdentifier(digestOid);
-                            writer.WriteNull();
+                            if (DigestAlgorithmUsesNullParameter(digestOid))
+                            {
+                                writer.WriteNull();
+                            }
                         }
                     }
 
@@ -252,7 +255,10 @@ public sealed class CmsSignatureBuilder
                         writer.WriteObjectIdentifier(Oids.Data);
                         if (eContent is not null)
                         {
-                            writer.WriteOctetString(eContent);
+                            using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
+                            {
+                                writer.WriteOctetString(eContent);
+                            }
                         }
                     }
 
@@ -307,7 +313,10 @@ public sealed class CmsSignatureBuilder
             using (writer.PushSequence())
             {
                 writer.WriteObjectIdentifier(digestOid);
-                writer.WriteNull();
+                if (DigestAlgorithmUsesNullParameter(digestOid))
+                {
+                    writer.WriteNull();
+                }
             }
 
             // signedAttrs [0] IMPLICIT SET OF Attribute
@@ -702,10 +711,15 @@ public sealed class CmsSignatureBuilder
         }
     }
 
+    /// <summary>Returns true when the digest algorithm OID expects an explicit NULL parameter in the AlgorithmIdentifier.</summary>
+    internal static bool DigestAlgorithmUsesNullParameter(string digestOid) => digestOid is not
+        (Oids.Sha3_256 or Oids.Sha3_384 or Oids.Sha3_512);
+
     /// <summary>Returns true when the signature algorithm OID expects an explicit NULL parameter in the AlgorithmIdentifier.</summary>
     public static bool SignatureAlgorithmUsesNullParameter(string signatureOid) => signatureOid switch
     {
-        Oids.EcdsaSha256 or Oids.EcdsaSha384 or Oids.EcdsaSha512 => false,
+        Oids.EcdsaSha256 or Oids.EcdsaSha384 or Oids.EcdsaSha512
+            or Oids.EcdsaSha3_256 or Oids.EcdsaSha3_384 or Oids.EcdsaSha3_512 => false,
         Oids.Ed25519 or Oids.Ed448 => false,
         Oids.RsaPss => false,
         _ => true
@@ -788,6 +802,123 @@ public sealed class CmsSignatureBuilder
         return writer.Encode();
     }
 
+    /// <summary>
+    /// Adds certificates and revocation information to the root SignedData sets used by CAdES-B-LT.
+    /// Existing certificate, revocation, and signer information is preserved.
+    /// </summary>
+    internal static byte[] AddValidationMaterial(
+        byte[] cmsBytes,
+        IReadOnlyList<byte[]> certificates,
+        IReadOnlyList<byte[]> crls,
+        IReadOnlyList<byte[]> ocspResponses)
+    {
+        ArgumentNullException.ThrowIfNull(cmsBytes);
+        ArgumentNullException.ThrowIfNull(certificates);
+        ArgumentNullException.ThrowIfNull(crls);
+        ArgumentNullException.ThrowIfNull(ocspResponses);
+
+        var reader = new AsnReader(cmsBytes, AsnEncodingRules.BER);
+        var contentInfo = reader.ReadSequence();
+        string contentOid = contentInfo.ReadObjectIdentifier();
+        var wrapper = contentInfo.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true));
+        var signedData = wrapper.ReadSequence();
+        byte[] version = signedData.ReadEncodedValue().ToArray();
+        byte[] digestAlgorithms = signedData.ReadEncodedValue().ToArray();
+        byte[] encapContentInfo = signedData.ReadEncodedValue().ToArray();
+
+        var allCertificates = new List<byte[]>();
+        if (signedData.HasData && signedData.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))
+        {
+            var existing = signedData.ReadSetOf(skipSortOrderValidation: true,
+                new Asn1Tag(TagClass.ContextSpecific, 0, true));
+            while (existing.HasData)
+            {
+                allCertificates.Add(existing.ReadEncodedValue().ToArray());
+            }
+        }
+        foreach (byte[] certificate in certificates)
+        {
+            if (!allCertificates.Any(existing => existing.AsSpan().SequenceEqual(certificate)))
+            {
+                allCertificates.Add(certificate);
+            }
+        }
+
+        var allRevocations = new List<byte[]>();
+        if (signedData.HasData && signedData.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 1, true))
+        {
+            var existing = signedData.ReadSetOf(skipSortOrderValidation: true,
+                new Asn1Tag(TagClass.ContextSpecific, 1, true));
+            while (existing.HasData)
+            {
+                allRevocations.Add(existing.ReadEncodedValue().ToArray());
+            }
+        }
+        foreach (byte[] crl in crls)
+        {
+            if (!allRevocations.Any(existing => existing.AsSpan().SequenceEqual(crl)))
+            {
+                allRevocations.Add(crl);
+            }
+        }
+        foreach (byte[] ocspResponse in ocspResponses)
+        {
+            var otherWriter = new AsnWriter(AsnEncodingRules.DER);
+            using (otherWriter.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 1, true)))
+            {
+                otherWriter.WriteObjectIdentifier("1.3.6.1.5.5.7.16.2"); // id-ri-ocsp-response (RFC 5940)
+                otherWriter.WriteEncodedValue(ocspResponse);
+            }
+            byte[] encoded = otherWriter.Encode();
+            if (!allRevocations.Any(existing => existing.AsSpan().SequenceEqual(encoded)))
+            {
+                allRevocations.Add(encoded);
+            }
+        }
+
+        byte[] signerInfos = signedData.ReadEncodedValue().ToArray();
+        bool hasOtherRevocationInfo = allRevocations.Any(revocation =>
+            revocation.Length > 0 && revocation[0] == 0xA1);
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            writer.WriteObjectIdentifier(contentOid);
+            using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
+            using (writer.PushSequence())
+            {
+                if (hasOtherRevocationInfo)
+                {
+                    writer.WriteInteger(5);
+                }
+                else
+                {
+                    writer.WriteEncodedValue(version);
+                }
+                writer.WriteEncodedValue(digestAlgorithms);
+                writer.WriteEncodedValue(encapContentInfo);
+                using (writer.PushSetOf(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
+                {
+                    foreach (byte[] certificate in allCertificates)
+                    {
+                        writer.WriteEncodedValue(certificate);
+                    }
+                }
+                if (allRevocations.Count > 0)
+                {
+                    using (writer.PushSetOf(new Asn1Tag(TagClass.ContextSpecific, 1, true)))
+                    {
+                        foreach (byte[] revocation in allRevocations)
+                        {
+                            writer.WriteEncodedValue(revocation);
+                        }
+                    }
+                }
+                writer.WriteEncodedValue(signerInfos);
+            }
+        }
+        return writer.Encode();
+    }
+
     private static byte[] AddUnsignedAttrsToSignerInfo(byte[] signerInfoBytes, IReadOnlyList<CmsAttribute> unsignedAttributes)
     {
         var reader = new AsnReader(signerInfoBytes, AsnEncodingRules.DER);
@@ -806,16 +937,13 @@ public sealed class CmsSignatureBuilder
         byte[] signatureAlg = siSeq.ReadEncodedValue().ToArray();
         byte[] signature = siSeq.ReadEncodedValue().ToArray();
 
-        var existing = new List<(string oid, byte[] val)>();
+        var existing = new List<byte[]>();
         if (siSeq.HasData && siSeq.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 1, true))
         {
             var existingSet = siSeq.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 1, true));
             while (existingSet.HasData)
             {
-                var attrSeq = existingSet.ReadSequence();
-                string oid = attrSeq.ReadObjectIdentifier();
-                byte[] val = attrSeq.ReadEncodedValue().ToArray();
-                existing.Add((oid, val));
+                existing.Add(existingSet.ReadEncodedValue().ToArray());
             }
         }
 
@@ -834,17 +962,11 @@ public sealed class CmsSignatureBuilder
             writer.WriteEncodedValue(signatureAlg);
             writer.WriteEncodedValue(signature);
 
-            using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 1, true)))
+            using (writer.PushSetOf(new Asn1Tag(TagClass.ContextSpecific, 1, true)))
             {
-                foreach (var (oid, val) in existing)
+                foreach (byte[] attribute in existing)
                 {
-                    using (writer.PushSequence())
-                    {
-                        writer.WriteObjectIdentifier(oid);
-                        // val already contains the complete Attribute.attrValues SET OF encoding.
-                        // Re-wrapping it creates SET OF SET OF and invalidates preserved timestamps.
-                        writer.WriteEncodedValue(val);
-                    }
+                    writer.WriteEncodedValue(attribute);
                 }
                 foreach (var attr in unsignedAttributes)
                 {

@@ -35,7 +35,7 @@ internal sealed class ValidateSignatureDto
     public bool Integrity { get; init; }
     public bool Signature { get; init; }
     public bool Chain { get; init; }
-    public bool Revoked { get; init; }
+    public bool? Revoked { get; init; }
     public DateTimeOffset? SigningTime { get; init; }
     public List<string> Errors { get; init; } = [];
 }

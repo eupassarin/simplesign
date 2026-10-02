@@ -1,5 +1,6 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Constants;
@@ -10,11 +11,11 @@ namespace SimpleSign.Core.Tests.Compliance;
 
 /// <summary>
 /// Validates that CMS signatures produced by <see cref="CmsSignatureBuilder"/>
-/// with SHA-3 digest and signature algorithms conform to RFC 8702 at the ASN.1 wire level.
+/// with SHA-3 digest and signature algorithms conform to RFC 9688 at the ASN.1 wire level.
 /// Each test maps to a specific section of the RFC.
 /// </summary>
 [Trait("Category", "Unit")]
-public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
+public sealed class Rfc9688Sha3CmsComplianceTests : IDisposable
 {
     private const string IdSignedData = "1.2.840.113549.1.7.2";
     private const string OidSigningCertificateV2 = "1.2.840.113549.1.9.16.2.47";
@@ -37,20 +38,20 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         }
     }
 
-    public Rfc8702Sha3CmsComplianceTests()
+    public Rfc9688Sha3CmsComplianceTests()
     {
         Skip.If(!IsSha3Available(), "SHA-3 not supported on this platform/runtime");
 
         using var rsa = RSA.Create(2048);
-        var req = new CertificateRequest("CN=RFC8702 Test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var req = new CertificateRequest("CN=RFC9688 Test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using var temp = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
         _rsaCert = CertificateLoader.LoadPkcs12(temp.Export(X509ContentType.Pkcs12, "t"), "t");
 
-        _cmsSha3_256 = CmsSignatureBuilder.Build("hello rfc8702"u8.ToArray(), _rsaCert, HashAlgorithmName.SHA3_256,
+        _cmsSha3_256 = CmsSignatureBuilder.Build("hello rfc9688"u8.ToArray(), _rsaCert, HashAlgorithmName.SHA3_256,
             padesAttributes: true);
-        _cmsSha3_384 = CmsSignatureBuilder.Build("hello rfc8702"u8.ToArray(), _rsaCert, HashAlgorithmName.SHA3_384,
+        _cmsSha3_384 = CmsSignatureBuilder.Build("hello rfc9688"u8.ToArray(), _rsaCert, HashAlgorithmName.SHA3_384,
             padesAttributes: true);
-        _cmsSha3_512 = CmsSignatureBuilder.Build("hello rfc8702"u8.ToArray(), _rsaCert, HashAlgorithmName.SHA3_512,
+        _cmsSha3_512 = CmsSignatureBuilder.Build("hello rfc9688"u8.ToArray(), _rsaCert, HashAlgorithmName.SHA3_512,
             padesAttributes: true);
     }
 
@@ -94,23 +95,117 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         algIds.ShouldContain(expectedOid, $"digestAlgorithms must include {expectedOid}");
     }
 
-    // ── RFC 8702 §2.1: SHA-3 Digest OIDs ─────────────────────────────────────
+    private static void AssertAlgorithmIdentifier(AsnReader algorithm, string expectedOid, bool hasNull)
+    {
+        algorithm.ReadObjectIdentifier().ShouldBe(expectedOid);
+        if (hasNull)
+        {
+            algorithm.ReadNull();
+        }
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 SignedData digestAlgorithms contains id-sha3-256")]
+        algorithm.ThrowIfNotEmpty();
+    }
+
+    [SkippableFact(DisplayName = "RFC 9688 SHA-3 digest parameters are absent in SignedData and SignerInfo")]
+    public void Sha3_DigestAlgorithmIdentifiers_OmitParameters()
+    {
+        foreach ((byte[] cms, string oid) in new[]
+        {
+            (_cmsSha3_256, Oids.Sha3_256),
+            (_cmsSha3_384, Oids.Sha3_384),
+            (_cmsSha3_512, Oids.Sha3_512)
+        })
+        {
+            var signedData = OpenSignedData(cms);
+            _ = signedData.ReadInteger();
+            var algorithms = signedData.ReadSetOf();
+            AssertAlgorithmIdentifier(algorithms.ReadSequence(), oid, hasNull: false);
+            algorithms.ThrowIfNotEmpty();
+
+            var signerInfo = OpenSignerInfo(cms);
+            _ = signerInfo.ReadInteger();
+            _ = signerInfo.ReadEncodedValue();
+            AssertAlgorithmIdentifier(signerInfo.ReadSequence(), oid, hasNull: false);
+        }
+    }
+
+    [SkippableFact(DisplayName = "RFC 9688 RSA with SHA-3 signature parameters contain NULL")]
+    public void RsaSha3_SignatureAlgorithmIdentifiers_ContainNull()
+    {
+        foreach ((byte[] cms, string oid) in new[]
+        {
+            (_cmsSha3_256, Oids.RsaSha3_256),
+            (_cmsSha3_384, Oids.RsaSha3_384),
+            (_cmsSha3_512, Oids.RsaSha3_512)
+        })
+        {
+            var signerInfo = OpenSignerInfo(cms);
+            _ = signerInfo.ReadInteger();
+            _ = signerInfo.ReadEncodedValue();
+            _ = signerInfo.ReadEncodedValue();
+            _ = signerInfo.ReadEncodedValue();
+            AssertAlgorithmIdentifier(signerInfo.ReadSequence(), oid, hasNull: true);
+        }
+    }
+
+    [SkippableFact(DisplayName = "RFC 9688 ECDSA with SHA-3 signature parameters are absent")]
+    public void EcdsaSha3_SignatureAlgorithmIdentifiers_OmitParameters()
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest("CN=RFC9688 ECDSA Test", ecdsa, HashAlgorithmName.SHA256);
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+
+        foreach ((HashAlgorithmName hash, string oid) in new[]
+        {
+            (HashAlgorithmName.SHA3_256, Oids.EcdsaSha3_256),
+            (HashAlgorithmName.SHA3_384, Oids.EcdsaSha3_384),
+            (HashAlgorithmName.SHA3_512, Oids.EcdsaSha3_512)
+        })
+        {
+            byte[] cms = CmsSignatureBuilder.Build("hello rfc9688"u8, certificate, hash);
+            var signerInfo = OpenSignerInfo(cms);
+            _ = signerInfo.ReadInteger();
+            _ = signerInfo.ReadEncodedValue();
+            _ = signerInfo.ReadEncodedValue();
+            _ = signerInfo.ReadEncodedValue();
+            AssertAlgorithmIdentifier(signerInfo.ReadSequence(), oid, hasNull: false);
+        }
+    }
+
+    [SkippableFact(DisplayName = "RFC 9688 SHA-3 CMS can be decoded by SignedCms")]
+    public void Sha3_Cms_DecodesWithIndependentParser()
+    {
+        foreach ((byte[] cms, string digestOid) in new[]
+        {
+            (_cmsSha3_256, Oids.Sha3_256),
+            (_cmsSha3_384, Oids.Sha3_384),
+            (_cmsSha3_512, Oids.Sha3_512)
+        })
+        {
+            var parsed = new SignedCms(new ContentInfo("hello rfc9688"u8.ToArray()), detached: true);
+            parsed.Decode(cms);
+            parsed.SignerInfos.Count.ShouldBe(1);
+            parsed.SignerInfos[0].DigestAlgorithm.Value.ShouldBe(digestOid);
+        }
+    }
+
+    // ── RFC 9688 §2.1: SHA-3 Digest OIDs ─────────────────────────────────────
+
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 SignedData digestAlgorithms contains id-sha3-256")]
     public void SignedData_DigestAlgorithms_Contains_Sha3_256() =>
         AssertOidInDigestAlgorithms(_cmsSha3_256, Oids.Sha3_256);
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 SignedData digestAlgorithms contains id-sha3-384")]
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 SignedData digestAlgorithms contains id-sha3-384")]
     public void SignedData_DigestAlgorithms_Contains_Sha3_384() =>
         AssertOidInDigestAlgorithms(_cmsSha3_384, Oids.Sha3_384);
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 SignedData digestAlgorithms contains id-sha3-512")]
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 SignedData digestAlgorithms contains id-sha3-512")]
     public void SignedData_DigestAlgorithms_Contains_Sha3_512() =>
         AssertOidInDigestAlgorithms(_cmsSha3_512, Oids.Sha3_512);
 
-    // ── RFC 8702 §2.1: SHA-3 digest OID in SignerInfo ────────────────────────
+    // ── RFC 9688 §2.1: SHA-3 digest OID in SignerInfo ────────────────────────
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 SignerInfo digestAlgorithm = id-sha3-256")]
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 SignerInfo digestAlgorithm = id-sha3-256")]
     public void SignerInfo_DigestAlgorithm_Is_Sha3_256()
     {
         var si = OpenSignerInfo(_cmsSha3_256);
@@ -121,7 +216,7 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         oid.ShouldBe(Oids.Sha3_256, "SignerInfo digestAlgorithm must be id-sha3-256");
     }
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 SignerInfo digestAlgorithm = id-sha3-384")]
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 SignerInfo digestAlgorithm = id-sha3-384")]
     public void SignerInfo_DigestAlgorithm_Is_Sha3_384()
     {
         var si = OpenSignerInfo(_cmsSha3_384);
@@ -132,7 +227,7 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         oid.ShouldBe(Oids.Sha3_384, "SignerInfo digestAlgorithm must be id-sha3-384");
     }
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 SignerInfo digestAlgorithm = id-sha3-512")]
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 SignerInfo digestAlgorithm = id-sha3-512")]
     public void SignerInfo_DigestAlgorithm_Is_Sha3_512()
     {
         var si = OpenSignerInfo(_cmsSha3_512);
@@ -143,9 +238,9 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         oid.ShouldBe(Oids.Sha3_512, "SignerInfo digestAlgorithm must be id-sha3-512");
     }
 
-    // ── RFC 8702 §3: SHA-3 Signature Algorithm OIDs ──────────────────────────
+    // ── RFC 9688 §3: SHA-3 Signature Algorithm OIDs ──────────────────────────
 
-    [SkippableFact(DisplayName = "RFC 8702 §3 SignerInfo signatureAlgorithm = id-rsassa-pkcs1-v1_5-with-sha3-256")]
+    [SkippableFact(DisplayName = "RFC 9688 §3 SignerInfo signatureAlgorithm = id-rsassa-pkcs1-v1_5-with-sha3-256")]
     public void SignerInfo_SignatureAlgorithm_Is_RsaSha3_256()
     {
         var si = OpenSignerInfo(_cmsSha3_256);
@@ -158,7 +253,7 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         oid.ShouldBe(Oids.RsaSha3_256, "signatureAlgorithm must be id-rsassa-pkcs1-v1_5-with-sha3-256");
     }
 
-    [SkippableFact(DisplayName = "RFC 8702 §3 SignerInfo signatureAlgorithm = id-rsassa-pkcs1-v1_5-with-sha3-384")]
+    [SkippableFact(DisplayName = "RFC 9688 §3 SignerInfo signatureAlgorithm = id-rsassa-pkcs1-v1_5-with-sha3-384")]
     public void SignerInfo_SignatureAlgorithm_Is_RsaSha3_384()
     {
         var si = OpenSignerInfo(_cmsSha3_384);
@@ -171,7 +266,7 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         oid.ShouldBe(Oids.RsaSha3_384, "signatureAlgorithm must be id-rsassa-pkcs1-v1_5-with-sha3-384");
     }
 
-    [SkippableFact(DisplayName = "RFC 8702 §3 SignerInfo signatureAlgorithm = id-rsassa-pkcs1-v1_5-with-sha3-512")]
+    [SkippableFact(DisplayName = "RFC 9688 §3 SignerInfo signatureAlgorithm = id-rsassa-pkcs1-v1_5-with-sha3-512")]
     public void SignerInfo_SignatureAlgorithm_Is_RsaSha3_512()
     {
         var si = OpenSignerInfo(_cmsSha3_512);
@@ -186,7 +281,7 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
 
     // ── SHA-3 messageDigest size ─────────────────────────────────────────────
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 signedAttrs messageDigest = 32 bytes for SHA3-256")]
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 signedAttrs messageDigest = 32 bytes for SHA3-256")]
     public void SignedAttrs_MessageDigest_Sha3_256_Is_32_Bytes()
     {
         var si = OpenSignerInfo(_cmsSha3_256);
@@ -214,7 +309,7 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         digest.Length.ShouldBe(32);
     }
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 signedAttrs messageDigest = 48 bytes for SHA3-384")]
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 signedAttrs messageDigest = 48 bytes for SHA3-384")]
     public void SignedAttrs_MessageDigest_Sha3_384_Is_48_Bytes()
     {
         var si = OpenSignerInfo(_cmsSha3_384);
@@ -242,7 +337,7 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
         digest.Length.ShouldBe(48);
     }
 
-    [SkippableFact(DisplayName = "RFC 8702 §2.1 signedAttrs messageDigest = 64 bytes for SHA3-512")]
+    [SkippableFact(DisplayName = "RFC 9688 §2.1 signedAttrs messageDigest = 64 bytes for SHA3-512")]
     public void SignedAttrs_MessageDigest_Sha3_512_Is_64_Bytes()
     {
         var si = OpenSignerInfo(_cmsSha3_512);
@@ -296,7 +391,7 @@ public sealed class Rfc8702Sha3CmsComplianceTests : IDisposable
 
     // ── Signature verification ───────────────────────────────────────────────
 
-    [SkippableFact(DisplayName = "RFC 8702 signature verifies with SHA3-256")]
+    [SkippableFact(DisplayName = "RFC 9688 signature verifies with SHA3-256")]
     public void Signature_Verifies_With_Sha3_256()
     {
         var parsed = CmsParser.Parse(_cmsSha3_256);

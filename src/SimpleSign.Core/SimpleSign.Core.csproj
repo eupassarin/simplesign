@@ -22,6 +22,7 @@
     <InternalsVisibleTo Include="SimpleSign.Brasil.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Fuzz" />
     <InternalsVisibleTo Include="SimpleSign.CAdES" />
+    <InternalsVisibleTo Include="SimpleSign.CAdES.Tests" />
     <InternalsVisibleTo Include="SimpleSign.XAdES" />
   </ItemGroup>
 

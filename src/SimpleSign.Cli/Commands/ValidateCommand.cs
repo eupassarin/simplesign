@@ -312,7 +312,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             valNode.AddNode($"Integrity:  {Check(result.IsIntegrityValid)}");
             valNode.AddNode($"Signature:  {Check(result.IsSignatureValid)}");
             valNode.AddNode($"Chain:      {Check(result.IsCertificateChainValid)}");
-            valNode.AddNode($"Revoked:    {Check(!result.IsNotRevoked, invert: true)}{FormatRevocationSource(result.RevocationSource)}");
+            valNode.AddNode($"Revoked:    {FormatRevocationStatus(result)}");
 
             if (result.HasValidTimestamp.HasValue)
             {
@@ -433,7 +433,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
                 tsNode.AddNode($"Chain:        {Check(result.IsCertificateChainValid)}");
             }
 
-            tsNode.AddNode($"Revoked:      {Check(!result.IsNotRevoked, invert: true)}{FormatRevocationSource(result.RevocationSource)}");
+            tsNode.AddNode($"Revoked:      {FormatRevocationStatus(result)}");
 
             if (result.SigningTime.HasValue)
             {
@@ -498,6 +498,13 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         2 => "[yellow]![/] Locked — [bold]form filling[/] only",
         3 => "[green]✓[/] Certified — [bold]form filling and annotations[/] allowed",
         _ => "Not locked"
+    };
+
+    internal static string FormatRevocationStatus(SignatureValidationResult result) => result.RevocationSource switch
+    {
+        RevocationSource.None => "[dim]not checked[/]",
+        RevocationSource.Indeterminate => "[yellow]? (indeterminate)[/]",
+        _ => $"{Check(!result.IsNotRevoked, invert: true)}{FormatRevocationSource(result.RevocationSource)}"
     };
 
     private static string FormatRevocationSource(RevocationSource source) => source switch

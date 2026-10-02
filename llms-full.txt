@@ -2,7 +2,9 @@
 
 SimpleSign is a multi-targeted (`net8.0`, `net10.0`) .NET library for PAdES, CAdES and
 XAdES signing and validation. It uses only platform cryptography and must remain safe for
-Native AOT where the platform XMLDSig implementation permits it.
+Native AOT where the platform XMLDSig implementation permits it. This reference describes
+the current source tree; use release-tagged documentation and `CHANGELOG.md` for the
+behavior delivered in a particular package version.
 
 ## Signing contract
 
@@ -25,8 +27,17 @@ always configured through `WithLogger`. All fluent builders are immutable. Crede
 mutually exclusive: `WithCertificate` and `WithExternalSigner` replace one another.
 
 `SignWithDetailsAsync` returns an `ISigningResult` with requested and achieved levels,
-artifact-derived timestamp/LTV/archive flags and structured warnings. Strict `SignAsync`
-rejects profiles configured for best-effort downgrade.
+checked timestamp/LTV/archive flags and structured warnings. The completed base signature
+and content integrity must verify before a result is returned. Strict success requires
+`RequestedLevel == AchievedLevel`; `SignAsync` rejects best-effort profiles.
+`ReturnLowerLevel` is available through the detailed terminal for enrichment failures,
+while base-signature failures and cancellation still fail.
+
+B-LT requires embedded issuers and applicable, authenticated OCSP/CRL evidence for required
+non-root signer, prior-TSA, and responder paths. Cryptographically self-signed root
+candidates and authorized OCSP no-check responders are exempt from their own revocation
+objects. CAdES baseline LTV uses root CMS certificate/revocation sets and RFC 5940 OCSP
+choices; validation also reads legacy CAdES-XL unsigned attributes.
 
 ## External signatures
 
@@ -43,13 +54,25 @@ deferred PAdES workflows use the same profile/provider/algorithm vocabulary as d
 
 ## Security rules
 
-- RFC 3161 responses must bind to request OID, imprint and nonce.
+- RFC 3161 responses must bind to request OID, imprint, and nonce. Token integrity requires
+  a matching TSA signer certificate, authenticated TSTInfo signed attributes, valid CMS
+  signature, signing-certificate binding, and exclusive critical timestamping EKU.
+- Evidence applicability and authenticity are distinct from signer-chain and TSA trust.
+  Trust requires separate validation anchors and policy.
 - TLS/TSA and revocation clients are supplied through `IHttpClientProvider`; callers retain
   ownership of their clients.
 - CAdES/XAdES archive claims must be validated from final artifact structure and standards-defined
   preimages. Unsupported XMLDSig transforms or resources fail closed.
 - Do not add cryptographic third-party packages, reflection-based serialization, dynamic code or
   unsafe code.
+
+## Validation results
+
+XAdES `DetectedLevel` describes observed unsigned-property elements, including properties
+that fail validation. `HasValidSignatureTimeStamp`, `IsLtvDataValid`, and
+`HasValidArchiveTimeStamp` report checked outcomes and must be inspected together with
+base signature/integrity. `IsValid` combines fundamental signature, integrity, and
+signer-chain checks. `IsTsaTrusted` separately reports signature-TSA trust.
 
 ## Verification
 
