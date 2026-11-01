@@ -35,7 +35,7 @@ Update `<Version>` in all `.csproj` files:
 
 ```bash
 VERSION="X.Y.Z"
-OLD="0.9.2"
+OLD="0.9.3"
 sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   Directory.Build.props \
   src/SimpleSign/SimpleSign.csproj \
@@ -56,11 +56,11 @@ These files contain version strings that do NOT come from `<Version>` and must b
 
 | File | Location | What to update |
 |------|----------|----------------|
-| `src/SimpleSign.HostSigner/TrayContext.cs` | `Version = "0.9.2"` | Hardcoded version for health check API |
+| `src/SimpleSign.HostSigner/TrayContext.cs` | `Version = "0.9.3"` | Hardcoded version for health check API |
 | `src/SimpleSign.HostSigner/README.md` | Install examples, health check responses | All version strings |
-| `src/SimpleSign.HostSigner/webapp/src/pages/ApiPage.tsx` and `AboutPage.tsx` | Version strings in web UI | `"0.9.2"` → new version |
-| `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.9.2]` | Example version |
-| `RELEASING.md` | `OLD="0.9.2"` and `Current version: \`0.9.2\`` | Update both—this file |
+| `src/SimpleSign.HostSigner/webapp/src/pages/ApiPage.tsx` and `AboutPage.tsx` | Version strings in web UI | `"0.9.3"` → new version |
+| `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.9.3]` | Example version |
+| `RELEASING.md` | `OLD="0.9.3"` and `Current version: \`0.9.3\`` | Update both—this file |
 
 Run to find any missed occurrences:
 
@@ -196,4 +196,4 @@ NOTES
 - **MINOR** (0.x.0): New public API surface, deprecations
 - **MAJOR** (x.0.0): Breaking changes to public API
 
-Current version: `0.9.2`
+Current version: `0.9.3`

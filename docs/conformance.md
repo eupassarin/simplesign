@@ -76,7 +76,7 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **ETSI EN 319 132-1** | XAdES B-B, B-T, B-LT, B-LTA | ✅ | ETSI archive preimage; XMLDSig reference processing; same-document distributed unsigned properties and counter-signatures |
 | **RFC 9688** | SHA-3 OIDs and parameters in CMS | ✅ | id-sha3-256/384/512, id-rsassa-pkcs1-v1_5-with-sha3-256/384/512, id-ecdsa-with-sha3-256/384/512 |
 | **RFC 8933** | EdDSA in CMS | ⏳ | OIDs are recognized, but signing is deferred until raw external output is verifiable on every target |
-| **RFC 8032** | EdDSA algorithm | ⏳ | Ed25519/Ed448 signing is not advertised in v0.9.2 |
+| **RFC 8032** | EdDSA algorithm | ⏳ | Ed25519/Ed448 signing is not advertised in v0.9.3 |
 | **RFC 8410** | EdDSA X.509 identifiers | ✅ | OIDs 1.3.101.112 (Ed25519) / 1.3.101.113 (Ed448) |
 
 ## SubFilter Support
@@ -98,7 +98,7 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **PDF/A** | 1a, 1b, 2a, 2b, 2u, 3a, 3b, 3u, 4a, 4b, 4u, 4e (detection + preservation) |
 
 ¹ SHA-3 signature and digest OIDs defined in RFC 8702; CMS encoding defined in RFC 8933.
-² EdDSA algorithm identifiers remain recognized, but v0.9.2 rejects EdDSA signing rather than producing external output that net8.0 cannot verify.
+² EdDSA algorithm identifiers remain recognized, but v0.9.3 rejects EdDSA signing rather than producing external output that net8.0 cannot verify.
 
 ## CAdES and XAdES archival boundaries
 

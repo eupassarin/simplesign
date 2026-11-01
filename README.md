@@ -43,6 +43,14 @@ changes and work under `Unreleased`.
 
 ---
 
+## What's New in v0.9.3
+
+**Usage-rights signatures no longer reported as document signatures** — Adobe Reader Extensions signatures (`/TransformMethod /UR3`), common in XFA/LiveCycle forms, are now skipped by inspection, validation, and extraction, matching Adobe Acrobat's signature panel.
+
+See the [full changelog](CHANGELOG.md).
+
+---
+
 ## What's New in v0.9.2
 
 **Acrobat-safe structure preservation** — dictionary scanners now treat literal strings, hexadecimal strings, and comments correctly, so content such as `(merged >> streams)` in a `/Reason` no longer confuses parsing. Key removal is token-aware, and document timestamps (B-LTA) preserve an inline `/AcroForm` dictionary just like regular signing.
