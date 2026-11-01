@@ -427,6 +427,20 @@ public sealed class PdfSignatureInspectorTests
         inspection.Signatures[2].Reason.ShouldBe("Razão da assinatura");
     }
 
+    [Fact(DisplayName = "InspectAsync skips usage-rights (UR3) signatures")]
+    public async Task InspectAsync_UsageRightsSignature_NotReported()
+    {
+        // Compact Adobe Reader Extensions signature dictionary (XFA/LiveCycle forms).
+        const string ur3Body = "/Type/Sig/Filter/Adobe.PPKLite/SubFilter/adbe.pkcs7.detached/Reference[<</Type/SigRef/TransformMethod/UR3/TransformParams<</V/2.2>>]/Name(Adobe Profile 24 ARES 8.1 Unlimited Comment PunchCard 1272)/Contents <00>/ByteRange [0 100 200 300]";
+        byte[] pdf = BuildPdfWithSignatureDicts(ur3Body);
+        using MemoryStream stream = new(pdf);
+
+        PdfInspectionResult inspection = await PdfSignatureInspector.InspectAsync(stream);
+
+        inspection.Signatures.ShouldBeEmpty();
+        inspection.Document.SignatureCount.ShouldBe(0);
+    }
+
     private static X509Certificate2 CreateRsaCert(string subject = "CN=Test Signer, O=Tests, C=BR")
     {
         using RSA key = RSA.Create(2048);

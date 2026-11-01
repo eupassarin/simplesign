@@ -1615,6 +1615,16 @@ public sealed class PdfStructureReader
             return null;
         }
 
+        // Usage-rights signatures (Adobe Reader Extensions, /TransformMethod /UR3 in
+        // the /Reference array) are not document signatures: Acrobat does not show them
+        // in the signature panel, and they must not be reported by inspection or
+        // validation. Skip them here so every consumer of this reader behaves
+        // consistently.
+        if (ContainsNameToken(dictSpan, "/UR3"u8))
+        {
+            return null;
+        }
+
         byte[] contentsBytes = ExtractContents(byteRange, fullData);
         DateTimeOffset? signingTime = ExtractPdfDate(dictSpan);
         string? subFilter = ExtractPdfName(dictSpan, "/SubFilter"u8);
@@ -1695,6 +1705,32 @@ public sealed class PdfStructureReader
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Determines whether a PDF name token (e.g. "/UR3") appears in the span with a
+    /// valid token boundary after it (whitespace, '/', '>', ']', or end of span),
+    /// so that longer names such as "/UR3Something" do not match.
+    /// </summary>
+    private static bool ContainsNameToken(ReadOnlySpan<byte> span, ReadOnlySpan<byte> name)
+    {
+        int pos = 0;
+        while ((pos = IndexOf(span, name, pos)) >= 0)
+        {
+            int after = pos + name.Length;
+            if (after >= span.Length
+                || IsWhitespace(span[after])
+                || span[after] == (byte)'/'
+                || span[after] == (byte)'>'
+                || span[after] == (byte)']')
+            {
+                return true;
+            }
+
+            pos = after;
+        }
+
+        return false;
     }
 
     /// <summary>

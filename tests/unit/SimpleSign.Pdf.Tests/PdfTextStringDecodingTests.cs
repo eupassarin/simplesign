@@ -55,9 +55,11 @@ public sealed class PdfTextStringDecodingTests
     /// Each signature dictionary is wrapped as "N 0 obj &lt;&lt; {body} &gt;&gt; endobj"
     /// and referenced by a widget annotation (/V). The /Reason entry of each body
     /// appears before /Contents, and /ByteRange after /Contents, as in the issue.
+    /// Bodies must contain the literal "/ByteRange [0 100 200 300]" which is replaced
+    /// by a placeholder and back-filled with the real byte ranges around /Contents.
     /// Returns the PDF bytes and the signature object numbers in order.
     /// </summary>
-    private static (byte[] Pdf, int[] SigObjNums) BuildPdfWithSignatures(params string[] sigDictBodies)
+    internal static (byte[] Pdf, int[] SigObjNums) BuildPdfWithSignatures(params string[] sigDictBodies)
     {
         int count = sigDictBodies.Length;
         var sigObjNums = new int[count];
@@ -85,13 +87,26 @@ public sealed class PdfTextStringDecodingTests
         offsets[3] = sb.Length;
         sb.Append($"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [{string.Join(' ', annotRefs)}] >>\nendobj\n");
 
+        var byteRangeValuePositions = new int[count];
+        var contentsHexStarts = new int[count];
         for (int i = 0; i < count; i++)
         {
             offsets[4 + (i * 2)] = sb.Length;
             sb.Append($"{4 + (i * 2)} 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Sig /T (Sig{i + 1}) /V {sigObjNums[i]} 0 R >>\nendobj\n");
 
-            offsets[sigObjNums[i]] = sb.Length;
-            sb.Append($"{sigObjNums[i]} 0 obj\n<< {sigDictBodies[i]} >>\nendobj\n");
+            string body = sigDictBodies[i].Replace(
+                "/ByteRange [0 100 200 300]",
+                $"/ByteRange {byteRangePlaceholder}",
+                StringComparison.Ordinal);
+            int objStart = sb.Length;
+            sb.Append($"{sigObjNums[i]} 0 obj\n<< {body} >>\nendobj\n");
+            offsets[sigObjNums[i]] = objStart;
+
+            string textSoFar = sb.ToString();
+            int contentsKey = textSoFar.IndexOf("/Contents <", objStart, StringComparison.Ordinal);
+            contentsHexStarts[i] = contentsKey + "/Contents <".Length;
+            int byteRangeKey = textSoFar.IndexOf("/ByteRange ", objStart, StringComparison.Ordinal);
+            byteRangeValuePositions[i] = byteRangeKey + "/ByteRange ".Length;
         }
 
         long xrefOffset = sb.Length;
@@ -106,8 +121,27 @@ public sealed class PdfTextStringDecodingTests
         sb.Append($"trailer\n<< /Size {offsets.Length} /Root 1 0 R >>\n");
         sb.Append($"startxref\n{xrefOffset}\n%%EOF\n");
 
-        return (Encoding.Latin1.GetBytes(sb.ToString()), sigObjNums);
+        byte[] pdf = Encoding.Latin1.GetBytes(sb.ToString());
+        for (int i = 0; i < count; i++)
+        {
+            int hexStart = contentsHexStarts[i];
+            int hexEnd = hexStart;
+            while (hexEnd < pdf.Length && pdf[hexEnd] != (byte)'>')
+            {
+                hexEnd++;
+            }
+
+            long length1 = hexStart - 1;
+            long offset2 = hexEnd + 1;
+            long length2 = pdf.Length - offset2;
+            string values = $"[{0:D10} {length1:D10} {offset2:D10} {length2:D10}]";
+            Encoding.Latin1.GetBytes(values).CopyTo(pdf, byteRangeValuePositions[i]);
+        }
+
+        return (pdf, sigObjNums);
     }
+
+    private const string byteRangePlaceholder = "[0000000000 0000000000 0000000000 0000000000]";
 
     [Fact]
     public async Task ReadSignatureFields_DictDelimitersInsideLiteralStrings_DoNotBreakParsing()
