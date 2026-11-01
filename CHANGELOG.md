@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `/Reference` array — common in XFA/LiveCycle forms) are no longer reported
   as document signatures by inspection, validation, or extraction. Adobe Acrobat
   does not display them in the signature panel, and SimpleSign now agrees.
+- `Microsoft.Extensions.DependencyInjection.Abstractions` in `SimpleSign.Brasil`
+  aligned with `SimpleSign.Core` (10.0.13), resolving an NU1605 package-downgrade
+  error during release builds.
 
 ## [0.9.2] - 2026-10-14
 
