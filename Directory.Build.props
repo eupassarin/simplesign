@@ -21,14 +21,17 @@
     <PackageTags>pdf;pades;digital-signature;electronic-signature;sign-pdf;pdf-signing;validate-signature;icp-brasil;govbr;etsi;pkcs7;cms;rfc3161;timestamp;x509;certificate;native-aot;no-bouncycastle</PackageTags>
     <PackageProjectUrl>https://github.com/eupassarin/SimpleSign</PackageProjectUrl>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <!-- SourceLink: embed source in PDB for debugger step-through -->
-    <!-- SourceLink: embed PDB in DLL for debugging -->
-    <DebugType>embedded</DebugType>
+    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
+    <!-- SourceLink: embed source links in PDB for debugger step-through -->
+    <!-- Portable PDBs so the symbol package (snupkg) carries them -->
+    <DebugType>portable</DebugType>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- Symbol packages (snupkg) published alongside the nupkg -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <!-- Allow restore/build of Windows-targeting projects (e.g. HostSigner) on Linux CI -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Confirmed: no vulnerable packages (dotnet list package). -->
@@ -36,6 +39,6 @@
 
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)assets/icon.png" Pack="true" PackagePath="\" Visible="false" />
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildProjectDirectory)/PACKAGE.md" Pack="true" PackagePath="\" Visible="false" Condition="Exists('$(MSBuildProjectDirectory)/PACKAGE.md')" />
   </ItemGroup>
 </Project>

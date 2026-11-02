@@ -47,4 +47,8 @@
     <EmbeddedResource Include="GovBr\Certs\GovBr-ACFinal-v1.crt" LogicalName="SimpleSign.Brasil.GovBr.Certs.GovBr-ACFinal-v1.crt" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
 </Project>

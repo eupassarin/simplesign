@@ -37,4 +37,8 @@
     <PackageReference Include="Spectre.Console.Cli" Version="0.57.2" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
 </Project>

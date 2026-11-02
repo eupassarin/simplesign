@@ -89,6 +89,10 @@ jobs:
             --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
             --source "https://api.nuget.org/v3/index.json" \
             --skip-duplicate
+          dotnet nuget push "nupkgs/*.snupkg" \
+            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --skip-duplicate
 
       - name: Upload packages artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

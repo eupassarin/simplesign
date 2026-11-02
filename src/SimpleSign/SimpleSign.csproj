@@ -18,4 +18,8 @@
     <ProjectReference Include="..\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
 </Project>
