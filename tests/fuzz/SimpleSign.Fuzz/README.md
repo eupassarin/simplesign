@@ -23,6 +23,8 @@ Fuzz testing harness for SimpleSign parsers using SharpFuzz (libFuzzer/AFL integ
 | `cms` | CMS/PKCS#7 SignedData parser (certificates, signed attributes) |
 | `validator` | Full PAdES validation pipeline (end-to-end) |
 | `xref` | PDF xref and object locator (low-level structure) |
+| `html` | Full HTML → PDF conversion (tokenizer, CSS, layout, rendering); any exception is a finding |
+| `css` | CSS parser, selector engine, and cascade |
 
 ## Usage
 

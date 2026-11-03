@@ -1,0 +1,38 @@
+page 1
+Block 72.0 0.0 451.3 180.3
+Block 72.0 8.0 421.3 50.4
+Block 102.0 8.0 421.3 50.4
+InlineText 102.0 10.4 30.0 16.8 "Disco"
+Block 102.0 24.8 391.3 33.6
+Block 132.0 24.8 391.3 33.6
+InlineText 132.0 27.2 38.0 16.8 "Círculo"
+Block 132.0 41.6 361.3 16.8
+Block 162.0 41.6 361.3 16.8
+InlineText 162.0 44.0 53.4 16.8 "Quadrado"
+ListMarker 151.2 47.8 4.3 4.3 marker=Square
+ListMarker 121.2 31.0 4.3 4.3 marker=Circle
+ListMarker 91.2 14.2 4.3 4.3 marker=Disc
+Block 72.0 66.4 421.3 33.6
+Block 102.0 66.4 421.3 16.8
+InlineText 102.0 68.8 34.0 16.8 "quatro"
+ListMarker 86.0 68.8 10.0 16.8 marker=4.
+Block 102.0 83.2 421.3 16.8
+InlineText 102.0 85.6 20.0 16.8 "três"
+ListMarker 86.0 85.6 10.0 16.8 marker=3.
+Block 72.0 110.0 451.3 28.0
+InlineText 72.0 120.4 30.0 16.8 "Texto"
+InlineText 105.3 120.4 40.7 16.8 "negrito"
+InlineText 146.0 120.4 3.3 16.8 ","
+InlineText 152.7 120.4 46.7 16.8 "marcado"
+InlineText 199.4 120.4 3.3 16.8 ","
+InlineText 206.0 123.3 13.5 11.8 "sup"
+InlineText 222.9 120.4 18.7 16.8 "e H"
+InlineText 241.6 123.3 4.7 11.8 "2"
+InlineText 246.3 120.4 35.3 16.8 "O com"
+InlineText 284.9 114.0 62.3 28.0 "grande"
+InlineText 347.2 120.4 3.3 16.8 "."
+Block 72.0 148.0 451.3 22.3
+InlineText 72.0 153.1 24.0 16.8 "Selo"
+Block 99.3 148.0 60.0 16.8
+InlineText 104.1 153.1 60.0 16.8 "inline-block"
+InlineText 172.2 153.1 46.0 16.8 "no meio."

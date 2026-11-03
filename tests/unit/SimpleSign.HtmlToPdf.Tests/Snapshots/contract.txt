@@ -1,0 +1,53 @@
+page 1
+Block 72.0 0.0 451.3 227.4
+Block 72.0 14.0 451.3 18.2
+InlineText 72.0 16.6 7.2 18.2 "§"
+InlineText 82.8 16.6 192.9 18.2 "Cláusula Primeira — Do Objeto"
+Block 373.8 46.2 140.0 33.6
+InlineText 378.5 53.3 136.7 16.8 "Nota lateral flutuante com"
+InlineText 378.5 70.1 71.4 16.8 "observações."
+Block 72.0 46.2 451.3 67.2
+InlineText 90.0 48.6 9.3 16.8 "O"
+InlineText 103.5 48.6 46.7 16.8 "presente"
+InlineText 154.4 48.6 43.4 16.8 "contrato"
+InlineText 202.0 48.6 20.0 16.8 "tem"
+InlineText 226.2 48.6 17.3 16.8 "por"
+InlineText 247.8 48.6 32.7 16.8 "objeto"
+InlineText 284.7 48.6 6.7 16.8 "a"
+InlineText 295.5 48.6 52.7 16.8 "prestação"
+InlineText 352.4 48.6 13.3 16.8 "de"
+InlineText 72.0 65.4 44.0 16.8 "serviços"
+InlineText 128.3 65.4 44.0 16.8 "técnicos"
+InlineText 184.7 65.4 82.0 16.8 "especializados,"
+InlineText 279.1 65.4 86.7 16.8 "compreendendo"
+InlineText 72.0 82.2 75.4 16.8 "levantamento,"
+InlineText 152.0 82.2 36.0 16.8 "estudo"
+InlineText 192.6 82.2 56.0 16.8 "preliminar,"
+InlineText 253.2 82.2 60.0 16.8 "anteprojeto"
+InlineText 317.8 82.2 6.7 16.8 "e"
+InlineText 329.1 82.2 36.7 16.8 "projeto"
+InlineText 72.0 99.0 188.8 16.8 "executivo, conforme escopo anexo."
+Block 72.0 123.4 421.3 50.4
+Block 102.0 123.4 421.3 16.8
+InlineText 102.0 125.8 128.1 16.8 "Levantamento cadastral"
+ListMarker 90.0 125.8 6.0 16.8 marker=i.
+Block 102.0 140.2 421.3 16.8
+InlineText 102.0 142.6 93.4 16.8 "Estudo preliminar"
+ListMarker 87.3 142.6 8.7 16.8 marker=ii.
+Block 102.0 157.0 421.3 16.8
+InlineText 102.0 159.4 92.0 16.8 "Projeto executivo"
+ListMarker 84.7 159.4 11.3 16.8 marker=iii.
+Block 72.0 183.8 451.3 33.6
+InlineText 90.0 186.2 14.0 16.8 "As"
+InlineText 111.6 186.2 33.3 16.8 "partes"
+InlineText 152.6 186.2 39.3 16.8 "elegem"
+InlineText 199.6 186.2 6.7 16.8 "o"
+InlineText 213.9 186.2 20.7 16.8 "foro"
+InlineText 242.2 186.2 13.3 16.8 "da"
+InlineText 263.1 186.2 46.0 16.8 "comarca"
+InlineText 316.7 186.2 13.3 16.8 "de"
+InlineText 337.7 186.2 53.4 16.8 "Vitória/ES"
+InlineText 398.7 186.2 24.0 16.8 "para"
+InlineText 430.3 186.2 32.7 16.8 "dirimir"
+InlineText 470.6 186.2 52.7 16.8 "quaisquer"
+InlineText 72.0 203.0 74.7 16.8 "controvérsias."

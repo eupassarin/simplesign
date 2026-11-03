@@ -126,7 +126,7 @@ dotnet tool install -g SimpleSign.Cli
   - **SimpleSign.XAdES** — XML signature signing & validation (ETSI EN 319 132)
     - **SimpleSign.Core** (shared)
 - **SimpleSign.Brasil** — ICP-Brasil + Gov.br + Lei 14.063 (depends on PAdES)
-- **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF (independent)
+- **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF: CSS cascade, floats, flexbox, grid, paginated tables, subset Unicode fonts, PDF/A-2b (independent)
 - **SimpleSign.Cli** — CLI tool (install as dotnet tool)
 - **SimpleSign.HostSigner** — Windows tray app for local signing API
 
@@ -645,8 +645,11 @@ simplesign inspect signed.pdf
 # Extract CMS from signed PDF
 simplesign extract signed.pdf --output signature.p7s
 
-# Convert HTML to PDF
-simplesign html2pdf page.html --output page.pdf
+# Convert HTML to PDF (relative images/CSS resolve against the HTML file's folder)
+simplesign html-to-pdf page.html --output page.pdf
+
+# ... with an embedded Unicode font, footer, and PDF/A-2b for archiving
+simplesign html-to-pdf page.html --font "Noto Sans=NotoSans-Regular.ttf" --footer "{page}/{pages}" --pdfa
 
 # Explain certificate details
 simplesign explain --cert mycert.pfx --password secret

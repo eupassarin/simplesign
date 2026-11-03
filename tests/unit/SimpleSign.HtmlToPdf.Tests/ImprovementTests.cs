@@ -317,14 +317,15 @@ public class ImprovementTests
         color.B.ShouldBe(0.5f, 0.01f);
     }
 
-    [Fact(DisplayName = "HSLA: with alpha parses correctly without crash")]
+    [Fact(DisplayName = "HSLA: alpha is kept for PDF transparency")]
     public void Hsla_WithAlpha_ParsesCorrectly()
     {
         var color = PdfColor.Parse("hsla(120, 100%, 50%, 0.5)");
 
-        color.R.ShouldBe(0.0f, 0.01f);
+        color.R.ShouldBe(0f, 0.01f);
         color.G.ShouldBe(1.0f, 0.01f);
-        color.B.ShouldBe(0.0f, 0.01f);
+        color.B.ShouldBe(0f, 0.01f);
+        color.Alpha.ShouldBe(0.5f, 0.01f);
     }
 
     [Fact(DisplayName = "HSL in CSS: renders valid PDF with color operator")]

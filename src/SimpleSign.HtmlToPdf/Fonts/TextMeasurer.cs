@@ -1,7 +1,10 @@
+using System.Text;
+using SimpleSign.HtmlToPdf.Parsing;
+
 namespace SimpleSign.HtmlToPdf.Fonts;
 
 /// <summary>
-/// Measures text dimensions using standard PDF font metrics.
+/// Measures text dimensions using standard PDF font metrics or registered TrueType metrics.
 /// Used by the layout engine for word wrapping and text positioning.
 /// </summary>
 public static class TextMeasurer
@@ -13,15 +16,74 @@ public static class TextMeasurer
     /// <param name="bold">Whether text is bold.</param>
     /// <param name="italic">Whether text is italic.</param>
     /// <returns>Width of the text in points.</returns>
-    public static float MeasureWidth(string text, string fontFamily, float fontSize, bool bold = false, bool italic = false)
+    public static float MeasureWidth(string text, string fontFamily, float fontSize, bool bold = false, bool italic = false) =>
+        MeasureWidth(text, fontFamily, fontSize, bold, italic, null);
+
+    internal static float MeasureWidth(string text, string fontFamily, float fontSize, bool bold, bool italic, FontCollection? fonts, float letterSpacing = 0, float wordSpacing = 0) =>
+        MeasureResolved(text, FontCollection.Resolve(fonts, fontFamily, bold, italic), fonts, fontSize, letterSpacing, wordSpacing);
+
+    /// <summary>Measures text using every typographic property of a computed style (family fallback list included).</summary>
+    internal static float MeasureWidth(string text, ComputedStyle style, FontCollection? fonts) =>
+        MeasureResolved(text, ResolveFont(style, fonts), fonts, style.FontSize, style.LetterSpacing, style.WordSpacing);
+
+    /// <summary>Resolves the primary face for a computed style.</summary>
+    internal static ResolvedFont ResolveFont(ComputedStyle style, FontCollection? fonts) =>
+        FontCollection.Resolve(fonts, style.FontFamilies.Count > 0 ? style.FontFamilies : [style.FontFamily], style.IsBold, style.IsItalic);
+
+    internal static float MeasureResolved(string text, ResolvedFont primary, FontCollection? fonts, float fontSize, float letterSpacing, float wordSpacing)
     {
-        string pdfFont = StandardFonts.Resolve(fontFamily, bold, italic);
-        float totalWidth = 0;
-        foreach (char c in text)
+        if (text.Length == 0)
         {
-            totalWidth += FontMetrics.GetCharWidth(pdfFont, c) * fontSize / 1000f;
+            return 0;
         }
-        return totalWidth;
+
+        float width = 0;
+        int runeCount = 0;
+        int spaces = 0;
+        foreach (var (segment, font) in FontCollection.SplitRuns(text, primary, fonts))
+        {
+            bool shaped = UsesShaping(font, segment, letterSpacing);
+            if (shaped)
+            {
+                width += font.Embedded!.Shape(segment, rightToLeft: false).Advance * fontSize / font.Embedded.UnitsPerEm;
+            }
+
+            foreach (Rune rune in segment.EnumerateRunes())
+            {
+                if (!shaped)
+                {
+                    width += font.MeasureRune(rune, fontSize);
+                }
+
+                runeCount++;
+                if (rune.Value == ' ')
+                {
+                    spaces++;
+                }
+            }
+        }
+
+        return width + (Math.Max(0, runeCount - 1) * letterSpacing) + (spaces * wordSpacing);
+    }
+
+    /// <summary>
+    /// Returns true when a run is drawn through the OpenType shaper: always for complex scripts,
+    /// and for other text when the font has layout tables and no letter-spacing is applied
+    /// (letter-spacing disables ligatures, as in browsers).
+    /// </summary>
+    internal static bool UsesShaping(ResolvedFont font, string text, float letterSpacing)
+    {
+        if (font.Embedded is not { } embedded)
+        {
+            return false;
+        }
+
+        if (OpenType.TextShaper.DetectScript(text) != OpenType.ShapingScript.Default)
+        {
+            return true;
+        }
+
+        return letterSpacing == 0 && embedded.Shaper.HasLayout;
     }
 
     /// <summary>Measures the width of a single character in points.</summary>
@@ -31,11 +93,12 @@ public static class TextMeasurer
     /// <param name="bold">Whether text is bold.</param>
     /// <param name="italic">Whether text is italic.</param>
     /// <returns>Width of the character in points.</returns>
-    public static float MeasureChar(char c, string fontFamily, float fontSize, bool bold = false, bool italic = false)
-    {
-        string pdfFont = StandardFonts.Resolve(fontFamily, bold, italic);
-        return FontMetrics.GetCharWidth(pdfFont, c) * fontSize / 1000f;
-    }
+    public static float MeasureChar(char c, string fontFamily, float fontSize, bool bold = false, bool italic = false) =>
+        MeasureChar(c, fontFamily, fontSize, bold, italic, null);
+
+    internal static float MeasureChar(char c, string fontFamily, float fontSize, bool bold, bool italic, FontCollection? fonts, float letterSpacing = 0, float wordSpacing = 0) =>
+        MeasureResolved(c.ToString(), FontCollection.Resolve(fonts, fontFamily, bold, italic), fonts, fontSize, 0, 0)
+            + letterSpacing + (c == ' ' ? wordSpacing : 0);
 
     /// <summary>
     /// Finds how many characters fit within a given width.
@@ -49,20 +112,31 @@ public static class TextMeasurer
     /// <param name="bold">Whether text is bold.</param>
     /// <param name="italic">Whether text is italic.</param>
     /// <returns>The exclusive index of the last character that fits within the available width.</returns>
-    public static int FitChars(string text, int startIndex, float availableWidth, string fontFamily, float fontSize, bool bold = false, bool italic = false)
+    public static int FitChars(string text, int startIndex, float availableWidth, string fontFamily, float fontSize, bool bold = false, bool italic = false) =>
+        FitChars(text, startIndex, availableWidth, fontFamily, fontSize, bold, italic, null);
+
+    internal static int FitChars(string text, int startIndex, float availableWidth, string fontFamily, float fontSize, bool bold, bool italic, FontCollection? fonts)
     {
-        string pdfFont = StandardFonts.Resolve(fontFamily, bold, italic);
+        ArgumentNullException.ThrowIfNull(text);
+        ResolvedFont primary = FontCollection.Resolve(fonts, fontFamily, bold, italic);
         float width = 0;
-        for (int i = startIndex; i < text.Length; i++)
+        int index = startIndex;
+        foreach (var (segment, font) in FontCollection.SplitRuns(text[startIndex..], primary, fonts))
         {
-            float charWidth = FontMetrics.GetCharWidth(pdfFont, text[i]) * fontSize / 1000f;
-            if (width + charWidth > availableWidth)
+            foreach (Rune rune in segment.EnumerateRunes())
             {
-                return i;
+                float runeWidth = font.MeasureRune(rune, fontSize);
+                if (width + runeWidth > availableWidth)
+                {
+                    return index;
+                }
+
+                width += runeWidth;
+                index += rune.Utf16SequenceLength;
             }
-            width += charWidth;
         }
-        return text.Length;
+
+        return index;
     }
 
     /// <summary>
@@ -76,7 +150,16 @@ public static class TextMeasurer
     /// <param name="bold">Whether text is bold.</param>
     /// <param name="italic">Whether text is italic.</param>
     /// <returns>A list of text lines that each fit within the specified width.</returns>
-    public static List<string> WrapText(string text, float maxWidth, string fontFamily, float fontSize, bool bold = false, bool italic = false)
+    public static List<string> WrapText(string text, float maxWidth, string fontFamily, float fontSize, bool bold = false, bool italic = false) =>
+        WrapText(text, maxWidth, fontFamily, fontSize, bold, italic, null);
+
+    internal static List<string> WrapText(string text, float maxWidth, string fontFamily, float fontSize, bool bold, bool italic, FontCollection? fonts, float letterSpacing = 0, float wordSpacing = 0)
+    {
+        ResolvedFont primary = FontCollection.Resolve(fonts, fontFamily, bold, italic);
+        return WrapText(text, maxWidth, s => MeasureResolved(s, primary, fonts, fontSize, letterSpacing, wordSpacing));
+    }
+
+    private static List<string> WrapText(string text, float maxWidth, Func<string, float> measure)
     {
         var lines = new List<string>();
         if (string.IsNullOrEmpty(text))
@@ -84,128 +167,72 @@ public static class TextMeasurer
             return lines;
         }
 
-        string pdfFont = StandardFonts.Resolve(fontFamily, bold, italic);
-        float scale = fontSize / 1000f;
-
+        float spaceWidth = measure("a a") - measure("aa");
         foreach (string paragraph in text.Split('\n'))
         {
-            if (paragraph.Length == 0)
+            string[] words = paragraph.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0)
             {
                 lines.Add(string.Empty);
                 continue;
             }
 
-            WrapParagraph(paragraph, pdfFont, scale, maxWidth, lines);
+            var line = new StringBuilder();
+            float width = 0;
+            foreach (string word in words)
+            {
+                float wordWidth = measure(word);
+                float gap = line.Length == 0 ? 0 : spaceWidth;
+                if (line.Length > 0 && width + gap + wordWidth > maxWidth)
+                {
+                    lines.Add(line.ToString());
+                    line.Clear();
+                    width = 0;
+                    gap = 0;
+                }
+
+                if (wordWidth <= maxWidth || maxWidth <= 0)
+                {
+                    if (line.Length > 0)
+                    {
+                        line.Append(' ');
+                    }
+
+                    line.Append(word);
+                    width += gap + wordWidth;
+                    continue;
+                }
+
+                // Word wider than the line: break between characters.
+                if (line.Length > 0)
+                {
+                    lines.Add(line.ToString());
+                    line.Clear();
+                    width = 0;
+                }
+
+                foreach (Rune rune in word.EnumerateRunes())
+                {
+                    string piece = rune.ToString();
+                    float runeWidth = measure(piece);
+                    if (line.Length > 0 && width + runeWidth > maxWidth)
+                    {
+                        lines.Add(line.ToString());
+                        line.Clear();
+                        width = 0;
+                    }
+
+                    line.Append(piece);
+                    width += runeWidth;
+                }
+            }
+
+            if (line.Length > 0)
+            {
+                lines.Add(line.ToString());
+            }
         }
 
         return lines;
-    }
-
-    private static void WrapParagraph(string paragraph, string pdfFont, float scale, float maxWidth, List<string> lines)
-    {
-        string[] words = paragraph.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0)
-        {
-            lines.Add(string.Empty);
-            return;
-        }
-
-        float spaceWidth = FontMetrics.GetCharWidth(pdfFont, ' ') * scale;
-        var currentLine = new System.Text.StringBuilder();
-        float currentWidth = 0;
-
-        foreach (string word in words)
-        {
-            float wordWidth = MeasureWordWidth(word, pdfFont, scale);
-
-            if (currentLine.Length == 0)
-            {
-                if (wordWidth <= maxWidth)
-                {
-                    currentLine.Append(word);
-                    currentWidth = wordWidth;
-                }
-                else
-                {
-                    BreakLongWord(word, pdfFont, scale, maxWidth, lines, ref currentLine, ref currentWidth);
-                }
-            }
-            else if (currentWidth + spaceWidth + wordWidth <= maxWidth)
-            {
-                currentLine.Append(' ');
-                currentLine.Append(word);
-                currentWidth += spaceWidth + wordWidth;
-            }
-            else
-            {
-                lines.Add(currentLine.ToString());
-                currentLine.Clear();
-                currentWidth = 0;
-
-                if (wordWidth <= maxWidth)
-                {
-                    currentLine.Append(word);
-                    currentWidth = wordWidth;
-                }
-                else
-                {
-                    BreakLongWord(word, pdfFont, scale, maxWidth, lines, ref currentLine, ref currentWidth);
-                }
-            }
-        }
-
-        if (currentLine.Length > 0)
-        {
-            lines.Add(currentLine.ToString());
-        }
-    }
-
-    private static void BreakLongWord(
-        string word,
-        string pdfFont,
-        float scale,
-        float maxWidth,
-        List<string> lines,
-        ref System.Text.StringBuilder currentLine,
-        ref float currentWidth)
-    {
-        int pos = 0;
-        while (pos < word.Length)
-        {
-            float lineWidth = 0;
-            int start = pos;
-
-            while (pos < word.Length)
-            {
-                float charWidth = FontMetrics.GetCharWidth(pdfFont, word[pos]) * scale;
-                if (lineWidth + charWidth > maxWidth && pos > start)
-                {
-                    break;
-                }
-                lineWidth += charWidth;
-                pos++;
-            }
-
-            if (pos < word.Length)
-            {
-                lines.Add(word[start..pos]);
-            }
-            else
-            {
-                // Last fragment — keep it as the current line for potential continuation
-                currentLine.Append(word[start..pos]);
-                currentWidth = lineWidth;
-            }
-        }
-    }
-
-    private static float MeasureWordWidth(string word, string pdfFont, float scale)
-    {
-        float width = 0;
-        foreach (char c in word)
-        {
-            width += FontMetrics.GetCharWidth(pdfFont, c) * scale;
-        }
-        return width;
     }
 }

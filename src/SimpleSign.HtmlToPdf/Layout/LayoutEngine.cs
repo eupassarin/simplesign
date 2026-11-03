@@ -8,26 +8,65 @@ namespace SimpleSign.HtmlToPdf.Layout;
 
 /// <summary>
 /// Lays out a styled DOM tree into positioned boxes across pages.
-/// Handles block flow, inline text wrapping, page breaking, and list markers.
+/// Handles block flow, inline formatting (wrapping, alignment, justification), floats, positioning,
+/// flexbox, grid, tables, list markers, and page fragmentation.
 /// </summary>
-public sealed class LayoutEngine
+/// <remarks>
+/// Content that must be measured before it is placed (table cells, inline-blocks, floats, flex and grid items,
+/// absolutely positioned boxes) is laid out by an <em>isolated</em> engine on a single, unbounded page. The
+/// resulting boxes are then translated into the main flow, splitting them across pages when necessary.
+/// </remarks>
+public sealed partial class LayoutEngine
 {
+    private const float UnboundedHeight = 10_000_000f;
+    private const float MaxContentProbeWidth = 100_000f;
+    private const float MinContentProbeWidth = 0.01f;
+
     private readonly PageSettings _settings;
+    private readonly SharedState _shared;
     private readonly List<PageBox> _pages = [];
     private readonly List<BookmarkEntry> _bookmarks = [];
     private PageBox _currentPage;
-    private float _cursorY;
     private float _lastMarginBottom;
+    private float _pendingIndent;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LayoutEngine"/> class.
     /// </summary>
     /// <param name="settings">Page settings for layout.</param>
-    public LayoutEngine(PageSettings settings)
+    public LayoutEngine(PageSettings settings) : this(settings, null)
+    {
+    }
+
+    internal LayoutEngine(PageSettings settings, FontCollection? fonts) : this(settings, fonts, null)
+    {
+    }
+
+    internal LayoutEngine(PageSettings settings, FontCollection? fonts, ResourceLoader? loader)
+        : this(settings, new SharedState(fonts, loader ?? ResourceLoader.DataUriOnly), isolated: false, measuring: false)
+    {
+    }
+
+    private LayoutEngine(PageSettings settings, SharedState shared, bool isolated, bool measuring)
     {
         _settings = settings;
+        _shared = shared;
+        IsIsolated = isolated;
+        IsMeasuring = measuring;
         _currentPage = CreateNewPage();
     }
+
+    internal FontCollection? Fonts => _shared.Fonts;
+
+    internal ResourceLoader Resources => _shared.Loader;
+
+    internal bool IsIsolated { get; }
+
+    internal bool IsMeasuring { get; }
+
+    internal float CursorY { get; set; }
+
+    internal float PageContentHeight => _settings.ContentHeight;
 
     /// <summary>
     /// Lays out the DOM tree into pages.
@@ -36,249 +75,375 @@ public sealed class LayoutEngine
     /// <returns>Layout result with positioned pages and boxes.</returns>
     public LayoutResult Layout(HtmlNode root)
     {
+        ArgumentNullException.ThrowIfNull(root);
         LayoutBlockChildren(root, _settings.ContentWidth, _settings.Margins.Left);
+        LayoutPendingAbsolutes(null, new ContainingBlock(_settings.Margins.Left, 0, _settings.ContentWidth, _settings.ContentHeight, _currentPage));
         FlushCurrentPage();
 
-        var result = new LayoutResult { Settings = _settings };
+        // A forced break after the last element leaves only empty continuation fragments behind.
+        while (_pages.Count > 1 && _pages[^1].Boxes.TrueForAll(b => b.Type == LayoutBoxType.Block && b.Height <= 0.5f && b.SuppressTopBorder))
+        {
+            _pages.RemoveAt(_pages.Count - 1);
+        }
+
+        StampFixedBoxes();
+
+        (HtmlNode? canvasNode, ComputedStyle? canvasStyle) = FindCanvas(root);
+        var result = new LayoutResult
+        {
+            Settings = _settings,
+            Fonts = _shared.Fonts,
+            Resources = _shared.Loader,
+            CanvasNode = canvasNode,
+            CanvasStyle = canvasStyle,
+        };
         result.Pages.AddRange(_pages);
         result.Bookmarks.AddRange(_bookmarks);
         return result;
     }
 
+    /// <summary>
+    /// CSS propagates the root element's background (or the body's, when the root has none)
+    /// to the canvas, which covers every page.
+    /// </summary>
+    private static (HtmlNode? Node, ComputedStyle? Style) FindCanvas(HtmlNode root)
+    {
+        HtmlNode? html = root.Tag == "html" ? root : root.Descendants("html").FirstOrDefault();
+        HtmlNode? body = (html ?? root).Descendants("body").FirstOrDefault();
+        foreach (HtmlNode? candidate in new[] { html, body })
+        {
+            if (candidate?.ComputedStyle is { } style
+                && ((style.BackgroundColor is PdfColor color && !color.IsTransparent) || style.HasBackgroundImage))
+            {
+                return (candidate, style);
+            }
+        }
+
+        return (null, null);
+    }
+
+    // ── Block flow ───────────────────────────────────────────────────────
+
     private void LayoutBlockChildren(HtmlNode parent, float availableWidth, float offsetX)
     {
-        int listCounter = 0;
-        bool inOrderedList = parent.Tag is "ol";
+        ListCounter? counter = null;
 
         for (int i = 0; i < parent.Children.Count; i++)
         {
             HtmlNode child = parent.Children[i];
-            ComputedStyle style = child.ComputedStyle ?? new ComputedStyle();
+            ComputedStyle style = StyleFor(child, availableWidth);
 
             if (style.Display == DisplayType.None)
             {
                 continue;
             }
 
-            if (child.NodeType == HtmlNodeType.Text)
+            if (child.NodeType == HtmlNodeType.Element && TryHandleOutOfFlow(child, style, availableWidth, offsetX))
             {
-                // Collect consecutive inline content starting from this text node
+                continue;
+            }
+
+            if (child.NodeType == HtmlNodeType.Text || IsInlineLevel(child, style))
+            {
                 int end = CollectInlineSpan(parent, i);
-                LayoutInlineContent(parent, i, end, availableWidth, offsetX);
+                bool firstContent = IsFirstContent(parent, i);
+                LayoutInlineContent(parent, i, end, availableWidth, offsetX, firstContent);
                 i = end - 1;
                 continue;
             }
 
-            if (style.Display == DisplayType.Inline)
-            {
-                // Handle <img> as block-level even though it's inline
-                if (child.Tag is "img")
-                {
-                    LayoutImage(child, availableWidth, offsetX);
-                    continue;
-                }
+            ApplyClear(style.Clear);
 
-                int end = CollectInlineSpan(parent, i);
-                LayoutInlineContent(parent, i, end, availableWidth, offsetX);
-                i = end - 1;
-                continue;
+            if (style.PageBreakBefore == PageBreak.Always)
+            {
+                ForcePageBreak();
             }
 
             if (style.Display == DisplayType.ListItem)
             {
-                listCounter++;
-                string marker = inOrderedList
-                    ? $"{listCounter}."
-                    : "\u2022";
-                LayoutListItem(child, availableWidth, offsetX, marker);
-                continue;
+                counter ??= new ListCounter(parent);
+                (string? text, MarkerShape shape) = ListMarkers.Create(style.ListStyleType, counter.Next(child));
+                MarkerInfo? marker = text is null && shape == MarkerShape.Text ? null : new MarkerInfo(text, shape);
+                LayoutBlock(child, availableWidth, offsetX, marker: marker);
             }
-
-            if (child.Tag is "br")
-            {
-                float lineHeight = style.FontSize * style.LineHeight;
-                EnsureSpace(lineHeight);
-                _cursorY += lineHeight;
-                continue;
-            }
-
-            if (child.Tag is "hr")
+            else if (child.Tag is "hr")
             {
                 LayoutHorizontalRule(child, availableWidth, offsetX);
-                continue;
             }
-
-            if (child.Tag is "img")
+            else if (IsReplaced(child))
             {
-                LayoutImage(child, availableWidth, offsetX);
-                continue;
+                LayoutBlockImage(child, availableWidth, offsetX);
             }
-
-            if (child.Tag is "table" || style.Display == DisplayType.Table)
+            else if (style.Display == DisplayType.Table || (child.Tag is "table" && style.Display != DisplayType.Inline))
             {
-                if (style.PageBreakBefore == PageBreak.Always)
-                {
-                    StartNewPage();
-                }
-
-                float tableHeight = TableLayoutHelper.LayoutTable(
-                    child,
-                    availableWidth,
-                    offsetX,
-                    _cursorY,
-                    box => _currentPage.Boxes.Add(box));
-                _cursorY += tableHeight;
-
-                if (style.PageBreakAfter == PageBreak.Always)
-                {
-                    StartNewPage();
-                }
-
-                continue;
+                TableLayoutHelper.Layout(this, child, availableWidth, offsetX);
             }
-
-            if (style.PageBreakBefore == PageBreak.Always)
+            else
             {
-                StartNewPage();
+                LayoutBlock(child, availableWidth, offsetX);
             }
-
-            LayoutBlock(child, availableWidth, offsetX);
 
             if (style.PageBreakAfter == PageBreak.Always)
             {
-                StartNewPage();
+                ForcePageBreak();
             }
         }
     }
 
-    private void LayoutBlock(HtmlNode node, float availableWidth, float offsetX)
+    private static bool IsInlineLevel(HtmlNode node, ComputedStyle style) =>
+        style.Float == FloatMode.None
+        && style.Display is DisplayType.Inline or DisplayType.InlineBlock
+        && !(IsReplaced(node) && style.Display == DisplayType.Block);
+
+    /// <summary>Replaced elements are laid out as images: raster images and inline SVG.</summary>
+    private static bool IsReplaced(HtmlNode node) => node.Tag is "img" or "svg";
+
+    private static bool IsFirstContent(HtmlNode parent, int index)
     {
-        ComputedStyle style = node.ComputedStyle ?? new ComputedStyle();
+        for (int i = 0; i < index; i++)
+        {
+            HtmlNode sibling = parent.Children[i];
+            if (sibling.NodeType == HtmlNodeType.Text)
+            {
+                if (!string.IsNullOrWhiteSpace(sibling.Text))
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (sibling.ComputedStyle?.Display != DisplayType.None)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Lays out a block box (and its subtree), advancing the cursor.</summary>
+    /// <param name="node">The block element.</param>
+    /// <param name="availableWidth">Width of the containing block.</param>
+    /// <param name="offsetX">Left edge of the containing block.</param>
+    /// <param name="ignoreExplicitWidth">True when the caller already decided the outer width (flex/grid items, floats).</param>
+    /// <param name="marker">List marker to draw next to the first line, if any.</param>
+    private void LayoutBlock(HtmlNode node, float availableWidth, float offsetX, bool ignoreExplicitWidth = false, MarkerInfo? marker = null)
+    {
+        ComputedStyle style = StyleFor(node, availableWidth);
+
+        // Block formatting context roots are placed beside floats instead of under them.
+        bool bfcRoot = IsBlockFormattingContextRoot(style);
+        if (bfcRoot && _floats.Count > 0)
+        {
+            (float bandLeft, float bandRight) = FloatBand(CursorY, CursorY + 1, offsetX, offsetX + availableWidth);
+            offsetX = bandLeft;
+            availableWidth = Math.Max(0, bandRight - bandLeft);
+        }
 
         // Margin collapsing: collapse top margin with previous bottom margin
         float marginTop = style.Margin.Top;
         float collapsedSpacing = Math.Max(marginTop, _lastMarginBottom) - _lastMarginBottom;
-        _cursorY += collapsedSpacing;
+        CursorY += collapsedSpacing;
         _lastMarginBottom = 0;
 
         float borderLeft = style.Border.LeftWidth;
         float borderRight = style.Border.RightWidth;
         float borderTop = style.Border.TopWidth;
         float borderBottom = style.Border.BottomWidth;
+        float paddingLeft = ResolvePercent(style.Padding.Left, availableWidth);
+        float paddingRight = ResolvePercent(style.Padding.Right, availableWidth);
+        float paddingTop = ResolvePercent(style.Padding.Top, availableWidth);
+        float paddingBottom = ResolvePercent(style.Padding.Bottom, availableWidth);
+        float marginLeft = ResolvePercent(style.Margin.Left, availableWidth);
+        float marginRight = ResolvePercent(style.Margin.Right, availableWidth);
+        float horizontalExtras = borderLeft + borderRight + paddingLeft + paddingRight;
 
-        float paddingLeft = style.Padding.Left;
-        float paddingRight = style.Padding.Right;
-        float paddingTop = style.Padding.Top;
-        float paddingBottom = style.Padding.Bottom;
-
-        float marginLeft = style.Margin.Left;
-        float marginRight = style.Margin.Right;
-
-        float contentWidth = availableWidth - marginLeft - marginRight - borderLeft - borderRight - paddingLeft - paddingRight;
-        if (style.Width is float explicitWidth)
+        float contentWidth = availableWidth - marginLeft - marginRight - horizontalExtras;
+        bool widthConstrained = false;
+        if (!ignoreExplicitWidth && ResolveWidth(style.Width, style, availableWidth, horizontalExtras) is float explicitWidth)
         {
-            if (explicitWidth < 0)
-            {
-                // Negative values represent percentages (e.g., -50 = 50%)
-                float resolvedWidth = availableWidth * (-explicitWidth / 100f);
-                contentWidth = Math.Min(contentWidth, resolvedWidth - marginLeft - marginRight - borderLeft - borderRight - paddingLeft - paddingRight);
-            }
-            else
-            {
-                contentWidth = Math.Min(contentWidth, explicitWidth);
-            }
+            contentWidth = Math.Min(contentWidth, explicitWidth);
+            widthConstrained = true;
         }
 
-        if (style.MaxWidth is float maxWidth)
+        if (ResolveWidth(style.MaxWidth, style, availableWidth, horizontalExtras) is float maxWidth && contentWidth > maxWidth)
         {
-            if (maxWidth < 0)
-            {
-                float resolvedMax = availableWidth * (-maxWidth / 100f);
-                contentWidth = Math.Min(contentWidth, resolvedMax);
-            }
-            else
-            {
-                contentWidth = Math.Min(contentWidth, maxWidth);
-            }
+            contentWidth = maxWidth;
+            widthConstrained = true;
+        }
+
+        if (ResolveWidth(style.MinWidth, style, availableWidth, horizontalExtras) is float minWidth && contentWidth < minWidth)
+        {
+            contentWidth = minWidth;
         }
 
         contentWidth = Math.Max(contentWidth, 0);
 
-        float boxX = offsetX + marginLeft;
-        float boxStartY = _cursorY;
+        // Auto horizontal margins center (or right-align) a box narrower than its container.
+        float autoShift = 0;
+        if (widthConstrained && !IsMeasuring)
+        {
+            float free = availableWidth - marginLeft - marginRight - horizontalExtras - contentWidth;
+            if (free > 0)
+            {
+                if (style.MarginLeftAuto && style.MarginRightAuto)
+                {
+                    autoShift = free / 2;
+                }
+                else if (style.MarginLeftAuto)
+                {
+                    autoShift = free;
+                }
+            }
+        }
 
-        // Advance past border+padding top
-        _cursorY += borderTop + paddingTop;
+        // Keep small boxes (break-inside: avoid) and headings (keep with next) together.
+        bool isHeading = node.Tag is "h1" or "h2" or "h3" or "h4" or "h5" or "h6";
+        if (!IsIsolated && CursorY > 0 && (style.PageBreakInside == PageBreak.Avoid || isHeading))
+        {
+            float needed = MeasureBlockHeight(node, availableWidth) + (isHeading ? 2 * 12f * 1.4f : 0);
+            if (CursorY + needed > _settings.ContentHeight && needed <= _settings.ContentHeight)
+            {
+                StartNewPage();
+            }
+        }
 
+        if (!IsIsolated && CursorY > 0 && CursorY + borderTop + paddingTop + (style.FontSize * style.LineHeight) > _settings.ContentHeight)
+        {
+            StartNewPage();
+        }
+
+        float boxX = offsetX + marginLeft + autoShift;
+        float boxStartY = CursorY;
         float contentOffsetX = boxX + borderLeft + paddingLeft;
 
-        // Add block box BEFORE children so background renders behind text content
+        // Percentage paddings are resolved now so the renderer sees absolute values.
+        ComputedStyle boxStyle = style;
+        if (CssLength.IsPercent(style.Padding.Left) || CssLength.IsPercent(style.Padding.Right) || CssLength.IsPercent(style.Padding.Top) || CssLength.IsPercent(style.Padding.Bottom))
+        {
+            boxStyle = style.Clone();
+            boxStyle.Padding = new Thickness(paddingTop, paddingRight, paddingBottom, paddingLeft);
+        }
+
         var box = new LayoutBox
         {
             Type = LayoutBoxType.Block,
             Node = node,
-            Style = style,
+            Style = boxStyle,
             X = boxX,
             Y = boxStartY,
             Width = contentWidth,
-            Height = 0, // Updated after children layout
+            Height = 0,
         };
 
-        // Track the page before children layout to detect page breaks
+        // Add the block box BEFORE children so its background renders behind them.
         PageBox startPage = _currentPage;
+        int startIndex = startPage.Boxes.Count;
         startPage.Boxes.Add(box);
+        int floatsBefore = _floats.Count;
 
-        // Layout children inside this block
-        float childStartY = _cursorY;
-        LayoutBlockChildren(node, contentWidth, contentOffsetX);
+        CursorY += borderTop + paddingTop;
+        float childStartY = CursorY;
 
-        float contentHeight = _cursorY - childStartY;
-        if (style.Height is float explicitHeight)
+        if (marker is not null && style.ListStyleInside)
         {
-            contentHeight = Math.Max(contentHeight, explicitHeight);
-            _cursorY = childStartY + contentHeight;
+            _pendingIndent = MeasureMarker(marker, style) + (style.FontSize * 0.3f);
         }
 
-        _cursorY += paddingBottom + borderBottom;
-
-        if (_currentPage == startPage)
+        switch (style.Display)
         {
-            // No page break — update the block box height
+            case DisplayType.Flex:
+                LayoutFlexChildren(node, contentWidth, contentOffsetX);
+                break;
+            case DisplayType.Grid:
+                LayoutGridChildren(node, contentWidth, contentOffsetX);
+                break;
+            default:
+                if (ColumnLayout(style, contentWidth) is { } columns)
+                {
+                    LayoutMultiColumn(node, style, columns, contentOffsetX);
+                }
+                else
+                {
+                    LayoutBlockChildren(node, contentWidth, contentOffsetX);
+                }
+
+                break;
+        }
+
+        _pendingIndent = 0;
+
+        bool samePage = _currentPage == startPage;
+        float contentHeight = CursorY - childStartY;
+        if (samePage && bfcRoot)
+        {
+            for (int f = floatsBefore; f < _floats.Count; f++)
+            {
+                contentHeight = Math.Max(contentHeight, _floats[f].Bottom - childStartY);
+            }
+        }
+
+        if (samePage)
+        {
+            float verticalExtras = borderTop + borderBottom + paddingTop + paddingBottom;
+            if (ResolveHeight(style.Height, style, verticalExtras) is float explicitHeight)
+            {
+                // Clipped boxes keep their declared height; visible overflow grows the box instead of overlapping.
+                contentHeight = style.ClipsContent ? explicitHeight : Math.Max(contentHeight, explicitHeight);
+            }
+
+            if (ResolveHeight(style.MinHeight, style, verticalExtras) is float minHeight)
+            {
+                contentHeight = Math.Max(contentHeight, minHeight);
+            }
+
+            if (ResolveHeight(style.MaxHeight, style, verticalExtras) is float maxHeight && contentHeight > maxHeight && style.ClipsContent)
+            {
+                contentHeight = maxHeight;
+            }
+
+            CursorY = childStartY + contentHeight;
             box.Height = contentHeight;
         }
         else
         {
-            // Page break occurred during children layout.
-            // Cap the start page box to remaining space
-            float startPageRemaining = _settings.ContentHeight - boxStartY;
-            box.Height = Math.Max(startPageRemaining, 0);
-
-            // Add a continuation block box on the current page (before any subsequent content)
-            var continuationBox = new LayoutBox
-            {
-                Type = LayoutBoxType.Block,
-                Node = node,
-                Style = style,
-                X = boxX,
-                Y = 0,
-                Width = contentWidth,
-                Height = _cursorY,
-            };
-
-            // Insert at position 0 so background renders behind text on this page too
-            _currentPage.Boxes.Insert(0, continuationBox);
+            SplitBlockAcrossPages(box, startPage, boxStartY, borderTop + paddingTop, CursorY);
         }
 
-        // Collect bookmark for headings (use page index from before children layout)
-        if (node.Tag is "h1" or "h2" or "h3" or "h4" or "h5" or "h6")
+        CursorY += paddingBottom + borderBottom;
+
+        if (marker is not null)
+        {
+            PlaceMarker(marker, style, startPage, startIndex + 1, contentOffsetX, childStartY);
+        }
+
+        if (samePage && style.Position == PositionMode.Relative)
+        {
+            ShiftBoxes(startPage, startIndex, RelativeOffset(style));
+        }
+
+        if (style.Position is PositionMode.Relative or PositionMode.Absolute or PositionMode.Fixed)
+        {
+            float paddingBoxHeight = samePage ? contentHeight + paddingTop + paddingBottom : _settings.ContentHeight;
+            (float dx, float dy) = samePage && style.Position == PositionMode.Relative ? RelativeOffset(style) : (0, 0);
+            LayoutPendingAbsolutes(node, new ContainingBlock(
+                boxX + borderLeft + dx,
+                boxStartY + borderTop + dy,
+                contentWidth + paddingLeft + paddingRight,
+                paddingBoxHeight,
+                startPage));
+        }
+
+        if (isHeading && !IsIsolated)
         {
             int bookmarkPage = _pages.IndexOf(startPage);
             if (bookmarkPage < 0)
             {
-                // startPage is still the current (unflushed) page; its index will be _pages.Count
                 bookmarkPage = _pages.Count;
             }
-            int level = node.Tag[1] - '0';
+
+            int level = node.Tag![1] - '0';
             string title = GetTextContent(node);
             if (title.Length > 0)
             {
@@ -286,341 +451,455 @@ public sealed class LayoutEngine
             }
         }
 
-        // Set margin-bottom for collapsing with next sibling
         _lastMarginBottom = style.Margin.Bottom;
-        _cursorY += style.Margin.Bottom;
+        CursorY += style.Margin.Bottom;
     }
 
-    private void LayoutInlineContent(HtmlNode parent, int startIdx, int endIdx, float availableWidth, float offsetX)
+    /// <summary>Distributes a block's background/border over every page it spans.</summary>
+    private void SplitBlockAcrossPages(LayoutBox box, PageBox startPage, float boxStartY, float topExtras, float contentEndOnLastPage)
     {
-        // Collect text runs from consecutive inline nodes
-        var runs = new List<TextRun>();
-        for (int i = startIdx; i < endIdx; i++)
+        float pageHeight = _settings.ContentHeight;
+        box.Height = Math.Max(pageHeight - boxStartY - topExtras, 0);
+        box.SuppressBottomBorder = true;
+
+        int startIndex = _pages.IndexOf(startPage);
+        if (startIndex >= 0)
         {
-            CollectTextRuns(parent.Children[i], runs);
+            for (int p = startIndex + 1; p < _pages.Count; p++)
+            {
+                LayoutBox middle = box.CloneAt(box.X, 0);
+                middle.Height = pageHeight;
+                middle.SuppressTopBorder = true;
+                middle.SuppressBottomBorder = true;
+                _pages[p].Boxes.Insert(0, middle);
+            }
         }
 
-        if (runs.Count == 0)
-        {
-            return;
-        }
-
-        // Build lines by word-wrapping runs
-        var lines = WrapRunsIntoLines(runs, availableWidth);
-
-        ComputedStyle parentStyle = parent.ComputedStyle ?? new ComputedStyle();
-
-        foreach (LayoutLine line in lines)
-        {
-            float lineHeight = line.Height;
-            EnsureSpace(lineHeight);
-
-            // Apply text-align
-            float lineX = offsetX;
-            float extraSpace = availableWidth - line.Width;
-            if (parentStyle.TextAlign == TextAlign.Center)
-            {
-                lineX += extraSpace / 2;
-            }
-            else if (parentStyle.TextAlign == TextAlign.Right)
-            {
-                lineX += extraSpace;
-            }
-
-            foreach (LayoutBox box in line.Boxes)
-            {
-                box.X += lineX;
-                box.Y = _cursorY;
-                _currentPage.Boxes.Add(box);
-            }
-
-            _cursorY += lineHeight;
-        }
+        LayoutBox last = box.CloneAt(box.X, 0);
+        last.Height = Math.Max(contentEndOnLastPage, 0);
+        last.SuppressTopBorder = true;
+        last.SuppressBottomBorder = false;
+        _currentPage.Boxes.Insert(0, last);
     }
 
-    private void LayoutListItem(HtmlNode node, float availableWidth, float offsetX, string marker)
+    private static bool IsBlockFormattingContextRoot(ComputedStyle style) =>
+        style.OverflowHidden || style.Display is DisplayType.FlowRoot or DisplayType.Flex or DisplayType.Grid or DisplayType.InlineBlock or DisplayType.Table
+        || style.Float != FloatMode.None || style.Position is PositionMode.Absolute or PositionMode.Fixed;
+
+    /// <summary>
+    /// Returns the node's style with percentage margins/paddings and math functions resolved
+    /// against <paramref name="containerWidth"/>. The cascaded style is kept as a template so
+    /// the node can be laid out again at another width (intrinsic sizing probes).
+    /// </summary>
+    private ComputedStyle StyleFor(HtmlNode node, float containerWidth, float? containerHeight = null)
     {
-        ComputedStyle style = node.ComputedStyle ?? new ComputedStyle();
-
-        float marginTop = style.Margin.Top;
-        float collapsedSpacing = Math.Max(marginTop, _lastMarginBottom) - _lastMarginBottom;
-        _cursorY += collapsedSpacing;
-        _lastMarginBottom = 0;
-
-        float paddingLeft = style.Padding.Left;
-        float contentWidth = availableWidth - style.Margin.Left - style.Margin.Right - paddingLeft;
-        contentWidth = Math.Max(contentWidth, 0);
-
-        // Position marker
-        float markerWidth = TextMeasurer.MeasureWidth(marker + " ", style.FontFamily, style.FontSize, style.IsBold, style.IsItalic);
-        float markerX = offsetX + style.Margin.Left + paddingLeft - markerWidth;
-
-        var markerBox = new LayoutBox
+        ComputedStyle? template = node.CalcTemplate ?? node.ComputedStyle;
+        if (template is null)
         {
-            Type = LayoutBoxType.ListMarker,
-            Node = node,
-            Style = style,
-            X = markerX,
-            Y = _cursorY,
-            Width = markerWidth,
-            Height = style.FontSize * style.LineHeight,
-            Marker = marker,
-        };
-        _currentPage.Boxes.Add(markerBox);
+            return new ComputedStyle();
+        }
 
-        // Layout children in the content area
-        float contentX = offsetX + style.Margin.Left + paddingLeft;
-        LayoutBlockChildren(node, contentWidth, contentX);
+        if (!StyleResolver.DependsOnContainer(template))
+        {
+            return template;
+        }
 
-        _lastMarginBottom = style.Margin.Bottom;
-        _cursorY += style.Margin.Bottom;
+        node.CalcTemplate = template;
+        node.ComputedStyle = StyleResolver.ResolveCalcs(template, containerWidth, containerHeight ?? _settings.ContentHeight);
+        return node.ComputedStyle;
     }
+
+    private static float ResolvePercent(float value, float reference) => CssLength.Resolve(value, reference);
+
+    /// <summary>Resolves a width property to a content-box width (null for auto).</summary>
+    private static float? ResolveWidth(float? value, ComputedStyle style, float reference, float horizontalExtras)
+    {
+        if (value is not float width)
+        {
+            return null;
+        }
+
+        float resolved = CssLength.Resolve(width, reference);
+        if (style.BoxSizing == BoxSizing.BorderBox)
+        {
+            resolved -= horizontalExtras;
+        }
+
+        return Math.Max(0, resolved);
+    }
+
+    private static float? ResolveHeight(float? value, ComputedStyle style, float verticalExtras)
+    {
+        if (value is not float height || height < 0 || CssLength.IsPercent(height))
+        {
+            return null;
+        }
+
+        return style.BoxSizing == BoxSizing.BorderBox ? Math.Max(0, height - verticalExtras) : height;
+    }
+
+    private float MeasureBlockHeight(HtmlNode node, float availableWidth) =>
+        LayoutBoxIsolated(node, availableWidth, ignoreExplicitWidth: false).Height;
 
     private void LayoutHorizontalRule(HtmlNode node, float availableWidth, float offsetX)
     {
-        ComputedStyle style = node.ComputedStyle ?? new ComputedStyle();
+        ComputedStyle style = StyleFor(node, availableWidth);
         float hrHeight = style.Border.TopWidth > 0 ? style.Border.TopWidth : 1;
-        float totalHeight = style.Margin.Top + hrHeight + style.Margin.Bottom;
+        float collapsed = Math.Max(style.Margin.Top, _lastMarginBottom) - _lastMarginBottom;
+        CursorY += collapsed;
+        _lastMarginBottom = 0;
+        EnsureSpace(hrHeight);
 
-        EnsureSpace(totalHeight);
-        _cursorY += style.Margin.Top;
+        float width = ResolveWidth(style.Width, style, availableWidth, 0) is float w ? Math.Min(w, availableWidth) : availableWidth;
+        float x = offsetX;
+        if (width < availableWidth && style.MarginLeftAuto)
+        {
+            x += style.MarginRightAuto ? (availableWidth - width) / 2 : availableWidth - width;
+        }
 
         var box = new LayoutBox
         {
             Type = LayoutBoxType.HorizontalRule,
             Node = node,
             Style = style,
-            X = offsetX,
-            Y = _cursorY,
-            Width = availableWidth,
+            X = x,
+            Y = CursorY,
+            Width = width,
             Height = hrHeight,
         };
         _currentPage.Boxes.Add(box);
 
-        _cursorY += hrHeight + style.Margin.Bottom;
-        _lastMarginBottom = 0;
+        CursorY += hrHeight + style.Margin.Bottom;
+        _lastMarginBottom = style.Margin.Bottom;
     }
 
-    private void LayoutImage(HtmlNode node, float availableWidth, float offsetX)
+    private void LayoutBlockImage(HtmlNode node, float availableWidth, float offsetX)
     {
-        ComputedStyle style = node.ComputedStyle ?? new ComputedStyle();
-        node.Attributes.TryGetValue("src", out string? src);
+        ComputedStyle style = StyleFor(node, availableWidth);
+        float collapsed = Math.Max(style.Margin.Top, _lastMarginBottom) - _lastMarginBottom;
+        CursorY += collapsed;
+        _lastMarginBottom = 0;
 
-        ImageData? img = ImageData.Parse(src);
-        if (img is null || img.Width == 0 || img.Height == 0)
+        AtomicInline? image = CreateImageAtomic(node, style, availableWidth, null, includeVerticalMargins: false);
+        if (image is null)
         {
-            // Fallback: render alt text if image can't be parsed
-            if (node.Attributes.TryGetValue("alt", out string? alt) && alt.Length > 0)
-            {
-                float fontSize = style.FontSize;
-                float lineHeight = fontSize * style.LineHeight;
-                EnsureSpace(lineHeight);
-                var altBox = new LayoutBox
-                {
-                    Type = LayoutBoxType.InlineText,
-                    Node = node,
-                    Style = new ComputedStyle
-                    {
-                        FontSize = fontSize,
-                        IsItalic = true,
-                        Color = new PdfColor(0.5f, 0.5f, 0.5f),
-                    },
-                    X = offsetX,
-                    Y = _cursorY,
-                    Width = availableWidth,
-                    Height = lineHeight,
-                    Text = $"[{alt}]",
-                };
-                _currentPage.Boxes.Add(altBox);
-                _cursorY += lineHeight;
-            }
-
             return;
         }
 
-        // Determine display size in points (default: 1 px = 0.75 pt)
-        const float PxToPt = 0.75f;
-        float intrinsicW = img.Width * PxToPt;
-        float intrinsicH = img.Height * PxToPt;
-        float aspectRatio = intrinsicW / intrinsicH;
-
-        // Apply CSS width/height if specified
-        float displayW = intrinsicW;
-        float displayH = intrinsicH;
-
-        if (style.Width is float cssW && cssW > 0)
+        EnsureSpace(image.Height);
+        float x = offsetX;
+        float free = availableWidth - image.Width;
+        if (free > 0 && style.MarginLeftAuto)
         {
-            displayW = cssW;
-            displayH = displayW / aspectRatio;
+            x += style.MarginRightAuto ? free / 2 : free;
         }
-        else if (style.Width is float cssWPct && cssWPct < 0)
+        else if (free > 0 && node.Parent?.ComputedStyle?.EffectiveTextAlign is TextAlign.Center && !IsMeasuring)
         {
-            displayW = availableWidth * (-cssWPct / 100f);
-            displayH = displayW / aspectRatio;
+            x += free / 2;
+        }
+        else if (free > 0 && node.Parent?.ComputedStyle?.EffectiveTextAlign is TextAlign.Right && !IsMeasuring)
+        {
+            x += free;
         }
 
-        if (style.Height is float cssH && cssH > 0)
+        foreach (LayoutBox b in image.Boxes)
         {
-            displayH = cssH;
-            if (style.Width is null)
-            {
-                displayW = displayH * aspectRatio;
-            }
+            _currentPage.Boxes.Add(b.CloneAt(b.X + x, b.Y + CursorY));
         }
 
-        // Also check HTML width/height attributes
-        if (style.Width is null && node.Attributes.TryGetValue("width", out string? widthAttr) &&
-            float.TryParse(widthAttr, System.Globalization.CultureInfo.InvariantCulture, out float attrW))
+        CursorY += image.Height + style.Margin.Bottom;
+        _lastMarginBottom = style.Margin.Bottom;
+    }
+
+    // ── Isolated layout & measurement ────────────────────────────────────
+
+    /// <summary>Lays out the children of a container on an unbounded page; boxes are relative to (0,0).</summary>
+    internal IsolatedResult LayoutChildrenIsolated(HtmlNode container, float contentWidth)
+    {
+        LayoutEngine engine = CreateIsolated(IsMeasuring);
+        engine.LayoutBlockChildren(container, contentWidth, 0);
+        return engine.FinishIsolated();
+    }
+
+    /// <summary>Lays out a node as a block box of the given outer width on an unbounded page.</summary>
+    internal IsolatedResult LayoutBoxIsolated(HtmlNode node, float outerWidth, bool ignoreExplicitWidth = true)
+    {
+        LayoutEngine engine = CreateIsolated(IsMeasuring);
+        engine.LayoutAsBox(node, outerWidth, ignoreExplicitWidth);
+        return engine.FinishIsolated();
+    }
+
+    private void LayoutAsBox(HtmlNode node, float outerWidth, bool ignoreExplicitWidth)
+    {
+        ComputedStyle style = StyleFor(node, outerWidth);
+        if (style.Display == DisplayType.Table || node.Tag == "table")
         {
-            displayW = attrW * PxToPt;
-            displayH = displayW / aspectRatio;
+            TableLayoutHelper.Layout(this, node, outerWidth, 0);
         }
-
-        if (style.Height is null && node.Attributes.TryGetValue("height", out string? heightAttr) &&
-            float.TryParse(heightAttr, System.Globalization.CultureInfo.InvariantCulture, out float attrH))
+        else if (IsReplaced(node))
         {
-            displayH = attrH * PxToPt;
-            if (style.Width is null && !node.Attributes.ContainsKey("width"))
-            {
-                displayW = displayH * aspectRatio;
-            }
+            LayoutBlockImage(node, outerWidth, 0);
         }
-
-        // Constrain to available width
-        if (displayW > availableWidth)
+        else if (node.NodeType == HtmlNodeType.Text)
         {
-            displayW = availableWidth;
-            displayH = displayW / aspectRatio;
+            LayoutInlineContent(node.Parent!, node.Parent!.Children.IndexOf(node), node.Parent.Children.IndexOf(node) + 1, outerWidth, 0, false);
         }
-
-        // Apply max-width
-        if (style.MaxWidth is float mw && mw > 0 && displayW > mw)
+        else
         {
-            displayW = mw;
-            displayH = displayW / aspectRatio;
+            LayoutBlock(node, outerWidth, 0, ignoreExplicitWidth);
         }
+    }
 
-        float marginTop = style.Margin.Top;
-        float marginBottom = style.Margin.Bottom;
-        float totalHeight = marginTop + displayH + marginBottom;
-
-        EnsureSpace(totalHeight);
-        _cursorY += marginTop;
-
-        // Center block images by default, or use text-align from parent
-        float imgX = offsetX;
-        ComputedStyle? parentStyle = node.Parent?.ComputedStyle;
-        if (parentStyle?.TextAlign == TextAlign.Center)
+    private LayoutEngine CreateIsolated(bool measuring)
+    {
+        var settings = new PageSettings
         {
-            imgX = offsetX + (availableWidth - displayW) / 2;
-        }
-        else if (parentStyle?.TextAlign == TextAlign.Right)
-        {
-            imgX = offsetX + availableWidth - displayW;
-        }
-
-        var box = new LayoutBox
-        {
-            Type = LayoutBoxType.Image,
-            Node = node,
-            Style = style,
-            X = imgX,
-            Y = _cursorY,
-            Width = displayW,
-            Height = displayH,
-            ImageSource = src,
+            PageWidth = MaxContentProbeWidth * 10,
+            PageHeight = UnboundedHeight,
+            Margins = Thickness.Zero,
         };
-        _currentPage.Boxes.Add(box);
+        return new LayoutEngine(settings, _shared, isolated: true, measuring);
+    }
 
-        _cursorY += displayH + marginBottom;
+    private IsolatedResult FinishIsolated()
+    {
+        LayoutPendingAbsolutes(null, new ContainingBlock(0, 0, _settings.ContentWidth, CursorY, _currentPage), flushAll: true);
+        float height = CursorY;
+        foreach (FloatBox f in _floats)
+        {
+            height = Math.Max(height, f.Bottom);
+        }
+
+        return new IsolatedResult(_currentPage.Boxes, Math.Max(height, 0));
+    }
+
+    /// <summary>Computes min-content and max-content widths of a node (as a box when <paramref name="asBox"/> is true).</summary>
+    internal (float Min, float Max) MeasureIntrinsic(HtmlNode node, bool asBox)
+    {
+        var key = (node, asBox);
+        if (_shared.IntrinsicCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        ComputedStyle style = node.ComputedStyle ?? new ComputedStyle();
+        (float Min, float Max) result;
+        if (asBox && style.Width is float fixedWidth && fixedWidth > 0)
+        {
+            float extras = style.Border.LeftWidth + style.Border.RightWidth + Math.Max(0, style.Padding.Left) + Math.Max(0, style.Padding.Right);
+            float outer = (style.BoxSizing == BoxSizing.BorderBox ? fixedWidth : fixedWidth + extras)
+                + Math.Max(0, style.Margin.Left) + Math.Max(0, style.Margin.Right);
+            result = (outer, outer);
+        }
+        else
+        {
+            float min = MeasureExtent(node, asBox, MinContentProbeWidth);
+            float max = MeasureExtent(node, asBox, MaxContentProbeWidth);
+            if (asBox)
+            {
+                // Leaf extents already include the left-side offsets; add the right side.
+                float rightExtras = Math.Max(0, style.Margin.Right) + style.Border.RightWidth + Math.Max(0, style.Padding.Right);
+                min += rightExtras;
+                max += rightExtras;
+            }
+
+            // A hair of slack so the content laid out at exactly max-content does not wrap from rounding.
+            result = (min + 0.01f, Math.Max(min, max) + 0.02f);
+        }
+
+        _shared.IntrinsicCache[key] = result;
+        return result;
+    }
+
+    private float MeasureExtent(HtmlNode node, bool asBox, float probeWidth)
+    {
+        LayoutEngine engine = CreateIsolated(measuring: true);
+        if (asBox)
+        {
+            engine.LayoutAsBox(node, probeWidth, ignoreExplicitWidth: true);
+        }
+        else
+        {
+            engine.LayoutBlockChildren(node, probeWidth, 0);
+        }
+
+        float extent = 0;
+        foreach (LayoutBox box in engine._currentPage.Boxes)
+        {
+            float right = box.Type switch
+            {
+                LayoutBoxType.Block when box.Style.Width is > 0 => box.X + BorderBoxWidth(box),
+                LayoutBoxType.Block or LayoutBoxType.HorizontalRule or LayoutBoxType.ListMarker => 0,
+                _ => box.X + box.Width,
+            };
+            extent = Math.Max(extent, right);
+        }
+
+        foreach (FloatBox f in engine._floats)
+        {
+            extent = Math.Max(extent, f.X + f.Width);
+        }
+
+        return extent;
+    }
+
+    private static float BorderBoxWidth(LayoutBox box) =>
+        box.Style.Border.LeftWidth + Math.Max(0, box.Style.Padding.Left) + box.Width + Math.Max(0, box.Style.Padding.Right) + box.Style.Border.RightWidth;
+
+    /// <summary>Shrink-to-fit width: min(max(min-content, available), max-content).</summary>
+    internal float ShrinkToFit(HtmlNode node, float available)
+    {
+        (float min, float max) = MeasureIntrinsic(node, asBox: true);
+        return Math.Max(min, Math.Min(max, available));
+    }
+
+    // ── Placement helpers ────────────────────────────────────────────────
+
+    internal void AddBox(LayoutBox box) => _currentPage.Boxes.Add(box);
+
+    internal void NewPage() => StartNewPage();
+
+    internal void ResetMarginCollapse() => _lastMarginBottom = 0;
+
+    /// <summary>Collapses a top margin against the previous sibling's bottom margin and advances the cursor.</summary>
+    internal void ApplyTopMargin(float marginTop)
+    {
+        CursorY += Math.Max(marginTop, _lastMarginBottom) - _lastMarginBottom;
         _lastMarginBottom = 0;
     }
 
-    private static bool IsInsidePre(HtmlNode node)
+    /// <summary>Records a bottom margin for collapsing with the next sibling and advances the cursor.</summary>
+    internal void ApplyBottomMargin(float marginBottom)
     {
-        HtmlNode? current = node.Parent;
-        while (current is not null)
-        {
-            if (current.Tag is "pre")
-            {
-                return true;
-            }
-
-            current = current.Parent;
-        }
-
-        return false;
+        CursorY += marginBottom;
+        _lastMarginBottom = marginBottom;
     }
 
-    private static void CollectTextRuns(HtmlNode node, List<TextRun> runs)
+    /// <summary>Translates isolated boxes into the current page.</summary>
+    internal void PlaceBoxes(IEnumerable<LayoutBox> boxes, float dx, float dy)
     {
-        if (node.NodeType == HtmlNodeType.Text)
+        foreach (LayoutBox box in boxes)
         {
-            bool inPre = IsInsidePre(node);
-            string rawText = node.Text ?? string.Empty;
-            string text = inPre ? rawText : NormalizeWhitespace(rawText);
-            if (text.Length > 0)
-            {
-                ComputedStyle style = node.ComputedStyle ?? node.Parent?.ComputedStyle ?? new ComputedStyle();
-                string? linkUrl = FindAncestorLink(node);
-
-                if (inPre)
-                {
-                    // Split pre-formatted text on newlines so WrapRunsIntoLines handles line breaks
-                    string[] lines = text.Split('\n');
-                    for (int li = 0; li < lines.Length; li++)
-                    {
-                        if (li > 0)
-                        {
-                            runs.Add(new TextRun("\n", style));
-                        }
-
-                        string line = lines[li];
-                        if (line.Length > 0)
-                        {
-                            runs.Add(new TextRun(line, style, linkUrl));
-                        }
-                    }
-                }
-                else
-                {
-                    runs.Add(new TextRun(text, style, linkUrl));
-                }
-            }
-
-            return;
+            box.X += dx;
+            box.Y += dy;
+            _currentPage.Boxes.Add(box);
         }
+    }
 
-        if (node.NodeType == HtmlNodeType.Element)
+    /// <summary>
+    /// Places isolated content of the given height at the cursor, splitting it across pages between leaf boxes.
+    /// Containers crossing a break are cut into per-page segments. Advances the cursor.
+    /// </summary>
+    internal void PlaceFragmented(List<LayoutBox> boxes, float height, float dx)
+    {
+        float sliceTop = 0;
+        int guard = 0;
+        while (true)
         {
-            if (node.Tag is "br")
+            float available = _settings.ContentHeight - CursorY;
+            if (IsIsolated || height - sliceTop <= available + 0.01f || guard++ > 10_000)
             {
-                runs.Add(new TextRun("\n", node.ComputedStyle ?? new ComputedStyle()));
+                PlaceSlice(boxes, sliceTop, float.MaxValue, dx);
+                CursorY += height - sliceTop;
                 return;
             }
 
-            foreach (HtmlNode child in node.Children)
+            float sliceBottom = sliceTop + available;
+            bool moved = true;
+            while (moved)
             {
-                CollectTextRuns(child, runs);
+                moved = false;
+                foreach (LayoutBox box in boxes)
+                {
+                    if (box.Type == LayoutBoxType.Block)
+                    {
+                        continue;
+                    }
+
+                    float bottom = box.Y + box.Height;
+                    if (box.Y < sliceBottom && bottom > sliceBottom + 0.01f && box.Y > sliceTop)
+                    {
+                        sliceBottom = box.Y;
+                        moved = true;
+                    }
+                }
             }
+
+            if (sliceBottom <= sliceTop + 0.5f)
+            {
+                if (CursorY > 0)
+                {
+                    StartNewPage();
+                    continue;
+                }
+
+                sliceBottom = sliceTop + available;
+            }
+
+            PlaceSlice(boxes, sliceTop, sliceBottom, dx);
+            StartNewPage();
+            sliceTop = sliceBottom;
         }
     }
 
-    private static string? FindAncestorLink(HtmlNode node)
+    private void PlaceSlice(List<LayoutBox> boxes, float sliceTop, float sliceBottom, float dx)
     {
-        HtmlNode? current = node.Parent;
-        while (current is not null)
+        float baseY = CursorY;
+        foreach (LayoutBox box in boxes)
         {
-            if (current.Tag is "a" && current.Attributes.TryGetValue("href", out string? href))
+            if (box.Type == LayoutBoxType.Block)
             {
-                return href;
+                ComputedStyle s = box.Style;
+                float topExtras = box.SuppressTopBorder ? 0 : s.Border.TopWidth + Math.Max(0, s.Padding.Top);
+                float bottomExtras = box.SuppressBottomBorder ? 0 : s.Border.BottomWidth + Math.Max(0, s.Padding.Bottom);
+                float top = box.Y;
+                float bottom = box.Y + topExtras + box.Height + bottomExtras;
+                if (bottom <= sliceTop || top >= sliceBottom)
+                {
+                    continue;
+                }
+
+                float segTop = Math.Max(top, sliceTop);
+                float segBottom = Math.Min(bottom, sliceBottom);
+                LayoutBox segment = box.CloneAt(box.X + dx, baseY + segTop - sliceTop);
+                segment.SuppressTopBorder = box.SuppressTopBorder || top < sliceTop;
+                segment.SuppressBottomBorder = box.SuppressBottomBorder || bottom > sliceBottom;
+                float segTopExtras = segment.SuppressTopBorder ? 0 : topExtras;
+                float segBottomExtras = segment.SuppressBottomBorder ? 0 : bottomExtras;
+                segment.Height = Math.Max(0, segBottom - segTop - segTopExtras - segBottomExtras);
+                _currentPage.Boxes.Add(segment);
+                continue;
             }
 
-            current = current.Parent;
+            if (box.Y >= sliceTop - 0.01f && box.Y < sliceBottom)
+            {
+                _currentPage.Boxes.Add(box.CloneAt(box.X + dx, baseY + box.Y - sliceTop));
+            }
+        }
+    }
+
+    private static void ShiftBoxes(PageBox page, int startIndex, (float Dx, float Dy) offset)
+    {
+        if (offset.Dx == 0 && offset.Dy == 0)
+        {
+            return;
         }
 
-        return null;
+        for (int i = startIndex; i < page.Boxes.Count; i++)
+        {
+            page.Boxes[i].X += offset.Dx;
+            page.Boxes[i].Y += offset.Dy;
+        }
     }
+
+    private static (float Dx, float Dy) RelativeOffset(ComputedStyle style)
+    {
+        float dx = style.Left is float left && !CssLength.IsPercent(left) ? left : style.Right is float right && !CssLength.IsPercent(right) ? -right : 0;
+        float dy = style.Top is float top && !CssLength.IsPercent(top) ? top : style.Bottom is float bottom && !CssLength.IsPercent(bottom) ? -bottom : 0;
+        return (dx, dy);
+    }
+
+    // ── Text helpers ─────────────────────────────────────────────────────
 
     private static string GetTextContent(HtmlNode node)
     {
@@ -632,10 +911,15 @@ public sealed class LayoutEngine
         var sb = new System.Text.StringBuilder();
         foreach (HtmlNode child in node.Children)
         {
+            if (child.IsPseudo)
+            {
+                continue;
+            }
+
             string childText = GetTextContent(child);
             if (childText.Length > 0)
             {
-                if (sb.Length > 0 && sb[sb.Length - 1] != ' ')
+                if (sb.Length > 0 && sb[^1] != ' ')
                 {
                     sb.Append(' ');
                 }
@@ -644,185 +928,36 @@ public sealed class LayoutEngine
             }
         }
 
-        return sb.ToString().Trim();
+        return string.Join(' ', sb.ToString().Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private static List<LayoutLine> WrapRunsIntoLines(List<TextRun> runs, float maxWidth)
-    {
-        var lines = new List<LayoutLine>();
-        var currentLine = new LayoutLine();
-        float cursorX = 0;
-        bool pendingSpace = false;
-
-        foreach (TextRun run in runs)
-        {
-            if (run.Text == "\n")
-            {
-                FinalizeLine(currentLine, lines);
-                currentLine = new LayoutLine();
-                cursorX = 0;
-                pendingSpace = false;
-                continue;
-            }
-
-            string[] words = run.Text.Split(' ');
-            bool needsSpaceBefore = false;
-
-            for (int wi = 0; wi < words.Length; wi++)
-            {
-                string word = words[wi];
-                if (word.Length == 0)
-                {
-                    if (wi < words.Length - 1)
-                    {
-                        // Empty word from split = space delimiter (leading or mid-run space)
-                        needsSpaceBefore = true;
-                    }
-                    else
-                    {
-                        // Trailing empty string from "text " split → carry space to next run
-                        if (cursorX > 0 || needsSpaceBefore)
-                        {
-                            pendingSpace = true;
-                        }
-                    }
-
-                    continue;
-                }
-
-                // Calculate space before this word
-                float spaceWidth = 0;
-                if (cursorX > 0 && (needsSpaceBefore || pendingSpace))
-                {
-                    spaceWidth = TextMeasurer.MeasureChar(' ', run.Style.FontFamily, run.Style.FontSize, run.Style.IsBold, run.Style.IsItalic);
-                }
-
-                needsSpaceBefore = true;
-                pendingSpace = false;
-
-                float wordWidth = TextMeasurer.MeasureWidth(word, run.Style.FontFamily, run.Style.FontSize, run.Style.IsBold, run.Style.IsItalic);
-
-                // Word fits on current line?
-                if (cursorX + spaceWidth + wordWidth <= maxWidth || cursorX == 0)
-                {
-                    cursorX += spaceWidth;
-
-                    var box = new LayoutBox
-                    {
-                        Type = LayoutBoxType.InlineText,
-                        Style = run.Style,
-                        X = cursorX,
-                        Y = 0,
-                        Width = wordWidth,
-                        Height = run.Style.FontSize * run.Style.LineHeight,
-                        Text = word,
-                        LinkUrl = run.LinkUrl,
-                    };
-                    currentLine.Boxes.Add(box);
-                    cursorX += wordWidth;
-                    currentLine.Width = cursorX;
-                    currentLine.Height = Math.Max(currentLine.Height, box.Height);
-                }
-                else
-                {
-                    // Start new line
-                    FinalizeLine(currentLine, lines);
-                    currentLine = new LayoutLine();
-                    cursorX = 0;
-                    pendingSpace = false;
-
-                    var box = new LayoutBox
-                    {
-                        Type = LayoutBoxType.InlineText,
-                        Style = run.Style,
-                        X = 0,
-                        Y = 0,
-                        Width = wordWidth,
-                        Height = run.Style.FontSize * run.Style.LineHeight,
-                        Text = word,
-                        LinkUrl = run.LinkUrl,
-                    };
-                    currentLine.Boxes.Add(box);
-                    cursorX = wordWidth;
-                    currentLine.Width = cursorX;
-                    currentLine.Height = Math.Max(currentLine.Height, box.Height);
-                }
-            }
-        }
-
-        if (currentLine.Boxes.Count > 0)
-        {
-            FinalizeLine(currentLine, lines);
-        }
-
-        return lines;
-    }
-
-    private static void FinalizeLine(LayoutLine line, List<LayoutLine> lines)
-    {
-        if (line.Boxes.Count == 0)
-        {
-            // Empty line (just a line break) — use default line height
-            line.Height = 12f * 1.4f;
-        }
-
-        lines.Add(line);
-    }
-
-    private static int CollectInlineSpan(HtmlNode parent, int startIdx)
-    {
-        int i = startIdx;
-        while (i < parent.Children.Count)
-        {
-            HtmlNode child = parent.Children[i];
-            if (child.NodeType == HtmlNodeType.Text)
-            {
-                i++;
-                continue;
-            }
-
-            ComputedStyle style = child.ComputedStyle ?? new ComputedStyle();
-            if (style.Display == DisplayType.Inline)
-            {
-                i++;
-                continue;
-            }
-
-            break;
-        }
-
-        return Math.Max(i, startIdx + 1);
-    }
-
-    private static string NormalizeWhitespace(string text)
-    {
-        // Collapse runs of whitespace into single spaces
-        var sb = new System.Text.StringBuilder(text.Length);
-        bool lastWasSpace = false;
-
-        foreach (char c in text)
-        {
-            if (char.IsWhiteSpace(c))
-            {
-                if (!lastWasSpace)
-                {
-                    sb.Append(' ');
-                    lastWasSpace = true;
-                }
-            }
-            else
-            {
-                sb.Append(c);
-                lastWasSpace = false;
-            }
-        }
-
-        return sb.ToString();
-    }
+    // ── Pages ────────────────────────────────────────────────────────────
 
     private void EnsureSpace(float height)
     {
-        if (_cursorY + height > _settings.ContentHeight)
+        if (!IsIsolated && CursorY > 0 && CursorY + height > _settings.ContentHeight)
+        {
+            StartNewPage();
+        }
+    }
+
+    /// <summary>Starts a new page when the content does not fit in the remaining space (and would fit on a page).</summary>
+    internal void EnsureSpaceFor(float height)
+    {
+        if (height <= _settings.ContentHeight)
+        {
+            EnsureSpace(height);
+        }
+    }
+
+    private void ForcePageBreak()
+    {
+        if (IsIsolated)
+        {
+            return;
+        }
+
+        if (CursorY > 0 || _currentPage.Boxes.Count > 0)
         {
             StartNewPage();
         }
@@ -830,13 +965,19 @@ public sealed class LayoutEngine
 
     private void StartNewPage()
     {
-        FlushCurrentPage();
+        if (IsIsolated)
+        {
+            return;
+        }
+
+        FlushCurrentPage(force: true);
         _currentPage = CreateNewPage();
+        _floats.Clear();
     }
 
-    private void FlushCurrentPage()
+    private void FlushCurrentPage(bool force = false)
     {
-        if (_currentPage.Boxes.Count > 0)
+        if ((force || _currentPage.Boxes.Count > 0) && !_pages.Contains(_currentPage))
         {
             _pages.Add(_currentPage);
         }
@@ -844,7 +985,7 @@ public sealed class LayoutEngine
 
     private PageBox CreateNewPage()
     {
-        _cursorY = 0;
+        CursorY = 0;
         _lastMarginBottom = 0;
         return new PageBox
         {
@@ -852,26 +993,26 @@ public sealed class LayoutEngine
             Settings = _settings,
         };
     }
+
+    /// <summary>State shared by the main engine and the isolated engines it creates.</summary>
+    private sealed class SharedState(FontCollection? fonts, ResourceLoader loader)
+    {
+        internal FontCollection? Fonts { get; } = fonts;
+
+        internal ResourceLoader Loader { get; } = loader;
+
+        internal Dictionary<(HtmlNode Node, bool AsBox), (float Min, float Max)> IntrinsicCache { get; } = [];
+
+        internal Dictionary<string, HtmlNode?> SvgImages { get; } = new(StringComparer.Ordinal);
+    }
 }
 
-/// <summary>A segment of text with uniform styling for inline layout.</summary>
-/// <param name="Text">The text content.</param>
-/// <param name="Style">The computed style.</param>
-/// <param name="LinkUrl">Optional hyperlink URL from ancestor &lt;a&gt; element.</param>
-internal readonly record struct TextRun(string Text, ComputedStyle Style, string? LinkUrl = null);
+/// <summary>Boxes produced by an isolated layout, relative to its origin, and the total height.</summary>
+/// <param name="Boxes">Laid-out boxes.</param>
+/// <param name="Height">Total height including floats.</param>
+internal sealed record IsolatedResult(List<LayoutBox> Boxes, float Height);
 
-/// <summary>A single line of laid-out inline content.</summary>
-internal sealed class LayoutLine
-{
-    /// <summary>Gets or sets the line Y position.</summary>
-    public float Y { get; set; }
-
-    /// <summary>Gets or sets the total line width.</summary>
-    public float Width { get; set; }
-
-    /// <summary>Gets or sets the line height.</summary>
-    public float Height { get; set; }
-
-    /// <summary>Gets the inline boxes on this line.</summary>
-    public List<LayoutBox> Boxes { get; } = [];
-}
+/// <summary>List marker to render next to a list item.</summary>
+/// <param name="Text">Marker text for textual markers.</param>
+/// <param name="Shape">Graphical shape.</param>
+internal sealed record MarkerInfo(string? Text, MarkerShape Shape);

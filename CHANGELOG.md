@@ -14,6 +14,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with symbol packages (.snupkg) published to NuGet.org alongside the main
   packages. Release builds are deterministic.
 
+### Added — SimpleSign.HtmlToPdf
+
+- **Fonts**: caller-supplied TrueType/OpenType fonts (`WithFont`/`WithFontFile`, with
+  `FontVariant` for bold/italic faces, or CSS `@font-face`) embedded as Type0/CID fonts with
+  ToUnicode maps, **subset** to the glyphs used and written once per document; `font-family`
+  fallback lists; per-glyph fallback to other registered fonts; synthesized bold/italic.
+- **CSS engine**: complex selectors (`>`, `+`, `~`, attribute operators, structural
+  pseudo-classes, `:not()`), correct cascade (specificity, source order, `!important`),
+  custom properties (`var()`), `currentColor`, `inherit`, `@media print`, `@page` (size and
+  margins), `::before`/`::after` with `content` (strings, `attr()`), `font` and `list-style`
+  shorthands, extended colors (all CSS named colors, alpha), presentational HTML attributes
+  (`align`, `valign`, `bgcolor`, `width`, `border`, `cellpadding`, `cellspacing`, `<font>`).
+- **Layout**: floats and `clear`, `position: relative/absolute/fixed` (fixed repeats on every
+  page), `inline-block`, inline images, flexbox (wrap, grow/shrink with min-content, all
+  `justify-content` modes), CSS grid (`fr`, `repeat()`, spans), `text-align: justify`,
+  `text-indent`, baseline alignment of mixed font sizes, inline backgrounds, `margin: auto`
+  centering, `box-sizing`, min/max sizes, percentage paddings, list markers for every common
+  `list-style-type` (graphical bullets, `start`/`reversed`/`value`), `orphans`/`widows`,
+  `break-*`/`page-break-inside: avoid`, headings kept with the next content, backgrounds and
+  borders of boxes split across pages.
+- **Tables**: any content inside cells (paragraphs, lists, images, nested tables), content-based
+  column sizing (min/max-content, fixed and percentage widths, `<col>`), `border-collapse`,
+  `border-spacing`, rowspan heights, captions, and **pagination** that never splits rows and
+  repeats `<thead>` on each page (`<tfoot>` after the last row).
+- **Rendering**: dashed/dotted/double borders, `border-radius`, borders drawn inside the box,
+  linked images, `visibility: hidden`.
+- **Images & resources**: full PNG decoding (palette, 1–16-bit, interlaced, alpha as soft
+  masks), progressive and Adobe CMYK JPEGs; `WithBaseDirectory` (sandboxed to that folder) and
+  `WithResourceLoader` for images, `<link rel="stylesheet">`, and fonts.
+- **PDF/A-2b** via `WithPdfA()` (sRGB output intent, XMP metadata, embedded fonts only), document
+  `/Lang` from `<html lang>` or `WithLanguage`, `<title>` as the default title, trailer `/ID`.
+- CLI `html-to-pdf`: `--font`, `--base-dir` (defaults to the input folder), `--pdfa`,
+  `--header`, `--footer`, `--landscape`; page size defaults to CSS `@page`.
+- Fuzz targets `html` and `css` in `SimpleSign.Fuzz`.
+- **Paint**: `background-image` (PNG, JPEG, SVG), linear/radial/repeating gradients as PDF shadings
+  (translucent stops through soft masks), `background-size/position/repeat/origin/clip`, multiple
+  layers, page-wide root background; `opacity`, alpha colors with real transparency, `box-shadow`
+  (blur, spread, inset), `text-shadow`, `transform` + `transform-origin`, `mix-blend-mode`,
+  `overflow: hidden` clipping.
+- **CSS**: `calc()`, `min()`, `max()`, `clamp()`; CSS counters (`counter-reset/increment/set`,
+  `counter()`, `counters()`); `@page` margin boxes with `counter(page)`/`counter(pages)` and
+  `:first/:left/:right`; multi-column layout (`column-count/width/gap/rule/span`).
+- **SVG**: inline `<svg>`, SVG images and backgrounds drawn as vectors (shapes, paths, text,
+  gradients, clip paths, `use`/`symbol`).
+- **International text**: OpenType shaping for embedded fonts (kerning, ligatures, marks, Arabic
+  joining, Devanagari conjuncts; verified against HarfBuzz), bidirectional text (`dir`,
+  `direction`, `text-align: start/end`), hyphenation (`&shy;`, `hyphens: auto` for pt/es),
+  all HTML 4 named entities.
+
+### Fixed — SimpleSign.HtmlToPdf
+
+- `<style>` elements inside the document were ignored and their CSS was rendered as text.
+- Tables were not paginated: rows past the bottom of the page were cut off and lost.
+- Mixed inline formatting inside table cells (`Total <b>x</b>`) was split onto separate lines.
+- Embedded fonts were written once per page instead of once per document.
+- Characters outside WinAnsi in standard fonts were measured with the wrong width (overlapping text).
+- `body { ... }` rules did not apply to HTML fragments (an implied `<body>` is now created).
+- Negative lengths (`margin-left: -10px`, `text-indent: -1em`) were read as percentages.
+- A forced page break after the last element added a blank page.
+- Named entities other than `&amp; &lt; &gt; &quot; &apos; &nbsp;` were left undecoded.
+
+### Changed — SimpleSign.HtmlToPdf (behavior)
+
+- Words of the same style on a line are emitted as one text run (smaller PDFs, better text
+  extraction/copy-paste).
+- Auto-width tables shrink to their content like browsers; use `width: 100%` for full width.
+- Unknown elements are inline (browser behavior); `<td>`/`<th>` default to `vertical-align: middle`;
+  `<a>` without `href` is no longer styled as a link.
+- Colors with alpha are drawn with PDF transparency (`PdfColor.Alpha`) instead of being ignored.
+- `CssParser.ParseLength` encodes percentages as values ≤ −100000 (−100000 − p) so negative
+  lengths stay representable.
+- Text with embedded fonts is shaped (kerning/ligatures change widths slightly); hard hyphens are
+  line-break opportunities; elements with `overflow: hidden` and a fixed height keep that height.
+- Every PDF now contains at least one page (empty documents produce a blank page).
+
 ## [0.9.3] - 2026-11-01
 
 ### Fixed

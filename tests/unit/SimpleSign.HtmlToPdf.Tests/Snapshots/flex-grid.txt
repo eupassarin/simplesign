@@ -1,0 +1,20 @@
+page 1
+Block 72.0 0.0 451.3 66.4
+Block 72.0 0.0 451.3 16.8
+Block 72.0 0.0 117.1 16.8
+InlineText 72.0 2.4 16.7 16.8 "um"
+Block 199.1 0.0 234.2 16.8
+InlineText 199.1 2.4 22.0 16.8 "dois"
+Block 443.3 0.0 80.0 16.8
+InlineText 443.3 2.4 18.7 16.8 "fixo"
+Block 72.0 26.8 451.3 39.6
+Block 72.0 26.8 100.0 16.8
+InlineText 72.0 29.2 8.0 16.8 "A"
+Block 178.0 26.8 169.6 16.8
+InlineText 178.0 29.2 8.0 16.8 "B"
+Block 353.6 26.8 169.6 16.8
+InlineText 353.6 29.2 8.7 16.8 "C"
+Block 72.0 49.6 275.6 16.8
+InlineText 72.0 52.0 38.7 16.8 "D larga"
+Block 353.6 49.6 169.6 16.8
+InlineText 353.6 52.0 8.0 16.8 "E"

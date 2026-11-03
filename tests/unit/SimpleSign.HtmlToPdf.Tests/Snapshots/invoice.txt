@@ -1,0 +1,35 @@
+page 1
+Block 72.0 0.0 451.3 138.5
+Block 72.0 0.0 451.3 28.0
+Block 72.0 0.0 139.0 28.0
+InlineText 72.0 4.0 139.0 28.0 "Fatura 2026/17"
+Block 417.6 0.0 105.6 28.0
+InlineText 417.6 2.0 102.8 14.0 "Emitida em 03/11/2026"
+InlineText 417.6 16.0 105.6 14.0 "Vencimento 30/11/2026"
+Block 72.0 47.5 451.3 83.0
+Block 72.0 47.5 262.1 20.8
+Block 334.1 47.5 56.8 20.8
+Block 390.9 47.5 132.4 20.8
+InlineText 192.8 52.9 20.6 14.0 "Item"
+InlineText 353.9 52.9 17.2 14.0 "Qtd"
+InlineText 444.6 52.9 25.0 14.0 "Valor"
+Block 72.0 47.5 262.1 20.8
+Block 334.1 47.5 56.8 20.8
+Block 390.9 47.5 132.4 20.8
+InlineText 77.4 73.6 115.1 14.0 "Consultoria de arquitetura"
+InlineText 374.4 73.6 11.1 14.0 "12"
+InlineText 463.4 73.6 54.5 14.0 "R$ 3.600,00"
+Block 72.0 68.2 262.1 20.8
+Block 334.1 68.2 56.8 20.8
+Block 390.9 68.2 132.4 20.8
+InlineText 77.4 94.4 76.7 14.0 "Projeto executivo"
+InlineText 156.9 94.4 38.9 14.0 "(revisão)"
+InlineText 379.9 94.4 5.6 14.0 "1"
+InlineText 463.4 94.4 54.5 14.0 "R$ 1.250,00"
+Block 72.0 89.0 262.1 20.8
+Block 334.1 89.0 56.8 20.8
+Block 390.9 89.0 132.4 20.8
+InlineText 77.4 115.1 23.9 14.0 "Total"
+InlineText 463.4 115.1 54.5 14.0 "R$ 4.850,00"
+Block 72.0 109.8 318.9 20.8
+Block 390.9 109.8 132.4 20.8

@@ -611,7 +611,8 @@ internal static class FontMetrics
         int code = WinAnsiEncoding.MapToWinAnsi(charCode);
         if (code < 0)
         {
-            return widths[0]; // unmappable → default to space width
+            // Unmappable characters are rendered as '?', so measure them as '?'.
+            code = '?';
         }
 
         int index = code - FirstChar;

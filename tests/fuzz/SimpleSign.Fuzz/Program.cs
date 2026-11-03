@@ -5,6 +5,8 @@ using SimpleSign.CAdES;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Inspection;
 using SimpleSign.Core.Revocation;
+using SimpleSign.HtmlToPdf;
+using SimpleSign.HtmlToPdf.Parsing;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.Pdf;
 using SimpleSign.Pdf.Exceptions;
@@ -17,7 +19,7 @@ namespace SimpleSign.Fuzz;
 /// and ensures the parser doesn't crash, hang, or throw uncaught exceptions outside the
 /// expected exception types.
 ///
-/// Targets: dss, timestamp, ocsp, pdf, cms, validator, xref, xades-sign, xades-validate, cades-sign
+/// Targets: dss, timestamp, ocsp, pdf, cms, validator, xref, xades-sign, xades-validate, cades-sign, html, css
 /// </summary>
 internal static class Program
 {
@@ -28,7 +30,7 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("Usage: dotnet run -c Release -- <dss|timestamp|ocsp|pdf|cms|validator|xref|xades-sign|xades-validate|cades-sign>");
+            Console.Error.WriteLine("Usage: dotnet run -c Release -- <dss|timestamp|ocsp|pdf|cms|validator|xref|xades-sign|xades-validate|cades-sign|html|css>");
             return 1;
         }
 
@@ -44,6 +46,8 @@ internal static class Program
             "xades-sign" => FuzzXadesSign,
             "xades-validate" => FuzzXadesValidate,
             "cades-sign" => FuzzCadesSign,
+            "html" => FuzzHtmlToPdf,
+            "css" => FuzzCss,
             _ => throw new ArgumentException($"Unknown target: {args[0]}")
         };
 
@@ -115,6 +119,23 @@ internal static class Program
             _ = OcspClient.ParseOcspResponse(data, OcspProbeCert);
         }
         catch (Exception ex) when (IsExpectedException(ex)) { }
+    }
+
+    /// <summary>
+    /// Fuzz the full HTML → PDF pipeline. Any exception is a finding: arbitrary HTML/CSS must always convert.
+    /// </summary>
+    private static void FuzzHtmlToPdf(byte[] data)
+    {
+        string html = System.Text.Encoding.UTF8.GetString(data);
+        _ = HtmlToPdfConverter.Html(html).WithFooter("{page}/{pages}").Convert();
+    }
+
+    /// <summary>Fuzz the CSS parser, selector engine, and cascade against a fixed document.</summary>
+    private static void FuzzCss(byte[] data)
+    {
+        string css = System.Text.Encoding.UTF8.GetString(data);
+        HtmlNode dom = HtmlTokenizer.Parse("<div id='a' class='b c'><p lang='pt'>x <span>y</span></p><ul><li>1</li><li>2</li></ul><table><tr><td>z</td></tr></table></div>");
+        StyleResolver.Resolve(dom, CssParser.ParseStylesheet(css));
     }
 
     private static void FuzzPdfReader(byte[] data)

@@ -13,4 +13,13 @@ public sealed class CssRule
 
     /// <summary>Specificity of this selector (higher = more specific).</summary>
     public int Specificity { get; init; }
+
+    /// <summary>Gets the declarations marked <c>!important</c> (lowercase keys).</summary>
+    public Dictionary<string, string> ImportantProperties { get; init; } = new(StringComparer.Ordinal);
+
+    /// <summary>Gets the source order of the rule within the parsed stylesheet(s).</summary>
+    internal int Order { get; set; }
+
+    /// <summary>Gets the parsed selector, or null when it is an at-rule or unsupported.</summary>
+    internal CssSelector? ParsedSelector { get; init; }
 }

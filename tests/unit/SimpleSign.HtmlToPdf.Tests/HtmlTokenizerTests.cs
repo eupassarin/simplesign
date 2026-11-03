@@ -292,4 +292,20 @@ public class HtmlTokenizerTests
             CollectByTag(child, tag, results);
         }
     }
+
+    [Theory]
+    [InlineData("&eacute;&ccedil;&atilde;o", "éção")]
+    [InlineData("&copy; 2026 &mdash; &euro;10", "© 2026 — €10")]
+    [InlineData("a&shy;b", "a\u00ADb")]
+    [InlineData("&#x1F600;", "\U0001F600")]
+    [InlineData("&#128512;", "\U0001F600")]
+    [InlineData("&#xD800;", "\uFFFD")]
+    [InlineData("&AMP;&NBSP;", "&\u00A0")]
+    [InlineData("&unknown; &Eacute;", "&unknown; É")]
+    public void Parse_NamedAndNumericEntities_AreDecoded(string html, string expected)
+    {
+        HtmlNode root = HtmlTokenizer.Parse($"<p>{html}</p>");
+
+        root.Descendants("p").Single().Children.Single().Text.ShouldBe(expected);
+    }
 }

@@ -32,14 +32,23 @@ public static class StandardFonts
         };
     }
 
+    /// <summary>Returns true when the CSS family name maps to one of the standard PDF fonts.</summary>
+    /// <param name="family">CSS family name.</param>
+    /// <returns>True for generic families and the Helvetica/Arial, Times, and Courier names.</returns>
+    public static bool IsKnownFamily(string family) => family.Trim().Trim('\'', '"').ToLowerInvariant() is
+        "arial" or "helvetica" or "helvetica neue" or "sans-serif" or "system-ui" or "-apple-system" or "ui-sans-serif"
+        or "courier" or "courier new" or "monospace" or "ui-monospace"
+        or "times" or "times new roman" or "serif" or "ui-serif";
+
     private static string NormalizeFamily(string family)
     {
-        return family.Trim().ToLowerInvariant() switch
+        return family.Trim().Trim('\'', '"').ToLowerInvariant() switch
         {
-            "arial" or "helvetica" or "sans-serif" or "verdana" or "tahoma" or "trebuchet ms" => "Helvetica",
-            "courier new" or "courier" or "monospace" or "consolas" or "lucida console" => "Courier",
-            "times new roman" or "times" or "georgia" or "serif" or "palatino" or "book antiqua" => "Times",
-            _ => "Helvetica"
+            "courier new" or "courier" or "monospace" or "consolas" or "lucida console" or "ui-monospace" or "menlo"
+                or "monaco" or "liberation mono" or "dejavu sans mono" => "Courier",
+            "times new roman" or "times" or "georgia" or "serif" or "palatino" or "book antiqua" or "cambria"
+                or "garamond" or "liberation serif" or "dejavu serif" or "ui-serif" or "palatino linotype" => "Times",
+            _ => "Helvetica",
         };
     }
 }

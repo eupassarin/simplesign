@@ -18,6 +18,9 @@ internal sealed class PdfObjectWriter
     /// <summary>Gets or sets the object number for the /Info dictionary, included in the trailer when set.</summary>
     public int? InfoObjectNum { get; set; }
 
+    /// <summary>Gets or sets the file identifier written as the trailer /ID (both entries), when set.</summary>
+    public byte[]? FileId { get; set; }
+
     /// <summary>Allocates the next object number.</summary>
     /// <returns>The allocated object number.</returns>
     public int AllocateObject() => _nextObjNum++;
@@ -35,9 +38,16 @@ internal sealed class PdfObjectWriter
     /// <param name="objNum">Object number.</param>
     /// <param name="dict">Dictionary content (without &lt;&lt; &gt;&gt;).</param>
     /// <param name="streamData">Raw stream bytes.</param>
-    public void WriteStreamObject(int objNum, string dict, byte[] streamData)
+    public void WriteStreamObject(int objNum, string dict, byte[] streamData) => WriteStreamObject(objNum, dict, streamData, compress: true);
+
+    /// <summary>Writes a PDF stream object, optionally leaving the data uncompressed (e.g. XMP metadata).</summary>
+    /// <param name="objNum">Object number.</param>
+    /// <param name="dict">Dictionary content (without &lt;&lt; &gt;&gt;).</param>
+    /// <param name="streamData">Raw stream bytes.</param>
+    /// <param name="compress">Whether to apply FlateDecode.</param>
+    public void WriteStreamObject(int objNum, string dict, byte[] streamData, bool compress)
     {
-        bool alreadyFiltered = dict.Contains("/Filter", StringComparison.Ordinal);
+        bool alreadyFiltered = !compress || dict.Contains("/Filter", StringComparison.Ordinal);
         byte[] outputData = streamData;
         string outputDict = dict;
 
@@ -81,7 +91,7 @@ internal sealed class PdfObjectWriter
         using var ms = new MemoryStream();
 
         // Header
-        byte[] header = "%PDF-1.7\n%\xe2\xe3\xcf\xd3\n"u8.ToArray();
+        byte[] header = [.. "%PDF-1.7\n%"u8, 0xE2, 0xE3, 0xCF, 0xD3, (byte)'\n'];
         ms.Write(header);
 
         // Objects
@@ -111,7 +121,8 @@ internal sealed class PdfObjectWriter
 
         // Trailer
         string infoRef = InfoObjectNum.HasValue ? $" /Info {InfoObjectNum.Value} 0 R" : string.Empty;
-        string trailer = $"trailer\n<< /Size {_nextObjNum} /Root 1 0 R{infoRef} >>\nstartxref\n{xrefOffset}\n%%EOF\n";
+        string id = FileId is { Length: > 0 } fileId ? $" /ID [<{Convert.ToHexString(fileId)}> <{Convert.ToHexString(fileId)}>]" : string.Empty;
+        string trailer = $"trailer\n<< /Size {_nextObjNum} /Root 1 0 R{infoRef}{id} >>\nstartxref\n{xrefOffset}\n%%EOF\n";
         ms.Write(Encoding.ASCII.GetBytes(trailer));
 
         return ms.ToArray();

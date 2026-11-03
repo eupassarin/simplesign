@@ -1,58 +1,593 @@
+using System.Globalization;
+using System.Text;
+
 namespace SimpleSign.HtmlToPdf.Parsing;
 
 /// <summary>
-/// Resolves CSS cascade: applies browser defaults, stylesheet rules, and inline styles
-/// to produce a <see cref="ComputedStyle"/> for each DOM node.
+/// Resolves CSS cascade: applies browser defaults, presentational HTML attributes, stylesheet rules,
+/// and inline styles to produce a <see cref="ComputedStyle"/> for each DOM node.
 /// </summary>
+/// <remarks>
+/// Cascade order (lowest to highest): user-agent defaults, presentational attributes
+/// (<c>align</c>, <c>bgcolor</c>, <c>width</c>, ...), author rules by specificity then source order,
+/// inline <c>style</c>, <c>!important</c> author rules, inline <c>!important</c>.
+/// <c>::before</c>/<c>::after</c> rules with a <c>content</c> value generate pseudo-element nodes.
+/// </remarks>
 public static class StyleResolver
 {
+    private static readonly HashSet<string> HiddenTags =
+    [
+        "head", "style", "script", "title", "meta", "link", "template", "noscript", "base",
+    ];
+
     /// <summary>
     /// Resolves computed styles for the entire DOM tree.
     /// Call after parsing HTML and CSS. Sets <see cref="HtmlNode.ComputedStyle"/> on each node.
     /// </summary>
+    /// <param name="root">The DOM root.</param>
+    /// <param name="stylesheetRules">Author rules in source order.</param>
     public static void Resolve(HtmlNode root, List<CssRule> stylesheetRules)
     {
-        var sortedRules = stylesheetRules
-            .OrderBy(r => r.Specificity)
-            .ToList();
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(stylesheetRules);
 
-        ResolveNode(root, parentStyle: null, sortedRules);
+        var compiled = new List<CompiledRule>(stylesheetRules.Count);
+        for (int i = 0; i < stylesheetRules.Count; i++)
+        {
+            CssRule rule = stylesheetRules[i];
+            if (rule.Selector.StartsWith('@'))
+            {
+                continue;
+            }
+
+            CssSelector? selector = rule.ParsedSelector ?? CssSelector.TryParse(rule.Selector);
+            if (selector is null)
+            {
+                continue;
+            }
+
+            compiled.Add(new CompiledRule(rule, selector, i));
+        }
+
+        compiled.Sort((x, y) =>
+        {
+            int bySpecificity = x.Selector.SpecificityKey.CompareTo(y.Selector.SpecificityKey);
+            return bySpecificity != 0 ? bySpecificity : x.SourceIndex.CompareTo(y.SourceIndex);
+        });
+
+        var context = new ResolveContext(
+            [.. compiled.Where(r => r.Selector.PseudoElement == PseudoElement.None)],
+            [.. compiled.Where(r => r.Selector.PseudoElement == PseudoElement.Before)],
+            [.. compiled.Where(r => r.Selector.PseudoElement == PseudoElement.After)]);
+
+        ResolveNode(root, parentStyle: null, context);
     }
 
-    private static void ResolveNode(HtmlNode node, ComputedStyle? parentStyle, List<CssRule> rules)
+    private static void ResolveNode(HtmlNode node, ComputedStyle? parentStyle, ResolveContext context)
     {
         var style = CreateInheritedStyle(parentStyle);
 
-        if (node.NodeType == HtmlNodeType.Element && node.Tag is not null)
+        if (node.NodeType != HtmlNodeType.Element || node.Tag is null)
         {
-            ApplyBrowserDefaults(style, node.Tag);
+            node.ComputedStyle = style;
+            return;
+        }
 
-            foreach (var rule in rules)
-            {
-                if (MatchesSelector(node, rule.Selector))
-                {
-                    ApplyProperties(style, rule.Properties, parentStyle?.FontSize ?? 12f);
-                }
-            }
+        ApplyBrowserDefaults(style, node.Tag, node);
+        ApplyPresentationalHints(style, node);
 
-            if (node.InlineStyle is { Count: > 0 })
+        var declarations = new List<KeyValuePair<string, string>>();
+        var important = new List<KeyValuePair<string, string>>();
+        foreach (CompiledRule rule in context.ElementRules)
+        {
+            if (rule.Selector.Matches(node))
             {
-                ApplyProperties(style, node.InlineStyle, parentStyle?.FontSize ?? 12f);
-            }
-            else if (node.Attributes.TryGetValue("style", out string? inlineCss) &&
-                     !string.IsNullOrWhiteSpace(inlineCss))
-            {
-                var inlineProps = CssParser.ParseInlineStyle(inlineCss);
-                ApplyProperties(style, inlineProps, parentStyle?.FontSize ?? 12f);
+                declarations.AddRange(rule.Rule.Properties);
+                important.AddRange(rule.Rule.ImportantProperties);
             }
         }
+
+        if (node.InlineStyle is { Count: > 0 })
+        {
+            declarations.AddRange(node.InlineStyle);
+        }
+        else if (node.Attributes.TryGetValue("style", out string? inlineCss) && !string.IsNullOrWhiteSpace(inlineCss))
+        {
+            declarations.AddRange(CssParser.ParseInlineStyle(inlineCss));
+        }
+
+        declarations.AddRange(important);
+        ApplyDeclarations(style, declarations, parentStyle);
 
         node.ComputedStyle = style;
 
-        foreach (var child in node.Children)
+        // Remove pseudo-elements generated by a previous resolution of the same tree.
+        node.Children.RemoveAll(child => child.IsPseudo);
+        bool rendered = style.Display != DisplayType.None && context.HiddenDepth == 0;
+        if (rendered)
         {
-            ResolveNode(child, style, rules);
+            context.Counters.Apply(node, style);
+            AddPseudoElement(node, style, context, before: true);
         }
+        else
+        {
+            context.HiddenDepth++;
+        }
+
+        // Iterate over a snapshot: ::after is appended once the children are done.
+        foreach (var child in node.Children.ToArray())
+        {
+            if (child.IsPseudo)
+            {
+                continue;
+            }
+
+            ResolveNode(child, style, context);
+        }
+
+        if (rendered)
+        {
+            AddPseudoElement(node, style, context, before: false);
+            context.Counters.LeaveChildrenOf(node);
+        }
+        else
+        {
+            context.HiddenDepth--;
+        }
+    }
+
+    private static void AddPseudoElement(HtmlNode node, ComputedStyle elementStyle, ResolveContext context, bool before)
+    {
+        List<CompiledRule> rules = before ? context.BeforeRules : context.AfterRules;
+        if (rules.Count == 0 || node.IsVoid)
+        {
+            return;
+        }
+
+        var declarations = new List<KeyValuePair<string, string>>();
+        var important = new List<KeyValuePair<string, string>>();
+        foreach (CompiledRule rule in rules)
+        {
+            if (rule.Selector.Matches(node))
+            {
+                declarations.AddRange(rule.Rule.Properties);
+                important.AddRange(rule.Rule.ImportantProperties);
+            }
+        }
+
+        if (declarations.Count == 0 && important.Count == 0)
+        {
+            return;
+        }
+
+        declarations.AddRange(important);
+        string? content = null;
+        foreach (var (name, value) in declarations)
+        {
+            if (name == "content")
+            {
+                content = value;
+            }
+        }
+
+        if (content is null)
+        {
+            return;
+        }
+
+        string resolvedContent = SubstituteVariables(content, elementStyle.CustomProperties).Trim();
+        if (resolvedContent is "none" or "normal" || resolvedContent.Length == 0)
+        {
+            return;
+        }
+
+        ComputedStyle pseudoStyle = CreateInheritedStyle(elementStyle);
+        pseudoStyle.Display = DisplayType.Inline;
+        ApplyDeclarations(pseudoStyle, declarations.Where(d => d.Key != "content"), elementStyle);
+        if (pseudoStyle.Display == DisplayType.None)
+        {
+            return;
+        }
+
+        var pseudo = new HtmlNode
+        {
+            NodeType = HtmlNodeType.Element,
+            Tag = before ? "::before" : "::after",
+            IsPseudo = true,
+            ComputedStyle = pseudoStyle,
+        };
+
+        // The pseudo-element's own counter properties apply before its content is generated.
+        pseudo.Parent = node;
+        context.Counters.Apply(pseudo, pseudoStyle);
+        string? text = EvaluateContent(resolvedContent, node, context.Counters);
+        if (text is null)
+        {
+            return;
+        }
+
+        if (text.Length > 0)
+        {
+            HtmlNode textNode = HtmlNode.CreateText(text);
+            textNode.ComputedStyle = CreateInheritedStyle(pseudoStyle);
+            pseudo.AppendChild(textNode);
+        }
+
+        if (before)
+        {
+            node.Children.Insert(0, pseudo);
+        }
+        else
+        {
+            node.Children.Add(pseudo);
+        }
+    }
+
+    /// <summary>Computes a style for declarations that do not belong to an element (e.g. page-margin boxes).</summary>
+    internal static ComputedStyle ResolveDetached(IEnumerable<KeyValuePair<string, string>> declarations, ComputedStyle? parent)
+    {
+        ComputedStyle style = CreateInheritedStyle(parent);
+        ApplyDeclarations(style, declarations, parent);
+        return style;
+    }
+
+    /// <summary>Evaluates a CSS <c>content</c> value. Returns null for <c>none</c>/<c>normal</c>.</summary>
+    internal static string? EvaluateContent(string value, HtmlNode node, CssCounters? counters = null)
+    {
+        string trimmed = value.Trim();
+        if (trimmed is "none" or "normal" || trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        var sb = new StringBuilder();
+        foreach (string token in CssParser.SplitValueTokens(trimmed))
+        {
+            if (token.Length >= 2 && token[0] is '"' or '\'' && token[^1] == token[0])
+            {
+                sb.Append(UnescapeCssString(token[1..^1]));
+            }
+            else if (token.StartsWith("attr(", StringComparison.OrdinalIgnoreCase) && token.EndsWith(')'))
+            {
+                string attr = token[5..^1].Trim();
+                sb.Append(node.GetAttribute(attr) ?? string.Empty);
+            }
+            else if (counters is not null && token.StartsWith("counter(", StringComparison.OrdinalIgnoreCase) && token.EndsWith(')'))
+            {
+                List<string> args = CssParser.SplitTopLevel(token[8..^1], ',');
+                if (args.Count > 0)
+                {
+                    sb.Append(counters.Counter(args[0].Trim(), args.Count > 1 ? args[1].Trim() : "decimal"));
+                }
+            }
+            else if (counters is not null && token.StartsWith("counters(", StringComparison.OrdinalIgnoreCase) && token.EndsWith(')'))
+            {
+                List<string> args = CssParser.SplitTopLevel(token[9..^1], ',');
+                if (args.Count == 0)
+                {
+                    continue;
+                }
+
+                string separator = args.Count > 1 ? args[1].Trim() : string.Empty;
+                if (separator.Length >= 2 && separator[0] is '"' or '\'' && separator[^1] == separator[0])
+                {
+                    separator = UnescapeCssString(separator[1..^1]);
+                }
+
+                sb.Append(counters.Counters(args[0].Trim(), separator, args.Count > 2 ? args[2].Trim() : "decimal"));
+            }
+            else if (token.Equals("open-quote", StringComparison.OrdinalIgnoreCase))
+            {
+                sb.Append('“');
+            }
+            else if (token.Equals("close-quote", StringComparison.OrdinalIgnoreCase))
+            {
+                sb.Append('”');
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string UnescapeCssString(string value)
+    {
+        if (!value.Contains('\\', StringComparison.Ordinal))
+        {
+            return value;
+        }
+
+        var sb = new StringBuilder(value.Length);
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (c != '\\' || i + 1 >= value.Length)
+            {
+                sb.Append(c);
+                continue;
+            }
+
+            int start = i + 1;
+            int end = start;
+            while (end < value.Length && end - start < 6 && Uri.IsHexDigit(value[end]))
+            {
+                end++;
+            }
+
+            if (end > start)
+            {
+                int codepoint = int.Parse(value[start..end], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                if (codepoint is > 0 and <= 0x10FFFF and not (>= 0xD800 and <= 0xDFFF))
+                {
+                    sb.Append(char.ConvertFromUtf32(codepoint));
+                }
+
+                i = end - 1;
+                if (end < value.Length && value[end] == ' ')
+                {
+                    i = end;
+                }
+            }
+            else
+            {
+                sb.Append(value[start]);
+                i = start;
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static void ApplyDeclarations(ComputedStyle style, IEnumerable<KeyValuePair<string, string>> declarations, ComputedStyle? parentStyle)
+    {
+        List<KeyValuePair<string, string>> list = [.. declarations];
+        float parentFontSize = parentStyle?.FontSize ?? 12f;
+
+        // Custom properties first, so var() can see values declared on the same element.
+        Dictionary<string, string>? variables = null;
+        foreach (var (name, value) in list)
+        {
+            if (name.StartsWith("--", StringComparison.Ordinal))
+            {
+                variables ??= style.CustomProperties is null
+                    ? new Dictionary<string, string>(StringComparer.Ordinal)
+                    : new Dictionary<string, string>(style.CustomProperties, StringComparer.Ordinal);
+                variables[name] = value;
+            }
+        }
+
+        if (variables is not null)
+        {
+            style.CustomProperties = variables;
+        }
+
+        // font-size (and the font shorthand) first: em units in other properties are relative to it.
+        foreach (var (name, value) in list)
+        {
+            if (name == "font-size")
+            {
+                ApplyProperty(style, name, SubstituteVariables(value, style.CustomProperties), parentFontSize, parentStyle);
+            }
+        }
+
+        foreach (var (name, value) in list)
+        {
+            if (name == "font-size" || name.StartsWith("--", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            ApplyProperty(style, name, SubstituteVariables(value, style.CustomProperties), style.FontSize, parentStyle);
+        }
+    }
+
+    /// <summary>Replaces <c>var(--name, fallback)</c> references with their values.</summary>
+    internal static string SubstituteVariables(string value, IReadOnlyDictionary<string, string>? variables)
+    {
+        if (!value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+        {
+            return value;
+        }
+
+        for (int guard = 0; guard < 16 && value.Contains("var(", StringComparison.OrdinalIgnoreCase); guard++)
+        {
+            int start = value.IndexOf("var(", StringComparison.OrdinalIgnoreCase);
+            int depth = 0;
+            int end = -1;
+            for (int i = start + 3; i < value.Length; i++)
+            {
+                if (value[i] == '(')
+                {
+                    depth++;
+                }
+                else if (value[i] == ')' && --depth == 0)
+                {
+                    end = i;
+                    break;
+                }
+            }
+
+            if (end < 0)
+            {
+                break;
+            }
+
+            string inner = value[(start + 4)..end];
+            int comma = inner.IndexOf(',', StringComparison.Ordinal);
+            string name = (comma >= 0 ? inner[..comma] : inner).Trim();
+            string? fallback = comma >= 0 ? inner[(comma + 1)..].Trim() : null;
+            string replacement = variables is not null && variables.TryGetValue(name, out string? found)
+                ? found
+                : fallback ?? string.Empty;
+            value = string.Concat(value.AsSpan(0, start), replacement, value.AsSpan(end + 1));
+        }
+
+        return value.Trim();
+    }
+
+    /// <summary>SVG properties kept for the SVG renderer (font properties are also applied normally).</summary>
+    private static readonly HashSet<string> SvgPropertyNames = new(StringComparer.Ordinal)
+    {
+        "fill", "fill-opacity", "fill-rule", "stroke", "stroke-width", "stroke-opacity", "stroke-linecap",
+        "stroke-linejoin", "stroke-dasharray", "stroke-dashoffset", "stroke-miterlimit", "stop-color", "stop-opacity",
+        "text-anchor", "clip-path", "clip-rule", "dominant-baseline", "font-size", "font-family", "font-weight", "font-style",
+    };
+
+    /// <summary>Length properties that accept percentage-dependent math functions.</summary>
+    private static readonly HashSet<string> CalcProperties = new(StringComparer.Ordinal)
+    {
+        "width", "min-width", "max-width", "height", "min-height", "max-height",
+        "margin-top", "margin-right", "margin-bottom", "margin-left",
+        "padding-top", "padding-right", "padding-bottom", "padding-left",
+        "top", "right", "bottom", "left", "flex-basis", "text-indent",
+    };
+
+    /// <summary>Returns true when the style has values that need the containing block size.</summary>
+    /// <param name="style">The cascaded style.</param>
+    /// <returns>True when layout must resolve percentages or math functions.</returns>
+    internal static bool DependsOnContainer(ComputedStyle style) =>
+        style.Calcs is { Count: > 0 }
+        || CssLength.IsPercent(style.Margin.Top) || CssLength.IsPercent(style.Margin.Right)
+        || CssLength.IsPercent(style.Margin.Bottom) || CssLength.IsPercent(style.Margin.Left)
+        || CssLength.IsPercent(style.Padding.Top) || CssLength.IsPercent(style.Padding.Right)
+        || CssLength.IsPercent(style.Padding.Bottom) || CssLength.IsPercent(style.Padding.Left)
+        || CssLength.IsPercent(style.Left) || CssLength.IsPercent(style.Right)
+        || CssLength.IsPercent(style.Top) || CssLength.IsPercent(style.Bottom);
+
+    private static void RemoveCalc(ComputedStyle style, string name)
+    {
+        if (style.Calcs!.Any(c => c.Key == name))
+        {
+            List<KeyValuePair<string, CssCalc>> remaining = [.. style.Calcs!.Where(c => c.Key != name)];
+            style.Calcs = remaining.Count == 0 ? null : remaining;
+        }
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="style"/> with every deferred math function resolved,
+    /// percentages measured against <paramref name="reference"/> (heights against <paramref name="heightReference"/>).
+    /// </summary>
+    /// <param name="style">The style holding unresolved expressions.</param>
+    /// <param name="reference">The containing block width.</param>
+    /// <param name="heightReference">The containing block height, or null when it is indefinite.</param>
+    /// <returns>A resolved copy, or the same instance when nothing is deferred.</returns>
+    internal static ComputedStyle ResolveCalcs(ComputedStyle style, float reference, float? heightReference)
+    {
+        if (!DependsOnContainer(style))
+        {
+            return style;
+        }
+
+        ComputedStyle resolved = style.Clone();
+        resolved.Calcs = null;
+        resolved.Margin = new Thickness(
+            CssLength.Resolve(style.Margin.Top, reference),
+            CssLength.Resolve(style.Margin.Right, reference),
+            CssLength.Resolve(style.Margin.Bottom, reference),
+            CssLength.Resolve(style.Margin.Left, reference));
+        resolved.Padding = new Thickness(
+            Math.Max(0, CssLength.Resolve(style.Padding.Top, reference)),
+            Math.Max(0, CssLength.Resolve(style.Padding.Right, reference)),
+            Math.Max(0, CssLength.Resolve(style.Padding.Bottom, reference)),
+            Math.Max(0, CssLength.Resolve(style.Padding.Left, reference)));
+        if (style.Left is float left && CssLength.IsPercent(left))
+        {
+            resolved.Left = CssLength.Resolve(left, reference);
+        }
+
+        if (style.Right is float right && CssLength.IsPercent(right))
+        {
+            resolved.Right = CssLength.Resolve(right, reference);
+        }
+
+        if (heightReference is float h)
+        {
+            if (style.Top is float top && CssLength.IsPercent(top))
+            {
+                resolved.Top = CssLength.Resolve(top, h);
+            }
+
+            if (style.Bottom is float bottom && CssLength.IsPercent(bottom))
+            {
+                resolved.Bottom = CssLength.Resolve(bottom, h);
+            }
+        }
+
+        foreach (var (name, calc) in style.Calcs ?? [])
+        {
+            bool vertical = name is "height" or "min-height" or "max-height" or "top" or "bottom";
+            if (vertical && heightReference is null)
+            {
+                continue;
+            }
+
+            float v = calc.Evaluate(vertical ? heightReference!.Value : reference);
+            float nonNegative = Math.Max(0, v);
+            switch (name)
+            {
+                case "width":
+                    resolved.Width = nonNegative;
+                    break;
+                case "min-width":
+                    resolved.MinWidth = nonNegative;
+                    break;
+                case "max-width":
+                    resolved.MaxWidth = nonNegative;
+                    break;
+                case "height":
+                    resolved.Height = nonNegative;
+                    break;
+                case "min-height":
+                    resolved.MinHeight = nonNegative;
+                    break;
+                case "max-height":
+                    resolved.MaxHeight = nonNegative;
+                    break;
+                case "margin-top":
+                    resolved.Margin = resolved.Margin with { Top = v };
+                    break;
+                case "margin-right":
+                    resolved.Margin = resolved.Margin with { Right = v };
+                    break;
+                case "margin-bottom":
+                    resolved.Margin = resolved.Margin with { Bottom = v };
+                    break;
+                case "margin-left":
+                    resolved.Margin = resolved.Margin with { Left = v };
+                    break;
+                case "padding-top":
+                    resolved.Padding = resolved.Padding with { Top = nonNegative };
+                    break;
+                case "padding-right":
+                    resolved.Padding = resolved.Padding with { Right = nonNegative };
+                    break;
+                case "padding-bottom":
+                    resolved.Padding = resolved.Padding with { Bottom = nonNegative };
+                    break;
+                case "padding-left":
+                    resolved.Padding = resolved.Padding with { Left = nonNegative };
+                    break;
+                case "top":
+                    resolved.Top = v;
+                    break;
+                case "right":
+                    resolved.Right = v;
+                    break;
+                case "bottom":
+                    resolved.Bottom = v;
+                    break;
+                case "left":
+                    resolved.Left = v;
+                    break;
+                case "flex-basis":
+                    resolved.FlexBasis = nonNegative;
+                    break;
+                default:
+                    resolved.TextIndent = v;
+                    break;
+            }
+        }
+
+        return resolved;
     }
 
     private static ComputedStyle CreateInheritedStyle(ComputedStyle? parent)
@@ -65,52 +600,84 @@ public static class StyleResolver
         return new ComputedStyle
         {
             FontFamily = parent.FontFamily,
+            FontFamilies = parent.FontFamilies,
             FontSize = parent.FontSize,
+            FontWeight = parent.FontWeight,
             IsBold = parent.IsBold,
             IsItalic = parent.IsItalic,
+            // Text decorations and sub/superscript propagate to descendant text.
+            IsUnderline = parent.IsUnderline,
+            IsStrikethrough = parent.IsStrikethrough,
+            FontPosition = parent.FontPosition,
             Color = parent.Color,
             TextAlign = parent.TextAlign,
+            LogicalAlign = parent.LogicalAlign,
+            Rtl = parent.Rtl,
+            TextIndent = parent.TextIndent,
             LineHeight = parent.LineHeight,
+            WhiteSpace = parent.WhiteSpace,
+            WordBreak = parent.WordBreak,
+            OverflowWrapAnywhere = parent.OverflowWrapAnywhere,
+            TextTransform = parent.TextTransform,
+            LetterSpacing = parent.LetterSpacing,
+            WordSpacing = parent.WordSpacing,
+            ListStyleType = parent.ListStyleType,
+            ListStyleInside = parent.ListStyleInside,
+            BorderCollapse = parent.BorderCollapse,
+            BorderSpacing = parent.BorderSpacing,
+            IsHidden = parent.IsHidden,
+            Orphans = parent.Orphans,
+            Widows = parent.Widows,
+            CustomProperties = parent.CustomProperties,
+            TextShadows = parent.TextShadows,
+            Language = parent.Language,
+            Hyphens = parent.Hyphens,
         };
     }
 
-    private static void ApplyBrowserDefaults(ComputedStyle style, string tag)
+    private static void ApplyBrowserDefaults(ComputedStyle style, string tag, HtmlNode node)
     {
+        if (HiddenTags.Contains(tag))
+        {
+            style.Display = DisplayType.None;
+            return;
+        }
+
         switch (tag)
         {
             case "h1":
                 style.FontSize = 24f;
-                style.IsBold = true;
+                SetBold(style, true);
                 style.Margin = new Thickness(16f, 0f, 16f, 0f);
                 style.Display = DisplayType.Block;
                 break;
             case "h2":
                 style.FontSize = 20f;
-                style.IsBold = true;
+                SetBold(style, true);
                 style.Margin = new Thickness(14f, 0f, 14f, 0f);
                 style.Display = DisplayType.Block;
                 break;
             case "h3":
                 style.FontSize = 16f;
-                style.IsBold = true;
+                SetBold(style, true);
                 style.Margin = new Thickness(12f, 0f, 12f, 0f);
                 style.Display = DisplayType.Block;
                 break;
             case "h4":
                 style.FontSize = 14f;
-                style.IsBold = true;
+                SetBold(style, true);
                 style.Margin = new Thickness(10f, 0f, 10f, 0f);
                 style.Display = DisplayType.Block;
                 break;
             case "h5":
                 style.FontSize = 12f;
-                style.IsBold = true;
+                SetBold(style, true);
                 style.Margin = new Thickness(8f, 0f, 8f, 0f);
                 style.Display = DisplayType.Block;
                 break;
             case "h6":
                 style.FontSize = 10f;
-                style.IsBold = true;
+                SetBold(style, true);
                 style.Margin = new Thickness(6f, 0f, 6f, 0f);
                 style.Display = DisplayType.Block;
                 break;
@@ -129,27 +696,29 @@ public static class StyleResolver
                 style.Display = DisplayType.Block;
                 break;
             case "pre":
-                style.FontFamily = "Courier";
+                SetFontFamily(style, "Courier");
                 style.FontSize = 10f;
+                style.WhiteSpace = WhiteSpaceMode.Pre;
                 style.Margin = new Thickness(8f, 0f, 8f, 0f);
                 style.Padding = new Thickness(8f, 8f, 8f, 8f);
                 style.BackgroundColor = PdfColor.Parse("#f5f5f5");
                 style.Border = CreateUniformBorder(1f, PdfColor.Parse("#ddd"));
                 style.Display = DisplayType.Block;
                 break;
-            case "code":
-                style.FontFamily = "Courier";
+            case "code" or "tt" or "samp":
+                SetFontFamily(style, "Courier");
                 style.FontSize = 10f;
-                break;
-            case "strong" or "b":
-                style.IsBold = true;
                 style.Display = DisplayType.Inline;
                 break;
-            case "em" or "i":
+            case "strong" or "b":
+                SetBold(style, true);
+                style.Display = DisplayType.Inline;
+                break;
+            case "em" or "i" or "cite" or "var" or "dfn":
                 style.IsItalic = true;
                 style.Display = DisplayType.Inline;
                 break;
-            case "u":
+            case "u" or "ins":
                 style.IsUnderline = true;
                 style.Display = DisplayType.Inline;
                 break;
@@ -167,18 +736,30 @@ public static class StyleResolver
                 style.FontSize *= 0.7f;
                 style.Display = DisplayType.Inline;
                 break;
+            case "small":
+                style.FontSize *= 0.83f;
+                style.Display = DisplayType.Inline;
+                break;
+            case "big":
+                style.FontSize *= 1.2f;
+                style.Display = DisplayType.Inline;
+                break;
             case "mark":
                 style.BackgroundColor = new PdfColor(1f, 1f, 0f);
                 style.Display = DisplayType.Inline;
                 break;
             case "kbd":
-                style.FontFamily = "Courier";
+                SetFontFamily(style, "Courier");
                 style.FontSize = 10f;
                 style.Display = DisplayType.Inline;
                 break;
             case "a":
-                style.Color = new PdfColor(0f, 0f, 1f);
-                style.IsUnderline = true;
+                if (node.Attributes.ContainsKey("href"))
+                {
+                    style.Color = new PdfColor(0f, 0f, 1f);
+                    style.IsUnderline = true;
+                }
+
                 style.Display = DisplayType.Inline;
                 break;
             case "figure":
@@ -193,22 +774,47 @@ public static class StyleResolver
                 style.Display = DisplayType.Block;
                 break;
             case "caption":
-                style.IsBold = true;
+                SetBold(style, true);
                 style.TextAlign = TextAlign.Center;
                 style.Margin = new Thickness(0f, 0f, 4f, 0f);
                 style.Display = DisplayType.Block;
                 break;
-            case "ul" or "ol":
-                style.Margin = new Thickness(8f, 0f, 8f, 0f);
+            case "ul" or "ol" or "menu":
+                style.Margin = HasListAncestor(node) ? Thickness.Zero : new Thickness(8f, 0f, 8f, 0f);
                 style.Padding = new Thickness(0f, 0f, 0f, 30f);
                 style.Display = DisplayType.Block;
+                style.ListStyleType = tag == "ol" ? "decimal" : (CountListAncestors(node, "ul") switch
+                {
+                    0 => "disc",
+                    1 => "circle",
+                    _ => "square",
+                });
                 break;
             case "li":
                 style.Display = DisplayType.ListItem;
                 break;
-            case "table":
+            case "dl":
                 style.Margin = new Thickness(8f, 0f, 8f, 0f);
                 style.Display = DisplayType.Block;
+                break;
+            case "dt":
+                style.Display = DisplayType.Block;
+                break;
+            case "dd":
+                style.Margin = new Thickness(0f, 0f, 0f, 30f);
+                style.Display = DisplayType.Block;
+                break;
+            case "address":
+                style.IsItalic = true;
+                style.Display = DisplayType.Block;
+                break;
+            case "center":
+                style.TextAlign = TextAlign.Center;
+                style.Display = DisplayType.Block;
+                break;
+            case "table":
+                style.Margin = new Thickness(8f, 0f, 8f, 0f);
+                style.Display = DisplayType.Table;
                 break;
             case "thead" or "tbody" or "tfoot":
                 style.Display = DisplayType.Block;
@@ -217,13 +823,15 @@ public static class StyleResolver
                 style.Display = DisplayType.TableRow;
                 break;
             case "th":
-                style.IsBold = true;
+                SetBold(style, true);
                 style.Padding = new Thickness(4f, 4f, 4f, 4f);
                 style.TextAlign = TextAlign.Center;
+                style.VerticalAlign = VerticalAlign.Middle;
                 style.Display = DisplayType.TableCell;
                 break;
             case "td":
                 style.Padding = new Thickness(4f, 4f, 4f, 4f);
+                style.VerticalAlign = VerticalAlign.Middle;
                 style.Display = DisplayType.TableCell;
                 break;
             case "hr":
@@ -235,49 +843,342 @@ public static class StyleResolver
                 };
                 style.Display = DisplayType.Block;
                 break;
-            case "div" or "header" or "footer" or "main" or "section" or "article" or "nav" or "aside":
+            case "div" or "header" or "footer" or "main" or "section" or "article" or "nav" or "aside"
+                or "body" or "html" or "form" or "fieldset" or "details" or "summary" or "hgroup":
                 style.Display = DisplayType.Block;
                 break;
-            case "span" or "abbr" or "small" or "br" or "img":
+            default:
+                // Unknown and phrasing elements (span, abbr, br, img, font, label, ...) are inline.
                 style.Display = DisplayType.Inline;
                 break;
         }
     }
 
-    private static void ApplyProperties(
-        ComputedStyle style,
-        Dictionary<string, string> properties,
-        float parentFontSize)
+    private static bool HasListAncestor(HtmlNode node)
     {
-        foreach (var (name, value) in properties)
+        for (HtmlNode? p = node.Parent; p is not null; p = p.Parent)
         {
-            ApplyProperty(style, name, value, parentFontSize);
+            if (p.Tag is "li")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int CountListAncestors(HtmlNode node, string tag)
+    {
+        int count = 0;
+        for (HtmlNode? p = node.Parent; p is not null; p = p.Parent)
+        {
+            if (p.Tag == tag || (tag == "ul" && p.Tag == "ol"))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>Maps legacy presentational HTML attributes onto style (lower priority than any CSS).</summary>
+    private static void ApplyPresentationalHints(ComputedStyle style, HtmlNode node)
+    {
+        string? tag = node.Tag;
+        if (node.GetAttribute("hidden") is not null)
+        {
+            style.Display = DisplayType.None;
+            return;
+        }
+
+        if (node.GetAttribute("align") is { } align && tag is not "img" and not "table")
+        {
+            style.TextAlign = ParseTextAlign(align);
+        }
+
+        if (tag is "table" && node.GetAttribute("align") is { } tableAlign)
+        {
+            string a = tableAlign.Trim().ToLowerInvariant();
+            if (a == "center")
+            {
+                style.MarginLeftAuto = true;
+                style.MarginRightAuto = true;
+            }
+            else if (a == "right")
+            {
+                style.MarginLeftAuto = true;
+            }
+        }
+
+        if (node.GetAttribute("valign") is { } valign)
+        {
+            style.VerticalAlign = ParseVerticalAlign(valign);
+        }
+
+        if (node.GetAttribute("dir") is { Length: > 0 } dir)
+        {
+            style.Rtl = dir.Trim().ToLowerInvariant() switch
+            {
+                "rtl" => true,
+                "ltr" => false,
+                _ => Layout.Bidi.FirstStrongIsRtl(node) ?? style.Rtl,
+            };
+        }
+
+        if (node.GetAttribute("lang") is { Length: > 0 } lang)
+        {
+            style.Language = lang.Trim();
+        }
+
+        if (node.GetAttribute("bgcolor") is { } bgcolor)
+        {
+            style.BackgroundColor = PdfColor.Parse(bgcolor);
+        }
+
+        if (tag is "body" or "table" or "td" or "th" or "tr" && node.GetAttribute("background") is { Length: > 0 } backgroundUrl)
+        {
+            style.BackgroundImages = [new CssUrlImage(backgroundUrl.Trim())];
+        }
+
+        if (tag is "td" or "th" or "table" or "col")
+        {
+            if (node.GetAttribute("width") is { } width && ParseHtmlLength(width) is { } w)
+            {
+                style.Width = w;
+            }
+
+            if (node.GetAttribute("height") is { } height && ParseHtmlLength(height) is { } h && h > 0)
+            {
+                style.Height = h;
+            }
+        }
+
+        if (tag is "td" or "th" && node.GetAttribute("nowrap") is not null)
+        {
+            style.WhiteSpace = WhiteSpaceMode.NoWrap;
+        }
+
+        if (tag is "table")
+        {
+            if (node.GetAttribute("border") is { } border
+                && float.TryParse(border.Length == 0 ? "1" : border, NumberStyles.Float, CultureInfo.InvariantCulture, out float bw)
+                && bw > 0)
+            {
+                style.Border = CreateUniformBorder(bw * 0.75f, PdfColor.Gray);
+            }
+
+            if (node.GetAttribute("cellspacing") is { } spacing && ParseHtmlLength(spacing) is { } s && s >= 0)
+            {
+                style.BorderSpacing = s;
+            }
+        }
+
+        if (tag is "td" or "th" && FindAncestor(node, "table") is { } table)
+        {
+            if (table.GetAttribute("cellpadding") is { } padding && ParseHtmlLength(padding) is { } p && p >= 0)
+            {
+                style.Padding = Thickness.Uniform(p);
+            }
+
+            if (table.GetAttribute("border") is { } border
+                && float.TryParse(border.Length == 0 ? "1" : border, NumberStyles.Float, CultureInfo.InvariantCulture, out float bw)
+                && bw > 0)
+            {
+                style.Border = CreateUniformBorder(0.75f, PdfColor.Gray);
+            }
+        }
+
+        if (tag is "font")
+        {
+            if (node.GetAttribute("color") is { } color)
+            {
+                style.Color = PdfColor.Parse(color);
+            }
+
+            if (node.GetAttribute("face") is { } face)
+            {
+                SetFontFamilyList(style, face);
+            }
+
+            if (node.GetAttribute("size") is { } size && int.TryParse(size.TrimStart('+'), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int fontSize))
+            {
+                int level = size.StartsWith('+') || size.StartsWith('-') ? 3 + fontSize : fontSize;
+                style.FontSize = Math.Clamp(level, 1, 7) switch
+                {
+                    1 => 7.5f,
+                    2 => 9.75f,
+                    3 => 12f,
+                    4 => 13.5f,
+                    5 => 18f,
+                    6 => 24f,
+                    _ => 36f,
+                };
+            }
+        }
+
+        if (tag is "ol" && node.GetAttribute("type") is { } olType)
+        {
+            style.ListStyleType = olType switch
+            {
+                "a" => "lower-alpha",
+                "A" => "upper-alpha",
+                "i" => "lower-roman",
+                "I" => "upper-roman",
+                _ => "decimal",
+            };
+        }
+
+        if (tag is "ul" && node.GetAttribute("type") is { } ulType)
+        {
+            style.ListStyleType = ulType.ToLowerInvariant();
         }
     }
 
-    private static void ApplyProperty(ComputedStyle style, string name, string value, float parentFontSize)
+    private static HtmlNode? FindAncestor(HtmlNode node, string tag)
     {
+        for (HtmlNode? p = node.Parent; p is not null; p = p.Parent)
+        {
+            if (p.Tag == tag)
+            {
+                return p;
+            }
+        }
+
+        return null;
+    }
+
+    private static float? ParseHtmlLength(string value)
+    {
+        string v = value.Trim();
+        if (v.EndsWith('%') && float.TryParse(v[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out float pct))
+        {
+            return CssLength.Percent(pct);
+        }
+
+        return CssParser.ParseLength(v);
+    }
+
+    private static void SetBold(ComputedStyle style, bool bold)
+    {
+        style.IsBold = bold;
+        style.FontWeight = bold ? 700 : 400;
+    }
+
+    private static void SetFontFamily(ComputedStyle style, string family)
+    {
+        style.FontFamily = family;
+        style.FontFamilies = [family];
+    }
+
+    private static void SetFontFamilyList(ComputedStyle style, string value)
+    {
+        List<string> families = [.. CssParser.SplitTopLevel(value, ',')
+            .Select(f => f.Trim().Trim('\'', '"').Trim())
+            .Where(f => f.Length > 0)];
+        if (families.Count == 0)
+        {
+            return;
+        }
+
+        style.FontFamily = families[0];
+        style.FontFamilies = families;
+    }
+
+    private static void ApplyProperty(ComputedStyle style, string name, string value, float fontSize, ComputedStyle? parent)
+    {
+        if (value.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+        {
+            if (parent is not null)
+            {
+                InheritProperty(style, name, parent);
+            }
+
+            return;
+        }
+
+        if (SvgPropertyNames.Contains(name))
+        {
+            var svg = style.SvgProperties is null
+                ? new Dictionary<string, string>(StringComparer.Ordinal)
+                : new Dictionary<string, string>(style.SvgProperties, StringComparer.Ordinal);
+            svg[name] = value;
+            style.SvgProperties = svg;
+            if (!name.StartsWith("font", StringComparison.Ordinal))
+            {
+                return;
+            }
+        }
+
+        if (CalcProperties.Contains(name))
+        {
+            if (style.Calcs is not null)
+            {
+                RemoveCalc(style, name);
+            }
+
+            if (CssCalc.IsMathFunction(value) && CssParser.ParseLength(value, fontSize) is null
+                && CssCalc.TryParse(value, fontSize) is { HasPercent: true } calc)
+            {
+                List<KeyValuePair<string, CssCalc>> calcs = style.Calcs is null ? [] : [.. style.Calcs];
+                calcs.Add(new KeyValuePair<string, CssCalc>(name, calc));
+                style.Calcs = calcs;
+                if (name is "margin-left")
+                {
+                    style.MarginLeftAuto = false;
+                }
+                else if (name is "margin-right")
+                {
+                    style.MarginRightAuto = false;
+                }
+
+                return;
+            }
+        }
+
         switch (name)
         {
             case "font-family":
-                style.FontFamily = value.Split(',')[0].Trim().Trim('\'', '"');
+                SetFontFamilyList(style, value);
                 break;
 
             case "font-size":
-                var fs = CssParser.ParseLength(value, parentFontSize);
-                if (fs is > 0)
+                if (ParseFontSizeKeyword(value, fontSize) is { } keywordSize)
                 {
-                    style.FontSize = fs.Value;
+                    style.FontSize = keywordSize;
+                }
+                else if (CssParser.ParseLength(value, fontSize) is { } fs)
+                {
+                    if (CssLength.IsPercent(fs))
+                    {
+                        style.FontSize = Math.Max(0, fontSize * CssLength.PercentOf(fs) / 100f);
+                    }
+                    else if (fs > 0)
+                    {
+                        style.FontSize = fs;
+                    }
                 }
 
                 break;
 
             case "font-weight":
-                style.IsBold = value is "bold" or "bolder" or "700" or "800" or "900";
+                style.FontWeight = value.Trim().ToLowerInvariant() switch
+                {
+                    "bold" => 700,
+                    "normal" => 400,
+                    "bolder" => (parent?.FontWeight ?? 400) >= 600 ? 900 : 700,
+                    "lighter" => (parent?.FontWeight ?? 400) >= 600 ? 400 : 100,
+                    _ => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int weight)
+                        ? Math.Clamp(weight, 1, 1000)
+                        : style.FontWeight,
+                };
+                style.IsBold = style.FontWeight >= 600;
                 break;
 
             case "font-style":
-                style.IsItalic = value is "italic" or "oblique";
+                style.IsItalic = value.Trim().ToLowerInvariant() is "italic" or "oblique" || value.StartsWith("oblique", StringComparison.OrdinalIgnoreCase);
+                break;
+
+            case "font-variant":
                 break;
 
             case "text-decoration" or "text-decoration-line":
@@ -286,110 +1187,360 @@ public static class StyleResolver
                 break;
 
             case "color":
-                style.Color = PdfColor.Parse(value);
+                if (!value.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+                {
+                    style.Color = PdfColor.Parse(value);
+                }
+
                 break;
 
             case "text-align":
                 style.TextAlign = ParseTextAlign(value);
+                style.LogicalAlign = value.Trim().ToLowerInvariant() switch
+                {
+                    "start" => LogicalTextAlign.Start,
+                    "end" => LogicalTextAlign.End,
+                    _ => null,
+                };
+                break;
+
+            case "direction":
+                style.Rtl = value.Trim().Equals("rtl", StringComparison.OrdinalIgnoreCase);
                 break;
 
             case "line-height":
-                if (float.TryParse(value, System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture, out var lh))
+                if (value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase))
+                {
+                    style.LineHeight = 1.2f;
+                }
+                else if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var lh))
                 {
                     style.LineHeight = lh;
                 }
-                else if (CssParser.ParseLength(value, style.FontSize) is { } lhPt and > 0)
+                else if (CssParser.ParseLength(value, style.FontSize) is { } lhPt && lhPt != 0)
                 {
-                    style.LineHeight = lhPt / style.FontSize;
+                    style.LineHeight = Math.Max(0, CssLength.IsPercent(lhPt) ? CssLength.PercentOf(lhPt) / 100f : lhPt / style.FontSize);
                 }
 
                 break;
 
             case "text-indent":
-                if (CssParser.ParseLength(value, parentFontSize) is { } indent)
+                if (CssParser.ParseLength(value, fontSize) is { } indent)
                 {
                     style.TextIndent = indent;
                 }
 
                 break;
 
+            case "white-space":
+                style.WhiteSpace = value.ToLowerInvariant() switch
+                {
+                    "nowrap" => WhiteSpaceMode.NoWrap,
+                    "pre" => WhiteSpaceMode.Pre,
+                    "pre-wrap" or "break-spaces" => WhiteSpaceMode.PreWrap,
+                    "pre-line" => WhiteSpaceMode.PreLine,
+                    _ => WhiteSpaceMode.Normal,
+                };
+                break;
+
+            case "word-break":
+                style.WordBreak = value.ToLowerInvariant() switch
+                {
+                    "break-all" => WordBreakMode.BreakAll,
+                    "keep-all" => WordBreakMode.KeepAll,
+                    _ => WordBreakMode.Normal,
+                };
+                if (value.Equals("break-word", StringComparison.OrdinalIgnoreCase))
+                {
+                    style.OverflowWrapAnywhere = true;
+                }
+
+                break;
+
+            case "overflow-wrap" or "word-wrap":
+                style.OverflowWrapAnywhere = value.ToLowerInvariant() is "anywhere" or "break-word";
+                break;
+
+            case "text-transform":
+                style.TextTransform = value.ToLowerInvariant() switch
+                {
+                    "uppercase" => TextTransformMode.Uppercase,
+                    "lowercase" => TextTransformMode.Lowercase,
+                    "capitalize" => TextTransformMode.Capitalize,
+                    _ => TextTransformMode.None,
+                };
+                break;
+
+            case "letter-spacing":
+                style.LetterSpacing = value == "normal" ? 0 : CssParser.ParseLength(value, fontSize) ?? 0;
+                break;
+
+            case "word-spacing":
+                style.WordSpacing = value == "normal" ? 0 : CssParser.ParseLength(value, fontSize) ?? 0;
+                break;
+
             case "margin-top":
-                style.Margin = style.Margin with { Top = CssParser.ParseLength(value, parentFontSize) ?? 0f };
+                style.Margin = style.Margin with { Top = CssParser.ParseLength(value, fontSize) ?? 0f };
                 break;
             case "margin-right":
-                style.Margin = style.Margin with { Right = CssParser.ParseLength(value, parentFontSize) ?? 0f };
+                style.MarginRightAuto = IsAuto(value);
+                style.Margin = style.Margin with { Right = CssParser.ParseLength(value, fontSize) ?? 0f };
                 break;
             case "margin-bottom":
-                style.Margin = style.Margin with { Bottom = CssParser.ParseLength(value, parentFontSize) ?? 0f };
+                style.Margin = style.Margin with { Bottom = CssParser.ParseLength(value, fontSize) ?? 0f };
                 break;
             case "margin-left":
-                style.Margin = style.Margin with { Left = CssParser.ParseLength(value, parentFontSize) ?? 0f };
+                style.MarginLeftAuto = IsAuto(value);
+                style.Margin = style.Margin with { Left = CssParser.ParseLength(value, fontSize) ?? 0f };
                 break;
 
             case "padding-top":
-                style.Padding = style.Padding with { Top = CssParser.ParseLength(value, parentFontSize) ?? 0f };
+                style.Padding = style.Padding with { Top = PaddingValue(value, fontSize) };
                 break;
             case "padding-right":
-                style.Padding = style.Padding with { Right = CssParser.ParseLength(value, parentFontSize) ?? 0f };
+                style.Padding = style.Padding with { Right = PaddingValue(value, fontSize) };
                 break;
             case "padding-bottom":
-                style.Padding = style.Padding with { Bottom = CssParser.ParseLength(value, parentFontSize) ?? 0f };
+                style.Padding = style.Padding with { Bottom = PaddingValue(value, fontSize) };
                 break;
             case "padding-left":
-                style.Padding = style.Padding with { Left = CssParser.ParseLength(value, parentFontSize) ?? 0f };
+                style.Padding = style.Padding with { Left = PaddingValue(value, fontSize) };
                 break;
 
             case "border-top-width":
-                EnsureMutableBorder(style).TopWidth = CssParser.ParseLength(value, parentFontSize) ?? 0f;
+                EnsureMutableBorder(style).TopWidth = NonNegative(CssParser.ParseLength(value, fontSize));
                 break;
             case "border-right-width":
-                EnsureMutableBorder(style).RightWidth = CssParser.ParseLength(value, parentFontSize) ?? 0f;
+                EnsureMutableBorder(style).RightWidth = NonNegative(CssParser.ParseLength(value, fontSize));
                 break;
             case "border-bottom-width":
-                EnsureMutableBorder(style).BottomWidth = CssParser.ParseLength(value, parentFontSize) ?? 0f;
+                EnsureMutableBorder(style).BottomWidth = NonNegative(CssParser.ParseLength(value, fontSize));
                 break;
             case "border-left-width":
-                EnsureMutableBorder(style).LeftWidth = CssParser.ParseLength(value, parentFontSize) ?? 0f;
+                EnsureMutableBorder(style).LeftWidth = NonNegative(CssParser.ParseLength(value, fontSize));
                 break;
 
             case "border-top-color":
-                EnsureMutableBorder(style).TopColor = PdfColor.Parse(value);
+                EnsureMutableBorder(style).TopColor = ParseColorWithCurrent(value, style);
                 break;
             case "border-right-color":
-                EnsureMutableBorder(style).RightColor = PdfColor.Parse(value);
+                EnsureMutableBorder(style).RightColor = ParseColorWithCurrent(value, style);
                 break;
             case "border-bottom-color":
-                EnsureMutableBorder(style).BottomColor = PdfColor.Parse(value);
+                EnsureMutableBorder(style).BottomColor = ParseColorWithCurrent(value, style);
                 break;
             case "border-left-color":
-                EnsureMutableBorder(style).LeftColor = PdfColor.Parse(value);
+                EnsureMutableBorder(style).LeftColor = ParseColorWithCurrent(value, style);
                 break;
-            case "border-color":
-                var bc = PdfColor.Parse(value);
-                var b = EnsureMutableBorder(style);
-                b.TopColor = bc;
-                b.RightColor = bc;
-                b.BottomColor = bc;
-                b.LeftColor = bc;
+
+            case "border-top-style":
+                ApplyBorderStyle(style, value, b => b.TopStyle = ParseBorderLineStyle(value), b => b.TopWidth = 0);
+                break;
+            case "border-right-style":
+                ApplyBorderStyle(style, value, b => b.RightStyle = ParseBorderLineStyle(value), b => b.RightWidth = 0);
+                break;
+            case "border-bottom-style":
+                ApplyBorderStyle(style, value, b => b.BottomStyle = ParseBorderLineStyle(value), b => b.BottomWidth = 0);
+                break;
+            case "border-left-style":
+                ApplyBorderStyle(style, value, b => b.LeftStyle = ParseBorderLineStyle(value), b => b.LeftWidth = 0);
+                break;
+
+            case "border-radius" or "border-top-left-radius":
+                if (CssParser.SplitValueTokens(value.Split('/')[0]).FirstOrDefault() is { } radiusToken
+                    && CssParser.ParseLength(radiusToken, fontSize) is { } radius && radius > 0)
+                {
+                    style.BorderRadius = radius;
+                }
+                else
+                {
+                    style.BorderRadius = 0;
+                }
+
                 break;
 
             case "border-collapse":
                 style.BorderCollapse = value is "collapse";
                 break;
 
+            case "border-spacing":
+                style.BorderSpacing = NonNegative(CssParser.ParseLength(CssParser.SplitValueTokens(value).FirstOrDefault() ?? "0", fontSize));
+                break;
+
             case "width":
-                style.Width = CssParser.ParseLength(value, parentFontSize);
+                style.Width = CssParser.ParseLength(value, fontSize);
                 break;
             case "max-width":
-                style.MaxWidth = CssParser.ParseLength(value, parentFontSize);
+                style.MaxWidth = CssParser.ParseLength(value, fontSize);
+                break;
+            case "min-width":
+                style.MinWidth = CssParser.ParseLength(value, fontSize);
                 break;
             case "height":
-                style.Height = CssParser.ParseLength(value, parentFontSize);
+                style.Height = CssParser.ParseLength(value, fontSize) is { } height && height >= 0 && !CssLength.IsPercent(height) ? height : null;
+                break;
+            case "min-height":
+                style.MinHeight = CssParser.ParseLength(value, fontSize) is { } minHeight && minHeight >= 0 && !CssLength.IsPercent(minHeight) ? minHeight : null;
+                break;
+            case "max-height":
+                style.MaxHeight = CssParser.ParseLength(value, fontSize) is { } maxHeight && maxHeight >= 0 && !CssLength.IsPercent(maxHeight) ? maxHeight : null;
+                break;
+
+            case "box-sizing":
+                style.BoxSizing = value.Trim().Equals("border-box", StringComparison.OrdinalIgnoreCase)
+                    ? BoxSizing.BorderBox
+                    : BoxSizing.ContentBox;
+                break;
+
+            case "float":
+                style.Float = value.Trim().ToLowerInvariant() switch
+                {
+                    "left" or "inline-start" => FloatMode.Left,
+                    "right" or "inline-end" => FloatMode.Right,
+                    _ => FloatMode.None,
+                };
+                break;
+
+            case "clear":
+                style.Clear = value.Trim().ToLowerInvariant() switch
+                {
+                    "left" => ClearMode.Left,
+                    "right" => ClearMode.Right,
+                    "both" => ClearMode.Both,
+                    _ => ClearMode.None,
+                };
+                break;
+
+            case "position":
+                style.Position = value.Trim().ToLowerInvariant() switch
+                {
+                    "relative" or "sticky" => PositionMode.Relative,
+                    "absolute" => PositionMode.Absolute,
+                    "fixed" => PositionMode.Fixed,
+                    _ => PositionMode.Static,
+                };
+                break;
+
+            case "top":
+                style.Top = CssParser.ParseLength(value, fontSize);
+                break;
+            case "right":
+                style.Right = CssParser.ParseLength(value, fontSize);
+                break;
+            case "bottom":
+                style.Bottom = CssParser.ParseLength(value, fontSize);
+                break;
+            case "left":
+                style.Left = CssParser.ParseLength(value, fontSize);
+                break;
+
+            case "overflow" or "overflow-x" or "overflow-y":
+                style.OverflowHidden = value.Trim().ToLowerInvariant() is "hidden" or "auto" or "scroll" or "clip";
+                style.ClipsContent = style.OverflowHidden;
+                break;
+
+            case "visibility":
+                style.IsHidden = value.Trim().ToLowerInvariant() is "hidden" or "collapse";
+                break;
+
+            case "list-style-type":
+                style.ListStyleType = value.Trim().ToLowerInvariant();
+                break;
+
+            case "list-style-position":
+                style.ListStyleInside = value.Trim().Equals("inside", StringComparison.OrdinalIgnoreCase);
+                break;
+
+            case "flex-direction":
+                style.FlexDirection = value.ToLowerInvariant() is "column" or "column-reverse"
+                    ? FlexDirection.Column
+                    : FlexDirection.Row;
+                break;
+
+            case "justify-content":
+                style.JustifyContent = value.ToLowerInvariant() switch
+                {
+                    "center" => JustifyContent.Center,
+                    "flex-end" or "end" or "right" => JustifyContent.End,
+                    "space-between" => JustifyContent.SpaceBetween,
+                    "space-around" => JustifyContent.SpaceAround,
+                    "space-evenly" => JustifyContent.SpaceEvenly,
+                    _ => JustifyContent.Start,
+                };
+                break;
+
+            case "align-items":
+                style.AlignItems = value.ToLowerInvariant() switch
+                {
+                    "center" => AlignItems.Center,
+                    "flex-end" or "end" => AlignItems.End,
+                    "flex-start" or "start" or "baseline" => AlignItems.Start,
+                    _ => AlignItems.Stretch,
+                };
+                break;
+
+            case "gap" or "grid-gap":
+                {
+                    style.GapDeclared = true;
+                    List<string> parts = CssParser.SplitValueTokens(value);
+                    float rowGap = NonNegative(CssParser.ParseLength(parts.Count > 0 ? parts[0] : "0", fontSize));
+                    style.RowGap = rowGap;
+                    style.Gap = parts.Count > 1 ? NonNegative(CssParser.ParseLength(parts[1], fontSize)) : rowGap;
+                    break;
+                }
+
+            case "row-gap" or "grid-row-gap":
+                style.RowGap = NonNegative(CssParser.ParseLength(value, fontSize));
+                break;
+
+            case "column-gap" or "grid-column-gap":
+                style.GapDeclared = !value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase);
+                style.Gap = NonNegative(CssParser.ParseLength(value, fontSize));
+                break;
+
+            case "grid-template-columns":
+                style.GridTemplateColumns = value.Trim();
+                break;
+
+            case "grid-column":
+                style.GridColumn = value.Trim();
+                break;
+
+            case "flex-wrap":
+                style.FlexWrap = value.ToLowerInvariant() is "wrap" or "wrap-reverse";
+                break;
+
+            case "flex-grow":
+                if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float grow))
+                {
+                    style.FlexGrow = Math.Max(grow, 0);
+                }
+
+                break;
+
+            case "flex-shrink":
+                if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float shrink))
+                {
+                    style.FlexShrink = Math.Max(shrink, 0);
+                }
+
+                break;
+
+            case "flex-basis":
+                style.FlexBasis = CssParser.ParseLength(value, fontSize);
+                break;
+
+            case "flex":
+                ApplyFlexShorthand(style, value, fontSize);
                 break;
 
             case "display":
                 style.Display = ParseDisplayType(value);
+                if (value.Trim().Equals("flow-root", StringComparison.OrdinalIgnoreCase))
+                {
+                    style.OverflowHidden = true;
+                }
+
                 break;
 
             case "page-break-before":
@@ -398,16 +1549,415 @@ public static class StyleResolver
             case "page-break-after":
                 style.PageBreakAfter = ParsePageBreak(value);
                 break;
+            case "page-break-inside":
+                style.PageBreakInside = ParsePageBreak(value);
+                break;
 
-            case "background-color" or "background":
-                style.BackgroundColor = PdfColor.Parse(value);
+            case "orphans":
+                if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int orphans) && orphans > 0)
+                {
+                    style.Orphans = orphans;
+                }
+
+                break;
+
+            case "widows":
+                if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int widows) && widows > 0)
+                {
+                    style.Widows = widows;
+                }
+
+                break;
+
+            case "background-color":
+                style.BackgroundColor = ParseBackgroundColor(value, style);
+                break;
+
+            case "background":
+                ApplyBackgroundShorthand(style, value, fontSize);
+                break;
+
+            case "background-image":
+                style.BackgroundImages = CssPaint.ParseImages(value, fontSize, style.Color);
+                break;
+            case "background-position":
+                style.BackgroundPositions = CssPaint.ParsePositions(value, fontSize);
+                break;
+            case "background-position-x" or "background-position-y":
+                {
+                    CssPosition current = style.BackgroundPositions is { Count: > 0 } existing ? existing[0] : CssPosition.TopLeft;
+                    CssPosition parsed = CssPaint.ParsePosition(name.EndsWith('x') ? value + " top" : "left " + value, fontSize) ?? current;
+                    style.BackgroundPositions = [name.EndsWith('x') ? current with { X = parsed.X } : current with { Y = parsed.Y }];
+                    break;
+                }
+
+            case "background-size":
+                style.BackgroundSizes = CssPaint.ParseSizes(value, fontSize);
+                break;
+            case "background-repeat":
+                style.BackgroundRepeats = CssPaint.ParseRepeats(value);
+                break;
+            case "background-origin":
+                style.BackgroundOrigins = CssPaint.ParseBoxes(value);
+                break;
+            case "background-clip" or "-webkit-background-clip":
+                style.BackgroundClips = CssPaint.ParseBoxes(value);
+                break;
+
+            case "opacity":
+                {
+                    string o = value.Trim();
+                    bool percent = o.EndsWith('%');
+                    if (float.TryParse(percent ? o[..^1] : o, NumberStyles.Float, CultureInfo.InvariantCulture, out float opacity))
+                    {
+                        style.Opacity = Math.Clamp(percent ? opacity / 100f : opacity, 0f, 1f);
+                    }
+
+                    break;
+                }
+
+            case "box-shadow":
+                style.BoxShadows = CssPaint.ParseShadows(value, fontSize, style.Color, boxShadow: true) is { Count: > 0 } boxShadows ? boxShadows : null;
+                break;
+            case "text-shadow":
+                style.TextShadows = CssPaint.ParseShadows(value, fontSize, style.Color, boxShadow: false) is { Count: > 0 } textShadows ? textShadows : null;
+                break;
+
+            case "transform" or "-webkit-transform":
+                style.Transform = CssPaint.ParseTransform(value, fontSize);
+                break;
+            case "transform-origin" or "-webkit-transform-origin":
+                style.TransformOrigin = CssPaint.ParsePosition(value, fontSize) ?? CssPosition.CenterCenter;
+                break;
+
+            case "column-count":
+                style.ColumnCount = int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int columnCount) && columnCount > 0
+                    ? Math.Min(columnCount, 100)
+                    : 0;
+                break;
+            case "column-width":
+                style.ColumnWidth = CssParser.ParseLength(value, fontSize) is float columnWidth && columnWidth > 0 ? columnWidth : null;
+                break;
+            case "columns":
+                style.ColumnCount = 0;
+                style.ColumnWidth = null;
+                foreach (string token in CssParser.SplitValueTokens(value))
+                {
+                    if (int.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out int count) && count > 0)
+                    {
+                        style.ColumnCount = Math.Min(count, 100);
+                    }
+                    else if (CssParser.ParseLength(token, fontSize) is float width && width > 0)
+                    {
+                        style.ColumnWidth = width;
+                    }
+                }
+
+                break;
+            case "column-rule":
+                foreach (string token in CssParser.SplitValueTokens(value))
+                {
+                    string lower = token.ToLowerInvariant();
+                    if (lower is "none" or "hidden" or "solid" or "dashed" or "dotted" or "double" or "groove" or "ridge" or "inset" or "outset")
+                    {
+                        style.ColumnRuleStyle = ParseBorderLineStyle(lower);
+                    }
+                    else if (CssParser.IsColorValue(token) || lower == "currentcolor")
+                    {
+                        style.ColumnRuleColor = ParseColorWithCurrent(token, style);
+                    }
+                    else if (CssParser.ParseLength(token, fontSize) is float ruleWidth)
+                    {
+                        style.ColumnRuleWidth = Math.Max(0, ruleWidth);
+                    }
+                }
+
+                if (style.ColumnRuleWidth == 0 && style.ColumnRuleStyle != BorderLineStyle.None)
+                {
+                    style.ColumnRuleWidth = 2.25f;
+                }
+
+                break;
+            case "column-rule-width":
+                style.ColumnRuleWidth = NonNegative(CssParser.ParseLength(value, fontSize));
+                break;
+            case "column-rule-style":
+                style.ColumnRuleStyle = ParseBorderLineStyle(value);
+                break;
+            case "column-rule-color":
+                style.ColumnRuleColor = ParseColorWithCurrent(value, style);
+                break;
+            case "column-span":
+                style.ColumnSpanAll = value.Trim().Equals("all", StringComparison.OrdinalIgnoreCase);
+                break;
+
+            case "hyphens" or "-webkit-hyphens" or "-ms-hyphens":
+                style.Hyphens = value.Trim().ToLowerInvariant() switch
+                {
+                    "auto" => HyphensMode.Auto,
+                    "none" => HyphensMode.None,
+                    _ => HyphensMode.Manual,
+                };
+                break;
+
+            case "counter-reset":
+                style.CounterReset = value;
+                break;
+            case "counter-increment":
+                style.CounterIncrement = value;
+                break;
+            case "counter-set":
+                style.CounterSet = value;
+                break;
+
+            case "mix-blend-mode":
+                style.BlendMode = ToPdfBlendMode(value);
                 break;
 
             case "vertical-align":
-                style.VerticalAlign = ParseVerticalAlign(value);
+                string va = value.Trim().ToLowerInvariant();
+                if (va is "super")
+                {
+                    style.FontPosition = FontPosition.Superscript;
+                }
+                else if (va is "sub")
+                {
+                    style.FontPosition = FontPosition.Subscript;
+                }
+                else if (va is "baseline")
+                {
+                    style.FontPosition = FontPosition.Normal;
+                }
+                else
+                {
+                    style.VerticalAlign = ParseVerticalAlign(value);
+                }
+
                 break;
         }
     }
+
+    private static void InheritProperty(ComputedStyle style, string name, ComputedStyle parent)
+    {
+        switch (name)
+        {
+            case "color":
+                style.Color = parent.Color;
+                break;
+            case "font-family":
+                style.FontFamily = parent.FontFamily;
+                style.FontFamilies = parent.FontFamilies;
+                break;
+            case "font-size":
+                style.FontSize = parent.FontSize;
+                break;
+            case "font-weight":
+                style.FontWeight = parent.FontWeight;
+                style.IsBold = parent.IsBold;
+                break;
+            case "font-style":
+                style.IsItalic = parent.IsItalic;
+                break;
+            case "text-align":
+                style.TextAlign = parent.TextAlign;
+                style.LogicalAlign = parent.LogicalAlign;
+                break;
+            case "line-height":
+                style.LineHeight = parent.LineHeight;
+                break;
+            case "background-color":
+                style.BackgroundColor = parent.BackgroundColor;
+                break;
+            case "background" or "background-image":
+                style.BackgroundColor = parent.BackgroundColor;
+                style.BackgroundImages = parent.BackgroundImages;
+                style.BackgroundPositions = parent.BackgroundPositions;
+                style.BackgroundSizes = parent.BackgroundSizes;
+                style.BackgroundRepeats = parent.BackgroundRepeats;
+                style.BackgroundOrigins = parent.BackgroundOrigins;
+                style.BackgroundClips = parent.BackgroundClips;
+                break;
+            case "opacity":
+                style.Opacity = parent.Opacity;
+                break;
+            case "width":
+                style.Width = parent.Width;
+                break;
+            case "height":
+                style.Height = parent.Height;
+                break;
+            case "text-decoration" or "text-decoration-line":
+                style.IsUnderline = parent.IsUnderline;
+                style.IsStrikethrough = parent.IsStrikethrough;
+                break;
+        }
+    }
+
+    private static void ApplyFlexShorthand(ComputedStyle style, string value, float fontSize)
+    {
+        string v = value.Trim().ToLowerInvariant();
+        if (v == "none")
+        {
+            style.FlexGrow = 0;
+            style.FlexShrink = 0;
+            style.FlexBasis = null;
+            return;
+        }
+
+        if (v == "auto")
+        {
+            style.FlexGrow = 1;
+            style.FlexShrink = 1;
+            style.FlexBasis = null;
+            return;
+        }
+
+        string[] flexParts = [.. CssParser.SplitValueTokens(v)];
+        if (flexParts.Length > 0
+            && float.TryParse(flexParts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float shorthandGrow))
+        {
+            style.FlexGrow = Math.Max(shorthandGrow, 0);
+            if (flexParts.Length == 1)
+            {
+                style.FlexShrink = 1;
+                style.FlexBasis = 0;
+            }
+            else
+            {
+                int basisIndex = 1;
+                if (float.TryParse(flexParts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float shorthandShrink))
+                {
+                    style.FlexShrink = Math.Max(shorthandShrink, 0);
+                    basisIndex = 2;
+                }
+
+                if (flexParts.Length > basisIndex)
+                {
+                    ApplyProperty(style, "flex-basis", flexParts[basisIndex], fontSize, null);
+                }
+                else
+                {
+                    style.FlexBasis = 0;
+                }
+            }
+        }
+        else if (CssParser.ParseLength(v, fontSize) is { } basis)
+        {
+            style.FlexGrow = 1;
+            style.FlexShrink = 1;
+            style.FlexBasis = basis;
+        }
+    }
+
+    private static bool IsAuto(string value) => value.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase);
+
+    private static float NonNegative(float? value) => value is > 0 ? value.Value : 0f;
+
+    /// <summary>Padding: negative lengths are invalid (0); percentages stay negative for deferred resolution.</summary>
+    private static float PaddingValue(string value, float fontSize) =>
+        CssParser.ParseLength(value, fontSize) is float v && CssLength.IsPercent(v) ? v : NonNegative(CssParser.ParseLength(value, fontSize));
+
+    private static float? ParseFontSizeKeyword(string value, float parentFontSize) => value.Trim().ToLowerInvariant() switch
+    {
+        "xx-small" => 7f,
+        "x-small" => 7.5f,
+        "small" => 10f,
+        "medium" => 12f,
+        "large" => 13.5f,
+        "x-large" => 18f,
+        "xx-large" => 24f,
+        "xxx-large" => 36f,
+        "smaller" => parentFontSize / 1.2f,
+        "larger" => parentFontSize * 1.2f,
+        _ => null,
+    };
+
+    private static PdfColor ParseColorWithCurrent(string value, ComputedStyle style) =>
+        value.Trim().Equals("currentcolor", StringComparison.OrdinalIgnoreCase) ? style.Color : PdfColor.Parse(value);
+
+    private static void ApplyBackgroundShorthand(ComputedStyle style, string value, float fontSize)
+    {
+        string trimmed = value.Trim();
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("transparent", StringComparison.OrdinalIgnoreCase))
+        {
+            style.BackgroundColor = PdfColor.Transparent;
+            style.BackgroundImages = null;
+            return;
+        }
+
+        CssPaint.BackgroundShorthand bg = CssPaint.ParseBackground(trimmed, fontSize, style.Color);
+        style.BackgroundColor = bg.Color;
+        style.BackgroundImages = bg.Images.Exists(i => i is not null) ? bg.Images : null;
+        style.BackgroundPositions = bg.Positions;
+        style.BackgroundSizes = bg.Sizes;
+        style.BackgroundRepeats = bg.Repeats;
+        style.BackgroundOrigins = bg.Origins;
+        style.BackgroundClips = bg.Clips;
+    }
+
+    private static string? ToPdfBlendMode(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "multiply" => "Multiply",
+        "screen" => "Screen",
+        "overlay" => "Overlay",
+        "darken" => "Darken",
+        "lighten" => "Lighten",
+        "color-dodge" => "ColorDodge",
+        "color-burn" => "ColorBurn",
+        "hard-light" => "HardLight",
+        "soft-light" => "SoftLight",
+        "difference" => "Difference",
+        "exclusion" => "Exclusion",
+        "hue" => "Hue",
+        "saturation" => "Saturation",
+        "color" => "Color",
+        "luminosity" => "Luminosity",
+        _ => null,
+    };
+
+    private static PdfColor? ParseBackgroundColor(string value, ComputedStyle style)
+    {
+        string trimmed = value.Trim();
+        if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("transparent", StringComparison.OrdinalIgnoreCase))
+        {
+            return PdfColor.Transparent;
+        }
+
+        foreach (string token in CssParser.SplitValueTokens(trimmed))
+        {
+            if (token.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+            {
+                return style.Color;
+            }
+
+            if (CssParser.IsColorValue(token))
+            {
+                return PdfColor.Parse(token);
+            }
+        }
+
+        // Only images/gradients/positions: keep the previous background.
+        return style.BackgroundColor;
+    }
+
+    private static void ApplyBorderStyle(ComputedStyle style, string value, Action<BorderStyle> setStyle, Action<BorderStyle> clearWidth)
+    {
+        BorderStyle border = EnsureMutableBorder(style);
+        setStyle(border);
+        if (value.Trim().ToLowerInvariant() is "none" or "hidden")
+        {
+            clearWidth(border);
+        }
+    }
+
+    private static BorderLineStyle ParseBorderLineStyle(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "dashed" => BorderLineStyle.Dashed,
+        "dotted" => BorderLineStyle.Dotted,
+        "double" => BorderLineStyle.Double,
+        "none" or "hidden" => BorderLineStyle.None,
+        _ => BorderLineStyle.Solid,
+    };
 
     /// <summary>
     /// Ensures the style has a mutable (non-shared) BorderStyle instance.
@@ -435,179 +1985,65 @@ public static class StyleResolver
         LeftColor = color,
     };
 
-    private static TextAlign ParseTextAlign(string value) => value.ToLowerInvariant() switch
+    private static TextAlign ParseTextAlign(string value) => value.Trim().ToLowerInvariant() switch
     {
-        "left" => TextAlign.Left,
-        "center" => TextAlign.Center,
-        "right" => TextAlign.Right,
-        "justify" => TextAlign.Justify,
+        "left" or "start" => TextAlign.Left,
+        "center" or "middle" or "-webkit-center" => TextAlign.Center,
+        "right" or "end" => TextAlign.Right,
+        "justify" or "justify-all" => TextAlign.Justify,
         _ => TextAlign.Left,
     };
 
-    private static DisplayType ParseDisplayType(string value) => value.ToLowerInvariant() switch
+    private static DisplayType ParseDisplayType(string value) => value.Trim().ToLowerInvariant() switch
     {
         "block" => DisplayType.Block,
-        "inline" or "inline-block" => DisplayType.Inline,
+        "flex" or "inline-flex" => DisplayType.Flex,
+        "grid" or "inline-grid" => DisplayType.Grid,
+        "inline" or "contents" => DisplayType.Inline,
+        "inline-block" or "inline-table" => DisplayType.InlineBlock,
+        "flow-root" => DisplayType.FlowRoot,
         "none" => DisplayType.None,
-        "table" or "table-row-group" => DisplayType.Block,
+        "table" => DisplayType.Table,
+        "table-row-group" or "table-header-group" or "table-footer-group" => DisplayType.Block,
         "table-row" => DisplayType.TableRow,
         "table-cell" => DisplayType.TableCell,
         "list-item" => DisplayType.ListItem,
         _ => DisplayType.Block,
     };
 
-    private static PageBreak ParsePageBreak(string value) => value.ToLowerInvariant() switch
+    private static PageBreak ParsePageBreak(string value) => value.Trim().ToLowerInvariant() switch
     {
-        "always" => PageBreak.Always,
-        "avoid" => PageBreak.Avoid,
+        "always" or "page" or "left" or "right" => PageBreak.Always,
+        "avoid" or "avoid-page" => PageBreak.Avoid,
         _ => PageBreak.Auto,
     };
 
-    private static VerticalAlign ParseVerticalAlign(string value) => value.ToLowerInvariant() switch
+    private static VerticalAlign ParseVerticalAlign(string value) => value.Trim().ToLowerInvariant() switch
     {
-        "top" => VerticalAlign.Top,
-        "middle" => VerticalAlign.Middle,
-        "bottom" => VerticalAlign.Bottom,
+        "top" or "text-top" => VerticalAlign.Top,
+        "middle" or "center" => VerticalAlign.Middle,
+        "bottom" or "text-bottom" => VerticalAlign.Bottom,
         _ => VerticalAlign.Top,
     };
 
     /// <summary>
     /// Tests whether an HTML node matches a CSS selector.
-    /// Supports: tag, .class, #id, tag.class, and descendant combinators (space-separated).
+    /// Supports type, universal, class, id and attribute selectors, all four combinators,
+    /// structural pseudo-classes and <c>:not()</c>.
     /// </summary>
-    internal static bool MatchesSelector(HtmlNode node, string selector)
+    internal static bool MatchesSelector(HtmlNode node, string selector) =>
+        CssSelector.TryParse(selector) is { PseudoElement: PseudoElement.None } parsed && parsed.Matches(node);
+
+    private sealed record CompiledRule(CssRule Rule, CssSelector Selector, int SourceIndex);
+
+    private sealed record ResolveContext(
+        List<CompiledRule> ElementRules,
+        List<CompiledRule> BeforeRules,
+        List<CompiledRule> AfterRules)
     {
-        if (node.NodeType != HtmlNodeType.Element)
-        {
-            return false;
-        }
+        public CssCounters Counters { get; } = new();
 
-        var parts = selector.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0)
-        {
-            return false;
-        }
-
-        if (!MatchesCompoundSelector(node, parts[^1]))
-        {
-            return false;
-        }
-
-        if (parts.Length == 1)
-        {
-            return true;
-        }
-
-        // Walk up ancestors for remaining parts (right to left)
-        var ancestor = node.Parent;
-        for (var i = parts.Length - 2; i >= 0; i--)
-        {
-            var found = false;
-            while (ancestor is not null)
-            {
-                if (MatchesCompoundSelector(ancestor, parts[i]))
-                {
-                    ancestor = ancestor.Parent;
-                    found = true;
-                    break;
-                }
-
-                ancestor = ancestor.Parent;
-            }
-
-            if (!found)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Matches a compound selector like "table.data" or "#main" against a single node.
-    /// </summary>
-    private static bool MatchesCompoundSelector(HtmlNode node, string compound)
-    {
-        if (node.NodeType != HtmlNodeType.Element || node.Tag is null)
-        {
-            return false;
-        }
-
-        string? requiredTag = null;
-        string? requiredId = null;
-        List<string>? requiredClasses = null;
-
-        var i = 0;
-
-        if (i < compound.Length && compound[i] != '.' && compound[i] != '#')
-        {
-            var start = i;
-            while (i < compound.Length && compound[i] != '.' && compound[i] != '#')
-            {
-                i++;
-            }
-
-            requiredTag = compound[start..i];
-        }
-
-        while (i < compound.Length)
-        {
-            if (compound[i] == '.')
-            {
-                i++;
-                var start = i;
-                while (i < compound.Length && compound[i] != '.' && compound[i] != '#')
-                {
-                    i++;
-                }
-
-                requiredClasses ??= [];
-                requiredClasses.Add(compound[start..i]);
-            }
-            else if (compound[i] == '#')
-            {
-                i++;
-                var start = i;
-                while (i < compound.Length && compound[i] != '.' && compound[i] != '#')
-                {
-                    i++;
-                }
-
-                requiredId = compound[start..i];
-            }
-            else
-            {
-                i++;
-            }
-        }
-
-        if (requiredTag is not null &&
-            !string.Equals(node.Tag, requiredTag, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (requiredId is not null &&
-            !string.Equals(node.GetAttribute("id"), requiredId, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (requiredClasses is { Count: > 0 })
-        {
-            var nodeClasses = node.GetAttribute("class")?
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
-
-            foreach (var cls in requiredClasses)
-            {
-                if (!nodeClasses.Contains(cls, StringComparer.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-            }
-        }
-
-        return true;
+        /// <summary>Gets or sets the depth of display:none ancestors (their subtrees do not count).</summary>
+        public int HiddenDepth { get; set; }
     }
 }

@@ -320,8 +320,10 @@ public class CkEditorCompatibilityTests
         StyleResolver.Resolve(root, []);
         var p = FindByTag(root, "p");
         p.ShouldNotBeNull();
+        // Translucent red: drawn with PDF transparency
         p!.ComputedStyle!.Color.R.ShouldBe(1.0f, 0.01f);
         p!.ComputedStyle!.Color.G.ShouldBe(0f, 0.01f);
+        p!.ComputedStyle!.Color.Alpha.ShouldBe(0.5f, 0.01f);
     }
 
     [Fact(DisplayName = "CK: inline style from HTML attribute is applied")]

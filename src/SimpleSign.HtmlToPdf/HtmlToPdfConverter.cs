@@ -1,8 +1,8 @@
 // Licensed to SimpleSign under the MIT License.
 
+using SimpleSign.HtmlToPdf.Fonts;
 using SimpleSign.HtmlToPdf.Layout;
 using SimpleSign.HtmlToPdf.Parsing;
-using SimpleSign.HtmlToPdf.Rendering;
 
 namespace SimpleSign.HtmlToPdf;
 
@@ -25,9 +25,9 @@ namespace SimpleSign.HtmlToPdf;
 ///     .WithStylesheet("body { font-size: 14px; }")
 ///     .Convert();
 ///
-/// // From file
-/// byte[] pdf = await HtmlToPdfConverter
-///     .FileAsync("report.html")
+/// // From file (relative images/stylesheets resolve against the file's folder)
+/// byte[] pdf = await (await HtmlToPdfConverter.FileAsync("report.html"))
+///     .WithBaseDirectory("templates")
 ///     .WithPageSize(PageSize.Legal)
 ///     .ConvertAsync();
 /// </code>
@@ -92,176 +92,190 @@ public static class HtmlToPdfConverter
 /// </summary>
 public sealed class HtmlToPdfBuilder
 {
-    private readonly string _html;
-    private readonly PageSize _pageSize;
-    private readonly PageOrientation _orientation;
-    private readonly float? _marginTop;
-    private readonly float? _marginRight;
-    private readonly float? _marginBottom;
-    private readonly float? _marginLeft;
-    private readonly string? _stylesheet;
-    private readonly string? _title;
-    private readonly string? _author;
-    private readonly string? _headerTemplate;
-    private readonly string? _footerTemplate;
+    private readonly ConversionOptions _options;
 
     internal HtmlToPdfBuilder(string html)
     {
-        _html = html;
-        _pageSize = PageSize.A4;
-        _orientation = PageOrientation.Portrait;
+        _options = new ConversionOptions { Html = html };
     }
 
-    private HtmlToPdfBuilder(
-        string html,
-        PageSize pageSize,
-        PageOrientation orientation,
-        float? marginTop,
-        float? marginRight,
-        float? marginBottom,
-        float? marginLeft,
-        string? stylesheet,
-        string? title,
-        string? author,
-        string? headerTemplate,
-        string? footerTemplate)
+    private HtmlToPdfBuilder(ConversionOptions options)
     {
-        _html = html;
-        _pageSize = pageSize;
-        _orientation = orientation;
-        _marginTop = marginTop;
-        _marginRight = marginRight;
-        _marginBottom = marginBottom;
-        _marginLeft = marginLeft;
-        _stylesheet = stylesheet;
-        _title = title;
-        _author = author;
-        _headerTemplate = headerTemplate;
-        _footerTemplate = footerTemplate;
+        _options = options;
     }
 
-    private HtmlToPdfBuilder With(
-        PageSize? pageSize = null,
-        PageOrientation? orientation = null,
-        float? marginTop = null,
-        float? marginRight = null,
-        float? marginBottom = null,
-        float? marginLeft = null,
-        string? stylesheet = null,
-        string? title = null,
-        string? author = null,
-        string? headerTemplate = null,
-        string? footerTemplate = null)
-        => new(
-            _html,
-            pageSize ?? _pageSize,
-            orientation ?? _orientation,
-            marginTop ?? _marginTop,
-            marginRight ?? _marginRight,
-            marginBottom ?? _marginBottom,
-            marginLeft ?? _marginLeft,
-            stylesheet ?? _stylesheet,
-            title ?? _title,
-            author ?? _author,
-            headerTemplate ?? _headerTemplate,
-            footerTemplate ?? _footerTemplate);
+    private static HtmlToPdfBuilder With(ConversionOptions options) => new(options);
 
-    /// <summary>Sets the page size for the output PDF.</summary>
-    public HtmlToPdfBuilder WithPageSize(PageSize pageSize) => With(pageSize: pageSize);
+    /// <summary>Sets the page size for the output PDF (overrides any CSS <c>@page size</c>).</summary>
+    /// <param name="pageSize">The paper size.</param>
+    /// <returns>A new builder.</returns>
+    public HtmlToPdfBuilder WithPageSize(PageSize pageSize) => With(_options with { PageSize = pageSize });
 
-    /// <summary>Sets the page orientation for the output PDF.</summary>
-    public HtmlToPdfBuilder WithPageOrientation(PageOrientation orientation) => With(orientation: orientation);
+    /// <summary>Sets the page orientation for the output PDF (overrides any CSS <c>@page size</c>).</summary>
+    /// <param name="orientation">The page orientation.</param>
+    /// <returns>A new builder.</returns>
+    public HtmlToPdfBuilder WithPageOrientation(PageOrientation orientation) => With(_options with { Orientation = orientation });
 
-    /// <summary>Sets uniform margins (in points, 1pt = 1/72 inch).</summary>
-    public HtmlToPdfBuilder WithMargins(float all) =>
-        With(marginTop: all, marginRight: all, marginBottom: all, marginLeft: all);
+    /// <summary>Sets uniform margins (in points, 1pt = 1/72 inch). Overrides CSS <c>@page margin</c>.</summary>
+    /// <param name="all">The margin for all sides.</param>
+    /// <returns>A new builder.</returns>
+    public HtmlToPdfBuilder WithMargins(float all) => WithMargins(all, all, all, all);
 
-    /// <summary>Sets margins individually (in points, 1pt = 1/72 inch).</summary>
+    /// <summary>Sets margins individually (in points, 1pt = 1/72 inch). Overrides CSS <c>@page margin</c>.</summary>
+    /// <param name="top">Top margin.</param>
+    /// <param name="right">Right margin.</param>
+    /// <param name="bottom">Bottom margin.</param>
+    /// <param name="left">Left margin.</param>
+    /// <returns>A new builder.</returns>
     public HtmlToPdfBuilder WithMargins(float top, float right, float bottom, float left) =>
-        With(marginTop: top, marginRight: right, marginBottom: bottom, marginLeft: left);
+        With(_options with { Margins = new Thickness(top, right, bottom, left) });
 
-    /// <summary>Adds a CSS stylesheet to apply during conversion.</summary>
+    /// <summary>Adds a CSS stylesheet to apply during conversion (after the document's own styles).</summary>
+    /// <param name="css">The stylesheet text.</param>
+    /// <returns>A new builder.</returns>
     public HtmlToPdfBuilder WithStylesheet(string css)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(css);
-        string combined = _stylesheet is not null ? _stylesheet + "\n" + css : css;
-        return With(stylesheet: combined);
+        string combined = _options.Stylesheet is not null ? _options.Stylesheet + "\n" + css : css;
+        return With(_options with { Stylesheet = combined });
     }
 
-    /// <summary>Sets the PDF document title metadata.</summary>
+    /// <summary>Sets the PDF document title metadata (defaults to the HTML <c>&lt;title&gt;</c>).</summary>
+    /// <param name="title">The title.</param>
+    /// <returns>A new builder.</returns>
     public HtmlToPdfBuilder WithTitle(string title)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
-        return With(title: title);
+        return With(_options with { Title = title });
     }
 
     /// <summary>Sets the PDF document author metadata.</summary>
+    /// <param name="author">The author.</param>
+    /// <returns>A new builder.</returns>
     public HtmlToPdfBuilder WithAuthor(string author)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(author);
-        return With(author: author);
+        return With(_options with { Author = author });
     }
 
     /// <summary>Sets a header template. Supports {page}, {pages}, {title}, {date} placeholders.</summary>
+    /// <param name="template">The header text template.</param>
+    /// <returns>A new builder.</returns>
     public HtmlToPdfBuilder WithHeader(string template)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(template);
-        return With(headerTemplate: template);
+        return With(_options with { HeaderTemplate = template });
     }
 
     /// <summary>Sets a footer template. Supports {page}, {pages}, {title}, {date} placeholders.</summary>
+    /// <param name="template">The footer text template.</param>
+    /// <returns>A new builder.</returns>
     public HtmlToPdfBuilder WithFooter(string template)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(template);
-        return With(footerTemplate: template);
+        return With(_options with { FooterTemplate = template });
+    }
+
+    /// <summary>Registers a TrueType font for CSS <c>font-family</c> use and embeds it in the output PDF.</summary>
+    /// <param name="family">The family alias used by CSS, e.g. <c>Brand Sans</c>.</param>
+    /// <param name="fontData">The complete TrueType font file bytes (TTF, cmap format 4 or 12).</param>
+    /// <returns>A new builder with the font registered.</returns>
+    public HtmlToPdfBuilder WithFont(string family, byte[] fontData) => WithFont(family, fontData, FontVariant.Regular);
+
+    /// <summary>
+    /// Registers one face (regular, bold, italic, or bold italic) of a font family. When a family lacks the
+    /// face a style asks for, the closest registered face is used and bold/italic are synthesized.
+    /// </summary>
+    /// <param name="family">The family alias used by CSS.</param>
+    /// <param name="fontData">The complete TrueType or OpenType (CFF) font file bytes.</param>
+    /// <param name="variant">Which face of the family this file provides.</param>
+    /// <returns>A new builder with the font registered.</returns>
+    public HtmlToPdfBuilder WithFont(string family, byte[] fontData, FontVariant variant)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(family);
+        ArgumentNullException.ThrowIfNull(fontData);
+        if (fontData.Length == 0)
+        {
+            throw new ArgumentException("Font data must not be empty.", nameof(fontData));
+        }
+
+        // Validate eagerly so callers get the error at registration time.
+        _ = new EmbeddedFont(family.Trim(), fontData, variant);
+
+        List<FontRegistration> fonts = [.. _options.Fonts.Where(f =>
+            !(string.Equals(f.Family, family.Trim(), StringComparison.OrdinalIgnoreCase) && f.Variant == variant))];
+        fonts.Add(new FontRegistration(family.Trim(), variant, [.. fontData]));
+        return With(_options with { Fonts = fonts });
+    }
+
+    /// <summary>Registers a TrueType font from a file path for CSS <c>font-family</c> use.</summary>
+    /// <param name="family">The family alias used by CSS.</param>
+    /// <param name="filePath">Path to a complete TrueType font file.</param>
+    /// <returns>A new builder with the font registered.</returns>
+    public HtmlToPdfBuilder WithFontFile(string family, string filePath) => WithFontFile(family, filePath, FontVariant.Regular);
+
+    /// <summary>Registers one face of a font family from a file path.</summary>
+    /// <param name="family">The family alias used by CSS.</param>
+    /// <param name="filePath">Path to a TrueType or OpenType font file.</param>
+    /// <param name="variant">Which face of the family this file provides.</param>
+    /// <returns>A new builder with the font registered.</returns>
+    public HtmlToPdfBuilder WithFontFile(string family, string filePath, FontVariant variant)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        return WithFont(family, File.ReadAllBytes(filePath), variant);
+    }
+
+    /// <summary>
+    /// Allows relative image, stylesheet (<c>&lt;link rel="stylesheet"&gt;</c>) and font references to be loaded
+    /// from this directory. Files outside the directory are never read.
+    /// </summary>
+    /// <param name="directory">The base directory.</param>
+    /// <returns>A new builder.</returns>
+    public HtmlToPdfBuilder WithBaseDirectory(string directory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        if (!Directory.Exists(directory))
+        {
+            throw new DirectoryNotFoundException($"Base directory not found: {directory}");
+        }
+
+        return With(_options with { BaseDirectory = Path.GetFullPath(directory) });
+    }
+
+    /// <summary>
+    /// Supplies a callback that resolves resource references (for example <c>https://</c> images or custom
+    /// schemes). Return null to fall back to the base directory. The library never accesses the network itself.
+    /// </summary>
+    /// <param name="loader">Callback that maps a reference (as written in HTML/CSS) to its bytes.</param>
+    /// <returns>A new builder.</returns>
+    public HtmlToPdfBuilder WithResourceLoader(Func<string, byte[]?> loader)
+    {
+        ArgumentNullException.ThrowIfNull(loader);
+        return With(_options with { ResourceLoader = loader });
+    }
+
+    /// <summary>
+    /// Produces a PDF/A-2b archival document: embeds an sRGB output intent and XMP metadata.
+    /// All text must use registered (embedded) fonts; conversion fails if a standard PDF font would be needed.
+    /// </summary>
+    /// <returns>A new builder.</returns>
+    public HtmlToPdfBuilder WithPdfA() => With(_options with { PdfA = true });
+
+    /// <summary>Sets the document language (e.g. <c>pt-BR</c>); defaults to the HTML <c>lang</c> attribute.</summary>
+    /// <param name="language">A BCP 47 language tag.</param>
+    /// <returns>A new builder.</returns>
+    public HtmlToPdfBuilder WithLanguage(string language)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        return With(_options with { Language = language });
     }
 
     /// <summary>Converts the HTML to PDF and returns the PDF bytes.</summary>
-    public byte[] Convert()
-    {
-        // 1. Parse HTML → DOM
-        HtmlNode dom = HtmlTokenizer.Parse(_html);
-
-        // 2. Apply CSS + stylesheet
-        List<CssRule> rules = [];
-        if (_stylesheet is not null)
-        {
-            rules.AddRange(CssParser.ParseStylesheet(_stylesheet));
-        }
-
-        StyleResolver.Resolve(dom, rules);
-
-        // 3. Layout → pages
-        PageSettings pageSettings = BuildPageSettings();
-        var engine = new LayoutEngine(pageSettings);
-        LayoutResult layout = engine.Layout(dom);
-
-        // Attach metadata if title, author, header, or footer was set
-        if (_title is not null || _author is not null || _headerTemplate is not null || _footerTemplate is not null)
-        {
-            var layoutWithMeta = new LayoutResult
-            {
-                Settings = layout.Settings,
-                Metadata = new PdfMetadata(_title, _author, _headerTemplate, _footerTemplate),
-            };
-            foreach (PageBox p in layout.Pages)
-            {
-                layoutWithMeta.Pages.Add(p);
-            }
-
-            foreach (BookmarkEntry bm in layout.Bookmarks)
-            {
-                layoutWithMeta.Bookmarks.Add(bm);
-            }
-
-            layout = layoutWithMeta;
-        }
-
-        // 4. Render → PDF bytes
-        return PdfDocumentRenderer.Render(layout);
-    }
+    /// <returns>The PDF bytes.</returns>
+    public byte[] Convert() => ConversionPipeline.Run(_options);
 
     /// <summary>Converts the HTML to PDF and writes to the output stream.</summary>
+    /// <param name="outputStream">The destination stream.</param>
     public void Convert(Stream outputStream)
     {
         ArgumentNullException.ThrowIfNull(outputStream);
@@ -270,6 +284,8 @@ public sealed class HtmlToPdfBuilder
     }
 
     /// <summary>Converts the HTML to PDF asynchronously and returns the PDF bytes.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The PDF bytes.</returns>
     public Task<byte[]> ConvertAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -277,6 +293,9 @@ public sealed class HtmlToPdfBuilder
     }
 
     /// <summary>Converts the HTML to PDF and writes to the output stream asynchronously.</summary>
+    /// <param name="outputStream">The destination stream.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the PDF has been written.</returns>
     public async Task ConvertAsync(Stream outputStream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(outputStream);
@@ -285,48 +304,23 @@ public sealed class HtmlToPdfBuilder
     }
 
     /// <summary>Converts the HTML to PDF and saves to a file.</summary>
+    /// <param name="filePath">The destination file.</param>
     public void SaveTo(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         byte[] pdf = Convert();
-        System.IO.File.WriteAllBytes(filePath, pdf);
+        File.WriteAllBytes(filePath, pdf);
     }
 
     /// <summary>Converts the HTML to PDF and saves to a file asynchronously.</summary>
+    /// <param name="filePath">The destination file.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the file has been written.</returns>
     public async Task SaveToAsync(string filePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         byte[] pdf = await ConvertAsync(cancellationToken).ConfigureAwait(false);
-        await System.IO.File.WriteAllBytesAsync(filePath, pdf, cancellationToken).ConfigureAwait(false);
-    }
-
-    private PageSettings BuildPageSettings()
-    {
-        PaperSize paperSize = _pageSize switch
-        {
-            PageSize.Letter => PaperSize.Letter,
-            PageSize.Legal => PaperSize.Legal,
-            PageSize.A3 => PaperSize.A3,
-            _ => PaperSize.A4,
-        };
-
-        PageSettings settings = PageSettings.FromPaperSize(paperSize, _orientation);
-
-        if (_marginTop.HasValue || _marginRight.HasValue || _marginBottom.HasValue || _marginLeft.HasValue)
-        {
-            settings = new PageSettings
-            {
-                PageWidth = settings.PageWidth,
-                PageHeight = settings.PageHeight,
-                Margins = new Thickness(
-                    _marginTop ?? settings.Margins.Top,
-                    _marginRight ?? settings.Margins.Right,
-                    _marginBottom ?? settings.Margins.Bottom,
-                    _marginLeft ?? settings.Margins.Left),
-            };
-        }
-
-        return settings;
+        await File.WriteAllBytesAsync(filePath, pdf, cancellationToken).ConfigureAwait(false);
     }
 }
 

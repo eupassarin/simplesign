@@ -140,9 +140,8 @@ public class StyleResolverTests
         var root = HtmlTokenizer.Parse("<table><tr><td>Cell</td></tr></table>");
         StyleResolver.Resolve(root, []);
 
-        // Table uses Block display (handled specially by LayoutEngine via tag check)
         var table = FindFirstByTag(root, "table");
-        table!.ComputedStyle!.Display.ShouldBe(DisplayType.Block);
+        table!.ComputedStyle!.Display.ShouldBe(DisplayType.Table);
 
         var tr = FindFirstByTag(root, "tr");
         tr!.ComputedStyle!.Display.ShouldBe(DisplayType.TableRow);

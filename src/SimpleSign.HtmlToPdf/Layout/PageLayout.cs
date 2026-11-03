@@ -1,5 +1,6 @@
 // Licensed to SimpleSign under the MIT License.
 
+using SimpleSign.HtmlToPdf.Fonts;
 using SimpleSign.HtmlToPdf.Parsing;
 
 namespace SimpleSign.HtmlToPdf.Layout;
@@ -117,4 +118,25 @@ public sealed class LayoutResult
 
     /// <summary>Gets the bookmarks collected from headings.</summary>
     public List<BookmarkEntry> Bookmarks { get; } = [];
+
+    /// <summary>Gets the registered custom fonts used to measure and render this layout.</summary>
+    internal FontCollection? Fonts { get; init; }
+
+    /// <summary>Gets the resource loader used for images.</summary>
+    internal Rendering.ResourceLoader? Resources { get; init; }
+
+    /// <summary>Gets the document language (BCP 47), if known.</summary>
+    internal string? Language { get; init; }
+
+    /// <summary>Gets a value indicating whether a PDF/A-2b document is requested.</summary>
+    internal bool PdfA { get; init; }
+
+    /// <summary>Gets the element whose background is painted on the whole page (html or body).</summary>
+    internal HtmlNode? CanvasNode { get; init; }
+
+    /// <summary>Gets the style of <see cref="CanvasNode"/>.</summary>
+    internal ComputedStyle? CanvasStyle { get; init; }
+
+    /// <summary>Gets the <c>@page</c> margin boxes.</summary>
+    internal IReadOnlyList<PageMarginBox> MarginBoxes { get; init; } = [];
 }

@@ -30,6 +30,22 @@ public enum LayoutBoxType
     PageBreak,
 }
 
+/// <summary>Graphical list marker shape.</summary>
+internal enum MarkerShape
+{
+    /// <summary>Text marker (numbers, letters).</summary>
+    Text,
+
+    /// <summary>Filled circle (disc).</summary>
+    Disc,
+
+    /// <summary>Hollow circle.</summary>
+    Circle,
+
+    /// <summary>Filled square.</summary>
+    Square,
+}
+
 /// <summary>
 /// Represents a positioned box in the layout tree.
 /// Uses top-down Y coordinates during layout (0 = top of content area).
@@ -45,7 +61,7 @@ public sealed class LayoutBox
     public HtmlNode? Node { get; init; }
 
     /// <summary>Gets the computed style snapshot.</summary>
-    public ComputedStyle Style { get; init; } = new();
+    public ComputedStyle Style { get; set; } = new();
 
     /// <summary>Gets or sets the X position relative to page content area.</summary>
     public float X { get; set; }
@@ -73,6 +89,57 @@ public sealed class LayoutBox
 
     /// <summary>Gets or sets the link URL for clickable text.</summary>
     public string? LinkUrl { get; set; }
+
+    /// <summary>Gets or sets the background painted behind an inline text run (from an inline ancestor).</summary>
+    internal PdfColor? InlineBackground { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether a collapsed space precedes this inline box on its line.</summary>
+    internal bool SpaceBefore { get; set; }
+
+    /// <summary>Gets or sets the graphical marker shape for list markers.</summary>
+    internal MarkerShape MarkerShape { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether the top border is omitted (box continues from a previous page).</summary>
+    internal bool SuppressTopBorder { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether the bottom border is omitted (box continues on the next page).</summary>
+    internal bool SuppressBottomBorder { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether borders are centered on the box edges (collapsed table borders)
+    /// instead of drawn inside the border box.
+    /// </summary>
+    internal bool BorderCentered { get; set; }
+
+    /// <summary>Creates a shallow copy positioned at a different location.</summary>
+    internal LayoutBox CloneAt(float x, float y) => new()
+    {
+        Type = Type,
+        Node = Node,
+        Style = Style,
+        X = x,
+        Y = y,
+        Width = Width,
+        Height = Height,
+        Text = Text,
+        Marker = Marker,
+        ImageSource = ImageSource,
+        LinkUrl = LinkUrl,
+        InlineBackground = InlineBackground,
+        SpaceBefore = SpaceBefore,
+        MarkerShape = MarkerShape,
+        SuppressTopBorder = SuppressTopBorder,
+        SuppressBottomBorder = SuppressBottomBorder,
+        BorderCentered = BorderCentered,
+        Svg = Svg,
+        Rtl = Rtl,
+    };
+
+    /// <summary>Gets or sets a value indicating whether the text is drawn right to left (glyph order reversed, brackets mirrored).</summary>
+    internal bool Rtl { get; set; }
+
+    /// <summary>Gets or sets the SVG document drawn in this image box (inline &lt;svg&gt; or an SVG image source).</summary>
+    internal HtmlNode? Svg { get; set; }
 
     /// <summary>Gets the total box width including margin, border, and padding.</summary>
     public float TotalWidth =>

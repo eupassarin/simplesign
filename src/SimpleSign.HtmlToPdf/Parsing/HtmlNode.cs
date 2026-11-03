@@ -37,8 +37,14 @@ public sealed class HtmlNode
     /// <summary>Inline style attribute parsed into individual properties. Populated by StyleResolver.</summary>
     public Dictionary<string, string> InlineStyle { get; set; } = [];
 
+    /// <summary>Gets a value indicating whether this node was generated for a ::before/::after pseudo-element.</summary>
+    internal bool IsPseudo { get; init; }
+
     /// <summary>Computed style after cascade resolution. Populated by StyleResolver.</summary>
     public ComputedStyle? ComputedStyle { get; set; }
+
+    /// <summary>Gets or sets the cascaded style holding unresolved math functions; layout derives <see cref="ComputedStyle"/> from it.</summary>
+    internal ComputedStyle? CalcTemplate { get; set; }
 
     /// <summary>Gets a value indicating whether this is a block-level element.</summary>
     public bool IsBlock => Tag is "div" or "p" or "h1" or "h2" or "h3" or "h4" or "h5" or "h6"

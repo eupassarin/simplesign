@@ -20,77 +20,27 @@ internal sealed class ImageData
     public int BitsPerComponent { get; init; } = 8;
     public int Components { get; init; } = 3; // RGB
 
-    /// <summary>Parse image from data URI (data:image/...) or file path.</summary>
-    public static ImageData? Parse(string? src)
+    /// <summary>Gets a value indicating whether a CMYK JPEG stores inverted samples (Adobe APP14).</summary>
+    public bool AdobeInverted { get; init; }
+
+    /// <summary>Parse image from a data URI.</summary>
+    public static ImageData? Parse(string? src) => Parse(src, ResourceLoader.DataUriOnly);
+
+    /// <summary>Parse image from a data URI, local file, or custom-loaded reference.</summary>
+    public static ImageData? Parse(string? src, ResourceLoader loader)
     {
-        if (string.IsNullOrWhiteSpace(src))
-        {
-            return null;
-        }
-
-        byte[]? bytes = null;
-        ImageFormat format = ImageFormat.Unknown;
-
-        if (src.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-        {
-            (bytes, format) = ParseDataUri(src);
-        }
-        else if (src.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                 src.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            // HTTP/HTTPS URLs are handled elsewhere; unsupported here.
-        }
-
+        byte[]? bytes = loader.Load(src);
         if (bytes is null || bytes.Length == 0)
         {
             return null;
         }
 
-        if (format == ImageFormat.Unknown)
-        {
-            format = DetectFormat(bytes);
-        }
-
-        return format switch
+        return DetectFormat(bytes) switch
         {
             ImageFormat.Jpeg => ParseJpeg(bytes),
             ImageFormat.Png => ParsePng(bytes),
             _ => null,
         };
-    }
-
-    private static (byte[]? Data, ImageFormat Format) ParseDataUri(string uri)
-    {
-        // data:image/png;base64,iVBOR...
-        int commaIdx = uri.IndexOf(',');
-        if (commaIdx < 0)
-        {
-            return (null, ImageFormat.Unknown);
-        }
-
-        ReadOnlySpan<char> header = uri.AsSpan(0, commaIdx);
-        string base64 = uri[(commaIdx + 1)..];
-
-        ImageFormat format = ImageFormat.Unknown;
-        if (header.Contains("image/jpeg", StringComparison.OrdinalIgnoreCase) ||
-            header.Contains("image/jpg", StringComparison.OrdinalIgnoreCase))
-        {
-            format = ImageFormat.Jpeg;
-        }
-        else if (header.Contains("image/png", StringComparison.OrdinalIgnoreCase))
-        {
-            format = ImageFormat.Png;
-        }
-
-        try
-        {
-            byte[] bytes = Convert.FromBase64String(base64);
-            return (bytes, format);
-        }
-        catch (FormatException)
-        {
-            return (null, ImageFormat.Unknown);
-        }
     }
 
     private static ImageFormat DetectFormat(byte[] data)
@@ -114,6 +64,7 @@ internal sealed class ImageData
     private static ImageData? ParseJpeg(byte[] data)
     {
         int i = 2; // skip FF D8
+        bool adobe = false;
         while (i + 1 < data.Length)
         {
             if (data[i] != 0xFF)
@@ -125,8 +76,20 @@ internal sealed class ImageData
             byte marker = data[i + 1];
             i += 2;
 
-            // SOF0 (baseline), SOF1 (extended), SOF2 (progressive)
-            if (marker is 0xC0 or 0xC1 or 0xC2)
+            // APP14 "Adobe": CMYK/YCCK samples are stored inverted.
+            if (marker == 0xEE && i + 7 < data.Length && data[i + 2] == 'A' && data[i + 3] == 'd' && data[i + 4] == 'o' && data[i + 5] == 'b' && data[i + 6] == 'e')
+            {
+                adobe = true;
+            }
+
+            // Standalone markers without a length.
+            if (marker is 0xD8 or 0x01 or (>= 0xD0 and <= 0xD7))
+            {
+                continue;
+            }
+
+            // Any start-of-frame marker (baseline, extended, progressive, lossless) except DHT/JPG/DAC.
+            if (marker is >= 0xC0 and <= 0xCF and not 0xC4 and not 0xC8 and not 0xCC)
             {
                 if (i + 7 > data.Length)
                 {
@@ -151,6 +114,7 @@ internal sealed class ImageData
                     Height = height,
                     BitsPerComponent = bpc,
                     Components = components,
+                    AdobeInverted = adobe && components == 4,
                 };
             }
 

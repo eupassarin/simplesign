@@ -1,8 +1,16 @@
 # SimpleSign.HtmlToPdf
 
-Dependency-free HTML → PDF conversion for .NET: a small layout engine with CSS
-subset support (block/inline boxes, margins, paddings, tables, basic flex),
-system-font metrics, and page breaks.
+Dependency-free HTML → PDF for .NET. A managed layout engine for documents — contracts, reports,
+invoices, editor content — with no browser or native runtime, AOT-friendly.
+
+- CSS cascade with complex selectors, `!important`, `var()`, `@media print`, `@page`, `@font-face`
+- Block/inline flow, floats, positioning, inline-block, flexbox, grid, lists, justification
+- Tables with content-based column sizing, colspan/rowspan, collapsed borders, and pagination that
+  repeats `<thead>` on every page
+- Embedded, subset TrueType/OpenType fonts with Unicode text extraction, per-glyph fallback, and
+  synthesized bold/italic
+- PNG (incl. alpha) and JPEG images from data URIs, a base directory, or your own loader
+- PDF/A-2b output for archiving and long-term signatures
 
 ## Quickstart
 
@@ -11,9 +19,23 @@ using SimpleSign.HtmlToPdf;
 
 byte[] pdf = await HtmlToPdfConverter
     .Html("<h1>Hello, SimpleSign</h1><p>A paragraph of text.</p>")
+    .WithFooter("Page {page} of {pages}")
     .ConvertAsync();
 File.WriteAllBytes("output.pdf", pdf);
+
+// Unicode text: register fonts (regular + bold) and use them from CSS.
+byte[] unicodePdf = HtmlToPdfConverter
+    .Html("<p class='u'>Olá — Καλημέρα — <b>Привет</b></p>")
+    .WithFontFile("Noto Sans", "fonts/NotoSans-Regular.ttf")
+    .WithFontFile("Noto Sans", "fonts/NotoSans-Bold.ttf", FontVariant.Bold)
+    .WithStylesheet(".u { font-family: 'Noto Sans', sans-serif; }")
+    .WithPdfA()
+    .Convert();
 ```
 
-More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [docs](https://eupassarin.github.io/SimpleSign/). MIT licensed.
+Relative images/stylesheets are only read when you opt in with `WithBaseDirectory(...)` or
+`WithResourceLoader(...)`; the library never accesses the network on its own.
+
+More (CSS support matrix, fonts, PDF/A, CLI) at
+[github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign) and the
+[docs](https://eupassarin.github.io/SimpleSign/). MIT licensed.
