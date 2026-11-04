@@ -16,7 +16,7 @@
   <a href="https://codecov.io/gh/eupassarin/SimpleSign"><img src="https://codecov.io/gh/eupassarin/SimpleSign/branch/main/graph/badge.svg" alt="codecov" /></a>
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />
   <img src="https://img.shields.io/badge/AOT-Compatible-blueviolet?style=flat-square" alt="Native AOT" />
-  <img src="https://img.shields.io/badge/Tests-1%2C750%2B-brightgreen?style=flat-square" alt="1,750+ tests" />
+  <img src="https://img.shields.io/badge/Tests-2%2C800%2B-brightgreen?style=flat-square" alt="2,800+ tests" />
   <img src="https://img.shields.io/badge/No%20Crypto%20Deps-✓-blue?style=flat-square" alt="No third-party crypto dependencies" />
 </p>
 
@@ -24,7 +24,7 @@
 
 ## What is SimpleSign?
 
-SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN 319 122), and **XAdES** (ETSI EN 319 132) digital signatures. All cryptography uses `System.Security.Cryptography` — no BouncyCastle, no third-party crypto dependencies. Native AOT compatible. 1,695+ tests. MIT licensed.
+SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN 319 122), and **XAdES** (ETSI EN 319 132) digital signatures. All cryptography uses `System.Security.Cryptography` — no BouncyCastle, no third-party crypto dependencies. Native AOT compatible. 2,800+ tests. MIT licensed.
 
 This README describes the current source tree. For released-package behavior, use
 its release-tagged documentation; the [changelog](CHANGELOG.md) records delivered
@@ -38,8 +38,22 @@ changes and work under `Unreleased`.
 - **Dependency Injection** — 15+ interfaces, `AddSimpleSign()` wires everything
 - **Native AOT compatible** — no reflection, no `dynamic`, no `Assembly.Load`
 - **MIT licensed** — use anywhere, for anything, with no restrictions
-- **2,600+ tests** — comprehensive coverage, 0 warnings, CI-enforced quality gates
+- **2,800+ tests** — comprehensive coverage, 0 warnings, CI-enforced quality gates
 - **Multi-target** — .NET 8 and .NET 10 on Windows, macOS, and Linux
+
+---
+
+## What's New in v0.10.1
+
+A hardening release on top of 0.10.0, driven by a new mutation fuzzer:
+
+- **Hostile PDFs no longer stall validation** — the signature-field scan was quadratic on files with thousands of unclosed dictionaries; it is now one linear pass (a 168 KB file went from 30+ s to under a second).
+- **HtmlToPdf** — long words with `hyphens: auto` no longer slow layout down quadratically.
+- **CLI** — `validate --trust` / `validate-dir --trust` accept your own root CA, and `xades validate --data` validates detached signatures.
+- **XAdES** — signing malformed XML throws `ArgumentException` instead of a raw `XmlException`.
+- **Signature stamp** — identical bytes on Windows and Unix.
+
+See the [full changelog](CHANGELOG.md).
 
 ---
 
@@ -54,58 +68,6 @@ changes and work under `Unreleased`.
 **Packaging** — every NuGet package ships its own README, icon, SourceLink and symbol package.
 
 See the [full changelog](CHANGELOG.md).
-
----
-
-## What's New in v0.9.3
-
-**Usage-rights signatures no longer reported as document signatures** — Adobe Reader Extensions signatures (`/TransformMethod /UR3`), common in XFA/LiveCycle forms, are now skipped by inspection, validation, and extraction, matching Adobe Acrobat's signature panel.
-
-See the [full changelog](CHANGELOG.md).
-
----
-
-## What's New in v0.9.2
-
-**Acrobat-safe structure preservation** — dictionary scanners now treat literal strings, hexadecimal strings, and comments correctly, so content such as `(merged >> streams)` in a `/Reason` no longer confuses parsing. Key removal is token-aware, and document timestamps (B-LTA) preserve an inline `/AcroForm` dictionary just like regular signing.
-
-**Robust incremental signing on external PDFs** — `/Fields` and `/Annots` entries are resolved without mistaking other keys' arrays (including compressed indirect arrays), signing into existing fields handles every `/V` form without duplicate keys, and empty `/V ()` fields are recognised as unsigned.
-
-**Accurate metadata and positioning** — hexadecimal and UTF-16 `/M` dates decode correctly, visible-widget counting no longer depends on a fixed window, and numeric parsing accepts only ASCII digits with complete `objNum genNum R` references.
-
-See the [full changelog](CHANGELOG.md).
-
----
-
-## What's New in v0.9.1
-
-**Adobe Acrobat compatibility fixes** — the embedded LiberationSans `/FontFile2` stream now carries the required `/Length1` metadata, and signing a PDF whose Catalog contains an inline `/AcroForm` dictionary preserves that dictionary (including `/DA` and `/DR`) instead of replacing it, so Acrobat no longer invalidates earlier signatures.
-
-**Robust PDF parsing for external documents** — compact `/Kids` page-tree arrays (`/Kids[2 0 R 3 0 R]`) are parsed with PDF token rules, and signature metadata such as `/Reason` now decodes hexadecimal and UTF-16 text strings used by external signing tools (e.g. Polish trusted-profile signatures).
-
-**Stronger timestamp and LTV verification** — RFC 3161 tokens require an authenticated TSA signature before acceptance, validation timeouts bound AIA/OCSP/CRL network calls, and B-LT/B-LTA evidence must include signed revocation material before levels are reported.
-
-See the [full changelog](CHANGELOG.md).
-
----
-
-## What's New in v0.9.0
-
-**Verifiable AdES level fulfillment** — a requested B-T/B-LT/B-LTA level now describes the artifact actually produced. Timestamp tokens are bound to their RFC 3161 request, LTV material is checked per certificate path, and result flags are derived from final-artifact inspection.
-
-**Standards-defined archival coverage** — CAdES uses ETSI `archiveTimestampV3` with `ATSHashIndexV3` inside the archive timestamp token. XAdES uses the ETSI archive preimage and XMLDSig reference processing, including same-document distributed unsigned properties and preceding counter-signatures.
-
-**Resolved external signing** — `IExternalSigner.SignAsync(ExternalSigningRequest, …)` receives coherent digest, scheme, operation ID and RSA-PSS parameters. RSA and ECDSA output is verified against the public certificate before packaging.
-
-**Provider-based HTTP configuration** — `.WithHttpClientProvider(...)` plus scoped providers in `TimestampOptions`, `LongTermValidationOptions`, and `ArchiveTimestampOptions`, with deterministic precedence.
-
-**CAdES-Enveloped (.p7m)** — embed the original data inside the CMS payload via `WithContentType(CadesContentType.Enveloped)`.
-
-**CLI improvements** — JSON output for `cades validate` / `xades validate` (`--json`) and stdin/pipe input (path `-`) for all sign and validate commands.
-
-**Hardened signing invariants** — certificates are checked against both `NotBefore` and `NotAfter`; PAdES inputs and configured binary/collection values are snapshotted; stream-backed PAdES builders are single-use and write transactionally.
-
-See the [full changelog](CHANGELOG.md) and the [v0.8 → v0.9 migration guide](docs/migration/v0.8-to-v0.9.md).
 
 ---
 
@@ -182,7 +144,7 @@ var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 
 foreach (var r in results)
 {
-    Console.WriteLine($"{r.FieldName}: Valid={r.IsValid}");
+    Console.WriteLine($"{r.FieldName}: {r.Indication}"); // Valid, Invalid or Indeterminate
     Console.WriteLine($"  Integrity={r.IsIntegrityValid}");
     Console.WriteLine($"  Chain={r.IsCertificateChainValid}");
     Console.WriteLine($"  Timestamp={r.HasValidTimestamp}");
@@ -484,7 +446,7 @@ using SimpleSign.PAdES.Inspection;
 
 var result = await PdfSignatureInspector.InspectAsync(stream);
 foreach (var s in result.Signatures)
-    Console.WriteLine($"{s.FieldName}: {s.SignerName}, {s.SigningTime}, {s.DigestAlgorithm}");
+    Console.WriteLine($"{s.FieldName}: {s.DeclaredSignerName}, {s.SigningTime}, {s.DigestAlgorithm}");
 ```
 
 ---
@@ -664,10 +626,11 @@ var options = new ValidationOptions
 
 ```bash
 # Sign a PDF
-simplesign sign contract.pdf --cert mycert.pfx --password secret --timestamp
+simplesign sign contract.pdf --cert mycert.pfx --password secret --tsa http://timestamp.digicert.com
 
-# Validate
+# Validate (add --trust to accept your own root CA, --json for machine-readable output)
 simplesign validate signed.pdf
+simplesign validate signed.pdf --trust my-root-ca.pem --json
 
 # Validate a directory of signed PDFs
 simplesign validate-dir ./documents/
@@ -676,7 +639,7 @@ simplesign validate-dir ./documents/
 simplesign inspect signed.pdf
 
 # Extract CMS from signed PDF
-simplesign extract signed.pdf --output signature.p7s
+simplesign extract signed.pdf --output-dir ./extracted
 
 # Convert HTML to PDF (relative images/CSS resolve against the HTML file's folder)
 simplesign html-to-pdf page.html --output page.pdf
@@ -684,8 +647,8 @@ simplesign html-to-pdf page.html --output page.pdf
 # ... with an embedded Unicode font, footer, and PDF/A-2b for archiving
 simplesign html-to-pdf page.html --font "Noto Sans=NotoSans-Regular.ttf" --footer "{page}/{pages}" --pdfa
 
-# Explain certificate details
-simplesign explain --cert mycert.pfx --password secret
+# Explain a signature term (omit the term for the full glossary)
+simplesign explain ByteRange
 
 # Show version
 simplesign version

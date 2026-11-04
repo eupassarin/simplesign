@@ -15,14 +15,14 @@ dotnet tool install --global SimpleSign.Cli
 # Sign a PDF with an ICP-Brasil certificate from the Windows store
 simplesign sign document.pdf --thumbprint <THUMBPRINT>
 
-# Validate all signatures
-simplesign validate signed.pdf
+# Validate all signatures (--trust adds your own root CA; --json for scripts)
+simplesign validate signed.pdf --trust root-ca.pem
 
 # Inspect signatures without validation
 simplesign inspect signed.pdf
 
 # CAdES / XAdES
-simplesign cades sign document.pdf --certificate cert.pfx
+simplesign cades sign document.pdf --cert cert.pfx
 simplesign xades validate signed.xml
 ```
 

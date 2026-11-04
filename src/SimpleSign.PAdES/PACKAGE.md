@@ -10,6 +10,7 @@ baseline levels **B-B, B-T, B-LT, and B-LTA**. Built only on
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
+using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
 
 // Sign a PDF
