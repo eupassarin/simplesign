@@ -65,16 +65,16 @@ public static class PdfAPreservationValidator
 
     private static void ValidateAppearance(PdfALevel level, SignatureAppearance appearance, List<PdfACompatibilityIssue> issues)
     {
-        // PDF/A-1 forbids transparency; PNG images with alpha channel could be problematic
-        // PDF/A-2+ allow transparency; PDF/A-4 (ISO 19005-4) also allows it
+        // PDF/A-1 forbids transparency (soft masks); PNG images with an alpha channel or a
+        // tRNS chunk are embedded with a soft mask. PDF/A-2+ allow transparency.
         if (level is PdfALevel.A1a or PdfALevel.A1b)
         {
-            if (appearance.BackgroundImagePng is { Length: > 0 })
+            if (appearance.BackgroundImagePng is { Length: > 0 } png && AppearanceImage.PngHasTransparency(png.Span))
             {
                 issues.Add(new PdfACompatibilityIssue(
                     PdfAIssueSeverity.Error,
-                    "PNG background images may contain transparency, which is forbidden in PDF/A-1 (ISO 19005-1). " +
-                    "Use JPEG instead, or ensure the PNG has no alpha channel and convert to JPEG before signing."));
+                    "PNG background images with transparency (alpha channel or tRNS chunk) are embedded with a soft mask, " +
+                    "which is forbidden in PDF/A-1 (ISO 19005-1). Use an opaque PNG or a JPEG instead."));
             }
         }
 

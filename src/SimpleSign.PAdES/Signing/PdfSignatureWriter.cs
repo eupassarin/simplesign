@@ -170,6 +170,7 @@ public sealed class PdfSignatureWriter
         int imageObjNum = appObjNum + 1;
         int fontFileObjNum = appObjNum + 2;
         int fontDescriptorObjNum = appObjNum + 3;
+        int softMaskObjNum = appObjNum + 4;
         int contentsHexLength = options.ContentsReservedBytes * 2;
         DateTime sigNow = (signingTime ?? DateTimeOffset.UtcNow).UtcDateTime;
 
@@ -262,6 +263,7 @@ public sealed class PdfSignatureWriter
         // Step 8: Write appearance XObject (if visible) and update page /Annots (always).
         long appObjOffset = 0L;
         long imageObjOffset = 0L;
+        long softMaskObjOffset = 0L;
         long updPageObjOffset = 0L;
         bool hasImage = hasAppearance && options.Appearance?.HasBackgroundImage() == true;
         if (hasAppearance && options.Appearance != null)
@@ -269,21 +271,18 @@ public sealed class PdfSignatureWriter
             byte[] appearanceBytes = SignatureAppearanceRenderer.BuildAppearanceXObject(
                 appObjNum, options, sigNow, appWidth, appHeight,
                 hasImage ? imageObjNum : 0,
-                hasAppearance ? fontFileObjNum : 0,
-                hasAppearance ? fontDescriptorObjNum : 0);
+                fontFileObjNum,
+                fontDescriptorObjNum,
+                hasImage ? softMaskObjNum : 0);
             appObjOffset = outputStream.Position;
             await outputStream.WriteAsync(appearanceBytes, cancellationToken).ConfigureAwait(false);
 
-            // If the appearance includes an image XObject, it's concatenated after the form XObject.
-            // We need to find where the image object starts within the written bytes.
+            // The image XObject (and its soft mask, if any) follow the form XObject in the written bytes.
             if (hasImage)
             {
                 string appText = Encoding.Latin1.GetString(appearanceBytes);
-                int imgObjIdx = appText.IndexOf($"{imageObjNum} 0 obj", StringComparison.Ordinal);
-                if (imgObjIdx >= 0)
-                {
-                    imageObjOffset = appObjOffset + imgObjIdx;
-                }
+                imageObjOffset = FindAppendedObject(appText, appObjOffset, imageObjNum);
+                softMaskObjOffset = FindAppendedObject(appText, appObjOffset, softMaskObjNum);
             }
         }
 
@@ -341,6 +340,10 @@ public sealed class PdfSignatureWriter
             {
                 objectOffsets[imageObjNum] = imageObjOffset;
             }
+            if (hasImage && softMaskObjOffset > 0)
+            {
+                objectOffsets[softMaskObjNum] = softMaskObjOffset;
+            }
             objectOffsets[fontFileObjNum] = fontFileObjOffset;
             objectOffsets[fontDescriptorObjNum] = fontDescriptorObjOffset;
         }
@@ -377,6 +380,17 @@ public sealed class PdfSignatureWriter
             ContentsReservedBytes = options.ContentsReservedBytes,
             SigDictObjectNumber = sigObjNum
         };
+    }
+
+    /// <summary>
+    /// Returns the file offset of an object appended after the appearance form XObject,
+    /// or 0 when the bytes do not contain it.
+    /// </summary>
+    private static long FindAppendedObject(string appearanceText, long appearanceOffset, int objNum)
+    {
+        string token = $"endobj\n{objNum} 0 obj";
+        int idx = appearanceText.IndexOf(token, StringComparison.Ordinal);
+        return idx >= 0 ? appearanceOffset + idx + "endobj\n".Length : 0L;
     }
 
     /// <summary>
@@ -582,19 +596,19 @@ public sealed class PdfSignatureWriter
         sigDict.Append($"   /Contents <{contentsHexPlaceholder}>\n");
         if (!string.IsNullOrEmpty(options.SignerName))
         {
-            sigDict.Append($"   /Name ({SignatureAppearanceRenderer.EscapePdfString(options.SignerName)})\n");
+            sigDict.Append($"   /Name {PdfTextString.Encode(options.SignerName)}\n");
         }
         if (!string.IsNullOrEmpty(options.Reason))
         {
-            sigDict.Append($"   /Reason ({SignatureAppearanceRenderer.EscapePdfString(options.Reason)})\n");
+            sigDict.Append($"   /Reason {PdfTextString.Encode(options.Reason)}\n");
         }
         if (!string.IsNullOrEmpty(options.Location))
         {
-            sigDict.Append($"   /Location ({SignatureAppearanceRenderer.EscapePdfString(options.Location)})\n");
+            sigDict.Append($"   /Location {PdfTextString.Encode(options.Location)}\n");
         }
         if (!string.IsNullOrEmpty(options.ContactInfo))
         {
-            sigDict.Append($"   /ContactInfo ({SignatureAppearanceRenderer.EscapePdfString(options.ContactInfo)})\n");
+            sigDict.Append($"   /ContactInfo {PdfTextString.Encode(options.ContactInfo)}\n");
         }
         sigDict.Append($"   /M (D:{signingTime:yyyyMMddHHmmss}+00'00')\n");
 
@@ -622,7 +636,7 @@ public sealed class PdfSignatureWriter
         fieldDict.Append("<< /Type /Annot\n");
         fieldDict.Append("   /Subtype /Widget\n");
         fieldDict.Append("   /FT /Sig\n");
-        fieldDict.Append($"   /T ({SignatureAppearanceRenderer.EscapePdfString(fieldName)})\n");
+        fieldDict.Append($"   /T {PdfTextString.Encode(fieldName)}\n");
         fieldDict.Append($"   /V {p.SigObjNum} 0 R\n");
         if (p.PageObjNum > 0)
         {

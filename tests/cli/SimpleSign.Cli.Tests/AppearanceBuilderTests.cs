@@ -195,4 +195,80 @@ public sealed class AppearanceBuilderTests
         result.Y.ShouldBe(60f);
         result.AutoPosition.ShouldBeFalse();
     }
+
+    [Fact]
+    public void Build_WithTextOptions_SetsLabelsAndDate()
+    {
+        var text = new AppearanceTextOptions("Assinado por", "Motivo: ", "Local: ", "Data: ", "dd/MM/yyyy HH:mm zzz", "-03:00");
+
+        var result = AppearanceBuilder.Build(true, null, null, null, null, null, true, true, text: text, backgroundColor: "1,1,0.9", imageFit: "contain");
+
+        result.SignedByLabel.ShouldBe("Assinado por");
+        result.ReasonLabel.ShouldBe("Motivo: ");
+        result.LocationLabel.ShouldBe("Local: ");
+        result.DateLabel.ShouldBe("Data: ");
+        result.DateFormat.ShouldBe("dd/MM/yyyy HH:mm zzz");
+        result.TimeZone!.BaseUtcOffset.ShouldBe(TimeSpan.FromHours(-3));
+        result.BackgroundColor.ShouldBe((1f, 1f, 0.9f));
+        result.BackgroundImageFit.ShouldBe(PAdES.Signing.SignatureImageFit.Contain);
+        result.AutoPosition.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Build_WithoutTextOptions_KeepsDefaultLabels()
+    {
+        var result = AppearanceBuilder.Build(true, null, null, null, null, null, false, false);
+
+        result.SignedByLabel.ShouldBe("Signed by");
+        result.TimeZone.ShouldBeNull();
+        result.BackgroundImageFit.ShouldBe(PAdES.Signing.SignatureImageFit.Stretch);
+    }
+
+    [Theory]
+    [InlineData("UTC", 0)]
+    [InlineData("+05:30", 330)]
+    [InlineData("-0300", -180)]
+    [InlineData("-03", -180)]
+    public void ParseTimeZone_Offsets_AreParsed(string value, int minutes) =>
+        AppearanceBuilder.ParseTimeZone(value)!.BaseUtcOffset.ShouldBe(TimeSpan.FromMinutes(minutes));
+
+    [Theory]
+    [InlineData("Not/AZone")]
+    [InlineData("+25:00")]
+    [InlineData("-")]
+    public void ParseTimeZone_Invalid_ReturnsNull(string value) =>
+        AppearanceBuilder.ParseTimeZone(value).ShouldBeNull();
+
+    [Theory]
+    [InlineData("Stretch", PAdES.Signing.SignatureImageFit.Stretch)]
+    [InlineData("contain", PAdES.Signing.SignatureImageFit.Contain)]
+    [InlineData(" COVER ", PAdES.Signing.SignatureImageFit.Cover)]
+    public void ParseImageFit_KnownModes_AreParsed(string value, PAdES.Signing.SignatureImageFit expected) =>
+        AppearanceBuilder.ParseImageFit(value).ShouldBe(expected);
+
+    [Fact]
+    public void ParseImageFit_Unknown_ReturnsNull() =>
+        AppearanceBuilder.ParseImageFit("tile").ShouldBeNull();
+
+    [Fact]
+    public void Build_WithLayoutOptions_SetsSizeAndAlignment()
+    {
+        var result = AppearanceBuilder.Build(true, null, null, null, null, null, false, false,
+            layout: new AppearanceLayoutOptions(200f, 60f, "center"));
+
+        result.Width.ShouldBe(200f);
+        result.Height.ShouldBe(60f);
+        result.TextAlignment.ShouldBe(PAdES.Signing.SignatureTextAlignment.Center);
+    }
+
+    [Theory]
+    [InlineData("left", PAdES.Signing.SignatureTextAlignment.Left)]
+    [InlineData("Center", PAdES.Signing.SignatureTextAlignment.Center)]
+    [InlineData(" RIGHT", PAdES.Signing.SignatureTextAlignment.Right)]
+    public void ParseTextAlignment_KnownValues_AreParsed(string value, PAdES.Signing.SignatureTextAlignment expected) =>
+        AppearanceBuilder.ParseTextAlignment(value).ShouldBe(expected);
+
+    [Fact]
+    public void ParseTextAlignment_Unknown_ReturnsNull() =>
+        AppearanceBuilder.ParseTextAlignment("justify").ShouldBeNull();
 }

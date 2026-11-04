@@ -192,6 +192,61 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Border width in points (default: 0.5, requires --border-color)")]
         public float? BorderWidth { get; init; }
 
+        /// <summary>Label above the signer name (default: "Signed by"; empty string hides the line).</summary>
+        [CommandOption("--signed-by-label <TEXT>")]
+        [Description("Label above the signer name (default: \"Signed by\"; \"\" hides the line)")]
+        public string? SignedByLabel { get; init; }
+
+        /// <summary>Prefix of the reason line (default: "Reason: ").</summary>
+        [CommandOption("--reason-label <TEXT>")]
+        [Description("Prefix of the reason line (default: \"Reason: \")")]
+        public string? ReasonLabel { get; init; }
+
+        /// <summary>Prefix of the location line (default: "Location: ").</summary>
+        [CommandOption("--location-label <TEXT>")]
+        [Description("Prefix of the location line (default: \"Location: \")")]
+        public string? LocationLabel { get; init; }
+
+        /// <summary>Prefix of the date line (default: none).</summary>
+        [CommandOption("--date-label <TEXT>")]
+        [Description("Prefix of the date line (default: none)")]
+        public string? DateLabel { get; init; }
+
+        /// <summary>.NET date format for the signing time, e.g. "dd/MM/yyyy HH:mm:ss zzz".</summary>
+        [CommandOption("--date-format <FORMAT>")]
+        [Description("Date format for the signing time, e.g. \"dd/MM/yyyy HH:mm:ss zzz\"")]
+        public string? DateFormat { get; init; }
+
+        /// <summary>Time zone for the signing time: an ID such as America/Sao_Paulo, or an offset such as -03:00.</summary>
+        [CommandOption("--time-zone <ZONE>")]
+        [Description("Time zone for the date: ID (America/Sao_Paulo) or offset (-03:00). Default: UTC")]
+        public string? TimeZone { get; init; }
+
+        /// <summary>Stamp fill color as RGB values 0-1, e.g. 1,1,1.</summary>
+        [CommandOption("--background-color <R,G,B>")]
+        [Description("Stamp fill color as RGB values 0-1, e.g. 1,1,1")]
+        public string? BackgroundColor { get; init; }
+
+        /// <summary>How the background image is scaled: stretch (default), contain or cover.</summary>
+        [CommandOption("--image-fit <MODE>")]
+        [Description("How the background image is scaled: stretch (default), contain, cover")]
+        public string? ImageFit { get; init; }
+
+        /// <summary>Fixed stamp width in points (text shrinks to fit).</summary>
+        [CommandOption("--stamp-width <PT>")]
+        [Description("Fixed stamp width in points (text shrinks to fit)")]
+        public float? StampWidth { get; init; }
+
+        /// <summary>Fixed stamp height in points (text shrinks to fit).</summary>
+        [CommandOption("--stamp-height <PT>")]
+        [Description("Fixed stamp height in points (text shrinks to fit)")]
+        public float? StampHeight { get; init; }
+
+        /// <summary>Text alignment in the stamp: left (default), center or right.</summary>
+        [CommandOption("--text-align <ALIGN>")]
+        [Description("Text alignment in the stamp: left (default), center, right")]
+        public string? TextAlign { get; init; }
+
         /// <summary>Hide signing date in visible signature.</summary>
         [CommandOption("--no-date")]
         [Description("Hide signing date in visible signature")]
@@ -343,8 +398,42 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 return ValidationResult.Error("--border-color must be in format R,G,B with values between 0 and 1.");
             }
 
+            if (BackgroundColor is not null && AppearanceBuilder.ParseColor(BackgroundColor) is null)
+            {
+                return ValidationResult.Error("--background-color must be in format R,G,B with values between 0 and 1.");
+            }
+
+            if (TimeZone is not null && AppearanceBuilder.ParseTimeZone(TimeZone) is null)
+            {
+                return ValidationResult.Error("--time-zone must be a time zone ID (e.g. America/Sao_Paulo) or an offset (e.g. -03:00).");
+            }
+
+            if (ImageFit is not null && AppearanceBuilder.ParseImageFit(ImageFit) is null)
+            {
+                return ValidationResult.Error("--image-fit must be stretch, contain or cover.");
+            }
+
+            if (StampWidth is <= 0 || StampHeight is <= 0)
+            {
+                return ValidationResult.Error("--stamp-width and --stamp-height must be greater than 0.");
+            }
+
+            if (TextAlign is not null && AppearanceBuilder.ParseTextAlignment(TextAlign) is null)
+            {
+                return ValidationResult.Error("--text-align must be left, center or right.");
+            }
+
+            if (DateFormat is not null && !AppearanceBuilder.IsValidDateFormat(DateFormat))
+            {
+                return ValidationResult.Error("--date-format is not a valid date format.");
+            }
+
             if (FontSize.HasValue || LabelFontSize.HasValue || TextColor is not null
-                || Font is not null || BorderColor is not null || BorderWidth.HasValue || NoDate)
+                || Font is not null || BorderColor is not null || BorderWidth.HasValue || NoDate
+                || SignedByLabel is not null || ReasonLabel is not null || LocationLabel is not null
+                || DateLabel is not null || DateFormat is not null || TimeZone is not null
+                || BackgroundColor is not null || ImageFit is not null
+                || StampWidth.HasValue || StampHeight.HasValue || TextAlign is not null)
             {
                 if (!Visible)
                 {
@@ -573,7 +662,13 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                             font: settings.Font,
                             borderColor: settings.BorderColor,
                             borderWidth: settings.BorderWidth,
-                            noDate: settings.NoDate);
+                            noDate: settings.NoDate,
+                            text: new AppearanceTextOptions(
+                                settings.SignedByLabel, settings.ReasonLabel, settings.LocationLabel,
+                                settings.DateLabel, settings.DateFormat, settings.TimeZone),
+                            backgroundColor: settings.BackgroundColor,
+                            imageFit: settings.ImageFit,
+                            layout: new AppearanceLayoutOptions(settings.StampWidth, settings.StampHeight, settings.TextAlign));
 
                         if (settings.Brasil)
                         {
