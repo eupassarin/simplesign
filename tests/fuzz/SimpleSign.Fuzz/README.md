@@ -4,8 +4,9 @@ Fuzz testing harness for SimpleSign parsers using SharpFuzz (libFuzzer/AFL integ
 
 ## Features
 
-- 7 fuzz targets covering the main parser entry points
-- SharpFuzz integration with libFuzzer
+- 12 fuzz targets covering the parser entry points (PDF, CMS, OCSP, timestamps, XAdES, CAdES, HTML, CSS)
+- Built-in mutation fuzzer that needs no external tools (`--mutate`), used in CI
+- SharpFuzz integration with AFL for coverage-guided runs
 - Corpus seed files for guided fuzzing
 - 5-second timeout protection per input
 - Unified exception filter for all expected malformed-input errors
@@ -25,25 +26,30 @@ Fuzz testing harness for SimpleSign parsers using SharpFuzz (libFuzzer/AFL integ
 | `xref` | PDF xref and object locator (low-level structure) |
 | `html` | Full HTML → PDF conversion (tokenizer, CSS, layout, rendering); any exception is a finding |
 | `css` | CSS parser, selector engine, and cascade |
+| `xades-sign` | XAdES signing of arbitrary XML |
+| `xades-validate` | XAdES validation of arbitrary XML |
+| `cades-sign` | CAdES signing of arbitrary data |
 
 ## Usage
 
+The harness has three modes:
+
 ```bash
-# Run a specific fuzz target
-dotnet run -c Release -f net8.0 -- pdf
+# 1. Built-in mutation fuzzer (no external tools; what CI runs).
+#    Mutates CorpusSeed/<target>, runs each input in-process, and stops a target on its first hang.
+dotnet run -c Release -f net10.0 -- pdf --mutate 300                 # 5 minutes
+dotnet run -c Release -f net10.0 -- html --mutate 300 --seed 42 --out ./Crashes --hang-seconds 20
 
-# Run another target
-dotnet run -c Release -f net8.0 -- cms
+# 2. Reproduce a finding (prints the unexpected exception, exit code 2)
+dotnet run -c Release -f net10.0 -- pdf --input ./Crashes/crash-pdf-0123abcd.bin
 
-# Run the validator target
-dotnet run -c Release -f net8.0 -- validator
-
-# Run with a time limit (seconds, depends on fuzzer front-end)
-dotnet run -c Release -f net8.0 -- ocsp --timeout 300
-
-# Reproduce a crash
-dotnet run -c Release -f net8.0 -- cms --input crash-file.bin
+# 3. Coverage-guided fuzzing with AFL (see "Building Instrumented Assemblies")
+afl-fuzz -i CorpusSeed/pdf -o findings -- dotnet ./fuzz-publish/SimpleSign.Fuzz.dll pdf
 ```
+
+`--mutate` writes each distinct finding to the output directory as `crash-<target>-<hash>.bin` or
+`hang-<target>-<hash>.bin`, with a `.txt` report (exception and stack trace) next to it, and exits
+with code 3 when it found anything. The `validator` and `xref` targets use the `pdf` seeds.
 
 ## Building Instrumented Assemblies
 
@@ -53,7 +59,7 @@ SharpFuzz requires instrumenting the target assembly DLLs before fuzzing:
 # 1. Publish the fuzz harness
 dotnet publish tests/fuzz/SimpleSign.Fuzz -c Release -f net8.0 -o ./fuzz-publish
 
-# 2. Instrument the target assemblies
+# 2. Instrument the target assemblies (tool: dotnet tool install --global SharpFuzz.CommandLine)
 sharpfuzz ./fuzz-publish/SimpleSign.Core.dll
 sharpfuzz ./fuzz-publish/SimpleSign.Pdf.dll
 sharpfuzz ./fuzz-publish/SimpleSign.PAdES.dll
@@ -77,7 +83,16 @@ Seed files are located in the `CorpusSeed/` directory, organized by target:
 
 ## Exception Handling
 
-All targets use a unified exception filter that catches exceptions expected from malformed input (e.g., `FormatException`, `CryptographicException`, `AsnContentException`, `OverflowException`, `OutOfMemoryException`, `OperationCanceledException`). Only truly unexpected exceptions (segfaults, unhandled crashes) will surface as findings.
+All targets share one filter of exceptions that are expected from malformed input: the library's
+own `SimpleSignException` family (for example `PdfStructureException`), `ArgumentException`,
+`FormatException`, `CryptographicException`, `AsnContentException`, `InvalidDataException`,
+`InvalidOperationException`, `OverflowException`, `NotSupportedException`, `IOException`,
+`OperationCanceledException` and `ObjectDisposedException`.
+
+`NullReferenceException`, `IndexOutOfRangeException`, `DivideByZeroException` and
+`OutOfMemoryException` are deliberately **not** expected: each means a missing check (or an
+allocation sized by untrusted input) and is reported as a finding. So is any input that runs
+longer than the hang limit — quadratic parsing is a denial-of-service bug.
 
 ## Reporting Crashes
 
@@ -85,9 +100,11 @@ Security-sensitive crashes should be reported via [GitHub Security Advisories](h
 
 ## CI Integration
 
-The fuzz workflow runs weekly (Wednesday 05:00 UTC) with a 15-minute timeout per target. Failures are non-blocking — they generate artifacts for manual triage but do not fail the CI pipeline.
+The fuzz workflow runs weekly (Wednesday 05:00 UTC) and on demand. Each target runs the built-in
+mutation fuzzer for 10 minutes; a finding fails that target's job and its inputs are uploaded as the
+`fuzz-crashes-<target>` artifact. The workflow does not run on pull requests.
 
 ## See Also
 
-- [Main README](../../README.md)
-- [Fuzz Workflow](../../.github/workflows/fuzz.yml)
+- [Main README](../../../README.md)
+- [Fuzz Workflow](../../../.github/workflows/fuzz.yml)

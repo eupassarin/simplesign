@@ -9,7 +9,6 @@ using SimpleSign.HtmlToPdf;
 using SimpleSign.HtmlToPdf.Parsing;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.Pdf;
-using SimpleSign.Pdf.Exceptions;
 using SimpleSign.XAdES;
 
 namespace SimpleSign.Fuzz;
@@ -20,6 +19,11 @@ namespace SimpleSign.Fuzz;
 /// expected exception types.
 ///
 /// Targets: dss, timestamp, ocsp, pdf, cms, validator, xref, xades-sign, xades-validate, cades-sign, html, css
+/// <para>
+/// Modes: with no option the harness hands control to SharpFuzz (AFL/libFuzzer front-end).
+/// <c>--mutate SECONDS</c> runs the built-in mutation fuzzer over the seed corpus (no external tools),
+/// and <c>--input FILE</c> runs one input and prints any unexpected exception (crash reproduction).
+/// </para>
 /// </summary>
 internal static class Program
 {
@@ -30,11 +34,13 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("Usage: dotnet run -c Release -- <dss|timestamp|ocsp|pdf|cms|validator|xref|xades-sign|xades-validate|cades-sign|html|css>");
+            Console.Error.WriteLine("Usage: SimpleSign.Fuzz <dss|timestamp|ocsp|pdf|cms|validator|xref|xades-sign|xades-validate|cades-sign|html|css>");
+            Console.Error.WriteLine("       [--mutate SECONDS [--corpus DIR] [--out DIR] [--seed N] [--hang-seconds N]] | [--input FILE]");
             return 1;
         }
 
-        Action<byte[]> target = args[0] switch
+        string name = args[0];
+        Action<byte[]> target = name switch
         {
             "dss" => FuzzDssExtractor,
             "timestamp" => FuzzTimestampExtractor,
@@ -48,8 +54,48 @@ internal static class Program
             "cades-sign" => FuzzCadesSign,
             "html" => FuzzHtmlToPdf,
             "css" => FuzzCss,
-            _ => throw new ArgumentException($"Unknown target: {args[0]}")
+            _ => throw new ArgumentException($"Unknown target: {name}")
         };
+
+        string? Option(string option)
+        {
+            int i = Array.IndexOf(args, option);
+            return i > 0 && i + 1 < args.Length ? args[i + 1] : null;
+        }
+
+        if (Option("--input") is { } inputFile)
+        {
+            try
+            {
+                target(File.ReadAllBytes(inputFile));
+                Console.WriteLine("No unexpected exception.");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return 2;
+            }
+        }
+
+        if (Option("--mutate") is { } seconds)
+        {
+            string corpus = Option("--corpus") ?? FindCorpus(name);
+            var seeds = Directory.Exists(corpus)
+                ? Directory.EnumerateFiles(corpus).Order(StringComparer.Ordinal).Select(File.ReadAllBytes)
+                : [];
+            var fuzzer = new MutationFuzzer(
+                name,
+                target,
+                IsExpectedException,
+                seeds,
+                int.Parse(Option("--seed") ?? "1", System.Globalization.CultureInfo.InvariantCulture),
+                Option("--out") ?? "Crashes",
+                TimeSpan.FromSeconds(double.Parse(Option("--hang-seconds") ?? "20", System.Globalization.CultureInfo.InvariantCulture)));
+            fuzzer.Run(TimeSpan.FromSeconds(double.Parse(seconds, System.Globalization.CultureInfo.InvariantCulture)));
+            Console.WriteLine($"[{name}] {fuzzer.Executions} executions, {fuzzer.Findings} finding(s).");
+            return fuzzer.Findings == 0 ? 0 : 3;
+        }
 
         Fuzzer.Run(stream =>
         {
@@ -61,9 +107,39 @@ internal static class Program
         return 0;
     }
 
+    /// <summary>Finds CorpusSeed/&lt;target&gt; next to the binary or in the source tree above the working directory.</summary>
+    private static string FindCorpus(string name)
+    {
+        string corpusName = name switch
+        {
+            "validator" or "xref" => "pdf",
+            "xades-sign" or "xades-validate" or "cades-sign" => "none",
+            _ => name,
+        };
+
+        foreach (string start in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() })
+        {
+            for (var dir = new DirectoryInfo(start); dir is not null; dir = dir.Parent)
+            {
+                foreach (string candidate in new[] { Path.Combine(dir.FullName, "CorpusSeed", corpusName), Path.Combine(dir.FullName, "tests", "fuzz", "SimpleSign.Fuzz", "CorpusSeed", corpusName) })
+                {
+                    if (Directory.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
     /// <summary>
     /// Returns true if the exception is expected for malformed/random input.
     /// The goal of fuzzing is to find crashes and hangs, not validation failures.
+    /// NullReferenceException, IndexOutOfRangeException, DivideByZeroException and
+    /// OutOfMemoryException are deliberately NOT expected: they mean a missing check
+    /// (or an allocation sized by untrusted input) and are reported as findings.
     /// </summary>
     private static bool IsExpectedException(Exception ex) =>
         ex is ArgumentException
@@ -77,13 +153,10 @@ internal static class Program
             or NotSupportedException
             or EndOfStreamException
             or IOException
-            or EncryptedPdfException
-            or IndexOutOfRangeException
+            or Core.SimpleSignException
             or OperationCanceledException
-            or OutOfMemoryException
-            or ObjectDisposedException
-            or NullReferenceException
-            or DivideByZeroException;
+            or ObjectDisposedException;
+
 
     private static void FuzzDssExtractor(byte[] data)
     {
