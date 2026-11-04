@@ -6,7 +6,7 @@ const endpoints = [
     method: 'GET',
     path: '/api/health',
     desc: 'Returns service status and version.',
-    response: '{ "status": "ok", "version": "0.10.0" }',
+    response: '{ "status": "ok", "version": "0.10.1" }',
   },
   {
     method: 'GET',
@@ -26,7 +26,7 @@ const endpoints = [
     method: 'GET',
     path: '/api/version',
     desc: 'Checks for updates from GitHub releases.',
-    response: '{ "current": "0.10.0", "latest": "...", "updateAvailable": false }',
+    response: '{ "current": "0.10.1", "latest": "...", "updateAvailable": false }',
   },
 ]
 

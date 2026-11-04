@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-04
+
+### Fixed
+
+- **PDF reader: quadratic scan on hostile files.** Finding the signature dictionary for each
+  `/ByteRange` marker searched backwards and rescanned the rest of the file for every `<<` it met.
+  Thousands of unclosed dictionaries or markers made a 168 KB file take over 30 s (a denial of
+  service on any service that validates uploads). Signature fields are now found in one linear
+  pass, and the backward search used elsewhere stops at object and stream boundaries.
+- **HtmlToPdf: quadratic hyphenation.** With `hyphens: auto`, choosing where to break a long word
+  measured every candidate prefix on every line (13 s for a 17 KB page); it is now a binary search.
+- **XAdES:** signing malformed XML threw a raw `XmlException`; it now throws `ArgumentException`
+  (parameter `xmlData`, the parse error as inner exception), like a document without a root element.
+- **Signature stamp:** the appearance content stream used the platform newline, so Windows and
+  Unix produced different bytes for the same stamp; it now always uses LF.
+- CAdES, XAdES and PAdES no longer create a new `HttpClient` for each embedded-revocation check.
+
+### Added
+
+- CLI: `validate --trust` and `validate-dir --trust` add your own root CA (PEM or DER) to the
+  default roots, and `xades validate --data` validates detached XAdES signatures (documented
+  before but missing).
+- Fuzz harness: a built-in mutation fuzzer (`--mutate SECONDS`) that needs no AFL/libFuzzer, and
+  `--input FILE` to reproduce a finding. `NullReferenceException`, `IndexOutOfRangeException`,
+  `DivideByZeroException` and `OutOfMemoryException` are now reported as findings instead of
+  being ignored. The weekly fuzz workflow had failed since it was added (it installed a
+  non-existent `SharpFuzz.CommandTool` package); it now runs the mutation fuzzer on 11 targets.
+
+### Tests
+
+- 21 end-to-end CLI tests (validate with JSON, `--trust` and a tampered file; `validate-dir`;
+  `inspect --json` and `--structure`; `html-to-pdf` with PDF/A; `explain`; CAdES and detached
+  XAdES sign/validate). CLI tests that replace the global console now run serially.
+- Regression tests for the fuzz findings; time bounds of the hostile-input tests relaxed so they
+  do not flake under coverage instrumentation.
+
+### Documentation
+
+- README keeps only the v0.10.0 release notes. Fixed examples that did not compile against
+  0.10.0 (`SignatureValidationResult.IsValid` → `Indication`, `DeclaredSignerName`), CLI examples
+  with options that do not exist (`--timestamp`, `extract --output`, `explain --cert`), the
+  ICP-Brasil validator example, missing `using` in the PAdES package readme, and test counts.
+
 ## [0.10.0] - 2026-11-04
 
 ### Changed (Breaking) — Signature Validation
