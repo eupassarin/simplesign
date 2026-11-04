@@ -218,7 +218,19 @@ public sealed class CadesSignerBuilder
     public CadesSignerBuilder WithSignaturePolicy(string oid, string? uri = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(oid);
-        return With(_options with { SignaturePolicyOid = oid, SignaturePolicyUri = uri });
+        return With(_options with { SignaturePolicyOid = oid, SignaturePolicyUri = uri, SignaturePolicy = null });
+    }
+
+    /// <summary>
+    /// Sets the signature policy with its hash (sigPolicyHash), as required by policies such as
+    /// ICP-Brasil's AD-RB/AD-RT.
+    /// </summary>
+    /// <param name="policy">The policy OID, hash and optional URI.</param>
+    /// <returns>A new builder with the signature policy configured.</returns>
+    public CadesSignerBuilder WithSignaturePolicy(SignaturePolicyReference policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        return With(_options with { SignaturePolicy = policy, SignaturePolicyOid = null, SignaturePolicyUri = null });
     }
 
     /// <summary>Sets the logger for diagnostic output.</summary>
@@ -653,7 +665,11 @@ public sealed class CadesSignerBuilder
             attrs.Add(CmsAttribute.CommitmentTypeIndication(_options.CommitmentType.Value));
         }
 
-        if (_options.SignaturePolicyOid is not null)
+        if (_options.SignaturePolicy is not null)
+        {
+            attrs.Add(CmsAttribute.SignaturePolicyIdentifier(_options.SignaturePolicy));
+        }
+        else if (_options.SignaturePolicyOid is not null)
         {
             attrs.Add(CmsAttribute.SignaturePolicyIdentifier(
                 _options.SignaturePolicyOid, _options.SignaturePolicyUri));

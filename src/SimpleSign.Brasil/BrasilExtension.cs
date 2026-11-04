@@ -168,6 +168,22 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
             metadata["BR.CompanyName"] = companyName;
         }
 
+        var errors = new List<string>(result.Errors);
+        errors.AddRange(result.Warnings.Where(w => w.Contains("Revocation status", StringComparison.Ordinal)));
+        if (context.Signature is { } signature)
+        {
+            var policy = IcpBrasilPolicyValidator.Validate(
+                signature, context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow);
+            if (policy.Status != IcpBrasilPolicyStatus.None)
+            {
+                metadata["BR.SignaturePolicy"] = policy.Policy is { } p
+                    ? $"{p.Info.Format} {p.Info.Policy} {p.Info.Version}".TrimEnd()
+                    : policy.Reference!.Oid;
+                metadata["BR.SignaturePolicyStatus"] = policy.Status.ToString();
+                errors.AddRange(policy.Errors.Select(e => $"Signature policy: {e}"));
+            }
+        }
+
         foreach (var registration in result.ProfessionalRegistrations)
         {
             metadata[$"BR.Registration.{registration.Council}"] = registration.StateCode is null
@@ -184,7 +200,7 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
             SignerIdType = result.Cpf is not null ? "CPF" : result.Cnpj is not null ? "CNPJ" : null,
             Metadata = metadata,
             RevocationStatus = result.RevocationStatus,
-            Errors = [.. result.Errors, .. result.Warnings.Where(w => w.Contains("Revocation status", StringComparison.Ordinal))],
+            Errors = errors,
         };
     }
 }

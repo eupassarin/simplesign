@@ -105,6 +105,112 @@ public sealed class CmsAttribute
     }
 
     /// <summary>
+    /// Creates a signature-policy-identifier attribute that names the policy and carries its hash
+    /// (RFC 5126 §5.8.1, ETSI EN 319 122-1 §5.2.9), as policies such as ICP-Brasil's require.
+    /// </summary>
+    /// <param name="policy">The policy OID, the hash of the policy and, optionally, its URI.</param>
+    /// <exception cref="ArgumentException">The policy has no hash algorithm or an empty hash.</exception>
+    public static CmsAttribute SignaturePolicyIdentifier(SignaturePolicyReference policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentException.ThrowIfNullOrWhiteSpace(policy.Oid);
+        if (string.IsNullOrEmpty(policy.HashAlgorithmOid) || policy.Hash.IsEmpty)
+        {
+            throw new ArgumentException("The policy hash and its algorithm are required.", nameof(policy));
+        }
+
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) // SignaturePolicyId
+        {
+            writer.WriteObjectIdentifier(policy.Oid);
+            using (writer.PushSequence()) // sigPolicyHash OtherHashAlgAndValue
+            {
+                using (writer.PushSequence()) // AlgorithmIdentifier
+                {
+                    writer.WriteObjectIdentifier(policy.HashAlgorithmOid);
+                }
+
+                writer.WriteOctetString(policy.Hash.Span);
+            }
+
+            if (!string.IsNullOrEmpty(policy.Uri))
+            {
+                using (writer.PushSequence()) // SEQUENCE OF SigPolicyQualifierInfo
+                {
+                    using (writer.PushSequence())
+                    {
+                        writer.WriteObjectIdentifier("1.2.840.113549.1.9.16.5.1"); // id-spq-ets-uri
+                        writer.WriteCharacterString(UniversalTagNumber.IA5String, policy.Uri);
+                    }
+                }
+            }
+        }
+
+        return new CmsAttribute(Oids.SignaturePolicyIdentifier, writer.Encode());
+    }
+
+    /// <summary>
+    /// Reads the signature-policy-identifier attribute from DER-encoded signed attributes
+    /// (<see cref="CmsSignedData.SignedAttrs"/>).
+    /// </summary>
+    /// <param name="signedAttrs">The signed attributes (SET OF Attribute).</param>
+    /// <returns>The policy reference, or <see langword="null"/> when there is none or it is implied/malformed.</returns>
+    public static SignaturePolicyReference? ReadSignaturePolicy(ReadOnlySpan<byte> signedAttrs)
+    {
+        try
+        {
+            var set = new AsnReader(signedAttrs.ToArray(), AsnEncodingRules.BER).ReadSetOf(skipSortOrderValidation: true);
+            while (set.HasData)
+            {
+                var attr = set.ReadSequence();
+                if (attr.ReadObjectIdentifier() != Oids.SignaturePolicyIdentifier)
+                {
+                    continue;
+                }
+
+                var values = attr.ReadSetOf(skipSortOrderValidation: true);
+                if (values.PeekTag() != Asn1Tag.Sequence)
+                {
+                    return null; // signaturePolicyImplied
+                }
+
+                var id = values.ReadSequence();
+                string oid = id.ReadObjectIdentifier();
+                string? hashAlg = null;
+                byte[] hash = [];
+                string? uri = null;
+                if (id.HasData)
+                {
+                    var hashSeq = id.ReadSequence();
+                    hashAlg = hashSeq.ReadSequence().ReadObjectIdentifier();
+                    hash = hashSeq.ReadOctetString();
+                }
+
+                if (id.HasData)
+                {
+                    var qualifiers = id.ReadSequence();
+                    while (qualifiers.HasData && uri is null)
+                    {
+                        var q = qualifiers.ReadSequence();
+                        if (q.ReadObjectIdentifier() == "1.2.840.113549.1.9.16.5.1" && q.HasData)
+                        {
+                            uri = q.ReadCharacterString(UniversalTagNumber.IA5String);
+                        }
+                    }
+                }
+
+                return new SignaturePolicyReference(oid, hashAlg, hash, uri);
+            }
+        }
+        catch (AsnContentException)
+        {
+            // Malformed attributes: no policy.
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Creates a CmsAttribute from raw OID and DER-encoded value.
     /// </summary>
     public static CmsAttribute Raw(string oid, byte[] derValue)

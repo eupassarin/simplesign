@@ -1,6 +1,7 @@
 using System.Net;
 using Shouldly;
 using SimpleSign.Brasil.IcpBrasil;
+using SimpleSign.Brasil.Signing;
 using SimpleSign.Core.Extensions;
 using SimpleSign.TestHelpers;
 
@@ -211,5 +212,26 @@ public sealed class IcpBrasilChainValidatorRevocationTests
 
         result.IsTrusted.ShouldBeFalse();
         result.Metadata!.ContainsKey("BR.Lei14063").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Provider_SignatureWithPolicy_ReportsPolicyStatus()
+    {
+        using var pki = TestPki.Create();
+        using var signer = TestCertificateFactory.CreateSelfSignedCert();
+        var signed = await PAdES.PadesSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+            .WithCertificate(signer)
+            .WithIcpBrasilPolicy()
+            .SignAsync();
+        using var stream = new MemoryStream(signed);
+        var inspection = await PAdES.Inspection.PdfSignatureInspector.InspectAsync(stream);
+        var cms = Core.Crypto.CmsParser.Parse(inspection.Signatures.Single().CmsRawData.ToArray());
+        var context = new ChainValidationContext { Certificate = pki.Leaf, Certificates = [pki.Ac], Signature = cms, CheckRevocation = false };
+        IChainValidationProvider provider = new IcpBrasilChainValidationProvider(Validator(pki));
+
+        var result = await provider.ValidateAsync(context, CancellationToken.None);
+
+        result.Metadata!["BR.SignaturePolicyStatus"].ShouldBe("Valid");
+        result.Metadata["BR.SignaturePolicy"].ShouldBe("Pades AdRb 1.3");
     }
 }

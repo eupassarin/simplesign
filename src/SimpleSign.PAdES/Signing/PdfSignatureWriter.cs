@@ -27,7 +27,14 @@ public sealed class PdfSignatureWriter
     /// catalog, optional appearance, cross-reference table, and trailer to the output stream.
     /// The ByteRange placeholder is then back-filled with actual offsets.
     /// </summary>
-    public static async Task<PdfSignaturePrepareResult> PrepareAsync(Stream inputPdf, Stream outputStream, SignatureFieldOptions options, ILogger? logger = null, PdfALevel? pdfALevel = null, DateTimeOffset? signingTime = null, CancellationToken cancellationToken = default(CancellationToken))
+    public static Task<PdfSignaturePrepareResult> PrepareAsync(Stream inputPdf, Stream outputStream, SignatureFieldOptions options, ILogger? logger = null, PdfALevel? pdfALevel = null, DateTimeOffset? signingTime = null, CancellationToken cancellationToken = default(CancellationToken)) =>
+        PrepareAsync(inputPdf, outputStream, options, logger, pdfALevel, signingTime, documentInfo: null, cancellationToken);
+
+    /// <summary>
+    /// Same as <see cref="PrepareAsync(Stream, Stream, SignatureFieldOptions, ILogger?, PdfALevel?, DateTimeOffset?, CancellationToken)"/>,
+    /// also writing a document information dictionary with <paramref name="documentInfo"/> set in the same revision.
+    /// </summary>
+    internal static async Task<PdfSignaturePrepareResult> PrepareAsync(Stream inputPdf, Stream outputStream, SignatureFieldOptions options, ILogger? logger, PdfALevel? pdfALevel, DateTimeOffset? signingTime, IReadOnlyDictionary<string, string>? documentInfo, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(inputPdf, nameof(inputPdf));
         ArgumentNullException.ThrowIfNull(outputStream, nameof(outputStream));
@@ -48,6 +55,11 @@ public sealed class PdfSignatureWriter
         // Step 1b: If signing an existing field, use the dedicated path.
         if (!string.IsNullOrEmpty(options.ExistingFieldName))
         {
+            if (documentInfo is { Count: > 0 })
+            {
+                throw new ArgumentException("Document information entries are not supported when signing an existing field.", nameof(documentInfo));
+            }
+
             return await PrepareExistingFieldAsync(outputStream, inputPdf, inputMem, options, cancellationToken, signingTime).ConfigureAwait(false);
         }
 
@@ -350,6 +362,14 @@ public sealed class PdfSignatureWriter
         long prevXRef = await PdfStructureParser.FindPrevXRefAsync(inputPdf, cancellationToken).ConfigureAwait(false);
         string? trailerId = PdfStructureParser.FindTrailerId(inputMem.Span);
         string? trailerInfo = PdfStructureParser.FindTrailerInfo(inputMem.Span);
+        if (documentInfo is { Count: > 0 })
+        {
+            int infoObjNum = Math.Max(objectOffsets.Keys.Max() + 1, nextObjNum);
+            objectOffsets[infoObjNum] = outputStream.Position;
+            await outputStream.WriteAsync(BuildInfoObject(inputMem.Span, trailerInfo, infoObjNum, documentInfo), cancellationToken).ConfigureAwait(false);
+            trailerInfo = $"/Info {infoObjNum} 0 R";
+        }
+
         long xrefOffset = outputStream.Position;
 
         bool useXRefStream = PdfStructureParser.UsesXRefStreams(inputMem.Span);
@@ -380,6 +400,50 @@ public sealed class PdfSignatureWriter
             ContentsReservedBytes = options.ContentsReservedBytes,
             SigDictObjectNumber = sigObjNum
         };
+    }
+
+    /// <summary>
+    /// Builds a new document information dictionary: the current one (if any) with
+    /// <paramref name="entries"/> set. Values are written as PDF text strings (UTF-16BE when
+    /// they are not printable ASCII).
+    /// </summary>
+    internal static byte[] BuildInfoObject(ReadOnlySpan<byte> pdf, string? trailerInfo, int objNum, IReadOnlyDictionary<string, string> entries)
+    {
+        string dict = "<<\n>>";
+        string[] parts = trailerInfo?.Split(' ') ?? [];
+        if (parts.Length >= 2 && int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int currentObjNum))
+        {
+            var (start, end) = PdfStructureParser.FindObjectBytes(pdf, currentObjNum);
+            string? text = start >= 0
+                ? Encoding.Latin1.GetString(pdf.Slice(start, end - start))
+                : PdfStructureParser.ExtractObjectFromObjStm(pdf, currentObjNum);
+            int dictStart = text?.IndexOf("<<", StringComparison.Ordinal) ?? -1;
+            int dictEnd = dictStart >= 0 ? PdfStructureParser.FindDictEnd(text!, dictStart) : -1;
+            if (dictEnd > dictStart)
+            {
+                dict = text![dictStart..(dictEnd + 2)];
+            }
+        }
+
+        foreach (var (key, value) in entries)
+        {
+            dict = PdfStructureParser.RemoveKeyFromDict(dict, "/" + key);
+            dict = PdfStructureParser.InsertIntoDict(dict, $" /{key} {EncodeTextString(value)}\n");
+        }
+
+        return Encoding.Latin1.GetBytes($"{objNum} 0 obj\n{dict}\nendobj\n");
+    }
+
+    private static string EncodeTextString(string value)
+    {
+        if (value.All(c => c is >= ' ' and <= '~'))
+        {
+            return "(" + value.Replace("\\", "\\\\", StringComparison.Ordinal)
+                .Replace("(", "\\(", StringComparison.Ordinal)
+                .Replace(")", "\\)", StringComparison.Ordinal) + ")";
+        }
+
+        return "<FEFF" + Convert.ToHexString(Encoding.BigEndianUnicode.GetBytes(value)) + ">";
     }
 
     /// <summary>

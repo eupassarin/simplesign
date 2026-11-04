@@ -31,8 +31,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   revocation as success. B-LT/B-LTA signatures stay valid after the certificate expires. Results
   report `RevocationStatus` and `ValidationTime`; the Certisign/ITI "verify manually" links are gone.
 - **Gov.br anchors:** only the AC Raiz is a trust anchor; the intermediate ACs are chain-building help.
+- **Duplicate policy attribute:** `WithAdvancedSignature` with a `PolicyOid` wrote the
+  signature-policy-identifier twice; signed attributes are now unique per type.
 
 ### Added (SimpleSign.Brasil)
+
+- **ICP-Brasil signature policies with hash:** `IcpBrasilSignaturePolicies` embeds the ITI's
+  LPA_PAdES and LPA_CAdES (55 policies: OID, PA URI, signPolicyHash, signing period, revocation);
+  `Current(policy, format)` picks the version in force (PAdES AD-RB/AD-RT v1.3, CAdES v2.4).
+  `PadesSignerBuilder.WithIcpBrasilPolicy(AdRb | AdRt, tsa?)` signs under them; previously the
+  signature-policy-identifier carried an empty hash.
+- `IcpBrasilPolicyValidator`: checks sigPolicyHash, signing period/revocation and the timestamp
+  AD-RT requires; the ICP-Brasil provider reports `BR.SignaturePolicy`/`BR.SignaturePolicyStatus`.
+- `WithHealthDocument(type, registrations…)`: VALIDAR health-document OIDs (document type, CFM/CFF/CFO
+  registration and UF) in the PDF document information dictionary.
+- Core/PAdES/CAdES: `SignaturePolicyReference`, `CmsAttribute.SignaturePolicyIdentifier(reference)`,
+  `CmsAttribute.ReadSignaturePolicy`, `PadesSignerBuilder.WithSignaturePolicy(reference)`,
+  `CadesSignerBuilder.WithSignaturePolicy(reference)`, `PadesSignerBuilder.WithDocumentInfo(key, value)`.
 
 - `IChainValidationProvider.ValidateAsync(ChainValidationContext, CancellationToken)`: providers
   receive the validation time, the embedded CRLs/OCSP responses and the parsed signature. Default

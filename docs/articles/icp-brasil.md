@@ -85,6 +85,73 @@ if (IcpBrasilPolicyInfo.TryParse(signaturePolicyOid, out var policy))
 }
 ```
 
+### Sign under an ICP-Brasil policy (AD-RB / AD-RT)
+
+ICP-Brasil signatures name a signature policy (PA) **and carry its hash** (`sigPolicyHash`).
+SimpleSign embeds the ITI's policy lists (LPA_PAdES and LPA_CAdES: 55 policies with their hashes
+and signing periods) and picks the version in force:
+
+```csharp
+// PAdES AD-RB (current version, e.g. v1.3) — ETSI.CAdES.detached, policy with its hash
+await PadesSigner.Document(pdf).WithCertificate(cert)
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRb)
+    .SignAsync(output);
+
+// PAdES AD-RT — needs a signature timestamp; use an ICP-Brasil accredited ACT
+await PadesSigner.Document(pdf).WithCertificate(cert)
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt, new TimestampOptions(new Uri(actUrl)))
+    .SignAsync(output);
+
+// CAdES (.p7s): pass the policy reference
+var policy = IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Cades);
+await CadesSigner.Document(data).WithCertificate(cert)
+    .WithSignaturePolicy(policy.ToReference())
+    .SignAsync();
+```
+
+The VALIDAR portal expects PAdES AD-RB or AD-RT. XAdES policies are not embedded. For a policy
+published after this release, read its PA with `IcpBrasilSignaturePolicies.FromPolicyDocument`
+(after checking the file against the digest in the current LPA).
+
+### Check a signature against its policy
+
+`IcpBrasilPolicyValidator.Validate` checks what DOC-ICP-15.03 requires of a signature that
+declares a policy: the `sigPolicyHash` matches the PA, the policy could be used at the signing
+time (signing period, not revoked), and AD-RT and above have a signature timestamp. The
+ICP-Brasil provider runs it during PDF validation and reports `BR.SignaturePolicy` and
+`BR.SignaturePolicyStatus` (`Valid`, `Invalid`, `Unknown`, `NotIcpBrasil`) in
+`ChainValidationMetadata`; failures are listed in the warnings.
+
+```csharp
+var check = IcpBrasilPolicyValidator.Validate(cms, signingTime, IcpBrasilPolicyFormat.Pades);
+Console.WriteLine($"{check.Status}: {string.Join("; ", check.Errors)}");
+```
+
+### DocMDP (certification)
+
+`AsCertification(...)` writes DocMDP the way the VALIDAR guide asks: a `/Reference` with
+`/TransformMethod /DocMDP` and `/TransformParams << /P n /V /1.2 >>`, and **no** `/Perms` entry in
+the catalog (the guide advises against it for Adobe compatibility).
+
+### Prescriptions and other health documents
+
+VALIDAR identifies health documents by OIDs in the PDF metadata: the document type
+(`2.16.76.1.12.1.1` prescrição, `.2` atestado, `.3` solicitação de exame, `.11` relatório) and the
+professional's council registration (`2.16.76.1.4.2.{council}.1` number, `.2` UF):
+
+```csharp
+await PadesSigner.Document(pdf).WithCertificate(cert)
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRb)
+    .WithHealthDocument(HealthDocumentType.Prescricao,
+        new ProfessionalRegistration(ProfessionalCouncil.Cfm, "123456", "SP", null))
+    .SignAsync(output);
+```
+
+The entries go into the PDF document information dictionary (keyed by OID) in the signing
+revision, so the signature covers them. The guide says "metadados" without naming the location;
+check your documents on validar.iti.gov.br. `PadesSignerBuilder.WithDocumentInfo(key, value)` sets
+any other Info entry.
+
 ### QR codes for VALIDAR
 
 The [ITI VALIDAR](https://validar.iti.gov.br) portal reads QR codes that point to **your** URL.
