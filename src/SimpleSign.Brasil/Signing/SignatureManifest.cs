@@ -8,7 +8,7 @@ namespace SimpleSign.Brasil.Signing;
 /// Signature Manifest — structured evidence embedded in the CMS signed attributes
 /// as a tamper-proof record of the signing act.
 /// Contains signer identity, authentication evidence, and institution data.
-/// Serialized as JSON and wrapped in a CMS attribute with OID 2.16.76.1.12.1.1.
+/// Serialized as JSON and wrapped in a CMS attribute with OID <see cref="SimpleSign.Core.Constants.Oids.SignatureManifest"/>.
 /// </summary>
 public sealed class SignatureManifest
 {

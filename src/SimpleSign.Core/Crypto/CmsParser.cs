@@ -426,6 +426,7 @@ public static class CmsParser
                     catch (AsnContentException) { /* ignore malformed */ }
                     break;
                 case Oids.SignatureManifest:
+                case Oids.SignatureManifestLegacy:
                     // Signature manifest: OCTET STRING containing UTF-8 JSON
                     try
                     {

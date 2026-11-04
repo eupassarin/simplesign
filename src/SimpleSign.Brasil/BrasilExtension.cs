@@ -127,7 +127,7 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
         {
             IsTrusted = result.IsValid,
             RegionCode = "BR",
-            PolicyLevel = IcpBrasilChainValidator.DetectPolicy(certificate)?.ToString(),
+            PolicyLevel = IcpBrasilChainValidator.DetectCertificateLevel(certificate)?.ToString(),
             SignerId = cpf ?? cnpj,
             SignerIdType = cpf is not null ? "CPF" : cnpj is not null ? "CNPJ" : null,
             Errors = result.Errors,

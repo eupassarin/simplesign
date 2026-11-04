@@ -149,11 +149,18 @@ public static class Oids
     public const string ProofOfCreation = "1.2.840.113549.1.9.16.6.6";
 
     /// <summary>
-    /// SimpleSign signature manifest — JSON-encoded AEA evidence (name, CPF, email, IP, auth method).
-    /// OID arc: 2.16.76 (Brazil) / 1.12 (electronic signature extensions) / 1.1 (manifest v1).
-    /// Embedded as a CMS signed attribute to be tamper-proof.
+    /// SimpleSign signature manifest — JSON-encoded AEA evidence (name, CPF, email, IP, auth method),
+    /// embedded as a CMS signed attribute to be tamper-proof. A UUID-based OID (ISO/IEC 9834-8,
+    /// arc 2.25) owned by SimpleSign.
     /// </summary>
-    public const string SignatureManifest = "2.16.76.1.12.1.1";
+    public const string SignatureManifest = "2.25.203506691189164941140958961231912791013";
+
+    /// <summary>
+    /// OID used for the signature manifest before 0.11. It belongs to the ITI's arc and is assigned
+    /// to the "prescrição de medicamento" health document type (ADE-ICP-04.01), so it is no longer
+    /// written. Signatures that carry it are still read.
+    /// </summary>
+    public const string SignatureManifestLegacy = "2.16.76.1.12.1.1";
 
     #endregion
 

@@ -9,9 +9,14 @@ public sealed class IcpBrasilValidationResult
     public bool IsChainValid { get; init; }
     /// <summary>Indicates whether the certificate is issued by ICP-Brasil.</summary>
     public bool IsIcpBrasilCertificate { get; init; }
-    /// <summary>Detected ICP-Brasil signature policy (AD-RB, AD-RT, AD-RV, AD-RC, or AD-RA).</summary>
+    /// <summary>Not set by the chain validator; always <see langword="null"/>.</summary>
+    /// <remarks>
+    /// Signature policies belong to the signature, not the certificate. Read the signature's
+    /// policy OID and pass it to <see cref="IcpBrasilPolicyInfo.TryParse"/>.
+    /// </remarks>
+    [Obsolete("Signature policies are not certificate attributes. Use IcpBrasilPolicyInfo.TryParse with the signature's policy OID.")]
     public IcpBrasilPolicy? DetectedPolicy { get; init; }
-    /// <summary>Certificate level (A1–A4 for authentication, S1–S4 for confidentiality).</summary>
+    /// <summary>Certificate type (A1–A4 signature, S1–S4 confidentiality, T3/T4 timestamp, A CF-e-SAT, OM-BR).</summary>
     public IcpBrasilCertificateLevel? CertificateLevel { get; init; }
     /// <summary>CPF extracted from the SAN field (OID 2.16.76.1.3.1), if present (11 digits, no formatting).</summary>
     public string? Cpf { get; init; }
@@ -26,11 +31,10 @@ public sealed class IcpBrasilValidationResult
         ? $"{Cnpj[..2]}.{Cnpj[2..5]}.{Cnpj[5..8]}/{Cnpj[8..12]}-{Cnpj[12..]}"
         : Cnpj;
     /// <summary>
-    /// Health professional registration info extracted from the SAN (CRM, CRO, or sequential).
-    /// Null when the certificate was not issued to a health professional.
-    /// Use this to verify prescriptions eletrônicas per CFM/CFF regulations.
+    /// Professional registrations (OAB, CFM, CFF, CFO…) from the SubjectAltName arc
+    /// 2.16.76.1.4.2.{council}. Empty when the certificate carries none.
     /// </summary>
-    public HealthProfessionalInfo? HealthProfessional { get; init; }
+    public IReadOnlyList<ProfessionalRegistration> ProfessionalRegistrations { get; init; } = [];
     /// <summary>Certificate chain elements with individual validation results.</summary>
     public IReadOnlyList<IcpBrasilChainElement> ChainElements { get; init; } = [];
     /// <summary>Bundled AC Raiz (root CA) certificates used for chain building.</summary>

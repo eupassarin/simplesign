@@ -1,8 +1,8 @@
 namespace SimpleSign.Brasil.IcpBrasil;
 
 /// <summary>
-/// ICP-Brasil signature policies (AD = Digital Signature).
-/// According to DOC-ICP-15.03.
+/// ICP-Brasil signature policy types (AD = Assinatura Digital), per DOC-ICP-15.03.
+/// PAdES has no AD-RV policy.
 /// </summary>
 public enum IcpBrasilPolicy
 {
@@ -23,8 +23,8 @@ public enum IcpBrasilPolicy
 }
 
 /// <summary>
-/// ICP-Brasil certificate level according to DOC-ICP-04.
-/// Determined by the policy OID in the certificate's CertificatePolicies.
+/// ICP-Brasil certificate type, from the certificate policy OID 2.16.76.1.2.{type}.{n}
+/// in the certificate's CertificatePolicies (ADE-ICP-04.01).
 /// </summary>
 public enum IcpBrasilCertificateLevel
 {
@@ -43,5 +43,17 @@ public enum IcpBrasilCertificateLevel
     /// <summary>S3 — Confidentiality certificate, hardware key (token/smartcard), validity up to 5 years.</summary>
     S3,
     /// <summary>S4 — Confidentiality certificate, high-level hardware key, validity up to 6 years.</summary>
-    S4
+    S4,
+
+    /// <summary>T3 — Timestamp (ACT) certificate, policy 2.16.76.1.2.303.</summary>
+    T3,
+
+    /// <summary>T4 — Timestamp (ACT) certificate, policy 2.16.76.1.2.304.</summary>
+    T4,
+
+    /// <summary>A CF-e-SAT — Certificate for the SAT fiscal equipment, policy 2.16.76.1.2.500.</summary>
+    ACfeSat,
+
+    /// <summary>OM-BR — Certificate for metrology objects, policy 2.16.76.1.2.550.</summary>
+    OmBr,
 }

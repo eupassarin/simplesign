@@ -93,14 +93,13 @@ public sealed class DocIcp15ComplianceTests
             "Legacy PKCS#7/CMS signatures (padesAttributes=false) include the signingTime attribute");
     }
 
-    [Theory(DisplayName = "DocIcp15: AD-RB policy OIDs detected (v1 and v2 arcs)")]
-    [InlineData("2.16.76.1.7.1.1.2.3")] // AD-RB v2
-    [InlineData("2.16.76.1.7.1.1.1.3")] // AD-RB v1
+    [Theory(DisplayName = "DocIcp15: AD-RB policy OIDs detected (CAdES v1 and v2 arcs)")]
+    [InlineData("2.16.76.1.7.1.1.2.3")] // AD-RB CAdES v2.3
+    [InlineData("2.16.76.1.7.1.1.1.3")] // AD-RB CAdES v1.3
     public void ADRB_Policy_OIDs_Detected_V1_And_V2(string policyOid)
     {
-        using var cert = CreateCertWithCertificatePolicy(policyOid);
-        IcpBrasilChainValidator.DetectPolicy(cert).ShouldBe(IcpBrasilPolicy.AdRb,
-            $"OID {policyOid} must map to AD-RB policy");
+        IcpBrasilPolicyInfo.TryParse(policyOid, out var info).ShouldBeTrue();
+        info!.Policy.ShouldBe(IcpBrasilPolicy.AdRb, $"OID {policyOid} must map to AD-RB policy");
     }
 
     [Theory(DisplayName = "DocIcp15: AD-RB certificate level detection A1 through A4")]
@@ -116,10 +115,10 @@ public sealed class DocIcp15ComplianceTests
     }
 
     [Theory(DisplayName = "DocIcp15: AD-RB certificate level detection S1 through S4")]
-    [InlineData("2.16.76.1.2.11.1.1", IcpBrasilCertificateLevel.S1)]
-    [InlineData("2.16.76.1.2.12.1.1", IcpBrasilCertificateLevel.S2)]
-    [InlineData("2.16.76.1.2.13.1.1", IcpBrasilCertificateLevel.S3)]
-    [InlineData("2.16.76.1.2.14.1.1", IcpBrasilCertificateLevel.S4)]
+    [InlineData("2.16.76.1.2.101.16", IcpBrasilCertificateLevel.S1)]
+    [InlineData("2.16.76.1.2.102.1", IcpBrasilCertificateLevel.S2)]
+    [InlineData("2.16.76.1.2.103.14", IcpBrasilCertificateLevel.S3)]
+    [InlineData("2.16.76.1.2.104.1", IcpBrasilCertificateLevel.S4)]
     public void ADRB_Certificate_Level_Detection_S1_Through_S4(string oid, IcpBrasilCertificateLevel expected)
     {
         using var cert = CreateCertWithCertificatePolicy(oid);
@@ -291,10 +290,9 @@ public sealed class DocIcp15ComplianceTests
         parsed.SignatureTimestampToken.ShouldBeNull(
             "CMS without TSA must not have a timestamp token; AD-RT upgrade requires adding one");
 
-        // The AD-RT policy OID must be detectable
-        using var adRtCert = CreateCertWithCertificatePolicy("2.16.76.1.7.1.2.2.3");
-        IcpBrasilChainValidator.DetectPolicy(adRtCert).ShouldBe(IcpBrasilPolicy.AdRt,
-            "AD-RT policy OID 2.16.76.1.7.1.2.2.3 must be detected");
+        // The AD-RT policy OID must be recognized
+        IcpBrasilPolicyInfo.TryParse("2.16.76.1.7.1.2.2.3", out var adRt).ShouldBeTrue();
+        adRt!.Policy.ShouldBe(IcpBrasilPolicy.AdRt, "AD-RT policy OID 2.16.76.1.7.1.2.2.3 must be detected");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

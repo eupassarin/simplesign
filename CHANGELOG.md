@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (SimpleSign.Brasil — see the [v0.10 → v0.11 migration guide](docs/migration/v0.10-to-v0.11.md))
+
+- **Professional registrations:** CRM/CRO were read from `2.16.76.1.3.4`/`3.5`/`3.6`, which hold
+  the e-CNPJ responsible person's data, the voter registration and the CEI. Registrations are now
+  read from `2.16.76.1.4.2.{council}` (registration, UF, specialty) for all 16 councils:
+  `ExtractProfessionalRegistrations` and `ProfessionalRegistration` replace `ExtractHealthProfessional`.
+- **Signature manifest OID:** the Lei 14.063 manifest used `2.16.76.1.12.1.1`, the ITI's OID for the
+  "prescrição de medicamento" document type. It now uses a SimpleSign UUID OID; old signatures are
+  still read.
+- **Certificate types:** S1–S4 are policy types 101–104 (were 11–14); T3, T4, A CF-e-SAT and OM-BR
+  added. Policy OIDs are decoded instead of matched by bytes.
+- **Signature policies:** `DetectPolicy(certificate)` is obsolete (policies are signature
+  attributes); new `IcpBrasilPolicyInfo.TryParse` maps CAdES, XAdES and PAdES policy OIDs. The false
+  "policy OID not found" warning on every ICP-Brasil certificate is gone.
+- **CNPJ:** alphanumeric CNPJs (IN RFB 2.229/2024) are accepted.
+- **VALIDAR:** `ValidarItiUrlBuilder.ForDocument` is obsolete (`?document=` is not a VALIDAR
+  parameter). New `ValidarItiQrEndpoint` implements the documented QR protocol
+  (`_format`, `_secretCode`, JSON with the signed files, 401/404).
+
 ### Added
 
 - **One-call signing:** `PadesSigner.SignFileAsync(input, output, pfxPath, password, level?)`
