@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="ss-title" content="inspect.title">
+  <title>Inspector · SimpleSign</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script type="module" src="assets/js/site.js"></script>
+  <script type="module" src="assets/js/inspect.js"></script>
+</head>
+<body data-page="inspect">
+  <a class="skip-link" href="#main" data-i18n="common.skip">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="assets/icon.svg" alt="">SimpleSign</a>
+      <nav class="nav" aria-label="Main">
+        <a href="learn.html" data-page="learn" data-i18n="nav.learn">Learn</a>
+        <a href="build.html" data-page="build" data-i18n="nav.build">Code builder</a>
+        <a href="inspect.html" data-page="inspect" data-i18n="nav.inspect">Inspector</a>
+        <a href="docs/" data-i18n="nav.docs">Docs</a>
+        <a href="https://github.com/eupassarin/SimpleSign">GitHub</a>
+      </nav>
+      <div class="tools">
+        <button class="tool-btn" id="lang-toggle" type="button" data-i18n-attr="aria-label:common.langLabel">PT</button>
+        <button class="tool-btn" id="theme-toggle" type="button" data-i18n-attr="aria-label:common.themeLabel">☾</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    <p class="kicker" data-i18n="inspect.kicker">Inspector</p>
+    <h1 data-i18n="inspect.title">What is inside this signature?</h1>
+    <p class="lead" data-i18n="inspect.lead">Drop a signed PDF to see its signatures, the signer, the algorithms and the PAdES level, and to check that it was not changed.</p>
+
+    <label class="drop" id="drop" for="file">
+      <strong data-i18n="inspect.drop">Drop a PDF here or click to choose</strong>
+      <span class="privacy" data-i18n="inspect.privacy">The file is read in your browser and never leaves your computer.</span>
+      <input id="file" type="file" accept="application/pdf,.pdf" hidden>
+    </label>
+    <div class="samples">
+      <span class="privacy" data-i18n="inspect.samples">Or try a sample:</span>
+      <button class="btn btn-ghost btn-sm" type="button" data-sample="signed-rsa.pdf" data-i18n="inspect.sample.rsa">RSA + visible stamp</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-sample="signed-timestamped.pdf" data-i18n="inspect.sample.ts">With timestamp (B-T)</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-sample="signed-ecdsa.pdf">ECDSA</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-sample="signed-pss.pdf">RSASSA-PSS</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-sample="tampered.pdf" data-i18n="inspect.sample.tampered">Tampered</button>
+    </div>
+
+    <div id="result" aria-live="polite"></div>
+
+    <div class="callout">
+      <strong data-i18n="inspect.limits.title">What this page does not check</strong>
+      <p data-i18n-html="inspect.limits.text">Whether the certificate is trusted (ICP-Brasil or another root) and not revoked. That needs trust anchors and OCSP/CRL: use <code>simplesign validate</code> or <code>BrasilExtension.CreateValidator()</code>.</p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <span data-i18n="common.footer">SimpleSign · MIT licensed · cryptography by the .NET base class library</span>
+      <span><a href="docs/">Docs</a> · <a href="https://github.com/eupassarin/SimpleSign">GitHub</a> · <a href="https://www.nuget.org/packages/SimpleSign">NuGet</a></span>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="ss-title" content="build.title">
+  <title>Code builder · SimpleSign</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script type="module" src="assets/js/site.js"></script>
+  <script type="module" src="assets/js/builder.js"></script>
+</head>
+<body data-page="build">
+  <a class="skip-link" href="#main" data-i18n="common.skip">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="assets/icon.svg" alt="">SimpleSign</a>
+      <nav class="nav" aria-label="Main">
+        <a href="learn.html" data-page="learn" data-i18n="nav.learn">Learn</a>
+        <a href="build.html" data-page="build" data-i18n="nav.build">Code builder</a>
+        <a href="inspect.html" data-page="inspect" data-i18n="nav.inspect">Inspector</a>
+        <a href="docs/" data-i18n="nav.docs">Docs</a>
+        <a href="https://github.com/eupassarin/SimpleSign">GitHub</a>
+      </nav>
+      <div class="tools">
+        <button class="tool-btn" id="lang-toggle" type="button" data-i18n-attr="aria-label:common.langLabel">PT</button>
+        <button class="tool-btn" id="theme-toggle" type="button" data-i18n-attr="aria-label:common.themeLabel">☾</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    <p class="kicker" data-i18n="build.kicker">Code builder</p>
+    <h1 data-i18n="build.title">Your signing code, ready to copy</h1>
+    <p class="lead" data-i18n="build.lead">Answer four questions. Every combination here is compiled against the library in CI, so it builds.</p>
+
+    <div class="builder">
+      <form class="choices" id="choices" aria-describedby="choices-hint">
+        <fieldset>
+          <legend data-i18n="build.q.format">What do you sign?</legend>
+          <div class="opts">
+            <label class="opt"><input type="radio" name="format" value="pades"><span data-i18n="build.format.pades">PDF (PAdES)</span></label>
+            <label class="opt"><input type="radio" name="format" value="cades"><span data-i18n="build.format.cades">Any file (CAdES .p7s)</span></label>
+            <label class="opt"><input type="radio" name="format" value="xades"><span data-i18n="build.format.xades">XML (XAdES)</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="build.q.key">Where is the private key?</legend>
+          <div class="opts">
+            <label class="opt"><input type="radio" name="key" value="pfx"><span data-i18n="build.key.pfx">.pfx file (A1)</span></label>
+            <label class="opt"><input type="radio" name="key" value="store"><span data-i18n="build.key.store">Windows store</span></label>
+            <label class="opt"><input type="radio" name="key" value="pkcs11"><span data-i18n="build.key.pkcs11">Token / smartcard (A3)</span></label>
+            <label class="opt"><input type="radio" name="key" value="psc"><span data-i18n="build.key.psc">Cloud ICP-Brasil (PSC)</span></label>
+            <label class="opt"><input type="radio" name="key" value="csc"><span data-i18n="build.key.csc">Cloud CSC v2</span></label>
+            <label class="opt"><input type="radio" name="key" value="deferred"><span data-i18n="build.key.deferred">User's device (deferred)</span></label>
+          </div>
+          <p class="hint" id="key-hint"></p>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="build.q.level">How long must it stay verifiable?</legend>
+          <div class="opts">
+            <label class="opt"><input type="radio" name="level" value="bb"><span>B-B</span></label>
+            <label class="opt"><input type="radio" name="level" value="bt"><span>B-T</span></label>
+            <label class="opt"><input type="radio" name="level" value="blt"><span>B-LT</span></label>
+            <label class="opt"><input type="radio" name="level" value="blta"><span>B-LTA</span></label>
+          </div>
+          <p class="hint" id="level-hint"></p>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="build.q.extras">Extras</legend>
+          <div class="opts">
+            <label class="opt"><input type="checkbox" name="stamp"><span data-i18n="build.extra.stamp">Visible stamp</span></label>
+          </div>
+          <p class="hint" data-i18n="build.validate.label">Validate after signing:</p>
+          <div class="opts">
+            <label class="opt"><input type="radio" name="validate" value="none"><span data-i18n="build.validate.none">No</span></label>
+            <label class="opt"><input type="radio" name="validate" value="generic"><span data-i18n="build.validate.generic">System roots</span></label>
+            <label class="opt"><input type="radio" name="validate" value="icpbrasil"><span>ICP-Brasil</span></label>
+          </div>
+        </fieldset>
+        <p class="hint" id="choices-hint" data-i18n="build.hint">Options that do not apply to your choice are disabled.</p>
+      </form>
+
+      <div class="outputs">
+        <div>
+          <div class="tabs" role="tablist">
+            <button class="tab" role="tab" id="tab-cs" aria-selected="true" aria-controls="panel-cs" type="button">C#</button>
+            <button class="tab" role="tab" id="tab-cli" aria-selected="false" aria-controls="panel-cli" type="button">CLI</button>
+          </div>
+          <div class="code" id="panel-cs" role="tabpanel" aria-labelledby="tab-cs">
+            <div class="code-head"><span>Program.cs</span><button class="copy" type="button" data-i18n="common.copy">Copy</button></div>
+            <pre id="out-cs"></pre>
+          </div>
+          <div class="code" id="panel-cli" role="tabpanel" aria-labelledby="tab-cli" hidden>
+            <div class="code-head"><span>bash</span><button class="copy" type="button" data-i18n="common.copy">Copy</button></div>
+            <pre id="out-cli"></pre>
+          </div>
+        </div>
+        <div class="code">
+          <div class="code-head"><span data-i18n="build.install">Install</span><button class="copy" type="button" data-i18n="common.copy">Copy</button></div>
+          <pre id="out-install"></pre>
+        </div>
+        <p class="hint" id="guide"></p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <span data-i18n="common.footer">SimpleSign · MIT licensed · cryptography by the .NET base class library</span>
+      <span><a href="docs/">Docs</a> · <a href="https://github.com/eupassarin/SimpleSign">GitHub</a> · <a href="https://www.nuget.org/packages/SimpleSign">NuGet</a></span>
+    </div>
+  </footer>
+</body>
+</html>

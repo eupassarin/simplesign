@@ -1,6 +1,7 @@
 ## Build output
 bin/
 obj/
+_pages/
 artifacts/
 BenchmarkDotNet.Artifacts/
 Findings/

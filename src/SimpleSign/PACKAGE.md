@@ -19,4 +19,4 @@ byte[] signed = await PadesSigner.Document(File.ReadAllBytes("document.pdf"))
 
 MIT licensed — no BouncyCastle, `System.Security.Cryptography` only, native AOT
 compatible. See [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [docs](https://eupassarin.github.io/SimpleSign/).
+and the [docs](https://eupassarin.github.io/SimpleSign/docs/).

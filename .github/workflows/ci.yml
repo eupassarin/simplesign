@@ -267,6 +267,31 @@ jobs:
       - name: Run PKCS#11 tests and AOT smoke test
         run: scripts/tests/pkcs11-run.sh
 
+  site:
+    name: Site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET (multi-target)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Build CLI
+        run: dotnet build src/SimpleSign.Cli -c Release
+
+      - name: Site tests (inspector, i18n, builder) and inspector vs CLI
+        run: SIMPLESIGN_CLI=src/SimpleSign.Cli/bin/Release/net8.0/simplesign.dll node --test site/tests/*.test.mjs
+
+      - name: Compile every code builder snippet
+        run: node site/tools/render-snippets.mjs && dotnet build tests/site/SimpleSign.Site.SnippetTests -c Release
+
+      - name: Check site links
+        run: node site/tools/check-links.mjs
+
   hostsigner-tests:
     name: HostSigner Tests
     runs-on: windows-latest

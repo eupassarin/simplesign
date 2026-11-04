@@ -23,4 +23,4 @@ Usually consumed transitively via `SimpleSign.PAdES`; install directly to build
 PDF tooling on top of the parser.
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [docs](https://eupassarin.github.io/SimpleSign/). MIT licensed.
+and the [docs](https://eupassarin.github.io/SimpleSign/docs/). MIT licensed.

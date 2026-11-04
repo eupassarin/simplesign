@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Compiles every combination of the site's code builder against the real API, so the site
+    can never show code that does not build. The C# files in Generated/ are written by
+    `node site/tools/render-snippets.mjs` (CI runs it before building this project).
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AnalysisMode>None</AnalysisMode>
+    <AnalysisLevel>none</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <!-- Compiler warnings (obsolete APIs, nullability) still fail the build. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\SimpleSign\SimpleSign.csproj" />
+    <ProjectReference Include="..\..\..\src\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
+    <ProjectReference Include="..\..\..\src\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
+    <ProjectReference Include="..\..\..\src\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
+  </ItemGroup>
+
+</Project>

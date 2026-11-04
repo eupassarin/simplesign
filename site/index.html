@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="ss-title" content="home.title">
+  <meta name="description" content="SimpleSign: PAdES, CAdES and XAdES digital signatures for .NET. Learn how digital signatures work and sign your first PDF.">
+  <title>SimpleSign</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script type="module" src="assets/js/site.js"></script>
+</head>
+<body data-page="home">
+  <a class="skip-link" href="#main" data-i18n="common.skip">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="assets/icon.svg" alt="">SimpleSign</a>
+      <nav class="nav" aria-label="Main">
+        <a href="learn.html" data-page="learn" data-i18n="nav.learn">Learn</a>
+        <a href="build.html" data-page="build" data-i18n="nav.build">Code builder</a>
+        <a href="inspect.html" data-page="inspect" data-i18n="nav.inspect">Inspector</a>
+        <a href="docs/" data-i18n="nav.docs">Docs</a>
+        <a href="https://github.com/eupassarin/SimpleSign">GitHub</a>
+      </nav>
+      <div class="tools">
+        <button class="tool-btn" id="lang-toggle" type="button" data-i18n-attr="aria-label:common.langLabel">PT</button>
+        <button class="tool-btn" id="theme-toggle" type="button" data-i18n-attr="aria-label:common.themeLabel">☾</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="kicker" data-i18n="home.kicker">Digital signatures for .NET</p>
+          <h1 data-i18n="home.headline">Sign and validate PDFs the way the law expects.</h1>
+          <p class="lead" data-i18n="home.lead">PAdES, CAdES and XAdES signatures with your certificate file, an A3 token or a cloud certificate. Learn the concepts here, then copy code that works.</p>
+          <div class="badges">
+            <span class="badge" data-i18n="home.badge.crypto">No third-party crypto</span>
+            <span class="badge">.NET 8 · 10</span>
+            <span class="badge">Native AOT</span>
+            <span class="badge">ICP-Brasil</span>
+            <span class="badge">MIT</span>
+          </div>
+          <div class="cta">
+            <a class="btn btn-primary" href="learn.html" data-i18n="home.cta.learn">Learn how it works</a>
+            <a class="btn btn-ghost" href="build.html" data-i18n="home.cta.build">Build my code</a>
+            <a class="btn btn-ghost" href="inspect.html" data-i18n="home.cta.inspect">Inspect a signed PDF</a>
+          </div>
+        </div>
+        <div class="code">
+          <div class="code-head"><span>Program.cs</span><button class="copy" type="button" data-i18n="common.copy">Copy</button></div>
+<pre data-lang="csharp">// dotnet add package SimpleSign
+using SimpleSign.PAdES;
+
+await PadesSigner.SignFileAsync(
+    "contract.pdf", "contract-signed.pdf",
+    "me.pfx", password);</pre>
+        </div>
+      </div>
+    </div>
+
+    <section>
+      <div class="wrap">
+        <h2 data-i18n="home.can.title">What you can do</h2>
+        <div class="grid grid-3">
+          <div class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg></div>
+            <h3 data-i18n="home.can.sign">Sign</h3>
+            <p data-i18n="home.can.sign.text">PDF (PAdES B-B to B-LTA), any file (CAdES) or XML (XAdES), with visible stamps and timestamps.</p>
+          </div>
+          <div class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></div>
+            <h3 data-i18n="home.can.validate">Validate</h3>
+            <p data-i18n="home.can.validate.text">Integrity, signature, certificate chain (ICP-Brasil included), revocation and timestamps, as Valid, Invalid or Indeterminate.</p>
+          </div>
+          <div class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></div>
+            <h3 data-i18n="home.can.inspect">Inspect</h3>
+            <p data-i18n="home.can.inspect.text">See what is inside a signature: signer, algorithms, PAdES level, timestamps and embedded LTV data.</p>
+          </div>
+          <div class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13l-2 2 2 2M14 13l2 2-2 2"/></svg></div>
+            <h3 data-i18n="home.can.html">HTML to PDF</h3>
+            <p data-i18n="home.can.html.text">Generate contracts and reports from HTML and CSS (flexbox, grid, fonts, PDF/A) and sign them.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-soft">
+      <div class="wrap">
+        <h2 data-i18n="home.key.title">Where is your private key?</h2>
+        <p data-i18n="home.key.lead">Pick your case and get the code for it.</p>
+        <div class="grid grid-3">
+          <a class="card" href="build.html?key=pfx">
+            <h3 data-i18n="home.key.pfx">Certificate file (A1)</h3>
+            <p data-i18n="home.key.pfx.text">A .pfx/.p12 file with a password. The simplest start.</p>
+            <span class="pkg">SimpleSign</span>
+          </a>
+          <a class="card" href="build.html?key=pkcs11">
+            <h3 data-i18n="home.key.pkcs11">Token or smartcard (A3)</h3>
+            <p data-i18n="home.key.pkcs11.text">The key never leaves the device. Works on Windows, Linux and macOS through PKCS#11.</p>
+            <span class="pkg">SimpleSign.Signers.Pkcs11</span>
+          </a>
+          <a class="card" href="build.html?key=psc">
+            <h3 data-i18n="home.key.cloud">Cloud certificate</h3>
+            <p data-i18n="home.key.cloud.text">BirdID, VIDaaS, NeoID and other ICP-Brasil PSCs, or CSC v2 providers.</p>
+            <span class="pkg">SimpleSign.Signers.Cloud</span>
+          </a>
+          <a class="card" href="build.html?key=deferred">
+            <h3 data-i18n="home.key.deferred">In the user's browser or app</h3>
+            <p data-i18n="home.key.deferred.text">Deferred signing: the server prepares the PDF, the signer device returns the signature.</p>
+            <span class="pkg">SimpleSign.PAdES</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2 data-i18n="home.pkg.title">Packages</h2>
+        <div class="grid grid-3">
+          <div class="card"><span class="pkg">SimpleSign</span><p data-i18n="home.pkg.meta">Everything for PAdES, CAdES and XAdES.</p></div>
+          <div class="card"><span class="pkg">SimpleSign.Brasil</span><p data-i18n="home.pkg.brasil">ICP-Brasil and Gov.br roots, CPF/CNPJ, Lei 14.063.</p></div>
+          <div class="card"><span class="pkg">SimpleSign.Signers.Pkcs11</span><p data-i18n="home.pkg.pkcs11">A3 tokens, smartcards and HSMs.</p></div>
+          <div class="card"><span class="pkg">SimpleSign.Signers.Cloud</span><p data-i18n="home.pkg.cloud">Cloud certificates (PSC and CSC v2).</p></div>
+          <div class="card"><span class="pkg">SimpleSign.HtmlToPdf</span><p data-i18n="home.pkg.html">Pure .NET HTML/CSS to PDF.</p></div>
+          <div class="card"><span class="pkg">SimpleSign.Cli</span><p data-i18n-html="home.pkg.cli">The <code>simplesign</code> command-line tool.</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <span data-i18n="common.footer">SimpleSign · MIT licensed · cryptography by the .NET base class library</span>
+      <span><a href="docs/">Docs</a> · <a href="https://github.com/eupassarin/SimpleSign">GitHub</a> · <a href="https://www.nuget.org/packages/SimpleSign">NuGet</a></span>
+    </div>
+  </footer>
+</body>
+</html>

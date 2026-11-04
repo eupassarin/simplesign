@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Site** (`site/`, published at the root of GitHub Pages, in Portuguese and English): six
+  illustrated chapters on how digital signatures work (hash, PDF ByteRange, CMS, PAdES levels,
+  trust and ICP-Brasil, where the key lives); a code builder that produces the C# and CLI for
+  each format, key source and level (every combination is compiled against the library in CI);
+  and an in-browser PDF inspector that decodes the signatures and checks integrity and the
+  signature with WebCrypto, without uploading the file. Plain HTML/CSS/JS, no dependencies.
+- The docfx documentation moved to `/docs/`; the old addresses redirect to it.
+
 - **One-call signing:** `PadesSigner.SignFileAsync(input, output, pfxPath, password, level?)`
   signs a PDF file with a PKCS#12 file and writes the result. The first certificate with a
   private key signs; the other certificates in the file are embedded as its chain.

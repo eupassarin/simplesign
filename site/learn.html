@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="ss-title" content="learn.title">
+  <title>Learn · SimpleSign</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script type="module" src="assets/js/site.js"></script>
+  <script type="module" src="assets/js/learn.js"></script>
+</head>
+<body data-page="learn">
+  <a class="skip-link" href="#main" data-i18n="common.skip">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="assets/icon.svg" alt="">SimpleSign</a>
+      <nav class="nav" aria-label="Main">
+        <a href="learn.html" data-page="learn" data-i18n="nav.learn">Learn</a>
+        <a href="build.html" data-page="build" data-i18n="nav.build">Code builder</a>
+        <a href="inspect.html" data-page="inspect" data-i18n="nav.inspect">Inspector</a>
+        <a href="docs/" data-i18n="nav.docs">Docs</a>
+        <a href="https://github.com/eupassarin/SimpleSign">GitHub</a>
+      </nav>
+      <div class="tools">
+        <button class="tool-btn" id="lang-toggle" type="button" data-i18n-attr="aria-label:common.langLabel">PT</button>
+        <button class="tool-btn" id="theme-toggle" type="button" data-i18n-attr="aria-label:common.themeLabel">☾</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap learn-layout">
+    <nav class="toc" aria-label="Chapters">
+      <ol>
+        <li><a href="#hash" data-i18n="learn.c1.short">Hash and signature</a></li>
+        <li><a href="#pdf" data-i18n="learn.c2.short">Signing a PDF</a></li>
+        <li><a href="#cms" data-i18n="learn.c3.short">Inside the signature</a></li>
+        <li><a href="#levels" data-i18n="learn.c4.short">Time and the long term</a></li>
+        <li><a href="#trust" data-i18n="learn.c5.short">Trust</a></li>
+        <li><a href="#keys" data-i18n="learn.c6.short">Where the key lives</a></li>
+      </ol>
+    </nav>
+
+    <main id="main">
+      <p class="kicker" data-i18n="learn.kicker">Learn</p>
+      <h1 data-i18n="learn.title">How digital signatures work</h1>
+      <p class="lead" data-i18n="learn.lead">Six short chapters, from the hash to ICP-Brasil, with something to try in each one.</p>
+
+      <!-- 1 ─────────────────────────────────────────────── -->
+      <section class="chapter" id="hash">
+        <p class="kicker" data-i18n="learn.chapter1">Chapter 1</p>
+        <h2 data-i18n="learn.c1.title">A fingerprint, then a seal</h2>
+        <p data-i18n-html="learn.c1.p1">A <strong>hash</strong> (here SHA-256) turns any content into a short fingerprint. Change one letter and the fingerprint changes completely.</p>
+        <p data-i18n-html="learn.c1.p2">A <strong>digital signature</strong> is that fingerprint sealed with a <strong>private key</strong> that only the signer has. Anyone can check the seal with the matching <strong>public key</strong>, which travels inside the certificate.</p>
+        <div class="figure demo">
+          <label for="hash-input" data-i18n="learn.c1.try">Try it: type something</label>
+          <textarea id="hash-input" rows="2">Eu, Fulana, aprovo este contrato.</textarea>
+          <div><strong>SHA-256</strong><div class="hash-out" id="hash-out" aria-live="polite"></div></div>
+          <div class="cta">
+            <button class="btn btn-primary btn-sm" type="button" id="sign-btn" data-i18n="learn.c1.sign">Sign this text</button>
+            <span id="verify-out" aria-live="polite"></span>
+          </div>
+          <p class="hint" data-i18n="learn.c1.hint">The key pair (ECDSA P-256) was created in your browser just now. Sign, then edit the text: the signature stops matching.</p>
+        </div>
+        <div class="callout ok"><p data-i18n-html="learn.c1.lib">In SimpleSign every hash and signature uses <code>System.Security.Cryptography</code>, the same cryptography .NET itself uses.</p></div>
+      </section>
+
+      <!-- 2 ─────────────────────────────────────────────── -->
+      <section class="chapter" id="pdf">
+        <p class="kicker" data-i18n="learn.chapter2">Chapter 2</p>
+        <h2 data-i18n="learn.c2.title">How a PDF carries a signature</h2>
+        <p data-i18n-html="learn.c2.p1">A signed PDF is the original file plus an <strong>incremental update</strong> appended to the end. The update adds a signature field whose value has two key parts.</p>
+        <figure class="figure">
+          <svg viewBox="0 0 720 230" role="img" aria-labelledby="pdf-fig-title">
+            <title id="pdf-fig-title">PDF signature layout</title>
+            <g class="hot" data-explain="learn.c2.e.original" tabindex="0">
+              <rect class="svg-box" x="10" y="40" width="250" height="120" rx="8"/>
+              <text class="svg-text" x="135" y="95" text-anchor="middle" data-i18n="learn.c2.l.original">Original PDF</text>
+              <text class="svg-soft" x="135" y="115" text-anchor="middle" data-i18n="learn.c2.l.signed">signed bytes</text>
+            </g>
+            <g class="hot" data-explain="learn.c2.e.contents" tabindex="0">
+              <rect class="svg-accent" x="270" y="40" width="200" height="120" rx="8"/>
+              <text class="svg-text" x="370" y="88" text-anchor="middle">/Contents &lt;…&gt;</text>
+              <text class="svg-soft" x="370" y="108" text-anchor="middle" data-i18n="learn.c2.l.cms">the CMS signature</text>
+              <text class="svg-soft" x="370" y="126" text-anchor="middle" data-i18n="learn.c2.l.notsigned">(not hashed)</text>
+            </g>
+            <g class="hot" data-explain="learn.c2.e.tail" tabindex="0">
+              <rect class="svg-ok" x="480" y="40" width="230" height="120" rx="8"/>
+              <text class="svg-text" x="595" y="95" text-anchor="middle" data-i18n="learn.c2.l.tail">rest of the update</text>
+              <text class="svg-soft" x="595" y="115" text-anchor="middle">xref · trailer · %%EOF</text>
+            </g>
+            <g class="hot" data-explain="learn.c2.e.byterange" tabindex="0">
+              <path class="svg-line" d="M10 185 H260 M480 185 H710" stroke-width="3"/>
+              <path class="svg-line" d="M10 178 V192 M260 178 V192 M480 178 V192 M710 178 V192"/>
+              <text class="svg-text" x="360" y="214" text-anchor="middle">/ByteRange [ 0  a  b  c ]</text>
+            </g>
+            <text class="svg-soft" x="10" y="25" data-i18n="learn.c2.l.click">Click a part ↓</text>
+          </svg>
+          <figcaption class="explain" id="pdf-explain" aria-live="polite" data-i18n="learn.c2.e.default">Click a part of the diagram to see what it does.</figcaption>
+        </figure>
+        <p data-i18n-html="learn.c2.p2">Because the signed bytes are fixed, <strong>any later change</strong> to them breaks the signature. New signatures and LTV data are added as further updates, after the signed range.</p>
+      </section>
+
+      <!-- 3 ─────────────────────────────────────────────── -->
+      <section class="chapter" id="cms">
+        <p class="kicker" data-i18n="learn.chapter3">Chapter 3</p>
+        <h2 data-i18n="learn.c3.title">Inside the signature: CMS</h2>
+        <p data-i18n-html="learn.c3.p1">The <code>/Contents</code> holds a <strong>CMS SignedData</strong> (the same format as a <code>.p7s</code> file). PAdES and CAdES add rules on top of it.</p>
+        <figure class="figure">
+          <svg viewBox="0 0 720 300" role="img" aria-labelledby="cms-fig-title">
+            <title id="cms-fig-title">CMS SignedData structure</title>
+            <rect class="svg-box" x="10" y="10" width="700" height="280" rx="10"/>
+            <text class="svg-text" x="25" y="34" font-weight="700">SignedData</text>
+            <g class="hot" data-explain="learn.c3.e.certs" tabindex="0">
+              <rect class="svg-brand" x="25" y="50" width="200" height="70" rx="8"/>
+              <text class="svg-text" x="125" y="80" text-anchor="middle" data-i18n="learn.c3.l.certs">certificates</text>
+              <text class="svg-soft" x="125" y="100" text-anchor="middle" data-i18n="learn.c3.l.certs2">signer + chain</text>
+            </g>
+            <rect class="svg-box" x="240" y="50" width="455" height="225" rx="8"/>
+            <text class="svg-text" x="255" y="72" font-weight="700">SignerInfo</text>
+            <g class="hot" data-explain="learn.c3.e.attrs" tabindex="0">
+              <rect class="svg-ok" x="255" y="84" width="425" height="88" rx="8"/>
+              <text class="svg-text" x="270" y="106" data-i18n="learn.c3.l.attrs">signed attributes</text>
+              <text class="svg-soft" x="270" y="126">contentType · messageDigest = hash(ByteRange)</text>
+              <text class="svg-soft" x="270" y="144">signingCertificateV2 = hash(certificate)</text>
+              <text class="svg-soft" x="270" y="162" data-i18n="learn.c3.l.attrs3">(policy, commitment type…)</text>
+            </g>
+            <g class="hot" data-explain="learn.c3.e.sig" tabindex="0">
+              <rect class="svg-accent" x="255" y="180" width="205" height="80" rx="8"/>
+              <text class="svg-text" x="357" y="212" text-anchor="middle" data-i18n="learn.c3.l.sig">signature value</text>
+              <text class="svg-soft" x="357" y="232" text-anchor="middle" data-i18n="learn.c3.l.sig2">over the signed attributes</text>
+            </g>
+            <g class="hot" data-explain="learn.c3.e.unsigned" tabindex="0">
+              <rect class="svg-box" x="475" y="180" width="205" height="80" rx="8"/>
+              <text class="svg-text" x="577" y="212" text-anchor="middle" data-i18n="learn.c3.l.unsigned">unsigned attributes</text>
+              <text class="svg-soft" x="577" y="232" text-anchor="middle" data-i18n="learn.c3.l.unsigned2">signature timestamp</text>
+            </g>
+            <g class="hot" data-explain="learn.c3.e.chain" tabindex="0">
+              <path class="svg-line" d="M125 120 V200 H255" stroke-dasharray="4 4"/>
+              <text class="svg-soft" x="40" y="160" data-i18n="learn.c3.l.verify">public key verifies →</text>
+            </g>
+          </svg>
+          <figcaption class="explain" id="cms-explain" aria-live="polite" data-i18n="learn.c3.e.default">Click a box to see what it proves.</figcaption>
+        </figure>
+        <p data-i18n-html="learn.c3.p2">The signature covers the <em>attributes</em>, and the attributes cover the document through <code>messageDigest</code>. That is why a tampered PDF fails the integrity check even though the signature value itself still verifies. You can see this with the <a href="inspect.html">inspector</a> and the “tampered” sample.</p>
+      </section>
+
+      <!-- 4 ─────────────────────────────────────────────── -->
+      <section class="chapter" id="levels">
+        <p class="kicker" data-i18n="learn.chapter4">Chapter 4</p>
+        <h2 data-i18n="learn.c4.title">Time and the long term: B-B to B-LTA</h2>
+        <p data-i18n-html="learn.c4.p1">Certificates expire and keys get old. The PAdES <strong>baseline levels</strong> (ETSI EN 319 142) add evidence so a signature can still be checked years later.</p>
+        <div class="steps" role="group" data-i18n-attr="aria-label:learn.c4.levels">
+          <button class="step-btn" type="button" data-level="bb" aria-pressed="true">B-B</button>
+          <button class="step-btn" type="button" data-level="bt" aria-pressed="false">B-T</button>
+          <button class="step-btn" type="button" data-level="blt" aria-pressed="false">B-LT</button>
+          <button class="step-btn" type="button" data-level="blta" aria-pressed="false">B-LTA</button>
+        </div>
+        <figure class="figure">
+          <svg viewBox="0 0 720 210" role="img" aria-labelledby="levels-fig-title">
+            <title id="levels-fig-title">What each PAdES level adds</title>
+            <g class="layer" data-from="bb">
+              <rect class="svg-brand" x="10" y="30" width="160" height="150" rx="8"/>
+              <text class="svg-text" x="90" y="95" text-anchor="middle" data-i18n="learn.c4.l.sig">Signature</text>
+              <text class="svg-soft" x="90" y="115" text-anchor="middle" data-i18n="learn.c4.l.sig2">signer + certificate</text>
+            </g>
+            <g class="layer off" data-from="bt">
+              <rect class="svg-accent" x="190" y="30" width="160" height="150" rx="8"/>
+              <text class="svg-text" x="270" y="95" text-anchor="middle" data-i18n="learn.c4.l.ts">Timestamp</text>
+              <text class="svg-soft" x="270" y="115" text-anchor="middle" data-i18n="learn.c4.l.ts2">TSA proves “when”</text>
+            </g>
+            <g class="layer off" data-from="blt">
+              <rect class="svg-ok" x="370" y="30" width="160" height="150" rx="8"/>
+              <text class="svg-text" x="450" y="95" text-anchor="middle">DSS</text>
+              <text class="svg-soft" x="450" y="115" text-anchor="middle" data-i18n="learn.c4.l.dss2">chain + OCSP/CRL</text>
+            </g>
+            <g class="layer off" data-from="blta">
+              <rect class="svg-arch" x="550" y="30" width="160" height="150" rx="8"/>
+              <text class="svg-text" x="630" y="95" text-anchor="middle" data-i18n="learn.c4.l.arch">Archive timestamp</text>
+              <text class="svg-soft" x="630" y="115" text-anchor="middle" data-i18n="learn.c4.l.arch2">protects everything</text>
+            </g>
+          </svg>
+          <figcaption class="explain" id="levels-explain" aria-live="polite"></figcaption>
+        </figure>
+        <div class="code">
+          <div class="code-head"><span>C#</span><button class="copy" type="button" data-i18n="common.copy">Copy</button></div>
+          <pre id="levels-code"></pre>
+        </div>
+      </section>
+
+      <!-- 5 ─────────────────────────────────────────────── -->
+      <section class="chapter" id="trust">
+        <p class="kicker" data-i18n="learn.chapter5">Chapter 5</p>
+        <h2 data-i18n="learn.c5.title">Trust: who vouches for the signer</h2>
+        <p data-i18n-html="learn.c5.p1">A valid seal only proves that <em>some</em> key signed. To know <em>who</em>, the validator follows the certificate <strong>chain</strong> up to a root it trusts, such as the <strong>AC Raiz ICP-Brasil</strong>, and asks OCSP or CRL whether a certificate was revoked.</p>
+        <figure class="figure">
+          <svg viewBox="0 0 720 120" role="img" aria-labelledby="chain-fig-title">
+            <title id="chain-fig-title">Certificate chain</title>
+            <rect class="svg-ok" x="10" y="25" width="190" height="70" rx="8"/>
+            <text class="svg-text" x="105" y="57" text-anchor="middle">AC Raiz ICP-Brasil</text>
+            <text class="svg-soft" x="105" y="77" text-anchor="middle" data-i18n="learn.c5.l.root">trust anchor</text>
+            <path class="svg-line" d="M200 60 H265 M255 52 L265 60 L255 68"/>
+            <rect class="svg-box" x="265" y="25" width="190" height="70" rx="8"/>
+            <text class="svg-text" x="360" y="57" text-anchor="middle" data-i18n="learn.c5.l.ca">Issuing CA</text>
+            <text class="svg-soft" x="360" y="77" text-anchor="middle" data-i18n="learn.c5.l.ca2">e.g. AC SERPRO, AC Soluti</text>
+            <path class="svg-line" d="M455 60 H520 M510 52 L520 60 L510 68"/>
+            <rect class="svg-brand" x="520" y="25" width="190" height="70" rx="8"/>
+            <text class="svg-text" x="615" y="57" text-anchor="middle" data-i18n="learn.c5.l.holder">Signer</text>
+            <text class="svg-soft" x="615" y="77" text-anchor="middle" data-i18n="learn.c5.l.holder2">CPF inside the certificate</text>
+          </svg>
+        </figure>
+        <p data-i18n="learn.c5.p2">The result is one of three indications. Pick a situation:</p>
+        <div class="demo figure">
+          <label for="scenario" data-i18n="learn.c5.scenario">Situation</label>
+          <select id="scenario">
+            <option value="ok" data-i18n="learn.c5.s.ok">Intact file, trusted chain, not revoked</option>
+            <option value="tampered" data-i18n="learn.c5.s.tampered">The PDF was changed after signing</option>
+            <option value="unknown" data-i18n="learn.c5.s.unknown">Self-signed certificate (unknown root)</option>
+            <option value="offline" data-i18n="learn.c5.s.offline">Revocation server unreachable</option>
+            <option value="revoked" data-i18n="learn.c5.s.revoked">Certificate revoked before the signing time</option>
+          </select>
+          <div><span id="scenario-verdict" class="verdict ok"></span></div>
+          <p class="explain" id="scenario-explain" aria-live="polite"></p>
+        </div>
+        <div class="code">
+          <div class="code-head"><span>C#</span><button class="copy" type="button" data-i18n="common.copy">Copy</button></div>
+<pre data-lang="csharp">var validator = BrasilExtension.CreateValidator();   // ICP-Brasil + Gov.br roots
+foreach (var result in await validator.ValidateAsync(File.OpenRead("signed.pdf")))
+{
+    Console.WriteLine($"{result.FieldName}: {result.Indication}");
+}</pre>
+        </div>
+      </section>
+
+      <!-- 6 ─────────────────────────────────────────────── -->
+      <section class="chapter" id="keys">
+        <p class="kicker" data-i18n="learn.chapter6">Chapter 6</p>
+        <h2 data-i18n="learn.c6.title">Where the private key lives</h2>
+        <p data-i18n="learn.c6.p1">The signature is the same in every case; what changes is where the private key is and who touches it.</p>
+        <div class="grid grid-2">
+          <a class="card" href="build.html?key=pfx">
+            <h3 data-i18n="learn.c6.pfx">A1: a .pfx file</h3>
+            <p data-i18n="learn.c6.pfx.text">The key is in a password-protected file. Easy for servers and automation; protect the file and the password.</p>
+          </a>
+          <a class="card" href="build.html?key=pkcs11">
+            <h3 data-i18n="learn.c6.a3">A3: token or smartcard</h3>
+            <p data-i18n="learn.c6.a3.text">The key cannot be copied out of the device. SimpleSign talks to its PKCS#11 driver; the device signs the hash.</p>
+          </a>
+          <a class="card" href="build.html?key=psc">
+            <h3 data-i18n="learn.c6.cloud">Cloud certificate</h3>
+            <p data-i18n="learn.c6.cloud.text">The key lives in the provider's HSM (BirdID, VIDaaS…). The holder approves in the app or browser; only the hash is sent.</p>
+          </a>
+          <a class="card" href="build.html?key=deferred">
+            <h3 data-i18n="learn.c6.deferred">Deferred signing</h3>
+            <p data-i18n="learn.c6.deferred.text">Your server prepares the PDF, the user's device signs, and the server finishes. The key never reaches the server.</p>
+          </a>
+        </div>
+        <div class="cta">
+          <a class="btn btn-primary" href="build.html" data-i18n="learn.next.build">Build my code</a>
+          <a class="btn btn-ghost" href="inspect.html" data-i18n="learn.next.inspect">Inspect a signed PDF</a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <span data-i18n="common.footer">SimpleSign · MIT licensed · cryptography by the .NET base class library</span>
+      <span><a href="docs/">Docs</a> · <a href="https://github.com/eupassarin/SimpleSign">GitHub</a> · <a href="https://www.nuget.org/packages/SimpleSign">NuGet</a></span>
+    </div>
+  </footer>
+</body>
+</html>

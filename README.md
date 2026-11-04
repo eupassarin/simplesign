@@ -20,6 +20,14 @@
   <img src="https://img.shields.io/badge/No%20Crypto%20Deps-✓-blue?style=flat-square" alt="No third-party crypto dependencies" />
 </p>
 
+<p align="center">
+  <a href="https://eupassarin.github.io/SimpleSign/"><strong>Site</strong></a> ·
+  <a href="https://eupassarin.github.io/SimpleSign/learn.html">Learn how signatures work</a> ·
+  <a href="https://eupassarin.github.io/SimpleSign/build.html">Code builder</a> ·
+  <a href="https://eupassarin.github.io/SimpleSign/inspect.html">PDF inspector</a> ·
+  <a href="https://eupassarin.github.io/SimpleSign/docs/">Docs</a>
+</p>
+
 ---
 
 ## What is SimpleSign?

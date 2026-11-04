@@ -20,4 +20,4 @@ ICP-Brasil trust anchors are embedded, and `IcpBrasilChainValidator` reports
 enriched results via `WithCountryExtension(...)` during validation.
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [docs](https://eupassarin.github.io/SimpleSign/). MIT licensed.
+and the [docs](https://eupassarin.github.io/SimpleSign/docs/). MIT licensed.

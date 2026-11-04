@@ -29,4 +29,4 @@ simplesign xades validate signed.xml
 Run `simplesign --help` for all commands and options.
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [docs](https://eupassarin.github.io/SimpleSign/). MIT licensed.
+and the [docs](https://eupassarin.github.io/SimpleSign/docs/). MIT licensed.

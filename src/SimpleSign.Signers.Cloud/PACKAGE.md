@@ -37,4 +37,4 @@ using var signer = await CscSigner.CreateAsync(client, credentialId, new Explici
 
 The PSC defaults were validated against SimpleSign's simulator; confirm them in each provider's
 homologation environment. More in the
-[cloud signing guide](https://eupassarin.github.io/SimpleSign/articles/cloud-signing.html). MIT licensed.
+[cloud signing guide](https://eupassarin.github.io/SimpleSign/docs/articles/cloud-signing.html). MIT licensed.
