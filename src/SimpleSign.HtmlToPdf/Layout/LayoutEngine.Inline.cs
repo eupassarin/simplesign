@@ -751,26 +751,62 @@ public sealed partial class LayoutEngine
                 if (wraps && !IsMeasuring && cursorX + spaceWidth + segmentWidth > maxWidth + WrapTolerance)
                 {
                     List<(int Index, bool AddHyphen)> breaks = HyphenationBreaks(segment, style);
+                    string fullWord = word;
+                    int consumed = 0; // characters of fullWord already placed on earlier lines
+                    int first = 0;    // first break point after `consumed`
                     int guard = 0;
-                    while (breaks.Count > 0 && cursorX + spaceWidth + segmentWidth > current.BandWidth + WrapTolerance && guard++ < 1000)
+
+                    // Prefix text and width from `consumed` up to break point `index`.
+                    bool Fits(int index, out string text, out float width)
                     {
-                        (int Index, bool AddHyphen)? chosen = null;
+                        text = fullWord[consumed..breaks[index].Index] + (breaks[index].AddHyphen ? "-" : string.Empty);
+                        width = TextMeasurer.MeasureWidth(text, style, _shared.Fonts);
+                        return cursorX + spaceWidth + width <= current.BandWidth + WrapTolerance;
+                    }
+
+                    while (first < breaks.Count && cursorX + spaceWidth + segmentWidth > current.BandWidth + WrapTolerance && guard++ < 1000)
+                    {
+                        int chosen = -1;
                         string prefix = string.Empty;
                         float prefixWidth = 0;
-                        for (int b = breaks.Count - 1; b >= 0; b--)
+
+                        // Prefix widths grow with the break index. Gallop from the first break
+                        // (+0, +1, +2, +4, ...) to bracket the longest prefix that fits, then
+                        // binary-search inside the bracket. Only prefixes about a line long are
+                        // measured, and nothing is copied or re-measured per line, so a long
+                        // word stays linear.
+                        int low = first;
+                        int high = breaks.Count - 1;
+                        int step = 0;
+                        while (first + step <= high)
                         {
-                            string candidate = word[..breaks[b].Index] + (breaks[b].AddHyphen ? "-" : string.Empty);
-                            float candidateWidth = TextMeasurer.MeasureWidth(candidate, style, _shared.Fonts);
-                            if (cursorX + spaceWidth + candidateWidth <= current.BandWidth + WrapTolerance)
+                            int probe = first + step;
+                            if (!Fits(probe, out string text, out float width))
                             {
-                                chosen = breaks[b];
-                                prefix = candidate;
-                                prefixWidth = candidateWidth;
+                                high = probe - 1;
                                 break;
+                            }
+
+                            (chosen, prefix, prefixWidth) = (probe, text, width);
+                            low = probe + 1;
+                            step = step == 0 ? 1 : step * 2;
+                        }
+
+                        while (low <= high)
+                        {
+                            int mid = (low + high) >>> 1;
+                            if (Fits(mid, out string text, out float width))
+                            {
+                                (chosen, prefix, prefixWidth) = (mid, text, width);
+                                low = mid + 1;
+                            }
+                            else
+                            {
+                                high = mid - 1;
                             }
                         }
 
-                        if (chosen is not { } point)
+                        if (chosen < 0)
                         {
                             if (cursorX > 0)
                             {
@@ -786,8 +822,16 @@ public sealed partial class LayoutEngine
                         current.Width = cursorX + spaceWidth + prefixWidth;
                         Break(hard: false, strut);
                         spaceWidth = 0;
-                        word = word[point.Index..];
-                        breaks = [.. breaks.Where(x => x.Index > point.Index).Select(x => (x.Index - point.Index, x.AddHyphen))];
+
+                        // Estimate the rest's width from the placed part; it is measured exactly once below.
+                        segmentWidth -= TextMeasurer.MeasureWidth(fullWord[consumed..breaks[chosen].Index], style, _shared.Fonts);
+                        consumed = breaks[chosen].Index;
+                        first = chosen + 1;
+                    }
+
+                    if (consumed > 0)
+                    {
+                        word = fullWord[consumed..];
                         segmentWidth = TextMeasurer.MeasureWidth(word, style, _shared.Fonts);
                     }
 

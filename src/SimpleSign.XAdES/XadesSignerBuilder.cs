@@ -258,6 +258,7 @@ public sealed class XadesSignerBuilder
     /// <see cref="SignWithDetailsAsync(CancellationToken)"/> in that case.
     /// </remarks>
     /// <returns>The signed XML bytes.</returns>
+    /// <exception cref="ArgumentException">The document is not well-formed XML or has no root element.</exception>
     public async Task<byte[]> SignAsync(CancellationToken cancellationToken = default)
     {
         EnsureStrictProfile();

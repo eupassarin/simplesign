@@ -1563,44 +1563,134 @@ public sealed class PdfStructureReader
         ReadOnlySpan<byte> data, List<PdfCrossRef> crossRefs)
     {
         var fields = new List<PdfSignatureField>();
-        int searchPos = 0;
+        int skipUntil = 0;
 
-        while (searchPos < data.Length)
+        foreach (var (byteRangePos, dictStart, dictEnd) in FindByteRangeDictionaries(data))
         {
-            int byteRangePos = IndexOf(data, ByteRangeKey, searchPos);
-            if (byteRangePos < 0)
+            // A later /ByteRange inside a dictionary that was already parsed adds nothing.
+            if (byteRangePos < skipUntil || dictStart < 0 || dictEnd < 0)
             {
-                break;
-            }
-
-            // Find the enclosing dictionary <<...>>
-            int dictStart = FindDictStart(data, byteRangePos);
-            if (dictStart < 0)
-            {
-                searchPos = byteRangePos + ByteRangeKey.Length;
                 continue;
             }
 
             int objNumber = FindOwningObject(data, dictStart, crossRefs);
-            int dictEnd = FindMatchingDictEnd(data, dictStart);
-            if (dictEnd < 0)
-            {
-                searchPos = byteRangePos + ByteRangeKey.Length;
-                continue;
-            }
-
             var field = ParseSignatureDict(data[dictStart..(dictEnd + 2)], dictStart, objNumber, data);
             if (field is not null)
             {
                 fields.Add(field);
             }
 
-            // Always advance past the /ByteRange marker to prevent infinite loops
-            // when FindDictStart returns a dict that doesn't contain /ByteRange
-            searchPos = Math.Max(dictEnd + 2, byteRangePos + ByteRangeKey.Length);
+            skipUntil = dictEnd + 2;
         }
 
         return fields.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Finds every <c>/ByteRange</c> name together with its innermost enclosing dictionary, in
+    /// one forward pass. The pass tracks open dictionaries on a stack and skips comments,
+    /// literal and hexadecimal strings, and stream data, so the cost is linear in the file size
+    /// whatever the input (a backward search per marker was quadratic on hostile files).
+    /// </summary>
+    /// <returns>For each marker, in file order: its position, the start of the enclosing
+    /// <c>&lt;&lt;</c> (or -1), and the first <c>&gt;</c> of its closing <c>&gt;&gt;</c> (or -1 when it never closes).</returns>
+    internal static List<(int Position, int DictStart, int DictEnd)> FindByteRangeDictionaries(ReadOnlySpan<byte> data)
+    {
+        var markers = new List<(int Position, int DictStart, int DictEnd)>();
+        var open = new List<int>();           // starts of currently open dictionaries
+        var pending = new Dictionary<int, List<int>>(); // dict start -> marker indexes waiting for its end
+
+        void Unwind()
+        {
+            // Dictionaries left open at an object or stream boundary never close.
+            open.Clear();
+            pending.Clear();
+        }
+
+        int i = 0;
+        while (i < data.Length)
+        {
+            byte b = data[i];
+            switch (b)
+            {
+                case (byte)'%':
+                    while (i < data.Length && data[i] != (byte)'\n' && data[i] != (byte)'\r')
+                    {
+                        i++;
+                    }
+
+                    continue;
+
+                case (byte)'(':
+                    i = SkipLiteralString(data, i) + 1;
+                    continue;
+
+                case (byte)'<' when i + 1 < data.Length && data[i + 1] == (byte)'<':
+                    open.Add(i);
+                    i += 2;
+                    continue;
+
+                case (byte)'<':
+                    i = SkipHexString(data, i) + 1;
+                    continue;
+
+                case (byte)'>' when i + 1 < data.Length && data[i + 1] == (byte)'>':
+                    if (open.Count > 0)
+                    {
+                        int dictStart = open[^1];
+                        open.RemoveAt(open.Count - 1);
+                        if (pending.Remove(dictStart, out var waiting))
+                        {
+                            foreach (int index in waiting)
+                            {
+                                markers[index] = (markers[index].Position, dictStart, i);
+                            }
+                        }
+                    }
+
+                    i += 2;
+                    continue;
+
+                case (byte)'/' when data[i..].StartsWith(ByteRangeKey)
+                    && (i + ByteRangeKey.Length >= data.Length || IsTokenBoundary(data[i + ByteRangeKey.Length])):
+                    {
+                        int enclosing = open.Count > 0 ? open[^1] : -1;
+                        markers.Add((i, enclosing, -1));
+                        if (enclosing >= 0)
+                        {
+                            if (!pending.TryGetValue(enclosing, out var list))
+                            {
+                                pending[enclosing] = list = [];
+                            }
+
+                            list.Add(markers.Count - 1);
+                        }
+
+                        i += ByteRangeKey.Length;
+                        continue;
+                    }
+
+                case (byte)'m' when KeywordEndsAt(data, i, "stream"u8)
+                    && !(i >= 8 && data.Slice(i - 8, 3).SequenceEqual("end"u8)):
+                    {
+                        Unwind();
+                        int streamEnd = IndexOf(data, "endstream"u8, i + 1);
+                        i = streamEnd < 0 ? data.Length : streamEnd + "endstream".Length;
+                        continue;
+                    }
+
+                case (byte)'j' when KeywordEndsAt(data, i, "endobj"u8):
+                    Unwind();
+                    i++;
+                    continue;
+
+                default:
+                    i++;
+                    continue;
+            }
+        }
+
+        return markers;
     }
 
     /// <summary>
@@ -2372,10 +2462,13 @@ public sealed class PdfStructureReader
     /// Finds the start of the enclosing dictionary (&lt;&lt;) by scanning backwards from nearPos.
     /// Verifies the found dictionary actually encloses nearPos (handles nested dicts), and
     /// skips literal strings, hexadecimal strings, and comments while scanning backwards.
+    /// The scan stops at the boundary of the current object (an <c>obj</c>/<c>endobj</c> or
+    /// <c>stream</c>/<c>endstream</c> keyword): a dictionary never crosses one, and an
+    /// unbounded scan made malformed input quadratic.
     /// </summary>
     private static int FindDictStart(ReadOnlySpan<byte> data, int nearPos)
     {
-        for (int pos = nearPos; pos >= 1; pos--)
+        for (int pos = Math.Min(nearPos, data.Length - 1); pos >= 1; pos--)
         {
             byte b = data[pos];
             if (b == (byte)')')
@@ -2384,6 +2477,16 @@ public sealed class PdfStructureReader
                 // characters inside it cannot be mistaken for structure.
                 pos = BacktrackLiteralString(data, pos);
                 continue;
+            }
+
+            if (b == (byte)'j' && KeywordEndsAt(data, pos, "obj"u8))
+            {
+                return -1; // reached this object's header (or the previous object's endobj)
+            }
+
+            if (b == (byte)'m' && KeywordEndsAt(data, pos, "stream"u8))
+            {
+                return -1; // "stream" or "endstream": nearPos is not inside a dictionary
             }
 
             if (b == (byte)'<' && data[pos - 1] == (byte)'<')
@@ -2405,6 +2508,41 @@ public sealed class PdfStructureReader
         }
         return -1;
     }
+
+    /// <summary>
+    /// True when <paramref name="keyword"/> ends at <paramref name="lastPos"/> as a whole token:
+    /// followed by whitespace, a delimiter or the end of data, and preceded by whitespace, a
+    /// delimiter other than '/', the start of data, or (for "obj"/"stream") the prefix "end".
+    /// </summary>
+    private static bool KeywordEndsAt(ReadOnlySpan<byte> data, int lastPos, ReadOnlySpan<byte> keyword)
+    {
+        int start = lastPos - keyword.Length + 1;
+        if (start < 0 || !data.Slice(start, keyword.Length).SequenceEqual(keyword))
+        {
+            return false;
+        }
+
+        if (lastPos + 1 < data.Length && !IsTokenBoundary(data[lastPos + 1]))
+        {
+            return false;
+        }
+
+        if (start == 0)
+        {
+            return true;
+        }
+
+        if (start >= 3 && data.Slice(start - 3, 3).SequenceEqual("end"u8))
+        {
+            return start == 3 || IsTokenBoundary(data[start - 4]);
+        }
+
+        return IsTokenBoundary(data[start - 1]) && data[start - 1] != (byte)'/';
+    }
+
+    private static bool IsTokenBoundary(byte b) =>
+        IsWhitespace(b) || b is 0 or (byte)'\f' or (byte)'<' or (byte)'>' or (byte)'[' or (byte)']'
+            or (byte)'(' or (byte)')' or (byte)'{' or (byte)'}' or (byte)'/' or (byte)'%';
 
     /// <summary>
     /// Backtracks from a closing ')' over the literal string it terminates, honouring
@@ -2511,6 +2649,14 @@ public sealed class PdfStructureReader
                     return i - 2; // index of the first '>'
                 }
                 continue;
+            }
+
+            // A dictionary cannot contain stream data or span objects: an unclosed dictionary
+            // ends here instead of scanning the rest of the file.
+            if ((b == (byte)'m' && KeywordEndsAt(data, i, "stream"u8))
+                || (b == (byte)'j' && KeywordEndsAt(data, i, "endobj"u8)))
+            {
+                return -1;
             }
 
             i++;

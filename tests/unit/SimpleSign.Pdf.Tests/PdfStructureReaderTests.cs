@@ -318,6 +318,63 @@ public sealed class PdfStructureReaderTests
         return Encoding.Latin1.GetBytes(sb.ToString());
     }
 
+    // ── Hostile structure (found by the mutation fuzzer) ────────────────────
+
+    [Fact]
+    public void FindByteRangeDictionaries_ReturnsInnermostEnclosingDictionary()
+    {
+        byte[] pdf = Encoding.Latin1.GetBytes(
+            "1 0 obj\n<< /Type /Sig /Prop_Build << /App << /Name /X >> >> /ByteRange [0 1 2 3] /Contents <00> >>\nendobj\n" +
+            "2 0 obj\n<< /Length 30 >>\nstream\n<< /ByteRange [9 9 9 9] >>\nendstream\nendobj\n" +
+            "% << /ByteRange in a comment\n" +
+            "3 0 obj\n<< /T (/ByteRange in a string) >>\nendobj\n");
+
+        var markers = PdfStructureReader.FindByteRangeDictionaries(pdf);
+
+        markers.Count.ShouldBe(1);
+        string text = Encoding.Latin1.GetString(pdf);
+        markers[0].DictStart.ShouldBe(text.IndexOf("<< /Type /Sig", StringComparison.Ordinal));
+        text.Substring(markers[0].DictEnd, 3).ShouldBe(">>\n");
+        text[markers[0].DictStart..(markers[0].DictEnd + 2)].ShouldEndWith("/Contents <00> >>");
+    }
+
+    [Fact]
+    public void FindByteRangeDictionaries_UnclosedDictionary_HasNoEnd()
+    {
+        byte[] pdf = Encoding.Latin1.GetBytes("1 0 obj\n<< /ByteRange [0 1 2 3]\nendobj\n2 0 obj\n<< /ByteRange [4 5 6 7] >>\nendobj\n");
+
+        var markers = PdfStructureReader.FindByteRangeDictionaries(pdf);
+
+        markers.Count.ShouldBe(2);
+        markers[0].DictEnd.ShouldBe(-1);
+        markers[1].DictEnd.ShouldBeGreaterThan(markers[1].DictStart);
+    }
+
+    [Theory]
+    [InlineData("<< /ByteRange [0 1 2 3] ")]
+    [InlineData("<< ")]
+    [InlineData("/ByteRange ")]
+    public async Task ReadSignatureFieldsAsync_RepeatedUnclosedTokens_FinishesQuickly(string token)
+    {
+        // Thousands of unclosed dictionaries and /ByteRange markers in one object made the
+        // backward search for each marker rescan the file (quadratic: minutes on 1 MB).
+        var sb = new StringBuilder("%PDF-1.7\n1 0 obj\n");
+        sb.Insert(sb.Length, token, 1_000_000 / token.Length);
+        sb.Append("\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF");
+        using var stream = new MemoryStream(Encoding.Latin1.GetBytes(sb.ToString()));
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            _ = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
+        }
+        catch (Core.SimpleSignException)
+        {
+            // Rejecting the malformed file is fine; hanging is not.
+        }
+
+        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(30));
+    }
 }
 internal sealed class NonSeekableStream(byte[] data) : Stream
 {

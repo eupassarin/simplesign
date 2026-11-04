@@ -349,10 +349,9 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 #endif
                 }
 
-                using var httpClient = new HttpClient();
                 if (!EmbeddedRevocationEvidence.CoversAll(
                     certificates, material.OcspResponses, material.Crls,
-                    cmsData.SigningTime ?? DateTimeOffset.UtcNow, new OcspClient(httpClient)))
+                    cmsData.SigningTime ?? DateTimeOffset.UtcNow, new OcspClient(Core.Http.DefaultHttpClientProvider.Instance.GetClient())))
                 {
                     warnings.Add("CAdES-B-LT: Embedded revocation evidence is not authenticated or does not cover the certificate paths.");
                     return false;

@@ -1219,6 +1219,20 @@ public sealed class XadesSignerTests
         ex.Reason.ShouldBe(SigningErrorReason.PrivateKeyMissing);
     }
 
+    [Theory]
+    [InlineData("<doc><unclosed></doc>")]
+    [InlineData("not xml at all")]
+    [InlineData("<?xml version=\"1.0\"?><a></b>")]
+    public async Task SignAsync_MalformedXml_ThrowsArgumentException(string xml)
+    {
+        var ex = await Should.ThrowAsync<ArgumentException>(() =>
+            XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes(xml))
+                .WithCertificate(s_cert)
+                .SignAsync());
+        ex.ParamName.ShouldBe("xmlData");
+        ex.InnerException.ShouldBeOfType<System.Xml.XmlException>();
+    }
+
     [Fact]
     public async Task Builder_WithFormDetached_WithoutDataUri_Throws()
     {

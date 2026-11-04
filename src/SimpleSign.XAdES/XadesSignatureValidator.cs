@@ -5,8 +5,8 @@ using System.Security.Cryptography.Xml;
 using System.Xml;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
-using SimpleSign.Core.Signing;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.XAdES.Constants;
 
@@ -1199,9 +1199,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                 return false;
             }
 
-            using var httpClient = new HttpClient();
             if (!EmbeddedRevocationEvidence.CoversAll(
-                    certificates, ocsps, crls, signingTime ?? DateTimeOffset.UtcNow, new OcspClient(httpClient)))
+                    certificates, ocsps, crls, signingTime ?? DateTimeOffset.UtcNow, new OcspClient(Core.Http.DefaultHttpClientProvider.Instance.GetClient())))
             {
                 warnings.Add("XAdES-B-LT: Embedded revocation evidence is not authenticated or does not cover the certificate paths.");
                 return false;

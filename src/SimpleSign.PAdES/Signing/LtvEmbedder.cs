@@ -297,10 +297,9 @@ public sealed class LtvEmbedder : ILtvEmbedder
 #endif
             }
 
-            using var httpClient = new HttpClient();
             return EmbeddedRevocationEvidence.CoversAll(
                 requiredCertificates, embeddedCertificates, dss.GlobalOcsps, dss.GlobalCrls,
-                DateTimeOffset.UtcNow, new OcspClient(httpClient));
+                DateTimeOffset.UtcNow, new OcspClient(DefaultHttpClientProvider.Instance.GetClient()));
         }
         catch (Exception ex) when (ex is CryptographicException or InvalidDataException)
         {

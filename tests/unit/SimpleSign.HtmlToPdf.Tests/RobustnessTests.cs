@@ -153,7 +153,24 @@ public sealed class RobustnessTests
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         Should.NotThrow(() => HtmlToPdfConverter.Html(html).Convert());
-        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
+
+        // Fixed inputs finish in well under a second; the unbounded versions ran for minutes.
+        // The bound is generous so coverage instrumentation and busy CI runners do not flake.
+        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public void LongHyphenatableWord_FinishesQuickly()
+    {
+        // hyphens:auto offers a break point every few letters; choosing the longest prefix that
+        // fits used to measure every candidate per line, which made a long word quadratic.
+        string html = "<p lang='pt-BR' style='hyphens:auto;width:60pt'>" + Repeat("endobj", 6_000) + "</p>";
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        byte[] pdf = HtmlToPdfConverter.Html(html).Convert();
+
+        pdf.Length.ShouldBeGreaterThan(0);
+        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(30));
     }
 
     [Fact]

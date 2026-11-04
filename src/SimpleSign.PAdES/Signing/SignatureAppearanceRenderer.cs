@@ -30,12 +30,12 @@ internal static class SignatureAppearanceRenderer
         string baseFontName = appearance.GetBaseFontName();
 
         var stream = new StringBuilder();
-        stream.AppendLine("q");
+        Line(stream, "q");
 
         if (appearance.BackgroundColor is { } fill)
         {
-            stream.AppendLine($"{F(fill.R)} {F(fill.G)} {F(fill.B)} rg");
-            stream.AppendLine($"0 0 {F(width)} {F(height)} re f");
+            Line(stream, $"{F(fill.R)} {F(fill.G)} {F(fill.B)} rg");
+            Line(stream, $"0 0 {F(width)} {F(height)} re f");
         }
 
         if (image is not null)
@@ -53,11 +53,11 @@ internal static class SignatureAppearanceRenderer
             float moduleSize = qrSize / modules;
 
             // White background for QR code (ensures quiet zone contrast)
-            stream.AppendLine("1 1 1 rg");
-            stream.AppendLine($"{F(2)} {F(2)} {F(qrSize)} {F(qrSize)} re f");
+            Line(stream, "1 1 1 rg");
+            Line(stream, $"{F(2)} {F(2)} {F(qrSize)} {F(qrSize)} re f");
 
             // Dark modules
-            stream.AppendLine("0 0 0 rg");
+            Line(stream, "0 0 0 rg");
             for (int r = 0; r < modules; r++)
             {
                 for (int c = 0; c < modules; c++)
@@ -66,7 +66,7 @@ internal static class SignatureAppearanceRenderer
                     {
                         float x = 2 + (c * moduleSize);
                         float y = height - 2 - ((r + 1) * moduleSize);
-                        stream.AppendLine($"{F(x)} {F(y)} {F(moduleSize)} {F(moduleSize)} re f");
+                        Line(stream, $"{F(x)} {F(y)} {F(moduleSize)} {F(moduleSize)} re f");
                     }
                 }
             }
@@ -77,13 +77,13 @@ internal static class SignatureAppearanceRenderer
         // Border last, so the background image and QR code do not cover it.
         if (appearance.BorderColor is { } border)
         {
-            stream.AppendLine($"{F(border.R)} {F(border.G)} {F(border.B)} RG");
-            stream.AppendLine($"{F(appearance.BorderWidth)} w");
+            Line(stream, $"{F(border.R)} {F(border.G)} {F(border.B)} RG");
+            Line(stream, $"{F(appearance.BorderWidth)} w");
             float bw = appearance.BorderWidth / 2;
-            stream.AppendLine($"{F(bw)} {F(bw)} {F(width - appearance.BorderWidth)} {F(height - appearance.BorderWidth)} re S");
+            Line(stream, $"{F(bw)} {F(bw)} {F(width - appearance.BorderWidth)} {F(height - appearance.BorderWidth)} re S");
         }
 
-        stream.AppendLine("Q");
+        Line(stream, "Q");
 
         byte[] streamBytes = Encoding.Latin1.GetBytes(stream.ToString());
         byte[] form = WrapInFormXObject(objNum, width, height, streamBytes, baseFontName, fontFileObjNum, fontDescriptorObjNum, image is not null ? imageObjNum : 0);
@@ -120,15 +120,15 @@ internal static class SignatureAppearanceRenderer
             clip = fit == SignatureImageFit.Cover;
         }
 
-        stream.AppendLine("q");
+        Line(stream, "q");
         if (clip)
         {
-            stream.AppendLine($"0 0 {F(width)} {F(height)} re W n");
+            Line(stream, $"0 0 {F(width)} {F(height)} re W n");
         }
 
-        stream.AppendLine($"{F(drawW)} 0 0 {F(drawH)} {F(tx)} {F(ty)} cm");
-        stream.AppendLine("/Img0 Do");
-        stream.AppendLine("Q");
+        Line(stream, $"{F(drawW)} 0 0 {F(drawH)} {F(tx)} {F(ty)} cm");
+        Line(stream, "/Img0 Do");
+        Line(stream, "Q");
     }
 
     /// <summary>
@@ -141,29 +141,29 @@ internal static class SignatureAppearanceRenderer
         // Text color (default: black)
         if (appearance.TextColor is { } tc)
         {
-            sb.AppendLine($"{F(tc.R)} {F(tc.G)} {F(tc.B)} rg");
+            Line(sb, $"{F(tc.R)} {F(tc.G)} {F(tc.B)} rg");
         }
         else
         {
-            sb.AppendLine("0 0 0 rg");
+            Line(sb, "0 0 0 rg");
         }
 
-        sb.AppendLine("BT");
+        Line(sb, "BT");
 
         float? currentSize = null;
         foreach (var line in appearance.Layout(options.SignerName, options.Reason, options.Location, sigTime, width, height))
         {
             if (currentSize != line.FontSize)
             {
-                sb.AppendLine($"/F1 {F(line.FontSize)} Tf");
+                Line(sb, $"/F1 {F(line.FontSize)} Tf");
                 currentSize = line.FontSize;
             }
 
-            sb.AppendLine($"1 0 0 1 {F(line.X)} {F(line.Y)} Tm");
-            sb.AppendLine($"({EscapePdfString(line.Text)}) Tj");
+            Line(sb, $"1 0 0 1 {F(line.X)} {F(line.Y)} Tm");
+            Line(sb, $"({EscapePdfString(line.Text)}) Tj");
         }
 
-        sb.AppendLine("ET");
+        Line(sb, "ET");
         return sb.ToString();
     }
 
@@ -232,6 +232,12 @@ internal static class SignatureAppearanceRenderer
                 .Replace("\b", "\\b")
                 .Replace("\f", "\\f");
     }
+
+    /// <summary>
+    /// Appends one content-stream line ending in LF. <see cref="StringBuilder.AppendLine()"/>
+    /// would use the platform newline, making the stamp bytes differ between Windows and Unix.
+    /// </summary>
+    private static void Line(StringBuilder sb, string text) => sb.Append(text).Append('\n');
 
     /// <summary>Formats a float with '.' decimal separator regardless of system locale.</summary>
     internal static string F(float value) => PdfFormatting.F(value);

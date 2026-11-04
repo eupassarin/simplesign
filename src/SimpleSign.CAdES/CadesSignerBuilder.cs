@@ -5,8 +5,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
-using SimpleSign.Core.Signing;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 
 namespace SimpleSign.CAdES;
@@ -497,10 +497,9 @@ public sealed class CadesSignerBuilder
 #endif
             }
 
-            using var httpClient = new HttpClient();
             return EmbeddedRevocationEvidence.CoversAll(
                 certificates, embedded.OcspResponses, embedded.Crls,
-                DateTimeOffset.UtcNow, new OcspClient(httpClient));
+                DateTimeOffset.UtcNow, new OcspClient(DefaultHttpClientProvider.Instance.GetClient()));
         }
         finally
         {

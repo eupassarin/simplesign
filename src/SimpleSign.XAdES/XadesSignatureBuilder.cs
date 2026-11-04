@@ -10,8 +10,8 @@ using Microsoft.Extensions.Logging;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
-using SimpleSign.Core.Signing;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.XAdES.Constants;
 
@@ -21,6 +21,25 @@ namespace SimpleSign.XAdES;
 [RequiresDynamicCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
 internal static class XadesSignatureBuilder
 {
+    /// <summary>
+    /// Loads the document to sign. Malformed XML is reported as an <see cref="ArgumentException"/>
+    /// (like a document without a root element), not as a raw <see cref="XmlException"/>.
+    /// </summary>
+    private static XmlDocument LoadDocument(byte[] xmlData)
+    {
+        var xmlDoc = new XmlDocument { PreserveWhitespace = true };
+        try
+        {
+            xmlDoc.Load(new MemoryStream(xmlData));
+        }
+        catch (XmlException ex)
+        {
+            throw new ArgumentException($"XML data is not well-formed: {ex.Message}", nameof(xmlData), ex);
+        }
+
+        return xmlDoc;
+    }
+
     internal static byte[] BuildSignature(
         byte[] xmlData,
         X509Certificate2 certificate,
@@ -44,8 +63,7 @@ internal static class XadesSignatureBuilder
                 signatureAlgorithmOid, form, dataUri, signerRoles, dataObjectFormat, logger);
         }
 
-        var xmlDoc = new XmlDocument { PreserveWhitespace = true };
-        xmlDoc.Load(new MemoryStream(xmlData));
+        var xmlDoc = LoadDocument(xmlData);
 
         if (xmlDoc.DocumentElement is null)
         {
@@ -177,8 +195,7 @@ internal static class XadesSignatureBuilder
         string signatureId = XadesUris.SignatureIdPrefix + Guid.NewGuid().ToString("N")[..8];
 
         // Create a temporary document with all elements so digests can be computed
-        var xmlDoc = new XmlDocument { PreserveWhitespace = true };
-        xmlDoc.Load(new MemoryStream(xmlData));
+        var xmlDoc = LoadDocument(xmlData);
 
         if (xmlDoc.DocumentElement is null)
         {
@@ -260,8 +277,7 @@ internal static class XadesSignatureBuilder
                 signerRoles, dataObjectFormat, form, dataUri, dataObjectId);
         }
 
-        var xmlDoc = new XmlDocument { PreserveWhitespace = true };
-        xmlDoc.Load(new MemoryStream(xmlData));
+        var xmlDoc = LoadDocument(xmlData);
 
         if (xmlDoc.DocumentElement is null)
         {
@@ -485,9 +501,8 @@ internal static class XadesSignatureBuilder
 #endif
             }
 
-            using var httpClient = new HttpClient();
             return EmbeddedRevocationEvidence.CoversAll(
-                certificates, ocspResponses, crls, DateTimeOffset.UtcNow, new OcspClient(httpClient));
+                certificates, ocspResponses, crls, DateTimeOffset.UtcNow, new OcspClient(Core.Http.DefaultHttpClientProvider.Instance.GetClient()));
         }
         finally
         {
@@ -853,7 +868,7 @@ internal static class XadesSignatureBuilder
 
         if (HasTransform(reference, XmlDSigUrls.Base64Transform, ns))
         {
-            return Convert.FromBase64String(System.Text.Encoding.UTF8.GetString(detachedData).Trim());
+            return Convert.FromBase64String(Encoding.UTF8.GetString(detachedData).Trim());
         }
 
         XmlNodeList? detachedTransforms = reference.SelectNodes("ds:Transforms/ds:Transform", ns);
@@ -1258,7 +1273,7 @@ internal static class XadesSignatureBuilder
                 var dmElement = doc.CreateElement("DigestMethod", XmlDSigUrls.DsNamespace);
                 dmElement.SetAttribute("Algorithm", GetDigestMethod(hashAlgorithm));
                 var dvElement = doc.CreateElement("DigestValue", XmlDSigUrls.DsNamespace);
-                byte[] policyDigest = HashData(hashAlgorithm, System.Text.Encoding.UTF8.GetBytes(signaturePolicyOid));
+                byte[] policyDigest = HashData(hashAlgorithm, Encoding.UTF8.GetBytes(signaturePolicyOid));
                 dvElement.InnerText = Convert.ToBase64String(policyDigest);
                 spHashElement.AppendChild(dmElement);
                 spHashElement.AppendChild(dvElement);

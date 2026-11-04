@@ -11,7 +11,7 @@ namespace SimpleSign.PAdES.Signing;
 /// </summary>
 internal static class FontResources
 {
-    private static byte[]? _ttfData;
+    private static readonly Lazy<byte[]> s_ttfData = new(LoadTtf, LazyThreadSafetyMode.ExecutionAndPublication);
     private static readonly Lazy<byte[]> s_compressedTtf = new(CompressTtf, LazyThreadSafetyMode.ExecutionAndPublication);
 
     private const string ResourceName = "SimpleSign.PAdES.Signing.LiberationSans-subset.ttf";
@@ -27,7 +27,7 @@ internal static class FontResources
     }
 
     /// <summary>Raw TTF font data for LiberationSans (WinAnsi subset).</summary>
-    internal static byte[] TtfData => _ttfData ??= LoadTtf();
+    internal static byte[] TtfData => s_ttfData.Value;
 
     /// <summary>TTF data compressed with FlateDecode (ready for PDF stream).</summary>
     internal static byte[] CompressedTtf => s_compressedTtf.Value;
