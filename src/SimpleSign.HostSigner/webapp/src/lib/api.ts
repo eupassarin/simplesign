@@ -25,6 +25,23 @@ export interface SignFileOptions {
   archivalTimestamp?: boolean
   certificationLevel?: string
   visibleStamp?: boolean
+  stamp?: StampOptions | null
+}
+
+export interface StampOptions {
+  page?: number | null
+  x?: number | null
+  y?: number | null
+  width?: number | null
+  height?: number | null
+  signedByLabel?: string | null
+  reasonLabel?: string | null
+  locationLabel?: string | null
+  dateLabel?: string | null
+  dateFormat?: string | null
+  timeZone?: string | null
+  showDate?: boolean
+  textAlign?: 'left' | 'center' | 'right'
 }
 
 export async function fetchCertificates(): Promise<CertificateInfo[]> {

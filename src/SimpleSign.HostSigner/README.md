@@ -129,6 +129,40 @@ Signs one or more hash digests using a certificate identified by thumbprint.
 ]
 ```
 
+### POST /api/sign-file
+
+Signs a local PDF file with a certificate from the Windows store and writes `<name>-signed.pdf`
+next to it. Used by the built-in web app.
+
+**Request (main fields):**
+
+```json
+{
+  "filePath": "C:\\Docs\\contract.pdf",
+  "thumbprint": "A1B2C3D4...",
+  "reason": "Aprovação",
+  "location": "Vitória/ES",
+  "visibleStamp": true,
+  "stamp": {
+    "signedByLabel": "Assinado digitalmente por",
+    "reasonLabel": "Motivo: ",
+    "locationLabel": "Local: ",
+    "dateFormat": "dd/MM/yyyy HH:mm",
+    "timeZone": "America/Sao_Paulo",
+    "textAlign": "left"
+  }
+}
+```
+
+`stamp` is optional and every field in it is optional: `page`, `x`, `y` (when both are missing the
+stamp is placed automatically at the bottom of the page), `width`, `height`, `signedByLabel`
+(`""` hides the line), `reasonLabel`, `locationLabel`, `dateLabel`, `dateFormat`, `timeZone`
+(an ID such as `America/Sao_Paulo` or an offset such as `-03:00`), `showDate` and `textAlign`
+(`left`, `center`, `right`). The reason and location lines appear when `reason` and `location`
+are given. An invalid value returns `400` with an error message.
+
+**Response:** `{ "outputPath": "C:\\Docs\\contract-signed.pdf" }`
+
 ### GET /api/version
 
 Checks for updates against GitHub Releases.

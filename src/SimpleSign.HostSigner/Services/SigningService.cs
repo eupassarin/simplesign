@@ -20,7 +20,8 @@ internal sealed record SignFileOptions(
     bool PreservePdfA = false,
     bool ArchivalTimestamp = false,
     string CertificationLevel = "none",
-    bool VisibleStamp = false
+    bool VisibleStamp = false,
+    StampOptions? Stamp = null
 );
 
 internal static class SigningService
@@ -106,7 +107,9 @@ internal static class SigningService
         // Visible stamp
         if (options.VisibleStamp)
         {
-            builder = builder.WithAppearance(new SignatureAppearance { Page = 1 });
+            builder = builder.WithAppearance((options.Stamp ?? new StampOptions()).ToAppearance(
+                hasReason: !string.IsNullOrEmpty(options.Reason),
+                hasLocation: !string.IsNullOrEmpty(options.Location)));
         }
 
         var signedPdf = await builder.SignAsync();

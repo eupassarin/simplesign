@@ -34,6 +34,13 @@ export default function SignPage() {
   const [archivalTimestamp, setArchivalTimestamp] = useState(false)
   const [certificationLevel, setCertificationLevel] = useState('none')
   const [visibleStamp, setVisibleStamp] = useState(false)
+  const [signedByLabel, setSignedByLabel] = useState('')
+  const [reasonLabel, setReasonLabel] = useState('')
+  const [locationLabel, setLocationLabel] = useState('')
+  const [dateFormat, setDateFormat] = useState('')
+  const [timeZone, setTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || '')
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('left')
+  const [showDate, setShowDate] = useState(true)
 
   useEffect(() => {
     fetchCertificates().then(setCerts).catch(() => {})
@@ -83,6 +90,17 @@ export default function SignPage() {
           archivalTimestamp,
           certificationLevel,
           visibleStamp,
+          stamp: visibleStamp
+            ? {
+                signedByLabel: signedByLabel || null,
+                reasonLabel: reasonLabel || null,
+                locationLabel: locationLabel || null,
+                dateFormat: dateFormat || null,
+                timeZone: timeZone || null,
+                textAlign,
+                showDate,
+              }
+            : null,
         })
         newResults.push({ file, success: true, message: `→ ${fileName(data.outputPath)}` })
       } catch (e: any) {
@@ -227,6 +245,42 @@ export default function SignPage() {
                   <Switch checked={visibleStamp} onCheckedChange={setVisibleStamp} /> Visible Stamp
                 </label>
               </div>
+
+              {visibleStamp && (
+                <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">"Signed by" Label</Label>
+                    <Input placeholder="Signed by" value={signedByLabel} onChange={e => setSignedByLabel(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Text Alignment</Label>
+                    <Select value={textAlign} onChange={e => setTextAlign(e.target.value as 'left' | 'center' | 'right')}>
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Reason Label</Label>
+                    <Input placeholder="Reason: " value={reasonLabel} onChange={e => setReasonLabel(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Location Label</Label>
+                    <Input placeholder="Location: " value={locationLabel} onChange={e => setLocationLabel(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Date Format</Label>
+                    <Input placeholder="dd/MM/yyyy HH:mm" value={dateFormat} onChange={e => setDateFormat(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Time Zone</Label>
+                    <Input placeholder="UTC" value={timeZone} onChange={e => setTimeZone(e.target.value)} />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm col-span-2">
+                    <Switch checked={showDate} onCheckedChange={setShowDate} /> Show Date
+                  </label>
+                </div>
+              )}
             </CardContent>
           </Card>
         </CollapsibleContent>

@@ -378,6 +378,18 @@ internal sealed class TrayContext : ApplicationContext
 
         _form.Log($"POST /api/sign-file ({Path.GetFileName(filePath)})");
 
+        Services.StampOptions? stamp;
+        try
+        {
+            stamp = Services.StampOptions.FromJson(root);
+        }
+        catch (FormatException ex)
+        {
+            resp.StatusCode = 400;
+            await WriteJsonAsync(resp, new ErrorResponse { Error = ex.Message });
+            return;
+        }
+
         var options = new Services.SignFileOptions(
             FilePath: filePath,
             Thumbprint: thumbprint,
@@ -392,7 +404,8 @@ internal sealed class TrayContext : ApplicationContext
             PreservePdfA: root.TryGetProperty("preservePdfA", out var pdfa) && pdfa.GetBoolean(),
             ArchivalTimestamp: root.TryGetProperty("archivalTimestamp", out var arch) && arch.GetBoolean(),
             CertificationLevel: root.TryGetProperty("certificationLevel", out var docmdp) ? docmdp.GetString() ?? "none" : "none",
-            VisibleStamp: root.TryGetProperty("visibleStamp", out var vs) && vs.GetBoolean()
+            VisibleStamp: root.TryGetProperty("visibleStamp", out var vs) && vs.GetBoolean(),
+            Stamp: stamp
         );
 
         try
