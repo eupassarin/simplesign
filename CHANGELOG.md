@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their PKCS#11 driver (`Pkcs11Signer.Open(...)`, an `IExternalSigner` for PAdES, CAdES and XAdES;
   `Pkcs11Signer.ListTokens(...)`). Own minimal interop: no third-party dependencies, no `unsafe`,
   Native AOT compatible. Tested against SoftHSM2 (`scripts/tests/pkcs11.sh` runs it in Docker).
+- **New package `SimpleSign.Signers.Cloud`:** sign with cloud certificates. `PscSigner`/`PscClient`
+  implement the ICP-Brasil PSC API ("API v0", DOC-ICP-17.01: OAuth 2.0 with PKCE or CPF + OTP,
+  certificate discovery, RAW signatures) for BirdID, VIDaaS, NeoID, SafeID, RemoteID and similar;
+  field names are configurable through `PscWireFormat`. `CscSigner`/`CscClient` implement the
+  Cloud Signature Consortium API v2 (service OAuth, credentials list/info/authorize, signHash;
+  SCAL 1/2, PIN/OTP or OAuth credential authorization; RSA, RSASSA-PSS and ECDSA).
+  `LoopbackAuthorizationHandler` completes OAuth logins in the browser for desktop and CLI apps.
+  Validated against in-process simulators; real-provider tests run when sandbox credentials are set.
+- CLI: `sign` and `cades sign` accept `--psc-*` and `--csc-*` options (secrets accept `env:NAME`);
+  `psc certificates` and `csc list` show the available certificates.
 - CLI: `sign` and `cades sign` accept `--pkcs11-lib`, `--pkcs11-token`, `--pkcs11-key` and `--pin`;
   `pkcs11 list --lib <path>` lists tokens and certificates.
 - **Brasil:** `BrasilExtension.CreateValidator(options?, httpClient?, logger?)` returns a PAdES

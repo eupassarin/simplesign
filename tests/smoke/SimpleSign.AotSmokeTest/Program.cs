@@ -5,6 +5,8 @@ using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.Pdf;
+using SimpleSign.Signers.Cloud.Csc;
+using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.Signers.Pkcs11;
 
 // AOT/Trimming smoke test — verifies the library works after native AOT publishing.
@@ -72,6 +74,24 @@ try
         Console.WriteLine("[SKIP] PKCS#11: PKCS11_SMOKE_MODULE not set");
     }
 
+    // Cloud signing (PSC + CSC) — JSON handling under AOT, against an in-process simulator
+    using var cloud = new SmokeCloudHandler(cert);
+    var psc = new PscClient(new PscClientOptions { BaseUri = new Uri("https://psc.example/v0/"), ClientId = "aot" },
+        new HttpClient(cloud, disposeHandler: false));
+    var pscToken = await psc.PasswordAuthorizeAsync("12345678909", "123456");
+    using var pscSigner = await PscSigner.CreateAsync(psc, pscToken);
+    var cloudSigned = await PadesSigner.Document(pdf).WithExternalSigner(pscSigner.Certificate, pscSigner, pscSigner.Chain).SignAsync();
+    var cloudResults = await new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustedRoots = [cert] })
+        .ValidateAsync(new MemoryStream(cloudSigned));
+    if (cloudResults[0].Indication != SignatureIndication.Valid)
+    {
+        throw new InvalidOperationException($"PSC signature is {cloudResults[0].Indication}");
+    }
+
+    var cscInfo = await new CscClient(new CscClientOptions { BaseUri = new Uri("https://qtsp.example/csc/v2/") },
+        new HttpClient(cloud, disposeHandler: false)).GetInfoAsync();
+    Console.WriteLine($"[PASS] Cloud: PSC signature {cloudResults[0].Indication}, CSC service '{cscInfo.Name}'");
+
     Console.WriteLine("\n✅ All AOT smoke tests passed.");
     return 0;
 }
@@ -107,4 +127,40 @@ static byte[] CreateMinimalPdf()
               "xref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n" +
               "0000000107 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n176\n%%EOF";
     return System.Text.Encoding.ASCII.GetBytes(pdf);
+}
+
+/// <summary>Minimal PSC/CSC simulator for the AOT smoke test.</summary>
+internal sealed class SmokeCloudHandler(X509Certificate2 cert) : HttpMessageHandler
+{
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        string path = request.RequestUri!.AbsolutePath;
+        string json;
+        if (path.EndsWith("/oauth/pwd_authorize", StringComparison.Ordinal))
+        {
+            json = "{\"access_token\":\"aot-token\",\"expires_in\":300,\"scope\":\"signature_session\"}";
+        }
+        else if (path.EndsWith("/oauth/certificate-discovery", StringComparison.Ordinal))
+        {
+            json = "{\"certificates\":[{\"alias\":\"aot\",\"certificate\":\"" + Convert.ToBase64String(cert.RawData) + "\"}]}";
+        }
+        else if (path.EndsWith("/oauth/signature", StringComparison.Ordinal))
+        {
+            var body = System.Text.Json.Nodes.JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!;
+            var entry = body["hashes"]![0]!;
+            byte[] hash = Convert.FromBase64String(entry["hash"]!.GetValue<string>());
+            using var rsa = cert.GetRSAPrivateKey()!;
+            string signature = Convert.ToBase64String(rsa.SignHash(hash, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+            json = "{\"signatures\":[{\"id\":\"" + entry["id"]!.GetValue<string>() + "\",\"raw_signature\":\"" + signature + "\"}]}";
+        }
+        else
+        {
+            json = "{\"name\":\"AOT QTSP\",\"specs\":\"2.0.0.0\",\"authType\":[\"oauth2client\"],\"methods\":[]}";
+        }
+
+        return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+        };
+    }
 }

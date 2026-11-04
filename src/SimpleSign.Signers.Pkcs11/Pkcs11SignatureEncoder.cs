@@ -88,23 +88,7 @@ internal static class Pkcs11SignatureEncoder
 
     /// <summary>Converts a raw PKCS#11 ECDSA signature (<c>r||s</c>) to DER <c>SEQUENCE { r, s }</c> (RFC 3279).</summary>
     /// <exception cref="CryptographicException">The raw signature has an odd or zero length.</exception>
-    internal static byte[] EcdsaRawToDer(byte[] raw)
-    {
-        if (raw.Length == 0 || raw.Length % 2 != 0)
-        {
-            throw new CryptographicException($"The token returned a malformed ECDSA signature ({raw.Length} bytes).");
-        }
-
-        int half = raw.Length / 2;
-        var writer = new AsnWriter(AsnEncodingRules.DER);
-        using (writer.PushSequence())
-        {
-            writer.WriteIntegerUnsigned(TrimLeadingZeros(raw.AsSpan(0, half)));
-            writer.WriteIntegerUnsigned(TrimLeadingZeros(raw.AsSpan(half, half)));
-        }
-
-        return writer.Encode();
-    }
+    internal static byte[] EcdsaRawToDer(byte[] raw) => EcdsaSignatureEncoding.RawToDer(raw);
 
     /// <summary>Encodes CK_RSA_PKCS_PSS_PARAMS for a layout.</summary>
     internal static byte[] EncodePssParameters(CkLayout layout, ulong hashMechanism, ulong mgf, ulong saltLength)
@@ -162,17 +146,6 @@ internal static class Pkcs11SignatureEncoder
         "SHA512" => CkConstants.CkgMgf1Sha512,
         _ => throw new NotSupportedException($"MGF1 with '{hashAlgorithm.Name}' is not supported by the PKCS#11 signer."),
     };
-
-    private static ReadOnlySpan<byte> TrimLeadingZeros(ReadOnlySpan<byte> value)
-    {
-        int start = 0;
-        while (start < value.Length - 1 && value[start] == 0)
-        {
-            start++;
-        }
-
-        return value[start..];
-    }
 
     private static void WriteULong(byte[] buffer, int offset, int size, ulong value)
     {

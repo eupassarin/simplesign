@@ -6,6 +6,8 @@
   href: inspection-validation.md
 - name: Tokens, Smartcards & HSMs (PKCS#11)
   href: pkcs11.md
+- name: Cloud Signing (PSC & CSC)
+  href: cloud-signing.md
 - name: ICP-Brasil
   href: icp-brasil.md
 - name: HTML to PDF

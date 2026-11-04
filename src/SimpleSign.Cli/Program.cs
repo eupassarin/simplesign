@@ -60,6 +60,18 @@ internal static partial class Program
                     .WithDescription("List the tokens and certificates of a PKCS#11 driver");
             });
 
+            config.AddBranch("psc", psc =>
+            {
+                psc.AddCommand<PscCertificatesCommand>("certificates")
+                    .WithDescription("Log in to an ICP-Brasil cloud certificate provider (PSC) and list its certificates");
+            });
+
+            config.AddBranch("csc", csc =>
+            {
+                csc.AddCommand<CscListCommand>("list")
+                    .WithDescription("List the credentials of a Cloud Signature Consortium (CSC v2) service");
+            });
+
             config.AddBranch("xades", xades =>
             {
                 xades.AddCommand<XadesSignCommand>("sign")

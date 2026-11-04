@@ -91,6 +91,9 @@ dotnet add package SimpleSign.XAdES
 # A3 tokens, smartcards and HSMs (PKCS#11)
 dotnet add package SimpleSign.Signers.Pkcs11
 
+# Cloud certificates: ICP-Brasil PSCs (BirdID, VIDaaS, ...) and CSC v2
+dotnet add package SimpleSign.Signers.Cloud
+
 # CLI tool
 dotnet tool install -g SimpleSign.Cli
 ```
@@ -106,6 +109,7 @@ dotnet tool install -g SimpleSign.Cli
     - **SimpleSign.Core** (shared)
 - **SimpleSign.Brasil** — ICP-Brasil + Gov.br + Lei 14.063 (depends on PAdES)
 - **SimpleSign.Signers.Pkcs11** — sign with A3 tokens, smartcards and HSMs through their PKCS#11 driver (depends on Core)
+- **SimpleSign.Signers.Cloud** — sign with cloud certificates: ICP-Brasil PSCs (API v0) and Cloud Signature Consortium API v2 (depends on Core)
 - **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF: CSS cascade, floats, flexbox, grid, multi-column, paginated tables, gradients, SVG, OpenType shaping and RTL text, subset Unicode fonts, PDF/A-2b (independent)
 - **SimpleSign.Cli** — CLI tool (install as dotnet tool)
 - **SimpleSign.HostSigner** — Windows tray app for local signing API
@@ -188,6 +192,28 @@ var signedPdf = await PadesSigner
 The private key never leaves the device. The same signer works with CAdES and XAdES, and the CLI
 accepts `--pkcs11-lib` (`simplesign pkcs11 list` shows the tokens). See the
 [PKCS#11 guide](docs/articles/pkcs11.md).
+
+---
+
+### Sign with a cloud certificate (BirdID, VIDaaS, NeoID, ... or CSC v2)
+
+```csharp
+using SimpleSign.Signers.Cloud;
+using SimpleSign.Signers.Cloud.Psc;
+
+var psc = new PscClient(new PscClientOptions { BaseUri = providerUrl, ClientId = clientId, ClientSecret = clientSecret });
+var token = await psc.AuthorizeAsync(new LoopbackAuthorizationHandler(), PscScope.SignatureSession,
+    TimeSpan.FromMinutes(10), loginHint: cpf);   // the holder approves in the browser or app
+using var signer = await PscSigner.CreateAsync(psc, token);
+
+var signedPdf = await PadesSigner
+    .Document(pdfBytes)
+    .WithExternalSigner(signer.Certificate, signer, signer.Chain)
+    .SignAsync();
+```
+
+`CscSigner` does the same for Cloud Signature Consortium API v2 services. See the
+[cloud signing guide](docs/articles/cloud-signing.md).
 
 ---
 

@@ -409,7 +409,7 @@ public sealed class CliCommandTests : IDisposable
         var (exit, output) = await RunAsync("sign", pdf, "--cert", _pfxPath, "--pin", "1234");
 
         exit.ShouldNotBe(0);
-        output.ShouldContain("require --pkcs11-lib");
+        output.ShouldContain("--pin requires --pkcs11-lib or --csc-url");
     }
 
     [Fact]
@@ -462,6 +462,131 @@ public sealed class CliCommandTests : IDisposable
 
         exit.ShouldNotBe(0);
         output.ShouldContain("--lib is required");
+    }
+
+    [Fact]
+    public async Task Sign_PscWithOtp_ProducesValidPdf()
+    {
+        using var pki = new SimpleSign.Signers.Cloud.Tests.Fakes.TestPki();
+        using var psc = new SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer(pki);
+        using var server = new LoopbackHttpServer(psc);
+        string pdf = WritePdf("psc.pdf");
+        string signed = Path.Combine(_tempDir, "psc-signed.pdf");
+        string ca = Path.Combine(_tempDir, "cloud-ca.cer");
+        File.WriteAllBytes(ca, pki.Ca.RawData);
+        Environment.SetEnvironmentVariable("SIMPLESIGN_TEST_PSC_SECRET", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.ClientSecret);
+
+        var (exit, output) = await RunAsync("sign", pdf, "-o", signed,
+            "--psc-url", new Uri(server.BaseUri, "v0/").AbsoluteUri,
+            "--psc-client-id", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.ClientId,
+            "--psc-client-secret", "env:SIMPLESIGN_TEST_PSC_SECRET",
+            "--psc-cpf", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.Cpf,
+            "--psc-otp", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.Otp);
+
+        exit.ShouldBe(0, output);
+        output.ShouldContain("PSC certificate rsa-1");
+        var (validateExit, validateOutput) = await RunAsync("validate", signed, "--no-revocation", "--trust", ca, "--json");
+        validateExit.ShouldBe(0, validateOutput);
+    }
+
+    [Fact]
+    public async Task Sign_PscWrongOtp_FailsWithProviderError()
+    {
+        using var pki = new SimpleSign.Signers.Cloud.Tests.Fakes.TestPki();
+        using var psc = new SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer(pki);
+        using var server = new LoopbackHttpServer(psc);
+
+        var (exit, output) = await RunAsync("sign", WritePdf("psc-bad.pdf"),
+            "--psc-url", new Uri(server.BaseUri, "v0/").AbsoluteUri,
+            "--psc-client-id", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.ClientId,
+            "--psc-client-secret", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.ClientSecret,
+            "--psc-cpf", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.Cpf,
+            "--psc-otp", "999999");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("invalid_grant");
+        output.ShouldNotContain("999999");
+    }
+
+    [Fact]
+    public async Task CadesSign_Csc_ProducesValidSignature()
+    {
+        using var pki = new SimpleSign.Signers.Cloud.Tests.Fakes.TestPki();
+        using var csc = new SimpleSign.Signers.Cloud.Tests.Fakes.FakeCscServer(pki);
+        using var server = new LoopbackHttpServer(csc);
+        string data = Path.Combine(_tempDir, "csc-data.bin");
+        File.WriteAllBytes(data, [1, 2, 3, 4]);
+        string ca = Path.Combine(_tempDir, "csc-ca.cer");
+        File.WriteAllBytes(ca, pki.Ca.RawData);
+
+        var (exit, output) = await RunAsync("cades", "sign", data, "-o", data + ".p7s",
+            "--csc-url", new Uri(server.BaseUri, "csc/v2/").AbsoluteUri,
+            "--csc-token", SimpleSign.Signers.Cloud.Tests.Fakes.FakeCscServer.ServiceToken,
+            "--csc-credential", "ec-cred",
+            "--pin", SimpleSign.Signers.Cloud.Tests.Fakes.FakeCscServer.Pin);
+
+        exit.ShouldBe(0, output);
+        var (validateExit, validateOutput) = await RunAsync("cades", "validate", data + ".p7s", "--data", data, "--trust", ca);
+        validateExit.ShouldBe(0, validateOutput);
+    }
+
+    [Fact]
+    public async Task CscList_ShowsCredentials()
+    {
+        using var pki = new SimpleSign.Signers.Cloud.Tests.Fakes.TestPki();
+        using var csc = new SimpleSign.Signers.Cloud.Tests.Fakes.FakeCscServer(pki);
+        using var server = new LoopbackHttpServer(csc);
+
+        var (exit, output) = await RunAsync("csc", "list",
+            "--csc-url", new Uri(server.BaseUri, "csc/v2/").AbsoluteUri,
+            "--csc-token", SimpleSign.Signers.Cloud.Tests.Fakes.FakeCscServer.ServiceToken);
+
+        exit.ShouldBe(0, output);
+        output.ShouldContain("rsa-cred");
+        output.ShouldContain("oauth2code");
+    }
+
+    [Fact]
+    public async Task PscCertificates_WithOtp_ShowsAliases()
+    {
+        using var pki = new SimpleSign.Signers.Cloud.Tests.Fakes.TestPki();
+        using var psc = new SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer(pki);
+        using var server = new LoopbackHttpServer(psc);
+
+        var (exit, output) = await RunAsync("psc", "certificates",
+            "--psc-url", new Uri(server.BaseUri, "v0/").AbsoluteUri,
+            "--psc-client-id", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.ClientId,
+            "--psc-client-secret", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.ClientSecret,
+            "--psc-cpf", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.Cpf,
+            "--psc-otp", SimpleSign.Signers.Cloud.Tests.Fakes.FakePscServer.Otp);
+
+        exit.ShouldBe(0, output);
+        output.ShouldContain("rsa-1");
+    }
+
+    [Theory]
+    [InlineData("Use only one of", "--pkcs11-lib", "/x.so", "--psc-url", "https://psc.example/v0/", "--psc-client-id", "a")]
+    [InlineData("--psc-url requires --psc-client-id", "--psc-url", "https://psc.example/v0/")]
+    [InlineData("--psc-otp requires --psc-cpf", "--psc-url", "https://psc.example/v0/", "--psc-client-id", "a", "--psc-otp", "1")]
+    [InlineData("--csc-url requires --csc-token and --csc-credential", "--csc-url", "https://qtsp.example/csc/v2/")]
+    [InlineData("require --csc-url", "--pkcs11-lib", "/x.so", "--otp", "1")]
+    [InlineData("require --psc-url", "--pkcs11-lib", "/x.so", "--psc-cpf", "1")]
+    public async Task Sign_InconsistentCloudOptions_AreRejected(string expected, params string[] options)
+    {
+        var (exit, output) = await RunAsync(["sign", WritePdf("cloud-options.pdf"), .. options]);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain(expected);
+    }
+
+    [Fact]
+    public async Task Sign_PscWithCert_IsRejected()
+    {
+        var (exit, output) = await RunAsync("sign", WritePdf("psc-cert.pdf"), "--cert", _pfxPath,
+            "--psc-url", "https://psc.example/v0/", "--psc-client-id", "a");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("cannot be combined with --cert");
     }
 
     private string WritePdf(string name)

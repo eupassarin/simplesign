@@ -344,6 +344,14 @@ public sealed class CmsSignatureBuilder
         }
     }
 
+    /// <summary>Encodes the DER <c>RSASSA-PSS-params</c> for <paramref name="hashAlg"/> (see <see cref="WriteRsaPssParams"/>).</summary>
+    internal static byte[] EncodeRsaPssParams(HashAlgorithmName hashAlg)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        WriteRsaPssParams(writer, hashAlg);
+        return writer.Encode();
+    }
+
     /// <summary>
     /// Writes the <c>RSASSA-PSS-params</c> structure (RFC 4055 §3.1) that must accompany the
     /// <c>id-RSASSA-PSS</c> OID in <c>signatureAlgorithm</c>. The params declare the hash

@@ -31,6 +31,14 @@
     <ProjectReference Include="..\..\..\src\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
     <ProjectReference Include="..\..\..\src\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
     <ProjectReference Include="..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
+    <ProjectReference Include="..\..\..\src\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
+  </ItemGroup>
+
+  <!-- PSC and CSC simulators shared with the cloud signer tests -->
+  <ItemGroup>
+    <Compile Include="..\..\unit\SimpleSign.Signers.Cloud.Tests\Fakes\TestPki.cs" Link="CloudFakes\TestPki.cs" />
+    <Compile Include="..\..\unit\SimpleSign.Signers.Cloud.Tests\Fakes\FakePscServer.cs" Link="CloudFakes\FakePscServer.cs" />
+    <Compile Include="..\..\unit\SimpleSign.Signers.Cloud.Tests\Fakes\FakeCscServer.cs" Link="CloudFakes\FakeCscServer.cs" />
   </ItemGroup>
 
 </Project>

@@ -5,7 +5,6 @@ using SimpleSign.CAdES;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
-using SimpleSign.Signers.Pkcs11;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -23,7 +22,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
     }
 
     /// <summary>CAdES sign command settings.</summary>
-    internal sealed class Settings : CommonSettings
+    internal sealed class Settings : ExternalCredentialSettings
     {
         /// <summary>Input data file to sign.</summary>
         [CommandArgument(0, "<input>")]
@@ -39,26 +38,6 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         [CommandOption("--password|-p <PASSWORD>")]
         [Description("Certificate password (omit for interactive prompt)")]
         public string? Password { get; init; }
-
-        /// <summary>PKCS#11 library of an A3 token, smartcard or HSM (alternative to --cert).</summary>
-        [CommandOption("--pkcs11-lib <PATH>")]
-        [Description("PKCS#11 library of an A3 token, smartcard or HSM (alternative to --cert). See 'simplesign pkcs11 list'.")]
-        public string? Pkcs11Library { get; init; }
-
-        /// <summary>Token label, when more than one token is connected. Requires --pkcs11-lib.</summary>
-        [CommandOption("--pkcs11-token <LABEL>")]
-        [Description("Token label, when more than one token is connected. Requires --pkcs11-lib.")]
-        public string? Pkcs11Token { get; init; }
-
-        /// <summary>Key or certificate label, when the token has more than one key. Requires --pkcs11-lib.</summary>
-        [CommandOption("--pkcs11-key <LABEL>")]
-        [Description("Key or certificate label, when the token has more than one key. Requires --pkcs11-lib.")]
-        public string? Pkcs11Key { get; init; }
-
-        /// <summary>Token PIN (omit for an interactive prompt or a PIN pad). Requires --pkcs11-lib.</summary>
-        [CommandOption("--pin <PIN>")]
-        [Description("Token PIN (omit for an interactive prompt or a PIN pad). Requires --pkcs11-lib.")]
-        public string? Pin { get; init; }
 
         /// <summary>Output signature file (default: input.p7s).</summary>
         [CommandOption("--output|-o <PATH>")]
@@ -112,9 +91,9 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
                 return ValidationResult.Error($"File not found: {InputPath}");
             }
 
-            if (Pkcs11CommandSupport.Validate(Pkcs11Library, Pkcs11Token, Pkcs11Key, Pin, CertPath is not null) is { } pkcs11Error)
+            if (ExternalCredentialSupport.Validate(this, CertPath is not null) is { } externalError)
             {
-                return ValidationResult.Error(pkcs11Error);
+                return ValidationResult.Error(externalError);
             }
 
             if (CertPath is not null && !File.Exists(CertPath))
@@ -146,9 +125,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
     {
         byte[] data = await CommonSettings.ReadInputBytesAsync(settings.InputPath, cancellationToken);
 
-        using Pkcs11Signer? token = string.IsNullOrWhiteSpace(settings.Pkcs11Library)
-            ? null
-            : await Pkcs11CommandSupport.OpenAsync(settings.Pkcs11Library, settings.Pkcs11Token, settings.Pkcs11Key, settings.Pin);
+        using ExternalCredential? token = await ExternalCredentialSupport.OpenAsync(settings, cancellationToken);
         using X509Certificate2? ownCert = token is null ? await LoadCertificateAsync(settings, cancellationToken) : null;
         X509Certificate2 cert = token?.Certificate ?? ownCert!;
 
@@ -160,7 +137,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         var logger = settings.CreateLogger<CadesSignCommand>();
         var builder = (token is null
                 ? CadesSigner.Document(data).WithCertificate(cert)
-                : CadesSigner.Document(data).WithExternalSigner(token.Certificate, token, token.Chain))
+                : CadesSigner.Document(data).WithExternalSigner(token.Certificate, token.Signer, token.Chain))
             .WithHashAlgorithm(hashAlg)
             .WithContentType(contentType);
 
@@ -186,7 +163,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         {
             builder = token is null
                 ? builder.WithCertificate(cert, LoadChainCertificates(settings.ChainPath))
-                : builder.WithExternalSigner(token.Certificate, token, [.. token.Chain, .. LoadChainCertificates(settings.ChainPath)]);
+                : builder.WithExternalSigner(token.Certificate, token.Signer, [.. token.Chain, .. LoadChainCertificates(settings.ChainPath)]);
         }
 
         byte[] cms = await builder.SignAsync(cancellationToken);

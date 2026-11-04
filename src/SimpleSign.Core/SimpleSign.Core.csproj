@@ -25,6 +25,8 @@
     <InternalsVisibleTo Include="SimpleSign.CAdES.Tests" />
     <InternalsVisibleTo Include="SimpleSign.XAdES" />
     <InternalsVisibleTo Include="SimpleSign.Signers.Pkcs11" />
+    <InternalsVisibleTo Include="SimpleSign.Signers.Cloud" />
+    <InternalsVisibleTo Include="SimpleSign.Signers.Cloud.Tests" />
   </ItemGroup>
 
   <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0'))">
