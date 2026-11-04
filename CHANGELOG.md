@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.10.0] - 2026-11-03
+## [0.10.0] - 2026-11-04
 
 ### Changed (Breaking) — Signature Validation
 
@@ -100,6 +100,51 @@ See the [v0.9 → v0.10 migration guide](docs/migration/v0.9-to-v0.10.md).
 - Text with embedded fonts is shaped (kerning/ligatures change widths slightly); hard hyphens are
   line-break opportunities; elements with `overflow: hidden` and a fixed height keep that height.
 - Every PDF now contains at least one page (empty documents produce a blank page).
+
+### Added — Signature Appearance
+
+- Customizable stamp text: `SignedByLabel` (replaces "Signed by"; an empty string hides the
+  line), `ReasonLabel`, `LocationLabel`, `DateLabel` and `SignerDisplayName`, plus the
+  `WithLabels(...)` clone method.
+- Date display options: `DateFormat`, `TimeZone` and `DateCulture`, plus `WithDateFormat(...)`.
+  With a time zone other than UTC the default format shows the offset (`11:30 UTC-03:00`).
+- `BackgroundColor`, fixed `Width`/`Height`, `MaxTextLength`, and `BackgroundImageFit`
+  (`Stretch`, `Contain`, `Cover`).
+- PNG backgrounds with transparency (RGBA, gray+alpha and palette images with `tRNS`) are embedded
+  with a soft mask, so a scanned handwritten signature can sit over the stamp. Palette PNGs
+  (1/2/4/8-bit) are now accepted.
+- `TextAlignment` (`Left`, `Center`, `Right`), `VerticalAlignment` (`Top`, `Middle`, `Bottom`) and
+  `ShrinkToFit` (default on): with a fixed `Width`/`Height`, text that does not fit is scaled down
+  instead of being clipped.
+- CLI: `--signed-by-label`, `--reason-label`, `--location-label`, `--date-label`, `--date-format`,
+  `--time-zone`, `--background-color`, `--image-fit`, `--stamp-width`, `--stamp-height` and
+  `--text-align`.
+- HostSigner: `POST /api/sign-file` accepts an optional `stamp` object (labels, date format, time
+  zone, position, size, alignment), and the Sign page has fields for them. The visible stamp now
+  shows the reason and location when they are given, and is placed automatically when no
+  position is set.
+
+### Fixed — Signature Appearance
+
+- The stamp size now uses the font's real character widths and the configured font sizes. Large
+  font sizes no longer overflow the stamp, and line spacing grows with the font size. Stamps with the
+  default fonts are narrower than before, because the old estimate was too wide.
+- The border is drawn over the background image instead of under it.
+- Grayscale and CMYK JPEG backgrounds use the right color space. JPEG dimensions are read by
+  walking the marker segments, so bytes inside metadata are no longer taken for the frame header.
+- Characters the stamp font cannot show are replaced with readable text (for example `–` → `-`,
+  `Ł` → `L`), instead of all becoming `?`.
+- Reason, location and extra lines always use the label font size; before, they used the name size
+  when the date was hidden.
+- The PDF/A-1 check only reports PNG backgrounds that actually have transparency.
+- Helvetica-Bold, Times-Roman and Times-Bold stamps are measured with their own character widths
+  instead of an approximation, so the stamp fits the text.
+
+### Fixed — Signature Dictionary
+
+- `/Name`, `/Reason`, `/Location`, `/ContactInfo` and the field name (`/T`) are written as UTF-16
+  when they contain characters outside PDFDocEncoding (for example `Ł`, `€`, Greek or Cyrillic).
+  Before, those characters became `?` in the signature panel of PDF readers.
 
 ## [0.9.3] - 2026-11-01
 

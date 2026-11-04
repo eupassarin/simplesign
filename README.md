@@ -49,6 +49,8 @@ changes and work under `Unreleased`.
 
 **HTML to PDF, browser-grade** — `SimpleSign.HtmlToPdf` is now a full CSS layout engine: complex selectors and cascade, floats, flexbox, grid, multi-column, paginated tables, `calc()`, counters and `@page` page numbers; backgrounds, gradients, transparency, shadows and transforms; inline and file SVG as vectors; embedded subset fonts with OpenType shaping (kerning, ligatures, Arabic, Devanagari), right-to-left text and hyphenation; PDF/A-2b output.
 
+**Customizable signature stamp** — every stamp text can be changed (`SignedByLabel` replaces "Signed by"), the date can be shown in a local time zone and format, and stamps support fixed sizes with shrink-to-fit, text alignment, background colors and transparent PNG images (handwritten signatures). Signer names and reasons outside Latin-1 are now kept in the signature dictionary. The CLI and HostSigner expose the same options.
+
 **Packaging** — every NuGet package ships its own README, icon, SourceLink and symbol package.
 
 See the [full changelog](CHANGELOG.md).
@@ -422,6 +424,25 @@ await PadesSigner
     .WithAppearance(appearance)
     .SignAsync(output);
 ```
+
+Every text in the stamp can be changed, and the date can be shown in a local time zone:
+
+```csharp
+var appearance = new SignatureAppearance
+{
+    ShowReason = true,
+    BackgroundImagePng = handwrittenSignaturePng,   // transparency is kept
+    BackgroundImageFit = SignatureImageFit.Contain,  // keep the aspect ratio
+    BackgroundColor = (1f, 1f, 1f),
+    BorderColor = (0.2f, 0.2f, 0.2f),
+}
+.WithLabels(signedBy: "Assinado digitalmente por", reason: "Motivo: ", location: "Local: ", date: "Data: ")
+.WithDateFormat("dd/MM/yyyy HH:mm:ss", TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"));
+```
+
+Set `SignedByLabel = ""` to hide the first line, `SignerDisplayName` to show a name other than the
+`/Name` entry, and `Width`/`Height` to give the stamp a fixed size (text shrinks to fit; use
+`TextAlignment` and `VerticalAlignment` to place it).
 
 ---
 

@@ -52,6 +52,14 @@ cannot perform equivalent raw-output verification.
 appearance configuration and is the explicit way to clear nullable field values. Batch and
 deferred PAdES workflows use the same profile/provider/algorithm vocabulary as direct signing.
 
+`SignatureAppearance` controls the visible stamp. Texts: `SignedByLabel` (default "Signed by";
+"" hides it), `ReasonLabel`, `LocationLabel`, `DateLabel`, `SignerDisplayName`; date:
+`DateFormat`, `TimeZone`, `DateCulture`; layout: `Width`/`Height` (fixed size), `ShrinkToFit`,
+`TextAlignment`, `VerticalAlignment`, `MaxTextLength`; look: `BackgroundColor`,
+`BackgroundImagePng`/`BackgroundImageJpeg` with `BackgroundImageFit`, `BorderColor`,
+`TextColor`, `BaseFontName` (Base14). Clone helpers: `WithLabels(...)`, `WithDateFormat(...)`.
+Stamp text is limited to Latin-1; the signature dictionary keeps full Unicode.
+
 ## Security rules
 
 - RFC 3161 responses must bind to request OID, imprint, and nonce. Token integrity requires

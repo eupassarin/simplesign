@@ -34,6 +34,8 @@ IReadOnlyList<SignatureValidationResult> results =
   (two-phase) signing for HSM / web scenarios
 - ICP-Brasil / eIDAS country extensions via `WithCountryExtension(...)`
 - PDF/A preservation, incremental updates that keep earlier signatures valid
+- Visible signature stamps with customizable labels and date/time zone, QR code, and
+  background images (PNG transparency kept)
 - Zero third-party crypto; AOT-compatible
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)

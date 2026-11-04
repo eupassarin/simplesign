@@ -119,6 +119,31 @@ await PadesSigner
     .SignAsync(output);
 ```
 
+The stamp texts are customizable. For a stamp in Portuguese with the date in Brasília time:
+
+```csharp
+var appearance = new SignatureAppearance { ShowReason = true, ShowLocation = true }
+    .WithLabels(signedBy: "Assinado digitalmente por", reason: "Motivo: ", location: "Local: ")
+    .WithDateFormat(null, TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"));
+// "Assinado digitalmente por / Maria Silva / 15/06/2025 11:30 UTC-03:00 / Motivo: ..."
+```
+
+| Property | Default | Purpose |
+|---|---|---|
+| `SignedByLabel` | `"Signed by"` | First line; `""` hides it |
+| `SignerDisplayName` | signer name | Name shown in the stamp (the `/Name` entry is unchanged) |
+| `ReasonLabel` / `LocationLabel` / `DateLabel` | `"Reason: "` / `"Location: "` / `""` | Line prefixes |
+| `DateFormat` / `TimeZone` / `DateCulture` | `dd/MM/yyyy HH:mm` + offset, UTC, invariant | Date display |
+| `Width` / `Height` | computed | Fixed stamp size |
+| `ShrinkToFit` | `true` | With a fixed size, scale text down so every line fits |
+| `TextAlignment` / `VerticalAlignment` | `Left` / `Top` | Text position inside the stamp |
+| `MaxTextLength` | `40` | Characters per line before `...`; `0` disables |
+| `BackgroundColor` | none | Stamp fill color |
+| `BackgroundImageFit` | `Stretch` | `Stretch`, `Contain` (keep ratio) or `Cover` (fill and crop) |
+
+PNG backgrounds may have transparency (RGBA, gray+alpha, or palette with `tRNS`), which is kept
+through a soft mask. PDF/A-1 forbids transparency, so use an opaque PNG or a JPEG there.
+
 ## Validate Signatures
 
 ```csharp
