@@ -390,6 +390,87 @@ public sealed class CliCommandTests : IDisposable
     }
 
     /// <summary>Runs the CLI and returns the exit code with everything written to both consoles.</summary>
+    [Fact]
+    public async Task Sign_Pkcs11WithCert_IsRejected()
+    {
+        string pdf = WritePdf("pkcs11-conflict.pdf");
+
+        var (exit, output) = await RunAsync("sign", pdf, "--cert", _pfxPath, "--pkcs11-lib", "/nonexistent/lib.so");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("--pkcs11-lib cannot be combined");
+    }
+
+    [Fact]
+    public async Task Sign_PinWithoutPkcs11Lib_IsRejected()
+    {
+        string pdf = WritePdf("pin-only.pdf");
+
+        var (exit, output) = await RunAsync("sign", pdf, "--cert", _pfxPath, "--pin", "1234");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("require --pkcs11-lib");
+    }
+
+    [Fact]
+    public async Task Sign_NoCredential_MentionsPkcs11()
+    {
+        string pdf = WritePdf("no-credential.pdf");
+
+        var (exit, output) = await RunAsync("sign", pdf);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("--pkcs11-lib");
+    }
+
+    [Fact]
+    public async Task Sign_MissingPkcs11Library_FailsWithClearError()
+    {
+        string pdf = WritePdf("missing-lib.pdf");
+
+        var (exit, output) = await RunAsync("sign", pdf, "--pkcs11-lib", "/nonexistent/libpkcs11.so", "--pin", "1234");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("could not be loaded");
+    }
+
+    [Fact]
+    public async Task CadesSign_Pkcs11WithCert_IsRejected()
+    {
+        string data = Path.Combine(_tempDir, "data.bin");
+        File.WriteAllBytes(data, [1, 2, 3]);
+
+        var (exit, output) = await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--pkcs11-lib", "/nonexistent/lib.so");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("--pkcs11-lib cannot be combined");
+    }
+
+    [Fact]
+    public async Task Pkcs11List_MissingLibrary_FailsWithClearError()
+    {
+        var (exit, output) = await RunAsync("pkcs11", "list", "--lib", "/nonexistent/libpkcs11.so");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("could not be loaded");
+    }
+
+    [Fact]
+    public async Task Pkcs11List_NoLib_IsRejected()
+    {
+        var (exit, output) = await RunAsync("pkcs11", "list");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("--lib is required");
+    }
+
+    private string WritePdf(string name)
+    {
+        string path = Path.Combine(_tempDir, name);
+        File.WriteAllBytes(path, TestPdfFactory.CreateMinimalPdf());
+        return path;
+    }
+
     private static async Task<(int Exit, string Output)> RunAsync(params string[] args)
     {
         var services = new ServiceCollection();

@@ -8,6 +8,7 @@ using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
+using SimpleSign.Signers.Pkcs11;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -56,6 +57,26 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [CommandOption("--thumbprint <HEX>")]
         [Description("Certificate thumbprint in OS certificate store (alternative to --cert)")]
         public string? Thumbprint { get; init; }
+
+        /// <summary>PKCS#11 library of an A3 token, smartcard or HSM (alternative to --cert).</summary>
+        [CommandOption("--pkcs11-lib <PATH>")]
+        [Description("PKCS#11 library of an A3 token, smartcard or HSM (alternative to --cert). See 'simplesign pkcs11 list'.")]
+        public string? Pkcs11Library { get; init; }
+
+        /// <summary>Token label, when more than one token is connected. Requires --pkcs11-lib.</summary>
+        [CommandOption("--pkcs11-token <LABEL>")]
+        [Description("Token label, when more than one token is connected. Requires --pkcs11-lib.")]
+        public string? Pkcs11Token { get; init; }
+
+        /// <summary>Key or certificate label, when the token has more than one key. Requires --pkcs11-lib.</summary>
+        [CommandOption("--pkcs11-key <LABEL>")]
+        [Description("Key or certificate label, when the token has more than one key. Requires --pkcs11-lib.")]
+        public string? Pkcs11Key { get; init; }
+
+        /// <summary>Token PIN (omit for an interactive prompt or a PIN pad). Requires --pkcs11-lib.</summary>
+        [CommandOption("--pin <PIN>")]
+        [Description("Token PIN (omit for an interactive prompt or a PIN pad). Requires --pkcs11-lib.")]
+        public string? Pin { get; init; }
 
         /// <summary>Output file (default: input_signed.pdf).</summary>
         [CommandOption("--output|-o <PATH>")]
@@ -301,10 +322,16 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         {
             bool hasCertPath = !string.IsNullOrWhiteSpace(CertPath);
             bool hasThumbprint = !string.IsNullOrWhiteSpace(Thumbprint);
+            bool hasPkcs11 = !string.IsNullOrWhiteSpace(Pkcs11Library);
 
-            if (!hasCertPath && !hasThumbprint)
+            if (Pkcs11CommandSupport.Validate(Pkcs11Library, Pkcs11Token, Pkcs11Key, Pin, hasCertPath || hasThumbprint) is { } pkcs11Error)
             {
-                return ValidationResult.Error("Either --cert or --thumbprint is required.");
+                return ValidationResult.Error(pkcs11Error);
+            }
+
+            if (!hasCertPath && !hasThumbprint && !hasPkcs11)
+            {
+                return ValidationResult.Error("Either --cert, --thumbprint or --pkcs11-lib is required.");
             }
 
             if (hasCertPath && hasThumbprint)
@@ -560,7 +587,12 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
     private async Task<int> ExecuteCertSigningAsync(
         Settings settings, string outputPath, ILoggerFactory? loggerFactory, CancellationToken cancellation)
     {
-        var (cert, chainCerts) = await LoadSigningCertificateAsync(settings, cancellation);
+        Pkcs11Signer? token = string.IsNullOrWhiteSpace(settings.Pkcs11Library)
+            ? null
+            : await Pkcs11CommandSupport.OpenAsync(settings.Pkcs11Library, settings.Pkcs11Token, settings.Pkcs11Key, settings.Pin);
+        var (cert, chainCerts) = token is null
+            ? await LoadSigningCertificateAsync(settings, cancellation)
+            : (token.Certificate, [.. token.Chain]);
 
         try
         {
@@ -574,7 +606,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                     var pdfBytes = await File.ReadAllBytesAsync(settings.InputPath);
                     ILogger? logger = loggerFactory?.CreateLogger("SimpleSign.Signing");
                     PadesSignerBuilder builder;
-                    if (chainCerts.Count > 0)
+                    if (token is not null)
+                    {
+                        builder = PadesSigner.Document(pdfBytes).WithExternalSigner(token.Certificate, token, token.Chain);
+                    }
+                    else if (chainCerts.Count > 0)
                     {
                         builder = PadesSigner.Document(pdfBytes).WithCertificate(cert, chainCerts);
                     }
@@ -734,10 +770,17 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         }
         finally
         {
-            cert.Dispose();
-            foreach (var c in chainCerts)
+            if (token is not null)
             {
-                c.Dispose();
+                token.Dispose();
+            }
+            else
+            {
+                cert.Dispose();
+                foreach (var c in chainCerts)
+                {
+                    c.Dispose();
+                }
             }
         }
     }

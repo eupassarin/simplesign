@@ -88,6 +88,9 @@ dotnet add package SimpleSign.CAdES
 # XAdES signatures (XML-DSig)
 dotnet add package SimpleSign.XAdES
 
+# A3 tokens, smartcards and HSMs (PKCS#11)
+dotnet add package SimpleSign.Signers.Pkcs11
+
 # CLI tool
 dotnet tool install -g SimpleSign.Cli
 ```
@@ -102,6 +105,7 @@ dotnet tool install -g SimpleSign.Cli
   - **SimpleSign.XAdES** — XML signature signing & validation (ETSI EN 319 132)
     - **SimpleSign.Core** (shared)
 - **SimpleSign.Brasil** — ICP-Brasil + Gov.br + Lei 14.063 (depends on PAdES)
+- **SimpleSign.Signers.Pkcs11** — sign with A3 tokens, smartcards and HSMs through their PKCS#11 driver (depends on Core)
 - **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF: CSS cascade, floats, flexbox, grid, multi-column, paginated tables, gradients, SVG, OpenType shaping and RTL text, subset Unicode fonts, PDF/A-2b (independent)
 - **SimpleSign.Cli** — CLI tool (install as dotnet tool)
 - **SimpleSign.HostSigner** — Windows tray app for local signing API
@@ -161,6 +165,29 @@ foreach (var r in results)
     Console.WriteLine($"  Signer: {r.SignerName} at {r.SigningTime}");
 }
 ```
+
+---
+
+### Sign with an A3 token, smartcard or HSM (PKCS#11)
+
+```csharp
+using SimpleSign.Signers.Pkcs11;
+
+using var token = Pkcs11Signer.Open(new Pkcs11SignerOptions
+{
+    LibraryPath = "/usr/lib/libeToken.so",   // the token vendor's PKCS#11 driver
+    Pin = pin,
+});
+
+var signedPdf = await PadesSigner
+    .Document(pdfBytes)
+    .WithExternalSigner(token.Certificate, token, token.Chain)
+    .SignAsync();
+```
+
+The private key never leaves the device. The same signer works with CAdES and XAdES, and the CLI
+accepts `--pkcs11-lib` (`simplesign pkcs11 list` shows the tokens). See the
+[PKCS#11 guide](docs/articles/pkcs11.md).
 
 ---
 

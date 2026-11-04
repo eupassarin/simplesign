@@ -4,6 +4,8 @@
   href: deferred-signing.md
 - name: Inspection & Validation
   href: inspection-validation.md
+- name: Tokens, Smartcards & HSMs (PKCS#11)
+  href: pkcs11.md
 - name: ICP-Brasil
   href: icp-brasil.md
 - name: HTML to PDF

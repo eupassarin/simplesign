@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a PKCS#12 file, for the fluent API.
 - **Well-known TSAs:** `TimestampOptions.DigiCert`, `TimestampOptions.Sectigo` and
   `TimestampOptions.FreeTsa`, e.g. `AdesBaselineProfile.Timestamped(TimestampOptions.DigiCert)`.
+- **New package `SimpleSign.Signers.Pkcs11`:** sign with A3 tokens, smartcards and HSMs through
+  their PKCS#11 driver (`Pkcs11Signer.Open(...)`, an `IExternalSigner` for PAdES, CAdES and XAdES;
+  `Pkcs11Signer.ListTokens(...)`). Own minimal interop: no third-party dependencies, no `unsafe`,
+  Native AOT compatible. Tested against SoftHSM2 (`scripts/tests/pkcs11.sh` runs it in Docker).
+- CLI: `sign` and `cades sign` accept `--pkcs11-lib`, `--pkcs11-token`, `--pkcs11-key` and `--pin`;
+  `pkcs11 list --lib <path>` lists tokens and certificates.
 - **Brasil:** `BrasilExtension.CreateValidator(options?, httpClient?, logger?)` returns a PAdES
   validator that trusts the ICP-Brasil and Gov.br roots, without positional `null` arguments.
 

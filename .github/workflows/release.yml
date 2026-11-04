@@ -62,6 +62,7 @@ jobs:
             src/SimpleSign.CAdES/SimpleSign.CAdES.csproj
             src/SimpleSign.XAdES/SimpleSign.XAdES.csproj
             src/SimpleSign.Brasil/SimpleSign.Brasil.csproj
+            src/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj
             src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj
             src/SimpleSign/SimpleSign.csproj
             src/SimpleSign.Cli/SimpleSign.Cli.csproj

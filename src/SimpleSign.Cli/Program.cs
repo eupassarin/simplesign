@@ -54,6 +54,12 @@ internal static partial class Program
                     .WithDescription("Validate a CAdES detached signature");
             });
 
+            config.AddBranch("pkcs11", pkcs11 =>
+            {
+                pkcs11.AddCommand<Pkcs11ListCommand>("list")
+                    .WithDescription("List the tokens and certificates of a PKCS#11 driver");
+            });
+
             config.AddBranch("xades", xades =>
             {
                 xades.AddCommand<XadesSignCommand>("sign")

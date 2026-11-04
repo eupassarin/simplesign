@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Signers.Pkcs11</AssemblyName>
+    <RootNamespace>SimpleSign.Signers.Pkcs11</RootNamespace>
+    <PackageId>SimpleSign.Signers.Pkcs11</PackageId>
+    <Description>Sign PAdES, CAdES and XAdES documents with A3 tokens, smartcards and HSMs through their PKCS#11 driver. Own minimal interop: no third-party dependencies, no unsafe code. Native AOT compatible.</Description>
+    <PackageTags>pkcs11;cryptoki;hsm;smartcard;token;a3;icp-brasil;digital-signature;external-signer;native-aot</PackageTags>
+    <Version>0.10.1</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Signers.Pkcs11.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
