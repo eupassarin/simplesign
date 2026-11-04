@@ -13,6 +13,21 @@
     <NoWarn>$(NoWarn);CA1829;CA1861</NoWarn>
   </PropertyGroup>
 
+  <!--
+    Pin the runtime to patched servicing releases. Without this the SDK picks the
+    runtime pack, NativeAOT runtime pack and ILCompiler versions bundled with the
+    installed SDK, and older SDKs (e.g. 10.0.300 -> 8.0.27 / 10.0.8) bring ILCompiler
+    builds affected by GHSA-p3jp-9v83-76w9, which NuGet audit reports as NU1903.
+    Setting RuntimeFrameworkVersion moves all three packs together, so the published
+    binary also links the patched runtime libraries. Bump on new servicing releases.
+  -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <RuntimeFrameworkVersion>8.0.33</RuntimeFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="../../../src/SimpleSign.PAdES/SimpleSign.PAdES.csproj" />
   </ItemGroup>
