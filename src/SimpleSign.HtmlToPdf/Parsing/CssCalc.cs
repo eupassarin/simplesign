@@ -140,7 +140,9 @@ internal sealed class CssCalc
 
     private sealed class Parser(string text, float fontSize)
     {
+        private const int MaxDepth = 32;
         private int _pos;
+        private int _depth;
 
         public bool AtEnd => _pos >= text.Length;
 
@@ -207,6 +209,29 @@ internal sealed class CssCalc
             }
 
             char c = text[_pos];
+            if (c == '(' || char.IsLetter(c))
+            {
+                // Bound the recursion: hostile input could nest thousands of parentheses.
+                if (++_depth > MaxDepth)
+                {
+                    throw new FormatException("Expression nested too deeply.");
+                }
+
+                try
+                {
+                    return ParseGroup(c);
+                }
+                finally
+                {
+                    _depth--;
+                }
+            }
+
+            return ParseNumber();
+        }
+
+        private Node ParseGroup(char c)
+        {
             if (c == '(')
             {
                 _pos++;
@@ -215,36 +240,31 @@ internal sealed class CssCalc
                 return inner;
             }
 
-            if (char.IsLetter(c))
+            int start = _pos;
+            while (_pos < text.Length && (char.IsLetter(text[_pos]) || text[_pos] == '-'))
             {
-                int start = _pos;
-                while (_pos < text.Length && (char.IsLetter(text[_pos]) || text[_pos] == '-'))
-                {
-                    _pos++;
-                }
-
-                string name = text[start.._pos].ToLowerInvariant();
-                Expect('(');
-                List<Node> args = [ParseExpression()];
-                SkipWhitespace();
-                while (!AtEnd && text[_pos] == ',')
-                {
-                    _pos++;
-                    args.Add(ParseExpression());
-                    SkipWhitespace();
-                }
-
-                Expect(')');
-                return name switch
-                {
-                    "calc" or "-webkit-calc" when args.Count == 1 => args[0],
-                    "min" or "max" when args.Count >= 1 => new Function(name, args),
-                    "clamp" when args.Count == 3 => new Function(name, args),
-                    _ => throw new FormatException("Unknown function."),
-                };
+                _pos++;
             }
 
-            return ParseNumber();
+            string name = text[start.._pos].ToLowerInvariant();
+            Expect('(');
+            List<Node> args = [ParseExpression()];
+            SkipWhitespace();
+            while (!AtEnd && text[_pos] == ',')
+            {
+                _pos++;
+                args.Add(ParseExpression());
+                SkipWhitespace();
+            }
+
+            Expect(')');
+            return name switch
+            {
+                "calc" or "-webkit-calc" when args.Count == 1 => args[0],
+                "min" or "max" when args.Count >= 1 => new Function(name, args),
+                "clamp" when args.Count == 3 => new Function(name, args),
+                _ => throw new FormatException("Unknown function."),
+            };
         }
 
         private Number ParseNumber()

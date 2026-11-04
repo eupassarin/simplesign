@@ -25,6 +25,7 @@ internal sealed class SvgRenderer
     private readonly ImageObjectCache _images;
     private readonly HashSet<string> _pageImages;
     private int _useExpansions;
+    private int _drawDepth;
 
     public SvgRenderer(ImageObjectCache images, HashSet<string> pageImages)
     {
@@ -84,11 +85,25 @@ internal sealed class SvgRenderer
     /// <summary>Draws an SVG root into a rectangle given in PDF coordinates.</summary>
     public void Draw(PdfContentStream cs, HtmlNode svg, PdfRect target)
     {
-        if (target.Width <= 0 || target.Height <= 0)
+        // An SVG may embed itself (or another SVG that embeds it) through <image>.
+        if (target.Width <= 0 || target.Height <= 0 || _drawDepth >= 4)
         {
             return;
         }
 
+        _drawDepth++;
+        try
+        {
+            DrawRoot(cs, svg, target);
+        }
+        finally
+        {
+            _drawDepth--;
+        }
+    }
+
+    private void DrawRoot(PdfContentStream cs, HtmlNode svg, PdfRect target)
+    {
         (float iw, float ih) = SvgDocument.IntrinsicSize(svg);
         float[] viewBox = SvgDocument.ParseViewBox(svg.GetAttribute("viewbox")) ?? [0, 0, iw, ih];
         Matrix2D toPage = ViewportMatrix(viewBox, target.Width, target.Height, svg.GetAttribute("preserveaspectratio"));
@@ -100,7 +115,6 @@ internal sealed class SvgRenderer
         cs.SaveState();
         cs.ClipRect(target.X, target.Bottom, target.Width, target.Height);
         Concat(cs, m);
-        _useExpansions = 0;
         State state = Inherit(new State { ViewportWidth = viewBox[2], ViewportHeight = viewBox[3] }, svg);
         float savedAlpha = cs.GroupAlpha;
         cs.GroupAlpha *= ElementOpacity(svg);

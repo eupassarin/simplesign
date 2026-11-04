@@ -123,7 +123,8 @@ internal static class BackgroundPainter
 
         int columns = Math.Max(1, (int)MathF.Ceiling((endX - startX) / tileW - 0.001f));
         int rows = Math.Max(1, (int)MathF.Ceiling((startTop - endBottom) / tileH - 0.001f));
-        if ((long)columns * rows > MaxTiles)
+        // Each SVG tile repeats the whole drawing, so vector tiles get a tighter budget.
+        if ((long)columns * rows > (svg is null ? MaxTiles : 256))
         {
             return;
         }

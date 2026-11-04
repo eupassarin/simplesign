@@ -42,8 +42,16 @@ public static class CssParser
         return rules;
     }
 
-    private static void ParseBlock(string css, List<CssRule> rules)
+    /// <summary>Conditional at-rules nested deeper than this are ignored (real stylesheets use one or two levels).</summary>
+    private const int MaxAtRuleDepth = 16;
+
+    private static void ParseBlock(string css, List<CssRule> rules, int depth = 0)
     {
+        if (depth > MaxAtRuleDepth)
+        {
+            return;
+        }
+
         var i = 0;
         while (i < css.Length)
         {
@@ -59,7 +67,7 @@ public static class CssParser
 
             if (css[i] == '@')
             {
-                i = ParseAtRule(css, i, rules);
+                i = ParseAtRule(css, i, rules, depth);
                 continue;
             }
 
@@ -109,7 +117,7 @@ public static class CssParser
         }
     }
 
-    private static int ParseAtRule(string css, int start, List<CssRule> rules)
+    private static int ParseAtRule(string css, int start, List<CssRule> rules, int depth)
     {
         var braceIdx = IndexOutsideStrings(css, '{', start);
         var semiIdx = IndexOutsideStrings(css, ';', start);
@@ -135,13 +143,13 @@ public static class CssParser
             case "media":
                 if (MediaQueryAppliesToPrint(prelude[5..]))
                 {
-                    ParseBlock(body, rules);
+                    ParseBlock(body, rules, depth + 1);
                 }
 
                 break;
 
             case "supports":
-                ParseBlock(body, rules);
+                ParseBlock(body, rules, depth + 1);
                 break;
 
             case "page":

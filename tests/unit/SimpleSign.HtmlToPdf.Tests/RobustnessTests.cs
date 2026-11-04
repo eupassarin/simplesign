@@ -127,4 +127,40 @@ public sealed class RobustnessTests
 
         html.Append(random.Next(5) == 0 ? string.Empty : $"</{tag}>");
     }
+
+    // ── Pathological nesting (each would otherwise recurse or rescan without bound) ──
+
+    private static string Repeat(string text, int count) => string.Concat(Enumerable.Repeat(text, count));
+
+    [Theory]
+    [InlineData("media")]
+    [InlineData("supports")]
+    [InlineData("not")]
+    [InlineData("calc")]
+    [InlineData("svg")]
+    public void DeeplyNestedInput_FinishesQuickly(string kind)
+    {
+        const int n = 20_000;
+        string html = kind switch
+        {
+            "media" => "<style>" + Repeat("@media print {", n) + "p{color:red}" + Repeat("}", n) + "</style><p>x</p>",
+            "supports" => "<style>" + Repeat("@supports (x) {", n) + Repeat("}", n) + "</style><p>x</p>",
+            "not" => "<style>p" + Repeat(":not(", n) + "a" + Repeat(")", n) + "{color:red}</style><p>x</p>",
+            "calc" => "<p style='width:calc(" + Repeat("(", n) + "1px" + Repeat(")", n) + ")'>x</p>",
+            _ => "<img src='data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                "<svg xmlns='http://www.w3.org/2000/svg'>" + Repeat("<g>", n) + Repeat("</g>", n) + "</svg>")) + "'>",
+        };
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Should.NotThrow(() => HtmlToPdfConverter.Html(html).Convert());
+        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void SelfReferencingSvgImage_DoesNotRecurseForever()
+    {
+        byte[] svg = Encoding.UTF8.GetBytes("<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10'><image href='self.svg' width='10' height='10'/></svg>");
+
+        Should.NotThrow(() => HtmlToPdfConverter.Html("<img src='self.svg'>").WithResourceLoader(_ => svg).Convert());
+    }
 }

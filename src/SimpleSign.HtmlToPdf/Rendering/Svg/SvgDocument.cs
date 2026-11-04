@@ -9,6 +9,7 @@ namespace SimpleSign.HtmlToPdf.Rendering.Svg;
 internal static class SvgDocument
 {
     private const int MaxElements = 200_000;
+    private const int MaxDepth = 128;
 
     /// <summary>Returns true when the reference or bytes look like an SVG document.</summary>
     public static bool LooksLikeSvg(string? reference, byte[]? bytes)
@@ -61,6 +62,8 @@ internal static class SvgDocument
             HtmlNode? root = null;
             HtmlNode? current = null;
             int count = 0;
+            int depth = 0;
+            int skipped = 0;
             while (reader.Read())
             {
                 switch (reader.NodeType)
@@ -69,6 +72,17 @@ internal static class SvgDocument
                         if (++count > MaxElements)
                         {
                             return root;
+                        }
+
+                        // Content nested deeper than any real drawing is dropped (keeps later recursion bounded).
+                        if (skipped > 0 || depth >= MaxDepth)
+                        {
+                            if (!reader.IsEmptyElement)
+                            {
+                                skipped++;
+                            }
+
+                            break;
                         }
 
                         var element = HtmlNode.CreateElement(reader.LocalName);
@@ -99,16 +113,28 @@ internal static class SvgDocument
                         if (!reader.IsEmptyElement)
                         {
                             current = element;
+                            depth++;
                         }
 
                         break;
 
                     case XmlNodeType.EndElement:
+                        if (skipped > 0)
+                        {
+                            skipped--;
+                            break;
+                        }
+
                         current = current?.Parent;
+                        depth--;
                         break;
 
                     case XmlNodeType.Text or XmlNodeType.CDATA or XmlNodeType.SignificantWhitespace or XmlNodeType.Whitespace:
-                        current?.AppendChild(HtmlNode.CreateText(reader.Value));
+                        if (skipped == 0)
+                        {
+                            current?.AppendChild(HtmlNode.CreateText(reader.Value));
+                        }
+
                         break;
                 }
             }

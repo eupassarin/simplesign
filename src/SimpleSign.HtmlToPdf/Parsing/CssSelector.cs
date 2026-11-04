@@ -368,8 +368,9 @@ internal sealed class CssSelector
 
     // ── Parser ───────────────────────────────────────────────────────────
 
-    private sealed class Parser(string text)
+    private sealed class Parser(string text, int depth = 0)
     {
+        private const int MaxNotDepth = 8;
         private int _pos;
 
         internal CssSelector ParseComplex()
@@ -521,10 +522,15 @@ internal sealed class CssSelector
 
                 if (name == "not")
                 {
+                    if (depth >= MaxNotDepth)
+                    {
+                        throw new FormatException(":not() nested too deeply.");
+                    }
+
                     List<CompoundSelector> alternatives = [];
                     foreach (string part in argument.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                     {
-                        var inner = new Parser(part);
+                        var inner = new Parser(part, depth + 1);
                         CompoundSelector compound = inner.ParseCompound(allowPseudoElement: false, out _);
                         if (inner._pos != part.Length)
                         {
