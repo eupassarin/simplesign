@@ -14,6 +14,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Tests;
 
+[Collection(CliConsoleCollection.Name)]
 public sealed class CommandPipelineTests : IDisposable
 {
     private readonly string _tempDir;
@@ -313,8 +314,8 @@ public sealed class CommandPipelineTests : IDisposable
             signResult.ShouldBe(0);
         }
 
-        // Validate programmatically with the test cert trusted.
-        // CLI validate uses ICP-Brasil trust anchors and cannot trust self-signed certs.
+        // Validate programmatically with the test cert trusted
+        // (CliCommandTests covers the same check through `validate --trust`).
         var validator = new PdfSignatureValidator(new ValidationOptions
         {
             CheckRevocation = false,

@@ -60,6 +60,11 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
         [Description("Directory containing PDF files to validate")]
         public string DirectoryPath { get; init; } = null!;
 
+        /// <summary>Extra trust anchor certificate(s), PEM or DER, added to the default roots.</summary>
+        [CommandOption("--trust <PATH>")]
+        [Description("Extra trust anchor certificate(s), PEM or DER, added to the default roots")]
+        public string? TrustPath { get; init; }
+
         /// <summary>Skip CRL/OCSP revocation checks.</summary>
         [CommandOption("--no-revocation")]
         [Description("Skip CRL/OCSP revocation checks")]
@@ -92,6 +97,11 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
                 return ValidationResult.Error("Concurrency must be at least 1.");
             }
 
+            if (TrustPath is not null && !File.Exists(TrustPath))
+            {
+                return ValidationResult.Error($"Trust anchor file not found: {TrustPath}");
+            }
+
             return ValidationResult.Success();
         }
     }
@@ -108,7 +118,13 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
         }
 
         using var loggerFactory = settings.CreateLoggerFactory();
-        var options = new ValidationOptions { CheckRevocation = !settings.NoRevocation };
+        var options = new ValidationOptions
+        {
+            CheckRevocation = !settings.NoRevocation,
+            TrustedRoots = settings.TrustPath is null
+                ? null
+                : [.. _certChainService.LoadCertsFromBytes(await File.ReadAllBytesAsync(settings.TrustPath, cancellationToken))],
+        };
         var validator = new PdfSignatureValidator(
             _httpClientProvider, _revocationChecker, options,
             settings.CreateLogger<PdfSignatureValidator>(),

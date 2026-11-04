@@ -29,6 +29,11 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         [Description("Signed XML file")]
         public string SignaturePath { get; init; } = null!;
 
+        /// <summary>Original data file (required for detached signatures).</summary>
+        [CommandOption("--data|-d <PATH>")]
+        [Description("Original data file (required for detached signatures)")]
+        public string? DataPath { get; init; }
+
         /// <summary>Trust anchor certificate(s) — PEM or DER.</summary>
         [CommandOption("--trust <PATH>")]
         [Description("Trust anchor certificate(s) — PEM or DER")]
@@ -51,6 +56,11 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 return ValidationResult.Error($"File not found: {SignaturePath}");
             }
 
+            if (DataPath is not null && !File.Exists(DataPath))
+            {
+                return ValidationResult.Error($"Data file not found: {DataPath}");
+            }
+
             return ValidationResult.Success();
         }
     }
@@ -64,7 +74,10 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
 
         var validator = new XadesSignatureValidator(
             new ValidationOptions { CheckRevocation = settings.CheckRevocation });
-        var result = validator.Validate(signedXml, trustAnchors: trustAnchors);
+        byte[]? originalData = settings.DataPath is null
+            ? null
+            : await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
+        var result = validator.Validate(signedXml, trustAnchors: trustAnchors, originalData: originalData);
 
         if (settings.Json)
         {

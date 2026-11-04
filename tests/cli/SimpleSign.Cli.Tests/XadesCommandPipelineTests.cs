@@ -11,6 +11,7 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Tests;
 
+[Collection(CliConsoleCollection.Name)]
 public sealed class XadesCommandPipelineTests : IDisposable
 {
     private readonly string _tempDir;

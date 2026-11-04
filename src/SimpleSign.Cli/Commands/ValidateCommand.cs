@@ -62,6 +62,11 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         [Description("Input PDF file to validate")]
         public string InputPath { get; init; } = null!;
 
+        /// <summary>Extra trust anchor certificate(s), PEM or DER, added to the default roots.</summary>
+        [CommandOption("--trust <PATH>")]
+        [Description("Extra trust anchor certificate(s), PEM or DER, added to the default roots")]
+        public string? TrustPath { get; init; }
+
         /// <summary>Skip CRL/OCSP revocation checks.</summary>
         [CommandOption("--no-revocation")]
         [Description("Skip CRL/OCSP revocation checks")]
@@ -84,6 +89,11 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
                 return ValidationResult.Error($"File not found: {InputPath}");
             }
 
+            if (TrustPath is not null && !File.Exists(TrustPath))
+            {
+                return ValidationResult.Error($"Trust anchor file not found: {TrustPath}");
+            }
+
             return ValidationResult.Success();
         }
     }
@@ -91,7 +101,13 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var loggerFactory = settings.CreateLoggerFactory();
-        var options = new ValidationOptions { CheckRevocation = !settings.NoRevocation };
+        var options = new ValidationOptions
+        {
+            CheckRevocation = !settings.NoRevocation,
+            TrustedRoots = settings.TrustPath is null
+                ? null
+                : [.. _certChainService.LoadCertsFromBytes(await File.ReadAllBytesAsync(settings.TrustPath, cancellationToken))],
+        };
         var logger = settings.CreateLogger<PdfSignatureValidator>();
         var validator = new PdfSignatureValidator(
             _httpClientProvider, _revocationChecker, options, logger,
