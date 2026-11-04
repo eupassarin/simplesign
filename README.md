@@ -112,6 +112,16 @@ dotnet tool install -g SimpleSign.Cli
 
 ### Sign a PDF (PAdES)
 
+In one line, with a .pfx file:
+
+```csharp
+using SimpleSign.PAdES;
+
+await PadesSigner.SignFileAsync("contract.pdf", "contract-signed.pdf", "me.pfx", password);
+```
+
+With the fluent builder (here PAdES B-LT, with a timestamp and revocation data):
+
 ```csharp
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
@@ -121,7 +131,7 @@ var signedPdf = await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(certificate)
     .WithLevel(AdesBaselineProfile.LongTerm(
-        new TimestampOptions(new Uri("http://timestamp.digicert.com")),
+        TimestampOptions.DigiCert,
         new LongTermValidationOptions()))
     .SignAsync();
 

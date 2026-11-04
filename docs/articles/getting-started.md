@@ -56,6 +56,27 @@ var signedPdf2 = await builder
 
 This creates a **PAdES B-B** (basic) signature.
 
+### In one line, from a .pfx file
+
+```csharp
+await PadesSigner.SignFileAsync("contract.pdf", "contract-signed.pdf", "me.pfx", password);
+```
+
+The first certificate with a private key in the file signs; the other certificates are embedded
+as its chain. To combine a .pfx file with other options, use `WithCertificateFile`:
+
+```csharp
+var builder = await PadesSigner.DocumentAsync("contract.pdf");
+var signedPdf3 = await builder
+    .WithCertificateFile("me.pfx", password)
+    .WithLevel(AdesBaselineProfile.Timestamped(TimestampOptions.DigiCert))
+    .SignAsync();
+```
+
+`TimestampOptions.DigiCert`, `TimestampOptions.Sectigo` and `TimestampOptions.FreeTsa` are ready-made
+public timestamp services. They are rate-limited and have no SLA; FreeTSA is not trusted by Adobe,
+so use it only for testing.
+
 ## Add a Timestamp (PAdES B-T)
 
 Include an RFC 3161 timestamp from a trusted TSA:

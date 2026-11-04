@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **One-call signing:** `PadesSigner.SignFileAsync(input, output, pfxPath, password, level?)`
+  signs a PDF file with a PKCS#12 file and writes the result. The first certificate with a
+  private key signs; the other certificates in the file are embedded as its chain.
+- `PadesSignerBuilder.WithCertificateFile(pfxPath, password)` loads the signer and its chain from
+  a PKCS#12 file, for the fluent API.
+- **Well-known TSAs:** `TimestampOptions.DigiCert`, `TimestampOptions.Sectigo` and
+  `TimestampOptions.FreeTsa`, e.g. `AdesBaselineProfile.Timestamped(TimestampOptions.DigiCert)`.
+- **Brasil:** `BrasilExtension.CreateValidator(options?, httpClient?, logger?)` returns a PAdES
+  validator that trusts the ICP-Brasil and Gov.br roots, without positional `null` arguments.
+
 ## [0.10.1] - 2026-11-04
 
 ### Fixed

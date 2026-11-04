@@ -1,3 +1,7 @@
+using SimpleSign.Core.Validation;
+using SimpleSign.PAdES;
+using SimpleSign.TestHelpers;
+
 namespace SimpleSign.Brasil.Tests;
 
 [Trait("Category", "Unit")]
@@ -44,5 +48,35 @@ public class BrasilExtensionTests
     {
         var ext = new BrasilExtension();
         Assert.Equal(2, ext.ChainValidationProviders.Count);
+    }
+
+    [Fact]
+    public async Task CreateValidator_SelfSignedSignature_IsNotValid()
+    {
+        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Not ICP-Brasil, C=BR");
+        var signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync();
+
+        var validator = BrasilExtension.CreateValidator(new ValidationOptions { CheckRevocation = false });
+        var results = await validator.ValidateAsync(new MemoryStream(signed));
+
+        Assert.Single(results);
+        Assert.True(results[0].IsIntegrityValid);
+        Assert.NotEqual(SignatureIndication.Valid, results[0].Indication);
+    }
+
+    [Fact]
+    public async Task CreateValidator_TrustedRootOption_IsKeptAlongsideBrasilAnchors()
+    {
+        using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Own Root Signer, C=BR");
+        var signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(cert).SignAsync();
+
+        var validator = BrasilExtension.CreateValidator(new ValidationOptions
+        {
+            CheckRevocation = false,
+            TrustedRoots = [cert],
+        });
+        var results = await validator.ValidateAsync(new MemoryStream(signed));
+
+        Assert.True(results[0].IsCertificateChainValid);
     }
 }

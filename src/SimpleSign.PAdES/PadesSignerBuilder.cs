@@ -108,6 +108,27 @@ public sealed class PadesSignerBuilder
         return WithCredential(new LocalCredential(certificate, CopyChain(chain)));
     }
 
+    /// <summary>
+    /// Loads a PKCS#12 (.pfx / .p12) file and uses it for local signing: the first certificate
+    /// with a private key signs, and the other certificates in the file are embedded as its chain.
+    /// </summary>
+    /// <remarks>
+    /// The loaded certificates are owned by the returned builder and are not disposed by it.
+    /// When you need to control their lifetime, load them yourself and call
+    /// <see cref="WithCertificate(X509Certificate2, IReadOnlyList{X509Certificate2})"/>.
+    /// </remarks>
+    /// <param name="pfxPath">Path to the PKCS#12 file.</param>
+    /// <param name="password">The file's password, or <see langword="null"/> when it has none.</param>
+    /// <returns>A new builder with the local credential configured.</returns>
+    /// <exception cref="ArgumentException"><paramref name="pfxPath"/> is null or whitespace, or the file has no certificate with a private key.</exception>
+    /// <exception cref="System.Security.Cryptography.CryptographicException">The password is wrong or the file is not a valid PKCS#12.</exception>
+    public PadesSignerBuilder WithCertificateFile(string pfxPath, string? password)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pfxPath);
+        var (signer, chain) = CertificateLoader.LoadSigningCredentialFromFile(pfxPath, password);
+        return WithCredential(new LocalCredential(signer, chain));
+    }
+
     /// <summary>Configures external signing with an explicit signer contract.</summary>
     /// <param name="certificate">The signer's public certificate (private key NOT required).</param>
     /// <param name="signer">The external signer implementation (HSM, cloud KMS, A3 token).</param>

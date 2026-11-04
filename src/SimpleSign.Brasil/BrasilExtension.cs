@@ -1,7 +1,10 @@
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Brasil.GovBr;
 using SimpleSign.Brasil.IcpBrasil;
+using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Extensions;
+using SimpleSign.Core.Validation;
+using SimpleSign.PAdES.Validation;
 
 namespace SimpleSign.Brasil;
 
@@ -31,6 +34,29 @@ public sealed class BrasilExtension : ICountryExtension
             new GovBrChainValidationProvider(httpClient, logger),
         ]);
     }
+
+    /// <summary>
+    /// Creates a PAdES validator that trusts the bundled ICP-Brasil and Gov.br roots and applies
+    /// their chain rules. This is the shortest way to validate Brazilian signatures.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var validator = BrasilExtension.CreateValidator();
+    /// var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
+    /// </code>
+    /// </example>
+    /// <param name="options">Validation options. If null, uses <see cref="ValidationOptions.Default"/>.</param>
+    /// <param name="httpClient">
+    /// <see cref="HttpClient"/> for OCSP, CRL and certificate downloads. If null, a shared
+    /// default client is used.
+    /// </param>
+    /// <param name="logger">Optional logger for structured diagnostics.</param>
+    /// <returns>A validator configured for ICP-Brasil and Gov.br.</returns>
+    public static PdfSignatureValidator CreateValidator(
+        ValidationOptions? options = null,
+        HttpClient? httpClient = null,
+        ILogger<PdfSignatureValidator>? logger = null) =>
+        new(options, httpClient, logger, countryExtensions: [new BrasilExtension(httpClient, logger)]);
 
     /// <inheritdoc />
     public string RegionCode => "BR";

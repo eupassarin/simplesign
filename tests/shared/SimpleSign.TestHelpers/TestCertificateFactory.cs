@@ -113,6 +113,30 @@ public static class TestCertificateFactory
         return result;
     }
 
+    /// <summary>
+    /// Writes a PKCS#12 file holding a leaf certificate with its private key and the
+    /// (public) CA certificate that issued it. Returns public copies of both.
+    /// </summary>
+    public static (X509Certificate2 Ca, X509Certificate2 Leaf) WritePfxWithChain(string path, string password)
+    {
+        using RSA caKey = RSA.Create(2048);
+        var caRequest = new CertificateRequest("CN=Pfx Test CA, O=SimpleSign Tests", caKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        caRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, 0, critical: true));
+        caRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.CrlSign | X509KeyUsageFlags.KeyCertSign, critical: true));
+        using X509Certificate2 ca = caRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(10));
+
+        using RSA leafKey = RSA.Create(2048);
+        var leafRequest = new CertificateRequest("CN=Pfx Test Signer, O=SimpleSign Tests", leafKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        leafRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: false));
+        using X509Certificate2 leafPublic = leafRequest.Create(ca, DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddYears(1), [4, 5, 6]);
+        using X509Certificate2 leaf = leafPublic.CopyWithPrivateKey(leafKey);
+
+        X509Certificate2 caPublic = CertificateLoader.LoadCertificate(ca.RawData);
+        var collection = new X509Certificate2Collection { leaf, caPublic };
+        File.WriteAllBytes(path, collection.Export(X509ContentType.Pkcs12, password)!);
+        return (caPublic, CertificateLoader.LoadCertificate(leaf.RawData));
+    }
+
     private static X509Certificate2 ExportAndReload(X509Certificate2 cert)
     {
         const string password = "test-export";

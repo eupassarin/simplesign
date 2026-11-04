@@ -59,6 +59,30 @@ internal static class CertificateLoader
         return LoadPkcs12Collection(bytes, password, Pkcs12KeyStorageFlags);
     }
 
+    /// <summary>
+    /// Loads a PKCS#12 (PFX) file and splits it into the signing certificate (the first
+    /// certificate that has a private key) and the remaining certificates (its chain).
+    /// </summary>
+    /// <exception cref="ArgumentException">The file has no certificate with a private key.</exception>
+    internal static (X509Certificate2 Signer, IReadOnlyList<X509Certificate2> Chain) LoadSigningCredentialFromFile(
+        string path, string? password)
+    {
+        var certificates = LoadPkcs12CollectionFromFile(path, password).ToList();
+        var signer = certificates.Find(c => c.HasPrivateKey);
+        if (signer is null)
+        {
+            foreach (var certificate in certificates)
+            {
+                certificate.Dispose();
+            }
+
+            throw new ArgumentException("No certificate with a private key was found in the PFX file.", nameof(path));
+        }
+
+        var chain = certificates.Where(c => !ReferenceEquals(c, signer)).ToList().AsReadOnly();
+        return (signer, chain);
+    }
+
     /// <summary>Loads a PKCS#12 (PFX) from a byte array.</summary>
     internal static X509Certificate2 LoadPkcs12(byte[] data, string? password) =>
 #if NET9_0_OR_GREATER
