@@ -67,7 +67,7 @@ public sealed class DeferredSignerTests
         using MemoryStream stream = new MemoryStream(array);
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(fullCert).ValidateAsync(stream);
         readOnlyList.Count().ShouldBe(1, "");
-        readOnlyList[0].IsValid.ShouldBeTrue("deferred-signed PDF should be valid");
+        readOnlyList[0].Indication.ShouldBe(SignatureIndication.Valid, "deferred-signed PDF should be valid");
     }
 
     [Fact(DisplayName = "Deferred signing with ECDSA produces valid PDF")]
@@ -82,7 +82,7 @@ public sealed class DeferredSignerTests
         using MemoryStream stream = new MemoryStream(await DeferredSigningEngineTestAdapter.CompleteAsync(deferredSigningPrepareResult.SessionData, rawSignature));
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(fullCert).ValidateAsync(stream);
         readOnlyList.Count().ShouldBe(1, "");
-        readOnlyList[0].IsValid.ShouldBeTrue("ECDSA deferred-signed PDF should be valid");
+        readOnlyList[0].Indication.ShouldBe(SignatureIndication.Valid, "ECDSA deferred-signed PDF should be valid");
     }
 
     [Fact(DisplayName = "Session serializes and deserializes correctly")]
@@ -107,7 +107,7 @@ public sealed class DeferredSignerTests
         byte[] array = await DeferredSigningEngineTestAdapter.CompleteAsync(sessionData, rawSignature);
         array.ShouldNotBeEmpty("");
         using MemoryStream stream = new MemoryStream(array);
-        (await ValidatorTrusting(fullCert).ValidateAsync(stream))[0].IsValid.ShouldBeTrue("re-serialized session should produce valid signature");
+        (await ValidatorTrusting(fullCert).ValidateAsync(stream))[0].Indication.ShouldBe(SignatureIndication.Valid, "re-serialized session should produce valid signature");
     }
 
     [Fact(DisplayName = "Invalid signature is rejected before CMS packaging")]
@@ -213,7 +213,7 @@ public sealed class DeferredSignerTests
         using RSA? rsa = fullCert.GetRSAPrivateKey();
         byte[] rawSignature = rsa!.SignData(deferredSigningPrepareResult.HashToSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using MemoryStream stream = new MemoryStream(await DeferredSigningEngineTestAdapter.CompleteAsync(deferredSigningPrepareResult.SessionData, rawSignature));
-        (await ValidatorTrusting(fullCert).ValidateAsync(stream))[0].IsValid.ShouldBeTrue("");
+        (await ValidatorTrusting(fullCert).ValidateAsync(stream))[0].Indication.ShouldBe(SignatureIndication.Valid, "");
     }
 
     [Fact(DisplayName = "Full web flow: prepare on server, sign externally, complete on server")]
@@ -230,7 +230,7 @@ public sealed class DeferredSignerTests
         using MemoryStream stream = new MemoryStream(await DeferredSigningEngineTestAdapter.CompleteAsync(sessionData, rawSignature));
         IReadOnlyList<SignatureValidationResult> readOnlyList = await ValidatorTrusting(fullCert).ValidateAsync(stream);
         readOnlyList.Count().ShouldBe(1);
-        readOnlyList[0].IsValid.ShouldBeTrue();
+        readOnlyList[0].Indication.ShouldBe(SignatureIndication.Valid);
         readOnlyList[0].SignerCertificate?.Subject.ShouldContain("Deferred RSA Signer");
     }
 }

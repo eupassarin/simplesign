@@ -65,7 +65,7 @@ public sealed class ValidationEdgeCaseTests
         readOnlyList.Count().ShouldBe(1, "");
         readOnlyList[0].IsNotRevoked.ShouldBeTrue("revocation check is disabled");
         readOnlyList[0].RevocationSource.ShouldBe(RevocationSource.None);
-        readOnlyList[0].IsValid.ShouldBeTrue();
+        readOnlyList[0].Indication.ShouldBe(SignatureIndication.Valid);
     }
 
     [Fact(DisplayName = "TrustSystemRoots=false without TrustedRoots rejects certificate chain")]
@@ -382,7 +382,7 @@ public sealed class ValidationEdgeCaseTests
         r.IsIntegrityValid.ShouldBeTrue();
         r.IsSignatureValid.ShouldBeTrue();
         r.IsCertificateChainValid.ShouldBeTrue();
-        r.IsValid.ShouldBeFalse();
+        r.Indication.ShouldBe(SignatureIndication.Indeterminate);
         r.Warnings.ShouldContain(w => w.Contains("Revocation check could not be completed"),
             "indeterminate revocation should produce a warning");
     }

@@ -39,8 +39,8 @@ public sealed class PdfSignatureValidatorTests
         validationOptions.NetworkTimeout.ShouldBe(TimeSpan.FromSeconds(10.0), "");
     }
 
-    [Fact(DisplayName = "Result with all fields valid returns IsValid true")]
-    public void SignatureValidationResult_AllValid_IsValidReturnsTrue()
+    [Fact(DisplayName = "Result with all fields valid returns Valid indication")]
+    public void SignatureValidationResult_AllValid_ReturnsValidIndication()
     {
         SignatureValidationResult signatureValidationResult = new SignatureValidationResult
         {
@@ -49,11 +49,11 @@ public sealed class PdfSignatureValidatorTests
             IsCertificateChainValid = true,
             IsNotRevoked = true
         };
-        signatureValidationResult.IsValid.ShouldBeTrue("");
+        signatureValidationResult.Indication.ShouldBe(SignatureIndication.Valid);
     }
 
-    [Fact(DisplayName = "Invalid integrity makes IsValid return false")]
-    public void SignatureValidationResult_IntegrityInvalid_IsValidReturnsFalse()
+    [Fact(DisplayName = "Invalid integrity returns Invalid indication")]
+    public void SignatureValidationResult_IntegrityInvalid_ReturnsInvalidIndication()
     {
         SignatureValidationResult signatureValidationResult = new SignatureValidationResult
         {
@@ -61,7 +61,7 @@ public sealed class PdfSignatureValidatorTests
             IsSignatureValid = true,
             IsCertificateChainValid = true
         };
-        signatureValidationResult.IsValid.ShouldBeFalse("");
+        signatureValidationResult.Indication.ShouldBe(SignatureIndication.Invalid);
     }
 
     [Fact(DisplayName = "Result ToString contains field name")]
@@ -105,8 +105,8 @@ public sealed class PdfSignatureValidatorTests
         result.ChainValidationMetadata.ShouldBe(metadata);
     }
 
-    [Fact(DisplayName = "IsValid is true when chain trust warning set (country provider override)")]
-    public void SignatureValidationResult_IsValid_ChainTrustWarning_WithIntegrity()
+    [Fact(DisplayName = "Indication is Valid when country provider overrides chain warning")]
+    public void SignatureValidationResult_Indication_ChainTrustWarning_WithIntegrity()
     {
         SignatureValidationResult result = new SignatureValidationResult
         {
@@ -116,11 +116,11 @@ public sealed class PdfSignatureValidatorTests
             IsChainTrustWarning = true,
             IsNotRevoked = true
         };
-        result.IsValid.ShouldBeTrue("chain trust warning from country provider override makes the signature valid");
+        result.Indication.ShouldBe(SignatureIndication.Valid);
     }
 
-    [Fact(DisplayName = "IsValid is false when chain invalid and no trust warning")]
-    public void SignatureValidationResult_IsValid_ChainInvalid_WithoutTrustWarning()
+    [Fact(DisplayName = "Indication is Indeterminate when chain cannot be built")]
+    public void SignatureValidationResult_Indication_ChainInvalid_WithoutTrustWarning()
     {
         SignatureValidationResult result = new SignatureValidationResult
         {
@@ -130,7 +130,7 @@ public sealed class PdfSignatureValidatorTests
             IsChainTrustWarning = false,
             IsNotRevoked = true
         };
-        result.IsValid.ShouldBeFalse();
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
     }
 
     [Fact(DisplayName = "Null stream throws ArgumentNullException")]

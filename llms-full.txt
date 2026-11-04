@@ -68,6 +68,13 @@ deferred PAdES workflows use the same profile/provider/algorithm vocabulary as d
 
 ## Validation results
 
+PAdES `SignatureValidationResult.Indication` is the single overall status:
+`SignatureIndication.Valid`, `Invalid`, or `Indeterminate`. Integrity or cryptographic
+signature failures and confirmed revocation are `Invalid`; an unavailable trust chain or
+indeterminate revocation is `Indeterminate` when the cryptographic checks pass. Inspect
+the individual checks and errors for the reason. PAdES results do not expose a parallel
+`IsValid` boolean.
+
 XAdES `DetectedLevel` describes observed unsigned-property elements, including properties
 that fail validation. `HasValidSignatureTimeStamp`, `IsLtvDataValid`, and
 `HasValidArchiveTimeStamp` report checked outcomes and must be inspected together with

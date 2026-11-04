@@ -55,7 +55,7 @@ app.MapPost("/api/validate", async (HttpRequest request) =>
         var options = new ValidationOptions { CheckRevocation = checkRevocation };
         var brasil = new BrasilExtension();
         var validator = new PdfSignatureValidator(options, httpClient: null, logger: null,
-            trustAnchorProviders: brasil.TrustAnchorProviders);
+            countryExtensions: [brasil]);
         var results = await validator.ValidateAsync(ms);
 
         // Inspect for conformance levels
@@ -87,7 +87,7 @@ app.MapPost("/api/validate", async (HttpRequest request) =>
             return new ValidateSignatureDto
             {
                 FieldName = r.FieldName,
-                Valid = r.IsValid,
+                Indication = r.Indication.ToString(),
                 IsDocumentTimestamp = r.IsDocumentTimestamp,
                 SignerName = r.SignerName,
                 Level = level != default ? FormatLevel(level) : null,
@@ -391,7 +391,7 @@ public class ManifestDto
 public class ValidateSignatureDto
 {
     public string FieldName { get; set; } = "";
-    public bool Valid { get; set; }
+    public string Indication { get; set; } = "Indeterminate";
     public bool IsDocumentTimestamp { get; set; }
     public string? SignerName { get; set; }
     public string? Level { get; set; }

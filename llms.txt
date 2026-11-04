@@ -36,6 +36,8 @@ signer-chain or TSA trust, which require validation anchors and policy.
 - RSA and ECDSA external signatures are verified before packaging; EdDSA signing is rejected.
 - Unsupported XMLDSig archive transforms and topologies fail closed.
 - CAdES does not expose a buffering stream facade; CAdES streaming is deferred.
+- PAdES signature results expose one overall `Indication` (`Valid`, `Invalid`, or
+  `Indeterminate`); chain/revocation uncertainty is not collapsed into an `IsValid` boolean.
 - XAdES `DetectedLevel` is structural; neither it nor `IsValid` establishes that
   all timestamp, LTV, and archive checks passed. Inspect those validation outcomes.
 

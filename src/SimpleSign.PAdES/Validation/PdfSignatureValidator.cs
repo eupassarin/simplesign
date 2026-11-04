@@ -27,7 +27,7 @@ namespace SimpleSign.PAdES.Validation;
 /// });
 /// var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 /// foreach (var r in results)
-///     Console.WriteLine($"{r.FieldName}: Valid={r.IsValid}, Signer={r.SignerName}");
+///     Console.WriteLine($"{r.FieldName}: {r.Indication}, Signer={r.SignerName}");
 /// </code>
 /// </example>
 public sealed class PdfSignatureValidator : IPdfSignatureValidator
@@ -343,7 +343,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         {
             _logger.FieldHasNoSignature(field.FieldName);
             errors.Add("Field has no signature (empty /Contents).");
-            return Invalid(field.FieldName, errors);
+            return Failure(field.FieldName, errors, SignatureIndication.Invalid);
         }
 
         // 1. Parse CMS
@@ -357,7 +357,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         {
             _logger.CmsParseError(ex, field.FieldName);
             errors.Add($"Failed to parse CMS: {ex.Message}");
-            return Invalid(field.FieldName, errors);
+            return Failure(field.FieldName, errors, SignatureIndication.Indeterminate);
         }
 
         // Route document timestamps to a dedicated validation path
@@ -384,7 +384,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             pdfStream, field, cmsData, errors, warnings, cancellationToken, _logger, isLastSignature).ConfigureAwait(false);
 
         // 3. Cryptographic signature
-        bool sigValid = ValidateSignatureStep(cmsData, errors);
+        bool sigValid = ValidateSignatureStep(cmsData, errors, out bool signatureVerificationIndeterminate);
 
         // 3a. signingCertificateV2 binding
         _cryptoVerifier.ValidateSigningCertV2(cmsData, errors, _logger);
@@ -424,6 +424,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             FieldName = field.FieldName,
             IsIntegrityValid = integrityValid,
             IsSignatureValid = sigValid,
+            IsSignatureVerificationIndeterminate = signatureVerificationIndeterminate,
             IsCertificateChainValid = chainValid,
             IsChainTrustWarning = chainTrustWarning,
             ChainValidationRegion = chainValidationResult?.RegionCode,
@@ -477,7 +478,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         // 2. Cryptographic signature (TSA signed the TSTInfo correctly)
-        bool sigValid = ValidateSignatureStep(cmsData, errors);
+        bool sigValid = ValidateSignatureStep(cmsData, errors, out bool signatureVerificationIndeterminate);
 
         // 3. TSA certificate chain
         bool chainValid = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
@@ -525,6 +526,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             FieldName = field.FieldName,
             IsIntegrityValid = integrityValid,
             IsSignatureValid = sigValid,
+            IsSignatureVerificationIndeterminate = signatureVerificationIndeterminate,
             IsCertificateChainValid = chainValid,
             IsChainTrustWarning = chainTrustWarning,
             ChainValidationRegion = chainValidationResult?.RegionCode,
@@ -547,15 +549,23 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         };
     }
 
-    private bool ValidateSignatureStep(CmsSignedData cmsData, List<string> errors)
+    private bool ValidateSignatureStep(CmsSignedData cmsData, List<string> errors, out bool isIndeterminate)
     {
+        isIndeterminate = cmsData.SignerCertificate is null || cmsData.SignedAttrs is null || cmsData.Signature is null;
         try
         {
             bool sigValid = _cryptoVerifier.VerifySignature(cmsData, _logger);
             if (!sigValid)
             {
-                _logger.SignatureInvalid();
-                errors.Add("Cryptographic signature verification failed.");
+                if (isIndeterminate)
+                {
+                    errors.Add("Signature could not be verified because required signer material is missing.");
+                }
+                else
+                {
+                    _logger.SignatureInvalid();
+                    errors.Add("Cryptographic signature verification failed.");
+                }
             }
             return sigValid;
         }
@@ -564,6 +574,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         {
             _logger.SignatureError(ex);
             errors.Add($"Signature verification error: {ex.Message}");
+            isIndeterminate = true;
             return false;
         }
     }
@@ -900,7 +911,10 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     };
     #endregion
 
-    private static SignatureValidationResult Invalid(string fieldName, List<string> errors) =>
+    private static SignatureValidationResult Failure(
+        string fieldName,
+        List<string> errors,
+        SignatureIndication indication) =>
         new()
         {
             FieldName = fieldName,
@@ -908,6 +922,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             IsSignatureValid = false,
             IsCertificateChainValid = false,
             IsNotRevoked = false,
+            Indication = indication,
             Errors = errors.AsReadOnly()
         };
 }

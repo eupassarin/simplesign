@@ -132,9 +132,12 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
             fileLookup.TryAdd(name, f);
         }
 
+        int indeterminateFiles = 0;
         int invalidFiles = 0;
         int totalSigs = 0;
         int validSigs = 0;
+        int indeterminateSigs = 0;
+        int invalidSigs = 0;
         int erroredFiles = 0;
 
         await foreach (var bulkResult in bulk.ValidateFilesAsync(files, cancellationToken).ConfigureAwait(false))
@@ -164,29 +167,61 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
 
             var fileName = Path.GetFileName(filePath);
             var dirUserSigs = bulkResult.Results!.Where(r => !r.IsDocumentTimestamp).ToList();
-            var dirValidCount = dirUserSigs.Count(r => r.IsValid);
-            var dirAllValid = dirValidCount == dirUserSigs.Count;
-            var dirStatusIcon = dirUserSigs.Count == 0 ? "?" : (dirAllValid ? "[green]✓[/]" : "[red]✗[/]");
+            var dirValidCount = dirUserSigs.Count(r => r.Indication == SignatureIndication.Valid);
+            var dirIndeterminateCount = dirUserSigs.Count(r => r.Indication == SignatureIndication.Indeterminate);
+            var dirInvalidCount = dirUserSigs.Count(r => r.Indication == SignatureIndication.Invalid);
+            var dirStatusIcon = dirUserSigs.Count == 0
+                ? "[yellow]?[/]"
+                : dirInvalidCount > 0
+                    ? "[red]✗[/]"
+                    : dirIndeterminateCount > 0
+                        ? "[yellow]?[/]"
+                        : "[green]✓[/]";
 
-            AnsiConsole.MarkupLine($"{dirStatusIcon} [bold]{fileName.EscapeMarkup()}[/]  {dirValidCount}/{dirUserSigs.Count} valid");
+            var dirSummary = $"{dirValidCount}/{dirUserSigs.Count} valid";
+            if (dirIndeterminateCount > 0)
+            {
+                dirSummary += $", {dirIndeterminateCount} indeterminate";
+            }
+            if (dirInvalidCount > 0)
+            {
+                dirSummary += $", {dirInvalidCount} invalid";
+            }
+            AnsiConsole.MarkupLine($"{dirStatusIcon} [bold]{fileName.EscapeMarkup()}[/]  {dirSummary}");
 
             foreach (var r in bulkResult.Results!)
             {
-                var icon = r.IsValid ? "[green]✓[/]" : "[red]✗[/]";
+                var icon = r.Indication switch
+                {
+                    SignatureIndication.Valid => "[green]✓[/]",
+                    SignatureIndication.Indeterminate => "[yellow]?[/]",
+                    _ => "[red]✗[/]"
+                };
                 var signer = (r.SignerName ?? "unknown").EscapeMarkup();
                 var level = conformanceLevels.TryGetValue(r.FieldName, out var l) ? $"  [dim]{Formatting.FormatLevel(l)}[/]" : string.Empty;
                 var time = r.SigningTime.HasValue ? $"  [dim]{r.SigningTime.Value:yyyy-MM-dd}[/]" : string.Empty;
-                var errSuffix = r.IsValid ? string.Empty : $"  [red]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "invalid")}[/]";
+                var errSuffix = r.Indication switch
+                {
+                    SignatureIndication.Valid => string.Empty,
+                    SignatureIndication.Indeterminate => $"  [yellow]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "indeterminate")}[/]",
+                    _ => $"  [red]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "invalid")}[/]"
+                };
 
                 AnsiConsole.MarkupLine($"  {icon} {r.FieldName.EscapeMarkup()}  {signer}{level}{time}{errSuffix}");
             }
 
             var userSigs = bulkResult.Results!.Where(r => !r.IsDocumentTimestamp).ToList();
             totalSigs += userSigs.Count;
-            validSigs += userSigs.Count(r => r.IsValid);
-            if (userSigs.Any(r => !r.IsValid))
+            validSigs += userSigs.Count(r => r.Indication == SignatureIndication.Valid);
+            indeterminateSigs += userSigs.Count(r => r.Indication == SignatureIndication.Indeterminate);
+            invalidSigs += userSigs.Count(r => r.Indication == SignatureIndication.Invalid);
+            if (userSigs.Any(r => r.Indication == SignatureIndication.Invalid))
             {
                 invalidFiles++;
+            }
+            else if (userSigs.Any(r => r.Indication == SignatureIndication.Indeterminate))
+            {
+                indeterminateFiles++;
             }
         }
 
@@ -196,12 +231,12 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
         AnsiConsole.Write(rule);
 
         var totalFiles = files.Length;
-        var okFiles = totalFiles - invalidFiles - erroredFiles;
-        AnsiConsole.MarkupLine($"Files:      [bold]{totalFiles}[/]  ([green]{okFiles} ok[/] · [red]{invalidFiles} invalid[/] · [red]{erroredFiles} error[/])");
-        AnsiConsole.MarkupLine($"Signatures: [bold]{totalSigs}[/]  ([green]{validSigs} valid[/] · [red]{totalSigs - validSigs} invalid[/])");
+        var okFiles = totalFiles - indeterminateFiles - invalidFiles - erroredFiles;
+        AnsiConsole.MarkupLine($"Files:      [bold]{totalFiles}[/]  ([green]{okFiles} ok[/] · [yellow]{indeterminateFiles} indeterminate[/] · [red]{invalidFiles} invalid[/] · [red]{erroredFiles} error[/])");
+        AnsiConsole.MarkupLine($"Signatures: [bold]{totalSigs}[/]  ([green]{validSigs} valid[/] · [yellow]{indeterminateSigs} indeterminate[/] · [red]{invalidSigs} invalid[/])");
         AnsiConsole.MarkupLine($"Avg time:   {bulk.AverageElapsedMs:N0} ms/file");
         AnsiConsole.WriteLine();
 
-        return (invalidFiles > 0 || erroredFiles > 0) ? 1 : 0;
+        return (indeterminateFiles > 0 || invalidFiles > 0 || erroredFiles > 0) ? 1 : 0;
     }
 }

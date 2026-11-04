@@ -32,7 +32,7 @@ try
         TrustedRoots = [cert]
     });
     var validationResults = await validator.ValidateAsync(validateStream);
-    Console.WriteLine($"[PASS] Validate: {validationResults.Count} result(s), valid={validationResults[0].IsValid}");
+    Console.WriteLine($"[PASS] Validate: {validationResults.Count} result(s), indication={validationResults[0].Indication}");
 
     // Structure reader
     await using var readerStream = new MemoryStream(signedPdf);

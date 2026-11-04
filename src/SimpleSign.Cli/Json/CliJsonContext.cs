@@ -27,7 +27,7 @@ internal sealed class ValidateOutput
 internal sealed class ValidateSignatureDto
 {
     public string FieldName { get; init; } = string.Empty;
-    public bool Valid { get; init; }
+    public string Indication { get; init; } = "Indeterminate";
     public bool IsDocumentTimestamp { get; init; }
     public string? Signer { get; init; }
     public string? Level { get; init; }

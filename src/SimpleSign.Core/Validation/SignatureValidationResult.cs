@@ -7,6 +7,8 @@ namespace SimpleSign.Core.Validation;
 /// <summary>Complete result of a PDF signature validation.</summary>
 public sealed class SignatureValidationResult
 {
+    private SignatureIndication? _indication;
+
     /// <summary>Validated signature field.</summary>
     public string FieldName { get; init; } = string.Empty;
 
@@ -15,6 +17,9 @@ public sealed class SignatureValidationResult
 
     /// <summary>The cryptographic signature is mathematically valid.</summary>
     public bool IsSignatureValid { get; init; }
+
+    /// <summary>Whether signature verification could not be completed due to missing material or an unsupported operation.</summary>
+    internal bool IsSignatureVerificationIndeterminate { get; init; }
 
     /// <summary>The certificate chain is valid and trusted.</summary>
     public bool IsCertificateChainValid { get; init; }
@@ -113,10 +118,16 @@ public sealed class SignatureValidationResult
     /// </summary>
     public IReadOnlyDictionary<string, string>? ChainValidationMetadata { get; init; }
 
-    /// <summary>Indicates whether integrity, signature, configured chain trust, and revocation policy pass. Indeterminate revocation prevents validity.</summary>
-    public bool IsValid =>
-        IsIntegrityValid && IsSignatureValid && (IsCertificateChainValid || IsChainTrustWarning) && IsNotRevoked
-        && RevocationSource != global::SimpleSign.Core.Validation.RevocationSource.Indeterminate;
+    /// <summary>
+    /// High-level validation outcome. A failed chain or indeterminate revocation is
+    /// INDETERMINATE when integrity and the cryptographic signature pass; conclusive
+    /// integrity, signature, or revocation failures are INVALID.
+    /// </summary>
+    public SignatureIndication Indication
+    {
+        get => _indication ?? DetermineIndication();
+        internal init => _indication = value;
+    }
 
     /// <summary>Errors found during validation.</summary>
     public IReadOnlyList<string> Errors { get; init; } = [];
@@ -124,7 +135,52 @@ public sealed class SignatureValidationResult
     /// <summary>Diagnostic warnings. Consult the validation outcomes and <see cref="RevocationSource"/> when determining validity.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 
+    private SignatureIndication DetermineIndication()
+    {
+        if (!IsIntegrityValid)
+        {
+            return SignatureIndication.Invalid;
+        }
+
+        if (IsSignatureVerificationIndeterminate)
+        {
+            return SignatureIndication.Indeterminate;
+        }
+
+        if (!IsSignatureValid)
+        {
+            return SignatureIndication.Invalid;
+        }
+
+        if (!IsNotRevoked && RevocationSource is not (RevocationSource.None or RevocationSource.Indeterminate))
+        {
+            return SignatureIndication.Invalid;
+        }
+
+        if (RevocationSource == RevocationSource.Indeterminate)
+        {
+            return SignatureIndication.Indeterminate;
+        }
+
+        if (!IsNotRevoked && RevocationSource == RevocationSource.None)
+        {
+            return SignatureIndication.Indeterminate;
+        }
+
+        if (IsDocumentTimestamp && IsChainTrustWarning && IsTsaTrusted != true)
+        {
+            return SignatureIndication.Indeterminate;
+        }
+
+        if (IsCertificateChainValid || IsChainTrustWarning)
+        {
+            return SignatureIndication.Valid;
+        }
+
+        return SignatureIndication.Indeterminate;
+    }
+
     /// <inheritdoc/>
     public override string ToString() =>
-        $"[{FieldName}] Valid={IsValid} | Integrity={IsIntegrityValid} | Sig={IsSignatureValid} | Chain={IsCertificateChainValid} | Revocation={IsNotRevoked}";
+        $"[{FieldName}] Indication={Indication} | Integrity={IsIntegrityValid} | Sig={IsSignatureValid} | Chain={IsCertificateChainValid} | Revocation={IsNotRevoked}";
 }

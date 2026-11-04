@@ -502,11 +502,17 @@ function renderValidate(data) {
 
     let html = '';
     for (const sig of data) {
-        const cls = sig.valid ? 'valid' : (sig.isChainTrustWarning ? 'warning' : 'invalid');
-        const icon = sig.valid ? '<i class="bi bi-check-circle-fill" style="color:var(--success)"></i>'
-            : sig.isChainTrustWarning ? '<i class="bi bi-exclamation-triangle-fill" style="color:var(--warning)"></i>'
+        const hasIndication = ['Valid', 'Invalid', 'Indeterminate'].includes(sig.indication);
+        const indication = hasIndication ? sig.indication : 'Indeterminate';
+        const isValid = indication === 'Valid';
+        const isIndeterminate = indication === 'Indeterminate';
+        const cls = isValid ? 'valid' : isIndeterminate ? 'warning' : 'invalid';
+        const icon = isValid ? '<i class="bi bi-check-circle-fill" style="color:var(--success)"></i>'
+            : isIndeterminate ? '<i class="bi bi-question-circle-fill" style="color:var(--warning)"></i>'
             : '<i class="bi bi-x-circle-fill" style="color:var(--danger)"></i>';
-        const statusBadge = sig.valid ? badge('ok', '✓ Valid') : sig.isChainTrustWarning ? badge('warn', '⚠ Trust Warning') : badge('fail', '✗ Invalid');
+        const statusBadge = isValid ? badge('ok', '✓ Valid')
+            : isIndeterminate ? badge('warn', '⚠ Indeterminate')
+            : badge('fail', '✗ Invalid');
         const typeBadge = sig.isDocumentTimestamp ? badge('purple', 'Timestamp') : '';
         const levelBadge = sig.level ? badge('info', sig.level) : '';
         const icpBadge = sig.icpBrasil ? '<span class="badge" style="background:#dcfce7;color:#15803d">🇧🇷 ICP-Brasil</span>' : '';

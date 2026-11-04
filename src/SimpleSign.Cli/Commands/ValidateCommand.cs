@@ -134,8 +134,8 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             OutputText(settings.InputPath, results, conformanceLevels, aeaInfo, inspection, inspectionLookup);
         }
 
-        bool hasInvalid = results.Any(r => !r.IsValid);
-        return hasInvalid ? 1 : 0;
+        bool hasUnvalidated = results.Any(r => r.Indication != SignatureIndication.Valid);
+        return hasUnvalidated ? 1 : 0;
     }
 
     private static void OutputSimple(string inputPath, IReadOnlyList<SignatureValidationResult> results,
@@ -143,28 +143,59 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
     {
         var fileName = Path.GetFileName(inputPath);
         var userSigs = results.Where(r => !r.IsDocumentTimestamp).ToList();
-        var validCount = userSigs.Count(r => r.IsValid);
-        var allValid = validCount == userSigs.Count;
-        var statusIcon = userSigs.Count == 0 ? "[yellow]?[/]" : (allValid ? "[green]✓[/]" : "[red]✗[/]");
+        var validCount = userSigs.Count(r => r.Indication == SignatureIndication.Valid);
+        var indeterminateCount = userSigs.Count(r => r.Indication == SignatureIndication.Indeterminate);
+        var invalidCount = userSigs.Count(r => r.Indication == SignatureIndication.Invalid);
+        var statusIcon = userSigs.Count == 0
+            ? "[yellow]?[/]"
+            : invalidCount > 0
+                ? "[red]✗[/]"
+                : indeterminateCount > 0
+                    ? "[yellow]?[/]"
+                    : "[green]✓[/]";
 
-        AnsiConsole.MarkupLine($"{statusIcon} [bold]{fileName.EscapeMarkup()}[/]  {validCount}/{userSigs.Count} valid");
+        var summary = $"{validCount}/{userSigs.Count} valid";
+        if (indeterminateCount > 0)
+        {
+            summary += $", {indeterminateCount} indeterminate";
+        }
+        if (invalidCount > 0)
+        {
+            summary += $", {invalidCount} invalid";
+        }
+        AnsiConsole.MarkupLine($"{statusIcon} [bold]{fileName.EscapeMarkup()}[/]  {summary}");
 
         foreach (var r in results)
         {
             string icon;
             if (r.IsDocumentTimestamp)
             {
-                icon = r.IsChainTrustWarning ? "[yellow]T[/]" : (r.IsValid ? "[green]T[/]" : "[red]T[/]");
+                icon = r.Indication switch
+                {
+                    SignatureIndication.Valid => "[green]T[/]",
+                    SignatureIndication.Indeterminate => "[yellow]?[/]",
+                    _ => "[red]T[/]"
+                };
             }
             else
             {
-                icon = r.IsValid ? "[green]✓[/]" : "[red]✗[/]";
+                icon = r.Indication switch
+                {
+                    SignatureIndication.Valid => "[green]✓[/]",
+                    SignatureIndication.Indeterminate => "[yellow]?[/]",
+                    _ => "[red]✗[/]"
+                };
             }
 
             var signer = (r.SignerName ?? "unknown").EscapeMarkup();
             var level = conformanceLevels.TryGetValue(r.FieldName, out var l) ? $"  [dim]{Formatting.FormatLevel(l)}[/]" : string.Empty;
             var time = r.SigningTime.HasValue ? $"  [dim]{r.SigningTime.Value:yyyy-MM-dd}[/]" : string.Empty;
-            var errSuffix = r.IsValid ? string.Empty : $"  [red]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "invalid")}[/]";
+            var errSuffix = r.Indication switch
+            {
+                SignatureIndication.Valid => string.Empty,
+                SignatureIndication.Indeterminate => $"  [yellow]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "indeterminate")}[/]",
+                _ => $"  [red]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "invalid")}[/]"
+            };
 
             AnsiConsole.MarkupLine($"  {icon} {r.FieldName.EscapeMarkup()}  {signer}{level}{time}{errSuffix}");
         }
@@ -191,10 +222,21 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         var userSigs = results.Where(r => !r.IsDocumentTimestamp).ToList();
         var docTimestamps = results.Where(r => r.IsDocumentTimestamp).ToList();
 
-        var validCount = userSigs.Count(r => r.IsValid);
-        var summaryColor = validCount == userSigs.Count ? "green" : "red";
+        var validCount = userSigs.Count(r => r.Indication == SignatureIndication.Valid);
+        var indeterminateCount = userSigs.Count(r => r.Indication == SignatureIndication.Indeterminate);
+        var invalidCount = userSigs.Count(r => r.Indication == SignatureIndication.Invalid);
+        var summaryColor = invalidCount > 0 ? "red" : indeterminateCount > 0 ? "yellow" : "green";
+        var summary = $"{validCount}/{userSigs.Count} valid";
+        if (indeterminateCount > 0)
+        {
+            summary += $", {indeterminateCount} indeterminate";
+        }
+        if (invalidCount > 0)
+        {
+            summary += $", {invalidCount} invalid";
+        }
 
-        var tree = new Tree($"[bold]{fileName.EscapeMarkup()}[/]  [{summaryColor}]{validCount}/{userSigs.Count} valid[/]");
+        var tree = new Tree($"[bold]{fileName.EscapeMarkup()}[/]  [{summaryColor}]{summary}[/]");
         tree.Style = Style.Parse("dim");
 
         // Document-level info
@@ -221,9 +263,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
                 continue;
             }
 
-            var status = result.IsValid
-                ? "[green]✓ VALID[/]"
-                : "[red]✗ INVALID[/]";
+            var status = FormatIndication(result.Indication);
 
             var sigNode = tree.AddNode($"{result.FieldName}  {status}");
             sigNode.AddNode($"Signer:       [bold]{(result.SignerName ?? "(unknown)").EscapeMarkup()}[/]");
@@ -394,11 +434,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         // Render document timestamps (archival infrastructure) separately, after user signatures
         foreach (var result in docTimestamps)
         {
-            var tsStatus = result.IsChainTrustWarning
-                ? "[yellow]? CHAIN UNVERIFIED[/]"
-                : result.IsValid
-                    ? "[green]✓ VALID[/]"
-                    : "[red]✗ INVALID[/]";
+            var tsStatus = FormatIndication(result.Indication);
 
             var tsNode = tree.AddNode($"{result.FieldName}  [dim]Archive Timestamp[/]  {tsStatus}");
 
@@ -477,6 +513,13 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         var display = invert ? !value : value;
         return display ? "[green]✓[/]" : "[red]✗[/]";
     }
+
+    private static string FormatIndication(SignatureIndication indication) => indication switch
+    {
+        SignatureIndication.Valid => "[green]✓ VALID[/]",
+        SignatureIndication.Indeterminate => "[yellow]? INDETERMINATE[/]",
+        _ => "[red]✗ INVALID[/]"
+    };
 
     private static string GetCn(string distinguishedName)
     {

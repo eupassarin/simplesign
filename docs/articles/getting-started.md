@@ -135,7 +135,7 @@ var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 
 foreach (var r in results)
 {
-    Console.WriteLine($"{r.FieldName}: Valid={r.IsValid}");
+    Console.WriteLine($"{r.FieldName}: {r.Indication}");
     Console.WriteLine($"  Integrity={r.IsIntegrityValid}");
     Console.WriteLine($"  Chain={r.IsCertificateChainValid}");
 }

@@ -66,7 +66,7 @@ internal sealed class SignFileResponse
 internal sealed class ValidateResultDto
 {
     public string FieldName { get; set; } = "";
-    public bool IsValid { get; set; }
+    public string Indication { get; set; } = "Indeterminate";
     public bool IsDocumentTimestamp { get; set; }
     public string? SignerName { get; set; }
     public string? Level { get; set; }

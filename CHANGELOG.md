@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Signature Validation
+
+- Made the three-state signature indication (`Valid`, `Invalid`, `Indeterminate`) the single
+  overall result in the validation API, CLI, JSON output, HostSigner, and WebInspectSample.
+  Removed the ambiguous `IsValid`/`valid` boolean for PAdES validation results.
+
 ### Improved
 
 - NuGet polish: every package ships its own concise README (rendered on

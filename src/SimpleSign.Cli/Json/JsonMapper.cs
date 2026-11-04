@@ -26,7 +26,7 @@ internal static class JsonMapper
                 return new ValidateSignatureDto
                 {
                     FieldName = r.FieldName,
-                    Valid = r.IsValid,
+                    Indication = r.Indication.ToString(),
                     IsDocumentTimestamp = r.IsDocumentTimestamp,
                     Signer = r.SignerName,
                     Level = level?.ToString(),

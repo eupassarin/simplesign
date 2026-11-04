@@ -211,8 +211,8 @@ public sealed record BulkValidationResult(
     /// <summary>Whether the PDF was successfully processed (not necessarily valid signatures).</summary>
     public bool IsProcessed => Error is null;
 
-    /// <summary>Number of valid signatures found. Zero if processing failed.</summary>
-    public int ValidSignatureCount => Results?.Count(r => r.IsValid) ?? 0;
+    /// <summary>Number of signatures with a valid indication. Zero if processing failed.</summary>
+    public int ValidSignatureCount => Results?.Count(r => r.Indication == SignatureIndication.Valid) ?? 0;
 
     /// <summary>Total signatures found. Zero if processing failed.</summary>
     public int TotalSignatureCount => Results?.Count ?? 0;

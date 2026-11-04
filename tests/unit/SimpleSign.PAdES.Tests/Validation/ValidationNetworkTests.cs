@@ -38,7 +38,7 @@ public sealed class ValidationNetworkTests
         var result = results.ShouldHaveSingleItem();
         result.IsIntegrityValid.ShouldBeTrue();
         result.IsSignatureValid.ShouldBeTrue();
-        result.IsValid.ShouldBeFalse();
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
         if (endpoint == "AIA")
         {
             result.Errors.ShouldContain(e => e.Contains("Certificate chain validation error"));

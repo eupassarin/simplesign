@@ -75,7 +75,7 @@ public sealed class NegativeValidationTests(ITestOutputHelper output)
         foreach (var result in results)
         {
             result.IsIntegrityValid.ShouldBeTrue();
-            output.WriteLine($"{result.FieldName}: Valid={result.IsValid}, Integrity={result.IsIntegrityValid}");
+            output.WriteLine($"{result.FieldName}: Indication={result.Indication}, Integrity={result.IsIntegrityValid}");
         }
     }
 

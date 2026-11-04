@@ -127,17 +127,15 @@ public sealed class SignatureValidationResult
     public RevocationSource RevocationSource { get; init; }
     public bool? HasValidTimestamp { get; init; }    // null = absent
     public bool IsChainTrustWarning { get; init; }   // doc timestamp chain
+    public SignatureIndication Indication { get; }
     public IReadOnlyList<string> Errors { get; init; }
     public IReadOnlyList<string> Warnings { get; init; }
-
-    public bool IsValid =>
-        IsIntegrityValid && IsSignatureValid
-        && (IsCertificateChainValid || IsChainTrustWarning)
-        && IsNotRevoked;
 }
 ```
 
-All properties use `init`-only setters (immutable). `IsValid` is a computed property — consumers can inspect individual sub-checks independently.
+Validation has a single overall outcome: `Valid`, `Invalid`, or `Indeterminate`. The individual
+checks remain available so consumers can inspect why the result was reached; there is no
+parallel overall `IsValid` boolean that would collapse `Indeterminate` into `false`.
 
 ### 7. Batch validation
 

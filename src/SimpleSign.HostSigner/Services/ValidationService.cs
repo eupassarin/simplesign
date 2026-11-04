@@ -33,7 +33,7 @@ internal static class ValidationService
         return [.. results.Select(r => new ValidateResultDto
         {
             FieldName = r.FieldName,
-            IsValid = r.IsValid,
+            Indication = r.Indication.ToString(),
             IsDocumentTimestamp = r.IsDocumentTimestamp,
             SignerName = r.SignerName,
             Level = levels.TryGetValue(r.FieldName, out var lv) ? FormatLevel(lv) : null,

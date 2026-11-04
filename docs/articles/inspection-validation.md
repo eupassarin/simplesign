@@ -125,7 +125,7 @@ var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 
 foreach (var r in results)
 {
-    Console.WriteLine($"{r.FieldName}: {(r.IsValid ? "VALID" : "INVALID")}");
+    Console.WriteLine($"{r.FieldName}: {r.Indication.ToString().ToUpperInvariant()}");
     Console.WriteLine($"  Integrity:  {r.IsIntegrityValid}");
     Console.WriteLine($"  Signature:  {r.IsSignatureValid}");
     Console.WriteLine($"  Chain:      {r.IsCertificateChainValid}");
@@ -143,7 +143,7 @@ foreach (var r in results)
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `IsValid` | `bool` | Integrity, signature, configured chain trust, and revocation policy pass |
+| `Indication` | `SignatureIndication` | The single overall outcome: `Valid`, `Invalid`, or `Indeterminate` |
 | `IsIntegrityValid` | `bool` | Byte-range hash matches (no tampering) |
 | `IsSignatureValid` | `bool` | Cryptographic signature verifies |
 | `IsCertificateChainValid` | `bool` | Chain builds to a trusted root |
@@ -152,22 +152,26 @@ foreach (var r in results)
 | `IsTsaTrusted` | `bool?` | TSA chain and timestamping-purpose policy pass (null if token absent, invalid, or unchecked) |
 | `IsDocumentTimestamp` | `bool` | True for archive/document timestamps |
 | `SignerName` | `string?` | Signer common name |
-| `SigningTime` | `DateTimeOffset?` | Signing time from timestamp or CMS |
+| `SigningTime` | `DateTimeOffset?` | Claimed signing time from CMS/PDF; not necessarily trusted |
 | `RevocationSource` | `enum` | Embedded/online CRL or OCSP, `None` (unchecked), or `Indeterminate` (unknown) |
 | `Errors` | `IReadOnlyList<string>` | Validation errors |
-| `Warnings` | `IReadOnlyList<string>` | Diagnostic warnings; unknown revocation prevents overall validity |
+| `Warnings` | `IReadOnlyList<string>` | Diagnostic warnings; unknown revocation prevents a `Valid` indication |
 
 Inspect `HasValidTimestamp` and `IsTsaTrusted` separately when the application
-requires a valid or trusted timestamp; these optional outcomes are not included
-in `SignatureValidationResult.IsValid`.
+requires a valid or trusted timestamp; these optional outcomes do not independently
+change `SignatureValidationResult.Indication` for an approval signature.
 
 ### Revocation and Network Policy
 
-When revocation is enabled, `Indeterminate` prevents `IsValid` from becoming true,
-even if integrity, signature, and chain checks pass. Disabling revocation keeps
-`RevocationSource.None` and permits validity under that configured policy. The CLI
-shows unknown and unchecked states explicitly; its JSON uses `revoked: null` for
-both, and a boolean only for a determined status.
+When revocation is enabled, an indeterminate revocation result produces an
+`Indeterminate` indication, even if integrity, signature, and chain checks pass.
+Disabling revocation keeps `RevocationSource.None`; if the other configured checks
+pass, the indication can be `Valid`. The CLI reports the high-level `indication` in
+text and JSON. Unknown and unchecked revocation states remain available separately;
+JSON uses `revoked: null` for both,
+and a boolean only for a determined status. `SignatureIndication` is the result
+classification; it does not by itself provide every ETSI sub-indication or replace
+policy-specific proof-of-existence and historical-validation checks.
 
 `ValidationOptions.NetworkTimeout` bounds each AIA download phase and each
 revocation check (OCSP and CRL together), and sets the chain URL retrieval timeout.
