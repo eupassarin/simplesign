@@ -32,3 +32,5 @@
   href: 0015-cross-format-signing-contract.md
 - name: ADR 0016 — Verifiable AdES level fulfillment
   href: 0016-verifiable-ades-level-fulfillment.md
+- name: ADR 0017 — Managed HTML layout and text shaping
+  href: 0017-managed-html-layout-and-text-shaping.md

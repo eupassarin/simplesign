@@ -9,7 +9,11 @@ invoices, editor content — with no browser or native runtime, AOT-friendly.
   repeats `<thead>` on every page
 - Embedded, subset TrueType/OpenType fonts with Unicode text extraction, per-glyph fallback, and
   synthesized bold/italic
-- PNG (incl. alpha) and JPEG images from data URIs, a base directory, or your own loader
+- Backgrounds, gradients, opacity, shadows, transforms, `calc()`, CSS counters, `@page` margin
+  boxes (page numbers), and multi-column layout
+- SVG (inline, `<img>`, backgrounds) drawn as vector graphics
+- OpenType shaping (kerning, ligatures, Arabic, Devanagari), right-to-left text, and hyphenation
+- PNG (incl. alpha), JPEG and SVG images from data URIs, a base directory, or your own loader
 - PDF/A-2b output for archiving and long-term signatures
 
 ## Quickstart

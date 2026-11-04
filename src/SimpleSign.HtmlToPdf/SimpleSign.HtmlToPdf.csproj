@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.HtmlToPdf</PackageId>
     <Description>Pure .NET HTML-to-PDF converter for documents. Zero browser dependency. CSS cascade with complex selectors, floats, flexbox, grid, paginated tables with repeated headers, subset Unicode TrueType/OpenType fonts, PNG/JPEG images, and PDF/A-2b output. Integrates with the SimpleSign signing pipeline.</Description>
     <PackageTags>html-to-pdf;pdf-generation;html2pdf;pdfa;css;native-aot</PackageTags>
-    <Version>0.9.3</Version>
+    <Version>0.10.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

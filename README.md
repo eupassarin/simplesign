@@ -38,8 +38,20 @@ changes and work under `Unreleased`.
 - **Dependency Injection** — 15+ interfaces, `AddSimpleSign()` wires everything
 - **Native AOT compatible** — no reflection, no `dynamic`, no `Assembly.Load`
 - **MIT licensed** — use anywhere, for anything, with no restrictions
-- **1,695+ tests** — comprehensive coverage, 0 warnings, CI-enforced quality gates
+- **2,600+ tests** — comprehensive coverage, 0 warnings, CI-enforced quality gates
 - **Multi-target** — .NET 8 and .NET 10 on Windows, macOS, and Linux
+
+---
+
+## What's New in v0.10.0
+
+**Three-state validation result (breaking)** — PAdES validation now reports one ETSI indication, `Valid`, `Invalid` or `Indeterminate`, in the API (`SignatureValidationResult.Indication`), the CLI, its JSON output, and HostSigner. The ambiguous `IsValid`/`valid` boolean is gone; see the [migration guide](docs/migration/v0.9-to-v0.10.md).
+
+**HTML to PDF, browser-grade** — `SimpleSign.HtmlToPdf` is now a full CSS layout engine: complex selectors and cascade, floats, flexbox, grid, multi-column, paginated tables, `calc()`, counters and `@page` page numbers; backgrounds, gradients, transparency, shadows and transforms; inline and file SVG as vectors; embedded subset fonts with OpenType shaping (kerning, ligatures, Arabic, Devanagari), right-to-left text and hyphenation; PDF/A-2b output.
+
+**Packaging** — every NuGet package ships its own README, icon, SourceLink and symbol package.
+
+See the [full changelog](CHANGELOG.md).
 
 ---
 
@@ -126,7 +138,7 @@ dotnet tool install -g SimpleSign.Cli
   - **SimpleSign.XAdES** — XML signature signing & validation (ETSI EN 319 132)
     - **SimpleSign.Core** (shared)
 - **SimpleSign.Brasil** — ICP-Brasil + Gov.br + Lei 14.063 (depends on PAdES)
-- **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF: CSS cascade, floats, flexbox, grid, paginated tables, subset Unicode fonts, PDF/A-2b (independent)
+- **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF: CSS cascade, floats, flexbox, grid, multi-column, paginated tables, gradients, SVG, OpenType shaping and RTL text, subset Unicode fonts, PDF/A-2b (independent)
 - **SimpleSign.Cli** — CLI tool (install as dotnet tool)
 - **SimpleSign.HostSigner** — Windows tray app for local signing API
 

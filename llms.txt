@@ -30,6 +30,20 @@ receives `ExternalSigningRequest`, including resolved PSS parameters when applic
 the completed signature and reports checked artifact evidence. This does not establish
 signer-chain or TSA trust, which require validation anchors and policy.
 
+## HTML to PDF
+
+`SimpleSign.HtmlToPdf` is independent of signing (no BCL crypto, no browser):
+
+```csharp
+byte[] pdf = HtmlToPdfConverter.Html(html)
+    .WithFontFile("Noto Sans", "NotoSans-Regular.ttf")
+    .WithBaseDirectory(folder)   // opt-in local resources; never touches the network
+    .WithPdfA()                   // PDF/A-2b; requires embedded fonts
+    .Convert();
+```
+
+Standard PDF fonts are Latin-only; register fonts for other scripts.
+
 ## Important constraints
 
 - Timestamp endpoints must be absolute HTTP(S) URIs.

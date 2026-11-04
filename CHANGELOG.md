@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed — Signature Validation
+## [0.10.0] - 2026-11-03
+
+### Changed (Breaking) — Signature Validation
+
+See the [v0.9 → v0.10 migration guide](docs/migration/v0.9-to-v0.10.md).
 
 - Made the three-state signature indication (`Valid`, `Invalid`, `Indeterminate`) the single
   overall result in the validation API, CLI, JSON output, HostSigner, and WebInspectSample.
@@ -89,6 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unknown elements are inline (browser behavior); `<td>`/`<th>` default to `vertical-align: middle`;
   `<a>` without `href` is no longer styled as a link.
 - Colors with alpha are drawn with PDF transparency (`PdfColor.Alpha`) instead of being ignored.
+- Hostile input is bounded: conditional at-rules nest at most 16 levels, `:not()` 8,
+  `calc()` 32, SVG documents 128, and an SVG embedding itself through `<image>` stops after 4 levels.
 - `CssParser.ParseLength` encodes percentages as values ≤ −100000 (−100000 − p) so negative
   lengths stay representable.
 - Text with embedded fonts is shaped (kerning/ligatures change widths slightly); hard hyphens are

@@ -50,7 +50,7 @@ byte[] signedPdf = await PadesSigner
 | [`SimpleSign.CAdES`](xref:SimpleSign.CAdES) | CAdES detached CMS signing and validation |
 | [`SimpleSign.XAdES`](xref:SimpleSign.XAdES) | XAdES XML signing and validation (enveloped, detached, enveloping) |
 | [`SimpleSign.Brasil`](xref:SimpleSign.Brasil) | ICP-Brasil trust anchors and certificate utilities |
-| [`SimpleSign.HtmlToPdf`](xref:SimpleSign.HtmlToPdf) | HTML-to-PDF conversion |
+| [`SimpleSign.HtmlToPdf`](xref:SimpleSign.HtmlToPdf) | HTML-to-PDF conversion (CSS layout, fonts, SVG, PDF/A-2b) |
 | [`SimpleSign.Cli`](https://www.nuget.org/packages/SimpleSign.Cli) | CLI tool for signing, validation, inspection |
 
 ## Learn More
@@ -59,6 +59,7 @@ byte[] signedPdf = await PadesSigner
 - [Deferred Signing](articles/deferred-signing.md)
 - [Inspection & Validation](articles/inspection-validation.md)
 - [ICP-Brasil](articles/icp-brasil.md)
+- [HTML to PDF](articles/html-to-pdf.md)
 - [Standards Conformance](conformance.md)
 - [Interoperability](interoperability.md)
 - [Benchmarks](benchmarks.md)

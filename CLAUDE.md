@@ -12,7 +12,7 @@ SimpleSign is a .NET library for PAdES (PDF Advanced Electronic Signatures). It 
 # Build everything
 dotnet build
 
-# Run all unit tests (~1,600 tests)
+# Run all unit tests (~2,500 tests)
 dotnet test tests/unit/
 
 # Run specific test project

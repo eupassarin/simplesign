@@ -81,6 +81,26 @@ that fail validation. `HasValidSignatureTimeStamp`, `IsLtvDataValid`, and
 base signature/integrity. `IsValid` combines fundamental signature, integrity, and
 signer-chain checks. `IsTsaTrusted` separately reports signature-TSA trust.
 
+## HTML to PDF
+
+- Entry points: `HtmlToPdfConverter.Html(string|byte[])`, `.File(path)`, `.FileAsync(path)`, then the
+  `HtmlToPdfBuilder` methods `WithStylesheet`, `WithPageSize`, `WithPageOrientation`, `WithMargins`,
+  `WithTitle`, `WithAuthor`, `WithHeader`/`WithFooter` (`{page}`, `{pages}`, `{title}`, `{date}`),
+  `WithFont(family, bytes[, FontVariant])`, `WithFontFile(family, path[, FontVariant])`,
+  `WithBaseDirectory`, `WithResourceLoader(Func<string, byte[]?>)`, `WithLanguage`, `WithPdfA`,
+  and `Convert`/`ConvertAsync`/`SaveTo`.
+- Resources (images, stylesheets, fonts, SVG) are read only from data URIs, the sandboxed base
+  directory, or the caller's loader. Do not add network access.
+- Keep the engine dependency-free and AOT-compatible: no reflection, no `dynamic`, SVG via
+  `XmlReader` with DTDs ignored and no resolver.
+- Percentages inside `float` style values use the `CssLength` encoding (≤ −100000); never test
+  `< 0` for "is percentage".
+- Text in embedded fonts goes through `TextShaper` (GSUB/GPOS); measurement and drawing must use
+  the same path (`TextMeasurer.UsesShaping`).
+- Layout changes show up in `Snapshots/*.txt`; regenerate with `HTMLTOPDF_UPDATE_SNAPSHOTS=1`
+  only when the geometry change is intended. Shaping changes must keep `ShapingReferenceTests`
+  (HarfBuzz reference output) passing.
+
 ## Verification
 
 Run `dotnet build SimpleSign.sln`, focused project suites beneath `tests/unit/`, CLI tests,
