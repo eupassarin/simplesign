@@ -634,6 +634,28 @@ foreach (var r in result.ProfessionalRegistrations)
 }
 ```
 
+### Sign under an ICP-Brasil Policy (AD-RB / AD-RT)
+
+```csharp
+// Policy OID + sigPolicyHash from the ITI's LPA (PAdES AD-RB v1.3), ETSI.CAdES.detached
+await PadesSigner.Document(pdf).WithCertificate(cert)
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt, new TimestampOptions(new Uri(actUrl)))
+    .WithHealthDocument(HealthDocumentType.Prescricao,
+        new ProfessionalRegistration(ProfessionalCouncil.Cfm, "123456", "SP", null))
+    .SignAsync(output);
+```
+
+### Lei 14.063 Level of a Validated Signature
+
+```csharp
+var validator = BrasilExtension.CreateValidator();
+foreach (var r in await validator.ValidateAsync(File.OpenRead("signed.pdf")))
+{
+    Console.WriteLine(Lei14063.Classify(r)); // Qualificada, Avancada, Simples (null if not valid)
+}
+// B-LT/B-LTA: the chain is validated at the signature timestamp time, with the embedded LCRs
+```
+
 ### QR Codes for the ITI VALIDAR Portal
 
 ```csharp

@@ -14,8 +14,7 @@ namespace SimpleSign.Brasil;
 /// </summary>
 public sealed class BrasilExtension : ICountryExtension
 {
-    private readonly Lazy<IReadOnlyList<ITrustAnchorProvider>> _trustAnchors = new(() =>
-        [new IcpBrasilTrustAnchorProvider(), new GovBrTrustAnchorProvider()]);
+    private readonly Lazy<IReadOnlyList<ITrustAnchorProvider>> _trustAnchors;
 
     private readonly Lazy<IReadOnlyList<IChainValidationProvider>> _chainValidators;
 
@@ -27,10 +26,25 @@ public sealed class BrasilExtension : ICountryExtension
 
     /// <summary>Creates a new Brasil extension with optional HTTP client and logger.</summary>
     public BrasilExtension(HttpClient? httpClient, Microsoft.Extensions.Logging.ILogger? logger)
+        : this(httpClient, logger, [])
     {
+    }
+
+    /// <summary>
+    /// Creates a Brasil extension that also trusts <paramref name="additionalIcpRoots"/> — AC Raiz
+    /// versions published after this release (see <see cref="IcpBrasilRoots.DownloadAsync"/>).
+    /// </summary>
+    /// <param name="httpClient">HTTP client for AIA, LCR and OCSP; null uses the shared client.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="additionalIcpRoots">Extra ICP-Brasil root certificates to trust.</param>
+    public BrasilExtension(HttpClient? httpClient, Microsoft.Extensions.Logging.ILogger? logger, IReadOnlyList<X509Certificate2> additionalIcpRoots)
+    {
+        ArgumentNullException.ThrowIfNull(additionalIcpRoots);
+        _trustAnchors = new Lazy<IReadOnlyList<ITrustAnchorProvider>>(() =>
+            [new IcpBrasilTrustAnchorProvider(additionalIcpRoots), new GovBrTrustAnchorProvider()]);
         _chainValidators = new Lazy<IReadOnlyList<IChainValidationProvider>>(() =>
         [
-            new IcpBrasilChainValidationProvider(httpClient, logger),
+            new IcpBrasilChainValidationProvider(new IcpBrasilChainValidator(httpClient, logger) { AdditionalTrustAnchors = additionalIcpRoots }),
             new GovBrChainValidationProvider(httpClient, logger),
         ]);
     }
@@ -75,8 +89,17 @@ public sealed class BrasilExtension : ICountryExtension
 
 internal sealed class IcpBrasilTrustAnchorProvider : ITrustAnchorProvider
 {
-    private readonly Lazy<IReadOnlyList<X509Certificate2>> _certs = new(
-        () => IcpBrasilChainValidator.LoadBundledAcRaizCerts());
+    private readonly Lazy<IReadOnlyList<X509Certificate2>> _certs;
+
+    public IcpBrasilTrustAnchorProvider()
+        : this([])
+    {
+    }
+
+    public IcpBrasilTrustAnchorProvider(IReadOnlyList<X509Certificate2> additionalRoots)
+    {
+        _certs = new(() => [.. IcpBrasilChainValidator.LoadBundledAcRaizCerts(), .. additionalRoots]);
+    }
 
     /// <inheritdoc />
     public string RegionCode => "BR";

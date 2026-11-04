@@ -37,9 +37,6 @@ public sealed class IcpBrasilChainValidator
         "SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv13.crt",
     ];
 
-    // Extra URLs (future versions not bundled) — used as online fallback
-    private static readonly string[] ExtraAcRaizCertUrls = [];
-
     // CMS (CAdES) signature policy OIDs, 2.16.76.1.7.1.{policy}.{major}.{minor} (ADE-ICP-04.01).
     // These identify signature policies, which travel in a signature's signature-policy-identifier
     // attribute, not in certificates. Kept only for the obsolete DetectPolicy(certificate).
@@ -100,6 +97,12 @@ public sealed class IcpBrasilChainValidator
 
     /// <summary>Test hook: roots to trust instead of the bundled AC Raiz certificates.</summary>
     internal IReadOnlyList<X509Certificate2>? TrustAnchorsOverride { get; init; }
+
+    /// <summary>
+    /// AC Raiz certificates to trust in addition to the bundled v4–v13 — e.g. a new root version
+    /// obtained with <see cref="IcpBrasilRoots.DownloadAsync"/>.
+    /// </summary>
+    public IReadOnlyList<X509Certificate2> AdditionalTrustAnchors { get; init; } = [];
 
     /// <param name="httpClient">
     /// <see cref="HttpClient"/> instance for AIA downloads and OCSP/CRL fetch.
@@ -726,38 +729,17 @@ public sealed class IcpBrasilChainValidator
         return chainElements;
     }
 
-    private async Task<List<X509Certificate2>> DownloadAllAcRaizAsync(
-        List<string> warnings, CancellationToken ct)
+    private Task<List<X509Certificate2>> DownloadAllAcRaizAsync(List<string> warnings, CancellationToken ct)
     {
-        // Loads bundled certificates (offline, deterministic)
+        ct.ThrowIfCancellationRequested();
         var result = new List<X509Certificate2>(TrustAnchorsOverride ?? LoadBundledAcRaizCerts());
-
-        // Attempts to download extra/future versions not bundled (silent failure)
-        foreach (var url in ExtraAcRaizCertUrls)
-        {
-            try
-            {
-                var bytes = await ResilientHttp.GetBytesAsync(_httpClient, url, logger: _logger, ct: ct).ConfigureAwait(false);
-                if (bytes is not null)
-                {
-                    result.Add(CertificateLoader.LoadCertificate(bytes));
-                }
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.RootCertDownloadFailed(ex.Message);
-            }
-            catch (CryptographicException ex)
-            {
-                _logger.RootCertLoadingFailed(ex.Message);
-            }
-        }
-
+        result.AddRange(AdditionalTrustAnchors);
         if (result is [])
         {
             warnings.Add("Could not load any ICP-Brasil root certificate.");
         }
-        return result;
+
+        return Task.FromResult(result);
     }
 
     /// <summary>

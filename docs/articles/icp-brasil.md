@@ -22,6 +22,41 @@ var validator = BrasilExtension.CreateValidator(
 var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 ```
 
+### New AC Raiz versions
+
+A root is self-signed, so nothing but its published fingerprint can vouch for it. When the ITI
+publishes a new AC Raiz, download it pinned to the SHA-256 fingerprint from the official
+publication and pass it to the extension (or to `IcpBrasilChainValidator.AdditionalTrustAnchors`):
+
+```csharp
+var v14 = await IcpBrasilRoots.DownloadAsync(httpClient, 14, "<SHA-256 fingerprint from the ITI>");
+var validator = new PdfSignatureValidator(options, httpClient,
+    countryExtensions: [new BrasilExtension(httpClient, logger, [v14])]);
+```
+
+`IcpBrasilRoots.ExpiringWithin(TimeSpan)` lists bundled roots close to expiry (v5 ends on
+2029-03-02); a unit test fails a year before any bundled root expires.
+
+### Timestamps for AD-RT (ACT)
+
+AD-RT and above need a signature timestamp. For ICP-Brasil conformance use an **ACT** (Autoridade
+de Carimbo do Tempo) accredited by the ITI; the list of accredited ACTs is published at
+[gov.br/iti — Estrutura da ICP-Brasil](https://www.gov.br/iti/pt-br/assuntos/icp-brasil/estrutura).
+ACT services usually require a contract and credentials. Public TSAs such as
+`TimestampOptions.DigiCert` produce valid RFC 3161 tokens, but they are not ICP-Brasil ACTs.
+
+## CPF and CNPJ
+
+`Cpf` and `Cnpj` validate and format numbers, formatted or not; CNPJs may be alphanumeric:
+
+```csharp
+Cpf.IsValid("123.456.789-09");     // true
+Cpf.Format("12345678909");         // 123.456.789-09
+Cpf.Mask("12345678909");           // ***.456.789-**
+Cnpj.IsValid("12.ABC.345/01DE-35"); // true
+Cnpj.Format("12abc34501de35");     // 12.ABC.345/01DE-35
+```
+
 ## Certificate Detection
 
 Detect whether a certificate belongs to the ICP-Brasil chain:
@@ -264,10 +299,29 @@ var level = GovBrChainValidator.DetectAssuranceLevel(certificate);
 
 ## CLI Support
 
-The CLI tool automatically detects ICP-Brasil certificates during validation:
+`validate` runs the ICP-Brasil and Gov.br providers and shows, per signature, the Lei 14.063 level,
+the hierarchy and certificate type, CPF/CNPJ, professional registrations, the signature policy
+and its status, and the revocation status at the validation time (`--json` adds `lei14063` and a
+`brasil` object):
 
 ```bash
 simplesign validate signed.pdf
+simplesign validate signed.pdf --json
 ```
 
-The output will show ICP-Brasil specific information when a signer certificate is from the Brazilian PKI.
+`sign` can sign under an ICP-Brasil policy and mark health documents for VALIDAR:
+
+```bash
+# AD-RB
+simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-rb
+
+# AD-RT with an ICP-Brasil ACT
+simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-rt --tsa https://act.example/tsa
+
+# Prescription: document type and CRM in the PDF metadata
+simplesign sign receita.pdf --cert cert.pfx --icp-policy ad-rb \
+  --health-document prescricao --registration crm:123456/SP
+```
+
+`--registration` takes `COUNCIL:NUMBER/UF` (crm, crf, cro, oab, coren… or the federal council
+acronym) and may be repeated.
