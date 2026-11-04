@@ -257,7 +257,7 @@ public sealed class SignatureAppearanceCustomizationTests
     {
         var app = new SignatureAppearance { BackgroundColor = (0.9f, 0.95f, 1f), BorderColor = (0f, 0f, 0.5f), Width = 120, Height = 40 };
 
-        string content = Render(app);
+        string content = Render(app).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         int fill = content.IndexOf("0.90 0.95 1.00 rg\n0 0 120.00 40.00 re f", StringComparison.Ordinal);
         int text = content.IndexOf("BT", StringComparison.Ordinal);
