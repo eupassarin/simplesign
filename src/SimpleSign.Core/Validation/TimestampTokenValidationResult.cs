@@ -8,4 +8,7 @@ public sealed class TimestampTokenValidationResult
 
     /// <summary>Whether the TSA certificate chain passed the caller's trust policy; null when no policy was supplied or integrity failed.</summary>
     public bool? IsTsaTrusted { get; init; }
+
+    /// <summary>The token's genTime, when its integrity is valid.</summary>
+    public DateTimeOffset? GenTime { get; init; }
 }

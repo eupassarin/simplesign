@@ -109,7 +109,8 @@ app.MapGet("/rx/{id}", (string id, string? _format, string? _secretCode) =>
 
 ## Full Chain Validation
 
-Validate the entire certificate chain against ICP-Brasil root CAs:
+Validate the entire certificate chain against ICP-Brasil root CAs. Revocation is checked for the
+certificate and every AC with their LCRs (CRLs), then OCSP:
 
 ```csharp
 var validator = new IcpBrasilChainValidator();
@@ -119,18 +120,67 @@ Console.WriteLine($"Chain Valid: {result.IsChainValid}");
 Console.WriteLine($"ICP-Brasil: {result.IsIcpBrasilCertificate}");
 Console.WriteLine($"Type: {result.CertificateLevel}");
 Console.WriteLine($"CPF: {result.CpfFormatted} CNPJ: {result.CnpjFormatted}");
+Console.WriteLine($"Revocation: {result.RevocationStatus}"); // Good, Revoked, Unknown, NotChecked
 
 foreach (var error in result.Errors)
     Console.WriteLine($"Error: {error}");
 ```
 
+### Long-term signatures (B-LT / B-LTA)
+
+When `PdfSignatureValidator` (or `BrasilExtension.CreateValidator()`) validates a PDF, the ICP-Brasil
+and Gov.br providers receive a `ChainValidationContext`: the chain is validated at the time of a
+trusted **signature timestamp**, and revocation is checked against the LCRs and OCSP responses
+**embedded in the document** (DSS) before going online. A B-LTA signature therefore stays valid after
+the signer's certificate expires, and a certificate revoked after the timestamp does not invalidate
+it. You can do the same by hand:
+
+```csharp
+var result = await validator.ValidateAsync(new ChainValidationContext
+{
+    Certificate = signer,
+    Certificates = embeddedCerts,
+    ValidationTime = timestampGenTime,      // null = now
+    EmbeddedCrls = dssCrls,
+    EmbeddedOcsps = dssOcsps,
+    CheckRevocation = true,                 // false = embedded evidence only
+});
+```
+
+When no LCR or OCSP response covers a certificate, `RevocationStatus` is `Unknown` and a warning
+names the certificate; the PAdES result then carries it as a warning.
+
+### Holder data
+
+`IcpBrasilCertificateData.FromCertificate(cert)` (also `result.CertificateData`) reads every
+SubjectAltName field of DOC-ICP-04: birth date, CPF, NIS, RG and issuer (`2.16.76.1.3.1`), voter
+registration (`3.5`), CEI (`3.6`/`3.7`), and for e-CNPJ the responsible person's name and data
+(`3.2`, `3.4`, including the CPF), the CNPJ (`3.3`) and the company name (`3.8`).
+
+```csharp
+var data = IcpBrasilCertificateData.FromCertificate(cert);
+Console.WriteLine($"{data.HolderType}: signer CPF {data.SignerCpf}, company {data.CompanyName}");
+```
+
 ## AEA — Advanced Electronic Signature (Lei 14.063/2020)
 
-SimpleSign supports signature manifests for Lei 14.063 compliance, which defines three levels of electronic signatures in Brazilian government interactions:
+Lei 14.063/2020, art. 4, defines three levels of electronic signature. `Lei14063.Classify` returns
+the level of a validated signature:
 
-- **Simple (EES)** — basic electronic signature
-- **Advanced (AES)** — uses ICP-Brasil or Gov.br credentials
-- **Qualified (QES)** — uses ICP-Brasil digital certificate
+- **Simples** — any other valid signature
+- **Avançada** — Gov.br, or a signature with a SimpleSign advanced-signature manifest
+- **Qualificada** — a trusted ICP-Brasil signature certificate (A1–A4)
+
+```csharp
+var validator = BrasilExtension.CreateValidator();
+foreach (var r in await validator.ValidateAsync(File.OpenRead("signed.pdf")))
+{
+    Console.WriteLine($"{r.FieldName}: {Lei14063.Classify(r)}");   // null when not valid
+}
+```
+
+The providers also put the level in `ChainValidationMetadata["BR.Lei14063"]`, with
+`BR.Hierarchy`, `BR.RevocationStatus`, `BR.ValidationTime` and, for e-CNPJ, `BR.ResponsibleCpf`.
 
 ## Gov.br Integration
 

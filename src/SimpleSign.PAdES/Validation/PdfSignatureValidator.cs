@@ -392,9 +392,14 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // 4. Certificate chain
         bool chainValid = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
 
-        // 4a. Country-specific chain validation providers (enrich with policy level, signer ID, etc.)
+        // 4a. Signature timestamp: its genTime is the time the chain is validated at (B-T and above).
+        TimestampTokenValidationResult timestamp = _timestampValidator.ValidateWithTrust(
+            cmsData, warnings, ValidateCertificateChain, _logger);
+        DateTimeOffset? provenTime = timestamp is { IsIntegrityValid: true, IsTsaTrusted: true } ? timestamp.GenTime : null;
+
+        // 4b. Country-specific chain validation providers (enrich with policy level, signer ID, etc.)
         var chainValidationResult = await RunChainValidationProvidersAsync(
-            cmsData.SignerCertificate, cmsData.Certificates, errors, warnings, cancellationToken).ConfigureAwait(false);
+            cmsData, provenTime, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken).ConfigureAwait(false);
 
         // If standard PKI chain fails but a country-specific provider trusts the certificate,
         // promote chain errors to warnings (same pattern as document timestamps).
@@ -415,9 +420,6 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // 5. Revocation (optional — requires network)
         var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
             field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken).ConfigureAwait(false);
-
-        TimestampTokenValidationResult timestamp = _timestampValidator.ValidateWithTrust(
-            cmsData, warnings, ValidateCertificateChain, _logger);
 
         return new SignatureValidationResult
         {
@@ -485,7 +487,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // 3a. Country-specific chain validation providers (policy level, signer ID enrichment)
         var chainValidationResult = await RunChainValidationProvidersAsync(
-            cmsData.SignerCertificate, cmsData.Certificates, errors, warnings, cancellationToken).ConfigureAwait(false);
+            cmsData, null, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken).ConfigureAwait(false);
 
         // When integrity and signature are cryptographically sound but the TSA chain cannot be
         // anchored to a local trust root, treat this as an advisory warning rather than a hard
@@ -811,16 +813,31 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     /// add them as <paramref name="warnings"/>. Provider failures are logged and surfaced as warnings.
     /// </summary>
     private async Task<ChainValidationResult?> RunChainValidationProvidersAsync(
-        X509Certificate2? signerCert,
-        IReadOnlyList<X509Certificate2> certificates,
+        CmsSignedData cmsData,
+        DateTimeOffset? provenTime,
+        IReadOnlyList<byte[]> embeddedCrls,
+        IReadOnlyList<byte[]> embeddedOcsps,
         List<string> errors,
         List<string> warnings,
         CancellationToken cancellationToken)
     {
+        var signerCert = cmsData.SignerCertificate;
         if (signerCert is null || _chainValidationProviders.Count == 0)
         {
             return null;
         }
+
+        var context = new ChainValidationContext
+        {
+            Certificate = signerCert,
+            Certificates = cmsData.Certificates,
+            ValidationTime = provenTime,
+            IsValidationTimeFromTimestamp = provenTime is not null,
+            EmbeddedCrls = embeddedCrls,
+            EmbeddedOcsps = embeddedOcsps,
+            CheckRevocation = _options.CheckRevocation,
+            Signature = cmsData,
+        };
 
         foreach (var provider in _chainValidationProviders)
         {
@@ -832,9 +849,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-#pragma warning disable CA2016 // ValidateAsync 2-param overload doesn't accept CancellationToken
-                var result = await provider.ValidateAsync(signerCert, certificates).ConfigureAwait(false);
-#pragma warning restore CA2016
+                var result = await provider.ValidateAsync(context, cancellationToken).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (!result.IsTrusted)
@@ -892,6 +907,11 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
                 {
                     chain.ChainPolicy.ExtraStore.Add(cert);
                 }
+            }
+
+            foreach (var cert in provider.GetIntermediateCertificates())
+            {
+                chain.ChainPolicy.ExtraStore.Add(cert);
             }
         }
     }

@@ -25,6 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **VALIDAR:** `ValidarItiUrlBuilder.ForDocument` is obsolete (`?document=` is not a VALIDAR
   parameter). New `ValidarItiQrEndpoint` implements the documented QR protocol
   (`_format`, `_secretCode`, JSON with the signed files, 401/404).
+- **Chain validation time and revocation:** the ICP-Brasil and Gov.br providers validate at the
+  trusted signature timestamp time and check LCRs/OCSP (embedded in the DSS first, then online) for
+  the certificate and every AC, instead of the OS check at the current time that treated unknown
+  revocation as success. B-LT/B-LTA signatures stay valid after the certificate expires. Results
+  report `RevocationStatus` and `ValidationTime`; the Certisign/ITI "verify manually" links are gone.
+- **Gov.br anchors:** only the AC Raiz is a trust anchor; the intermediate ACs are chain-building help.
+
+### Added (SimpleSign.Brasil)
+
+- `IChainValidationProvider.ValidateAsync(ChainValidationContext, CancellationToken)`: providers
+  receive the validation time, the embedded CRLs/OCSP responses and the parsed signature. Default
+  implementation delegates to the existing overloads. `ChainValidationResult.RevocationStatus`,
+  `TimestampTokenValidationResult.GenTime`, `TimestampValidator.ReadGenTime`,
+  `ITrustAnchorProvider.GetIntermediateCertificates()`.
+- `Lei14063.Classify(result, manifestJson?)`: simples / avançada / qualificada (art. 4); the providers
+  also fill `ChainValidationMetadata["BR.Lei14063"]`.
+- `IcpBrasilCertificateData`: all DOC-ICP-04 SubjectAltName fields (PF birth date, CPF, NIS, RG,
+  voter registration, CEI; PJ responsible name and CPF, CNPJ, company name). Gov.br CPF extraction
+  shares the same parser.
 
 ### Added
 

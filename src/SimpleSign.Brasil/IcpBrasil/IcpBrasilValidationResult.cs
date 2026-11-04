@@ -35,6 +35,12 @@ public sealed class IcpBrasilValidationResult
     /// 2.16.76.1.4.2.{council}. Empty when the certificate carries none.
     /// </summary>
     public IReadOnlyList<ProfessionalRegistration> ProfessionalRegistrations { get; init; } = [];
+    /// <summary>Holder data from the SubjectAltName (PF/PJ fields, responsible person, registrations).</summary>
+    public IcpBrasilCertificateData? CertificateData { get; init; }
+    /// <summary>The time the chain was validated at (the signature timestamp time, or the time of validation).</summary>
+    public DateTimeOffset ValidationTime { get; init; }
+    /// <summary>The revocation status of the certificate and its CAs at <see cref="ValidationTime"/>.</summary>
+    public SimpleSign.Core.Extensions.ChainRevocationStatus RevocationStatus { get; init; }
     /// <summary>Certificate chain elements with individual validation results.</summary>
     public IReadOnlyList<IcpBrasilChainElement> ChainElements { get; init; } = [];
     /// <summary>Bundled AC Raiz (root CA) certificates used for chain building.</summary>

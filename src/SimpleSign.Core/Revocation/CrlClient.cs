@@ -230,7 +230,7 @@ public sealed class CrlClient : ICrlClient
     /// different ASN.1 string types (UTF8String vs PrintableString) for the same DN value.
     /// This is common in Brazilian ICP-Brasil / Gov.br CAs.
     /// </summary>
-    private static bool IssuerMatchesCertificate(byte[] crlIssuerBytes, X500DistinguishedName certIssuer)
+    internal static bool IssuerMatchesCertificate(byte[] crlIssuerBytes, X500DistinguishedName certIssuer)
     {
         if (crlIssuerBytes.AsSpan().SequenceEqual(certIssuer.RawData))
         {

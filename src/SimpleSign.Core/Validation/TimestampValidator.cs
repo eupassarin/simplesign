@@ -80,8 +80,35 @@ public static class TimestampValidator
         return new TimestampTokenValidationResult
         {
             IsIntegrityValid = integrity,
-            IsTsaTrusted = integrity == true ? trusted : null
+            IsTsaTrusted = integrity == true ? trusted : null,
+            GenTime = integrity == true ? ReadGenTime(timestampToken) : null,
         };
+    }
+
+    /// <summary>Reads the genTime of an RFC 3161 token, without verifying it.</summary>
+    /// <param name="timestampToken">DER-encoded RFC 3161 timestamp token.</param>
+    /// <returns>The genTime, or null when the token cannot be parsed.</returns>
+    public static DateTimeOffset? ReadGenTime(byte[] timestampToken)
+    {
+        try
+        {
+            byte[]? tstInfoBytes = timestampToken is { Length: > 0 } ? ExtractTstInfo(timestampToken) : null;
+            if (tstInfoBytes is null)
+            {
+                return null;
+            }
+
+            var tstInfo = new AsnReader(tstInfoBytes, AsnEncodingRules.BER).ReadSequence();
+            _ = tstInfo.ReadInteger();          // version
+            _ = tstInfo.ReadObjectIdentifier(); // policy
+            _ = tstInfo.ReadSequence();         // messageImprint
+            _ = tstInfo.ReadInteger();          // serialNumber
+            return tstInfo.ReadGeneralizedTime();
+        }
+        catch (Exception ex) when (ex is AsnContentException or System.Security.Cryptography.CryptographicException)
+        {
+            return null;
+        }
     }
 
     private sealed record ParsedTsaSignerInfo(

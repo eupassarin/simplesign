@@ -1,7 +1,7 @@
-using System.Formats.Asn1;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using SimpleSign.Brasil.Revocation;
 using SimpleSign.Core;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
@@ -25,7 +25,7 @@ namespace SimpleSign.Brasil.GovBr;
 ///   2.16.76.3.2.3.x = Level 3 (Gold equivalent)
 ///   2.16.76.3.2.4.x = Level 4
 /// </summary>
-public sealed partial class GovBrChainValidator
+public sealed class GovBrChainValidator
 {
     // Names of bundled resources (AC Raiz + Intermediate + Final, all valid until Jun 2033)
     private static readonly string[] BundledGovBrResourceNames =
@@ -38,6 +38,7 @@ public sealed partial class GovBrChainValidator
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly ICertificateChainService _certChainService;
+    private readonly ChainRevocationChecker _revocationChecker;
 
     /// <param name="httpClient">
     /// <see cref="HttpClient"/> instance for network calls.
@@ -51,6 +52,7 @@ public sealed partial class GovBrChainValidator
         _httpClient = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _logger = logger ?? NullLogger.Instance;
         _certChainService = certChainService ?? new CertificateChainService();
+        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger);
     }
 
     /// <summary>
@@ -63,6 +65,7 @@ public sealed partial class GovBrChainValidator
         _httpClient = httpClientProvider.GetClient();
         _logger = logger ?? NullLogger.Instance;
         _certChainService = certChainService ?? new CertificateChainService();
+        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger);
     }
 
     /// <summary>
@@ -151,98 +154,60 @@ public sealed partial class GovBrChainValidator
     public static string? ExtractCpfFromSan(X509Certificate2 certificate)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-
-        // SAN OID: 2.5.29.17
-        var sanExt = certificate.Extensions[Oids.SubjectAltName];
-        if (sanExt is null)
+        foreach (var (oid, value) in IcpBrasil.IcpBrasilChainValidator.ReadSanOtherNames(certificate, logger: null))
         {
-            return null;
-        }
-
-        try
-        {
-            // Estrutura SAN: SEQUENCE OF GeneralName
-            // OtherName: [0] IMPLICIT SEQUENCE { OID, [0] EXPLICIT ANY }
-            // CPF OID: 2.16.76.1.3.1 — value: UTF8String with 11 digits
-            var reader = new AsnReader(sanExt.RawData, AsnEncodingRules.DER);
-            var seq = reader.ReadSequence();
-
-            var cpfOidBytes = DerEncoder.EncodeOid(Oids.IcpBrasilSanHolderData);
-
-            while (seq.HasData)
+            if (oid != Oids.IcpBrasilSanHolderData)
             {
-                var tag = seq.PeekTag();
-
-                // OtherName tem tag [0] CONSTRUCTED
-                if (tag.TagClass == TagClass.ContextSpecific && tag.TagValue == 0 && tag.IsConstructed)
-                {
-                    var otherName = seq.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true));
-                    var oidBytes = otherName.ReadEncodedValue();
-
-                    // Verifies if this is the CPF OID
-                    if (oidBytes.Span.SequenceEqual(cpfOidBytes))
-                    {
-                        // value [0] EXPLICIT ANY
-                        var valueWrapper = otherName.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true));
-                        // CPF may be encoded as UTF8String or IA5String
-                        if (valueWrapper.HasData)
-                        {
-                            var cpfTag = valueWrapper.PeekTag();
-                            string cpfRaw;
-                            if (cpfTag == Asn1Tag.PrimitiveOctetString ||
-                                cpfTag.TagValue == (int)UniversalTagNumber.UTF8String)
-                            {
-                                cpfRaw = valueWrapper.ReadCharacterString(UniversalTagNumber.UTF8String);
-                            }
-                            else if (cpfTag.TagValue == (int)UniversalTagNumber.IA5String)
-                            {
-                                cpfRaw = valueWrapper.ReadCharacterString(UniversalTagNumber.IA5String);
-                            }
-                            else
-                            {
-                                cpfRaw = valueWrapper.ReadCharacterString(UniversalTagNumber.UTF8String);
-                            }
-
-                            // Extracts only the CPF digits (11 digits)
-                            var digits = new string([.. cpfRaw.Where(char.IsDigit)]);
-                            if (digits.Length == 11)
-                            {
-                                return digits;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    seq.ReadEncodedValue(); // ignora outros tipos de GeneralName
-                }
+                continue;
             }
-        }
-        catch (AsnContentException)
-        {
-            // If extraction fails via ASN.1, try numeric pattern search on the raw bytes
-            return ExtractCpfFallback(sanExt.RawData);
-        }
-        catch (InvalidOperationException)
-        {
-            return ExtractCpfFallback(sanExt.RawData);
+
+            // Either the ICP-Brasil layout (birth date + CPF + …) or the CPF alone.
+            string digits = new([.. value.Where(char.IsAsciiDigit)]);
+            if (digits.Length == 11 && IcpBrasil.IcpBrasilChainValidator.IsValidCpf(digits))
+            {
+                return digits;
+            }
+
+            if (IcpBrasil.IcpBrasilCertificateData.ParsePerson(value)?.Cpf is { } cpf)
+            {
+                return cpf;
+            }
         }
 
         return null;
     }
 
     /// <summary>
-    /// Validates the Gov.br certificate chain up to the bundled AC Raiz.
-    /// Also checks revocation via CRL if HttpClient is available.
+    /// Validates the Gov.br certificate chain up to the bundled AC Raiz at the current time,
+    /// checking revocation online.
     /// </summary>
     /// <exception cref="ArgumentNullException"><paramref name="certificate"/> is null.</exception>
-    /// <exception cref="HttpRequestException">AIA certificate download failed.</exception>
-    public async Task<GovBrValidationResult> ValidateAsync(
+    public Task<GovBrValidationResult> ValidateAsync(
         X509Certificate2 certificate,
         IReadOnlyList<X509Certificate2>? extraCerts = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(certificate);
+        return ValidateAsync(
+            new ChainValidationContext { Certificate = certificate, Certificates = extraCerts ?? [] },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates the Gov.br chain at <see cref="ChainValidationContext.ValidationTime"/>, checking
+    /// revocation against the embedded evidence first and, when allowed, online.
+    /// </summary>
+    /// <param name="context">The certificate, validation time and embedded revocation evidence.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="context"/> is null.</exception>
+    public async Task<GovBrValidationResult> ValidateAsync(
+        ChainValidationContext context,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var certificate = context.Certificate;
+        ArgumentNullException.ThrowIfNull(certificate, nameof(context));
+        var validationTime = context.ValidationTime ?? DateTimeOffset.UtcNow;
 
         _logger.GovBrValidating(certificate.Subject);
 
@@ -263,18 +228,31 @@ public sealed partial class GovBrChainValidator
 
         try
         {
-            using var chain = ConfigureChainPolicy(extraCerts, aiaCerts);
+            using var chain = ConfigureChainPolicy(context.Certificates, aiaCerts, validationTime);
             chain.Build(certificate);
 
-            var (chainElements, hasRevocationUnknown) = BuildChainElementResults(chain, errors);
-
-            if (hasRevocationUnknown)
-            {
-                warnings.Add("Revocation check incomplete (CRL/OCSP unreachable from this platform). " +
-                             "Verify manually at: https://assinador.iti.gov.br/");
-            }
-
+            var chainElements = BuildChainElementResults(chain, errors);
             bool isChainValid = errors is [] && chainElements is not [];
+
+            var revocationStatus = ChainRevocationStatus.NotChecked;
+            bool hasEvidence = context.EmbeddedCrls.Count > 0 || context.EmbeddedOcsps.Count > 0;
+            if (isChainValid && (context.CheckRevocation || hasEvidence))
+            {
+                var (status, messages) = await _revocationChecker.CheckAsync(
+                    [.. chain.ChainElements.Select(e => e.Certificate)], validationTime,
+                    context.EmbeddedCrls, context.EmbeddedOcsps, context.CheckRevocation, cancellationToken).ConfigureAwait(false);
+                if (status == ChainRevocationStatus.Revoked)
+                {
+                    errors.AddRange(messages);
+                    isChainValid = false;
+                }
+                else
+                {
+                    warnings.AddRange(messages);
+                }
+
+                revocationStatus = status;
+            }
 
             return new GovBrValidationResult
             {
@@ -282,6 +260,8 @@ public sealed partial class GovBrChainValidator
                 IsGovBrCertificate = isGovBr,
                 AssuranceLevel = level,
                 Cpf = cpf,
+                ValidationTime = validationTime,
+                RevocationStatus = revocationStatus,
                 ChainElements = chainElements.AsReadOnly(),
                 Errors = errors.AsReadOnly(),
                 Warnings = warnings.AsReadOnly()
@@ -304,16 +284,15 @@ public sealed partial class GovBrChainValidator
     /// </summary>
     private static X509Chain ConfigureChainPolicy(
         IReadOnlyList<X509Certificate2>? extraCerts,
-        List<X509Certificate2> aiaCerts)
+        List<X509Certificate2> aiaCerts,
+        DateTimeOffset validationTime)
     {
         var govBrCerts = new List<X509Certificate2>(LoadBundledGovBrCerts());
 
         var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
-        chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
-        chain.ChainPolicy.VerificationFlags =
-            X509VerificationFlags.IgnoreEndRevocationUnknown |
-            X509VerificationFlags.IgnoreCertificateAuthorityRevocationUnknown;
+        // Revocation is checked by ChainRevocationChecker at the validation time.
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.VerificationTime = validationTime.LocalDateTime;
         chain.ChainPolicy.UrlRetrievalTimeout = ResilientHttp.DefaultChainRetrievalTimeout;
         chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
 
@@ -352,40 +331,18 @@ public sealed partial class GovBrChainValidator
     }
 
     /// <summary>
-    /// Iterates chain elements, classifying each status as either a warning
-    /// (revocation unknown / offline revocation) or a critical error.
-    /// Builds a list of <see cref="GovBrChainElement"/> and aggregates critical errors
-    /// into the provided <paramref name="errors"/> list.
-    /// Returns the element list and whether any revocation-unknown status was encountered.
+    /// Builds a <see cref="GovBrChainElement"/> per chain element and adds its status errors to
+    /// <paramref name="errors"/>.
     /// </summary>
-    private (List<GovBrChainElement> Elements, bool HasRevocationUnknown) BuildChainElementResults(
-        X509Chain chain,
-        List<string> errors)
+    private List<GovBrChainElement> BuildChainElementResults(X509Chain chain, List<string> errors)
     {
         var chainElements = new List<GovBrChainElement>();
-        bool hasRevocationUnknown = false;
-
         foreach (var chainElement in chain.ChainElements)
         {
-            var elementErrors = new List<string>();
-            var elementWarnings = new List<string>();
-
-            foreach (var chainStatus in chainElement.ChainElementStatus)
-            {
-                bool isRevocationUnknown =
-                    chainStatus.Status is X509ChainStatusFlags.RevocationStatusUnknown
-                                or X509ChainStatusFlags.OfflineRevocation;
-
-                if (isRevocationUnknown)
-                {
-                    hasRevocationUnknown = true;
-                    elementWarnings.Add(chainStatus.StatusInformation.Trim());
-                }
-                else
-                {
-                    elementErrors.Add(chainStatus.StatusInformation.Trim());
-                }
-            }
+            var elementErrors = chainElement.ChainElementStatus
+                .Where(s => s.Status is not (X509ChainStatusFlags.RevocationStatusUnknown or X509ChainStatusFlags.OfflineRevocation))
+                .Select(s => s.StatusInformation.Trim())
+                .ToList();
 
             chainElements.Add(new GovBrChainElement
             {
@@ -395,7 +352,7 @@ public sealed partial class GovBrChainValidator
                 NotAfter = chainElement.Certificate.NotAfter,
                 Thumbprint = chainElement.Certificate.Thumbprint,
                 Errors = elementErrors.AsReadOnly(),
-                Warnings = elementWarnings.AsReadOnly()
+                Warnings = [],
             });
 
             foreach (var err in elementErrors)
@@ -404,7 +361,7 @@ public sealed partial class GovBrChainValidator
             }
         }
 
-        return (chainElements, hasRevocationUnknown);
+        return chainElements;
     }
 
     private Task<List<X509Certificate2>> DownloadAiaCertsAsync(
@@ -415,24 +372,4 @@ public sealed partial class GovBrChainValidator
 
     private static bool IsRootCert(X509Certificate2 cert) =>
         cert.IsSelfSigned();
-
-    private static string? ExtractCpfFallback(byte[] sanRawData)
-    {
-        var text = System.Text.Encoding.ASCII.GetString(sanRawData);
-        var match = CpfDigitsRegex().Match(text);
-        while (match.Success)
-        {
-            if (IcpBrasil.IcpBrasilChainValidator.IsValidCpf(match.Value))
-            {
-                return match.Value;
-            }
-
-            match = match.NextMatch();
-        }
-
-        return null;
-    }
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"\d{11}")]
-    private static partial System.Text.RegularExpressions.Regex CpfDigitsRegex();
 }

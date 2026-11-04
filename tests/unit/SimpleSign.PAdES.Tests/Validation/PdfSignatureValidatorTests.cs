@@ -345,7 +345,7 @@ public sealed class PdfSignatureValidatorTests
     [Fact(DisplayName = "Constructor with chain validation providers stores them")]
     public void Constructor_WithChainValidationProviders_StoresProviders()
     {
-        var mockProvider = new Mock<IChainValidationProvider>();
+        var mockProvider = new Mock<IChainValidationProvider> { CallBase = true };
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
 
         var validator = new PdfSignatureValidator(
@@ -361,7 +361,7 @@ public sealed class PdfSignatureValidatorTests
     [Fact(DisplayName = "Constructor with country extensions extracts trust anchors and chain validators")]
     public void Constructor_WithCountryExtensions_ExtractsProviders()
     {
-        var mockProvider = new Mock<IChainValidationProvider>();
+        var mockProvider = new Mock<IChainValidationProvider> { CallBase = true };
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
         var mockAnchor = new Mock<ITrustAnchorProvider>();
 
@@ -388,7 +388,7 @@ public sealed class PdfSignatureValidatorTests
         using MemoryStream outputStream = new MemoryStream();
         await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
 
-        var mockProvider = new Mock<IChainValidationProvider>();
+        var mockProvider = new Mock<IChainValidationProvider> { CallBase = true };
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
         mockProvider.Setup(p => p.CanValidate(It.IsAny<X509Certificate2>())).Returns(true);
         mockProvider.Setup(p => p.ValidateAsync(It.IsAny<X509Certificate2>(), It.IsAny<IReadOnlyList<X509Certificate2>>()))
@@ -417,6 +417,41 @@ public sealed class PdfSignatureValidatorTests
         results[0].ChainValidationRegion.ShouldBe("XX");
     }
 
+    [Fact(DisplayName = "Providers receive the validation context with the parsed signature")]
+    public async Task ValidateAsync_WithMatchingProvider_PassesContext()
+    {
+        using X509Certificate2 cert = CreateRsaCertWithKey();
+        byte[] pdfBytes = BuildMinimalPdfForSigning();
+        using MemoryStream outputStream = new MemoryStream();
+        await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
+
+        ChainValidationContext? captured = null;
+        var mockProvider = new Mock<IChainValidationProvider>();
+        mockProvider.Setup(p => p.RegionCode).Returns("XX");
+        mockProvider.Setup(p => p.CanValidate(It.IsAny<X509Certificate2>())).Returns(true);
+        mockProvider.Setup(p => p.ValidateAsync(It.IsAny<ChainValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback<ChainValidationContext, CancellationToken>((c, _) => captured = c)
+            .ReturnsAsync(new ChainValidationResult { IsTrusted = true, RegionCode = "XX" });
+
+        var validator = new PdfSignatureValidator(
+            new ValidationOptions { CheckRevocation = false, TrustedRoots = [cert] },
+            httpClient: null,
+            logger: null,
+            trustAnchorProviders: null,
+            chainValidationProviders: [mockProvider.Object]);
+
+        using MemoryStream signedStream = new MemoryStream(outputStream.ToArray());
+        await validator.ValidateAsync(signedStream);
+
+        captured.ShouldNotBeNull();
+        captured.Certificate.Thumbprint.ShouldBe(cert.Thumbprint);
+        captured.Signature.ShouldNotBeNull();
+        captured.CheckRevocation.ShouldBeFalse();
+        // B-B signature: no timestamp, so the provider validates at the current time.
+        captured.ValidationTime.ShouldBeNull();
+        captured.IsValidationTimeFromTimestamp.ShouldBeFalse();
+    }
+
     [Fact(DisplayName = "Validation with non-matching provider is ignored")]
     public async Task ValidateAsync_WithNonMatchingProvider_Ignored()
     {
@@ -425,7 +460,7 @@ public sealed class PdfSignatureValidatorTests
         using MemoryStream outputStream = new MemoryStream();
         await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
 
-        var mockProvider = new Mock<IChainValidationProvider>();
+        var mockProvider = new Mock<IChainValidationProvider> { CallBase = true };
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
         mockProvider.Setup(p => p.CanValidate(It.IsAny<X509Certificate2>())).Returns(false);
         mockProvider.Setup(p => p.ValidateAsync(It.IsAny<X509Certificate2>(), It.IsAny<IReadOnlyList<X509Certificate2>>()))
@@ -457,7 +492,7 @@ public sealed class PdfSignatureValidatorTests
         using MemoryStream outputStream = new MemoryStream();
         await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
 
-        var mockProvider = new Mock<IChainValidationProvider>();
+        var mockProvider = new Mock<IChainValidationProvider> { CallBase = true };
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
         mockProvider.Setup(p => p.CanValidate(It.IsAny<X509Certificate2>())).Returns(true);
         mockProvider.Setup(p => p.ValidateAsync(It.IsAny<X509Certificate2>(), It.IsAny<IReadOnlyList<X509Certificate2>>()))
@@ -488,7 +523,7 @@ public sealed class PdfSignatureValidatorTests
         using MemoryStream outputStream = new MemoryStream();
         await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
 
-        var mockProvider = new Mock<IChainValidationProvider>();
+        var mockProvider = new Mock<IChainValidationProvider> { CallBase = true };
         mockProvider.Setup(p => p.RegionCode).Returns("XX");
         mockProvider.Setup(p => p.CanValidate(It.IsAny<X509Certificate2>())).Returns(true);
         mockProvider.Setup(p => p.ValidateAsync(It.IsAny<X509Certificate2>(), It.IsAny<IReadOnlyList<X509Certificate2>>()))

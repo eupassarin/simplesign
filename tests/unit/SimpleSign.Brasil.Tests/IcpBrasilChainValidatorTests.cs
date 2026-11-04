@@ -87,7 +87,7 @@ public sealed class IcpBrasilChainValidatorTests
     public async Task ValidateAsync_NullCertificate_ThrowsArgumentNullException()
     {
         IcpBrasilChainValidator validator = new IcpBrasilChainValidator();
-        await Assert.ThrowsAsync<ArgumentNullException>(() => validator.ValidateAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => validator.ValidateAsync((X509Certificate2)null!));
     }
 
     [Fact(DisplayName = "Cert without ICP policy returns warning")]

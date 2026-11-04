@@ -14,6 +14,15 @@ public interface ITrustAnchorProvider
     /// <summary>Human-readable name (e.g., "ICP-Brasil", "EU Trusted List").</summary>
     string DisplayName { get; }
 
-    /// <summary>Returns the bundled trust anchor certificates.</summary>
+    /// <summary>
+    /// Returns the bundled trust anchor certificates. Return root (self-signed) CAs only:
+    /// validators treat a non-self-signed certificate here as an intermediate, not as an anchor.
+    /// </summary>
     IReadOnlyList<X509Certificate2> GetTrustAnchors();
+
+    /// <summary>
+    /// Intermediate CA certificates to help build chains under the anchors (never trusted by
+    /// themselves). The default is none.
+    /// </summary>
+    IReadOnlyList<X509Certificate2> GetIntermediateCertificates() => [];
 }
