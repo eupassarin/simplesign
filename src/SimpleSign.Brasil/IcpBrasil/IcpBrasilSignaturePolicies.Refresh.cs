@@ -1,5 +1,6 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
@@ -61,6 +62,102 @@ public sealed record IcpBrasilLpa(IReadOnlyList<IcpBrasilLpaEntry> Entries, Date
             throw new ArgumentException("The bytes are not a DER-encoded ICP-Brasil LPA.", nameof(lpa), ex);
         }
     }
+
+    /// <summary>
+    /// Parses the XML LPA (<c>LPA_XAdES.xml</c>, namespace <c>http://www.iti.gov.br/LPA/v2#</c>).
+    /// This does not verify its XML signature (SimpleSign.Brasil.Xades does).
+    /// </summary>
+    /// <param name="lpa">The LPA bytes.</param>
+    /// <exception cref="ArgumentException">The bytes are not an XML LPA.</exception>
+    public static IcpBrasilLpa ParseXml(ReadOnlySpan<byte> lpa)
+    {
+        var entries = new List<IcpBrasilLpaEntry>();
+        DateTimeOffset? nextUpdate = null;
+        try
+        {
+            using var stream = new MemoryStream(lpa.ToArray());
+            using var reader = System.Xml.XmlReader.Create(stream, new System.Xml.XmlReaderSettings
+            {
+                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                XmlResolver = null,
+            });
+            string? oid = null, uri = null, digestAlg = null;
+            byte[]? digest = null;
+            DateTimeOffset? notBefore = null, notAfter = null, revoked = null;
+            bool positioned = false;
+            while (positioned || reader.Read())
+            {
+                positioned = false;
+                if (reader.NodeType == System.Xml.XmlNodeType.EndElement && reader.LocalName == "PolicyInfo")
+                {
+                    if (oid is null || uri is null || digest is null || notBefore is null)
+                    {
+                        throw new ArgumentException("An LPA PolicyInfo is incomplete.", nameof(lpa));
+                    }
+
+                    entries.Add(new IcpBrasilLpaEntry(oid, uri, IcpBrasilSignaturePolicies.XmlDigestOid(digestAlg), digest,
+                        notBefore.Value, notAfter ?? DateTimeOffset.MaxValue, revoked));
+                    oid = uri = digestAlg = null;
+                    digest = null;
+                    notBefore = notAfter = revoked = null;
+                    continue;
+                }
+
+                if (reader.NodeType != System.Xml.XmlNodeType.Element || reader.NamespaceURI is "http://www.w3.org/2000/09/xmldsig#")
+                {
+                    continue;
+                }
+
+                switch (reader.LocalName)
+                {
+                    case "NextUpdate":
+                        nextUpdate = IcpBrasilSignaturePolicies.ParseXmlTime(reader.ReadElementContentAsString());
+                        positioned = true;
+                        break;
+                    case "NotBefore":
+                        notBefore = IcpBrasilSignaturePolicies.ParseXmlTime(reader.ReadElementContentAsString());
+                        positioned = true;
+                        break;
+                    case "NotAfter":
+                        notAfter = IcpBrasilSignaturePolicies.ParseXmlTime(reader.ReadElementContentAsString());
+                        positioned = true;
+                        break;
+                    case "RevocationDate":
+                        revoked = IcpBrasilSignaturePolicies.ParseXmlTime(reader.ReadElementContentAsString());
+                        positioned = true;
+                        break;
+                    case "Identifier":
+                        oid = reader.ReadElementContentAsString().Trim();
+                        positioned = true;
+                        if (oid.StartsWith("urn:oid:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            oid = oid[8..];
+                        }
+
+                        break;
+                    case "PolicyURI":
+                        uri = reader.ReadElementContentAsString().Trim();
+                        positioned = true;
+                        break;
+                    case "DigestMethod":
+                        digestAlg = reader.GetAttribute("Algorithm");
+                        break;
+                    case "DigestValue":
+                        digest = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        positioned = true;
+                        break;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.Xml.XmlException or FormatException)
+        {
+            throw new ArgumentException("The bytes are not an ICP-Brasil XML LPA.", nameof(lpa), ex);
+        }
+
+        return entries.Count == 0 || nextUpdate is null
+            ? throw new ArgumentException("The bytes are not an ICP-Brasil XML LPA.", nameof(lpa))
+            : new IcpBrasilLpa(entries.AsReadOnly(), nextUpdate.Value);
+    }
 }
 
 public static partial class IcpBrasilSignaturePolicies
@@ -69,7 +166,7 @@ public static partial class IcpBrasilSignaturePolicies
     public static readonly Uri Repository = new("https://politicas.icpbrasil.gov.br/");
 
     // CNPJ of the ITI (Instituto Nacional de Tecnologia da Informação), the LPA signer.
-    private const string ItiCnpj = "04039532000193";
+    internal const string ItiCnpj = "04039532000193";
 
     /// <summary>
     /// Downloads the current LPA of <paramref name="format"/> from the ITI and updates
@@ -82,7 +179,7 @@ public static partial class IcpBrasilSignaturePolicies
     /// Call it at start-up or when <see cref="IcpBrasilLpa.NextUpdate"/> has passed; on failure the current catalog is kept.
     /// </summary>
     /// <param name="httpClient">HTTP client for the ITI repository, LCRs and AIA.</param>
-    /// <param name="format">PAdES or CAdES (XAdES is not supported).</param>
+    /// <param name="format">PAdES or CAdES (for XAdES, use IcpBrasilXadesPolicies.RefreshAsync in SimpleSign.Brasil.Xades).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The LPA that was applied.</returns>
     /// <exception cref="CryptographicException">The LPA signature or a PA digest does not verify.</exception>
@@ -108,6 +205,16 @@ public static partial class IcpBrasilSignaturePolicies
         await VerifyLpaSignatureAsync(lpaBytes, signature, httpClient, cancellationToken, chainValidator).ConfigureAwait(false);
 
         var lpa = IcpBrasilLpa.Parse(lpaBytes);
+        await ApplyLpaAsync(lpa, httpClient, xml: false, name, cancellationToken).ConfigureAwait(false);
+        return lpa;
+    }
+
+    /// <summary>
+    /// Applies a verified LPA: known policies take its periods and revocation dates; new ones are
+    /// downloaded, checked against the LPA digest and parsed (DER or XML PAs).
+    /// </summary>
+    internal static async Task ApplyLpaAsync(IcpBrasilLpa lpa, HttpClient httpClient, bool xml, string name, CancellationToken cancellationToken)
+    {
         var updated = new List<IcpBrasilSignaturePolicy>();
         var newRules = new List<IcpBrasilPolicyRules>();
         foreach (var entry in lpa.Entries)
@@ -125,8 +232,8 @@ public static partial class IcpBrasilSignaturePolicies
                 throw new CryptographicException($"The PA at {entry.Uri} does not match the digest listed in {name}.");
             }
 
-            newRules.Add(IcpBrasilPolicyRules.Parse(pa));
-            updated.Add(FromPolicyDocument(pa, entry.Uri) with
+            newRules.Add(xml ? IcpBrasilPolicyRules.ParseXml(pa) : IcpBrasilPolicyRules.Parse(pa));
+            updated.Add((xml ? FromXmlPolicyDocument(pa, entry.Uri) : FromPolicyDocument(pa, entry.Uri)) with
             {
                 NotBefore = entry.NotBefore,
                 NotAfter = entry.NotAfter,
@@ -136,7 +243,38 @@ public static partial class IcpBrasilSignaturePolicies
 
         Apply(updated);
         ApplyRules(newRules);
-        return lpa;
+    }
+
+    /// <summary>The ITI repository URL of an LPA file.</summary>
+    internal static Task<byte[]> DownloadFromRepositoryAsync(HttpClient httpClient, string file, CancellationToken cancellationToken) =>
+        DownloadAsync(httpClient, new Uri(Repository, file), cancellationToken);
+
+    /// <summary>
+    /// Checks that an LPA signer is the ITI (CNPJ 04.039.532/0001-93) and chains, unrevoked, to an
+    /// ICP-Brasil AC Raiz.
+    /// </summary>
+    internal static async Task VerifyLpaSignerAsync(
+        X509Certificate2 signer, IReadOnlyList<X509Certificate2> certificates, DateTimeOffset? signingTime,
+        HttpClient httpClient, IcpBrasilChainValidator? chainValidator, CancellationToken cancellationToken)
+    {
+        var (_, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(signer);
+        if (cnpj != ItiCnpj)
+        {
+            throw new CryptographicException("The LPA is not signed by the ITI.");
+        }
+
+        var validator = chainValidator ?? new IcpBrasilChainValidator(httpClient);
+        var chain = await validator.ValidateAsync(new ChainValidationContext
+        {
+            Certificate = signer,
+            Certificates = certificates,
+            ValidationTime = signingTime,
+            CheckRevocation = true,
+        }, cancellationToken).ConfigureAwait(false);
+        if (!chain.IsChainValid || chain.RevocationStatus == ChainRevocationStatus.Revoked)
+        {
+            throw new CryptographicException($"The LPA signer certificate is not trusted: {string.Join("; ", chain.Errors)}");
+        }
     }
 
     /// <summary>
@@ -164,24 +302,7 @@ public static partial class IcpBrasilSignaturePolicies
             throw new CryptographicException("The LPA signature does not verify.");
         }
 
-        var (_, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(cms.SignerCertificate);
-        if (cnpj != ItiCnpj)
-        {
-            throw new CryptographicException("The LPA is not signed by the ITI.");
-        }
-
-        var validator = chainValidator ?? new IcpBrasilChainValidator(httpClient);
-        var chain = await validator.ValidateAsync(new ChainValidationContext
-        {
-            Certificate = cms.SignerCertificate,
-            Certificates = cms.Certificates,
-            ValidationTime = cms.SigningTime,
-            CheckRevocation = true,
-        }, cancellationToken).ConfigureAwait(false);
-        if (!chain.IsChainValid || chain.RevocationStatus == ChainRevocationStatus.Revoked)
-        {
-            throw new CryptographicException($"The LPA signer certificate is not trusted: {string.Join("; ", chain.Errors)}");
-        }
+        await VerifyLpaSignerAsync(cms.SignerCertificate, cms.Certificates, cms.SigningTime, httpClient, chainValidator, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<byte[]> DownloadAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken) =>

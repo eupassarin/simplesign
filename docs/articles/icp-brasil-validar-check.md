@@ -38,11 +38,13 @@ foreach (var (name, policy) in new[] { ("ad-rc", IcpBrasilPolicy.AdRc), ("ad-ra"
         .WithIcpBrasilPolicy(policy, act).SignAsync());
 }
 
-// 5. XAdES AD-RB (enveloped)
+// 5. XAdES AD-RB, AD-RT, AD-RC and AD-RA (enveloped; SimpleSign.Brasil.Xades)
 var xml = await File.ReadAllBytesAsync("documento.xml");
-await File.WriteAllBytesAsync("xades-ad-rb.xml", await XadesSigner.Document(xml).WithCertificate(cert)
-    .WithSignaturePolicy(IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Xades).ToReference())
-    .SignAsync());
+foreach (var (name, policy) in new[] { ("rb", IcpBrasilPolicy.AdRb), ("rt", IcpBrasilPolicy.AdRt), ("rc", IcpBrasilPolicy.AdRc), ("ra", IcpBrasilPolicy.AdRa) })
+{
+    await File.WriteAllBytesAsync($"xades-ad-{name}.xml", await XadesSigner.Document(xml).WithCertificate(cert)
+        .WithIcpBrasilPolicy(policy, policy == IcpBrasilPolicy.AdRb ? null : act).SignAsync());
+}
 ```
 
 ## 2. Upload to https://validar.iti.gov.br and record
@@ -54,7 +56,10 @@ await File.WriteAllBytesAsync("xades-ad-rb.xml", await XadesSigner.Document(xml)
 | `prescricao.pdf` | Approved, recognised as a prescription with the CRM and UF |
 | `ad-rc.p7s` (with `documento.pdf`) | Approved, policy PA_CAdES_AD_RC v2.4; complete references and values listed |
 | `ad-ra.p7s` (with `documento.pdf`) | Approved, policy PA_CAdES_AD_RA v2.5; archive timestamp accepted (checks the archive-time-stamp v2 hash input) |
-| `xades-ad-rb.xml` | Approved, policy PA_AD_RB v2.5 (checks the XAdES SigPolicyHash) |
+| `xades-ad-rb.xml` | Approved, policy PA_AD_RB v2.5 (checks the XAdES SigPolicyHash and SigningCertificate v1) |
+| `xades-ad-rt.xml` | Approved, policy PA_AD_RT v2.5, timestamp listed |
+| `xades-ad-rc.xml` | Approved, policy PA_AD_RC v2.5 (checks CompleteCertificateRefs/RevocationRefs, SigAndRefsTimeStamp and the values) |
+| `xades-ad-ra.xml` | Approved, policy PA_AD_RA v2.5 (checks the XAdES ArchiveTimeStamp over refs and values) |
 
 A certificate from AC Raiz v12 must be signed under CAdES ≥ v2.4 / PAdES ≥ v1.2; `WithIcpBrasilPolicy`
 picks those automatically. Signing it under an older PA should be rejected by VALIDAR.

@@ -18,7 +18,7 @@ public sealed class IcpBrasilPolicyRulesTests
 
     [Fact]
     public void Catalog_HasRulesForEveryPolicy() =>
-        IcpBrasilSignaturePolicies.All.Where(p => p.Info.Format != IcpBrasilPolicyFormat.Xades && !IcpBrasilSignaturePolicies.TryGetRules(p.Oid, out _)).Select(p => p.Oid).ShouldBeEmpty();
+        IcpBrasilSignaturePolicies.All.Where(p => !IcpBrasilSignaturePolicies.TryGetRules(p.Oid, out _)).Select(p => p.Oid).ShouldBeEmpty();
 
     [Theory]
     [InlineData("2.16.76.1.7.1.1.2.3", new[] { 2, 5 })]

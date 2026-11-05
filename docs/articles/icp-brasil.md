@@ -91,6 +91,38 @@ await PadesSigner.Document(pdf).WithCertificate(cert)
 ACTs that require the time-stamp request itself to be CMS-signed with the client's certificate are
 not supported yet.
 
+### Standalone timestamps (.tst)
+
+To prove that a file existed at a given time without signing it, request an RFC 3161 token for its
+hash (the file never leaves the machine) and keep it next to the file:
+
+```csharp
+byte[] tst = await TimestampToken.CreateAsync(File.ReadAllBytes("contrato.pdf"), act);
+File.WriteAllBytes("contrato.pdf.tst", tst);
+
+var check = IcpBrasilTimestamp.Verify(tst, File.ReadAllBytes("contrato.pdf"));   // ACT must chain to an AC Raiz
+Console.WriteLine($"{check.IsValid} at {check.Info?.GenerationTime}");
+```
+
+`TimestampToken.CreateForHashAsync` / `VerifyHash` work from a hash; `TimestampToken.Verify(token, data, trustAnchors)`
+checks any TSA. CLI: `simplesign timestamp create contrato.pdf --tsa <url>` and
+`simplesign timestamp verify contrato.pdf --token contrato.pdf.tst --icp`.
+
+### Homologation (test) certificates
+
+SERPRO and the ACs issue test certificates under an ICP-Brasil homologation hierarchy ("AC Raiz
+Brasileira v12 - HOM", "AC Raiz Hom do SERPRO" …). SimpleSign bundles it (50 certificates, from the
+keystore Demoiselle Signer ships; `scripts/update-icp-homologation.sh`) but trusts it only on request:
+
+```csharp
+var brasil = new BrasilExtension(new BrasilExtensionOptions { IcpEnvironment = IcpBrasilEnvironment.Homologation });
+```
+
+Chains that end in a test root are reported with `IcpBrasilValidationResult.IsHomologation`,
+`BR.Environment = Homologation` and a warning, and never as qualified (Lei 14.063). One test root
+uses the exact name of the production AC Raiz v12 with another key, so roots are compared by
+their bytes. CLI: `simplesign validate signed.pdf --icp-homologation`.
+
 ## CPF and CNPJ
 
 `Cpf` and `Cnpj` validate and format numbers, formatted or not; CNPJs may be alphanumeric:
@@ -188,15 +220,48 @@ await CadesSigner.Document(data).WithCertificate(cert)
     .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new TimestampOptions(new Uri(actUrl)))
     .SignAsync();
 
-// XAdES: pass the reference of the XML policy (LPA_XAdES)
-var xmlPolicy = IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Xades);
+// XAdES (package SimpleSign.Brasil.Xades): AD-RB … AD-RA
 await XadesSigner.Document(xml).WithCertificate(cert)
-    .WithSignaturePolicy(xmlPolicy.ToReference())
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new TimestampOptions(new Uri(actUrl)))
     .SignAsync();
 ```
 
 The VALIDAR portal expects PAdES AD-RB or AD-RT. The catalog also holds the 45 XAdES policies of
-`LPA_XAdES.xml` (version 2).
+`LPA_XAdES.xml` (version 2), with their rules.
+
+#### XAdES (SimpleSign.Brasil.Xades)
+
+```bash
+dotnet add package SimpleSign.Brasil.Xades
+```
+
+The XML PAs mandate the XAdES 1.3.2 `SigningCertificate` (not `SigningCertificateV2`) and, per
+policy, these unsigned properties (ETSI TS 101 903 v1.3.2):
+
+| Policy | Unsigned properties |
+|--------|---------------------|
+| AD-RB | none |
+| AD-RT | SignatureTimeStamp |
+| AD-RV | SignatureTimeStamp, CompleteCertificateRefs, CompleteRevocationRefs, SigAndRefsTimeStamp |
+| AD-RC | AD-RV plus CertificateValues and RevocationValues |
+| AD-RA | SignatureTimeStamp, references, values and ArchiveTimeStamp |
+
+`XadesSignerBuilder.WithIcpBrasilPolicy` writes them all: it picks the newest XML PA that accepts
+the signer's AC Raiz, sets `WithSigningCertificateForm(XadesSigningCertificateForm.V1)`, the policy
+reference and `WithExtendedValidationData(XadesExtendedForm…)`. The forms are also available
+without a policy, in SimpleSign.XAdES. Validate with:
+
+```csharp
+var result = new XadesSignatureValidator().Validate(signedXml);   // HasValidSigAndRefsTimeStamp, HasValidCompleteReferences
+var policy = IcpBrasilXadesPolicyValidator.Validate(signedXml, result);
+```
+
+`IcpBrasilXadesPolicyValidator` checks the hash, signing period, accepted roots, the mandated
+properties and the signature algorithm and key size. `IcpBrasilXadesPolicies.RefreshAsync` downloads
+`LPA_XAdES.xml`, verifies its ITI XML signature and applies new policies and revocations. The ITI
+signs the list in a way .NET's `SignedXml` rejects (an enveloped-signature transform on KeyInfo),
+so the verification is done by a strict verifier that accepts only that shape and refuses any
+element smuggled into the signature.
 
 #### Accepted roots
 
@@ -243,8 +308,8 @@ obtained yourself.
 Signatures carry the PA's own `signPolicyHash` in `sigPolicyHash` (not the digest of the PA file
 that the LPA lists): a production PAdES AD-RB signature in the integration tests confirms it.
 XAdES signatures likewise carry the XML PA's own `SignPolicyDigest` in `SigPolicyHash`, with the
-identifier written as `urn:oid:…` (`Qualifier="OIDAsURN"`); this has not been checked against a
-production XAdES signature yet. `RefreshAsync` does not cover XAdES.
+identifier written as `urn:oid:…` (`Qualifier="OIDAsURN"`), as Demoiselle Signer does; this has not
+been checked against VALIDAR yet.
 
 ### Check a signature against its policy
 
@@ -266,16 +331,9 @@ and unsigned attributes are present, and the signature algorithm and key size ar
 ICP-Brasil provider passes the root it found. CAdES escTimeStamp and archive-time-stamp v2 imprints
 are verified by `CadesSignatureValidator`.
 
-For XAdES, read the policy from the validation result and check it:
-
-```csharp
-var xades = new XadesSignatureValidator().Validate(signedXml);
-var check = IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, xades.SigningTime ?? DateTimeOffset.UtcNow,
-    hasSignatureTimestamp: xades.HasValidSignatureTimeStamp == true, IcpBrasilPolicyFormat.Xades);
-```
-
-This checks the hash, signing period, timestamp and format; the rules of the XML PAs are not
-embedded, so roots and attributes are not checked for XAdES.
+For XAdES, use `IcpBrasilXadesPolicyValidator` (SimpleSign.Brasil.Xades, above). Without that
+package, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSignatureTimestamp, IcpBrasilPolicyFormat.Xades)`
+checks the hash, signing period, timestamp and format.
 
 ### DocMDP (certification)
 
@@ -436,6 +494,14 @@ simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-rt --tsa https://act.exa
 # Prescription: document type and CRM in the PDF metadata
 simplesign sign receita.pdf --cert cert.pfx --icp-policy ad-rb \
   --health-document prescricao --registration crm:123456/SP
+```
+
+Test certificates and standalone timestamps:
+
+```bash
+simplesign validate signed.pdf --icp-homologation
+simplesign timestamp create contrato.pdf --tsa https://act.example/tsa
+simplesign timestamp verify contrato.pdf --token contrato.pdf.tst --icp
 ```
 
 `--registration` takes `COUNCIL:NUMBER/UF` (crm, crf, cro, oab, coren… or the federal council

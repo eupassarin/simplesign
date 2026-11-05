@@ -20,6 +20,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleSign.Brasil.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Cli" />
+    <InternalsVisibleTo Include="SimpleSign.Brasil.Xades" />
+    <InternalsVisibleTo Include="SimpleSign.Brasil.Xades.Tests" />
   </ItemGroup>
 
   <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0'))">
