@@ -1,3 +1,4 @@
+using SimpleSign.Brasil;
 using SimpleSign.Brasil.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
@@ -9,7 +10,11 @@ namespace SimpleSign.Cli.Json;
 /// </summary>
 internal static class JsonMapper
 {
-    public static ValidateOutput MapValidation(string fileName, IReadOnlyList<SignatureValidationResult> results, Dictionary<string, PAdESConformanceLevel>? conformanceLevels = null)
+    public static ValidateOutput MapValidation(
+        string fileName,
+        IReadOnlyList<SignatureValidationResult> results,
+        Dictionary<string, PAdESConformanceLevel>? conformanceLevels = null,
+        IReadOnlyDictionary<string, byte[]?>? manifests = null)
     {
         return new ValidateOutput
         {
@@ -36,9 +41,34 @@ internal static class JsonMapper
                     Chain = r.IsCertificateChainValid,
                     Revoked = r.RevocationSource is RevocationSource.None or RevocationSource.Indeterminate ? null : !r.IsNotRevoked,
                     SigningTime = r.SigningTime,
+                    Lei14063 = Lei14063.Classify(r, manifests?.GetValueOrDefault(r.FieldName))?.ToString(),
+                    Brasil = MapBrasil(r),
                     Errors = [.. r.Errors]
                 };
             })]
+        };
+    }
+
+    private static ValidateBrasilDto? MapBrasil(SignatureValidationResult r)
+    {
+        if (r.ChainValidationRegion != "BR")
+        {
+            return null;
+        }
+
+        var metadata = r.ChainValidationMetadata ?? new Dictionary<string, string>();
+        return new ValidateBrasilDto
+        {
+            Hierarchy = metadata.GetValueOrDefault("BR.Hierarchy"),
+            CertificateType = r.PolicyLevel,
+            SignerId = r.SignerId,
+            SignerIdType = r.SignerIdType,
+            SignaturePolicy = metadata.GetValueOrDefault("BR.SignaturePolicy"),
+            SignaturePolicyStatus = metadata.GetValueOrDefault("BR.SignaturePolicyStatus"),
+            RevocationStatus = metadata.GetValueOrDefault("BR.RevocationStatus"),
+            Registrations = metadata
+                .Where(m => m.Key.StartsWith("BR.Registration.", StringComparison.Ordinal))
+                .ToDictionary(m => m.Key["BR.Registration.".Length..], m => m.Value),
         };
     }
 

@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   AD-RT requires; the ICP-Brasil provider reports `BR.SignaturePolicy`/`BR.SignaturePolicyStatus`.
 - `WithHealthDocument(type, registrations…)`: VALIDAR health-document OIDs (document type, CFM/CFF/CFO
   registration and UF) in the PDF document information dictionary.
+- `Cpf` / `Cnpj`: public `IsValid`, `Format`, `Normalize` (and `Cpf.Mask`), alphanumeric CNPJ included.
+- `IcpBrasilRoots`: bundled roots, `ExpiringWithin`, `DownloadAsync`/`FromPinnedBytes` (SHA-256
+  pinned) for new AC Raiz versions; `IcpBrasilChainValidator.AdditionalTrustAnchors` and
+  `new BrasilExtension(httpClient, logger, additionalIcpRoots)`.
+- CLI: `sign --icp-policy ad-rb|ad-rt`, `--health-document`, `--registration COUNCIL:NUMBER/UF`;
+  `validate`/`validate-dir` run the ICP-Brasil and Gov.br providers and print the Lei 14.063 level,
+  certificate data, policy status and revocation status (`--json`: `lei14063`, `brasil`).
 - Core/PAdES/CAdES: `SignaturePolicyReference`, `CmsAttribute.SignaturePolicyIdentifier(reference)`,
   `CmsAttribute.ReadSignaturePolicy`, `PadesSignerBuilder.WithSignaturePolicy(reference)`,
   `CadesSignerBuilder.WithSignaturePolicy(reference)`, `PadesSignerBuilder.WithDocumentInfo(key, value)`.

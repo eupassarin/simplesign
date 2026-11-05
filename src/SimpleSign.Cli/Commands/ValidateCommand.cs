@@ -116,7 +116,8 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             cryptoVerifier: _cryptoVerifier,
             integrityVerifier: _integrityVerifier,
             cmsParser: _cmsParser,
-            timestampValidator: _timestampValidator);
+            timestampValidator: _timestampValidator,
+            chainValidationProviders: new BrasilExtension(_httpClientProvider.GetClient(), logger).ChainValidationProviders);
 
         await using var stream = File.OpenRead(settings.InputPath);
         var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);
@@ -139,7 +140,8 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 
         if (settings.Json)
         {
-            OutputJson(settings.InputPath, results, conformanceLevels);
+            OutputJson(settings.InputPath, results, conformanceLevels,
+                inspectionLookup.ToDictionary(kv => kv.Key, kv => kv.Value.ManifestJson));
         }
         else if (settings.Simple)
         {
@@ -217,11 +219,54 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         }
     }
 
+    private static void AddBrasilNode(TreeNode sigNode, SignatureValidationResult result, byte[]? manifestJson)
+    {
+        var level = Lei14063.Classify(result, manifestJson);
+        if (result.ChainValidationRegion != "BR" && level is null)
+        {
+            return;
+        }
+
+        var node = sigNode.AddNode($"Brasil:       [blue]{(level is null ? "—" : $"Lei 14.063: {level}")}[/]");
+        var metadata = result.ChainValidationMetadata ?? new Dictionary<string, string>();
+        if (metadata.TryGetValue("BR.Hierarchy", out var hierarchy))
+        {
+            node.AddNode($"Hierarchy:      {hierarchy.EscapeMarkup()} {(result.PolicyLevel ?? string.Empty).EscapeMarkup()}");
+        }
+
+        if (result.SignerId is not null)
+        {
+            node.AddNode($"{(result.SignerIdType ?? "ID").EscapeMarkup()}:{new string(' ', Math.Max(1, 16 - (result.SignerIdType ?? "ID").Length - 1))}{result.SignerId.EscapeMarkup()}");
+        }
+
+        if (metadata.TryGetValue("BR.ResponsibleCpf", out var responsible))
+        {
+            node.AddNode($"Responsible:    CPF {responsible.EscapeMarkup()}");
+        }
+
+        foreach (var (key, value) in metadata.Where(m => m.Key.StartsWith("BR.Registration.", StringComparison.Ordinal)))
+        {
+            node.AddNode($"Registration:   {key["BR.Registration.".Length..].ToUpperInvariant().EscapeMarkup()} {value.EscapeMarkup()}");
+        }
+
+        if (metadata.TryGetValue("BR.SignaturePolicy", out var policy))
+        {
+            string status = metadata.GetValueOrDefault("BR.SignaturePolicyStatus") ?? string.Empty;
+            string color = status == "Valid" ? "green" : status == "Invalid" ? "red" : "yellow";
+            node.AddNode($"Policy:         {policy.EscapeMarkup()} [{color}]{status.EscapeMarkup()}[/]");
+        }
+
+        if (metadata.TryGetValue("BR.RevocationStatus", out var revocation))
+        {
+            node.AddNode($"Revocation:     {revocation.EscapeMarkup()} [dim]at {metadata.GetValueOrDefault("BR.ValidationTime", string.Empty).EscapeMarkup()}[/]");
+        }
+    }
+
     private static void OutputJson(string inputPath, IReadOnlyList<SignatureValidationResult> results,
-        Dictionary<string, PAdESConformanceLevel> conformanceLevels)
+        Dictionary<string, PAdESConformanceLevel> conformanceLevels, IReadOnlyDictionary<string, byte[]?> manifests)
     {
         var fileName = Path.GetFileName(inputPath);
-        var output = JsonMapper.MapValidation(fileName, results, conformanceLevels);
+        var output = JsonMapper.MapValidation(fileName, results, conformanceLevels, manifests);
         var json = System.Text.Json.JsonSerializer.Serialize(output, CliJsonContext.Default.ValidateOutput);
         Console.WriteLine(json);
     }
@@ -411,6 +456,8 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
                     }
                 }
             }
+
+            AddBrasilNode(sigNode, result, sig?.ManifestJson);
 
             sigNode.AddNode($"Algorithm:    {(result.DigestAlgorithmName ?? result.DigestAlgorithmOid ?? "\u2014").EscapeMarkup()}");
 
