@@ -233,6 +233,35 @@ public sealed class CadesSignerBuilder
         return With(_options with { SignaturePolicy = policy, SignaturePolicyOid = null, SignaturePolicyUri = null });
     }
 
+    /// <summary>
+    /// Adds RFC 5126 extended validation data after the signature timestamp: complete references
+    /// and an escTimeStamp (CAdES-C/X), plus certificate and revocation values (X-L), or references,
+    /// values and an archive-time-stamp v2 (CAdES-A) — the forms ICP-Brasil's AD-RV, AD-RC and AD-RA
+    /// policies mandate. Requires a timestamped level (<c>WithLevel(AdesBaselineProfile.Timestamped(tsa))</c>);
+    /// the TSA also stamps the escTimeStamp / archive time-stamp.
+    /// </summary>
+    /// <param name="form">The extended form.</param>
+    /// <returns>A new builder with the extended form configured.</returns>
+    public CadesSignerBuilder WithExtendedValidationData(CadesExtendedForm form) =>
+        With(_options with { ExtendedForm = form });
+
+    /// <summary>Configures the builder to add its signer to <paramref name="existingSignature"/>.</summary>
+    internal CadesSignerBuilder ForCoSignature(byte[] existingSignature, bool attached) =>
+        With(_options with
+        {
+            CoSignTarget = existingSignature,
+            ContentType = attached ? CadesContentType.Enveloped : CadesContentType.Detached,
+        });
+
+    /// <summary>Configures the builder to countersign signer <paramref name="signerIndex"/> of <paramref name="existingSignature"/>.</summary>
+    internal CadesSignerBuilder ForCounterSignature(byte[] existingSignature, int signerIndex) =>
+        With(_options with
+        {
+            CounterSignTarget = existingSignature,
+            CounterSignIndex = signerIndex,
+            ContentType = CadesContentType.Detached,
+        });
+
     /// <summary>Sets the logger for diagnostic output.</summary>
     /// <param name="logger">The logger.</param>
     /// <returns>A new builder with the logger configured.</returns>
@@ -324,6 +353,18 @@ public sealed class CadesSignerBuilder
             }
         }
 
+        if (_options.ExtendedForm != CadesExtendedForm.None)
+        {
+            if (profile.Timestamp is null || timestampTokenBytes is null)
+            {
+                throw new SigningException(
+                    "Extended validation data needs a signature timestamp: use WithLevel(AdesBaselineProfile.Timestamped(tsa)).",
+                    SigningErrorReason.LevelNotAchievable);
+            }
+
+            cms = await ApplyExtendedFormAsync(cms, certificate, chain, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
+        }
+
         CadesLtvEmbeddingResult? ltvEmbedding = null;
         if (timestampTokenBytes is not null && profile.Level >= AdesBaselineLevel.LongTerm)
         {
@@ -394,6 +435,15 @@ public sealed class CadesSignerBuilder
         }
 
         var achieved = ComputeAchievedLevel(artifactHasTimestamp, artifactHasLtvMaterial, artifactHasArchiveTimestamp);
+
+        if (_options.CoSignTarget is { } coSignTarget)
+        {
+            cms = CmsComposer.AddSigner(coSignTarget, cms);
+        }
+        else if (_options.CounterSignTarget is { } counterSignTarget)
+        {
+            cms = CmsComposer.AddCounterSignature(counterSignTarget, _options.CounterSignIndex, cms);
+        }
 
         return new CadesSigningResult
         {
@@ -560,6 +610,12 @@ public sealed class CadesSignerBuilder
         }
     }
 
+    /// <summary>The signer certificate, once set (for extensions).</summary>
+    internal X509Certificate2? SignerCertificate => _options.Credential is { } credential ? GetCertificate(credential) : null;
+
+    /// <summary>The signer chain given with the certificate (for extensions).</summary>
+    internal IReadOnlyList<X509Certificate2> SignerChain => _options.Credential is { } credential ? GetChain(credential) : [];
+
     private static X509Certificate2 GetCertificate(CadesSigningCredential credential) => credential switch
     {
         CadesLocalCredential c => c.Certificate,
@@ -583,6 +639,17 @@ public sealed class CadesSignerBuilder
         var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
         var extraAttributes = BuildSignedAttributesInternal();
         byte[]? eContent = _options.ContentType == CadesContentType.Enveloped ? _data : null;
+
+        if (_options.IsCounterSignature)
+        {
+            string digestOid = CmsSignatureBuilder.GetDigestOid(hashAlg);
+            byte[] signedAttrs = CmsSignatureBuilder.BuildSignedAttributes(
+                CmsSignatureBuilder.ComputeHash(_data, hashAlg), digestOid, signingTime, certificate, extraAttributes,
+                padesAttributes: false, includeContentType: false);
+            byte[] signatureValue = CmsSignatureBuilder.SignData(signedAttrs, certificate, hashAlg, sigAlgOid);
+            return CmsSignatureBuilder.BuildSignedData(
+                digestOid, sigAlgOid, hashAlg, signedAttrs, signatureValue, certificate, [certificate, .. chain]);
+        }
 
         return CmsSignatureBuilder.Build(
             _data, certificate, hashAlg, signingTime,
@@ -611,7 +678,7 @@ public sealed class CadesSignerBuilder
 
         byte[] signedAttrs = CmsSignatureBuilder.BuildSignedAttributes(
             contentHash, digestOid, signingTime, certificate, extraAttributes,
-            padesAttributes: false);
+            padesAttributes: false, includeContentType: !_options.IsCounterSignature);
 
         var request = new ExternalSigningRequest(
             signedAttrs,
@@ -705,6 +772,62 @@ public sealed class CadesSignerBuilder
 
         var provider = scopedProvider ?? _options.Dependencies.HttpClientProvider;
         return new TimestampClient(provider.GetClient(), endpoint, _options.Dependencies.Logger);
+    }
+
+    private async Task<byte[]> ApplyExtendedFormAsync(
+        byte[] cms,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        HashAlgorithmName hashAlg,
+        TimestampOptions timestamp,
+        CancellationToken cancellationToken)
+    {
+        var logger = _options.Dependencies.Logger;
+        var known = new List<X509Certificate2> { certificate };
+        known.AddRange(chain.Where(c => known.All(k => k.Thumbprint != c.Thumbprint)));
+        var provider = timestamp.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
+        var evidence = await LtvDataCollector.CollectAsync(provider.GetClient(), certificate, known, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (!evidence.HasCompleteCoverage)
+        {
+            throw new SigningException(
+                "Extended validation data needs the CRL or OCSP response of every certificate in the path; some could not be collected.",
+                SigningErrorReason.LevelNotAchievable);
+        }
+
+        var path = CadesExtendedValidationData.BuildPath(certificate, [.. evidence.CertificateRawData, .. known.Select(k => k.RawData)]);
+        var refs = new List<CmsAttribute>
+        {
+            CadesExtendedValidationData.CompleteCertificateRefs(path),
+            CadesExtendedValidationData.CompleteRevocationRefs(path, evidence.Crls, evidence.OcspResponses),
+        };
+        cms = CmsSignatureBuilder.AddUnsignedAttributes(cms, refs);
+        var tsaClient = CreateTimestampClient(timestamp);
+
+        if (_options.ExtendedForm is CadesExtendedForm.CompleteReferences or CadesExtendedForm.ExtendedLong)
+        {
+            byte[] escInput = CadesExtendedValidationData.EscTimeStampInput(cms);
+            byte[] escToken = await tsaClient.GetTimestampAsync(escInput, hashAlg, cancellationToken).ConfigureAwait(false);
+            cms = CmsSignatureBuilder.AddUnsignedAttributes(cms, [CmsAttribute.Raw(Oids.EscTimeStamp, escToken)]);
+        }
+
+        if (_options.ExtendedForm is CadesExtendedForm.ExtendedLong or CadesExtendedForm.Archive)
+        {
+            cms = CmsSignatureBuilder.AddUnsignedAttributes(cms,
+            [
+                CadesExtendedValidationData.CertificateValues(path),
+                CadesExtendedValidationData.RevocationValues(evidence.Crls, evidence.OcspResponses),
+            ]);
+        }
+
+        if (_options.ExtendedForm == CadesExtendedForm.Archive)
+        {
+            byte[] external = _options.ContentType == CadesContentType.Detached ? _data : [];
+            byte[] archiveInput = CadesExtendedValidationData.ArchiveTimeStampV2Input(cms, _options.ContentType == CadesContentType.Detached ? external : null);
+            byte[] archiveToken = await tsaClient.GetTimestampAsync(archiveInput, hashAlg, cancellationToken).ConfigureAwait(false);
+            cms = CmsSignatureBuilder.AddUnsignedAttributes(cms, [CmsAttribute.Raw(Oids.ArchiveTimeStamp, archiveToken)]);
+        }
+
+        return cms;
     }
 
     private async Task<CadesLtvEmbeddingResult?> ApplyLtvAsync(

@@ -73,7 +73,7 @@ public static partial class IcpBrasilSignaturePolicies
 
     /// <summary>
     /// Downloads the current LPA of <paramref name="format"/> from the ITI and updates
-    /// <see cref="All"/>, <see cref="TryFind"/> and <see cref="Current"/>:
+    /// <see cref="All"/>, <see cref="TryFind"/> and <see cref="Current(IcpBrasilPolicy, IcpBrasilPolicyFormat, DateTimeOffset?)"/>:
     /// <list type="number">
     /// <item>the LPA's detached signature (<c>LPA_*.p7s</c>) must verify, be made by the ITI and chain to an ICP-Brasil AC Raiz (not revoked);</item>
     /// <item>known policies take the LPA's signing period and revocation date (revocations are published this way);</item>
@@ -109,6 +109,7 @@ public static partial class IcpBrasilSignaturePolicies
 
         var lpa = IcpBrasilLpa.Parse(lpaBytes);
         var updated = new List<IcpBrasilSignaturePolicy>();
+        var newRules = new List<IcpBrasilPolicyRules>();
         foreach (var entry in lpa.Entries)
         {
             if (TryFind(entry.Oid, out var known))
@@ -124,6 +125,7 @@ public static partial class IcpBrasilSignaturePolicies
                 throw new CryptographicException($"The PA at {entry.Uri} does not match the digest listed in {name}.");
             }
 
+            newRules.Add(IcpBrasilPolicyRules.Parse(pa));
             updated.Add(FromPolicyDocument(pa, entry.Uri) with
             {
                 NotBefore = entry.NotBefore,
@@ -133,6 +135,7 @@ public static partial class IcpBrasilSignaturePolicies
         }
 
         Apply(updated);
+        ApplyRules(newRules);
         return lpa;
     }
 

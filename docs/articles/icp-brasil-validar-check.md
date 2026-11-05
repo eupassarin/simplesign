@@ -29,6 +29,20 @@ await File.WriteAllBytesAsync("prescricao.pdf", await PadesSigner.Document(pdf).
     .WithHealthDocument(HealthDocumentType.Prescricao,
         new ProfessionalRegistration(ProfessionalCouncil.Cfm, "<CRM>", "<UF>", null))
     .SignAsync());
+
+// 4. CAdES AD-RC and AD-RA (.p7s, ICP-Brasil ACT)
+var act = new TimestampOptions(new Uri(Environment.GetEnvironmentVariable("ICP_ACT_URL")!));
+foreach (var (name, policy) in new[] { ("ad-rc", IcpBrasilPolicy.AdRc), ("ad-ra", IcpBrasilPolicy.AdRa) })
+{
+    await File.WriteAllBytesAsync($"{name}.p7s", await CadesSigner.Document(pdf).WithCertificate(cert)
+        .WithIcpBrasilPolicy(policy, act).SignAsync());
+}
+
+// 5. XAdES AD-RB (enveloped)
+var xml = await File.ReadAllBytesAsync("documento.xml");
+await File.WriteAllBytesAsync("xades-ad-rb.xml", await XadesSigner.Document(xml).WithCertificate(cert)
+    .WithSignaturePolicy(IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Xades).ToReference())
+    .SignAsync());
 ```
 
 ## 2. Upload to https://validar.iti.gov.br and record
@@ -38,6 +52,12 @@ await File.WriteAllBytesAsync("prescricao.pdf", await PadesSigner.Document(pdf).
 | `ad-rb.pdf` | "Assinatura aprovada", policy PA_PAdES_AD_RB v1.3 |
 | `ad-rt.pdf` | "Assinatura aprovada", policy PA_PAdES_AD_RT v1.3, timestamp listed |
 | `prescricao.pdf` | Approved, recognised as a prescription with the CRM and UF |
+| `ad-rc.p7s` (with `documento.pdf`) | Approved, policy PA_CAdES_AD_RC v2.4; complete references and values listed |
+| `ad-ra.p7s` (with `documento.pdf`) | Approved, policy PA_CAdES_AD_RA v2.5; archive timestamp accepted (checks the archive-time-stamp v2 hash input) |
+| `xades-ad-rb.xml` | Approved, policy PA_AD_RB v2.5 (checks the XAdES SigPolicyHash) |
+
+A certificate from AC Raiz v12 must be signed under CAdES ≥ v2.4 / PAdES ≥ v1.2; `WithIcpBrasilPolicy`
+picks those automatically. Signing it under an older PA should be rejected by VALIDAR.
 
 If VALIDAR reports "Assinatura Indeterminada" or does not recognise the prescription, save the
 report (PDF) and open an issue with it; the location of the health-document metadata is the

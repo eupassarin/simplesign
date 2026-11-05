@@ -864,6 +864,12 @@ public sealed class PadesSignerBuilder
         }
     }
 
+    /// <summary>The signer certificate, once WithCertificate/WithExternalSigner was called (for extensions).</summary>
+    internal X509Certificate2? SignerCertificate => _options.Credential is { } credential ? GetCertificate(credential) : null;
+
+    /// <summary>The signer chain given with the certificate (for extensions).</summary>
+    internal IReadOnlyList<X509Certificate2> SignerChain => _options.Credential is { } credential ? GetChain(credential) : [];
+
     private static X509Certificate2 GetCertificate(SigningCredential credential) => credential switch
     {
         LocalCredential c => c.Certificate,

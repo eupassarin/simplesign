@@ -183,14 +183,47 @@ await PadesSigner.Document(pdf).WithCertificate(cert)
     .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt, new TimestampOptions(new Uri(actUrl)))
     .SignAsync(output);
 
-// CAdES (.p7s): pass the policy reference
-var policy = IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Cades);
+// CAdES (.p7s): AD-RB, AD-RT, AD-RV, AD-RC or AD-RA (a TSA is required above AD-RB)
 await CadesSigner.Document(data).WithCertificate(cert)
-    .WithSignaturePolicy(policy.ToReference())
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new TimestampOptions(new Uri(actUrl)))
+    .SignAsync();
+
+// XAdES: pass the reference of the XML policy (LPA_XAdES)
+var xmlPolicy = IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Xades);
+await XadesSigner.Document(xml).WithCertificate(cert)
+    .WithSignaturePolicy(xmlPolicy.ToReference())
     .SignAsync();
 ```
 
-The VALIDAR portal expects PAdES AD-RB or AD-RT. XAdES policies are not embedded.
+The VALIDAR portal expects PAdES AD-RB or AD-RT. The catalog also holds the 45 XAdES policies of
+`LPA_XAdES.xml` (version 2).
+
+#### Accepted roots
+
+Each PA lists the AC Raiz versions a signer's chain may end in. CAdES up to v2.3 and PAdES up to
+v1.1 accept only roots v2 and v5; CAdES v2.4/v2.5 and PAdES v1.2/v1.3 accept v5 and v12. No PA in
+force accepts v13. `WithIcpBrasilPolicy` builds the signer's chain with the bundled roots and
+intermediates and picks the newest version of the policy that accepts its root; it throws
+`IcpBrasilPolicyException` when none does. `IcpBrasilSignaturePolicies.TryGetRules(oid, out rules)`
+gives the rules of each CAdES/PAdES PA: accepted roots (matched by public key, since the PAs embed
+re-encoded roots), mandatory signed and unsigned attributes, and allowed signature algorithms with
+their minimum key size. `IcpBrasilPolicyRules.Parse` reads them from a PA file;
+`scripts/IcpBrasilPolicyRulesGenerator` regenerates the embedded table.
+
+#### CAdES AD-RV, AD-RC and AD-RA
+
+`CadesSignerBuilder.WithIcpBrasilPolicy` adds the unsigned attributes the CAdES PAs mandate after
+the signature timestamp (RFC 5126 extended forms, also available as
+`WithExtendedValidationData(CadesExtendedForm)`):
+
+| Policy | Adds |
+|--------|------|
+| AD-RV | complete-certificate-references, complete-revocation-references, CAdES-C-time-stamp (escTimeStamp) |
+| AD-RC | the above plus certificate-values and revocation-values (LCRs and OCSP responses) |
+| AD-RA | the above plus archive-time-stamp v2 (`1.2.840.113549.1.9.16.2.48`) |
+
+PAdES AD-RC and AD-RA are not supported: their PAs mandate ICP-Brasil attributes
+(`2.16.76.1.8.1` to `.3`) whose definition has not been confirmed.
 
 The embedded catalog is a snapshot of the LPAs. To pick up policies and revocations the ITI
 published later, refresh it at start-up:
@@ -209,6 +242,9 @@ obtained yourself.
 
 Signatures carry the PA's own `signPolicyHash` in `sigPolicyHash` (not the digest of the PA file
 that the LPA lists): a production PAdES AD-RB signature in the integration tests confirms it.
+XAdES signatures likewise carry the XML PA's own `SignPolicyDigest` in `SigPolicyHash`, with the
+identifier written as `urn:oid:…` (`Qualifier="OIDAsURN"`); this has not been checked against a
+production XAdES signature yet. `RefreshAsync` does not cover XAdES.
 
 ### Check a signature against its policy
 
@@ -223,6 +259,23 @@ ICP-Brasil provider runs it during PDF validation and reports `BR.SignaturePolic
 var check = IcpBrasilPolicyValidator.Validate(cms, signingTime, IcpBrasilPolicyFormat.Pades);
 Console.WriteLine($"{check.Status}: {string.Join("; ", check.Errors)}");
 ```
+
+Given the root of the signer's chain (`IcpBrasilChainValidator.FindBundledRoot`), the overload
+with `signerRoot` also checks the PA's rules: the root is one the PA accepts, the mandatory signed
+and unsigned attributes are present, and the signature algorithm and key size are allowed. The
+ICP-Brasil provider passes the root it found. CAdES escTimeStamp and archive-time-stamp v2 imprints
+are verified by `CadesSignatureValidator`.
+
+For XAdES, read the policy from the validation result and check it:
+
+```csharp
+var xades = new XadesSignatureValidator().Validate(signedXml);
+var check = IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, xades.SigningTime ?? DateTimeOffset.UtcNow,
+    hasSignatureTimestamp: xades.HasValidSignatureTimeStamp == true, IcpBrasilPolicyFormat.Xades);
+```
+
+This checks the hash, signing period, timestamp and format; the rules of the XML PAs are not
+embedded, so roots and attributes are not checked for XAdES.
 
 ### DocMDP (certification)
 

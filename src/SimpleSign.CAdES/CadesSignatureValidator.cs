@@ -33,6 +33,9 @@ public sealed class CadesValidationResult
     /// <summary>The archive timestamp (if present) is valid.</summary>
     public bool? HasValidArchiveTimestamp { get; init; }
 
+    /// <summary>Whether the escTimeStamp (CAdES-X type 1) covers the signature, its timestamp and the complete references; null when absent.</summary>
+    public bool? HasValidEscTimestamp { get; init; }
+
     /// <summary>The signer certificate.</summary>
     public X509Certificate2? SignerCertificate { get; init; }
 
@@ -80,35 +83,176 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     }
 
     /// <summary>
-    /// Validates a CAdES detached signature.
+    /// Validates the first signer of a CAdES signature. For an attached signature (.p7m) pass
+    /// <see langword="null"/> as <paramref name="originalData"/> to validate the encapsulated content.
+    /// Use <see cref="ValidateAll"/> for co-signatures and countersignatures.
     /// </summary>
     /// <param name="cmsBytes">DER-encoded CMS/PKCS#7 SignedData.</param>
-    /// <param name="originalData">The original document bytes that were signed.</param>
+    /// <param name="originalData">The signed document bytes; null to use the encapsulated content.</param>
     /// <param name="trustAnchors">Optional trust anchors for certificate chain validation.</param>
     /// <returns>A detailed validation result.</returns>
     public CadesValidationResult Validate(
         byte[] cmsBytes,
-        byte[] originalData,
+        byte[]? originalData,
         IEnumerable<X509Certificate2>? trustAnchors = null)
     {
         ArgumentNullException.ThrowIfNull(cmsBytes);
-        ArgumentNullException.ThrowIfNull(originalData);
+        if (!TryParse(cmsBytes, out var set, out var failure))
+        {
+            return failure;
+        }
 
-        var errors = new List<string>();
-        var warnings = new List<string>();
+        byte[]? content = originalData ?? set.EncapsulatedContent;
+        if (content is null)
+        {
+            return Failed("The signature is detached: pass the signed data.");
+        }
 
-        // 1. Parse CMS
-        CmsSignedData? cmsData;
+        return set.Signers is [var first, ..]
+            ? ValidateSigner(cmsBytes, first, content, (data, errors) => VerifyContentHash(content, data, errors), trustAnchors, isFirstSigner: true)
+            : Failed("The CMS has no signer.");
+    }
+
+    /// <summary>
+    /// Validates the first signer against the hash of the signed document, without the document
+    /// (e.g. when only its hash was kept). The hash must use the signature's digest algorithm.
+    /// </summary>
+    /// <param name="cmsBytes">DER-encoded CMS/PKCS#7 SignedData.</param>
+    /// <param name="contentHash">The hash of the signed document.</param>
+    /// <param name="hashAlgorithmOid">The OID of the hash algorithm of <paramref name="contentHash"/>.</param>
+    /// <param name="trustAnchors">Optional trust anchors for certificate chain validation.</param>
+    public CadesValidationResult ValidateWithHash(
+        byte[] cmsBytes,
+        byte[] contentHash,
+        string hashAlgorithmOid,
+        IEnumerable<X509Certificate2>? trustAnchors = null)
+    {
+        ArgumentNullException.ThrowIfNull(cmsBytes);
+        ArgumentNullException.ThrowIfNull(contentHash);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hashAlgorithmOid);
+        if (!TryParse(cmsBytes, out var set, out var failure))
+        {
+            return failure;
+        }
+
+        if (set.Signers is not [var first, ..])
+        {
+            return Failed("The CMS has no signer.");
+        }
+
+        return ValidateSigner(cmsBytes, first, null, (data, errors) =>
+        {
+            if (data.DigestAlgorithmOid != hashAlgorithmOid)
+            {
+                errors.Add($"The hash uses {hashAlgorithmOid}, but the signature digest algorithm is {data.DigestAlgorithmOid}.");
+                return false;
+            }
+
+            bool valid = CryptographicOperations.FixedTimeEquals(contentHash, data.MessageDigest);
+            if (!valid)
+            {
+                errors.Add("Content hash mismatch — the document has been altered since signing.");
+            }
+
+            return valid;
+        }, trustAnchors, isFirstSigner: true);
+    }
+
+    /// <summary>
+    /// Validates every signer of a CAdES signature (co-signatures) and, under each, its
+    /// countersignatures (each checked against its parent's signature value).
+    /// </summary>
+    /// <param name="cmsBytes">DER-encoded CMS/PKCS#7 SignedData.</param>
+    /// <param name="originalData">The signed document bytes; null to use the encapsulated content.</param>
+    /// <param name="trustAnchors">Optional trust anchors for certificate chain validation.</param>
+    public CadesValidationReport ValidateAll(
+        byte[] cmsBytes,
+        byte[]? originalData = null,
+        IEnumerable<X509Certificate2>? trustAnchors = null)
+    {
+        ArgumentNullException.ThrowIfNull(cmsBytes);
+        if (!TryParse(cmsBytes, out var set, out var failure))
+        {
+            return new CadesValidationReport { Errors = failure.Errors };
+        }
+
+        byte[]? content = originalData ?? set.EncapsulatedContent;
+        if (content is null)
+        {
+            return new CadesValidationReport { Errors = ["The signature is detached: pass the signed data."] };
+        }
+
+        var signers = new List<CadesSignerValidationResult>();
+        for (int i = 0; i < set.Signers.Count; i++)
+        {
+            var signer = set.Signers[i];
+            var result = ValidateSigner(cmsBytes, signer, content, (data, errors) => VerifyContentHash(content, data, errors), trustAnchors, isFirstSigner: i == 0);
+            signers.Add(new CadesSignerValidationResult
+            {
+                Index = i,
+                Result = result,
+                CounterSignatures = ValidateCounterSignatures(signer, trustAnchors, depth: 0),
+            });
+        }
+
+        return new CadesValidationReport { Signers = signers.AsReadOnly() };
+    }
+
+    private IReadOnlyList<CadesSignerValidationResult> ValidateCounterSignatures(
+        CmsSignedData parent, IEnumerable<X509Certificate2>? trustAnchors, int depth)
+    {
+        if (parent.CounterSignatures.Count == 0 || parent.Signature is null || depth > 8)
+        {
+            return [];
+        }
+
+        var results = new List<CadesSignerValidationResult>();
+        for (int i = 0; i < parent.CounterSignatures.Count; i++)
+        {
+            var counter = parent.CounterSignatures[i];
+            byte[] parentSignature = parent.Signature;
+            var result = ValidateSigner(null, counter, null, (data, errors) => VerifyContentHash(parentSignature, data, errors), trustAnchors, isFirstSigner: false);
+            results.Add(new CadesSignerValidationResult
+            {
+                Index = i,
+                Result = result,
+                CounterSignatures = ValidateCounterSignatures(counter, trustAnchors, depth + 1),
+            });
+        }
+
+        return results.AsReadOnly();
+    }
+
+    private bool TryParse(byte[] cmsBytes, out CmsSignedDataSet set, out CadesValidationResult failure)
+    {
         try
         {
-            cmsData = _cmsParser.Parse(cmsBytes, _logger);
+            set = _cmsParser.ParseAll(cmsBytes, _logger);
+            failure = null!;
+            return true;
         }
         // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
         {
-            errors.Add($"Failed to parse CMS: {ex.Message}");
-            return new CadesValidationResult { Errors = errors.AsReadOnly() };
+            set = null!;
+            failure = Failed($"Failed to parse CMS: {ex.Message}");
+            return false;
         }
+    }
+
+    private static CadesValidationResult Failed(string error) => new() { Errors = [error] };
+
+    /// <summary>Validates one signer; <paramref name="cmsBytes"/>/<paramref name="content"/> null skip the SignedData-level (LTV, archive) checks.</summary>
+    private CadesValidationResult ValidateSigner(
+        byte[]? cmsBytes,
+        CmsSignedData cmsData,
+        byte[]? content,
+        Func<CmsSignedData, List<string>, bool> verifyIntegrity,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        bool isFirstSigner)
+    {
+        var errors = new List<string>();
+        var warnings = new List<string>();
 
         if (cmsData.SignerCertificate is null)
         {
@@ -126,8 +270,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
 
         // 2. Verify content integrity (hash match)
-        bool integrityValid = VerifyContentHash(originalData, cmsData, errors);
-
+        bool integrityValid = verifyIntegrity(cmsData, errors);
         // 3. Verify cryptographic signature
         bool sigValid = _cryptoVerifier.VerifySignature(cmsData, _logger);
         if (!sigValid)
@@ -167,13 +310,40 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
 
         // 7. LTV data validation (root SignedData certificate and revocation sets)
-        bool? ltvValid = ValidateLtvData(cmsBytes, cmsData, warnings);
+        bool? ltvValid = cmsBytes is null ? null : ValidateLtvData(cmsBytes, cmsData, warnings);
 
-        // 8. Archive timestamp validation
-        bool? archiveTsValid = null;
-        if (cmsData.ArchiveTimestampToken is not null)
+        // 7a. escTimeStamp (CAdES-X type 1, RFC 5126 §5.11.3)
+        bool? escValid = null;
+        if (cmsBytes is not null && isFirstSigner && cmsData.UnsignedAttributes?.TryGetValue(Oids.EscTimeStamp, out byte[][]? esc) == true && esc.Length > 0)
         {
-            archiveTsValid = ValidateArchiveTimestamp(cmsBytes, originalData, cmsData, errors, warnings);
+            escValid = TimestampCovers(esc[0], CadesExtendedValidationData.EscTimeStampInput(cmsBytes), cmsData.DigestAlgorithmOid);
+            if (escValid == false)
+            {
+                errors.Add("escTimeStamp does not cover the signature, its timestamp and the complete references.");
+            }
+        }
+
+        // 8. Archive timestamp validation (covers the first signer of the SignedData)
+        bool? archiveTsValid = null;
+        if (cmsBytes is not null && content is not null && isFirstSigner
+            && cmsData.UnsignedAttributes?.TryGetValue(Oids.ArchiveTimeStamp, out byte[][]? archiveV2) == true && archiveV2.Length > 0)
+        {
+            archiveTsValid = TimestampCovers(archiveV2[0], CadesExtendedValidationData.ArchiveTimeStampV2Input(cmsBytes, content), cmsData.DigestAlgorithmOid);
+            if (archiveTsValid == false)
+            {
+                errors.Add("archive-time-stamp (v2) does not cover the signature and its validation data.");
+            }
+        }
+        else if (cmsData.ArchiveTimestampToken is not null)
+        {
+            if (cmsBytes is not null && content is not null && isFirstSigner)
+            {
+                archiveTsValid = ValidateArchiveTimestamp(cmsBytes, content, cmsData, errors, warnings);
+            }
+            else
+            {
+                warnings.Add("The archive timestamp was not validated (it needs the signed content and is checked for the first signer only).");
+            }
         }
 
         return new CadesValidationResult
@@ -185,12 +355,35 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             IsTsaTrusted = tsaTrusted,
             IsLtvDataValid = ltvValid,
             HasValidArchiveTimestamp = archiveTsValid,
+            HasValidEscTimestamp = escValid,
             SignerCertificate = cmsData.SignerCertificate,
             SigningTime = cmsData.SigningTime,
             Errors = errors.AsReadOnly(),
             Warnings = warnings.Count > 0 ? warnings.AsReadOnly() : []
         };
     }
+
+    /// <summary>Whether the RFC 3161 token's message imprint is the hash of <paramref name="data"/>.</summary>
+    private static bool TimestampCovers(byte[] token, byte[] data, string digestOid)
+    {
+        try
+        {
+            TimestampClient.ValidateTimestampToken(token, data, HashFromOid(digestOid));
+            return true;
+        }
+        // S2221: intentional -- validation pipeline converts exceptions to results
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static HashAlgorithmName HashFromOid(string oid) => oid switch
+    {
+        Oids.Sha384 => HashAlgorithmName.SHA384,
+        Oids.Sha512 => HashAlgorithmName.SHA512,
+        _ => HashAlgorithmName.SHA256,
+    };
 
     private static bool VerifyContentHash(byte[] originalData, CmsSignedData cmsData, List<string> errors)
     {

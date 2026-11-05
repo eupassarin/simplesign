@@ -31,8 +31,7 @@ public sealed class XadesSignerBuilder
             Form: XadesForm.Enveloped,
             DataUri: null,
             CommitmentType: null,
-            SignaturePolicyOid: null,
-            SignaturePolicyUri: null,
+            SignaturePolicy: null,
             SignerRoles: null,
             DataObjectFormat: null,
             OperationId: null,
@@ -52,8 +51,7 @@ public sealed class XadesSignerBuilder
             Form: XadesForm.Enveloped,
             DataUri: null,
             CommitmentType: null,
-            SignaturePolicyOid: null,
-            SignaturePolicyUri: null,
+            SignaturePolicy: null,
             SignerRoles: null,
             DataObjectFormat: null,
             OperationId: null,
@@ -209,7 +207,20 @@ public sealed class XadesSignerBuilder
     public XadesSignerBuilder WithSignaturePolicy(string oid, string? uri = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(oid);
-        return With(_options with { SignaturePolicyOid = oid, SignaturePolicyUri = uri });
+        return With(_options with { SignaturePolicy = new SignaturePolicyReference(oid, null, ReadOnlyMemory<byte>.Empty, uri) });
+    }
+
+    /// <summary>
+    /// Sets the signature policy with its hash: writes the OID as an OID URN and SigPolicyHash with
+    /// <see cref="SignaturePolicyReference.Hash"/> (the digest the policy issuer publishes).
+    /// </summary>
+    /// <param name="policy">The policy reference (OID, hash algorithm, hash and optional URI).</param>
+    /// <returns>A new builder with the signature policy configured.</returns>
+    public XadesSignerBuilder WithSignaturePolicy(SignaturePolicyReference policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentException.ThrowIfNullOrWhiteSpace(policy.Oid, nameof(policy));
+        return With(_options with { SignaturePolicy = policy });
     }
 
     /// <summary>Set claimed signer role(s) (e.g., "Manager", "Approver").</summary>
@@ -521,7 +532,7 @@ public sealed class XadesSignerBuilder
         var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
         return XadesSignatureBuilder.BuildSignature(
             _xmlData, certificate, hashAlg, signingTime, chain,
-            _options.CommitmentType, _options.SignaturePolicyOid, _options.SignaturePolicyUri,
+            _options.CommitmentType, _options.SignaturePolicy,
             sigAlgOid, _options.Form, _options.SignerRoles, _options.DataObjectFormat,
             _options.Dependencies.Logger, _options.DataUri);
     }
@@ -540,7 +551,7 @@ public sealed class XadesSignerBuilder
 
         byte[] signedInfoBytes = XadesSignatureBuilder.BuildSignedInfoToHash(
             _xmlData, certificate, hashAlg, signingTime, _options.Form,
-            _options.CommitmentType, _options.SignaturePolicyOid, _options.SignaturePolicyUri,
+            _options.CommitmentType, _options.SignaturePolicy,
             sigAlgOid, _options.SignerRoles, _options.DataObjectFormat,
             out string signedPropertiesId,
             out byte[] signedInfoXml,
@@ -582,7 +593,7 @@ public sealed class XadesSignerBuilder
 
         return XadesSignatureBuilder.CompleteWithExternalSignature(
             _xmlData, certificate, hashAlg, signingTime, chain,
-            _options.CommitmentType, _options.SignaturePolicyOid, _options.SignaturePolicyUri,
+            _options.CommitmentType, _options.SignaturePolicy,
             sigAlgOid, signedInfoXml, signature.ToArray(), signedPropertiesId,
             _options.SignerRoles, _options.DataObjectFormat, _options.Form, _options.DataUri, dataObjectId);
     }

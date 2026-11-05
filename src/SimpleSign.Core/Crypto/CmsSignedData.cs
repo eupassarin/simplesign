@@ -113,4 +113,13 @@ public sealed class CmsSignedData
     /// for CAdES-B-LTA. Null when not present.
     /// </summary>
     public byte[]? ArchiveTimestampToken { get; init; }
+
+    /// <summary>
+    /// The encapsulated content (eContent) of an attached signature (.p7m), or <see langword="null"/>
+    /// when the signature is detached. Document timestamps keep their TSTInfo in <see cref="TstMessageImprintHash"/>.
+    /// </summary>
+    public byte[]? EncapsulatedContent { get; init; }
+
+    /// <summary>Countersignatures of this signer (id-countersignature, RFC 5652 §11.4), each over this signer's <see cref="Signature"/>.</summary>
+    public IReadOnlyList<CmsSignedData> CounterSignatures { get; init; } = [];
 }

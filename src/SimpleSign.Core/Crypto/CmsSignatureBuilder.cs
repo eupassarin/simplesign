@@ -406,22 +406,34 @@ public sealed class CmsSignatureBuilder
     /// <param name="time">Signing timestamp.</param>
     /// <param name="signerCertificate">The signer's certificate (for signingCertificateV2).</param>
     /// <param name="extraAttributes">Optional extra CAdES signed attributes.</param>
-    /// <param name="padesAttributes">When true, includes PAdES-specific attributes (signingCertificateV2).</param>
+    /// <param name="padesAttributes">When true, omits signingTime (PAdES uses the PDF /M entry); signingCertificateV2 is always included.</param>
     public static byte[] BuildSignedAttributes(byte[] contentHash, string digestOid, DateTimeOffset time,
         X509Certificate2 signerCertificate, IReadOnlyList<CmsAttribute>? extraAttributes = null,
-        bool padesAttributes = true)
+        bool padesAttributes = true) =>
+        BuildSignedAttributes(contentHash, digestOid, time, signerCertificate, extraAttributes, padesAttributes, includeContentType: true);
+
+    /// <summary>
+    /// Builds the signed attributes; <paramref name="includeContentType"/> = false for a
+    /// countersignature, which must not carry content-type (RFC 5652 §11.4).
+    /// </summary>
+    internal static byte[] BuildSignedAttributes(byte[] contentHash, string digestOid, DateTimeOffset time,
+        X509Certificate2 signerCertificate, IReadOnlyList<CmsAttribute>? extraAttributes,
+        bool padesAttributes, bool includeContentType)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
 
         using (writer.PushSetOf())
         {
             // contentType = id-data
-            using (writer.PushSequence())
+            if (includeContentType)
             {
-                writer.WriteObjectIdentifier(Oids.ContentType);
-                using (writer.PushSetOf())
+                using (writer.PushSequence())
                 {
-                    writer.WriteObjectIdentifier(Oids.Data);
+                    writer.WriteObjectIdentifier(Oids.ContentType);
+                    using (writer.PushSetOf())
+                    {
+                        writer.WriteObjectIdentifier(Oids.Data);
+                    }
                 }
             }
 
@@ -453,10 +465,9 @@ public sealed class CmsSignatureBuilder
             // Binds the signer certificate to the signature via SHA-256 hash.
             // Without this attribute, Adobe Acrobat displays "Not PAdES compliant".
             // Omitted for plain CMS/PKCS#7 (legacy) signatures.
-            if (padesAttributes)
-            {
-                BuildSigningCertificateV2Attribute(writer, signerCertificate);
-            }
+            // signing-certificate-v2: mandatory in PAdES and in CAdES baseline B-B (ETSI EN 319 122-1 §5.2.2.3),
+            // and in every ICP-Brasil signature policy.
+            BuildSigningCertificateV2Attribute(writer, signerCertificate);
 
             // Extra CAdES attributes (e.g., commitment-type-indication, signature-policy-identifier)
             if (extraAttributes is { Count: > 0 })
@@ -536,7 +547,7 @@ public sealed class CmsSignatureBuilder
 
     #region Cryptography
 
-    private static byte[] SignData(byte[] signedAttrs, X509Certificate2 cert, HashAlgorithmName hashAlg, string signatureOid)
+    internal static byte[] SignData(byte[] signedAttrs, X509Certificate2 cert, HashAlgorithmName hashAlg, string signatureOid)
     {
         // Signs the signedAttrs (not the document — this is the CMS/PAdES standard)
         using var key = cert.GetRSAPrivateKey();
