@@ -1,11 +1,8 @@
 namespace SimpleSign.Brasil.ValidarIti;
 
 /// <summary>
-/// Builds URLs for the ITI VALIDAR portal (https://validar.iti.gov.br).
-///
-/// The VALIDAR portal accepts a PDF file URL or a base64-encoded hash for validation.
-/// Use <see cref="ForDocument(string)"/> to build a URL that pre-loads a document for validation,
-/// or <see cref="BaseUrl"/> as the plain verification URL for QR code generation.
+/// URLs of the ITI VALIDAR portal (https://validar.iti.gov.br).
+/// For QR codes that VALIDAR can read, use <see cref="ValidarItiQrEndpoint"/>.
 ///
 /// Reference: https://validar.iti.gov.br/guia-desenvolvedor.html
 /// </summary>
@@ -23,6 +20,7 @@ public static class ValidarItiUrlBuilder
     /// </param>
     /// <returns>VALIDAR portal URL that opens the document for online validation.</returns>
     /// <exception cref="ArgumentException"><paramref name="documentUrl"/> is null or empty.</exception>
+    [Obsolete("VALIDAR does not document a ?document= parameter. Print ValidarItiQrEndpoint.BuildQrCodeUrl in the QR code and answer VALIDAR with ValidarItiQrEndpoint.Respond.")]
     public static string ForDocument(string documentUrl)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(documentUrl);
@@ -35,6 +33,7 @@ public static class ValidarItiUrlBuilder
     /// <param name="documentUri">Public URI of the signed PDF document.</param>
     /// <returns>VALIDAR portal URL that opens the document for online validation.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="documentUri"/> is null.</exception>
+    [Obsolete("VALIDAR does not document a ?document= parameter. Print ValidarItiQrEndpoint.BuildQrCodeUrl in the QR code and answer VALIDAR with ValidarItiQrEndpoint.Respond.")]
     public static string ForDocument(Uri documentUri)
     {
         ArgumentNullException.ThrowIfNull(documentUri);

@@ -38,11 +38,10 @@ public sealed class IcpBrasilChainValidator
     // Extra URLs (future versions not bundled) — used as online fallback
     private static readonly string[] ExtraAcRaizCertUrls = [];
 
-    // OIDs for ICP-Brasil certificate policies per DOC-ICP-15.03.
-    // Format: 2.16.76.1.7.1.{policy}.{certType}.{version}
-    //   policy:   1=AD-RB, 2=AD-RT, 3=AD-RV, 4=AD-RC, 5=AD-RA
-    //   certType: 1=PF (natural person), 2=PJ (legal entity)
-    //   version:  1=v1.0, 2=v2.0, 3=v3.0 (current)
+    // CMS (CAdES) signature policy OIDs, 2.16.76.1.7.1.{policy}.{major}.{minor} (ADE-ICP-04.01).
+    // These identify signature policies, which travel in a signature's signature-policy-identifier
+    // attribute, not in certificates. Kept only for the obsolete DetectPolicy(certificate).
+    // Use IcpBrasilPolicyInfo.TryParse for every format (CAdES, XAdES, PAdES).
     private static readonly Dictionary<IcpBrasilPolicy, string[]> PolicyOids = new()
     {
         [IcpBrasilPolicy.AdRb] =
@@ -137,20 +136,15 @@ public sealed class IcpBrasilChainValidator
         var errors = new List<string>();
         var warnings = new List<string>();
 
-        // 1. Detect ICP-Brasil policy
-        var policy = DetectPolicy(certificate);
+        // 1. Identify the certificate (signature policies are read from the signature, not here)
         bool isIcpBrasil = IsIcpBrasilCertificate(certificate);
         var certLevel = DetectCertificateLevel(certificate);
         var (cpf, cnpj) = ExtractCpfCnpj(certificate, _logger);
-        var healthProfessional = ExtractHealthProfessional(certificate, _logger);
+        var registrations = ExtractProfessionalRegistrations(certificate, _logger);
 
         if (!isIcpBrasil)
         {
             warnings.Add("Certificate does not appear to belong to the ICP-Brasil chain.");
-        }
-        else if (policy is null)
-        {
-            warnings.Add("Certificate is ICP-Brasil but AD signature policy OID was not found (may use document-level policy).");
         }
 
         // P2: Key size validation (DOC-ICP-04.01 requires RSA ≥ 2048 bits)
@@ -202,11 +196,10 @@ public sealed class IcpBrasilChainValidator
             {
                 IsChainValid = isChainValid,
                 IsIcpBrasilCertificate = isIcpBrasil,
-                DetectedPolicy = policy,
                 CertificateLevel = certLevel,
                 Cpf = cpf,
                 Cnpj = cnpj,
-                HealthProfessional = healthProfessional,
+                ProfessionalRegistrations = registrations,
                 ChainElements = chainElements.AsReadOnly(),
                 AcRaizCertificates = acRaizCerts.AsReadOnly(),
                 Errors = errors.AsReadOnly(),
@@ -223,9 +216,16 @@ public sealed class IcpBrasilChainValidator
     }
 
     /// <summary>
-    /// Detects the ICP-Brasil policy of the certificate (AD-RB, AD-RT, etc.)
-    /// by reading the Certificate Policies extension (OID 2.5.29.32).
+    /// Looks for CMS signature-policy OIDs (2.16.76.1.7.1.1–5) in the certificate's
+    /// CertificatePolicies extension.
     /// </summary>
+    /// <remarks>
+    /// Signature policies (AD-RB, AD-RT…) are a property of the <em>signature</em>, carried in its
+    /// signature-policy-identifier attribute; ICP-Brasil certificates do not contain them, so this
+    /// method returns <see langword="null"/> for real certificates. Read the policy OID from the
+    /// signature and pass it to <see cref="IcpBrasilPolicyInfo.TryParse"/> instead.
+    /// </remarks>
+    [Obsolete("Signature policies are not certificate attributes. Use IcpBrasilPolicyInfo.TryParse with the signature's policy OID.")]
     public static IcpBrasilPolicy? DetectPolicy(X509Certificate2 certificate)
     {
         ArgumentNullException.ThrowIfNull(certificate);
@@ -274,9 +274,11 @@ public sealed class IcpBrasilChainValidator
     }
 
     /// <summary>
-    /// Detects the ICP-Brasil certificate level (A1, A2, A3, A4, S1-S4).
-    /// Based on the policy OIDs in the 2.16.76.1.2.X pattern.
+    /// Detects the ICP-Brasil certificate type from its certificate policy OID,
+    /// 2.16.76.1.2.{type}.{n} (ADE-ICP-04.01): A1–A4 = 1–4, S1–S4 = 101–104, T3/T4 = 303/304,
+    /// A CF-e-SAT = 500, OM-BR = 550.
     /// </summary>
+    /// <returns>The type, or <see langword="null"/> when no ICP-Brasil certificate policy is present.</returns>
     public static IcpBrasilCertificateLevel? DetectCertificateLevel(X509Certificate2 certificate)
     {
         ArgumentNullException.ThrowIfNull(certificate);
@@ -286,41 +288,65 @@ public sealed class IcpBrasilChainValidator
             return null;
         }
 
-        // The OIDs follow the pattern: 2.16.76.1.2.{level}.{type}
-        // The 5th byte of the arc after 2.16.76.1.2 (0x60 0x92 0x4C 0x01 0x02) indicates the level
-        // A1=01, A2=02, A3=03, A4=04, S1=0B, S2=0C, S3=0D, S4=0E
-        // DER: 2.16.76.1.2 = bytes iniciais: 60 92 4C 01 02
-        ReadOnlySpan<byte> certificateLevelArc = Asn1Tags.IcpBrasilLevelArc;
-        var data = certPoliciesExt.RawData.AsSpan();
-        int idx = data.IndexOf(certificateLevelArc);
-        if (idx < 0)
+        foreach (string policy in ReadPolicyOids(certPoliciesExt.RawData))
         {
-            return null;
+            if (!policy.StartsWith(CertificatePolicyArc, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string type = policy[CertificatePolicyArc.Length..].Split('.')[0];
+            IcpBrasilCertificateLevel? level = type switch
+            {
+                "1" => IcpBrasilCertificateLevel.A1,
+                "2" => IcpBrasilCertificateLevel.A2,
+                "3" => IcpBrasilCertificateLevel.A3,
+                "4" => IcpBrasilCertificateLevel.A4,
+                "101" => IcpBrasilCertificateLevel.S1,
+                "102" => IcpBrasilCertificateLevel.S2,
+                "103" => IcpBrasilCertificateLevel.S3,
+                "104" => IcpBrasilCertificateLevel.S4,
+                "303" => IcpBrasilCertificateLevel.T3,
+                "304" => IcpBrasilCertificateLevel.T4,
+                "500" => IcpBrasilCertificateLevel.ACfeSat,
+                "550" => IcpBrasilCertificateLevel.OmBr,
+                _ => null,
+            };
+            if (level is not null)
+            {
+                return level;
+            }
         }
 
-        if (idx + certificateLevelArc.Length >= data.Length)
-        {
-            return null;
-        }
-        byte levelByte = data[idx + certificateLevelArc.Length];
+        return null;
+    }
 
-        return levelByte switch
+    private const string CertificatePolicyArc = "2.16.76.1.2.";
+
+    /// <summary>Decodes the policy OIDs of a CertificatePolicies extension (RFC 5280 §4.2.1.4).</summary>
+    private static List<string> ReadPolicyOids(byte[] extensionValue)
+    {
+        var oids = new List<string>();
+        try
         {
-            0x01 => IcpBrasilCertificateLevel.A1,
-            0x02 => IcpBrasilCertificateLevel.A2,
-            0x03 => IcpBrasilCertificateLevel.A3,
-            0x04 => IcpBrasilCertificateLevel.A4,
-            0x0B => IcpBrasilCertificateLevel.S1,
-            0x0C => IcpBrasilCertificateLevel.S2,
-            0x0D => IcpBrasilCertificateLevel.S3,
-            0x0E => IcpBrasilCertificateLevel.S4,
-            _ => null
-        };
+            var policies = new AsnReader(extensionValue, AsnEncodingRules.BER).ReadSequence();
+            while (policies.HasData)
+            {
+                var info = policies.ReadSequence();
+                oids.Add(info.ReadObjectIdentifier());
+            }
+        }
+        catch (AsnContentException)
+        {
+            // A malformed extension yields the OIDs read so far.
+        }
+
+        return oids;
     }
 
     /// <summary>
     /// Extracts CPF and/or CNPJ from an ICP-Brasil certificate via OID 2.16.76.1.3.1 (CPF) and 2.16.76.1.3.3 (CNPJ)
-    /// in the Subject Alternative Name (otherName).
+    /// in the Subject Alternative Name (otherName). CNPJs may be alphanumeric (IN RFB 2.229/2024).
     /// </summary>
     public static (string? Cpf, string? Cnpj) ExtractCpfCnpj(X509Certificate2 certificate, ILogger? logger = null)
     {
@@ -328,17 +354,93 @@ public sealed class IcpBrasilChainValidator
         string? cpf = null;
         string? cnpj = null;
 
-        // SubjectAlternativeName OID = 2.5.29.17
+        foreach (var (oid, textValue) in ReadSanOtherNames(certificate, logger))
+        {
+            // OID 2.16.76.1.3.1 = holder data (contains CPF in positions 8-18)
+            if (oid == Oids.IcpBrasilSanHolderData && textValue.Length >= 19)
+            {
+                string candidate = textValue.Substring(8, 11);
+                if (IsValidCpf(candidate))
+                {
+                    cpf = candidate;
+                }
+            }
+            // OID 2.16.76.1.3.3 = CNPJ (14 characters)
+            else if (oid == Oids.IcpBrasilSanCnpj && textValue.Length >= 14)
+            {
+                string candidate = textValue[..14].ToUpperInvariant();
+                if (IsValidCnpj(candidate))
+                {
+                    cnpj = candidate;
+                }
+            }
+        }
+
+        return (cpf, cnpj);
+    }
+
+    /// <summary>
+    /// Extracts the professional registrations (OAB, CFM, CFF, CFO…) from an ICP-Brasil
+    /// certificate's SubjectAltName, under the council arc 2.16.76.1.4.2.{council}: registration
+    /// number (.1), UF (.2) and specialty (.3), as assigned in ADE-ICP-04.01.
+    /// </summary>
+    /// <returns>One entry per council with a registration number; empty when there is none.</returns>
+    public static IReadOnlyList<ProfessionalRegistration> ExtractProfessionalRegistrations(
+        X509Certificate2 certificate, ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+        var fields = new Dictionary<int, Dictionary<int, string>>();
+        foreach (var (oid, textValue) in ReadSanOtherNames(certificate, logger))
+        {
+            if (!oid.StartsWith(Constants.BrasilOids.ProfessionalCouncilArc, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string[] parts = oid[Constants.BrasilOids.ProfessionalCouncilArc.Length..].Split('.');
+            if (parts.Length == 2
+                && int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int council)
+                && int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int field)
+                && Enum.IsDefined(typeof(ProfessionalCouncil), council))
+            {
+                if (!fields.TryGetValue(council, out var values))
+                {
+                    fields[council] = values = [];
+                }
+
+                values[field] = textValue.Trim();
+            }
+        }
+
+        var registrations = new List<ProfessionalRegistration>();
+        foreach (var (council, values) in fields.OrderBy(f => f.Key))
+        {
+            if (values.TryGetValue(1, out string? number) && number.Length > 0)
+            {
+                registrations.Add(new ProfessionalRegistration(
+                    (ProfessionalCouncil)council,
+                    number,
+                    values.TryGetValue(2, out string? uf) && uf.Length > 0 ? uf.ToUpperInvariant() : null,
+                    values.TryGetValue(3, out string? specialty) && specialty.Length > 0 ? specialty : null));
+            }
+        }
+
+        return registrations.AsReadOnly();
+    }
+
+    /// <summary>Reads every otherName (OID and decoded text) of the certificate's SubjectAltName.</summary>
+    private static List<(string Oid, string Value)> ReadSanOtherNames(X509Certificate2 certificate, ILogger? logger)
+    {
+        var result = new List<(string, string)>();
         var sanExt = certificate.Extensions[Oids.SubjectAltName];
         if (sanExt is null)
         {
-            return (null, null);
+            return result;
         }
 
         try
         {
-            var reader = new AsnReader(sanExt.RawData, AsnEncodingRules.BER);
-            var seq = reader.ReadSequence();
+            var seq = new AsnReader(sanExt.RawData, AsnEncodingRules.BER).ReadSequence();
             while (seq.HasData)
             {
                 var tag = seq.PeekTag();
@@ -349,30 +451,8 @@ public sealed class IcpBrasilChainValidator
                     string oid = otherName.ReadObjectIdentifier();
                     if (otherName.HasData)
                     {
-                        var valueWrapper = otherName.ReadSequence(
-                            new Asn1Tag(TagClass.ContextSpecific, 0, true));
-                        // Value is typically UTF8String, PrintableString, or OctetString containing the data
-                        byte[] rawValue = valueWrapper.ReadEncodedValue().ToArray();
-                        string textValue = ExtractStringFromAsn1Value(rawValue);
-
-                        // OID 2.16.76.1.3.1 = holder data (contains CPF in positions 8-18)
-                        if (oid == Oids.IcpBrasilSanHolderData && textValue.Length >= 19)
-                        {
-                            string candidate = textValue.Substring(8, 11);
-                            if (IsValidCpf(candidate))
-                            {
-                                cpf = candidate;
-                            }
-                        }
-                        // OID 2.16.76.1.3.3 = CNPJ (14 digits)
-                        else if (oid == Oids.IcpBrasilSanCnpj && textValue.Length >= 14)
-                        {
-                            string candidate = textValue[..14];
-                            if (IsValidCnpj(candidate))
-                            {
-                                cnpj = candidate;
-                            }
-                        }
+                        var valueWrapper = otherName.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true));
+                        result.Add((oid, ExtractStringFromAsn1Value(valueWrapper.ReadEncodedValue().ToArray())));
                     }
                 }
                 else
@@ -384,79 +464,7 @@ public sealed class IcpBrasilChainValidator
         catch (AsnContentException ex) { logger?.SanParsingFailed(ex.Message); }
         catch (InvalidOperationException ex) { logger?.SanParsingFailed(ex.Message); }
 
-        return (cpf, cnpj);
-    }
-
-    /// <summary>
-    /// Extracts health professional registration info from an ICP-Brasil certificate SAN.
-    /// Reads OIDs 2.16.76.1.3.4 (CRM), 2.16.76.1.3.5 (CRO), and 2.16.76.1.3.6 (sequential)
-    /// as defined in DOC-ICP-04 for electronic prescriptions (prescrições eletrônicas).
-    /// Returns <c>null</c> when no health professional OID is present.
-    /// </summary>
-    public static HealthProfessionalInfo? ExtractHealthProfessional(X509Certificate2 certificate, ILogger? logger = null)
-    {
-        ArgumentNullException.ThrowIfNull(certificate);
-
-        var sanExt = certificate.Extensions[Oids.SubjectAltName];
-        if (sanExt is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var reader = new AsnReader(sanExt.RawData, AsnEncodingRules.BER);
-            var seq = reader.ReadSequence();
-            while (seq.HasData)
-            {
-                var tag = seq.PeekTag();
-                if (tag.TagClass == TagClass.ContextSpecific && tag.TagValue == 0)
-                {
-                    var otherName = seq.ReadSequence(tag);
-                    string oid = otherName.ReadObjectIdentifier();
-                    if (otherName.HasData)
-                    {
-                        var valueWrapper = otherName.ReadSequence(
-                            new Asn1Tag(TagClass.ContextSpecific, 0, true));
-                        byte[] rawValue = valueWrapper.ReadEncodedValue().ToArray();
-                        string textValue = ExtractStringFromAsn1Value(rawValue).Trim();
-
-                        if (oid == Constants.BrasilOids.IcpBrasilSanCrm && !string.IsNullOrWhiteSpace(textValue))
-                        {
-                            return new HealthProfessionalInfo
-                            {
-                                Council = HealthProfessionalCouncil.Crm,
-                                RegistrationNumber = textValue,
-                            };
-                        }
-                        else if (oid == Constants.BrasilOids.IcpBrasilSanCro && !string.IsNullOrWhiteSpace(textValue))
-                        {
-                            return new HealthProfessionalInfo
-                            {
-                                Council = HealthProfessionalCouncil.Cro,
-                                RegistrationNumber = textValue,
-                            };
-                        }
-                        else if (oid == Constants.BrasilOids.IcpBrasilSanSequential && !string.IsNullOrWhiteSpace(textValue))
-                        {
-                            return new HealthProfessionalInfo
-                            {
-                                Council = HealthProfessionalCouncil.Sequential,
-                                RegistrationNumber = textValue,
-                            };
-                        }
-                    }
-                }
-                else
-                {
-                    seq.ReadEncodedValue();
-                }
-            }
-        }
-        catch (AsnContentException ex) { logger?.SanParsingFailed(ex.Message); }
-        catch (InvalidOperationException ex) { logger?.SanParsingFailed(ex.Message); }
-
-        return null;
+        return result;
     }
 
     private static string ExtractStringFromAsn1Value(byte[] encoded)
@@ -531,11 +539,15 @@ public sealed class IcpBrasilChainValidator
     }
 
     /// <summary>
-    /// Validates a CNPJ number using the mod-11 check digit algorithm.
+    /// Validates a CNPJ with the mod-11 check digits. Accepts the alphanumeric format of
+    /// IN RFB 2.229/2024 (in force since July 2026): the first 12 characters are 0–9 or A–Z
+    /// (uppercase), each worth its ASCII code minus 48; the last two are numeric check digits.
     /// </summary>
     internal static bool IsValidCnpj(string cnpj)
     {
-        if (cnpj.Length != 14 || !cnpj.All(char.IsDigit))
+        if (cnpj.Length != 14
+            || cnpj.AsSpan(0, 12).IndexOfAnyExcept(CnpjBaseCharacters) >= 0
+            || !char.IsAsciiDigit(cnpj[12]) || !char.IsAsciiDigit(cnpj[13]))
         {
             return false;
         }
@@ -570,6 +582,9 @@ public sealed class IcpBrasilChainValidator
         int digit2 = remainder < 2 ? 0 : 11 - remainder;
         return cnpj[13] - '0' == digit2;
     }
+
+    private static readonly System.Buffers.SearchValues<char> CnpjBaseCharacters =
+        System.Buffers.SearchValues.Create("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
     /// <summary>
     /// Loads the bundled AC Raiz certificates from the assembly (offline, no network).

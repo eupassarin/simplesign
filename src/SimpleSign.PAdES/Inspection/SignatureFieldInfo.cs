@@ -71,7 +71,7 @@ public sealed class SignatureFieldInfo
     /// <summary>
     /// Raw UTF-8 JSON bytes of the signature manifest.
     /// Contains tamper-proof signer evidence: name, CPF, email, IP, auth method, institution.
-    /// Present when the signature includes a manifest attribute (OID 2.16.76.1.12.1.1).
+    /// Present when the signature includes a manifest attribute (OID <see cref="SimpleSign.Core.Constants.Oids.SignatureManifest"/>).
     /// </summary>
     public byte[]? ManifestJson { get; init; }
 

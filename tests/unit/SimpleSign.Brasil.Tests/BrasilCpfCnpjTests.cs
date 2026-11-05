@@ -69,10 +69,20 @@ public sealed class BrasilCpfCnpjTests
     [InlineData("114447770001611")] // 15 digits
     public void IsValidCnpj_WrongLength_ReturnsFalse(string cnpj) => IcpBrasilChainValidator.IsValidCnpj(cnpj).ShouldBeFalse();
 
-    [Theory(DisplayName = "IsValidCnpj rejects non-digit input")]
+    [Theory(DisplayName = "IsValidCnpj rejects formatted input, letters in the check digits and lowercase")]
     [InlineData("11.444.777/0001-61")] // formatted
-    [InlineData("1144477700016A")]     // letter
-    public void IsValidCnpj_NonDigit_ReturnsFalse(string cnpj) => IcpBrasilChainValidator.IsValidCnpj(cnpj).ShouldBeFalse();
+    [InlineData("1144477700016A")]     // letter in a check digit
+    [InlineData("12abc34501de35")]     // lowercase (normalize before validating)
+    public void IsValidCnpj_InvalidCharacters_ReturnsFalse(string cnpj) => IcpBrasilChainValidator.IsValidCnpj(cnpj).ShouldBeFalse();
+
+    [Theory(DisplayName = "IsValidCnpj accepts alphanumeric CNPJs (IN RFB 2.229/2024)")]
+    [InlineData("12ABC34501DE35")] // Receita Federal example 12.ABC.345/01DE-35
+    [InlineData("ZZZZZZZZZZZZ62")]
+    public void IsValidCnpj_Alphanumeric_ReturnsTrue(string cnpj) => IcpBrasilChainValidator.IsValidCnpj(cnpj).ShouldBeTrue();
+
+    [Fact(DisplayName = "IsValidCnpj rejects an alphanumeric CNPJ with a wrong check digit")]
+    public void IsValidCnpj_AlphanumericBadCheckDigit_ReturnsFalse() =>
+        IcpBrasilChainValidator.IsValidCnpj("12ABC34501DE36").ShouldBeFalse();
 
     [Theory(DisplayName = "IsValidCnpj rejects all-same-digit sequences")]
     [InlineData("00000000000000")]

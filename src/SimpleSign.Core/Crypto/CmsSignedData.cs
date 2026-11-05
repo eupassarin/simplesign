@@ -68,7 +68,7 @@ public sealed class CmsSignedData
     public string? SignaturePolicyOid { get; init; }
 
     /// <summary>
-    /// Raw UTF-8 JSON bytes of the signature manifest from the SimpleSign manifest attribute (OID 2.16.76.1.12.1.1).
+    /// Raw UTF-8 JSON bytes of the signature manifest from the SimpleSign manifest attribute (OID <see cref="SimpleSign.Core.Constants.Oids.SignatureManifest"/>).
     /// Contains signer evidence: name, masked CPF, email, IP, auth method, institution.
     /// </summary>
     public byte[]? ManifestJson { get; init; }

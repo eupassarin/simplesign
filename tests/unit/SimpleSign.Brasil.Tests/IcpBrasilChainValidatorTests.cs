@@ -40,52 +40,6 @@ public sealed class IcpBrasilChainValidatorTests
         return new X509Extension("2.5.29.32", array3, critical: false);
     }
 
-    [Fact(DisplayName = "DetectPolicy with null certificate throws exception")]
-    public void DetectPolicy_NullCertificate_ThrowsArgumentNullException() => Assert.Throws<ArgumentNullException>(() => IcpBrasilChainValidator.DetectPolicy(null!));
-
-    [Fact(DisplayName = "Cert without policies returns null")]
-    public void DetectPolicy_CertWithoutPolicies_ReturnsNull()
-    {
-        using RSA key = RSA.Create(2048);
-        CertificateRequest certificateRequest = new CertificateRequest("CN=NoPolicies", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        using X509Certificate2 certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
-        IcpBrasilPolicy? icpBrasilPolicy = IcpBrasilChainValidator.DetectPolicy(certificate);
-        icpBrasilPolicy.ShouldBeNull("");
-    }
-
-    [Theory(DisplayName = "ICP-Brasil OID returns correct policy")]
-    [InlineData(
-    [
-        "2.16.76.1.7.1.1.2.3",
-        IcpBrasilPolicy.AdRb
-    ])]
-    [InlineData(
-    [
-        "2.16.76.1.7.1.2.2.3",
-        IcpBrasilPolicy.AdRt
-    ])]
-    [InlineData(
-    [
-        "2.16.76.1.7.1.3.2.3",
-        IcpBrasilPolicy.AdRv
-    ])]
-    [InlineData(
-    [
-        "2.16.76.1.7.1.4.2.3",
-        IcpBrasilPolicy.AdRc
-    ])]
-    [InlineData(
-    [
-        "2.16.76.1.7.1.5.2.3",
-        IcpBrasilPolicy.AdRa
-    ])]
-    public void DetectPolicy_CertWithIcpPolicyOid_ReturnsCorrectPolicy(string oid, IcpBrasilPolicy expectedPolicy)
-    {
-        using X509Certificate2 certificate = CreateCertWithPolicy(oid);
-        IcpBrasilPolicy? icpBrasilPolicy = IcpBrasilChainValidator.DetectPolicy(certificate);
-        icpBrasilPolicy.ShouldBe(expectedPolicy, "");
-    }
-
     [Fact(DisplayName = "EncodeOid for SHA-256 produces correct DER")]
     public void EncodeOid_StandardOid_ReturnsCorrectDer()
     {
@@ -145,7 +99,6 @@ public sealed class IcpBrasilChainValidatorTests
         CertificateRequest certificateRequest = new CertificateRequest("CN=NoPolicy", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using X509Certificate2 cert = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
         IcpBrasilValidationResult icpBrasilValidationResult = await icpBrasilChainValidator.ValidateAsync(cert);
-        icpBrasilValidationResult.DetectedPolicy.ShouldBeNull("");
         icpBrasilValidationResult.Warnings.ShouldContain(w => w.Contains("ICP-Brasil"), "");
     }
 

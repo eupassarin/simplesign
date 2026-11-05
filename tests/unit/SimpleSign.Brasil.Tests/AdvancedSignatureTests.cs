@@ -429,7 +429,7 @@ public sealed class AdvancedSignatureTests
         var manifest = SignatureManifest.FromInfo(info);
         var attr = CmsAttribute.SignatureManifestAttr(manifest.ToJsonUtf8());
 
-        attr.Oid.ShouldBe("2.16.76.1.12.1.1");
+        attr.Oid.ShouldBe(SimpleSign.Core.Constants.Oids.SignatureManifest);
         attr.DerValue.ShouldNotBeEmpty();
 
         // Verify it's a valid OCTET STRING containing JSON
@@ -472,6 +472,32 @@ public sealed class AdvancedSignatureTests
         restored.Signer.Email.ShouldBe("andre@tce.es.gov.br");
         restored.Evidence.Ip.ShouldBe("10.0.0.1");
         restored.Institution!.Name.ShouldBe("TCE-ES");
+    }
+
+    [Fact(DisplayName = "CMS with the pre-0.11 manifest OID is still read")]
+    public void CmsParse_LegacyManifestOid_IsStillRead()
+    {
+        using var cert = TestCertificateFactory.CreateSelfSignedCert();
+        var manifest = SignatureManifest.FromInfo(new AdvancedSignatureInfo
+        {
+            SignerName = "Legacy",
+            Cpf = "12345678901",
+            AuthMethod = AuthenticationMethod.TokenOtp,
+        });
+        var modern = CmsAttribute.SignatureManifestAttr(manifest.ToJsonUtf8());
+        var legacy = CmsAttribute.Raw(SimpleSign.Core.Constants.Oids.SignatureManifestLegacy, modern.DerValue);
+
+        var cms = CmsSignatureBuilder.Build("data"u8.ToArray(), cert, HashAlgorithmName.SHA256, extraAttributes: [legacy]);
+        var parsed = CmsParser.Parse(cms);
+
+        SignatureManifest.FromJsonUtf8(parsed.ManifestJson!)!.Signer.Name.ShouldBe("Legacy");
+    }
+
+    [Fact(DisplayName = "The manifest OID is outside the ITI arc (2.16.76)")]
+    public void SignatureManifestOid_IsNotInTheItiArc()
+    {
+        SimpleSign.Core.Constants.Oids.SignatureManifest.ShouldStartWith("2.25.");
+        SimpleSign.Core.Constants.Oids.SignatureManifest.ShouldNotStartWith("2.16.76.");
     }
 
     [Fact(DisplayName = "Full round-trip: sign with email+IP → inspect manifest")]

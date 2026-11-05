@@ -60,48 +60,23 @@ public sealed class IcpBrasilDetectionTests
         IcpBrasilChainValidator.IsIcpBrasilCertificate(cert).ShouldBeFalse();
     }
 
-    // ── DetectPolicy ─────────────────────────────────────────────────────────
-
-    [Theory(DisplayName = "DetectPolicy maps known OIDs to policy enum")]
-    [InlineData("2.16.76.1.7.1.1.2.3", IcpBrasilPolicy.AdRb)]
-    [InlineData("2.16.76.1.7.1.1.1.3", IcpBrasilPolicy.AdRb)]
-    [InlineData("2.16.76.1.7.1.2.2.3", IcpBrasilPolicy.AdRt)]
-    [InlineData("2.16.76.1.7.1.3.2.3", IcpBrasilPolicy.AdRv)]
-    [InlineData("2.16.76.1.7.1.4.2.3", IcpBrasilPolicy.AdRc)]
-    [InlineData("2.16.76.1.7.1.5.2.3", IcpBrasilPolicy.AdRa)]
-    public void DetectPolicy_KnownOid_ReturnsPolicy(string oid, IcpBrasilPolicy expected)
-    {
-        using var cert = CreateCertWithCertificatePolicy(oid);
-        IcpBrasilChainValidator.DetectPolicy(cert).ShouldBe(expected);
-    }
-
-    [Fact(DisplayName = "DetectPolicy returns null for cert without certificate policies extension")]
-    public void DetectPolicy_NoExtension_ReturnsNull()
-    {
-        using var cert = CreatePlainCert();
-        IcpBrasilChainValidator.DetectPolicy(cert).ShouldBeNull();
-    }
-
-    [Fact(DisplayName = "DetectPolicy returns null for cert with unknown policy OID")]
-    public void DetectPolicy_UnknownOid_ReturnsNull()
-    {
-        using var cert = CreateCertWithCertificatePolicy("2.16.76.1.7.1.99.99.99");
-        IcpBrasilChainValidator.DetectPolicy(cert).ShouldBeNull();
-    }
-
     // ── DetectCertificateLevel ───────────────────────────────────────────────
 
-    // The OID arc is 2.16.76.1.2.{level}.{type}; the byte after `60 4C 01 02` is the level:
-    // A1=01, A2=02, A3=03, A4=04, S1=0B, S2=0C, S3=0D, S4=0E.
-    [Theory(DisplayName = "DetectCertificateLevel maps level byte to enum")]
-    [InlineData("2.16.76.1.2.1.1.1", IcpBrasilCertificateLevel.A1)]
-    [InlineData("2.16.76.1.2.2.1.1", IcpBrasilCertificateLevel.A2)]
-    [InlineData("2.16.76.1.2.3.1.1", IcpBrasilCertificateLevel.A3)]
-    [InlineData("2.16.76.1.2.4.1.1", IcpBrasilCertificateLevel.A4)]
-    [InlineData("2.16.76.1.2.11.1.1", IcpBrasilCertificateLevel.S1)]
-    [InlineData("2.16.76.1.2.12.1.1", IcpBrasilCertificateLevel.S2)]
-    [InlineData("2.16.76.1.2.13.1.1", IcpBrasilCertificateLevel.S3)]
-    [InlineData("2.16.76.1.2.14.1.1", IcpBrasilCertificateLevel.S4)]
+    // The certificate policy OID is 2.16.76.1.2.{type}.{n} (ADE-ICP-04.01):
+    // A1–A4 = 1–4, S1–S4 = 101–104, T3/T4 = 303/304, A CF-e-SAT = 500, OM-BR = 550.
+    [Theory(DisplayName = "DetectCertificateLevel maps the policy type to the enum")]
+    [InlineData("2.16.76.1.2.1.135", IcpBrasilCertificateLevel.A1)]
+    [InlineData("2.16.76.1.2.2.1", IcpBrasilCertificateLevel.A2)]
+    [InlineData("2.16.76.1.2.3.126", IcpBrasilCertificateLevel.A3)]
+    [InlineData("2.16.76.1.2.4.53", IcpBrasilCertificateLevel.A4)]
+    [InlineData("2.16.76.1.2.101.16", IcpBrasilCertificateLevel.S1)]
+    [InlineData("2.16.76.1.2.102.1", IcpBrasilCertificateLevel.S2)]
+    [InlineData("2.16.76.1.2.103.14", IcpBrasilCertificateLevel.S3)]
+    [InlineData("2.16.76.1.2.104.1", IcpBrasilCertificateLevel.S4)]
+    [InlineData("2.16.76.1.2.303.9", IcpBrasilCertificateLevel.T3)]
+    [InlineData("2.16.76.1.2.304.9", IcpBrasilCertificateLevel.T4)]
+    [InlineData("2.16.76.1.2.500.2", IcpBrasilCertificateLevel.ACfeSat)]
+    [InlineData("2.16.76.1.2.550.4", IcpBrasilCertificateLevel.OmBr)]
     public void DetectCertificateLevel_KnownArc_ReturnsLevel(string oid, IcpBrasilCertificateLevel expected)
     {
         using var cert = CreateCertWithCertificatePolicy(oid);
@@ -122,11 +97,12 @@ public sealed class IcpBrasilDetectionTests
         IcpBrasilChainValidator.DetectCertificateLevel(cert).ShouldBeNull();
     }
 
-    [Fact(DisplayName = "DetectCertificateLevel returns null for unknown level byte (e.g. 0x05)")]
-    public void DetectCertificateLevel_UnknownLevelByte_ReturnsNull()
+    [Theory(DisplayName = "DetectCertificateLevel returns null for unknown types")]
+    [InlineData("2.16.76.1.2.5.1.1")]
+    [InlineData("2.16.76.1.2.11.1.1")] // the old, wrong S1 mapping
+    public void DetectCertificateLevel_UnknownType_ReturnsNull(string oid)
     {
-        // 2.16.76.1.2.5 → level byte 0x05 (not mapped to A1..A4 / S1..S4)
-        using var cert = CreateCertWithCertificatePolicy("2.16.76.1.2.5.1.1");
+        using var cert = CreateCertWithCertificatePolicy(oid);
         IcpBrasilChainValidator.DetectCertificateLevel(cert).ShouldBeNull();
     }
 
@@ -257,5 +233,12 @@ public sealed class IcpBrasilDetectionTests
             }
         }
         return CreateCertWithExtension(SubjectAltNameOid, w.Encode());
+    }
+
+    [Fact(DisplayName = "ExtractCpfCnpj extracts an alphanumeric CNPJ from SAN 2.16.76.1.3.3")]
+    public void ExtractCpfCnpj_AlphanumericCnpj_ReturnsCnpj()
+    {
+        using var cert = SanCertificates.Create(("2.16.76.1.3.3", "12abc34501de35"));
+        IcpBrasilChainValidator.ExtractCpfCnpj(cert).Cnpj.ShouldBe("12ABC34501DE35");
     }
 }

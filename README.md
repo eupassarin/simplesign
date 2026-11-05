@@ -611,7 +611,7 @@ services.AddSimpleSignBrasil(); // registers ICP-Brasil trust anchors (v4–v13)
 
 var validator = new IcpBrasilChainValidator();
 var result = await validator.ValidateAsync(certificate);
-// result.DetectedPolicy: AdRb, AdRt, AdRv, AdRc, AdRa
+// result.CertificateLevel: A1, A3, S1, T3…
 ```
 
 ### CPF / CNPJ Extraction
@@ -619,27 +619,28 @@ var result = await validator.ValidateAsync(certificate);
 ```csharp
 // CPF and CNPJ are automatically extracted from the certificate SAN
 Console.WriteLine(result.CpfFormatted);   // "123.456.789-09"
-Console.WriteLine(result.CnpjFormatted);  // "12.345.678/0001-90"
+Console.WriteLine(result.CnpjFormatted);  // "12.345.678/0001-90" or "12.ABC.345/01DE-35"
 ```
 
-### Health Professional Data (e-Prescriptions)
+### Professional Registrations (CRM, CRF, OAB…)
 
 ```csharp
-// CRM/CRO registration extracted from SAN (DOC-ICP-04)
-if (result.HealthProfessional is { } hp)
+// Read from the SAN arc 2.16.76.1.4.2.{council} (ADE-ICP-04.01)
+foreach (var r in result.ProfessionalRegistrations)
 {
-    Console.WriteLine($"Council: {hp.Council}");           // Crm / Cro
-    Console.WriteLine($"State:   {hp.StateCode}");         // "SP"
-    Console.WriteLine($"Number:  {hp.RegistrationNumber}"); // "SP123456"
+    Console.WriteLine($"Council: {r.Council}");            // Cfm, Cff, Cfo, Oab…
+    Console.WriteLine($"Number:  {r.RegistrationNumber}"); // "123456"
+    Console.WriteLine($"State:   {r.StateCode}");          // "SP"
 }
 ```
 
-### VALIDAR ITI Portal Link
+### QR Codes for the ITI VALIDAR Portal
 
 ```csharp
-// Generate a direct VALIDAR link for QR code embedding in a signed document
-string url = ValidarItiUrlBuilder.ForDocument("https://storage.example.com/doc.pdf");
-// → "https://validar.iti.gov.br/?document=https%3A%2F%2Fstorage..."
+// The QR code points to your URL; VALIDAR calls it with _format and _secretCode
+Uri qr = ValidarItiQrEndpoint.BuildQrCodeUrl(new Uri("https://clinic.example/rx/42"));
+var response = ValidarItiQrEndpoint.Respond(secretCodeFromRequest, document.SecretCode, [document.SignedPdfUrl]);
+// response.StatusCode: 200 (JSON with the signed files), 401 or 404
 ```
 
 ### Gov.br Validation

@@ -116,7 +116,7 @@ public sealed class CmsAttribute
 
     /// <summary>
     /// Creates a signature manifest attribute containing JSON-encoded evidence.
-    /// The data is embedded as an OCTET STRING (UTF-8 JSON) under OID 2.16.76.1.12.1.1.
+    /// The data is embedded as an OCTET STRING (UTF-8 JSON) under OID <see cref="SimpleSign.Core.Constants.Oids.SignatureManifest"/>.
     /// </summary>
     /// <param name="manifestJsonUtf8">UTF-8 encoded JSON bytes of the manifest.</param>
     public static CmsAttribute SignatureManifestAttr(byte[] manifestJsonUtf8)
