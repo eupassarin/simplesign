@@ -37,6 +37,12 @@ public sealed class IcpBrasilIntermediatesTests
                 continue;
             }
 
+            // Windows cannot verify EdDSA (Ed448: the OM-BR ACs under roots v6/v7) and throws.
+            if (OperatingSystem.IsWindows() && certificate.PublicKey.Oid.Value is "1.3.101.112" or "1.3.101.113")
+            {
+                continue;
+            }
+
             using var chain = new X509Chain();
             chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
             foreach (var root in roots)
@@ -86,6 +92,31 @@ public sealed class IcpBrasilIntermediatesTests
         certificate.Extensions.OfType<X509AuthorityKeyIdentifierExtension>().SingleOrDefault()?.KeyIdentifier is { } id
             ? Convert.ToHexString(id.Span)
             : null;
+
+    [Fact]
+    public async Task ValidateAsync_Ed448Chain_DoesNotThrow()
+    {
+        var omBr = IcpBrasilChainValidator.LoadBundledIntermediateCerts().First(c => c.PublicKey.Oid.Value == "1.3.101.113");
+        var offline = new HttpClient(new SimpleSign.TestHelpers.MockHttpHandler(_ =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable))));
+
+        var result = await new IcpBrasilChainValidator(offline).ValidateAsync(new ChainValidationContext
+        {
+            Certificate = omBr,
+            ValidationTime = omBr.NotBefore.AddDays(1),
+            CheckRevocation = false,
+        });
+
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows cannot verify Ed448: an invalid result with an explanation, not an exception.
+            result.Errors.ShouldNotBeEmpty();
+        }
+        else
+        {
+            result.IsChainValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        }
+    }
 
     [Fact]
     public void TrustAnchorProvider_ExposesIntermediates()

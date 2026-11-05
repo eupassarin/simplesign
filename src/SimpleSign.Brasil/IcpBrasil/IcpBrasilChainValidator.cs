@@ -265,6 +265,27 @@ public sealed class IcpBrasilChainValidator
                 Warnings = warnings.AsReadOnly()
             };
         }
+        catch (CryptographicException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Some platforms throw instead of reporting a chain status when a certificate in the
+            // path uses an algorithm they cannot verify (Windows and Ed448, used by the
+            // ICP-Brasil OM-BR hierarchy under roots v6/v7).
+            errors.Add($"The chain could not be built on this platform: {ex.Message}");
+            return new IcpBrasilValidationResult
+            {
+                IsChainValid = false,
+                IsIcpBrasilCertificate = isIcpBrasil,
+                CertificateLevel = certLevel,
+                Cpf = cpf,
+                Cnpj = cnpj,
+                ProfessionalRegistrations = registrations,
+                CertificateData = IcpBrasilCertificateData.FromCertificate(certificate, _logger),
+                ValidationTime = validationTime,
+                AcRaizCertificates = acRaizCerts.AsReadOnly(),
+                Errors = errors.AsReadOnly(),
+                Warnings = warnings.AsReadOnly(),
+            };
+        }
         finally
         {
             foreach (var c in aiaCerts)
@@ -741,8 +762,16 @@ public sealed class IcpBrasilChainValidator
             }
         }
 
-        chain.Build(certificate);
-        return chain;
+        try
+        {
+            chain.Build(certificate);
+            return chain;
+        }
+        catch
+        {
+            chain.Dispose();
+            throw;
+        }
     }
 
     private List<IcpBrasilChainElement> ProcessChainErrors(X509Chain chain, List<string> errors)
