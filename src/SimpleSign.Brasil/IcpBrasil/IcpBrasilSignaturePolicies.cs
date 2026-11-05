@@ -210,4 +210,101 @@ public static partial class IcpBrasilSignaturePolicies
             throw new ArgumentException("The document is not a DER-encoded ICP-Brasil signature policy.", nameof(policyDocument), ex);
         }
     }
+
+    /// <summary>
+    /// Reads an XML PA (the XAdES policies, <c>http://www.iti.gov.br/PA#</c>): its OID, the
+    /// <c>SignPolicyDigest</c> that XAdES signatures carry in <c>SigPolicyHash</c>, and its signing period.
+    /// </summary>
+    /// <param name="policyDocument">The XML PA.</param>
+    /// <param name="uri">The URI the PA was downloaded from.</param>
+    /// <exception cref="ArgumentException">The document is not an XML PA.</exception>
+    public static IcpBrasilSignaturePolicy FromXmlPolicyDocument(ReadOnlySpan<byte> policyDocument, string uri)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        string? oid = null;
+        string? digestAlgorithm = null;
+        string? digest = null;
+        DateTimeOffset? notBefore = null;
+        DateTimeOffset? notAfter = null;
+        try
+        {
+            using var stream = new MemoryStream(policyDocument.ToArray());
+            using var reader = System.Xml.XmlReader.Create(stream, new System.Xml.XmlReaderSettings
+            {
+                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                XmlResolver = null,
+            });
+            bool positioned = false;
+            bool inPeriod = false;
+            while (positioned || reader.Read())
+            {
+                positioned = false;
+                if (reader.NodeType == System.Xml.XmlNodeType.EndElement && reader.LocalName == "SigningPeriod")
+                {
+                    inPeriod = false;
+                }
+
+                if (reader.NodeType != System.Xml.XmlNodeType.Element)
+                {
+                    continue;
+                }
+
+                switch (reader.LocalName)
+                {
+                    case "SignPolicyDigestAlg":
+                        digestAlgorithm = reader.GetAttribute("Algorithm");
+                        break;
+                    case "Identifier" when oid is null:
+                        oid = reader.ReadElementContentAsString().Trim();
+                        positioned = true;
+                        if (oid.StartsWith("urn:oid:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            oid = oid[8..];
+                        }
+
+                        break;
+                    case "SigningPeriod" when !reader.IsEmptyElement:
+                        inPeriod = true;
+                        break;
+                    case "NotBefore" when inPeriod && notBefore is null:
+                        notBefore = ParseXmlTime(reader.ReadElementContentAsString());
+                        positioned = true;
+                        break;
+                    case "NotAfter" when inPeriod && notAfter is null:
+                        notAfter = ParseXmlTime(reader.ReadElementContentAsString());
+                        positioned = true;
+                        break;
+                    case "SignPolicyDigest":
+                        digest = reader.ReadElementContentAsString().Trim();
+                        positioned = true;
+                        break;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.Xml.XmlException or FormatException)
+        {
+            throw new ArgumentException("The document is not an ICP-Brasil XML signature policy.", nameof(policyDocument), ex);
+        }
+
+        if (oid is null || digest is null || notBefore is null || !IcpBrasilPolicyInfo.TryParse(oid, out _))
+        {
+            throw new ArgumentException("The document is not an ICP-Brasil XML signature policy.", nameof(policyDocument));
+        }
+
+        return new IcpBrasilSignaturePolicy(
+            oid, uri, XmlDigestOid(digestAlgorithm), Convert.ToHexString(Convert.FromBase64String(digest)),
+            notBefore.Value, notAfter ?? DateTimeOffset.MaxValue, null);
+    }
+
+    internal static DateTimeOffset ParseXmlTime(string text) =>
+        DateTimeOffset.Parse(text.Trim(), System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
+
+    internal static string XmlDigestOid(string? algorithmUri) => algorithmUri switch
+    {
+        "http://www.w3.org/2000/09/xmldsig#sha1" => SimpleSign.Core.Constants.Oids.Sha1,
+        "http://www.w3.org/2001/04/xmldsig-more#sha384" => SimpleSign.Core.Constants.Oids.Sha384,
+        "http://www.w3.org/2001/04/xmlenc#sha512" => SimpleSign.Core.Constants.Oids.Sha512,
+        _ => SimpleSign.Core.Constants.Oids.Sha256,
+    };
 }

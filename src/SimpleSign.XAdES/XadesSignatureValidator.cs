@@ -286,6 +286,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             SignerCertificate = signerCert,
             SigningTime = extraction.SigningTime,
             SignaturePolicy = ReadSignaturePolicy(sigElement, ns),
+            HasValidCompleteReferences = ValidateCompleteReferences(sigElement, ns, warnings),
+            HasValidSigAndRefsTimeStamp = ValidateSigAndRefsTimeStamp(sigElement, ns, warnings),
             DetectedLevel = detectedLevel,
             Errors = errors,
             Warnings = warnings
@@ -736,7 +738,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                 }
 
                 var signingCert = signedProps.SelectSingleNode(
-                    "xades:SignedSignatureProperties/xades:SigningCertificateV2", ns);
+                    "xades:SignedSignatureProperties/xades:SigningCertificateV2 | xades:SignedSignatureProperties/xades:SigningCertificate", ns);
 
                 if (signingCert is not null && signerCert is null)
                 {
@@ -772,7 +774,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                                     // S2221: intentional -- validation pipeline converts exceptions to error messages
                                     catch (Exception ex)
                                     {
-                                        warnings.Add($"Failed to load certificate from SigningCertificateV2: {ex.Message}");
+                                        warnings.Add($"Failed to load certificate from {signingCert.LocalName}: {ex.Message}");
                                     }
                                     break;
                                 }
@@ -862,6 +864,41 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             XmlDSigUrls.EcdsaSha512 => HashAlgorithmName.SHA512,
             _ => default
         };
+    }
+
+    private const string UnsignedSignatureProperties =
+        "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties/";
+
+    private static bool? ValidateCompleteReferences(XmlElement sigElement, XmlNamespaceManager ns, List<string> warnings) =>
+        sigElement.SelectSingleNode(UnsignedSignatureProperties + "xades:CompleteCertificateRefs", ns) is null
+            && sigElement.SelectSingleNode(UnsignedSignatureProperties + "xades:CompleteRevocationRefs", ns) is null
+            ? null
+            : XadesSignatureBuilder.ValidateCompleteReferences(sigElement, ns, warnings);
+
+    private static bool? ValidateSigAndRefsTimeStamp(XmlElement sigElement, XmlNamespaceManager ns, List<string> warnings)
+    {
+        if (sigElement.SelectSingleNode(UnsignedSignatureProperties + "xades:SigAndRefsTimeStamp/xades:EncapsulatedTimeStamp", ns) is not XmlElement encapsulated)
+        {
+            return null;
+        }
+
+        try
+        {
+            byte[] token = DecodeBase64(encapsulated);
+            byte[] input = XadesSignatureBuilder.CreateSigAndRefsTimeStampInput(sigElement, ns);
+            var check = TimestampToken.Verify(token, input);
+            if (!check.IsValid)
+            {
+                warnings.Add("XAdES-X: SigAndRefsTimeStamp is invalid: " + string.Join("; ", check.Errors));
+            }
+
+            return check.IsValid;
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidOperationException or CryptographicException)
+        {
+            warnings.Add($"XAdES-X: SigAndRefsTimeStamp could not be checked: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>Reads SignedSignatureProperties/SignaturePolicyIdentifier/SignaturePolicyId, if any.</summary>

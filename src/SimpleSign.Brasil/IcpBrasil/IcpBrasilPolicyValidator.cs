@@ -57,7 +57,7 @@ public static class IcpBrasilPolicyValidator
     /// <param name="signature">The parsed CMS signature.</param>
     /// <param name="signingTime">The signing time: the signature timestamp time when there is one.</param>
     /// <param name="expectedFormat">The container format, when known.</param>
-    /// <param name="signerRoot">The root certificate of the signer's chain (see <see cref="IcpBrasilChainValidator.FindBundledRoot"/>); null skips the root check.</param>
+    /// <param name="signerRoot">The root certificate of the signer's chain (see <see cref="IcpBrasilChainValidator.FindBundledRoot(System.Security.Cryptography.X509Certificates.X509Certificate2, IEnumerable{System.Security.Cryptography.X509Certificates.X509Certificate2})"/>); null skips the root check.</param>
     public static IcpBrasilPolicyValidationResult Validate(
         CmsSignedData signature, DateTimeOffset signingTime, IcpBrasilPolicyFormat? expectedFormat, X509Certificate2? signerRoot)
     {
@@ -71,9 +71,9 @@ public static class IcpBrasilPolicyValidator
     /// Validates a signature policy reference read from a signature in another format, such as a
     /// XAdES SignaturePolicyIdentifier (<c>XadesValidationResult.SignaturePolicy</c>): the
     /// SigPolicyHash matches the PA, the policy could be used at the signing time and AD-RT and
-    /// above carry a signature timestamp. The CMS attribute and algorithm rules of the PA are not
-    /// checked; the accepted roots are, when <paramref name="signerRoot"/> is given and the rules
-    /// of the policy are known (the embedded rules cover the CAdES and PAdES PAs, not the XML ones).
+    /// above carry a signature timestamp. The attribute and algorithm rules of the PA are not
+    /// checked here (SimpleSign.Brasil.Xades checks them for XAdES); the accepted roots are, when
+    /// <paramref name="signerRoot"/> is given.
     /// </summary>
     /// <param name="reference">The policy reference; null yields <see cref="IcpBrasilPolicyStatus.None"/>.</param>
     /// <param name="signingTime">The signing time: the signature timestamp time when there is one.</param>

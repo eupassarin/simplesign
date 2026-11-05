@@ -41,6 +41,8 @@ internal sealed record XadesSigningOptions(
     string? DataUri,
     CommitmentType? CommitmentType,
     SignaturePolicyReference? SignaturePolicy,
+    XadesSigningCertificateForm SigningCertificateForm,
+    XadesExtendedForm ExtendedForm,
     IReadOnlyList<string>? SignerRoles,
     DataObjectFormat? DataObjectFormat,
     string? OperationId,

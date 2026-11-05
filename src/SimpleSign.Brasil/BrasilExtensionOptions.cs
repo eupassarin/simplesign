@@ -22,4 +22,11 @@ public sealed class BrasilExtensionOptions
     /// ICP-Brasil LCRs reach several megabytes; set this on servers and CLIs. Null = memory only.
     /// </summary>
     public string? CrlCacheDirectory { get; init; }
+
+    /// <summary>
+    /// Which ICP-Brasil hierarchy to trust. <see cref="IcpBrasil.IcpBrasilEnvironment.Homologation"/>
+    /// also accepts test certificates from the homologation hierarchy (reported with
+    /// <c>BR.Environment = Homologation</c> and never as qualified). Default: production only.
+    /// </summary>
+    public IcpBrasil.IcpBrasilEnvironment IcpEnvironment { get; init; }
 }

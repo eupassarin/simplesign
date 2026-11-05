@@ -31,6 +31,18 @@ public sealed class XadesValidationResult
     /// <summary>The ArchiveTimeStamp token's cryptographic integrity and archive coverage are valid, independent of TSA trust.</summary>
     public bool? HasValidArchiveTimeStamp { get; init; }
 
+    /// <summary>
+    /// The SigAndRefsTimeStamp (XAdES-X) token is intact and covers the signature value, the
+    /// signature timestamp and the complete references; null when there is none.
+    /// </summary>
+    public bool? HasValidSigAndRefsTimeStamp { get; init; }
+
+    /// <summary>
+    /// CompleteCertificateRefs and CompleteRevocationRefs (XAdES-C) are present and every digest
+    /// matches a certificate or revocation value in the signature; null when there are none.
+    /// </summary>
+    public bool? HasValidCompleteReferences { get; init; }
+
     /// <summary>The signer certificate.</summary>
     public X509Certificate2? SignerCertificate { get; init; }
 

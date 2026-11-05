@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using SimpleSign.Brasil;
+using SimpleSign.Brasil.IcpBrasil;
 using SimpleSign.Brasil.Signing;
 using SimpleSign.Cli.Json;
 using SimpleSign.Cli.Rendering;
@@ -72,6 +73,11 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         [Description("Skip CRL/OCSP revocation checks")]
         public bool NoRevocation { get; init; }
 
+        /// <summary>Also trust the ICP-Brasil homologation (test) hierarchy.</summary>
+        [CommandOption("--icp-homologation")]
+        [Description("Also trust the ICP-Brasil homologation (test) hierarchy; test certificates are reported as such")]
+        public bool IcpHomologation { get; init; }
+
         /// <summary>Output as JSON (machine-readable).</summary>
         [CommandOption("--json")]
         [Description("Output as JSON (machine-readable)")]
@@ -117,7 +123,12 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             integrityVerifier: _integrityVerifier,
             cmsParser: _cmsParser,
             timestampValidator: _timestampValidator,
-            chainValidationProviders: new BrasilExtension(_httpClientProvider.GetClient(), logger).ChainValidationProviders);
+            chainValidationProviders: new BrasilExtension(new BrasilExtensionOptions
+            {
+                HttpClient = _httpClientProvider.GetClient(),
+                Logger = logger,
+                IcpEnvironment = settings.IcpHomologation ? IcpBrasilEnvironment.Homologation : IcpBrasilEnvironment.Production,
+            }).ChainValidationProviders);
 
         await using var stream = File.OpenRead(settings.InputPath);
         var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);

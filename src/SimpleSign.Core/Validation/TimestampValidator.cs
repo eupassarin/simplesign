@@ -85,6 +85,43 @@ public static class TimestampValidator
         };
     }
 
+    /// <summary>The certificates carried in a timestamp token, the TSA signer first when it was found; empty when unreadable.</summary>
+    internal static IReadOnlyList<X509Certificate2> ReadTokenCertificates(byte[] timestampToken)
+    {
+        try
+        {
+            return ExtractTsaCertificatesAndSigner(timestampToken).Certificates;
+        }
+        catch (Exception ex) when (ex is AsnContentException or CryptographicException or InvalidOperationException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>The messageImprint (hash algorithm OID and hash) of an RFC 3161 token, or null when unreadable.</summary>
+    internal static (string HashOid, byte[] Hash)? ReadMessageImprint(byte[] timestampToken)
+    {
+        try
+        {
+            byte[]? tstInfoBytes = ExtractTstInfo(timestampToken);
+            if (tstInfoBytes is null)
+            {
+                return null;
+            }
+
+            var tstInfo = new AsnReader(tstInfoBytes, AsnEncodingRules.BER).ReadSequence();
+            _ = tstInfo.ReadInteger();
+            _ = tstInfo.ReadObjectIdentifier();
+            var imprint = tstInfo.ReadSequence();
+            string oid = imprint.ReadSequence().ReadObjectIdentifier();
+            return (oid, imprint.ReadOctetString());
+        }
+        catch (Exception ex) when (ex is AsnContentException or CryptographicException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Reads the genTime of an RFC 3161 token, without verifying it.</summary>
     /// <param name="timestampToken">DER-encoded RFC 3161 timestamp token.</param>
     /// <returns>The genTime, or null when the token cannot be parsed.</returns>
@@ -562,7 +599,7 @@ public static class TimestampValidator
         return true;
     }
 
-    private static bool HasTimestampingEku(X509Certificate2? certificate, List<string> errors)
+    internal static bool HasTimestampingEku(X509Certificate2? certificate, List<string> errors)
     {
         var eku = certificate?.Extensions.OfType<X509EnhancedKeyUsageExtension>().FirstOrDefault();
         if (eku is not null && eku.Critical && eku.EnhancedKeyUsages.Count == 1
