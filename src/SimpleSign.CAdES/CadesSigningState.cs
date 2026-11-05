@@ -43,4 +43,8 @@ internal sealed record CadesSigningOptions(
     string? SignaturePolicyOid,
     string? SignaturePolicyUri,
     CadesContentType ContentType,
-    CadesDependencies Dependencies);
+    CadesDependencies Dependencies)
+{
+    /// <summary>A signature policy with its hash; takes precedence over <see cref="SignaturePolicyOid"/>.</summary>
+    public SignaturePolicyReference? SignaturePolicy { get; init; }
+}

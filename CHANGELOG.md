@@ -25,6 +25,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **VALIDAR:** `ValidarItiUrlBuilder.ForDocument` is obsolete (`?document=` is not a VALIDAR
   parameter). New `ValidarItiQrEndpoint` implements the documented QR protocol
   (`_format`, `_secretCode`, JSON with the signed files, 401/404).
+- **Chain validation time and revocation:** the ICP-Brasil and Gov.br providers validate at the
+  trusted signature timestamp time and check LCRs/OCSP (embedded in the DSS first, then online) for
+  the certificate and every AC, instead of the OS check at the current time that treated unknown
+  revocation as success. B-LT/B-LTA signatures stay valid after the certificate expires. Results
+  report `RevocationStatus` and `ValidationTime`; the Certisign/ITI "verify manually" links are gone.
+- **Gov.br anchors:** only the AC Raiz is a trust anchor; the intermediate ACs are chain-building help.
+- **Duplicate policy attribute:** `WithAdvancedSignature` with a `PolicyOid` wrote the
+  signature-policy-identifier twice; signed attributes are now unique per type.
+
+### Added (SimpleSign.Brasil)
+
+- **ICP-Brasil signature policies with hash:** `IcpBrasilSignaturePolicies` embeds the ITI's
+  LPA_PAdES and LPA_CAdES (55 policies: OID, PA URI, signPolicyHash, signing period, revocation);
+  `Current(policy, format)` picks the version in force (PAdES AD-RB/AD-RT v1.3, CAdES v2.4).
+  `PadesSignerBuilder.WithIcpBrasilPolicy(AdRb | AdRt, tsa?)` signs under them; previously the
+  signature-policy-identifier carried an empty hash.
+- `IcpBrasilPolicyValidator`: checks sigPolicyHash, signing period/revocation and the timestamp
+  AD-RT requires; the ICP-Brasil provider reports `BR.SignaturePolicy`/`BR.SignaturePolicyStatus`.
+- `WithHealthDocument(type, registrations…)`: VALIDAR health-document OIDs (document type, CFM/CFF/CFO
+  registration and UF) in the PDF document information dictionary.
+- `Cpf` / `Cnpj`: public `IsValid`, `Format`, `Normalize` (and `Cpf.Mask`), alphanumeric CNPJ included.
+- `IcpBrasilRoots`: bundled roots, `ExpiringWithin`, `DownloadAsync`/`FromPinnedBytes` (SHA-256
+  pinned) for new AC Raiz versions; `IcpBrasilChainValidator.AdditionalTrustAnchors` and
+  `new BrasilExtension(httpClient, logger, additionalIcpRoots)`.
+- CLI: `sign --icp-policy ad-rb|ad-rt`, `--health-document`, `--registration COUNCIL:NUMBER/UF`;
+  `validate`/`validate-dir` run the ICP-Brasil and Gov.br providers and print the Lei 14.063 level,
+  certificate data, policy status and revocation status (`--json`: `lei14063`, `brasil`).
+- Core/PAdES/CAdES: `SignaturePolicyReference`, `CmsAttribute.SignaturePolicyIdentifier(reference)`,
+  `CmsAttribute.ReadSignaturePolicy`, `PadesSignerBuilder.WithSignaturePolicy(reference)`,
+  `CadesSignerBuilder.WithSignaturePolicy(reference)`, `PadesSignerBuilder.WithDocumentInfo(key, value)`.
+
+- `IChainValidationProvider.ValidateAsync(ChainValidationContext, CancellationToken)`: providers
+  receive the validation time, the embedded CRLs/OCSP responses and the parsed signature. Default
+  implementation delegates to the existing overloads. `ChainValidationResult.RevocationStatus`,
+  `TimestampTokenValidationResult.GenTime`, `TimestampValidator.ReadGenTime`,
+  `ITrustAnchorProvider.GetIntermediateCertificates()`.
+- `Lei14063.Classify(result, manifestJson?)`: simples / avançada / qualificada (art. 4); the providers
+  also fill `ChainValidationMetadata["BR.Lei14063"]`.
+- `IcpBrasilCertificateData`: all DOC-ICP-04 SubjectAltName fields (PF birth date, CPF, NIS, RG,
+  voter registration, CEI; PJ responsible name and CPF, CNPJ, company name). Gov.br CPF extraction
+  shares the same parser.
 
 ### Added
 

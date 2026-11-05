@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
+using SimpleSign.Brasil.IcpBrasil;
 using SimpleSign.Brasil.Signing;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Crypto;
@@ -297,6 +298,21 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Signature policy URI for AEA")]
         public string? PolicyUri { get; init; }
 
+        /// <summary>ICP-Brasil signature policy: ad-rb or ad-rt.</summary>
+        [CommandOption("--icp-policy <POLICY>")]
+        [Description("ICP-Brasil signature policy with its LPA hash: ad-rb or ad-rt (ad-rt requires --tsa)")]
+        public string? IcpPolicy { get; init; }
+
+        /// <summary>VALIDAR health document type.</summary>
+        [CommandOption("--health-document <TYPE>")]
+        [Description("Health document for VALIDAR: prescricao, atestado, exame or relatorio (requires --registration)")]
+        public string? HealthDocument { get; init; }
+
+        /// <summary>Professional registrations, COUNCIL:NUMBER/UF.</summary>
+        [CommandOption("--registration <COUNCIL:NUMBER/UF>")]
+        [Description("Professional registration for --health-document, e.g. crm:123456/SP (repeatable)")]
+        public string[]? Registrations { get; init; }
+
         public override ValidationResult Validate()
         {
             bool hasCertPath = !string.IsNullOrWhiteSpace(CertPath);
@@ -380,6 +396,56 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             if (SignatureAlgorithm is not null && SignCommandOptions.ParseSignatureAlgorithm(SignatureAlgorithm) is null)
             {
                 return ValidationResult.Error("--signature-algorithm must be rsa-pkcs1 or rsassa-pss.");
+            }
+
+            if (IcpPolicy is not null)
+            {
+                var policy = IcpBrasilCliOptions.ParsePolicy(IcpPolicy);
+                if (policy is null)
+                {
+                    return ValidationResult.Error("--icp-policy must be ad-rb or ad-rt.");
+                }
+
+                if (policy == IcpBrasilPolicy.AdRt && string.IsNullOrWhiteSpace(TsaUrl))
+                {
+                    return ValidationResult.Error("--icp-policy ad-rt requires --tsa (an ICP-Brasil ACT).");
+                }
+
+                if (SubFilter is not null && SignCommandOptions.ParseSubFilter(SubFilter) != PdfSignatureSubFilter.EtsiCadesDetached)
+                {
+                    return ValidationResult.Error("--icp-policy requires the etsi-cades-detached sub-filter.");
+                }
+
+                if (PolicyOid is not null)
+                {
+                    return ValidationResult.Error("--icp-policy and --policy-oid are mutually exclusive.");
+                }
+            }
+
+            if (HealthDocument is not null)
+            {
+                if (IcpBrasilCliOptions.ParseHealthDocument(HealthDocument) is null)
+                {
+                    return ValidationResult.Error("--health-document must be prescricao, atestado, exame or relatorio.");
+                }
+
+                if (Registrations is not { Length: > 0 })
+                {
+                    return ValidationResult.Error("--health-document requires at least one --registration (e.g. crm:123456/SP).");
+                }
+
+                if (ExistingField is not null)
+                {
+                    return ValidationResult.Error("--health-document cannot be used with --existing-field.");
+                }
+            }
+
+            foreach (var registration in Registrations ?? [])
+            {
+                if (IcpBrasilCliOptions.ParseRegistration(registration) is null)
+                {
+                    return ValidationResult.Error($"--registration '{registration}' must be COUNCIL:NUMBER/UF, e.g. crm:123456/SP.");
+                }
             }
 
             if (FontSize.HasValue && (FontSize < 1 || FontSize > 72))
@@ -711,6 +777,22 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                     if (settings.PdfA)
                     {
                         builder = builder.WithPdfAPreservation();
+                    }
+
+                    // ICP-Brasil policy: sub-filter and policy hash only; the level comes from --tsa/--ltv.
+                    if (IcpBrasilCliOptions.ParsePolicy(settings.IcpPolicy) is { } icpPolicy)
+                    {
+                        builder = builder
+                            .WithSubFilter(PdfSignatureSubFilter.EtsiCadesDetached)
+                            .WithSignaturePolicy(IcpBrasilSignaturePolicies
+                                .Current(icpPolicy, IcpBrasilPolicyFormat.Pades).ToReference());
+                    }
+
+                    if (IcpBrasilCliOptions.ParseHealthDocument(settings.HealthDocument) is { } healthDocument)
+                    {
+                        builder = builder.WithHealthDocument(
+                            healthDocument,
+                            [.. (settings.Registrations ?? []).Select(r => IcpBrasilCliOptions.ParseRegistration(r)!)]);
                     }
 
                     var result = await builder.SignWithDetailsAsync();

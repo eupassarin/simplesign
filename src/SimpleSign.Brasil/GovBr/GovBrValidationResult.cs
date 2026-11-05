@@ -13,6 +13,12 @@ public sealed class GovBrValidationResult
     /// <summary>CPF extracted from the SAN field (OID 2.16.76.1.3.1), if available.</summary>
     public string? Cpf { get; init; }
 
+    /// <summary>The time the chain was validated at (the signature timestamp time, or the time of validation).</summary>
+    public DateTimeOffset ValidationTime { get; init; }
+
+    /// <summary>The revocation status of the certificate and its CAs at <see cref="ValidationTime"/>.</summary>
+    public SimpleSign.Core.Extensions.ChainRevocationStatus RevocationStatus { get; init; }
+
     /// <summary>Certificate chain elements with individual validation results.</summary>
     public IReadOnlyList<GovBrChainElement> ChainElements { get; init; } = [];
     /// <summary>Validation errors found during chain validation.</summary>

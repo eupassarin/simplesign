@@ -336,6 +336,43 @@ public sealed class PadesSignerBuilder
     }
 
     /// <summary>
+    /// Sets the signature policy, with its hash, as the signature-policy-identifier signed
+    /// attribute (ETSI EN 319 122-1 §5.2.9) — e.g. an ICP-Brasil AD-RB/AD-RT policy.
+    /// </summary>
+    /// <param name="policy">The policy OID, hash and optional URI.</param>
+    /// <returns>A new builder with the signature policy configured.</returns>
+    public PadesSignerBuilder WithSignaturePolicy(SignaturePolicyReference policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        return With(_options with { SignaturePolicy = policy });
+    }
+
+    /// <summary>
+    /// Sets an entry of the PDF document information dictionary (ISO 32000-1 §14.3.3) in the
+    /// signing revision, so the signature covers it. Existing entries are kept; a key set
+    /// twice keeps the last value. Not supported when signing an existing field.
+    /// </summary>
+    /// <param name="key">The key, without the leading slash (e.g. <c>Title</c>, or an OID).</param>
+    /// <param name="value">The text value.</param>
+    /// <returns>A new builder with the entry configured.</returns>
+    /// <exception cref="ArgumentException">The key is empty or not a valid PDF name.</exception>
+    public PadesSignerBuilder WithDocumentInfo(string key, string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(value);
+        if (key.Any(c => c <= ' ' || c > '~' || "()<>[]{}/%#".Contains(c, StringComparison.Ordinal)))
+        {
+            throw new ArgumentException("The key must be printable ASCII without PDF delimiters.", nameof(key));
+        }
+
+        var info = new Dictionary<string, string>(_options.DocumentInfo ?? new Dictionary<string, string>(), StringComparer.Ordinal)
+        {
+            [key] = value,
+        };
+        return With(_options with { DocumentInfo = info });
+    }
+
+    /// <summary>
     /// Adds a visual appearance (stamp) to the signature on a specific page.
     /// The stamp displays the signer name, date/time, and other configured metadata.
     /// </summary>
@@ -892,8 +929,8 @@ public sealed class PadesSignerBuilder
         }
 
         var prepareResult = await PdfSignatureWriter.PrepareAsync(
-            _inputPdf, outputStream, _options.Field, _options.Dependencies.Logger, pdfALevel: pdfALevel,
-            signingTime: _options.SigningTime, cancellationToken: cancellationToken).ConfigureAwait(false);
+            _inputPdf, outputStream, _options.Field, _options.Dependencies.Logger, pdfALevel,
+            _options.SigningTime, _options.DocumentInfo, cancellationToken).ConfigureAwait(false);
 
         var signedBytes = await PdfStructureReader.ReadSignedBytesAsync(
             outputStream, prepareResult.ByteRange, logger: _options.Dependencies.Logger, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -981,11 +1018,11 @@ public sealed class PadesSignerBuilder
 
     private IReadOnlyList<CmsAttribute>? BuildExtraAttributes()
     {
-        List<CmsAttribute>? extraAttributes = null;
+        var extraAttributes = new List<CmsAttribute>();
         if (_options.Metadata is not null)
         {
-            extraAttributes = [CmsAttribute.CommitmentTypeIndication(_options.Metadata.CommitmentType)];
-            if (_options.Metadata.PolicyOid is not null)
+            extraAttributes.Add(CmsAttribute.CommitmentTypeIndication(_options.Metadata.CommitmentType));
+            if (_options.Metadata.PolicyOid is not null && _options.SignaturePolicy is null)
             {
                 extraAttributes.Add(CmsAttribute.SignaturePolicyIdentifier(
                     _options.Metadata.PolicyOid, _options.Metadata.PolicyUri));
@@ -996,7 +1033,17 @@ public sealed class PadesSignerBuilder
             }
         }
 
-        return extraAttributes;
+        if (_options.SignaturePolicy is not null)
+        {
+            extraAttributes.Add(CmsAttribute.SignaturePolicyIdentifier(_options.SignaturePolicy));
+        }
+
+        // A signed attribute may appear once (RFC 5652 §5.3): the last one of a type wins.
+        var distinct = extraAttributes
+            .GroupBy(a => a.Oid, StringComparer.Ordinal)
+            .Select(g => g.Last())
+            .ToList();
+        return distinct.Count > 0 ? distinct : null;
     }
 
     private async Task<byte[]?> ApplyTimestampAsync(

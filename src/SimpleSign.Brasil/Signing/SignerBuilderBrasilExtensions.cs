@@ -27,12 +27,8 @@ public static class SignerBuilderBrasilExtensions
         var manifest = SignatureManifest.FromInfo(info);
         var manifestAttr = CmsAttribute.SignatureManifestAttr(manifest.ToJsonUtf8());
 
-        // Build extra CMS attributes list
+        // Extra CMS attributes (the policy comes from PolicyOid/PolicyUri below, once)
         var extraAttributes = new List<CmsAttribute> { manifestAttr };
-        if (info.PolicyOid is not null)
-        {
-            extraAttributes.Add(CmsAttribute.SignaturePolicyIdentifier(info.PolicyOid, info.PolicyUri));
-        }
 
         // Map to generic SignatureMetadata
         var metadata = new SignatureMetadata

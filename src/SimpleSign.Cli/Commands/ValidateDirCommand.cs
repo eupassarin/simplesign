@@ -133,7 +133,8 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
             cryptoVerifier: _cryptoVerifier,
             integrityVerifier: _integrityVerifier,
             cmsParser: _cmsParser,
-            timestampValidator: _timestampValidator);
+            timestampValidator: _timestampValidator,
+            chainValidationProviders: new SimpleSign.Brasil.BrasilExtension(_httpClientProvider.GetClient(), null).ChainValidationProviders);
         var bulk = new BulkValidator(validator, maxConcurrency: settings.Concurrency,
             logger: loggerFactory?.CreateLogger("SimpleSign.BulkValidation"));
 

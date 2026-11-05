@@ -37,7 +37,21 @@ internal sealed class ValidateSignatureDto
     public bool Chain { get; init; }
     public bool? Revoked { get; init; }
     public DateTimeOffset? SigningTime { get; init; }
+    public string? Lei14063 { get; init; }
+    public ValidateBrasilDto? Brasil { get; init; }
     public List<string> Errors { get; init; } = [];
+}
+
+internal sealed class ValidateBrasilDto
+{
+    public string? Hierarchy { get; init; }
+    public string? CertificateType { get; init; }
+    public string? SignerId { get; init; }
+    public string? SignerIdType { get; init; }
+    public string? SignaturePolicy { get; init; }
+    public string? SignaturePolicyStatus { get; init; }
+    public string? RevocationStatus { get; init; }
+    public Dictionary<string, string> Registrations { get; init; } = [];
 }
 
 // ─── Inspect DTOs ────────────────────────────────────────────────────

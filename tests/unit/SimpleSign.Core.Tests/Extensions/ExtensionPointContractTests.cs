@@ -58,7 +58,7 @@ public sealed class ChainValidationProviderContractTests
     public async Task CanValidate_KnownCert_ReturnsTrue()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var mock = new Mock<IChainValidationProvider>();
+        var mock = new Mock<IChainValidationProvider> { CallBase = true };
         mock.Setup(x => x.RegionCode).Returns("BR");
         mock.Setup(x => x.CanValidate(cert)).Returns(true);
         mock.Setup(x => x.ValidateAsync(cert, null)).ReturnsAsync(new ChainValidationResult
@@ -78,7 +78,7 @@ public sealed class ChainValidationProviderContractTests
     public void CanValidate_UnknownCert_ReturnsFalse()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var mock = new Mock<IChainValidationProvider>();
+        var mock = new Mock<IChainValidationProvider> { CallBase = true };
         mock.Setup(x => x.CanValidate(cert)).Returns(false);
 
         mock.Object.CanValidate(cert).ShouldBeFalse();
@@ -88,7 +88,7 @@ public sealed class ChainValidationProviderContractTests
     public async Task Validate_NullChain_Succeeds()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();
-        var mock = new Mock<IChainValidationProvider>();
+        var mock = new Mock<IChainValidationProvider> { CallBase = true };
         mock.Setup(x => x.ValidateAsync(cert, null)).ReturnsAsync(new ChainValidationResult
         {
             IsTrusted = false,
@@ -116,7 +116,7 @@ public sealed class CountryExtensionContractTests
         trustAnchor.Setup(x => x.DisplayName).Returns("Test Anchors");
         trustAnchor.Setup(x => x.GetTrustAnchors()).Returns(new List<X509Certificate2> { cert });
 
-        var chainValidator = new Mock<IChainValidationProvider>();
+        var chainValidator = new Mock<IChainValidationProvider> { CallBase = true };
         chainValidator.Setup(x => x.RegionCode).Returns("TS");
 
         var extension = new Mock<ICountryExtension>();

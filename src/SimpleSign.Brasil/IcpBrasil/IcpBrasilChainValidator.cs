@@ -5,7 +5,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core;
 using SimpleSign.Core.Constants;
+using SimpleSign.Brasil.Revocation;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Validation;
 
@@ -34,9 +36,6 @@ public sealed class IcpBrasilChainValidator
         "SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv12.crt",
         "SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv13.crt",
     ];
-
-    // Extra URLs (future versions not bundled) — used as online fallback
-    private static readonly string[] ExtraAcRaizCertUrls = [];
 
     // CMS (CAdES) signature policy OIDs, 2.16.76.1.7.1.{policy}.{major}.{minor} (ADE-ICP-04.01).
     // These identify signature policies, which travel in a signature's signature-policy-identifier
@@ -94,6 +93,16 @@ public sealed class IcpBrasilChainValidator
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly ICertificateChainService _certChainService;
+    private readonly ChainRevocationChecker _revocationChecker;
+
+    /// <summary>Test hook: roots to trust instead of the bundled AC Raiz certificates.</summary>
+    internal IReadOnlyList<X509Certificate2>? TrustAnchorsOverride { get; init; }
+
+    /// <summary>
+    /// AC Raiz certificates to trust in addition to the bundled v4–v13 — e.g. a new root version
+    /// obtained with <see cref="IcpBrasilRoots.DownloadAsync"/>.
+    /// </summary>
+    public IReadOnlyList<X509Certificate2> AdditionalTrustAnchors { get; init; } = [];
 
     /// <param name="httpClient">
     /// <see cref="HttpClient"/> instance for AIA downloads and OCSP/CRL fetch.
@@ -106,6 +115,7 @@ public sealed class IcpBrasilChainValidator
         _httpClient = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _logger = logger ?? NullLogger.Instance;
         _certChainService = certChainService ?? new CertificateChainService();
+        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger);
     }
 
     /// <summary>
@@ -118,20 +128,43 @@ public sealed class IcpBrasilChainValidator
         _httpClient = httpClientProvider.GetClient();
         _logger = logger ?? NullLogger.Instance;
         _certChainService = certChainService ?? new CertificateChainService();
+        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger);
     }
 
     /// <summary>
-    /// Checks whether the certificate belongs to the ICP-Brasil chain and validates up to the AC Raiz.
-    /// Automatically downloads root certificates from the ITI repository.
+    /// Checks whether the certificate belongs to the ICP-Brasil chain and validates it up to the
+    /// AC Raiz at the current time, checking revocation (LCR, then OCSP) online.
     /// </summary>
     /// <exception cref="ArgumentNullException"><paramref name="certificate"/> is null.</exception>
-    /// <exception cref="HttpRequestException">AIA or root certificate download failed.</exception>
-    public async Task<IcpBrasilValidationResult> ValidateAsync(
+    public Task<IcpBrasilValidationResult> ValidateAsync(
         X509Certificate2 certificate,
         IReadOnlyList<X509Certificate2>? extraCerts = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(certificate);
+        return ValidateAsync(
+            new ChainValidationContext { Certificate = certificate, Certificates = extraCerts ?? [] },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates an ICP-Brasil chain up to the AC Raiz at <see cref="ChainValidationContext.ValidationTime"/>
+    /// (the signature timestamp time for B-T and above, so long-term signatures stay valid after the
+    /// certificate expires), checking each CA and the certificate against the embedded LCRs/OCSP
+    /// responses first and, when <see cref="ChainValidationContext.CheckRevocation"/> is set, online.
+    /// </summary>
+    /// <param name="context">The certificate, validation time and embedded revocation evidence.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="context"/> is null.</exception>
+    public async Task<IcpBrasilValidationResult> ValidateAsync(
+        ChainValidationContext context,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var certificate = context.Certificate;
+        ArgumentNullException.ThrowIfNull(certificate, nameof(context));
+        var extraCerts = context.Certificates;
+        var validationTime = context.ValidationTime ?? DateTimeOffset.UtcNow;
 
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -170,7 +203,7 @@ public sealed class IcpBrasilChainValidator
             }
         }
 
-        // 2. Downloads all available versions of the AC Raiz from ITI
+        // 2. Loads the AC Raiz versions (bundled, plus any configured download)
         var acRaizCerts = await DownloadAllAcRaizAsync(warnings, cancellationToken).ConfigureAwait(false);
 
         // 3. Attempts to download intermediate certificates via AIA (Authority Information Access)
@@ -178,19 +211,32 @@ public sealed class IcpBrasilChainValidator
 
         try
         {
-            // 4. Builds the chain with the AC Raiz as trust anchor
-            using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts);
-
-            var (chainElements, hasRevocationUnknown) = ProcessChainErrors(chain, errors);
-
-            if (hasRevocationUnknown)
-            {
-                warnings.Add("Revocation check incomplete (CRL/OCSP unreachable from this platform). " +
-                "Verify manually at: https://consulta.certisign.com.br/");
-            }
-
-            // Recalculates: chain is valid if there are no real errors (RevocationUnknown is a warning, not an error)
+            // 4. Builds the chain at the validation time with the AC Raiz as trust anchor
+            using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts, validationTime);
+            var chainElements = ProcessChainErrors(chain, errors);
             bool isChainValid = errors is [] && chainElements is not [];
+
+            // 5. Revocation of the certificate and of every CA, at the validation time
+            var revocationStatus = ChainRevocationStatus.NotChecked;
+            bool hasEvidence = context.EmbeddedCrls.Count > 0 || context.EmbeddedOcsps.Count > 0;
+            if (isChainValid && (context.CheckRevocation || hasEvidence))
+            {
+                var chainCerts = chain.ChainElements.Select(e => e.Certificate).ToList();
+                var (status, messages) = await _revocationChecker.CheckAsync(
+                    chainCerts, validationTime, context.EmbeddedCrls, context.EmbeddedOcsps,
+                    context.CheckRevocation, cancellationToken).ConfigureAwait(false);
+                if (status == ChainRevocationStatus.Revoked)
+                {
+                    errors.AddRange(messages);
+                    isChainValid = false;
+                }
+                else
+                {
+                    warnings.AddRange(messages);
+                }
+
+                revocationStatus = status;
+            }
 
             return new IcpBrasilValidationResult
             {
@@ -200,6 +246,9 @@ public sealed class IcpBrasilChainValidator
                 Cpf = cpf,
                 Cnpj = cnpj,
                 ProfessionalRegistrations = registrations,
+                CertificateData = IcpBrasilCertificateData.FromCertificate(certificate, _logger),
+                ValidationTime = validationTime,
+                RevocationStatus = revocationStatus,
                 ChainElements = chainElements.AsReadOnly(),
                 AcRaizCertificates = acRaizCerts.AsReadOnly(),
                 Errors = errors.AsReadOnly(),
@@ -429,7 +478,7 @@ public sealed class IcpBrasilChainValidator
     }
 
     /// <summary>Reads every otherName (OID and decoded text) of the certificate's SubjectAltName.</summary>
-    private static List<(string Oid, string Value)> ReadSanOtherNames(X509Certificate2 certificate, ILogger? logger)
+    internal static List<(string Oid, string Value)> ReadSanOtherNames(X509Certificate2 certificate, ILogger? logger)
     {
         var result = new List<(string, string)>();
         var sanExt = certificate.Extensions[Oids.SubjectAltName];
@@ -612,18 +661,14 @@ public sealed class IcpBrasilChainValidator
         X509Certificate2 certificate,
         List<X509Certificate2> acRaizCerts,
         IReadOnlyList<X509Certificate2>? extraCerts,
-        List<X509Certificate2> aiaCerts)
+        List<X509Certificate2> aiaCerts,
+        DateTimeOffset validationTime)
     {
         var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
-        chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
-        // IgnoreEndRevocationUnknown + IgnoreCertificateAuthorityRevocationUnknown:
-        // On some platforms (macOS with CustomRootTrust) the OS cannot complete
-        // CRL/OCSP verification. Treat as warning, not a fatal error — revocation
-        // is checked separately and noted in warnings.
-        chain.ChainPolicy.VerificationFlags =
-            X509VerificationFlags.IgnoreEndRevocationUnknown |
-            X509VerificationFlags.IgnoreCertificateAuthorityRevocationUnknown;
+        // Revocation is checked by ChainRevocationChecker at the validation time, with the
+        // document's embedded LCR/OCSP evidence; the platform check only knows "now".
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.VerificationTime = validationTime.LocalDateTime;
         chain.ChainPolicy.UrlRetrievalTimeout = ResilientHttp.DefaultChainRetrievalTimeout;
 
         foreach (var root in acRaizCerts)
@@ -654,34 +699,15 @@ public sealed class IcpBrasilChainValidator
         return chain;
     }
 
-    private (List<IcpBrasilChainElement> Elements, bool HasRevocationUnknown) ProcessChainErrors(
-        X509Chain chain,
-        List<string> errors)
+    private List<IcpBrasilChainElement> ProcessChainErrors(X509Chain chain, List<string> errors)
     {
         var chainElements = new List<IcpBrasilChainElement>();
-        bool hasRevocationUnknown = false;
-
         foreach (var chainElement in chain.ChainElements)
         {
-            var elementErrors = new List<string>();
-            var elementWarnings = new List<string>();
-
-            foreach (var chainStatus in chainElement.ChainElementStatus)
-            {
-                bool isRevocationUnknown =
-                    chainStatus.Status is X509ChainStatusFlags.RevocationStatusUnknown
-                                or X509ChainStatusFlags.OfflineRevocation;
-
-                if (isRevocationUnknown)
-                {
-                    hasRevocationUnknown = true;
-                    elementWarnings.Add(chainStatus.StatusInformation.Trim());
-                }
-                else
-                {
-                    elementErrors.Add(chainStatus.StatusInformation.Trim());
-                }
-            }
+            var elementErrors = chainElement.ChainElementStatus
+                .Where(s => s.Status is not (X509ChainStatusFlags.RevocationStatusUnknown or X509ChainStatusFlags.OfflineRevocation))
+                .Select(s => s.StatusInformation.Trim())
+                .ToList();
 
             chainElements.Add(new IcpBrasilChainElement
             {
@@ -691,7 +717,7 @@ public sealed class IcpBrasilChainValidator
                 NotAfter = chainElement.Certificate.NotAfter,
                 Thumbprint = chainElement.Certificate.Thumbprint,
                 Errors = elementErrors.AsReadOnly(),
-                Warnings = elementWarnings.AsReadOnly()
+                Warnings = [],
             });
 
             foreach (var err in elementErrors)
@@ -700,41 +726,20 @@ public sealed class IcpBrasilChainValidator
             }
         }
 
-        return (chainElements, hasRevocationUnknown);
+        return chainElements;
     }
 
-    private async Task<List<X509Certificate2>> DownloadAllAcRaizAsync(
-        List<string> warnings, CancellationToken ct)
+    private Task<List<X509Certificate2>> DownloadAllAcRaizAsync(List<string> warnings, CancellationToken ct)
     {
-        // Loads bundled certificates (offline, deterministic)
-        var result = new List<X509Certificate2>(LoadBundledAcRaizCerts());
-
-        // Attempts to download extra/future versions not bundled (silent failure)
-        foreach (var url in ExtraAcRaizCertUrls)
-        {
-            try
-            {
-                var bytes = await ResilientHttp.GetBytesAsync(_httpClient, url, logger: _logger, ct: ct).ConfigureAwait(false);
-                if (bytes is not null)
-                {
-                    result.Add(CertificateLoader.LoadCertificate(bytes));
-                }
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.RootCertDownloadFailed(ex.Message);
-            }
-            catch (CryptographicException ex)
-            {
-                _logger.RootCertLoadingFailed(ex.Message);
-            }
-        }
-
+        ct.ThrowIfCancellationRequested();
+        var result = new List<X509Certificate2>(TrustAnchorsOverride ?? LoadBundledAcRaizCerts());
+        result.AddRange(AdditionalTrustAnchors);
         if (result is [])
         {
             warnings.Add("Could not load any ICP-Brasil root certificate.");
         }
-        return result;
+
+        return Task.FromResult(result);
     }
 
     /// <summary>

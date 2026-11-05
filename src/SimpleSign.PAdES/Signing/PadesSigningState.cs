@@ -49,4 +49,11 @@ internal sealed record PadesSigningOptions(
     string? OperationId,
     AdesBaselineProfile Profile,
     IReadOnlyList<ICountryExtension> CountryExtensions,
-    PadesDependencies Dependencies);
+    PadesDependencies Dependencies)
+{
+    /// <summary>A signature policy with its hash, written as signature-policy-identifier.</summary>
+    public SimpleSign.Core.Crypto.SignaturePolicyReference? SignaturePolicy { get; init; }
+
+    /// <summary>Entries to set in the document information dictionary in the signing revision.</summary>
+    public IReadOnlyDictionary<string, string>? DocumentInfo { get; init; }
+}

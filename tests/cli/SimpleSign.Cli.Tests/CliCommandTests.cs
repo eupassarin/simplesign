@@ -352,6 +352,46 @@ public sealed class CliCommandTests : IDisposable
 
     // ── helpers ─────────────────────────────────────────────────────────
 
+    // ── ICP-Brasil options ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Sign_IcpPolicyAndHealthDocument_ThenValidateJsonReportsLei14063()
+    {
+        string input = WriteMinimalPdf("icp-input.pdf");
+        string output = Path.Combine(_tempDir, "icp.pdf");
+
+        var (exit, text) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", output,
+            "--icp-policy", "ad-rb", "--health-document", "prescricao", "--registration", "crm:123456/SP");
+
+        exit.ShouldBe(0, text);
+        string pdf = Encoding.Latin1.GetString(await File.ReadAllBytesAsync(output));
+        pdf.ShouldContain("/SubFilter /ETSI.CAdES.detached");
+        pdf.ShouldContain("/2.16.76.1.4.2.2.1 (123456)");
+        pdf.ShouldContain("/2.16.76.1.4.2.2.2 (SP)");
+
+        var (validateExit, json) = await RunAsync("validate", output, "--no-revocation", "--trust", _cerPath, "--json");
+        validateExit.ShouldBe(0, json);
+        using var doc = JsonDocument.Parse(json);
+        var signature = doc.RootElement.GetProperty("signatures")[0];
+        signature.GetProperty("lei14063").GetString().ShouldBe("Simples", "a self-signed certificate is neither ICP-Brasil nor Gov.br");
+        signature.GetProperty("brasil").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Theory]
+    [InlineData("--icp-policy", "ad-xx")]
+    [InlineData("--icp-policy", "ad-rt")]
+    [InlineData("--health-document", "prescricao")]
+    [InlineData("--registration", "crm-123")]
+    public async Task Sign_InvalidIcpOptions_ReturnsError(string option, string value)
+    {
+        string input = WriteMinimalPdf($"bad-{Guid.NewGuid():N}.pdf");
+
+        var (exit, _) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password,
+            "--output", Path.Combine(_tempDir, "bad-out.pdf"), option, value);
+
+        exit.ShouldNotBe(0);
+    }
+
     private async Task<string> SignAsync(string relativeOutput)
     {
         string input = WriteMinimalPdf(Path.GetFileNameWithoutExtension(relativeOutput) + "-input.pdf");

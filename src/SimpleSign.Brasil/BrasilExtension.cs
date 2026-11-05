@@ -14,8 +14,7 @@ namespace SimpleSign.Brasil;
 /// </summary>
 public sealed class BrasilExtension : ICountryExtension
 {
-    private readonly Lazy<IReadOnlyList<ITrustAnchorProvider>> _trustAnchors = new(() =>
-        [new IcpBrasilTrustAnchorProvider(), new GovBrTrustAnchorProvider()]);
+    private readonly Lazy<IReadOnlyList<ITrustAnchorProvider>> _trustAnchors;
 
     private readonly Lazy<IReadOnlyList<IChainValidationProvider>> _chainValidators;
 
@@ -27,10 +26,25 @@ public sealed class BrasilExtension : ICountryExtension
 
     /// <summary>Creates a new Brasil extension with optional HTTP client and logger.</summary>
     public BrasilExtension(HttpClient? httpClient, Microsoft.Extensions.Logging.ILogger? logger)
+        : this(httpClient, logger, [])
     {
+    }
+
+    /// <summary>
+    /// Creates a Brasil extension that also trusts <paramref name="additionalIcpRoots"/> — AC Raiz
+    /// versions published after this release (see <see cref="IcpBrasilRoots.DownloadAsync"/>).
+    /// </summary>
+    /// <param name="httpClient">HTTP client for AIA, LCR and OCSP; null uses the shared client.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="additionalIcpRoots">Extra ICP-Brasil root certificates to trust.</param>
+    public BrasilExtension(HttpClient? httpClient, Microsoft.Extensions.Logging.ILogger? logger, IReadOnlyList<X509Certificate2> additionalIcpRoots)
+    {
+        ArgumentNullException.ThrowIfNull(additionalIcpRoots);
+        _trustAnchors = new Lazy<IReadOnlyList<ITrustAnchorProvider>>(() =>
+            [new IcpBrasilTrustAnchorProvider(additionalIcpRoots), new GovBrTrustAnchorProvider()]);
         _chainValidators = new Lazy<IReadOnlyList<IChainValidationProvider>>(() =>
         [
-            new IcpBrasilChainValidationProvider(httpClient, logger),
+            new IcpBrasilChainValidationProvider(new IcpBrasilChainValidator(httpClient, logger) { AdditionalTrustAnchors = additionalIcpRoots }),
             new GovBrChainValidationProvider(httpClient, logger),
         ]);
     }
@@ -75,8 +89,17 @@ public sealed class BrasilExtension : ICountryExtension
 
 internal sealed class IcpBrasilTrustAnchorProvider : ITrustAnchorProvider
 {
-    private readonly Lazy<IReadOnlyList<X509Certificate2>> _certs = new(
-        () => IcpBrasilChainValidator.LoadBundledAcRaizCerts());
+    private readonly Lazy<IReadOnlyList<X509Certificate2>> _certs;
+
+    public IcpBrasilTrustAnchorProvider()
+        : this([])
+    {
+    }
+
+    public IcpBrasilTrustAnchorProvider(IReadOnlyList<X509Certificate2> additionalRoots)
+    {
+        _certs = new(() => [.. IcpBrasilChainValidator.LoadBundledAcRaizCerts(), .. additionalRoots]);
+    }
 
     /// <inheritdoc />
     public string RegionCode => "BR";
@@ -96,7 +119,9 @@ internal sealed class GovBrTrustAnchorProvider : ITrustAnchorProvider
     /// <inheritdoc />
     public string DisplayName => "Gov.br";
     /// <inheritdoc />
-    public IReadOnlyList<X509Certificate2> GetTrustAnchors() => _certs.Value;
+    public IReadOnlyList<X509Certificate2> GetTrustAnchors() => [.. _certs.Value.Where(c => c.IsSelfSigned())];
+    /// <inheritdoc />
+    public IReadOnlyList<X509Certificate2> GetIntermediateCertificates() => [.. _certs.Value.Where(c => !c.IsSelfSigned())];
 }
 
 // ─── Chain validation adapters ───────────────────────────────────────────────
@@ -106,8 +131,13 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
     private readonly IcpBrasilChainValidator _validator;
 
     public IcpBrasilChainValidationProvider(HttpClient? httpClient, Microsoft.Extensions.Logging.ILogger? logger)
+        : this(new IcpBrasilChainValidator(httpClient, logger))
     {
-        _validator = new IcpBrasilChainValidator(httpClient, logger);
+    }
+
+    internal IcpBrasilChainValidationProvider(IcpBrasilChainValidator validator)
+    {
+        _validator = validator;
     }
 
     /// <inheritdoc />
@@ -118,26 +148,83 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
         IcpBrasilChainValidator.IsIcpBrasilCertificate(certificate);
 
     /// <inheritdoc />
-    public async Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain = null)
+    public Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain = null) =>
+        ValidateAsync(new ChainValidationContext { Certificate = certificate, Certificates = chain ?? [] }, CancellationToken.None);
+
+    /// <inheritdoc />
+    public Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain, CancellationToken cancellationToken) =>
+        ValidateAsync(new ChainValidationContext { Certificate = certificate, Certificates = chain ?? [] }, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<ChainValidationResult> ValidateAsync(ChainValidationContext context, CancellationToken cancellationToken)
     {
-        var result = await _validator.ValidateAsync(certificate, chain).ConfigureAwait(false);
-        var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(certificate);
+        ArgumentNullException.ThrowIfNull(context);
+        var result = await _validator.ValidateAsync(context, cancellationToken).ConfigureAwait(false);
+        var data = result.CertificateData;
+        var level = result.CertificateLevel;
+
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["BR.Hierarchy"] = "ICP-Brasil",
+            ["BR.RevocationStatus"] = result.RevocationStatus.ToString(),
+            ["BR.ValidationTime"] = result.ValidationTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+        };
+        if (result.IsValid)
+        {
+            bool signatureCertificate = level is IcpBrasilCertificateLevel.A1 or IcpBrasilCertificateLevel.A2
+                or IcpBrasilCertificateLevel.A3 or IcpBrasilCertificateLevel.A4;
+            metadata[Lei14063.MetadataKey] = (signatureCertificate ? Lei14063SignatureLevel.Qualificada : Lei14063SignatureLevel.Avancada).ToString();
+        }
+
+        if (data?.HolderType is { } holderType and not IcpBrasilHolderType.Unknown)
+        {
+            metadata["BR.HolderType"] = holderType.ToString();
+        }
+
+        if (data?.Responsible?.Cpf is { } responsibleCpf)
+        {
+            metadata["BR.ResponsibleCpf"] = responsibleCpf;
+        }
+
+        if (data?.CompanyName is { } companyName)
+        {
+            metadata["BR.CompanyName"] = companyName;
+        }
+
+        var errors = new List<string>(result.Errors);
+        errors.AddRange(result.Warnings.Where(w => w.Contains("Revocation status", StringComparison.Ordinal)));
+        if (context.Signature is { } signature)
+        {
+            var policy = IcpBrasilPolicyValidator.Validate(
+                signature, context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow);
+            if (policy.Status != IcpBrasilPolicyStatus.None)
+            {
+                metadata["BR.SignaturePolicy"] = policy.Policy is { } p
+                    ? $"{p.Info.Format} {p.Info.Policy} {p.Info.Version}".TrimEnd()
+                    : policy.Reference!.Oid;
+                metadata["BR.SignaturePolicyStatus"] = policy.Status.ToString();
+                errors.AddRange(policy.Errors.Select(e => $"Signature policy: {e}"));
+            }
+        }
+
+        foreach (var registration in result.ProfessionalRegistrations)
+        {
+            metadata[$"BR.Registration.{registration.Council}"] = registration.StateCode is null
+                ? registration.RegistrationNumber
+                : $"{registration.RegistrationNumber}/{registration.StateCode}";
+        }
 
         return new ChainValidationResult
         {
             IsTrusted = result.IsValid,
             RegionCode = "BR",
-            PolicyLevel = IcpBrasilChainValidator.DetectCertificateLevel(certificate)?.ToString(),
-            SignerId = cpf ?? cnpj,
-            SignerIdType = cpf is not null ? "CPF" : cnpj is not null ? "CNPJ" : null,
-            Errors = result.Errors,
+            PolicyLevel = level?.ToString(),
+            SignerId = result.Cpf ?? result.Cnpj,
+            SignerIdType = result.Cpf is not null ? "CPF" : result.Cnpj is not null ? "CNPJ" : null,
+            Metadata = metadata,
+            RevocationStatus = result.RevocationStatus,
+            Errors = errors,
         };
-    }
-
-    async Task<ChainValidationResult> IChainValidationProvider.ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return await ValidateAsync(certificate, chain).ConfigureAwait(false);
     }
 }
 
@@ -158,25 +245,40 @@ internal sealed class GovBrChainValidationProvider : IChainValidationProvider
         GovBrChainValidator.IsGovBrCertificate(certificate);
 
     /// <inheritdoc />
-    public async Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain = null)
+    public Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain = null) =>
+        ValidateAsync(new ChainValidationContext { Certificate = certificate, Certificates = chain ?? [] }, CancellationToken.None);
+
+    /// <inheritdoc />
+    public Task<ChainValidationResult> ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain, CancellationToken cancellationToken) =>
+        ValidateAsync(new ChainValidationContext { Certificate = certificate, Certificates = chain ?? [] }, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<ChainValidationResult> ValidateAsync(ChainValidationContext context, CancellationToken cancellationToken)
     {
-        var result = await _validator.ValidateAsync(certificate, chain).ConfigureAwait(false);
-        var cpf = GovBrChainValidator.ExtractCpfFromSan(certificate);
+        ArgumentNullException.ThrowIfNull(context);
+        var result = await _validator.ValidateAsync(context, cancellationToken).ConfigureAwait(false);
+
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["BR.Hierarchy"] = "Gov.br",
+            ["BR.RevocationStatus"] = result.RevocationStatus.ToString(),
+            ["BR.ValidationTime"] = result.ValidationTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+        };
+        if (result.IsValid)
+        {
+            metadata[Lei14063.MetadataKey] = nameof(Lei14063SignatureLevel.Avancada);
+        }
 
         return new ChainValidationResult
         {
             IsTrusted = result.IsValid,
             RegionCode = "BR",
-            PolicyLevel = GovBrChainValidator.DetectAssuranceLevel(certificate)?.ToString(),
-            SignerId = cpf,
-            SignerIdType = cpf is not null ? "CPF" : null,
-            Errors = result.Errors,
+            PolicyLevel = result.AssuranceLevel?.ToString(),
+            SignerId = result.Cpf,
+            SignerIdType = result.Cpf is not null ? "CPF" : null,
+            Metadata = metadata,
+            RevocationStatus = result.RevocationStatus,
+            Errors = [.. result.Errors, .. result.Warnings.Where(w => w.Contains("Revocation status", StringComparison.Ordinal))],
         };
-    }
-
-    async Task<ChainValidationResult> IChainValidationProvider.ValidateAsync(X509Certificate2 certificate, IReadOnlyList<X509Certificate2>? chain, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return await ValidateAsync(certificate, chain).ConfigureAwait(false);
     }
 }
