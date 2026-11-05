@@ -223,7 +223,8 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
         if (context.Signature is { } signature)
         {
             var policy = IcpBrasilPolicyValidator.Validate(
-                signature, context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow);
+                signature, context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow, expectedFormat: null,
+                signerRoot: IcpBrasilChainValidator.FindBundledRoot(context.Certificate, context.Certificates));
             if (policy.Status != IcpBrasilPolicyStatus.None)
             {
                 metadata["BR.SignaturePolicy"] = policy.Policy is { } p

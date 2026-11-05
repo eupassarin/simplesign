@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Crypto;
 
 namespace SimpleSign.Brasil.IcpBrasil;
@@ -21,7 +22,7 @@ public enum IcpBrasilPolicyStatus
     Invalid,
 }
 
-/// <summary>The result of <see cref="IcpBrasilPolicyValidator.Validate"/>.</summary>
+/// <summary>The result of <see cref="IcpBrasilPolicyValidator.Validate(CmsSignedData, DateTimeOffset, IcpBrasilPolicyFormat?, X509Certificate2?)"/>.</summary>
 /// <param name="Status">The outcome.</param>
 /// <param name="Reference">The policy reference read from the signature.</param>
 /// <param name="Policy">The matching LPA entry, when the OID is known.</param>
@@ -45,7 +46,20 @@ public static class IcpBrasilPolicyValidator
     /// <param name="expectedFormat">The container format (PAdES for PDF signatures, CAdES for .p7s), when known.</param>
     /// <exception cref="ArgumentNullException"><paramref name="signature"/> is null.</exception>
     public static IcpBrasilPolicyValidationResult Validate(
-        CmsSignedData signature, DateTimeOffset signingTime, IcpBrasilPolicyFormat? expectedFormat = null)
+        CmsSignedData signature, DateTimeOffset signingTime, IcpBrasilPolicyFormat? expectedFormat = null) =>
+        Validate(signature, signingTime, expectedFormat, signerRoot: null);
+
+    /// <summary>
+    /// Validates <paramref name="signature"/> against its declared ICP-Brasil policy, including the
+    /// policy's rules: the root of the signer's chain must be one the PA accepts, the mandatory
+    /// signed and unsigned attributes must be present and the signature algorithm must be allowed.
+    /// </summary>
+    /// <param name="signature">The parsed CMS signature.</param>
+    /// <param name="signingTime">The signing time: the signature timestamp time when there is one.</param>
+    /// <param name="expectedFormat">The container format, when known.</param>
+    /// <param name="signerRoot">The root certificate of the signer's chain (see <see cref="IcpBrasilChainValidator.FindBundledRoot"/>); null skips the root check.</param>
+    public static IcpBrasilPolicyValidationResult Validate(
+        CmsSignedData signature, DateTimeOffset signingTime, IcpBrasilPolicyFormat? expectedFormat, X509Certificate2? signerRoot)
     {
         ArgumentNullException.ThrowIfNull(signature);
         var reference = signature.SignedAttrs is { } attrs ? CmsAttribute.ReadSignaturePolicy(attrs) : null;
@@ -94,6 +108,102 @@ public static class IcpBrasilPolicyValidator
             errors.Add($"Policy {policy.Oid} is a {info.Format} policy, but the signature is {format}.");
         }
 
+        if (IcpBrasilSignaturePolicies.TryGetRules(policy.Oid, out var rules))
+        {
+            CheckRules(rules, signature, signerRoot, errors);
+        }
+
         return new(errors.Count == 0 ? IcpBrasilPolicyStatus.Valid : IcpBrasilPolicyStatus.Invalid, reference, policy, errors.AsReadOnly());
+    }
+
+    // PAdES PAs mandate ICP-Brasil attributes in the 2.16.76.1.8 arc that describe PDF structures
+    // (DSS/VRI/document timestamps), not CMS attributes; they are not checked on the CMS.
+    private const string PdfStructureArc = "2.16.76.1.8.";
+
+    private static void CheckRules(IcpBrasilPolicyRules rules, CmsSignedData signature, X509Certificate2? signerRoot, List<string> errors)
+    {
+        if (signerRoot is not null && rules.TrustAnchorKeySha256.Count > 0 && !rules.AcceptsRoot(signerRoot))
+        {
+            errors.Add($"Policy {rules.Oid} does not accept the signer's root ({signerRoot.GetNameInfo(X509NameType.SimpleName, false)}); "
+                + $"it accepts: {string.Join(", ", rules.TrustAnchorSubjects.Select(SimpleName))}.");
+        }
+
+        var signedOids = SignedAttributeOids(signature.SignedAttrs);
+        foreach (string oid in rules.MandatedSignedAttributes.Where(o => !signedOids.Contains(o)))
+        {
+            errors.Add($"Policy {rules.Oid} requires the signed attribute {oid}, which is missing.");
+        }
+
+        var unsigned = signature.UnsignedAttributes ?? new Dictionary<string, byte[][]>();
+        foreach (string oid in rules.MandatedUnsignedAttributes.Where(o => !o.StartsWith(PdfStructureArc, StringComparison.Ordinal) && !unsigned.ContainsKey(o)))
+        {
+            errors.Add($"Policy {rules.Oid} requires the unsigned attribute {oid}, which is missing.");
+        }
+
+        if (rules.SignerAlgorithms.Count > 0)
+        {
+            var allowed = rules.SignerAlgorithms.FirstOrDefault(a => a.Oid == signature.SignatureAlgorithmOid);
+            if (allowed is null)
+            {
+                errors.Add($"Policy {rules.Oid} does not allow the signature algorithm {signature.SignatureAlgorithmOid}.");
+            }
+            else if (allowed.MinKeyLength is { } min && KeySize(signature.SignerCertificate) is { } size && size < min)
+            {
+                errors.Add($"Policy {rules.Oid} requires keys of at least {min} bits; the signer key has {size}.");
+            }
+        }
+    }
+
+    private static string SimpleName(string subject)
+    {
+        int cn = subject.IndexOf("CN=", StringComparison.Ordinal);
+        if (cn < 0)
+        {
+            return subject;
+        }
+
+        int end = subject.IndexOf(',', cn);
+        return end < 0 ? subject[(cn + 3)..] : subject[(cn + 3)..end];
+    }
+
+    private static HashSet<string> SignedAttributeOids(byte[]? signedAttrs)
+    {
+        var oids = new HashSet<string>(StringComparer.Ordinal);
+        if (signedAttrs is null)
+        {
+            return oids;
+        }
+
+        try
+        {
+            var set = new System.Formats.Asn1.AsnReader(signedAttrs, System.Formats.Asn1.AsnEncodingRules.BER).ReadSetOf(skipSortOrderValidation: true);
+            while (set.HasData)
+            {
+                oids.Add(set.ReadSequence().ReadObjectIdentifier());
+            }
+        }
+        catch (System.Formats.Asn1.AsnContentException)
+        {
+            // Malformed attributes: report them all as missing.
+        }
+
+        return oids;
+    }
+
+    private static int? KeySize(X509Certificate2? certificate)
+    {
+        if (certificate is null)
+        {
+            return null;
+        }
+
+        using var rsa = certificate.GetRSAPublicKey();
+        if (rsa is not null)
+        {
+            return rsa.KeySize;
+        }
+
+        using var ec = certificate.GetECDsaPublicKey();
+        return ec?.KeySize;
     }
 }
