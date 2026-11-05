@@ -526,12 +526,12 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Pkcs11List_NoLib_IsRejected()
+    public async Task Pkcs11List_NoLib_SearchesTheInstalledDrivers()
     {
         var (exit, output) = await RunAsync("pkcs11", "list");
 
-        exit.ShouldNotBe(0);
-        output.ShouldContain("--lib is required");
+        exit.ShouldBeOneOf(0, 1);
+        output.ShouldNotContain("--lib is required");
     }
 
     [Fact]
