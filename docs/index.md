@@ -65,6 +65,7 @@ byte[] signedPdf = await PadesSigner
 - [Benchmarks](benchmarks.md)
 - [ADRs](adr/index.md) — Architecture Decision Records
 - [Migration Guides](migration/index.md)
+- [SimpleSign TestBench](articles/testbench.md) — local web app to try every PDF signing option, with an offline sandbox
 - [SimpleSign Agent](articles/agent.md) — macOS/Windows/Linux tray app: local signing agent for web pages (OS store and A3 tokens)
 - [CLI Tool](https://www.nuget.org/packages/SimpleSign.Cli) — command-line signing and validation
 - [GitHub Repository](https://github.com/eupassarin/SimpleSign)

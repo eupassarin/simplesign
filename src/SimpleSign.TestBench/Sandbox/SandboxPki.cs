@@ -1,0 +1,312 @@
+using System.Formats.Asn1;
+using System.Numerics;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+
+namespace SimpleSign.TestBench.Sandbox;
+
+/// <summary>Key type of a sandbox signer.</summary>
+internal enum SandboxKeyType
+{
+    Rsa2048,
+    Rsa3072,
+    Rsa4096,
+    EcdsaP256,
+    EcdsaP384,
+    EcdsaP521,
+}
+
+/// <summary>A sandbox signer: what it demonstrates and its certificate (with the private key).</summary>
+internal sealed record SandboxSigner(
+    string Id,
+    string Title,
+    string Description,
+    SandboxKeyType KeyType,
+    X509Certificate2 Certificate,
+    bool IsUsable,
+    string? Problem);
+
+/// <summary>
+/// An offline, ICP-Brasil-like test PKI: a root, an intermediate CA, a TSA, and signers that cover
+/// every key type the library supports plus the edge cases (expired, not yet valid, revoked,
+/// no non-repudiation, company certificate). Certificates carry CRL distribution points on
+/// <c>*.sandbox.simplesign.test</c>, served by <see cref="SandboxNetwork"/> (which also serves the CA certificates).
+/// Generated once per process; nothing is written to disk.
+/// </summary>
+internal sealed class SandboxPki : IDisposable
+{
+    public const string Host = "sandbox.simplesign.test";
+    public static readonly Uri TsaUri = new($"http://tsa.{Host}/tsr");
+    public static readonly Uri ArchiveTsaUri = new($"http://tsa.{Host}/archive");
+    public static readonly Uri AuthenticatedTsaUri = new($"http://tsa.{Host}/authenticated");
+    public static readonly Uri RootCrlUri = new($"http://crl.{Host}/root.crl");
+    public static readonly Uri IntermediateCrlUri = new($"http://crl.{Host}/intermediate.crl");
+    public static readonly Uri IntermediateCertUri = new($"http://aia.{Host}/intermediate.cer");
+    public static readonly Uri RootCertUri = new($"http://aia.{Host}/root.cer");
+
+    /// <summary>Basic credentials the authenticated sandbox TSA accepts (user:password).</summary>
+    public const string TsaUser = "sandbox";
+    public const string TsaPassword = "sandbox-tsa";
+
+    private const string HolderDataOid = "2.16.76.1.3.1";
+    private const string CnpjOid = "2.16.76.1.3.3";
+    private const string CompanyResponsibleOid = "2.16.76.1.3.2";
+
+    private readonly RSA _rootKey = RSA.Create(2048);
+    private readonly RSA _intermediateKey = RSA.Create(2048);
+    private readonly List<BigInteger> _revoked = [];
+    private readonly List<IDisposable> _owned = [];
+    private long _serial = 0x1000;
+
+    public SandboxPki()
+    {
+        var now = DateTimeOffset.UtcNow;
+        Root = BuildCa("CN=AC Raiz Sandbox SimpleSign, OU=Sandbox, O=SimpleSign TestBench, C=BR", _rootKey, null, null,
+            now.AddYears(-2), now.AddYears(20), pathLength: 1);
+        Intermediate = BuildCa("CN=AC Sandbox SimpleSign v1, OU=Sandbox, O=SimpleSign TestBench, C=BR", _intermediateKey, Root, _rootKey,
+            now.AddYears(-1), now.AddYears(10), pathLength: 0);
+
+        using var tsaKey = RSA.Create(2048);
+        Tsa = Issue("CN=ACT Sandbox SimpleSign, OU=Carimbo do Tempo, O=SimpleSign TestBench, C=BR", tsaKey,
+            now.AddYears(-1), now.AddYears(5), eku: [new Oid("1.3.6.1.5.5.7.3.8")], ekuCritical: true, keyUsage: X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation);
+        TsaKey = Tsa.GetRSAPrivateKey()!;
+
+        Signers =
+        [
+            Person("rsa-2048", "Maria da Silva (RSA 2048)", "e-CPF A1 with an RSA 2048 key — the most common ICP-Brasil certificate.", SandboxKeyType.Rsa2048, "11144477735"),
+            Person("rsa-3072", "João Souza (RSA 3072)", "RSA 3072 key: same algorithms, larger signature.", SandboxKeyType.Rsa3072, "52998224725"),
+            Person("rsa-4096", "Ana Pereira (RSA 4096)", "RSA 4096 key, as used by ICP-Brasil v5+ hierarchies for long-lived certificates.", SandboxKeyType.Rsa4096, "39053344705"),
+            Person("ecdsa-p256", "Carlos Lima (ECDSA P-256)", "Elliptic-curve key (NIST P-256). Signature algorithm is ECDSA; RSASSA-PSS is not available.", SandboxKeyType.EcdsaP256, "71428793860"),
+            Person("ecdsa-p384", "Beatriz Costa (ECDSA P-384)", "Elliptic-curve key (NIST P-384).", SandboxKeyType.EcdsaP384, "16899535009"),
+            Person("ecdsa-p521", "Rafael Alves (ECDSA P-521)", "Elliptic-curve key (NIST P-521).", SandboxKeyType.EcdsaP521, "05447007081"),
+            Company("company", "Empresa Exemplo Ltda (e-CNPJ)", "Company certificate (e-CNPJ) with the responsible person's CPF.", "11222333000181", "11144477735"),
+            Person("expired", "Expired certificate", "Valid chain, but the certificate expired yesterday: signing works, validation reports it.", SandboxKeyType.Rsa2048, "11144477735",
+                notBefore: now.AddYears(-2), notAfter: now.AddDays(-1), problem: "Expired"),
+            Person("not-yet-valid", "Not yet valid", "The certificate only becomes valid next month.", SandboxKeyType.Rsa2048, "11144477735",
+                notBefore: now.AddDays(30), notAfter: now.AddYears(2), problem: "Not yet valid"),
+            Person("revoked", "Revoked certificate", "Listed in the intermediate CA's CRL: B-LT/LTA embed the CRL, validation reports revoked.", SandboxKeyType.Rsa2048, "11144477735",
+                revoke: true, problem: "Revoked"),
+            Person("no-nonrepudiation", "Without non-repudiation", "Key usage has digitalSignature only (no nonRepudiation): signing works, ICP-Brasil validation warns.", SandboxKeyType.Rsa2048, "11144477735",
+                keyUsage: X509KeyUsageFlags.DigitalSignature, problem: "No non-repudiation"),
+        ];
+        RootCrl = BuildCrl(Root, _rootKey, []);
+        IntermediateCrl = BuildCrl(Intermediate, _intermediateKey, _revoked);
+    }
+
+    public X509Certificate2 Root { get; }
+
+    public X509Certificate2 Intermediate { get; }
+
+    public X509Certificate2 Tsa { get; }
+
+    public RSA TsaKey { get; }
+
+    public IReadOnlyList<SandboxSigner> Signers { get; }
+
+    public byte[] RootCrl { get; }
+
+    public byte[] IntermediateCrl { get; }
+
+    /// <summary>The certificates a validator needs besides the signer (intermediate and root).</summary>
+    public IReadOnlyList<X509Certificate2> Chain => [Intermediate, Root];
+
+    public SandboxSigner Signer(string id) =>
+        Signers.FirstOrDefault(s => s.Id == id) ?? throw new KeyNotFoundException($"No sandbox signer '{id}'.");
+
+    /// <summary>Issues a leaf for an arbitrary key (fake cloud providers, SoftHSM).</summary>
+    public X509Certificate2 IssueFor(AsymmetricAlgorithm key, string subject, string cpf) =>
+        key switch
+        {
+            RSA rsa => Issue(subject, rsa, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1), san: HolderData(cpf)),
+            ECDsa ec => Issue(subject, ec, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1), san: HolderData(cpf)),
+            _ => throw new NotSupportedException(key.GetType().Name),
+        };
+
+    public void Dispose()
+    {
+        _rootKey.Dispose();
+        _intermediateKey.Dispose();
+        TsaKey.Dispose();
+        foreach (var owned in _owned)
+        {
+            owned.Dispose();
+        }
+    }
+
+    private SandboxSigner Person(string id, string name, string description, SandboxKeyType keyType, string cpf,
+        DateTimeOffset? notBefore = null, DateTimeOffset? notAfter = null, bool revoke = false,
+        X509KeyUsageFlags keyUsage = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, string? problem = null)
+    {
+        string holder = name.Split(" (")[0];
+        string subject = $"CN={holder}:{cpf}, OU=Sandbox e-CPF A1, O=ICP-Brasil Sandbox, C=BR";
+        var from = notBefore ?? DateTimeOffset.UtcNow.AddDays(-1);
+        var to = notAfter ?? DateTimeOffset.UtcNow.AddYears(1);
+        var certificate = keyType switch
+        {
+            SandboxKeyType.Rsa2048 or SandboxKeyType.Rsa3072 or SandboxKeyType.Rsa4096 => IssueRsa(subject, keyType, from, to, keyUsage, HolderData(cpf)),
+            _ => IssueEc(subject, keyType, from, to, keyUsage, HolderData(cpf)),
+        };
+        if (revoke)
+        {
+            _revoked.Add(new BigInteger(certificate.SerialNumberBytes.Span, isUnsigned: true, isBigEndian: true));
+        }
+
+        return new SandboxSigner(id, name, description, keyType, certificate, problem is null || problem == "No non-repudiation", problem);
+    }
+
+    private SandboxSigner Company(string id, string name, string description, string cnpj, string responsibleCpf)
+    {
+        string subject = $"CN=EMPRESA EXEMPLO LTDA:{cnpj}, OU=Sandbox e-CNPJ A1, O=ICP-Brasil Sandbox, C=BR";
+        var san = new List<(string, string)> { (CnpjOid, cnpj), (CompanyResponsibleOid, "01011980" + responsibleCpf + new string('0', 26)) };
+        var certificate = IssueRsa(subject, SandboxKeyType.Rsa2048, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1),
+            X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, san);
+        return new SandboxSigner(id, name, description, SandboxKeyType.Rsa2048, certificate, true, null);
+    }
+
+    private X509Certificate2 IssueRsa(string subject, SandboxKeyType type, DateTimeOffset from, DateTimeOffset to,
+        X509KeyUsageFlags keyUsage, List<(string, string)> san)
+    {
+        using var key = RSA.Create(type switch { SandboxKeyType.Rsa3072 => 3072, SandboxKeyType.Rsa4096 => 4096, _ => 2048 });
+        return Issue(subject, key, from, to, keyUsage: keyUsage, san: san);
+    }
+
+    private X509Certificate2 IssueEc(string subject, SandboxKeyType type, DateTimeOffset from, DateTimeOffset to,
+        X509KeyUsageFlags keyUsage, List<(string, string)> san)
+    {
+        using var key = ECDsa.Create(type switch
+        {
+            SandboxKeyType.EcdsaP384 => ECCurve.NamedCurves.nistP384,
+            SandboxKeyType.EcdsaP521 => ECCurve.NamedCurves.nistP521,
+            _ => ECCurve.NamedCurves.nistP256,
+        });
+        return Issue(subject, key, from, to, keyUsage: keyUsage, san: san);
+    }
+
+    private X509Certificate2 Issue(string subject, AsymmetricAlgorithm key, DateTimeOffset from, DateTimeOffset to,
+        Oid[]? eku = null, bool ekuCritical = false,
+        X509KeyUsageFlags keyUsage = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation,
+        List<(string Oid, string Value)>? san = null)
+    {
+        var request = key switch
+        {
+            RSA rsa => new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1),
+            ECDsa ec => new CertificateRequest(subject, ec, HashAlgorithmName.SHA256),
+            _ => throw new NotSupportedException(key.GetType().Name),
+        };
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(keyUsage, true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+            eku is null ? new OidCollection { new("1.3.6.1.5.5.7.3.2"), new("1.3.6.1.5.5.7.3.4") } : ToCollection(eku), ekuCritical));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(Intermediate, true, false));
+        request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([IntermediateCrlUri.AbsoluteUri]));
+        // No AIA caIssuers: the chain is always embedded, and on macOS an AIA URL makes the OS trust
+        // evaluation try to fetch it (about a second per certificate for an unresolvable host).
+        if (san is { Count: > 0 })
+        {
+            request.CertificateExtensions.Add(new X509Extension("2.5.29.17", OtherNames(san), false));
+        }
+
+        // Not before the issuer: clamp, so an "expired" leaf still nests in the intermediate's validity.
+        if (from < Intermediate.NotBefore)
+        {
+            from = Intermediate.NotBefore.ToUniversalTime().AddMinutes(1);
+        }
+
+        using var publicOnly = request.Create(Intermediate.SubjectName, X509SignatureGenerator.CreateForRSA(_intermediateKey, RSASignaturePadding.Pkcs1),
+            from, to, NextSerial());
+        // In-memory key (no keychain / key container): the key object is copied into the certificate.
+        var certificate = key switch
+        {
+            RSA rsa => publicOnly.CopyWithPrivateKey(rsa),
+            ECDsa ec => publicOnly.CopyWithPrivateKey(ec),
+            _ => throw new NotSupportedException(),
+        };
+        _owned.Add(certificate);
+        return certificate;
+    }
+
+    private X509Certificate2 BuildCa(string subject, RSA key, X509Certificate2? issuer, RSA? issuerKey, DateTimeOffset from, DateTimeOffset to, int pathLength)
+    {
+        var request = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, true, pathLength, true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        X509Certificate2 certificate;
+        if (issuer is null)
+        {
+            certificate = request.CreateSelfSigned(from, to);
+        }
+        else
+        {
+            request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer, true, false));
+            request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([RootCrlUri.AbsoluteUri]));
+            using var publicOnly = request.Create(issuer.SubjectName, X509SignatureGenerator.CreateForRSA(issuerKey!, RSASignaturePadding.Pkcs1), from, to, NextSerial());
+            certificate = X509CertificateLoader.LoadCertificate(publicOnly.RawData);
+        }
+
+        var publicCopy = X509CertificateLoader.LoadCertificate(certificate.RawData);
+        certificate.Dispose();
+        _owned.Add(publicCopy);
+        return publicCopy;
+    }
+
+    private static byte[] BuildCrl(X509Certificate2 issuer, RSA issuerKey, IEnumerable<BigInteger> revoked)
+    {
+        var builder = new CertificateRevocationListBuilder();
+        foreach (var serial in revoked)
+        {
+            builder.AddEntry(serial.ToByteArray(isUnsigned: true, isBigEndian: true), DateTimeOffset.UtcNow.AddDays(-1), X509RevocationReason.KeyCompromise);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        return builder.Build(issuer.SubjectName, X509SignatureGenerator.CreateForRSA(issuerKey, RSASignaturePadding.Pkcs1),
+            BigInteger.One, now.AddDays(7), HashAlgorithmName.SHA256,
+            X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer, true, false), now.AddMinutes(-5));
+    }
+
+    private byte[] NextSerial()
+    {
+        long serial = Interlocked.Increment(ref _serial);
+        var bytes = new byte[9];
+        RandomNumberGenerator.Fill(bytes.AsSpan(0, 5));
+        bytes[0] &= 0x7F;
+        BitConverter.TryWriteBytes(bytes.AsSpan(5), (int)serial);
+        return bytes;
+    }
+
+    /// <summary>ICP-Brasil holder data: birth date (8) + CPF (11) + NIS (11) + RG (15) + issuer/UF (10).</summary>
+    private static List<(string, string)> HolderData(string cpf) => [(HolderDataOid, "01011980" + cpf + new string('0', 11) + new string('0', 15) + "SSPSP     ")];
+
+    private static byte[] OtherNames(List<(string Oid, string Value)> names)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            foreach (var (oid, value) in names)
+            {
+                using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
+                {
+                    writer.WriteObjectIdentifier(oid);
+                    using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
+                    {
+                        writer.WriteOctetString(System.Text.Encoding.ASCII.GetBytes(value));
+                    }
+                }
+            }
+        }
+
+        return writer.Encode();
+    }
+
+    private static OidCollection ToCollection(Oid[] oids)
+    {
+        var collection = new OidCollection();
+        foreach (var oid in oids)
+        {
+            collection.Add(oid);
+        }
+
+        return collection;
+    }
+}
