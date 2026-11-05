@@ -132,6 +132,34 @@ public sealed class TimestampClient : ITimestampClient
     }
 
     /// <summary>
+    /// Requests a timestamp token for a hash computed elsewhere (the data never leaves the caller).
+    /// </summary>
+    /// <param name="hash">The hash of the data to be timestamped.</param>
+    /// <param name="hashAlgorithm">The algorithm <paramref name="hash"/> was computed with.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>DER-encoded timestamp token (TSTInfo encapsulated in CMS).</returns>
+    /// <exception cref="ArgumentException">The hash length does not match the algorithm.</exception>
+    public async Task<byte[]> GetTimestampForHashAsync(
+        ReadOnlyMemory<byte> hash,
+        HashAlgorithmName hashAlgorithm,
+        CancellationToken cancellationToken = default)
+    {
+        string hashOid = GetHashOid(hashAlgorithm);
+        if (hash.Length != CryptoUtility.ComputeHash([], hashAlgorithm).Length)
+        {
+            throw new ArgumentException($"The hash is {hash.Length} bytes long, which does not match {hashAlgorithm.Name}.", nameof(hash));
+        }
+
+        byte[] hashBytes = hash.ToArray();
+        var (timestampRequest, requestNonce) = BuildTimeStampRequest(hashBytes, hashOid);
+        _logger.TimestampNonceSending(_tsaUrl);
+        byte[] timestampResponse = await SendRequestAsync(timestampRequest, cancellationToken).ConfigureAwait(false);
+        _logger.TimestampResponseReceived(timestampResponse.Length);
+
+        return ParseTimeStampResponse(timestampResponse, hashOid, hashBytes, requestNonce);
+    }
+
+    /// <summary>
     /// Embeds a timestamp token in the CMS as an unsigned attribute
     /// <c>id-aa-signatureTimeStampToken</c> (RFC 3161 / PAdES).
     /// </summary>
