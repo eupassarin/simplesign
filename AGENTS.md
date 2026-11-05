@@ -28,7 +28,7 @@ SimpleSign/
 │   ├── SimpleSign.Brasil/        ICP-Brasil extensions
 │   ├── SimpleSign.HtmlToPdf/     HTML→PDF layout engine
 │   ├── SimpleSign.Cli/           CLI tool (Spectre.Console)
-│   ├── SimpleSign.HostSigner/    Windows tray app — local signing API
+│   ├── SimpleSign.Desktop/       Avalonia app + local signing agent (macOS/Windows/Linux)
 │   └── ...
 ├── tests/
 │   ├── unit/                     Unit tests (~1,500 tests, < 5s)

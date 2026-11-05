@@ -32,7 +32,7 @@
     <!-- Symbol packages (snupkg) published alongside the nupkg -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <!-- Allow restore/build of Windows-targeting projects (e.g. HostSigner) on Linux CI -->
+    <!-- Allow restore/build of Windows-targeting projects on Linux CI -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Confirmed: no vulnerable packages (dotnet list package). -->
   </PropertyGroup>

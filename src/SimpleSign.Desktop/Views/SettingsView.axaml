@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SimpleSign.Desktop.ViewModels"
+             xmlns:s="using:SimpleSign.Desktop.Services"
+             xmlns:c="using:SimpleSign.Desktop.Controls"
+             xmlns:v="using:SimpleSign.Desktop.Views"
+             x:Class="SimpleSign.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+  <StackPanel Spacing="16">
+    <c:PageChrome />
+    <Border Classes="card">
+      <StackPanel Spacing="16">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="title" Text="Carimbo do tempo (TSA / ACT)" />
+          <TextBox Text="{Binding TsaUrl}" Watermark="https://act.exemplo.com.br/tsa" />
+          <TextBlock Classes="caption" TextWrapping="Wrap" Text="Para conformidade ICP-Brasil use uma ACT credenciada pelo ITI. Servidores públicos como o da DigiCert produzem carimbos válidos, mas não são ACTs." />
+        </StackPanel>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="title" Text="Cache de LCR" />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Escolher…" Command="{Binding PickCrlFolderCommand}" Margin="8,0,0,0" />
+            <TextBox Text="{Binding CrlCacheDirectory}" Watermark="Vazio = só em memória" />
+          </DockPanel>
+        </StackPanel>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="title" Text="Lembrar o PIN do token (minutos)" />
+          <NumericUpDown Value="{Binding PinCacheMinutes}" Minimum="0" Maximum="60" Increment="1" FormatString="0" Width="130" HorizontalAlignment="Left" />
+          <TextBlock Classes="caption" Text="0 = pedir o PIN a cada assinatura do agente." />
+        </StackPanel>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="title" Text="Aparência" />
+          <ListBox Classes="segmented" ItemsSource="{Binding Themes}" SelectedItem="{Binding SelectedTheme}" HorizontalAlignment="Left">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:OptionBase"><TextBlock Text="{Binding Label}" /></DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+        <Button Classes="accent" HorizontalAlignment="Right" Content="Salvar" Command="{Binding SaveCommand}" />
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

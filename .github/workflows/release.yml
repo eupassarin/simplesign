@@ -165,10 +165,17 @@ jobs:
             simplesign-osx-arm64.zip
 
 
-  hostsigner:
-    name: Publish HostSigner
-    runs-on: windows-latest
+  desktop:
+    name: Publish Desktop (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
     needs: release
+    strategy:
+      matrix:
+        include:
+          - { os: macos-latest, rid: osx-arm64 }
+          - { os: macos-latest, rid: osx-x64 }
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: windows-latest, rid: win-x64 }
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -185,31 +192,24 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Test HostSigner
-        run: >-
-          dotnet test tests/unit/SimpleSign.HostSigner.Tests/SimpleSign.HostSigner.Tests.csproj
-          --configuration Release
-          --framework net8.0-windows
-          --filter "Category!=Stress"
-          --verbosity quiet
+      - name: Test desktop app and agent
+        run: dotnet test tests/unit/SimpleSign.Desktop.Tests --configuration Release --verbosity quiet
 
-      - name: Publish HostSigner (win-x64)
+      - name: Package (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: scripts/package-desktop.sh ${{ matrix.rid }} ${{ steps.version.outputs.version }} artifacts/desktop
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          dotnet publish src/SimpleSign.HostSigner/SimpleSign.HostSigner.csproj `
-            -c Release `
-            -f net8.0-windows `
-            -r win-x64 `
-            --self-contained true `
-            -p:Version=${{ steps.version.outputs.version }} `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -o publish-hostsigner
+          dotnet publish src/SimpleSign.Desktop/SimpleSign.Desktop.csproj -c Release -r win-x64 --self-contained true `
+            -p:Version=${{ steps.version.outputs.version }} -o publish-desktop
+          New-Item -ItemType Directory -Force artifacts/desktop | Out-Null
+          Compress-Archive -Path publish-desktop\* -DestinationPath artifacts/desktop/SimpleSign-${{ steps.version.outputs.version }}-win-x64.zip
 
-      - name: Create HostSigner ZIP
-        run: Compress-Archive -Path publish-hostsigner\* -DestinationPath simplesign-hostsigner-win-x64.zip
-
-      - name: Upload HostSigner to Release
+      - name: Upload Desktop to Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
-          files: simplesign-hostsigner-win-x64.zip
+          files: artifacts/desktop/*

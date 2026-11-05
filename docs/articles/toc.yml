@@ -18,3 +18,5 @@
   href: icp-brasil-validar-check.md
 - name: HTML to PDF
   href: html-to-pdf.md
+- name: Desktop app & signing agent
+  href: desktop.md

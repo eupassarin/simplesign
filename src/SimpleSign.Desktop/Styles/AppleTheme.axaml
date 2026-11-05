@@ -1,0 +1,218 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Apple-style design tokens: colors follow the macOS system palette, light and dark. -->
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="App.Content" Color="#F5F5F7" />
+          <SolidColorBrush x:Key="App.Sidebar" Color="#E8E8EB" Opacity="0.82" />
+          <SolidColorBrush x:Key="App.Card" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="App.CardAlt" Color="#F2F2F5" />
+          <SolidColorBrush x:Key="App.Separator" Color="#E3E3E8" />
+          <SolidColorBrush x:Key="App.Label" Color="#1D1D1F" />
+          <SolidColorBrush x:Key="App.Secondary" Color="#6E6E73" />
+          <SolidColorBrush x:Key="App.Accent" Color="#007AFF" />
+          <SolidColorBrush x:Key="App.AccentSoft" Color="#1A007AFF" />
+          <SolidColorBrush x:Key="App.SidebarSelection" Color="#1F000000" />
+          <SolidColorBrush x:Key="App.Success" Color="#28A745" />
+          <SolidColorBrush x:Key="App.SuccessSoft" Color="#1F34C759" />
+          <SolidColorBrush x:Key="App.Warning" Color="#C77700" />
+          <SolidColorBrush x:Key="App.WarningSoft" Color="#24FF9F0A" />
+          <SolidColorBrush x:Key="App.Danger" Color="#E0352B" />
+          <SolidColorBrush x:Key="App.DangerSoft" Color="#1FFF3B30" />
+          <SolidColorBrush x:Key="App.DropZone" Color="#0A007AFF" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="App.Content" Color="#1C1C1E" />
+          <SolidColorBrush x:Key="App.Sidebar" Color="#2C2C2E" Opacity="0.78" />
+          <SolidColorBrush x:Key="App.Card" Color="#2C2C2E" />
+          <SolidColorBrush x:Key="App.CardAlt" Color="#3A3A3C" />
+          <SolidColorBrush x:Key="App.Separator" Color="#3A3A3C" />
+          <SolidColorBrush x:Key="App.Label" Color="#F5F5F7" />
+          <SolidColorBrush x:Key="App.Secondary" Color="#98989D" />
+          <SolidColorBrush x:Key="App.Accent" Color="#0A84FF" />
+          <SolidColorBrush x:Key="App.AccentSoft" Color="#330A84FF" />
+          <SolidColorBrush x:Key="App.SidebarSelection" Color="#29FFFFFF" />
+          <SolidColorBrush x:Key="App.Success" Color="#30D158" />
+          <SolidColorBrush x:Key="App.SuccessSoft" Color="#2930D158" />
+          <SolidColorBrush x:Key="App.Warning" Color="#FFB340" />
+          <SolidColorBrush x:Key="App.WarningSoft" Color="#29FF9F0A" />
+          <SolidColorBrush x:Key="App.Danger" Color="#FF6961" />
+          <SolidColorBrush x:Key="App.DangerSoft" Color="#29FF453A" />
+          <SolidColorBrush x:Key="App.DropZone" Color="#140A84FF" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <FontFamily x:Key="App.Font">.AppleSystemUIFont, SF Pro Text, Segoe UI Variable Text, Segoe UI, avares://Avalonia.Fonts.Inter/Assets#Inter, $Default</FontFamily>
+      <FontFamily x:Key="App.MonoFont">SF Mono, Menlo, Cascadia Mono, Consolas, monospace</FontFamily>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{StaticResource App.Font}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource App.Label}" />
+  </Style>
+
+  <!-- Typography -->
+  <Style Selector="TextBlock.largeTitle">
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="-0.3" />
+  </Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.subtitle">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource App.Secondary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="Foreground" Value="{DynamicResource App.Secondary}" />
+  </Style>
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource App.Secondary}" />
+    <Setter Property="Margin" Value="4,0,0,6" />
+  </Style>
+  <Style Selector="TextBlock.mono, SelectableTextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource App.MonoFont}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <!-- Cards -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource App.Card}" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="20" />
+    <Setter Property="BoxShadow" Value="0 1 3 0 #14000000" />
+  </Style>
+  <Style Selector="Border.group">
+    <Setter Property="Background" Value="{DynamicResource App.CardAlt}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="14,12" />
+  </Style>
+  <Style Selector="Border.badge">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="9,3" />
+    <Setter Property="Background" Value="{DynamicResource App.CardAlt}" />
+  </Style>
+  <Style Selector="Border.badge > TextBlock">
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Border.badge.ok">
+    <Setter Property="Background" Value="{DynamicResource App.SuccessSoft}" />
+  </Style>
+  <Style Selector="Border.badge.ok > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource App.Success}" />
+  </Style>
+  <Style Selector="Border.badge.warn">
+    <Setter Property="Background" Value="{DynamicResource App.WarningSoft}" />
+  </Style>
+  <Style Selector="Border.badge.warn > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource App.Warning}" />
+  </Style>
+  <Style Selector="Border.badge.error">
+    <Setter Property="Background" Value="{DynamicResource App.DangerSoft}" />
+  </Style>
+  <Style Selector="Border.badge.error > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource App.Danger}" />
+  </Style>
+  <Style Selector="Border.badge.accent">
+    <Setter Property="Background" Value="{DynamicResource App.AccentSoft}" />
+  </Style>
+  <Style Selector="Border.badge.accent > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource App.Accent}" />
+  </Style>
+
+  <!-- Controls -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="14,6" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{DynamicResource App.Accent}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="18,7" />
+  </Style>
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource App.Accent}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
+  <Style Selector="Button.accent:disabled /template/ ContentPresenter">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+  <Style Selector="Button.link">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource App.Accent}" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="TextBox, ComboBox, NumericUpDown">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="MinHeight" Value="30" />
+  </Style>
+  <Style Selector="ToggleSwitch">
+    <Setter Property="OnContent" Value="" />
+    <Setter Property="OffContent" Value="" />
+  </Style>
+
+  <!-- Segmented control: a ListBox with horizontal pills -->
+  <Style Selector="ListBox.segmented">
+    <Setter Property="Background" Value="{DynamicResource App.CardAlt}" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="2" />
+      </ItemsPanelTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem">
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="14,4" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource App.Card}" />
+    <Setter Property="BoxShadow" Value="0 1 2 0 #26000000" />
+    <Setter Property="Foreground" Value="{DynamicResource App.Label}" />
+  </Style>
+
+  <!-- Sidebar -->
+  <Style Selector="ListBox.sidebar">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.sidebar ListBoxItem">
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Margin" Value="10,1" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="ListBox.sidebar ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource App.SidebarSelection}" />
+    <Setter Property="Foreground" Value="{DynamicResource App.Label}" />
+  </Style>
+  <Style Selector="ListBox.sidebar ListBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource App.SidebarSelection}" />
+  </Style>
+
+  <!-- Stroke icons (24×24 SF-style line icons) -->
+  <Style Selector="Path.icon">
+    <Setter Property="Stroke" Value="{DynamicResource App.Accent}" />
+    <Setter Property="StrokeThickness" Value="1.7" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="Stretch" Value="Uniform" />
+  </Style>
+</Styles>

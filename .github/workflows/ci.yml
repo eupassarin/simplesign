@@ -267,10 +267,14 @@ jobs:
       - name: Run PKCS#11 tests and AOT smoke test
         run: scripts/tests/pkcs11-run.sh
 
-  hostsigner-tests:
-    name: HostSigner Tests
-    runs-on: windows-latest
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     needs: build-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -289,14 +293,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore
-        run: dotnet restore
+      - name: Test desktop app and agent (headless)
+        run: dotnet test tests/unit/SimpleSign.Desktop.Tests --configuration Release --logger "console;verbosity=normal"
 
-      - name: Restore HostSigner tests
-        run: dotnet restore tests/unit/SimpleSign.HostSigner.Tests
-
-      - name: Build HostSigner tests
-        run: dotnet build tests/unit/SimpleSign.HostSigner.Tests --no-restore --configuration Release
-
-      - name: Test HostSigner
-        run: dotnet test tests/unit/SimpleSign.HostSigner.Tests --no-build --configuration Release --logger "console;verbosity=normal"
+      - name: Upload page screenshots
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-screenshots
+          path: tests/unit/SimpleSign.Desktop.Tests/bin/Release/net10.0/screenshots/

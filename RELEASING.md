@@ -7,7 +7,7 @@ Step-by-step guide for releasing a new SimpleSign version.
 - [ ] All changes committed on `main`
 - [ ] `dotnet build SimpleSign.sln --no-restore` passes with 0 warnings
 - [ ] Focused projects beneath `tests/unit/` pass on net8.0 and net10.0
-- [ ] `SimpleSign.HostSigner.Tests` passes on a Windows runner (it requires the WindowsDesktop runtime)
+- [ ] `SimpleSign.Desktop.Tests` passes (headless; the CI runs it on Linux, Windows and macOS)
 - [ ] `dotnet test tests/cli/SimpleSign.Cli.Tests` passes
 - [ ] `dotnet test tests/integration/SimpleSign.Integration.Tests` passes when network credentials are available
 - [ ] `dotnet test tests/interop/SimpleSign.Interop.Tests` passes when Docker is available
@@ -28,7 +28,6 @@ Update `<Version>` in all `.csproj` files:
 | `src/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
 | `src/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
 | `src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
-| `src/SimpleSign.HostSigner/SimpleSign.HostSigner.csproj` | Host signer |
 | `src/SimpleSign.Cli/SimpleSign.Cli.csproj` | CLI tool |
 
 ### Quick sed (macOS):
@@ -46,7 +45,6 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
   src/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
   src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
-  src/SimpleSign.HostSigner/SimpleSign.HostSigner.csproj \
   src/SimpleSign.Cli/SimpleSign.Cli.csproj
 ```
 
@@ -56,9 +54,6 @@ These files contain version strings that do NOT come from `<Version>` and must b
 
 | File | Location | What to update |
 |------|----------|----------------|
-| `src/SimpleSign.HostSigner/TrayContext.cs` | `Version = "0.10.1"` | Hardcoded version for health check API |
-| `src/SimpleSign.HostSigner/README.md` | Install examples, health check responses | All version strings |
-| `src/SimpleSign.HostSigner/webapp/src/pages/ApiPage.tsx` and `AboutPage.tsx` | Version strings in web UI | `"0.10.1"` → new version |
 | `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.10.1]` | Example version |
 | `RELEASING.md` | `OLD="0.10.1"` and `Current version: \`0.10.1\`` | Update both—this file |
 
@@ -69,18 +64,11 @@ grep -r "$OLD" --include="*.md" --include="*.cs" --include="*.tsx" --include="*.
   | grep -v node_modules | grep -v obj/ | grep -v bin/ | grep -v CHANGELOG.md
 ```
 
-### HostSigner web bundle
+### Desktop app
 
-The HostSigner project packages the checked-in Vite bundle under `wwwroot`. After
-updating the version strings in the web UI, regenerate it and commit the resulting
-`wwwroot/index.html` and hashed assets; do not commit `node_modules` or TypeScript
-incremental-build files.
-
-```bash
-cd src/SimpleSign.HostSigner/webapp
-npm ci
-npm run build
-```
+SimpleSign Desktop takes its version from `Directory.Build.props` (the agent's `/api/health`
+reports it). The release workflow packages it for osx-arm64, osx-x64, linux-x64 and win-x64
+(`scripts/package-desktop.sh`); the builds are not code-signed.
 
 ## Documentation Updates
 
@@ -164,7 +152,7 @@ git tag vX.Y.Z
 git push origin main --tags
 ```
 
-The tag push triggers `.github/workflows/release.yml` which builds, tests, packs NuGet packages, publishes to NuGet.org, and creates the GitHub Release with CLI and HostSigner binaries.
+The tag push triggers `.github/workflows/release.yml` which builds, tests, packs NuGet packages, publishes to NuGet.org, and creates the GitHub Release with CLI and SimpleSign Desktop binaries.
 
 ## Manual NuGet Push (if CI fails)
 
