@@ -19,7 +19,7 @@ namespace SimpleSign.XAdES;
 
 [RequiresUnreferencedCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
 [RequiresDynamicCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
-internal static class XadesSignatureBuilder
+internal static partial class XadesSignatureBuilder
 {
     /// <summary>
     /// Loads the document to sign. Malformed XML is reported as an <see cref="ArgumentException"/>
@@ -48,6 +48,7 @@ internal static class XadesSignatureBuilder
         IReadOnlyList<X509Certificate2>? extraCertificates,
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
+        XadesSigningCertificateForm signingCertificateForm,
         string signatureAlgorithmOid,
         XadesForm form,
         IReadOnlyList<string>? signerRoles,
@@ -58,7 +59,7 @@ internal static class XadesSignatureBuilder
         if (form != XadesForm.Enveloped)
         {
             return BuildStandaloneSignature(xmlData, certificate, hashAlgorithm, signingTime,
-                extraCertificates, commitmentType, signaturePolicy,
+                extraCertificates, commitmentType, signaturePolicy, signingCertificateForm,
                 signatureAlgorithmOid, form, dataUri, signerRoles, dataObjectFormat, logger);
         }
 
@@ -75,7 +76,7 @@ internal static class XadesSignatureBuilder
         var signedProperties = CreateSignedProperties(
             xmlDoc, certificate, hashAlgorithm, signingTime,
             signedPropertiesId, signatureId, commitmentType,
-            signaturePolicy, signerRoles, dataObjectFormat);
+            signaturePolicy, signingCertificateForm, signerRoles, dataObjectFormat);
 
         var qualifyingProps = CreateQualifyingProperties(xmlDoc, signatureId, signedProperties);
 
@@ -171,6 +172,7 @@ internal static class XadesSignatureBuilder
         XadesForm form,
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
+        XadesSigningCertificateForm signingCertificateForm,
         string signatureAlgorithmOid,
         IReadOnlyList<string>? signerRoles,
         DataObjectFormat? dataObjectFormat,
@@ -182,7 +184,7 @@ internal static class XadesSignatureBuilder
         if (form != XadesForm.Enveloped)
         {
             return BuildStandaloneSignedInfoToHash(xmlData, certificate, hashAlgorithm, signingTime,
-                form, commitmentType, signaturePolicy, signatureAlgorithmOid,
+                form, commitmentType, signaturePolicy, signingCertificateForm, signatureAlgorithmOid,
                 signerRoles, dataObjectFormat, out signedPropertiesId, out signedInfoXmlBytes,
                 out dataObjectId, dataUri);
         }
@@ -203,7 +205,7 @@ internal static class XadesSignatureBuilder
         var signedProperties = CreateSignedProperties(
             xmlDoc, certificate, hashAlgorithm, signingTime,
             signedPropertiesId, signatureId, commitmentType,
-            signaturePolicy, signerRoles, dataObjectFormat);
+            signaturePolicy, signingCertificateForm, signerRoles, dataObjectFormat);
 
         var qualifyingProps = CreateQualifyingProperties(xmlDoc, signatureId, signedProperties);
         var objectElement = xmlDoc.CreateElement("Object", XmlDSigUrls.DsNamespace);
@@ -256,6 +258,7 @@ internal static class XadesSignatureBuilder
         IReadOnlyList<X509Certificate2>? extraCertificates,
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
+        XadesSigningCertificateForm signingCertificateForm,
         string signatureAlgorithmOid,
         byte[] signedInfoBytes,
         byte[] signatureValue,
@@ -269,7 +272,7 @@ internal static class XadesSignatureBuilder
         if (form != XadesForm.Enveloped)
         {
             return CompleteStandaloneExternalSignature(xmlData, certificate, hashAlgorithm, signingTime,
-                extraCertificates, commitmentType, signaturePolicy,
+                extraCertificates, commitmentType, signaturePolicy, signingCertificateForm,
                 signatureAlgorithmOid, signedInfoBytes, signatureValue, signedPropertiesId,
                 signerRoles, dataObjectFormat, form, dataUri, dataObjectId);
         }
@@ -313,7 +316,7 @@ internal static class XadesSignatureBuilder
         var signedProperties = CreateSignedProperties(
             xmlDoc, certificate, hashAlgorithm, signingTime,
             signedPropertiesId, signatureId, commitmentType,
-            signaturePolicy, signerRoles, dataObjectFormat);
+            signaturePolicy, signingCertificateForm, signerRoles, dataObjectFormat);
 
         var qualifyingProps = CreateQualifyingProperties(xmlDoc, signatureId, signedProperties);
         var objElement = xmlDoc.CreateElement("Object", XmlDSigUrls.DsNamespace);
@@ -1309,6 +1312,7 @@ internal static class XadesSignatureBuilder
         string signatureId,
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
+        XadesSigningCertificateForm signingCertificateForm,
         IReadOnlyList<string>? signerRoles,
         DataObjectFormat? dataObjectFormat)
     {
@@ -1322,7 +1326,9 @@ internal static class XadesSignatureBuilder
         stElement.InnerText = signingTime.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
         signedSigProps.AppendChild(stElement);
 
-        signedSigProps.AppendChild(CreateSigningCertificateV2(doc, certificate, hashAlgorithm));
+        signedSigProps.AppendChild(signingCertificateForm == XadesSigningCertificateForm.V1
+            ? CreateSigningCertificateV1(doc, certificate, hashAlgorithm)
+            : CreateSigningCertificateV2(doc, certificate, hashAlgorithm));
 
         // SignaturePolicyIdentifier — child of SignedSignatureProperties per §5.2.2
         if (signaturePolicy is not null)
@@ -1403,6 +1409,41 @@ internal static class XadesSignatureBuilder
         }
 
         return signedProps;
+    }
+
+    /// <summary>
+    /// XAdES 1.3.2 SigningCertificate (v1): CertDigest and IssuerSerial (issuer DN and decimal
+    /// serial), the form the ICP-Brasil XML signature policies mandate.
+    /// </summary>
+    private static XmlElement CreateSigningCertificateV1(
+        XmlDocument doc,
+        X509Certificate2 certificate,
+        HashAlgorithmName hashAlgorithm)
+    {
+        var signingCertificate = doc.CreateElement("SigningCertificate", XadesUris.XadesNamespace);
+        var certElement = doc.CreateElement("Cert", XadesUris.XadesNamespace);
+
+        var certDigest = doc.CreateElement("CertDigest", XadesUris.XadesNamespace);
+        var dmElement = doc.CreateElement("DigestMethod", XmlDSigUrls.DsNamespace);
+        dmElement.SetAttribute("Algorithm", GetDigestMethod(hashAlgorithm));
+        var dvElement = doc.CreateElement("DigestValue", XmlDSigUrls.DsNamespace);
+        dvElement.InnerText = Convert.ToBase64String(CryptoUtility.ComputeHash(certificate.RawData, hashAlgorithm));
+        certDigest.AppendChild(dmElement);
+        certDigest.AppendChild(dvElement);
+
+        var issuerSerial = doc.CreateElement("IssuerSerial", XadesUris.XadesNamespace);
+        var issuerName = doc.CreateElement("X509IssuerName", XmlDSigUrls.DsNamespace);
+        issuerName.InnerText = certificate.IssuerName.Name;
+        var serialNumber = doc.CreateElement("X509SerialNumber", XmlDSigUrls.DsNamespace);
+        serialNumber.InnerText = new System.Numerics.BigInteger(certificate.GetSerialNumber(), isUnsigned: true)
+            .ToString(CultureInfo.InvariantCulture);
+        issuerSerial.AppendChild(issuerName);
+        issuerSerial.AppendChild(serialNumber);
+
+        certElement.AppendChild(certDigest);
+        certElement.AppendChild(issuerSerial);
+        signingCertificate.AppendChild(certElement);
+        return signingCertificate;
     }
 
     private static XmlElement CreateSigningCertificateV2(
@@ -1679,6 +1720,7 @@ internal static class XadesSignatureBuilder
         IReadOnlyList<X509Certificate2>? extraCertificates,
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
+        XadesSigningCertificateForm signingCertificateForm,
         string signatureAlgorithmOid,
         XadesForm form,
         string? dataUri,
@@ -1714,7 +1756,7 @@ internal static class XadesSignatureBuilder
         }
 
         var signedProperties = CreateSignedProperties(outDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType, signaturePolicy,
+            signedPropertiesId, signatureId, commitmentType, signaturePolicy, signingCertificateForm,
             signerRoles, dataObjectFormat);
         var qualifyingProps = CreateQualifyingProperties(outDoc, signatureId, signedProperties);
         var spObject = outDoc.CreateElement("Object", XmlDSigUrls.DsNamespace);
@@ -1799,6 +1841,7 @@ internal static class XadesSignatureBuilder
         XadesForm form,
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
+        XadesSigningCertificateForm signingCertificateForm,
         string signatureAlgorithmOid,
         IReadOnlyList<string>? signerRoles,
         DataObjectFormat? dataObjectFormat,
@@ -1835,7 +1878,7 @@ internal static class XadesSignatureBuilder
         }
 
         var signedProperties = CreateSignedProperties(outDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType, signaturePolicy,
+            signedPropertiesId, signatureId, commitmentType, signaturePolicy, signingCertificateForm,
             signerRoles, dataObjectFormat);
         var qualifyingProps = CreateQualifyingProperties(outDoc, signatureId, signedProperties);
         var spObject = outDoc.CreateElement("Object", XmlDSigUrls.DsNamespace);
@@ -1896,6 +1939,7 @@ internal static class XadesSignatureBuilder
         IReadOnlyList<X509Certificate2>? extraCertificates,
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
+        XadesSigningCertificateForm signingCertificateForm,
         string signatureAlgorithmOid,
         byte[] signedInfoBytes,
         byte[] signatureValue,
@@ -1951,7 +1995,7 @@ internal static class XadesSignatureBuilder
         }
 
         var signedProperties = CreateSignedProperties(outDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType, signaturePolicy,
+            signedPropertiesId, signatureId, commitmentType, signaturePolicy, signingCertificateForm,
             signerRoles, dataObjectFormat);
         var qualifyingProps = CreateQualifyingProperties(outDoc, signatureId, signedProperties);
         var objElement = outDoc.CreateElement("Object", XmlDSigUrls.DsNamespace);

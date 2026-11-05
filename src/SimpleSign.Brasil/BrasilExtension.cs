@@ -59,13 +59,14 @@ public sealed class BrasilExtension : ICountryExtension
         var logger = options.Logger;
         var roots = options.AdditionalIcpRoots;
         _trustAnchors = new Lazy<IReadOnlyList<ITrustAnchorProvider>>(() =>
-            [new IcpBrasilTrustAnchorProvider(roots), new GovBrTrustAnchorProvider()]);
+            [new IcpBrasilTrustAnchorProvider(roots, options.IcpEnvironment), new GovBrTrustAnchorProvider()]);
         _chainValidators = new Lazy<IReadOnlyList<IChainValidationProvider>>(() =>
         [
             new IcpBrasilChainValidationProvider(new IcpBrasilChainValidator(httpClient, logger)
             {
                 AdditionalTrustAnchors = roots,
                 CrlCacheDirectory = options.CrlCacheDirectory,
+                Environment = options.IcpEnvironment,
             }),
             new GovBrChainValidationProvider(new GovBrChainValidator(httpClient, logger)
             {
@@ -121,9 +122,14 @@ internal sealed class IcpBrasilTrustAnchorProvider : ITrustAnchorProvider
     {
     }
 
-    public IcpBrasilTrustAnchorProvider(IReadOnlyList<X509Certificate2> additionalRoots)
+    private readonly IcpBrasilEnvironment _environment;
+
+    public IcpBrasilTrustAnchorProvider(IReadOnlyList<X509Certificate2> additionalRoots, IcpBrasilEnvironment environment = IcpBrasilEnvironment.Production)
     {
-        _certs = new(() => [.. IcpBrasilChainValidator.LoadBundledAcRaizCerts(), .. additionalRoots]);
+        _environment = environment;
+        _certs = new(() => environment == IcpBrasilEnvironment.Homologation
+            ? [.. IcpBrasilChainValidator.LoadBundledAcRaizCerts(), .. additionalRoots, .. IcpBrasilChainValidator.LoadBundledHomologationRoots()]
+            : [.. IcpBrasilChainValidator.LoadBundledAcRaizCerts(), .. additionalRoots]);
     }
 
     /// <inheritdoc />
@@ -133,7 +139,9 @@ internal sealed class IcpBrasilTrustAnchorProvider : ITrustAnchorProvider
     /// <inheritdoc />
     public IReadOnlyList<X509Certificate2> GetTrustAnchors() => _certs.Value;
     /// <inheritdoc />
-    public IReadOnlyList<X509Certificate2> GetIntermediateCertificates() => IcpBrasilChainValidator.LoadBundledIntermediateCerts();
+    public IReadOnlyList<X509Certificate2> GetIntermediateCertificates() => _environment == IcpBrasilEnvironment.Homologation
+        ? [.. IcpBrasilChainValidator.LoadBundledIntermediateCerts(), .. IcpBrasilChainValidator.LoadBundledHomologationIntermediates()]
+        : IcpBrasilChainValidator.LoadBundledIntermediateCerts();
 }
 
 internal sealed class GovBrTrustAnchorProvider : ITrustAnchorProvider
@@ -196,7 +204,11 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
             ["BR.RevocationStatus"] = result.RevocationStatus.ToString(),
             ["BR.ValidationTime"] = result.ValidationTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
         };
-        if (result.IsValid)
+        if (result.IsHomologation)
+        {
+            metadata["BR.Environment"] = nameof(IcpBrasilEnvironment.Homologation);
+        }
+        else if (result.IsValid)
         {
             bool signatureCertificate = level is IcpBrasilCertificateLevel.A1 or IcpBrasilCertificateLevel.A2
                 or IcpBrasilCertificateLevel.A3 or IcpBrasilCertificateLevel.A4;
@@ -219,12 +231,13 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
         }
 
         var errors = new List<string>(result.Errors);
-        errors.AddRange(result.Warnings.Where(w => w.Contains("Revocation status", StringComparison.Ordinal)));
+        errors.AddRange(result.Warnings.Where(w => w.Contains("Revocation status", StringComparison.Ordinal)
+            || w.Contains("homologation", StringComparison.Ordinal)));
         if (context.Signature is { } signature)
         {
             var policy = IcpBrasilPolicyValidator.Validate(
                 signature, context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow, expectedFormat: null,
-                signerRoot: IcpBrasilChainValidator.FindBundledRoot(context.Certificate, context.Certificates));
+                signerRoot: IcpBrasilChainValidator.FindBundledRoot(context.Certificate, context.Certificates, _validator.Environment));
             if (policy.Status != IcpBrasilPolicyStatus.None)
             {
                 metadata["BR.SignaturePolicy"] = policy.Policy is { } p

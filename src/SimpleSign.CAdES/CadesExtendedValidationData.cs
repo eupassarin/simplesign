@@ -89,7 +89,7 @@ internal static class CadesExtendedValidationData
     internal static CmsAttribute CompleteRevocationRefs(
         IReadOnlyList<X509Certificate2> path, IReadOnlyList<byte[]> crls, IReadOnlyList<byte[]> ocspResponses)
     {
-        var ocsp = new OcspClient(SimpleSign.Core.Http.DefaultHttpClientProvider.Instance.GetClient());
+        var ocsp = MatchingOcspClient();
         var w = new AsnWriter(AsnEncodingRules.DER);
         using (w.PushSequence())
         {
@@ -97,8 +97,7 @@ internal static class CadesExtendedValidationData
             {
                 var certificate = path[i];
                 var issuer = i + 1 < path.Count ? path[i + 1] : null;
-                var coveringCrls = crls.Where(c => issuer is not null && CrlClient.IsSerialInCrl(certificate, c, issuer) is not null).ToList();
-                var coveringOcsp = ocspResponses.Where(r => Covers(ocsp, certificate, issuer, r)).ToList();
+                var (coveringCrls, coveringOcsp) = CoveringEvidence(ocsp, certificate, issuer, crls, ocspResponses);
                 using (w.PushSequence()) // CrlOcspRef
                 {
                     if (coveringCrls.Count > 0)
@@ -139,6 +138,43 @@ internal static class CadesExtendedValidationData
         }
 
         return CmsAttribute.Raw(Oids.RevocationRefs, w.Encode());
+    }
+
+    /// <summary>The CRLs and OCSP responses (as given) that cover <paramref name="certificate"/>.</summary>
+    internal static (List<byte[]> Crls, List<byte[]> Ocsp) CoveringEvidence(
+        OcspClient ocsp, X509Certificate2 certificate, X509Certificate2? issuer, IReadOnlyList<byte[]> crls, IReadOnlyList<byte[]> ocspResponses) =>
+        ([.. crls.Where(c => issuer is not null && CrlClient.IsSerialInCrl(certificate, c, issuer) is not null)],
+            [.. ocspResponses.Where(r => Covers(ocsp, certificate, issuer, r))]);
+
+    /// <summary>An OCSP client used only to match responses to certificates (no network).</summary>
+    internal static OcspClient MatchingOcspClient() => new(SimpleSign.Core.Http.DefaultHttpClientProvider.Instance.GetClient());
+
+    /// <summary>The issuer (DER Name) and thisUpdate of a CRL.</summary>
+    internal static (byte[] Issuer, DateTimeOffset ThisUpdate) ReadCrlIdentifier(byte[] crl)
+    {
+        var tbs = new AsnReader(crl, AsnEncodingRules.BER).ReadSequence().ReadSequence();
+        if (tbs.PeekTag() == Asn1Tag.Integer)
+        {
+            _ = tbs.ReadInteger();
+        }
+
+        _ = tbs.ReadSequence(); // signature
+        byte[] issuer = tbs.ReadEncodedValue().ToArray();
+        DateTimeOffset thisUpdate = tbs.PeekTag().TagValue == (int)UniversalTagNumber.UtcTime ? tbs.ReadUtcTime() : tbs.ReadGeneralizedTime();
+        return (issuer, thisUpdate);
+    }
+
+    /// <summary>The ResponderID (DER, [1] byName or [2] byKey) and producedAt of a BasicOCSPResponse.</summary>
+    internal static (byte[] ResponderId, DateTimeOffset ProducedAt) ReadOcspIdentifier(byte[] basicResponse)
+    {
+        var tbs = new AsnReader(basicResponse, AsnEncodingRules.BER).ReadSequence().ReadSequence();
+        if (tbs.PeekTag() == Context0)
+        {
+            _ = tbs.ReadEncodedValue(); // version
+        }
+
+        byte[] responderId = tbs.ReadEncodedValue().ToArray();
+        return (responderId, tbs.ReadGeneralizedTime());
     }
 
     /// <summary>CertificateValues ::= SEQUENCE OF Certificate — the certificates of the path but the signer's.</summary>
@@ -319,16 +355,7 @@ internal static class CadesExtendedValidationData
     /// <summary>CrlValidatedID ::= SEQUENCE { crlHash OtherHash, crlIdentifier CrlIdentifier OPTIONAL }.</summary>
     private static void WriteCrlValidatedId(AsnWriter w, byte[] crl)
     {
-        var tbs = new AsnReader(crl, AsnEncodingRules.BER).ReadSequence().ReadSequence();
-        if (tbs.PeekTag() == Asn1Tag.Integer)
-        {
-            _ = tbs.ReadInteger();
-        }
-
-        _ = tbs.ReadSequence(); // signature
-        byte[] issuer = tbs.ReadEncodedValue().ToArray();
-        DateTimeOffset thisUpdate = tbs.PeekTag().TagValue == (int)UniversalTagNumber.UtcTime ? tbs.ReadUtcTime() : tbs.ReadGeneralizedTime();
-
+        var (issuer, thisUpdate) = ReadCrlIdentifier(crl);
         using (w.PushSequence())
         {
             WriteOtherHash(w, SHA256.HashData(crl));
@@ -343,14 +370,7 @@ internal static class CadesExtendedValidationData
     /// <summary>OcspResponsesID ::= SEQUENCE { ocspIdentifier { responderID, producedAt }, ocspRepHash OtherHash }.</summary>
     private static void WriteOcspResponsesId(AsnWriter w, byte[] basicResponse)
     {
-        var tbs = new AsnReader(basicResponse, AsnEncodingRules.BER).ReadSequence().ReadSequence();
-        if (tbs.PeekTag() == Context0)
-        {
-            _ = tbs.ReadEncodedValue(); // version
-        }
-
-        byte[] responderId = tbs.ReadEncodedValue().ToArray();
-        DateTimeOffset producedAt = tbs.ReadGeneralizedTime();
+        var (responderId, producedAt) = ReadOcspIdentifier(basicResponse);
         using (w.PushSequence())
         {
             using (w.PushSequence())

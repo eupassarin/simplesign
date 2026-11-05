@@ -15,6 +15,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI: `pkcs11 list` without `--lib` lists the tokens of every installed driver; `pkcs11 drivers`;
   `--pkcs11-lib auto` when signing.
 
+### Added (new package SimpleSign.Brasil.Xades)
+
+- `XadesSignerBuilder.WithIcpBrasilPolicy(policy, tsa)`: XAdES AD-RB, AD-RT, AD-RV, AD-RC and AD-RA
+  under the XML PAs, root-aware, with SigningCertificate (XAdES 1.3.2) and every mandated property.
+- `IcpBrasilXadesPolicyValidator.Validate(signedXml, result)`: hash, period, roots, mandated
+  properties, algorithm and key size.
+- `IcpBrasilXadesPolicies.RefreshAsync`: downloads `LPA_XAdES.xml` and verifies its ITI XML signature
+  with a strict verifier (the ITI's KeyInfo reference cannot be verified by `SignedXml`).
+
+### Added (XAdES)
+
+- `WithSigningCertificateForm(XadesSigningCertificateForm.V1)`: XAdES 1.3.2 SigningCertificate; the
+  validator now resolves the signer from SigningCertificate as well as SigningCertificateV2 (it
+  failed on ICP-Brasil and Demoiselle signatures).
+- `WithExtendedValidationData(XadesExtendedForm)`: CompleteCertificateRefs, CompleteRevocationRefs,
+  SigAndRefsTimeStamp, CertificateValues/RevocationValues and ArchiveTimeStamp (XAdES-C/X/X-L/A);
+  `XadesValidationResult.HasValidSigAndRefsTimeStamp` and `HasValidCompleteReferences`.
+
+### Added (SimpleSign.Brasil — homologation, XML policies, timestamps)
+
+- ICP-Brasil homologation hierarchy (50 test certificates), opt-in with
+  `IcpBrasilEnvironment.Homologation` (`BrasilExtensionOptions.IcpEnvironment`, chain validator,
+  `FindBundledRoot`); `IcpBrasilValidationResult.IsHomologation`, `BR.Environment`. CLI:
+  `validate --icp-homologation`.
+- Rules of the 45 XML PAs in the catalog; `IcpBrasilPolicyRules.ParseXml`,
+  `IcpBrasilSignaturePolicies.FromXmlPolicyDocument`, `IcpBrasilLpa.ParseXml`.
+- `IcpBrasilTimestamp.Verify` / `VerifyHash`: standalone timestamps from ICP-Brasil ACTs.
+
+### Added (Core — standalone timestamps)
+
+- `TimestampToken.CreateAsync` / `CreateForHashAsync` / `Verify` / `VerifyHash` (`.tst` files,
+  RFC 3161) and `TimestampClient.GetTimestampForHashAsync`. CLI: `simplesign timestamp create|verify`.
+
 ### Added (SimpleSign.Brasil — complete signature policies)
 
 - **PA rules:** `IcpBrasilPolicyRules` (accepted roots, mandatory signed/unsigned attributes,

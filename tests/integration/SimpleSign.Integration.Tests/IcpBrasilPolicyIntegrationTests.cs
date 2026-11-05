@@ -75,4 +75,23 @@ public sealed class IcpBrasilPolicyIntegrationTests
         lpa.Entries.Count.ShouldBeGreaterThanOrEqualTo(18);
         IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Pades).Oid.ShouldStartWith("2.16.76.1.7.1.11.1.");
     }
+
+    [SkippableFact]
+    public async Task RefreshXadesAsync_LiveItiRepository_VerifiesAndApplies()
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        IcpBrasilLpa lpa;
+        try
+        {
+            lpa = await SimpleSign.Brasil.Xades.IcpBrasilXadesPolicies.RefreshAsync(http);
+        }
+        catch (HttpRequestException ex)
+        {
+            Skip.If(true, $"ITI repository unreachable: {ex.Message}");
+            return;
+        }
+
+        lpa.Entries.Count.ShouldBeGreaterThanOrEqualTo(45);
+        IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Xades).Oid.ShouldStartWith("2.16.76.1.7.1.6.2.");
+    }
 }

@@ -54,6 +54,14 @@ internal static partial class Program
                     .WithDescription("Validate a CAdES detached signature");
             });
 
+            config.AddBranch("timestamp", timestamp =>
+            {
+                timestamp.AddCommand<TimestampCreateCommand>("create")
+                    .WithDescription("Create a standalone RFC 3161 timestamp (.tst) for a file or a hash");
+                timestamp.AddCommand<TimestampVerifyCommand>("verify")
+                    .WithDescription("Verify a standalone timestamp (.tst) against a file or a hash");
+            });
+
             config.AddBranch("pkcs11", pkcs11 =>
             {
                 pkcs11.AddCommand<Pkcs11ListCommand>("list")

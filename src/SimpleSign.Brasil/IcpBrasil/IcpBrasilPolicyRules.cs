@@ -99,6 +99,131 @@ public sealed record IcpBrasilPolicyRules(
         }
     }
 
+    /// <summary>
+    /// Reads the rules from an XML PA (the XAdES policies of <c>LPA_XAdES.xml</c>, namespace
+    /// <c>http://www.iti.gov.br/PA#</c>): mandated signed and unsigned qualifying properties
+    /// (by name, e.g. <c>SigningCertificate</c>), trust points and signer algorithms (by URI).
+    /// </summary>
+    /// <param name="policyDocument">The XML PA.</param>
+    /// <exception cref="ArgumentException">The document is not an XML PA.</exception>
+    public static IcpBrasilPolicyRules ParseXml(ReadOnlySpan<byte> policyDocument)
+    {
+        const string Pa = "http://www.iti.gov.br/PA#";
+        string? oid = null;
+        var signed = new List<string>();
+        var unsigned = new List<string>();
+        var anchors = new List<string>();
+        var subjects = new List<string>();
+        var algorithms = new List<IcpBrasilAlgorithmConstraint>();
+        var path = new Stack<string>();
+        string? algorithm = null;
+        try
+        {
+            using var stream = new MemoryStream(policyDocument.ToArray());
+            using var reader = System.Xml.XmlReader.Create(stream, new System.Xml.XmlReaderSettings
+            {
+                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                XmlResolver = null,
+                IgnoreWhitespace = true,
+            });
+            bool positioned = false;
+            while (positioned || reader.Read())
+            {
+                positioned = false;
+                if (reader.NodeType == System.Xml.XmlNodeType.EndElement)
+                {
+                    if (path.Pop() == "AlgAndLength" && algorithm is not null && path.Contains("SignerAlgConstraints"))
+                    {
+                        algorithms.Add(new IcpBrasilAlgorithmConstraint(algorithm, null));
+                    }
+
+                    if (reader.LocalName == "AlgAndLength")
+                    {
+                        algorithm = null;
+                    }
+
+                    continue;
+                }
+
+                if (reader.NodeType != System.Xml.XmlNodeType.Element)
+                {
+                    continue;
+                }
+
+                string name = reader.LocalName;
+                bool empty = reader.IsEmptyElement;
+                if (!empty)
+                {
+                    path.Push(name);
+                }
+
+                if (empty)
+                {
+                    continue;
+                }
+
+                if (name == "Identifier" && oid is null && path.Contains("SignPolicyIdentifier"))
+                {
+                    oid = StripUrn(reader.ReadElementContentAsString());
+                    positioned = true;
+                    path.Pop();
+                }
+                else if (name == "QPropertyID" && reader.NamespaceURI == Pa && path.Contains("SignerRules"))
+                {
+                    var target = path.Contains("MandatedSignedQProperties") ? signed : path.Contains("MandatedUnsignedQProperties") ? unsigned : null;
+                    string property = reader.ReadElementContentAsString().Trim();
+                    positioned = true;
+                    path.Pop();
+                    target?.Add(property);
+                }
+                else if (name == "X509Certificate" && reader.NamespaceURI == Pa && path.Contains("SigningCertTrustCondition"))
+                {
+                    byte[] der = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                    positioned = true;
+                    path.Pop();
+                    using var x509 = SimpleSign.Core.Crypto.CertificateLoader.LoadCertificate(der);
+                    anchors.Add(KeyFingerprint(x509));
+                    subjects.Add(x509.Subject);
+                }
+                else if (name == "AlgId" && path.Contains("SignerAlgConstraints"))
+                {
+                    algorithm = reader.ReadElementContentAsString().Trim();
+                    positioned = true;
+                    path.Pop();
+                    if (algorithm.Length == 0)
+                    {
+                        algorithm = null;
+                    }
+                }
+                else if (name == "MinKeyLength" && path.Contains("SignerAlgConstraints"))
+                {
+                    string text = reader.ReadElementContentAsString().Trim();
+                    positioned = true;
+                    path.Pop();
+                    if (algorithm is not null && int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int length))
+                    {
+                        algorithms.Add(new IcpBrasilAlgorithmConstraint(algorithm, length));
+                        algorithm = null;
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.Xml.XmlException or FormatException or CryptographicException or InvalidOperationException)
+        {
+            throw new ArgumentException("The document is not an ICP-Brasil XML signature policy.", nameof(policyDocument), ex);
+        }
+
+        return oid is null
+            ? throw new ArgumentException("The document is not an ICP-Brasil XML signature policy (no SignPolicyIdentifier).", nameof(policyDocument))
+            : new IcpBrasilPolicyRules(oid, anchors, subjects, signed, unsigned, algorithms);
+    }
+
+    private static string StripUrn(string identifier)
+    {
+        identifier = identifier.Trim();
+        return identifier.StartsWith("urn:oid:", StringComparison.OrdinalIgnoreCase) ? identifier[8..] : identifier;
+    }
+
     /// <summary>SignerAndVerifierRules ::= SEQUENCE { signerRules, verifierRules }.</summary>
     private static void ReadSignerRules(AsnReader signerAndVerifier, List<string> signed, List<string> unsigned)
     {

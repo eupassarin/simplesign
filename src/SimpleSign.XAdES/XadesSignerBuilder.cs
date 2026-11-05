@@ -32,6 +32,8 @@ public sealed class XadesSignerBuilder
             DataUri: null,
             CommitmentType: null,
             SignaturePolicy: null,
+            SigningCertificateForm: XadesSigningCertificateForm.V2,
+            ExtendedForm: XadesExtendedForm.None,
             SignerRoles: null,
             DataObjectFormat: null,
             OperationId: null,
@@ -52,6 +54,8 @@ public sealed class XadesSignerBuilder
             DataUri: null,
             CommitmentType: null,
             SignaturePolicy: null,
+            SigningCertificateForm: XadesSigningCertificateForm.V2,
+            ExtendedForm: XadesExtendedForm.None,
             SignerRoles: null,
             DataObjectFormat: null,
             OperationId: null,
@@ -223,6 +227,28 @@ public sealed class XadesSignerBuilder
         return With(_options with { SignaturePolicy = policy });
     }
 
+    /// <summary>
+    /// Chooses the signing-certificate property: <see cref="XadesSigningCertificateForm.V2"/>
+    /// (default) or the XAdES 1.3.2 <see cref="XadesSigningCertificateForm.V1"/> that the
+    /// ICP-Brasil XML policies mandate.
+    /// </summary>
+    /// <param name="form">The form.</param>
+    /// <returns>A new builder with the form configured.</returns>
+    public XadesSignerBuilder WithSigningCertificateForm(XadesSigningCertificateForm form) =>
+        With(_options with { SigningCertificateForm = form });
+
+    /// <summary>
+    /// Adds the XAdES extended forms of ETSI TS 101 903 v1.3.2 after the signature timestamp
+    /// (requires a timestamped profile): CompleteCertificateRefs and CompleteRevocationRefs, a
+    /// SigAndRefsTimeStamp (XAdES-X), CertificateValues/RevocationValues (XAdES-X-L) and an
+    /// ArchiveTimeStamp (XAdES-A), as ICP-Brasil's AD-RV, AD-RC and AD-RA XML policies mandate.
+    /// The CRL or OCSP response of every certificate in the path must be obtainable.
+    /// </summary>
+    /// <param name="form">The extended form.</param>
+    /// <returns>A new builder with the form configured.</returns>
+    public XadesSignerBuilder WithExtendedValidationData(XadesExtendedForm form) =>
+        With(_options with { ExtendedForm = form });
+
     /// <summary>Set claimed signer role(s) (e.g., "Manager", "Approver").</summary>
     /// <param name="roles">The signer roles. The collection is defensively copied.</param>
     /// <returns>A new builder with the signer roles configured.</returns>
@@ -291,6 +317,12 @@ public sealed class XadesSignerBuilder
         var profile = _options.Profile;
 
         ValidatePrerequisites(credential);
+        if (_options.ExtendedForm != XadesExtendedForm.None && profile.Timestamp is null)
+        {
+            throw new SigningException(
+                "WithExtendedValidationData needs a timestamped profile (AdesBaselineProfile.Timestamped).",
+                SigningErrorReason.LevelNotAchievable);
+        }
 
         var warnings = new List<SigningWarning>();
         var resolvedAlgorithm = SigningAlgorithmResolver.Resolve(
@@ -341,7 +373,25 @@ public sealed class XadesSignerBuilder
         }
 
         XadesLtvEmbeddingResult? ltvEmbedding = null;
-        if (timestampTokenBytes is not null && profile.Level >= AdesBaselineLevel.LongTerm)
+        bool hasArchiveTimestamp = false;
+        if (_options.ExtendedForm != XadesExtendedForm.None)
+        {
+            if (timestampTokenBytes is null)
+            {
+                throw new SigningException(
+                    "The XAdES extended forms need the signature timestamp, which could not be obtained.",
+                    SigningErrorReason.LevelNotAchievable);
+            }
+
+            (signedXml, ltvEmbedding) = await ApplyExtendedFormAsync(
+                signedXml, targetSignatureId, certificate, chain, hashAlg, profile.Timestamp!, cancellationToken).ConfigureAwait(false);
+            if (_options.ExtendedForm == XadesExtendedForm.Archive)
+            {
+                signedXml = await ApplyArchiveTimestampAsync(signedXml, targetSignatureId, hashAlg, cancellationToken).ConfigureAwait(false);
+                hasArchiveTimestamp = true;
+            }
+        }
+        else if (timestampTokenBytes is not null && profile.Level >= AdesBaselineLevel.LongTerm)
         {
             ltvEmbedding = await ApplyLtvAsync(signedXml, targetSignatureId, certificate, chain, cancellationToken).ConfigureAwait(false);
             if (ltvEmbedding is not null)
@@ -355,8 +405,7 @@ public sealed class XadesSignerBuilder
             }
         }
 
-        bool hasArchiveTimestamp = false;
-        if (ltvEmbedding is not null && profile.Level >= AdesBaselineLevel.Archive)
+        if (_options.ExtendedForm == XadesExtendedForm.None && ltvEmbedding is not null && profile.Level >= AdesBaselineLevel.Archive)
         {
             try
             {
@@ -516,6 +565,12 @@ public sealed class XadesSignerBuilder
         _ => throw new InvalidOperationException($"Unknown signing credential type: {credential.GetType().Name}")
     };
 
+    /// <summary>The signer certificate, once set (for extensions such as SimpleSign.Brasil.Xades).</summary>
+    internal X509Certificate2? SignerCertificate => _options.Credential is { } credential ? GetCertificate(credential) : null;
+
+    /// <summary>The signer chain given with the certificate (for extensions).</summary>
+    internal IReadOnlyList<X509Certificate2> SignerChain => _options.Credential is { } credential ? GetChain(credential) : [];
+
     private static IReadOnlyList<X509Certificate2> GetChain(XadesSigningCredential credential) => credential switch
     {
         XadesLocalCredential c => c.Chain,
@@ -532,7 +587,7 @@ public sealed class XadesSignerBuilder
         var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
         return XadesSignatureBuilder.BuildSignature(
             _xmlData, certificate, hashAlg, signingTime, chain,
-            _options.CommitmentType, _options.SignaturePolicy,
+            _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm,
             sigAlgOid, _options.Form, _options.SignerRoles, _options.DataObjectFormat,
             _options.Dependencies.Logger, _options.DataUri);
     }
@@ -551,7 +606,7 @@ public sealed class XadesSignerBuilder
 
         byte[] signedInfoBytes = XadesSignatureBuilder.BuildSignedInfoToHash(
             _xmlData, certificate, hashAlg, signingTime, _options.Form,
-            _options.CommitmentType, _options.SignaturePolicy,
+            _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm,
             sigAlgOid, _options.SignerRoles, _options.DataObjectFormat,
             out string signedPropertiesId,
             out byte[] signedInfoXml,
@@ -593,7 +648,7 @@ public sealed class XadesSignerBuilder
 
         return XadesSignatureBuilder.CompleteWithExternalSignature(
             _xmlData, certificate, hashAlg, signingTime, chain,
-            _options.CommitmentType, _options.SignaturePolicy,
+            _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm,
             sigAlgOid, signedInfoXml, signature.ToArray(), signedPropertiesId,
             _options.SignerRoles, _options.DataObjectFormat, _options.Form, _options.DataUri, dataObjectId);
     }
@@ -627,6 +682,51 @@ public sealed class XadesSignerBuilder
 
         var provider = scopedProvider ?? _options.Dependencies.HttpClientProvider;
         return new TimestampClient(provider.GetClient(), endpoint, _options.Dependencies.Logger);
+    }
+
+    private async Task<(byte[] SignedXml, XadesLtvEmbeddingResult? Ltv)> ApplyExtendedFormAsync(
+        byte[] signedXml,
+        string signatureId,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        HashAlgorithmName hashAlg,
+        TimestampOptions timestamp,
+        CancellationToken cancellationToken)
+    {
+        var known = new List<X509Certificate2> { certificate };
+        known.AddRange(chain.Where(c => known.All(k => k.Thumbprint != c.Thumbprint)));
+        if (XadesSignatureBuilder.ExtractSignatureTimeStamp(signedXml, signatureId) is { } signatureTimestamp)
+        {
+            known.AddRange(TsaCertificateExtractor.ExtractCertificates(signatureTimestamp).Where(c => known.All(k => k.Thumbprint != c.Thumbprint)));
+        }
+
+        var provider = _options.Profile.LongTermValidation?.HttpClientProvider ?? timestamp.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
+        var evidence = await LtvDataCollector.CollectAsync(
+            provider.GetClient(), certificate, known, _options.Dependencies.Logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (!evidence.HasCompleteCoverage)
+        {
+            throw new SigningException(
+                "The XAdES extended forms need the CRL or OCSP response of every certificate in the path; some could not be collected.",
+                SigningErrorReason.LevelNotAchievable);
+        }
+
+        var path = CadesExtendedValidationData.BuildPath(certificate, [.. evidence.CertificateRawData, .. known.Select(k => k.RawData)]);
+        signedXml = XadesSignatureBuilder.EmbedCompleteReferences(signedXml, path, evidence.Crls, evidence.OcspResponses, signatureId);
+        if (_options.ExtendedForm is XadesExtendedForm.CompleteReferences or XadesExtendedForm.ExtendedLong)
+        {
+            byte[] input = XadesSignatureBuilder.CreateSigAndRefsTimeStampInput(signedXml, signatureId);
+            byte[] token = await CreateTimestampClient(timestamp).GetTimestampAsync(input, hashAlg, cancellationToken).ConfigureAwait(false);
+            TimestampClient.ValidateTimestampToken(token, input, hashAlg);
+            signedXml = XadesSignatureBuilder.EmbedSigAndRefsTimeStamp(signedXml, token, signatureId);
+        }
+
+        if (_options.ExtendedForm is XadesExtendedForm.ExtendedLong or XadesExtendedForm.Archive)
+        {
+            signedXml = XadesSignatureBuilder.EmbedLtvData(signedXml, evidence, signatureId);
+            return (signedXml, new XadesLtvEmbeddingResult(signedXml, evidence));
+        }
+
+        return (signedXml, null);
     }
 
     private async Task<XadesLtvEmbeddingResult?> ApplyLtvAsync(
