@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through `SIMPLESIGN_PKCS11_LIBRARY`.
 - CLI: `pkcs11 list` without `--lib` lists the tokens of every installed driver; `pkcs11 drivers`;
   `--pkcs11-lib auto` when signing.
+
 ### Added (new package SimpleSign.Brasil.Xades)
 
 - `XadesSignerBuilder.WithIcpBrasilPolicy(policy, tsa)`: XAdES AD-RB, AD-RT, AD-RV, AD-RC and AD-RA
