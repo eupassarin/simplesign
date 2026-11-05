@@ -23,6 +23,8 @@ byte[] signed = await PadesSigner.Document(pdfBytes)
 ```
 
 `Pkcs11Signer.ListTokens(libraryPath)` lists the connected tokens and their certificates without a PIN.
+`Pkcs11Drivers.FindLibraryAsync()` finds the driver of the connected token among the middlewares
+used in Brazil (SafeNet, SafeSign, Watchdata, Gemalto, Oberthur, OpenSC…), so the path is optional.
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
 and the [PKCS#11 guide](https://eupassarin.github.io/SimpleSign/articles/pkcs11.html). MIT licensed.
