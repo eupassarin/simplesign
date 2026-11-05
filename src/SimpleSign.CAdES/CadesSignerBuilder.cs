@@ -684,12 +684,17 @@ public sealed class CadesSignerBuilder
         TimestampOptions timestampOptions,
         CancellationToken cancellationToken)
     {
-        var tsaClient = CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
+        var tsaClient = CreateTimestampClient(timestampOptions);
         byte[] signatureValue = TimestampClient.ExtractSignatureValue(cms);
         byte[] tsToken = await tsaClient.GetTimestampAsync(signatureValue, hashAlg, cancellationToken).ConfigureAwait(false);
         TimestampClient.ValidateTimestampToken(tsToken, signatureValue, hashAlg);
         return tsToken;
     }
+
+    private ITimestampClient CreateTimestampClient(TimestampOptions timestampOptions) =>
+        timestampOptions.NeedsDedicatedClient
+            ? TimestampClient.Create(timestampOptions, timestampOptions.HttpClientProvider ?? _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger)
+            : CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
 
     private ITimestampClient CreateTimestampClient(string endpoint, IHttpClientProvider? scopedProvider)
     {

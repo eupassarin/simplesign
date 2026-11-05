@@ -89,6 +89,29 @@ internal static class CrlEvaluator
         }
     }
 
+    /// <summary>The nextUpdate of a CRL, or null when it has none or cannot be parsed.</summary>
+    /// <param name="crlBytes">The DER (or BER) encoded CRL.</param>
+    internal static DateTimeOffset? ReadNextUpdate(byte[] crlBytes)
+    {
+        try
+        {
+            var tbs = new AsnReader(crlBytes, AsnEncodingRules.BER).ReadSequence().ReadSequence();
+            if (tbs.PeekTag() == Asn1Tag.Integer)
+            {
+                tbs.ReadEncodedValue(); // version
+            }
+
+            tbs.ReadSequence();       // signature
+            tbs.ReadEncodedValue();   // issuer
+            ReadTime(tbs);            // thisUpdate
+            return tbs.HasData && IsTime(tbs.PeekTag()) ? ReadTime(tbs) : null;
+        }
+        catch (AsnContentException)
+        {
+            return null;
+        }
+    }
+
     private static bool IsTime(Asn1Tag tag) =>
         tag.TagClass == TagClass.Universal && tag.TagValue is (int)UniversalTagNumber.UtcTime or (int)UniversalTagNumber.GeneralizedTime;
 

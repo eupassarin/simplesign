@@ -146,11 +146,26 @@ internal sealed class ChainRevocationChecker
         return ChainRevocationStatus.Unknown;
     }
 
+    /// <summary>
+    /// Directory where downloaded LCRs are kept between runs (ICP-Brasil LCRs reach several
+    /// megabytes). A cached LCR is reused until its nextUpdate. Null = memory only.
+    /// </summary>
+    internal string? CacheDirectory { get; set; }
+
     private async Task<byte[]?> DownloadCrlAsync(string url, CancellationToken cancellationToken)
     {
         if (_crlCache.TryGetValue(url, out var cached) && DateTimeOffset.UtcNow - cached.FetchedAt < CrlCacheLifetime)
         {
             return cached.Bytes;
+        }
+
+        string? file = CacheDirectory is null
+            ? null
+            : Path.Combine(CacheDirectory, Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url))) + ".crl");
+        if (file is not null && TryReadCurrent(file) is { } fromDisk)
+        {
+            _crlCache[url] = (fromDisk, DateTimeOffset.UtcNow);
+            return fromDisk;
         }
 
         try
@@ -159,6 +174,10 @@ internal sealed class ChainRevocationChecker
             if (bytes is not null)
             {
                 _crlCache[url] = (bytes, DateTimeOffset.UtcNow);
+                if (file is not null)
+                {
+                    TryWrite(file, bytes);
+                }
             }
 
             return bytes;
@@ -170,6 +189,49 @@ internal sealed class ChainRevocationChecker
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
         {
             return null;
+        }
+    }
+
+    /// <summary>The cached LCR, if the file exists and its nextUpdate has not passed.</summary>
+    private static byte[]? TryReadCurrent(string file)
+    {
+        try
+        {
+            if (!File.Exists(file))
+            {
+                return null;
+            }
+
+            byte[] bytes = File.ReadAllBytes(file);
+            return CrlEvaluator.ReadNextUpdate(bytes) is { } next && next > DateTimeOffset.UtcNow ? bytes : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Writes the LCR atomically (temporary file, then rename); a failed write only loses the cache.</summary>
+    private static void TryWrite(string file, byte[] bytes)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            string temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            File.WriteAllBytes(temp, bytes);
+            File.Move(temp, file, overwrite: true);
+        }
+        catch (IOException)
+        {
+            // The cache is an optimisation.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The cache is an optimisation.
         }
     }
 }

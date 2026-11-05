@@ -9,6 +9,15 @@ internal static class SanCertificates
 {
     internal static X509Certificate2 Create(params (string Oid, string Value)[] otherNames)
     {
+        using var key = RSA.Create(2048);
+        var req = new CertificateRequest("CN=SanTest", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(OtherNames(otherNames));
+        return req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+    }
+
+    /// <summary>A SubjectAltName extension with the given otherNames (UTF8String values).</summary>
+    internal static X509Extension OtherNames(params (string Oid, string Value)[] otherNames)
+    {
         var w = new AsnWriter(AsnEncodingRules.DER);
         using (w.PushSequence())
         {
@@ -25,9 +34,6 @@ internal static class SanCertificates
             }
         }
 
-        using var key = RSA.Create(2048);
-        var req = new CertificateRequest("CN=SanTest", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        req.CertificateExtensions.Add(new X509Extension("2.5.29.17", w.Encode(), critical: false));
-        return req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        return new X509Extension("2.5.29.17", w.Encode(), critical: false);
     }
 }

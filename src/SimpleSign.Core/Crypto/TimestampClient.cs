@@ -21,29 +21,92 @@ public sealed class TimestampClient : ITimestampClient
     private static readonly MediaTypeHeaderValue TsqContentType =
         new("application/timestamp-query");
 
+    /// <summary>Default port of the RFC 3161 TCP transport.</summary>
+    public const int DefaultTcpPort = 318;
+
+    private const int MaxTcpResponseBytes = 1024 * 1024;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, HttpClient> ClientCertificateClients = new(StringComparer.Ordinal);
+
     private readonly HttpClient _httpClient;
     private readonly string _tsaUrl;
     private readonly ILogger _logger;
+    private readonly AuthenticationHeaderValue? _authorization;
+    private readonly Uri? _tcpEndpoint;
 
     /// <summary>
     /// Initializes with the TSA URL and a configured HttpClient (dependency injection).
+    /// A <c>tcp://host:port</c> URL uses the RFC 3161 socket transport.
     /// </summary>
     public TimestampClient(HttpClient httpClient, string tsaUrl, ILogger? logger = null)
+        : this(httpClient, tsaUrl, authorization: null, logger)
+    {
+    }
+
+    /// <summary>
+    /// Initializes from <see cref="TimestampOptions"/>: endpoint (HTTP(S) or TCP) and credentials.
+    /// For <see cref="TimestampOptions.ClientCertificate"/>, use <see cref="Create"/>, which builds an
+    /// HTTP client that presents the certificate.
+    /// </summary>
+    public TimestampClient(HttpClient httpClient, TimestampOptions options, ILogger? logger = null)
+        : this(httpClient, (options ?? throw new ArgumentNullException(nameof(options))).Endpoint.AbsoluteUri, options.Authorization, logger)
+    {
+    }
+
+    private TimestampClient(HttpClient httpClient, string tsaUrl, AuthenticationHeaderValue? authorization, ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentException.ThrowIfNullOrWhiteSpace(tsaUrl);
 
-        if (!Http.UrlValidator.IsSafeUrl(tsaUrl))
+        if (Uri.TryCreate(tsaUrl, UriKind.Absolute, out var uri) && uri.Scheme == "tcp")
+        {
+            // Same SSRF rules as HTTP: no localhost or private networks.
+            if (!Http.UrlValidator.IsSafeUrl($"https://{uri.Host}/"))
+            {
+                throw new ArgumentException("TSA URL is blocked: it must not point to localhost or private networks.", nameof(tsaUrl));
+            }
+
+            _tcpEndpoint = uri;
+        }
+        else if (!Http.UrlValidator.IsSafeUrl(tsaUrl))
         {
             throw new ArgumentException($"TSA URL is blocked: must be an absolute HTTP(S) URL that does not point to localhost or private networks.", nameof(tsaUrl));
         }
 
         _httpClient = httpClient;
         _tsaUrl = tsaUrl;
+        _authorization = authorization;
         _logger = logger ?? NullLogger.Instance;
 
         // Timeout is configured by DefaultHttpClientProvider; avoid mutating shared HttpClient here.
     }
+
+    /// <summary>
+    /// Creates a client for <paramref name="options"/>: its own <see cref="TimestampOptions.HttpClientProvider"/>,
+    /// else an HTTP client that presents <see cref="TimestampOptions.ClientCertificate"/>, else
+    /// <paramref name="fallback"/>; credentials and TCP transport as configured.
+    /// </summary>
+    /// <param name="options">The TSA configuration.</param>
+    /// <param name="fallback">The HTTP client provider to use when the options do not set one.</param>
+    /// <param name="logger">Optional logger.</param>
+    public static TimestampClient Create(TimestampOptions options, IHttpClientProvider fallback, ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(fallback);
+        HttpClient client = options.HttpClientProvider?.GetClient()
+            ?? (options.ClientCertificate is { } certificate ? ClientFor(certificate) : fallback.GetClient());
+        return new TimestampClient(client, options, logger);
+    }
+
+    private static HttpClient ClientFor(System.Security.Cryptography.X509Certificates.X509Certificate2 certificate) =>
+        ClientCertificateClients.GetOrAdd(certificate.Thumbprint, _ =>
+        {
+#pragma warning disable CA2000 // Cached for the process lifetime, like DefaultHttpClientProvider's client.
+            var handler = new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) };
+#pragma warning restore CA2000
+            handler.SslOptions.ClientCertificates = [certificate];
+            return new HttpClient(handler) { Timeout = ResilientHttp.DefaultHttpTimeout };
+        });
 
     /// <summary>
     /// Requests a timestamp token for the provided bytes.
@@ -171,10 +234,17 @@ public sealed class TimestampClient : ITimestampClient
 
     private async Task<byte[]> SendRequestAsync(byte[] timestampRequest, CancellationToken ct)
     {
+        if (_tcpEndpoint is not null)
+        {
+            return await SendTcpAsync(_tcpEndpoint, timestampRequest, ct).ConfigureAwait(false);
+        }
+
         using var content = new ByteArrayContent(timestampRequest);
         content.Headers.ContentType = TsqContentType;
 
-        using var response = await ResilientHttp.PostAsync(_httpClient, _tsaUrl, content, ct).ConfigureAwait(false);
+        using var response = _authorization is null
+            ? await ResilientHttp.PostAsync(_httpClient, _tsaUrl, content, ct).ConfigureAwait(false)
+            : await ResilientHttp.PostAsync(_httpClient, _tsaUrl, timestampRequest, TsqContentType, _authorization, ct).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -193,6 +263,43 @@ public sealed class TimestampClient : ITimestampClient
         }
 
         return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// RFC 3161 §3.3 socket transport: each message is a 4-byte big-endian length (of what
+    /// follows), a 1-byte flag and the DER value. Requests use flag 0 (tsaMsg); the TSA answers
+    /// with 5 (finalMsgRep, a TimeStampResp) or 6 (errorMsgRep).
+    /// </summary>
+    internal static async Task<byte[]> SendTcpAsync(Uri endpoint, byte[] timestampRequest, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(ResilientHttp.DefaultHttpTimeout);
+        using var tcp = new System.Net.Sockets.TcpClient();
+        await tcp.ConnectAsync(endpoint.Host, endpoint.IsDefaultPort || endpoint.Port <= 0 ? DefaultTcpPort : endpoint.Port, timeout.Token).ConfigureAwait(false);
+        var stream = tcp.GetStream();
+
+        byte[] frame = new byte[5 + timestampRequest.Length];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(frame, timestampRequest.Length + 1);
+        frame[4] = 0; // tsaMsg
+        timestampRequest.CopyTo(frame, 5);
+        await stream.WriteAsync(frame, timeout.Token).ConfigureAwait(false);
+
+        byte[] header = new byte[5];
+        await stream.ReadExactlyAsync(header, timeout.Token).ConfigureAwait(false);
+        int length = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header);
+        if (length < 1 || length > MaxTcpResponseBytes)
+        {
+            throw new TimestampException($"TSA TCP response has an invalid length ({length}).", endpoint);
+        }
+
+        byte[] value = new byte[length - 1];
+        await stream.ReadExactlyAsync(value, timeout.Token).ConfigureAwait(false);
+        return header[4] switch
+        {
+            5 => value,
+            6 => throw new TimestampException("TSA returned an error message (errorMsgRep).", endpoint),
+            _ => throw new TimestampException($"TSA returned an unsupported TCP message (flag {header[4]}).", endpoint),
+        };
     }
     #endregion
 

@@ -40,6 +40,16 @@ public sealed class GovBrChainValidator
     private readonly ICertificateChainService _certChainService;
     private readonly ChainRevocationChecker _revocationChecker;
 
+    /// <summary>
+    /// Directory where downloaded LCRs are kept between runs and reused until their
+    /// nextUpdate (ICP-Brasil LCRs reach several megabytes). Null (default) = memory only.
+    /// </summary>
+    public string? CrlCacheDirectory
+    {
+        get => _revocationChecker.CacheDirectory;
+        init => _revocationChecker.CacheDirectory = value;
+    }
+
     /// <param name="httpClient">
     /// <see cref="HttpClient"/> instance for network calls.
     /// In ASP.NET Core, inject via <c>IHttpClientFactory.CreateClient()</c> to avoid socket exhaustion.

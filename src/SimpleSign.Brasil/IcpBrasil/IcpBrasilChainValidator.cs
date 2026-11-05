@@ -95,6 +95,16 @@ public sealed class IcpBrasilChainValidator
     private readonly ICertificateChainService _certChainService;
     private readonly ChainRevocationChecker _revocationChecker;
 
+    /// <summary>
+    /// Directory where downloaded LCRs are kept between runs and reused until their
+    /// nextUpdate (ICP-Brasil LCRs reach several megabytes). Null (default) = memory only.
+    /// </summary>
+    public string? CrlCacheDirectory
+    {
+        get => _revocationChecker.CacheDirectory;
+        init => _revocationChecker.CacheDirectory = value;
+    }
+
     /// <summary>Test hook: roots to trust instead of the bundled AC Raiz certificates.</summary>
     internal IReadOnlyList<X509Certificate2>? TrustAnchorsOverride { get; init; }
 
@@ -212,7 +222,7 @@ public sealed class IcpBrasilChainValidator
         try
         {
             // 4. Builds the chain at the validation time with the AC Raiz as trust anchor
-            using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts, validationTime);
+            using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts, validationTime, TrustAnchorsOverride is null);
             var chainElements = ProcessChainErrors(chain, errors);
             bool isChainValid = errors is [] && chainElements is not [];
 
@@ -253,6 +263,27 @@ public sealed class IcpBrasilChainValidator
                 AcRaizCertificates = acRaizCerts.AsReadOnly(),
                 Errors = errors.AsReadOnly(),
                 Warnings = warnings.AsReadOnly()
+            };
+        }
+        catch (CryptographicException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Some platforms throw instead of reporting a chain status when a certificate in the
+            // path uses an algorithm they cannot verify (Windows and Ed448, used by the
+            // ICP-Brasil OM-BR hierarchy under roots v6/v7).
+            errors.Add($"The chain could not be built on this platform: {ex.Message}");
+            return new IcpBrasilValidationResult
+            {
+                IsChainValid = false,
+                IsIcpBrasilCertificate = isIcpBrasil,
+                CertificateLevel = certLevel,
+                Cpf = cpf,
+                Cnpj = cnpj,
+                ProfessionalRegistrations = registrations,
+                CertificateData = IcpBrasilCertificateData.FromCertificate(certificate, _logger),
+                ValidationTime = validationTime,
+                AcRaizCertificates = acRaizCerts.AsReadOnly(),
+                Errors = errors.AsReadOnly(),
+                Warnings = warnings.AsReadOnly(),
             };
         }
         finally
@@ -635,6 +666,31 @@ public sealed class IcpBrasilChainValidator
     private static readonly System.Buffers.SearchValues<char> CnpjBaseCharacters =
         System.Buffers.SearchValues.Create("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
+    private static readonly Lazy<IReadOnlyList<X509Certificate2>> BundledIntermediates = new(LoadIntermediates);
+
+    /// <summary>
+    /// The bundled intermediate ICP-Brasil CA certificates (the ITI's <c>ACcompactado.zip</c>,
+    /// without the roots), so chains build offline when a signature does not carry its
+    /// intermediates. They help build chains only; trust still comes from the AC Raiz.
+    /// The returned certificates are shared: do not dispose them.
+    /// </summary>
+    public static IReadOnlyList<X509Certificate2> LoadBundledIntermediateCerts() => BundledIntermediates.Value;
+
+    private static IReadOnlyList<X509Certificate2> LoadIntermediates()
+    {
+        using var stream = typeof(IcpBrasilChainValidator).Assembly
+            .GetManifestResourceStream("SimpleSign.Brasil.IcpBrasil.Certs.IcpBrasilIntermediates.pem");
+        if (stream is null)
+        {
+            return [];
+        }
+
+        using var reader = new StreamReader(stream);
+        var collection = new X509Certificate2Collection();
+        collection.ImportFromPem(reader.ReadToEnd());
+        return [.. collection];
+    }
+
     /// <summary>
     /// Loads the bundled AC Raiz certificates from the assembly (offline, no network).
     /// </summary>
@@ -662,7 +718,8 @@ public sealed class IcpBrasilChainValidator
         List<X509Certificate2> acRaizCerts,
         IReadOnlyList<X509Certificate2>? extraCerts,
         List<X509Certificate2> aiaCerts,
-        DateTimeOffset validationTime)
+        DateTimeOffset validationTime,
+        bool useBundledIntermediates)
     {
         var chain = new X509Chain();
         // Revocation is checked by ChainRevocationChecker at the validation time, with the
@@ -695,8 +752,26 @@ public sealed class IcpBrasilChainValidator
             chain.ChainPolicy.ExtraStore.Add(chainCert);
         }
 
-        chain.Build(certificate);
-        return chain;
+        // Bundled ICP-Brasil intermediates: offline chain building when the signature and AIA
+        // do not provide them (only when the real roots are in use, not in tests).
+        if (useBundledIntermediates)
+        {
+            foreach (var intermediate in LoadBundledIntermediateCerts())
+            {
+                chain.ChainPolicy.ExtraStore.Add(intermediate);
+            }
+        }
+
+        try
+        {
+            chain.Build(certificate);
+            return chain;
+        }
+        catch
+        {
+            chain.Dispose();
+            throw;
+        }
     }
 
     private List<IcpBrasilChainElement> ProcessChainErrors(X509Chain chain, List<string> errors)

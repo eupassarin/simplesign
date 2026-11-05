@@ -594,13 +594,18 @@ public sealed class XadesSignerBuilder
         TimestampOptions timestampOptions,
         CancellationToken cancellationToken)
     {
-        var tsaClient = CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
+        var tsaClient = CreateTimestampClient(timestampOptions);
         byte[] timestampInput = XadesSignatureBuilder.CreateSignatureTimeStampInput(signedXml, signatureId);
         byte[] tsToken = await tsaClient.GetTimestampAsync(timestampInput, hashAlg, cancellationToken).ConfigureAwait(false);
         TimestampClient.ValidateTimestampToken(tsToken, timestampInput, hashAlg);
 
         return tsToken;
     }
+
+    private ITimestampClient CreateTimestampClient(TimestampOptions timestampOptions) =>
+        timestampOptions.NeedsDedicatedClient
+            ? TimestampClient.Create(timestampOptions, timestampOptions.HttpClientProvider ?? _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger)
+            : CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
 
     private ITimestampClient CreateTimestampClient(string endpoint, IHttpClientProvider? scopedProvider)
     {

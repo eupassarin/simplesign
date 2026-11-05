@@ -22,6 +22,29 @@ var validator = BrasilExtension.CreateValidator(
 var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 ```
 
+### Intermediate ACs (offline chains)
+
+The package also bundles the ~176 intermediate ICP-Brasil ACs published by the ITI
+(`ACcompactado.zip`), so a chain builds without network access even when a signature carries only
+the signer certificate. They only help build chains; trust still comes from the AC Raiz.
+`IcpBrasilChainValidator.LoadBundledIntermediateCerts()` returns them, and the ICP-Brasil trust
+anchor provider passes them to `PdfSignatureValidator`. Maintainers refresh them with
+`scripts/update-icp-intermediates.sh`; a unit test checks that each one chains to a bundled root.
+
+### LCR cache
+
+ICP-Brasil LCRs reach several megabytes. On servers and CLIs, keep them on disk; each one is reused
+until its `nextUpdate`:
+
+```csharp
+var brasil = new BrasilExtension(new BrasilExtensionOptions
+{
+    HttpClient = httpClient,
+    CrlCacheDirectory = Path.Combine(Path.GetTempPath(), "simplesign-lcr"),
+});
+// or: new IcpBrasilChainValidator(httpClient) { CrlCacheDirectory = "..." }
+```
+
 ### New AC Raiz versions
 
 A root is self-signed, so nothing but its published fingerprint can vouch for it. When the ITI
@@ -44,6 +67,29 @@ de Carimbo do Tempo) accredited by the ITI; the list of accredited ACTs is publi
 [gov.br/iti — Estrutura da ICP-Brasil](https://www.gov.br/iti/pt-br/assuntos/icp-brasil/estrutura).
 ACT services usually require a contract and credentials. Public TSAs such as
 `TimestampOptions.DigiCert` produce valid RFC 3161 tokens, but they are not ICP-Brasil ACTs.
+
+ACTs usually authenticate the client. `TimestampOptions` supports the common ways:
+
+```csharp
+// HTTP Basic or a bearer token, sent with each request (never on the shared HttpClient)
+var act = new TimestampOptions(new Uri("https://act.example.com.br/tsa"))
+{
+    Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}"))),
+};
+
+// Mutual TLS with a client certificate (with private key)
+var actMtls = new TimestampOptions(new Uri("https://act.example.com.br/tsa")) { ClientCertificate = clientCert };
+
+// RFC 3161 over TCP (socket transport, port 318 by default)
+var actTcp = new TimestampOptions(new Uri("tcp://act.example.com.br:318"));
+
+await PadesSigner.Document(pdf).WithCertificate(cert)
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt, act)
+    .SignAsync(output);
+```
+
+ACTs that require the time-stamp request itself to be CMS-signed with the client's certificate are
+not supported yet.
 
 ## CPF and CNPJ
 
@@ -144,9 +190,25 @@ await CadesSigner.Document(data).WithCertificate(cert)
     .SignAsync();
 ```
 
-The VALIDAR portal expects PAdES AD-RB or AD-RT. XAdES policies are not embedded. For a policy
-published after this release, read its PA with `IcpBrasilSignaturePolicies.FromPolicyDocument`
-(after checking the file against the digest in the current LPA).
+The VALIDAR portal expects PAdES AD-RB or AD-RT. XAdES policies are not embedded.
+
+The embedded catalog is a snapshot of the LPAs. To pick up policies and revocations the ITI
+published later, refresh it at start-up:
+
+```csharp
+await IcpBrasilSignaturePolicies.RefreshAsync(httpClient, IcpBrasilPolicyFormat.Pades);
+await IcpBrasilSignaturePolicies.RefreshAsync(httpClient, IcpBrasilPolicyFormat.Cades);
+```
+
+`RefreshAsync` downloads `LPA_*.der` and its detached signature `LPA_*.p7s` over HTTPS, and accepts
+the list only if the signature verifies, is made by the ITI (CNPJ 04.039.532/0001-93) and chains to
+an ICP-Brasil AC Raiz without being revoked. Known policies take the LPA's period and revocation
+date; new policies are downloaded and accepted only if the PA file matches the LPA digest. On any
+failure it throws and the current catalog stays as it was. `IcpBrasilLpa.Parse` reads an LPA you
+obtained yourself.
+
+Signatures carry the PA's own `signPolicyHash` in `sigPolicyHash` (not the digest of the PA file
+that the LPA lists): a production PAdES AD-RB signature in the integration tests confirms it.
 
 ### Check a signature against its policy
 

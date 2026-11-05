@@ -87,4 +87,31 @@ internal static class ResilientHttp
         return await Pipeline.ExecuteAsync(async token =>
             await httpClient.PostAsync(url, content, token).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Executes an HTTP POST with resilience and an Authorization header. A new request and
+    /// content are built per attempt, so credentials never go on the shared client's default headers.
+    /// </summary>
+    internal static async Task<HttpResponseMessage> PostAsync(
+        HttpClient httpClient,
+        string url,
+        byte[] body,
+        System.Net.Http.Headers.MediaTypeHeaderValue contentType,
+        System.Net.Http.Headers.AuthenticationHeaderValue authorization,
+        CancellationToken ct = default)
+    {
+        if (!await UrlValidator.IsSafeUrlAsync(url, ct).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException($"SSRF blocked: URL points to localhost or private network — {new Uri(url).Host}");
+        }
+
+        return await Pipeline.ExecuteAsync(async token =>
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Content = new ByteArrayContent(body);
+            request.Content.Headers.ContentType = contentType;
+            request.Headers.Authorization = authorization;
+            return await httpClient.SendAsync(request, token).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
+    }
 }
