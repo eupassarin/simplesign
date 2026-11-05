@@ -162,11 +162,14 @@ internal static class ExternalCredentialSupport
 
     private static async Task<ExternalCredential> OpenPkcs11Async(ExternalCredentialSettings s)
     {
+        string library = string.Equals(s.Pkcs11Library, "auto", StringComparison.OrdinalIgnoreCase)
+            ? await Pkcs11Drivers.FindLibraryAsync(s.Pkcs11Token)
+            : s.Pkcs11Library!;
         string? pin = await PasswordResolver.ResolvePinAsync(Secret(s.Pin));
 #pragma warning disable CA2000 // Ownership transferred to the returned ExternalCredential
         var token = Pkcs11Signer.Open(new Pkcs11SignerOptions
         {
-            LibraryPath = s.Pkcs11Library!,
+            LibraryPath = library,
             TokenLabel = s.Pkcs11Token,
             KeyLabel = s.Pkcs11Key,
             Pin = pin,

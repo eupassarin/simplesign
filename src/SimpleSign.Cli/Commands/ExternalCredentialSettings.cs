@@ -12,7 +12,7 @@ internal abstract class ExternalCredentialSettings : CommonSettings
 {
     /// <summary>PKCS#11 library of an A3 token, smartcard or HSM (alternative to --cert).</summary>
     [CommandOption("--pkcs11-lib <PATH>")]
-    [Description("PKCS#11 library of an A3 token, smartcard or HSM (alternative to --cert). See 'simplesign pkcs11 list'.")]
+    [Description("PKCS#11 library of an A3 token, smartcard or HSM (alternative to --cert), or 'auto' to find the installed driver. See 'simplesign pkcs11 list'.")]
     public string? Pkcs11Library { get; init; }
 
     /// <summary>Token label, when more than one token is connected. Requires --pkcs11-lib.</summary>

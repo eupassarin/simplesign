@@ -57,7 +57,9 @@ internal static partial class Program
             config.AddBranch("pkcs11", pkcs11 =>
             {
                 pkcs11.AddCommand<Pkcs11ListCommand>("list")
-                    .WithDescription("List the tokens and certificates of a PKCS#11 driver");
+                    .WithDescription("List the tokens and certificates of a PKCS#11 driver, or of every installed driver");
+                pkcs11.AddCommand<Pkcs11DriversCommand>("drivers")
+                    .WithDescription("List the known PKCS#11 token drivers and which are installed");
             });
 
             config.AddBranch("psc", psc =>

@@ -82,7 +82,27 @@ few wrong attempts, so do not retry a wrong PIN automatically.
 
 ## Finding the driver
 
-The driver ships with the token's middleware. Typical locations:
+The driver ships with the token's middleware. SimpleSign knows where the middlewares used in
+Brazil install it (SafeNet/Thales, SafeSign/G+D, Watchdata, Gemalto IDPrime/GemSafe,
+Oberthur/Certisign, Pronova, Feitian ePass2003, Safeweb, NeoID, Dexon, birdID, desktopID, OpenSC and
+SoftHSM), so the path is usually not needed:
+
+```csharp
+// The library of the connected token (or of the one labelled "ICP-Brasil" when several are)
+string library = await Pkcs11Drivers.FindLibraryAsync();
+using var token = Pkcs11Signer.Open(new Pkcs11SignerOptions { LibraryPath = library, Pin = pin });
+
+// Every installed driver and its tokens
+foreach (var found in await Pkcs11Drivers.FindTokensAsync())
+{
+    Console.WriteLine($"{found.Driver.Driver.Product} ({found.Driver.LibraryPath}): {found.Tokens.Count} token(s) {found.Error}");
+}
+```
+
+`Pkcs11Drivers.DetectInstalled()` only checks which files exist; `FindTokensAsync` loads each
+driver and skips, with the reason, those that fail. Other drivers can be added with the
+`SIMPLESIGN_PKCS11_LIBRARY` environment variable (paths separated by `:`, or `;` on Windows).
+`Pkcs11Drivers.Known` is the catalog. Typical locations:
 
 | Middleware | Windows | Linux | macOS |
 |---|---|---|---|
@@ -101,7 +121,10 @@ same architecture as the driver (64-bit drivers for 64-bit processes).
 ## CLI
 
 ```bash
+simplesign pkcs11 drivers                     # the catalog and what is installed
+simplesign pkcs11 list                        # tokens of every installed driver
 simplesign pkcs11 list --lib /usr/lib/libeToken.so
+simplesign sign contract.pdf --pkcs11-lib auto --pkcs11-key "My signing key"
 simplesign sign contract.pdf --pkcs11-lib /usr/lib/libeToken.so --pkcs11-key "My signing key"
 simplesign cades sign data.bin --pkcs11-lib /usr/lib/libeToken.so --tsa http://timestamp.digicert.com --level timestamped
 ```
