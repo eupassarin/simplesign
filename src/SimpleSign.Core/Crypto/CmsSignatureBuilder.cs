@@ -406,7 +406,7 @@ public sealed class CmsSignatureBuilder
     /// <param name="time">Signing timestamp.</param>
     /// <param name="signerCertificate">The signer's certificate (for signingCertificateV2).</param>
     /// <param name="extraAttributes">Optional extra CAdES signed attributes.</param>
-    /// <param name="padesAttributes">When true, includes PAdES-specific attributes (signingCertificateV2).</param>
+    /// <param name="padesAttributes">When true, omits signingTime (PAdES uses the PDF /M entry); signingCertificateV2 is always included.</param>
     public static byte[] BuildSignedAttributes(byte[] contentHash, string digestOid, DateTimeOffset time,
         X509Certificate2 signerCertificate, IReadOnlyList<CmsAttribute>? extraAttributes = null,
         bool padesAttributes = true) =>
@@ -465,10 +465,9 @@ public sealed class CmsSignatureBuilder
             // Binds the signer certificate to the signature via SHA-256 hash.
             // Without this attribute, Adobe Acrobat displays "Not PAdES compliant".
             // Omitted for plain CMS/PKCS#7 (legacy) signatures.
-            if (padesAttributes)
-            {
-                BuildSigningCertificateV2Attribute(writer, signerCertificate);
-            }
+            // signing-certificate-v2: mandatory in PAdES and in CAdES baseline B-B (ETSI EN 319 122-1 §5.2.2.3),
+            // and in every ICP-Brasil signature policy.
+            BuildSigningCertificateV2Attribute(writer, signerCertificate);
 
             // Extra CAdES attributes (e.g., commitment-type-indication, signature-policy-identifier)
             if (extraAttributes is { Count: > 0 })

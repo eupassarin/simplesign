@@ -35,6 +35,7 @@ public static class IcpBrasilSigningExtensions
     /// <param name="policy"><see cref="IcpBrasilPolicy.AdRb"/> or <see cref="IcpBrasilPolicy.AdRt"/>.</param>
     /// <param name="timestamp">The TSA, required for AD-RT.</param>
     /// <exception cref="ArgumentException">AD-RT without a TSA, or a policy other than AD-RB/AD-RT.</exception>
+    /// <exception cref="IcpBrasilPolicyException">No version of the policy accepts the root of the signer certificate.</exception>
     /// <example>
     /// <code>
     /// await PadesSigner.Document(pdf).WithCertificate(cert)
@@ -56,7 +57,14 @@ public static class IcpBrasilSigningExtensions
             throw new ArgumentException("AD-RT requires a signature timestamp: pass the TSA (an ICP-Brasil ACT).", nameof(timestamp));
         }
 
-        var current = IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Pades);
+        // Older PAs list only the roots that existed when they were issued: pick the newest version
+        // that accepts the signer's root (call after WithCertificate/WithExternalSigner).
+        var root = builder.SignerCertificate is { } signer
+            ? IcpBrasilChainValidator.FindBundledRoot(signer, builder.SignerChain)
+            : null;
+        var current = root is null
+            ? IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Pades)
+            : IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Pades, root);
         builder = builder
             .WithSubFilter(PdfSignatureSubFilter.EtsiCadesDetached)
             .WithSignaturePolicy(current.ToReference());

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (SimpleSign.Brasil — complete signature policies)
+
+- **PA rules:** `IcpBrasilPolicyRules` (accepted roots, mandatory signed/unsigned attributes,
+  signature algorithms and key sizes) for the 55 CAdES/PAdES PAs, via
+  `IcpBrasilSignaturePolicies.TryGetRules`; `IcpBrasilPolicyRules.Parse`; `RefreshAsync` parses the
+  rules of new PAs. Generator in `scripts/IcpBrasilPolicyRulesGenerator`.
+- **Root-aware policy selection:** `Current(policy, format, signerRoot)` and `WithIcpBrasilPolicy`
+  pick the newest PA that accepts the signer's AC Raiz (v12 signers get CAdES ≥ 2.4 / PAdES ≥ 1.2)
+  and throw `IcpBrasilPolicyException` when none does. `IcpBrasilChainValidator.FindBundledRoot`.
+- **Policy validation:** `IcpBrasilPolicyValidator.Validate(cms, time, format, signerRoot)` checks
+  roots, attributes and algorithms; the ICP-Brasil provider passes the chain root.
+  `Validate(SignaturePolicyReference, time, hasTimestamp, format)` validates XAdES (and other) references.
+- **CAdES AD-RV, AD-RC and AD-RA:** `CadesSignerBuilder.WithIcpBrasilPolicy(policy, tsa)`.
+- **XAdES:** the 45 XML policies of `LPA_XAdES.xml` in the catalog (no refresh, no rules).
+
+### Added (CAdES / XAdES)
+
+- `CadesSignerBuilder.WithExtendedValidationData(CadesExtendedForm)`: complete certificate and
+  revocation references, escTimeStamp, certificate and revocation values, archive-time-stamp v2
+  (RFC 5126). `CadesSignatureValidator` verifies escTimeStamp and archive v2 imprints.
+- `XadesSignerBuilder.WithSignaturePolicy(SignaturePolicyReference)` writes the policy's hash in
+  `SigPolicyHash` and the OID as `urn:oid:` (`Qualifier="OIDAsURN"`);
+  `XadesValidationResult.SignaturePolicy` exposes the declared policy.
+
+### Changed
+
+- CAdES signatures now always include the signing-certificate-v2 signed attribute (it was
+  PAdES-only); every ICP-Brasil PA mandates it.
+
 ### Added (CAdES — several signers)
 
 - `CadesSigner.CoSign(existing, data?)` (parallel signers, .p7s or .p7m) and

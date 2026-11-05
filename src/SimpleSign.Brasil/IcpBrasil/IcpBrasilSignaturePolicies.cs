@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Formats.Asn1;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SimpleSign.Brasil.IcpBrasil;
 
@@ -71,6 +72,66 @@ public static partial class IcpBrasilSignaturePolicies
     {
         policy = oid is null ? null : Array.Find(Effective, p => p.Oid == oid);
         return policy is not null;
+    }
+
+    private static volatile IReadOnlyDictionary<string, IcpBrasilPolicyRules>? s_refreshedRules;
+
+    /// <summary>
+    /// The rules of a policy (accepted roots, mandatory attributes, algorithms), from the PAs
+    /// embedded with this release or downloaded by <see cref="RefreshAsync(HttpClient, IcpBrasilPolicyFormat, CancellationToken)"/>.
+    /// </summary>
+    /// <param name="oid">The policy OID.</param>
+    /// <param name="rules">The rules, when known.</param>
+    public static bool TryGetRules(string? oid, [NotNullWhen(true)] out IcpBrasilPolicyRules? rules)
+    {
+        rules = null;
+        if (oid is null)
+        {
+            return false;
+        }
+
+        if (s_refreshedRules is { } refreshed && refreshed.TryGetValue(oid, out rules))
+        {
+            return true;
+        }
+
+        rules = Array.Find(IcpBrasilPolicyRulesCatalog.Rules, r => r.Oid == oid);
+        return rules is not null;
+    }
+
+    internal static void ApplyRules(IEnumerable<IcpBrasilPolicyRules> rules)
+    {
+        var merged = new Dictionary<string, IcpBrasilPolicyRules>(s_refreshedRules ?? new Dictionary<string, IcpBrasilPolicyRules>(), StringComparer.Ordinal);
+        foreach (var rule in rules)
+        {
+            merged[rule.Oid] = rule;
+        }
+
+        s_refreshedRules = merged;
+    }
+
+    /// <summary>
+    /// The newest version of a policy valid at <paramref name="time"/> whose rules accept a chain
+    /// ending in <paramref name="signerRoot"/>. Older PAs list only the roots that existed when they
+    /// were issued: e.g. CAdES AD-RB up to v2.3 accepts AC Raiz v2/v5, v2.4 adds v12.
+    /// </summary>
+    /// <param name="policy">AD-RB, AD-RT…</param>
+    /// <param name="format">CAdES or PAdES.</param>
+    /// <param name="signerRoot">The root certificate of the signer's chain.</param>
+    /// <param name="time">The signing time; null = now.</param>
+    /// <exception cref="IcpBrasilPolicyException">No valid version of the policy accepts that root.</exception>
+    public static IcpBrasilSignaturePolicy Current(IcpBrasilPolicy policy, IcpBrasilPolicyFormat format, X509Certificate2 signerRoot, DateTimeOffset? time = null)
+    {
+        ArgumentNullException.ThrowIfNull(signerRoot);
+        var at = time ?? DateTimeOffset.UtcNow;
+        return Effective
+            .Where(p => p.IsValidAt(at) && p.Info.Policy == policy && p.Info.Format == format
+                && (!TryGetRules(p.Oid, out var rules) || rules.AcceptsRoot(signerRoot)))
+            .OrderByDescending(p => p.NotBefore)
+            .ThenByDescending(p => p.Oid.Length)
+            .FirstOrDefault()
+            ?? throw new IcpBrasilPolicyException(
+                $"No ICP-Brasil {format} {policy} policy valid at {at:yyyy-MM-dd} accepts the signer's root ({signerRoot.Subject}).");
     }
 
     /// <summary>Merges refreshed entries over the current ones (same OID: the refreshed entry wins).</summary>

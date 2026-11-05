@@ -692,6 +692,47 @@ public sealed class IcpBrasilChainValidator
     }
 
     /// <summary>
+    /// The bundled AC Raiz the certificate chains to, built offline with the bundled
+    /// intermediates and <paramref name="extraCerts"/> (validity in time is not checked).
+    /// </summary>
+    /// <param name="certificate">The end-entity certificate.</param>
+    /// <param name="extraCerts">Intermediates that came with it.</param>
+    /// <returns>The root, or null when the certificate does not chain to a bundled ICP-Brasil root.</returns>
+    public static X509Certificate2? FindBundledRoot(X509Certificate2 certificate, IEnumerable<X509Certificate2>? extraCerts = null)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+        var roots = LoadBundledAcRaizCerts();
+        using var chain = new X509Chain();
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.VerificationFlags = X509VerificationFlags.IgnoreNotTimeValid;
+        foreach (var root in roots)
+        {
+            chain.ChainPolicy.CustomTrustStore.Add(root);
+        }
+
+        foreach (var intermediate in LoadBundledIntermediateCerts().Concat(extraCerts ?? []))
+        {
+            chain.ChainPolicy.ExtraStore.Add(intermediate);
+        }
+
+        try
+        {
+            if (!chain.Build(certificate) && chain.ChainElements.Count == 0)
+            {
+                return null;
+            }
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+
+        var top = chain.ChainElements[^1].Certificate;
+        return roots.FirstOrDefault(r => r.RawData.AsSpan().SequenceEqual(top.RawData));
+    }
+
+    /// <summary>
     /// Loads the bundled AC Raiz certificates from the assembly (offline, no network).
     /// </summary>
     public static IReadOnlyList<X509Certificate2> LoadBundledAcRaizCerts()

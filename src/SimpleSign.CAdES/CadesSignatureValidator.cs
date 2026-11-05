@@ -33,6 +33,9 @@ public sealed class CadesValidationResult
     /// <summary>The archive timestamp (if present) is valid.</summary>
     public bool? HasValidArchiveTimestamp { get; init; }
 
+    /// <summary>Whether the escTimeStamp (CAdES-X type 1) covers the signature, its timestamp and the complete references; null when absent.</summary>
+    public bool? HasValidEscTimestamp { get; init; }
+
     /// <summary>The signer certificate.</summary>
     public X509Certificate2? SignerCertificate { get; init; }
 
@@ -309,9 +312,29 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         // 7. LTV data validation (root SignedData certificate and revocation sets)
         bool? ltvValid = cmsBytes is null ? null : ValidateLtvData(cmsBytes, cmsData, warnings);
 
+        // 7a. escTimeStamp (CAdES-X type 1, RFC 5126 §5.11.3)
+        bool? escValid = null;
+        if (cmsBytes is not null && isFirstSigner && cmsData.UnsignedAttributes?.TryGetValue(Oids.EscTimeStamp, out byte[][]? esc) == true && esc.Length > 0)
+        {
+            escValid = TimestampCovers(esc[0], CadesExtendedValidationData.EscTimeStampInput(cmsBytes), cmsData.DigestAlgorithmOid);
+            if (escValid == false)
+            {
+                errors.Add("escTimeStamp does not cover the signature, its timestamp and the complete references.");
+            }
+        }
+
         // 8. Archive timestamp validation (covers the first signer of the SignedData)
         bool? archiveTsValid = null;
-        if (cmsData.ArchiveTimestampToken is not null)
+        if (cmsBytes is not null && content is not null && isFirstSigner
+            && cmsData.UnsignedAttributes?.TryGetValue(Oids.ArchiveTimeStamp, out byte[][]? archiveV2) == true && archiveV2.Length > 0)
+        {
+            archiveTsValid = TimestampCovers(archiveV2[0], CadesExtendedValidationData.ArchiveTimeStampV2Input(cmsBytes, content), cmsData.DigestAlgorithmOid);
+            if (archiveTsValid == false)
+            {
+                errors.Add("archive-time-stamp (v2) does not cover the signature and its validation data.");
+            }
+        }
+        else if (cmsData.ArchiveTimestampToken is not null)
         {
             if (cmsBytes is not null && content is not null && isFirstSigner)
             {
@@ -332,12 +355,35 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             IsTsaTrusted = tsaTrusted,
             IsLtvDataValid = ltvValid,
             HasValidArchiveTimestamp = archiveTsValid,
+            HasValidEscTimestamp = escValid,
             SignerCertificate = cmsData.SignerCertificate,
             SigningTime = cmsData.SigningTime,
             Errors = errors.AsReadOnly(),
             Warnings = warnings.Count > 0 ? warnings.AsReadOnly() : []
         };
     }
+
+    /// <summary>Whether the RFC 3161 token's message imprint is the hash of <paramref name="data"/>.</summary>
+    private static bool TimestampCovers(byte[] token, byte[] data, string digestOid)
+    {
+        try
+        {
+            TimestampClient.ValidateTimestampToken(token, data, HashFromOid(digestOid));
+            return true;
+        }
+        // S2221: intentional -- validation pipeline converts exceptions to results
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static HashAlgorithmName HashFromOid(string oid) => oid switch
+    {
+        Oids.Sha384 => HashAlgorithmName.SHA384,
+        Oids.Sha512 => HashAlgorithmName.SHA512,
+        _ => HashAlgorithmName.SHA256,
+    };
 
     private static bool VerifyContentHash(byte[] originalData, CmsSignedData cmsData, List<string> errors)
     {
