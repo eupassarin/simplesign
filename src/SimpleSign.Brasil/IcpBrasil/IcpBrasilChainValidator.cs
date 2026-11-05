@@ -231,6 +231,12 @@ public sealed class IcpBrasilChainValidator
             // 4. Builds the chain at the validation time with the AC Raiz as trust anchor
             using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts, validationTime, TrustAnchorsOverride is null, Environment);
             var chainElements = ProcessChainErrors(chain, errors);
+            if (errors is [] && chain.ChainElements.Count > 0
+                && !acRaizCerts.Any(r => r.RawData.AsSpan().SequenceEqual(chain.ChainElements[^1].Certificate.RawData)))
+            {
+                errors.Add("The chain does not end in a trusted AC Raiz.");
+            }
+
             bool isChainValid = errors is [] && chainElements is not [];
             bool isHomologation = Environment == IcpBrasilEnvironment.Homologation
                 && chain.ChainElements.Count > 0
@@ -742,6 +748,7 @@ public sealed class IcpBrasilChainValidator
         chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
         chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
         chain.ChainPolicy.VerificationFlags = X509VerificationFlags.IgnoreNotTimeValid;
+        chain.ChainPolicy.DisableCertificateDownloads = true;
         foreach (var root in roots)
         {
             chain.ChainPolicy.CustomTrustStore.Add(root);
@@ -754,7 +761,9 @@ public sealed class IcpBrasilChainValidator
 
         try
         {
-            if (!chain.Build(certificate) && chain.ChainElements.Count == 0)
+            // Only time and revocation problems are tolerated: a chain whose signatures do not
+            // verify (e.g. a test CA naming a production root as its issuer) has no root.
+            if ((!chain.Build(certificate) && !OnlyBenignStatus(chain)) || chain.ChainElements.Count == 0)
             {
                 return null;
             }
@@ -767,6 +776,13 @@ public sealed class IcpBrasilChainValidator
         var top = chain.ChainElements[^1].Certificate;
         return roots.FirstOrDefault(r => r.RawData.AsSpan().SequenceEqual(top.RawData));
     }
+
+    private const X509ChainStatusFlags BenignStatus = X509ChainStatusFlags.NotTimeValid | X509ChainStatusFlags.NotTimeNested
+        | X509ChainStatusFlags.RevocationStatusUnknown | X509ChainStatusFlags.OfflineRevocation;
+
+    private static bool OnlyBenignStatus(X509Chain chain) =>
+        chain.ChainElements.All(e => e.ChainElementStatus.All(s => (s.Status & ~BenignStatus) == 0))
+        && chain.ChainStatus.All(s => (s.Status & ~BenignStatus) == 0);
 
     private static readonly Lazy<(IReadOnlyList<X509Certificate2> Roots, IReadOnlyList<X509Certificate2> Intermediates)> BundledHomologation =
         new(LoadHomologation);

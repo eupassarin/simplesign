@@ -57,7 +57,7 @@ public sealed class IcpBrasilHomologationTests
 
         var result = await Validator(IcpBrasilEnvironment.Production).ValidateAsync(Context(testCa));
 
-        result.IsChainValid.ShouldBeFalse();
+        result.IsChainValid.ShouldBeFalse(Describe(result));
         result.IsHomologation.ShouldBeFalse();
     }
 
@@ -80,7 +80,7 @@ public sealed class IcpBrasilHomologationTests
     {
         var testCa = TestCa("Autoridade Certificadora SERPRO v5 - HOM");
 
-        IcpBrasilChainValidator.FindBundledRoot(testCa).ShouldBeNull();
+        IcpBrasilChainValidator.FindBundledRoot(testCa).ShouldBeNull(testCa.Issuer);
         var root = IcpBrasilChainValidator.FindBundledRoot(testCa, null, IcpBrasilEnvironment.Homologation).ShouldNotBeNull();
         IcpBrasilChainValidator.IsHomologationRoot(root).ShouldBeTrue();
     }
@@ -108,6 +108,10 @@ public sealed class IcpBrasilHomologationTests
         homologation.GetTrustAnchors().Count(IcpBrasilChainValidator.IsHomologationRoot)
             .ShouldBe(IcpBrasilChainValidator.LoadBundledHomologationRoots().Count);
     }
+
+    private static string Describe(IcpBrasilValidationResult result) =>
+        string.Join(" <- ", result.ChainElements.Select(e => $"{e.Subject} [{e.Thumbprint}] {string.Join(",", e.Errors)}"))
+        + " | errors: " + string.Join("; ", result.Errors);
 
     private static X509Certificate2 TestCa(string commonName) =>
         IcpBrasilChainValidator.LoadBundledHomologationIntermediates().Single(c => c.GetNameInfo(X509NameType.SimpleName, false) == commonName);
