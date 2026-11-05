@@ -79,6 +79,38 @@ public sealed class ChainValidationContext
 
     /// <summary>The parsed signature, when the chain belongs to a CMS signature (policy, manifest, attributes).</summary>
     public CmsSignedData? Signature { get; init; }
+
+    /// <summary>What the PDF holds around the signature, when it is a PDF signature; null otherwise.</summary>
+    public PdfSignatureFacts? Pdf { get; init; }
+}
+
+/// <summary>
+/// The PDF structures around a signature that signature policies can require (e.g. the
+/// ICP-Brasil PAdES PAs): the signature dictionary, the DSS and its VRI entry, and later
+/// document timestamps.
+/// </summary>
+public sealed record PdfSignatureFacts
+{
+    /// <summary>The signature dictionary's /Filter (e.g. "Adobe.PPKLite", "PBAD_PAdES").</summary>
+    public string? Filter { get; init; }
+
+    /// <summary>The signature dictionary's /SubFilter (e.g. "ETSI.CAdES.detached", "PBAD.PAdES").</summary>
+    public string? SubFilter { get; init; }
+
+    /// <summary>The document has a DSS dictionary.</summary>
+    public bool HasDss { get; init; }
+
+    /// <summary>The keys of the DSS dictionary (e.g. "Certs", "OCSPs", "VRI", "PBAD_PolicyArtifacts").</summary>
+    public IReadOnlyCollection<string> DssKeys { get; init; } = [];
+
+    /// <summary>The DSS has a VRI entry for this signature (keyed by the SHA-1 of its /Contents).</summary>
+    public bool HasVri { get; init; }
+
+    /// <summary>The keys of this signature's VRI dictionary (e.g. "Cert", "OCSP", "PBAD_PolicyArtifact").</summary>
+    public IReadOnlyCollection<string> VriKeys { get; init; } = [];
+
+    /// <summary>A document timestamp (ETSI.RFC3161) was added after this signature.</summary>
+    public bool HasLaterDocumentTimestamp { get; init; }
 }
 
 /// <summary>The revocation status a chain validation provider established for the chain.</summary>

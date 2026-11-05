@@ -56,4 +56,7 @@ internal sealed record PadesSigningOptions(
 
     /// <summary>Entries to set in the document information dictionary in the signing revision.</summary>
     public IReadOnlyDictionary<string, string>? DocumentInfo { get; init; }
+
+    /// <summary>Extra streams to add to the DSS and to this signature's VRI.</summary>
+    public IReadOnlyList<PdfDssArtifact> DssArtifacts { get; init; } = [];
 }

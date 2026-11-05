@@ -142,6 +142,62 @@ public sealed class DeferredSignerBuilder
         return With(profile: profile);
     }
 
+    /// <summary>
+    /// Supplies the TSA settings a resumed session cannot store: credentials
+    /// (<see cref="TimestampOptions.Authorization"/>), the mutual-TLS client certificate and a
+    /// scoped HTTP provider. The session keeps only the TSA endpoints, so each endpoint here must
+    /// match the one recorded in phase one; the requested level does not change.
+    /// </summary>
+    /// <param name="timestamp">The signature TSA, at the endpoint the session recorded.</param>
+    /// <param name="archiveTimestamp">
+    /// The archive TSA for B-LTA sessions; null keeps the session's (or inherits the signature TSA).
+    /// </param>
+    /// <returns>A new builder with the completed TSA settings.</returns>
+    /// <exception cref="InvalidOperationException">The builder was not returned by <see cref="DeferredSigner.Resume(byte[], byte[])"/>, or the session has no timestamp.</exception>
+    /// <exception cref="ArgumentException">An endpoint differs from the one recorded in the session.</exception>
+    public DeferredSignerBuilder WithTimestampOptions(TimestampOptions timestamp, ArchiveTimestampOptions? archiveTimestamp = null)
+    {
+        ArgumentNullException.ThrowIfNull(timestamp);
+        if (_sessionData is null)
+        {
+            throw new InvalidOperationException(
+                "WithTimestampOptions completes a resumed session; when preparing, pass the TSA in WithLevel.");
+        }
+
+        var current = _profile;
+        if (current?.Timestamp is null)
+        {
+            throw new InvalidOperationException("The deferred session was prepared without a timestamp (B-B).");
+        }
+
+        if (timestamp.Endpoint != current.Timestamp.Endpoint)
+        {
+            throw new ArgumentException(
+                $"The session was prepared for the TSA {current.Timestamp.Endpoint}; the resumed TSA must be the same.",
+                nameof(timestamp));
+        }
+
+        if (archiveTimestamp?.Endpoint is { } archiveEndpoint && current.ArchiveTimestamp?.Endpoint is { } recorded && archiveEndpoint != recorded)
+        {
+            throw new ArgumentException(
+                $"The session was prepared for the archive TSA {recorded}; the resumed archive TSA must be the same.",
+                nameof(archiveTimestamp));
+        }
+
+        var profile = current.Level switch
+        {
+            AdesBaselineLevel.Timestamped => AdesBaselineProfile.Timestamped(timestamp, current.FailureBehavior),
+            AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(
+                timestamp, current.LongTermValidation ?? new LongTermValidationOptions(), current.FailureBehavior),
+            _ => AdesBaselineProfile.Archive(
+                timestamp,
+                current.LongTermValidation ?? new LongTermValidationOptions(),
+                archiveTimestamp ?? current.ArchiveTimestamp,
+                current.FailureBehavior),
+        };
+        return With(profile: profile);
+    }
+
     /// <summary>Sets the fallback HTTP provider used by timestamp and LTV completion.</summary>
     public DeferredSignerBuilder WithHttpClientProvider(IHttpClientProvider provider)
     {

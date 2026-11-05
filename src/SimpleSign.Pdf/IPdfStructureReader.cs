@@ -9,7 +9,7 @@ public interface IPdfStructureReader
     /// <summary>Reads all signature fields from a PDF stream.</summary>
     Task<IReadOnlyList<PdfSignatureField>> ReadSignatureFieldsAsync(Stream pdfStream, ILogger? logger = null, CancellationToken cancellationToken = default);
 
-    /// <summary>Checks if a PDF has a DocMDP (document modification) lock.</summary>
+    /// <summary>Checks if a PDF has a DocMDP certification (P=1) that prohibits further signatures; P=2 and P=3 allow them.</summary>
     Task<bool> IsDocMdpLockedAsync(Stream pdfStream, ILogger? logger = null, CancellationToken cancellationToken = default);
 
     /// <summary>Reads the signed byte range from a PDF stream using ByteRange offsets.</summary>

@@ -298,9 +298,9 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Signature policy URI for AEA")]
         public string? PolicyUri { get; init; }
 
-        /// <summary>ICP-Brasil signature policy: ad-rb or ad-rt.</summary>
+        /// <summary>ICP-Brasil PAdES signature policy: ad-rb, ad-rt, ad-rc or ad-ra.</summary>
         [CommandOption("--icp-policy <POLICY>")]
-        [Description("ICP-Brasil signature policy with its LPA hash: ad-rb or ad-rt (ad-rt requires --tsa)")]
+        [Description("ICP-Brasil PAdES policy: ad-rb, ad-rt, ad-rc or ad-ra; the version follows the signer's root, and the policy sets the level and the PBAD.PAdES sub-filter (all but ad-rb require --tsa; ad-ra downloads the PA and LPA from the ITI)")]
         public string? IcpPolicy { get; init; }
 
         /// <summary>VALIDAR health document type.</summary>
@@ -360,6 +360,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 return ValidationResult.Error("--ltv requires --tsa. LTV without a timestamp is not valid for long-term archival.");
             }
 
+            if (Archival && string.IsNullOrWhiteSpace(TsaUrl))
+            {
+                return ValidationResult.Error("--archival requires --tsa: the signature and archive timestamps come from it.");
+            }
+
             if (Hash is not null && !Hash.Equals("SHA256", StringComparison.OrdinalIgnoreCase)
                 && !Hash.Equals("SHA384", StringComparison.OrdinalIgnoreCase)
                 && !Hash.Equals("SHA512", StringComparison.OrdinalIgnoreCase)
@@ -403,17 +408,22 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 var policy = IcpBrasilCliOptions.ParsePolicy(IcpPolicy);
                 if (policy is null)
                 {
-                    return ValidationResult.Error("--icp-policy must be ad-rb or ad-rt.");
+                    return ValidationResult.Error("--icp-policy must be ad-rb, ad-rt, ad-rc or ad-ra.");
                 }
 
-                if (policy == IcpBrasilPolicy.AdRt && string.IsNullOrWhiteSpace(TsaUrl))
+                if (policy != IcpBrasilPolicy.AdRb && string.IsNullOrWhiteSpace(TsaUrl))
                 {
-                    return ValidationResult.Error("--icp-policy ad-rt requires --tsa (an ICP-Brasil ACT).");
+                    return ValidationResult.Error($"--icp-policy {IcpPolicy.ToLowerInvariant()} requires --tsa (an ICP-Brasil ACT).");
                 }
 
-                if (SubFilter is not null && SignCommandOptions.ParseSubFilter(SubFilter) != PdfSignatureSubFilter.EtsiCadesDetached)
+                if (SubFilter is not null)
                 {
-                    return ValidationResult.Error("--icp-policy requires the etsi-cades-detached sub-filter.");
+                    return ValidationResult.Error("--icp-policy sets the PBAD.PAdES sub-filter the ICP-Brasil PAs mandate; remove --sub-filter.");
+                }
+
+                if (Ltv || Archival)
+                {
+                    return ValidationResult.Error("--icp-policy sets the level: use ad-rc or ad-ra for the DSS and document timestamp instead of --ltv/--archival.");
                 }
 
                 if (PolicyOid is not null)
@@ -779,13 +789,22 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                         builder = builder.WithPdfAPreservation();
                     }
 
-                    // ICP-Brasil policy: sub-filter and policy hash only; the level comes from --tsa/--ltv.
+                    // ICP-Brasil policy: version by the signer's root, PBAD.PAdES, and the level the policy needs.
                     if (IcpBrasilCliOptions.ParsePolicy(settings.IcpPolicy) is { } icpPolicy)
                     {
-                        builder = builder
-                            .WithSubFilter(PdfSignatureSubFilter.EtsiCadesDetached)
-                            .WithSignaturePolicy(IcpBrasilSignaturePolicies
-                                .Current(icpPolicy, IcpBrasilPolicyFormat.Pades).ToReference());
+                        IcpBrasilPolicyArtifacts? artifacts = null;
+                        if (icpPolicy == IcpBrasilPolicy.AdRa)
+                        {
+                            using var http = new HttpClient();
+                            artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(
+                                http, builder.ResolveIcpBrasilPolicy(icpPolicy), cancellation);
+                        }
+
+                        builder = builder.WithIcpBrasilPolicy(icpPolicy, new IcpBrasilPadesOptions
+                        {
+                            Timestamp = settings.TsaUrl is null ? null : new TimestampOptions(new Uri(settings.TsaUrl)),
+                            Artifacts = artifacts,
+                        });
                     }
 
                     if (IcpBrasilCliOptions.ParseHealthDocument(settings.HealthDocument) is { } healthDocument)

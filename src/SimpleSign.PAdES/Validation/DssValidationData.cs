@@ -10,6 +10,12 @@ internal sealed record DssValidationData(
     IReadOnlyList<byte[]> GlobalCerts,
     IReadOnlyDictionary<string, VriData> VriEntries)
 {
+    /// <summary>The document has a DSS dictionary.</summary>
+    internal bool Present { get; init; }
+
+    /// <summary>The keys of the DSS dictionary.</summary>
+    internal IReadOnlyCollection<string> Keys { get; init; } = [];
+
     /// <summary>Empty instance representing no DSS in the PDF.</summary>
     internal static DssValidationData Empty { get; } = new(
         [],
@@ -25,4 +31,8 @@ internal sealed record DssValidationData(
 internal sealed record VriData(
     IReadOnlyList<byte[]> Crls,
     IReadOnlyList<byte[]> Ocsps,
-    IReadOnlyList<byte[]> Certs);
+    IReadOnlyList<byte[]> Certs)
+{
+    /// <summary>The keys of the VRI dictionary.</summary>
+    internal IReadOnlyCollection<string> Keys { get; init; } = [];
+}

@@ -22,6 +22,41 @@ public sealed record ArchiveTimestampOptions
     /// </summary>
     public IHttpClientProvider? HttpClientProvider { get; }
 
+    /// <summary>
+    /// Credentials for an archive TSA set with <see cref="Endpoint"/> (Basic or bearer, sent per
+    /// request). When <see cref="Endpoint"/> is null, the signature TSA's credentials are used.
+    /// </summary>
+    public System.Net.Http.Headers.AuthenticationHeaderValue? Authorization { get; init; }
+
+    /// <summary>
+    /// Client certificate (mutual TLS) for an archive TSA set with <see cref="Endpoint"/>. When
+    /// <see cref="Endpoint"/> is null, the signature TSA's certificate is used.
+    /// </summary>
+    public System.Security.Cryptography.X509Certificates.X509Certificate2? ClientCertificate { get; init; }
+
+    /// <summary>The TSA settings the archive timestamp uses, given the signature TSA's.</summary>
+    /// <param name="signatureTimestamp">The signature timestamp settings.</param>
+    public TimestampOptions Resolve(TimestampOptions signatureTimestamp)
+    {
+        ArgumentNullException.ThrowIfNull(signatureTimestamp);
+        if (Endpoint is null)
+        {
+            return HttpClientProvider is null
+                ? signatureTimestamp
+                : new TimestampOptions(signatureTimestamp.Endpoint, HttpClientProvider)
+                {
+                    Authorization = signatureTimestamp.Authorization,
+                    ClientCertificate = signatureTimestamp.ClientCertificate,
+                };
+        }
+
+        return new TimestampOptions(Endpoint, HttpClientProvider ?? signatureTimestamp.HttpClientProvider)
+        {
+            Authorization = Authorization,
+            ClientCertificate = ClientCertificate,
+        };
+    }
+
     /// <summary>Creates a new instance.</summary>
     /// <param name="endpoint">Optional archival TSA endpoint (null reuses the signature TSA endpoint).</param>
     /// <param name="httpClientProvider">Optional archive-TSA-specific HTTP client provider.</param>

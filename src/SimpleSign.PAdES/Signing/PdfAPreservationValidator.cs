@@ -30,11 +30,13 @@ public static class PdfAPreservationValidator
         // PDF/A-2/3 allow PAdES (adbe.pkcs7.detached and ETSI.CAdES.detached)
         if (pdfALevel is PdfALevel.A1a or PdfALevel.A1b)
         {
-            if (options.SubFilter == PdfSignatureSubFilter.EtsiCadesDetached)
+            if (options.SubFilter != PdfSignatureSubFilter.AdbePkcs7Detached)
             {
                 issues.Add(new PdfACompatibilityIssue(
                     PdfAIssueSeverity.Error,
-                    "PDF/A-1 does not support ETSI.CAdES.detached sub-filter. Use adbe.pkcs7.detached instead."));
+                    options.SubFilter == PdfSignatureSubFilter.PbadPades
+                        ? "PDF/A-1 does not support the PBAD.PAdES sub-filter. Use adbe.pkcs7.detached instead."
+                        : "PDF/A-1 does not support ETSI.CAdES.detached sub-filter. Use adbe.pkcs7.detached instead."));
             }
         }
 

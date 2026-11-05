@@ -218,7 +218,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         {
             bool isLast = i == fields.Count - 1;
             var (embeddedCrls, embeddedOcsps) = GetRevocationDataForField(fields[i], dssData);
-            var result = await ValidateFieldAsync(pdfStream, fields[i], embeddedCrls, embeddedOcsps, cancellationToken, isLast).ConfigureAwait(false);
+            var facts = BuildPdfFacts(fields, i, dssData);
+            var result = await ValidateFieldAsync(pdfStream, fields[i], embeddedCrls, embeddedOcsps, cancellationToken, isLast, facts).ConfigureAwait(false);
             results.Add(result);
         }
 
@@ -251,7 +252,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         var dssData = await DssExtractor.TryReadFullDssDataAsync(pdfStream, cancellationToken, _logger).ConfigureAwait(false);
         var (embeddedCrls, embeddedOcsps) = GetRevocationDataForField(field, dssData);
         bool isLast = fields[^1].FieldName == fieldName;
-        return await ValidateFieldAsync(pdfStream, field, embeddedCrls, embeddedOcsps, cancellationToken, isLast).ConfigureAwait(false);
+        var facts = BuildPdfFacts(fields, fields.ToList().IndexOf(field), dssData);
+        return await ValidateFieldAsync(pdfStream, field, embeddedCrls, embeddedOcsps, cancellationToken, isLast, facts).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -334,7 +336,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IReadOnlyList<byte[]> embeddedCrls,
         IReadOnlyList<byte[]> embeddedOcsps,
         CancellationToken cancellationToken,
-        bool isLastSignature = true)
+        bool isLastSignature = true,
+        PdfSignatureFacts? pdfFacts = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -399,7 +402,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // 4b. Country-specific chain validation providers (enrich with policy level, signer ID, etc.)
         var chainValidationResult = await RunChainValidationProvidersAsync(
-            cmsData, provenTime, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken).ConfigureAwait(false);
+            cmsData, provenTime, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken, pdfFacts).ConfigureAwait(false);
 
         // If standard PKI chain fails but a country-specific provider trusts the certificate,
         // promote chain errors to warnings (same pattern as document timestamps).
@@ -668,6 +671,32 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
     }
 
+    /// <summary>The PDF structures around the signature at <paramref name="index"/>, for policy checks.</summary>
+    private static PdfSignatureFacts BuildPdfFacts(IReadOnlyList<PdfSignatureField> fields, int index, DssValidationData dssData)
+    {
+        var field = fields[index];
+        VriData? vri = null;
+        if (field.ContentsBytes is { Length: > 0 } contents)
+        {
+#pragma warning disable CA5350 // VRI key is defined as SHA-1 by PAdES spec
+            dssData.VriEntries.TryGetValue(Convert.ToHexString(SHA1.HashData(contents)), out vri);
+#pragma warning restore CA5350
+        }
+
+        long end = field.ByteRange.Offset2 + field.ByteRange.Length2;
+        return new PdfSignatureFacts
+        {
+            Filter = field.Filter,
+            SubFilter = field.SubFilter,
+            HasDss = dssData.Present,
+            DssKeys = dssData.Keys,
+            HasVri = vri is not null,
+            VriKeys = vri?.Keys ?? [],
+            HasLaterDocumentTimestamp = fields.Any(f => f.IsDocumentTimestamp && f.IsSigned
+                && f.ByteRange.Offset2 + f.ByteRange.Length2 > end),
+        };
+    }
+
     /// <summary>
     /// Gets the revocation data (CRLs + OCSPs) for a specific signature field.
     /// Uses VRI-specific data if available, falls back to global DSS arrays.
@@ -819,7 +848,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IReadOnlyList<byte[]> embeddedOcsps,
         List<string> errors,
         List<string> warnings,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        PdfSignatureFacts? pdfFacts = null)
     {
         var signerCert = cmsData.SignerCertificate;
         if (signerCert is null || _chainValidationProviders.Count == 0)
@@ -837,6 +867,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             EmbeddedOcsps = embeddedOcsps,
             CheckRevocation = _options.CheckRevocation,
             Signature = cmsData,
+            Pdf = pdfFacts,
         };
 
         foreach (var provider in _chainValidationProviders)

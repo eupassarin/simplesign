@@ -10,6 +10,8 @@ internal static class IcpBrasilCliOptions
     {
         "ad-rb" or "adrb" or "rb" => IcpBrasilPolicy.AdRb,
         "ad-rt" or "adrt" or "rt" => IcpBrasilPolicy.AdRt,
+        "ad-rc" or "adrc" or "rc" => IcpBrasilPolicy.AdRc,
+        "ad-ra" or "adra" or "ra" => IcpBrasilPolicy.AdRa,
         _ => null,
     };
 

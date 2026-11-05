@@ -26,15 +26,14 @@ public enum HealthDocumentType
 public static class IcpBrasilSigningExtensions
 {
     /// <summary>
-    /// Signs under an ICP-Brasil PAdES signature policy: writes the current version of the policy
-    /// (e.g. PAdES AD-RB v1.3) with its sigPolicyHash, and uses the ETSI.CAdES.detached sub-filter.
-    /// AD-RT also needs a TSA — ideally an ICP-Brasil accredited ACT — and sets the B-T level.
-    /// The VALIDAR portal expects AD-RB or AD-RT.
+    /// Signs under an ICP-Brasil PAdES signature policy with the newest version that accepts the
+    /// signer's root. AD-RT needs a TSA (ideally an ICP-Brasil accredited ACT). For AD-RC and AD-RA,
+    /// or to choose the version, use <see cref="WithIcpBrasilPolicy(PadesSignerBuilder, IcpBrasilPolicy, IcpBrasilPadesOptions)"/>.
     /// </summary>
     /// <param name="builder">The PAdES builder.</param>
-    /// <param name="policy"><see cref="IcpBrasilPolicy.AdRb"/> or <see cref="IcpBrasilPolicy.AdRt"/>.</param>
-    /// <param name="timestamp">The TSA, required for AD-RT.</param>
-    /// <exception cref="ArgumentException">AD-RT without a TSA, or a policy other than AD-RB/AD-RT.</exception>
+    /// <param name="policy">The policy; AD-RA also needs its artifacts, so it is refused here.</param>
+    /// <param name="timestamp">The TSA, required for every policy but AD-RB.</param>
+    /// <exception cref="ArgumentException">A timestamped policy without a TSA, or AD-RA.</exception>
     /// <exception cref="IcpBrasilPolicyException">No version of the policy accepts the root of the signer certificate.</exception>
     /// <example>
     /// <code>
@@ -44,32 +43,150 @@ public static class IcpBrasilSigningExtensions
     /// </code>
     /// </example>
     public static PadesSignerBuilder WithIcpBrasilPolicy(
-        this PadesSignerBuilder builder, IcpBrasilPolicy policy = IcpBrasilPolicy.AdRb, TimestampOptions? timestamp = null)
+        this PadesSignerBuilder builder, IcpBrasilPolicy policy = IcpBrasilPolicy.AdRb, TimestampOptions? timestamp = null) =>
+        builder.WithIcpBrasilPolicy(policy, new IcpBrasilPadesOptions { Timestamp = timestamp });
+
+    /// <summary>
+    /// Signs under an ICP-Brasil PAdES signature policy (DOC-ICP-15.03): writes the policy
+    /// identifier with its sigPolicyHash, the <c>/Filter /PBAD_PAdES /SubFilter /PBAD.PAdES</c>
+    /// signature dictionary the PAs mandate, and the level each policy needs:
+    /// <list type="bullet">
+    /// <item>AD-RB: B-B (B-T when a TSA is given).</item>
+    /// <item>AD-RT: B-T.</item>
+    /// <item>AD-RC: the signature timestamp, the DSS with VRI and a document timestamp (B-LTA).</item>
+    /// <item>AD-RA: AD-RC plus the PA, LPA and LPA signature in the DSS.</item>
+    /// </list>
+    /// Call after <c>WithCertificate</c>/<c>WithExternalSigner</c>, so the version can be chosen
+    /// by the signer's root.
+    /// </summary>
+    /// <param name="builder">The PAdES builder.</param>
+    /// <param name="policy">The policy.</param>
+    /// <param name="options">TSA, version and artifacts.</param>
+    /// <exception cref="ArgumentException">A missing TSA or AD-RA artifacts, or a version or artifacts for another policy.</exception>
+    /// <exception cref="IcpBrasilPolicyException">The version (chosen or given) is not in force or does not accept the signer's root.</exception>
+    /// <example>
+    /// <code>
+    /// var tsa = new TimestampOptions(new Uri(actUrl));
+    /// var version = IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRa, IcpBrasilPolicyFormat.Pades, root);
+    /// var artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(http, version);
+    /// await PadesSigner.Document(pdf).WithCertificate(cert)
+    ///     .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRa, new IcpBrasilPadesOptions { Timestamp = tsa, Artifacts = artifacts })
+    ///     .SignAsync(output);
+    /// </code>
+    /// </example>
+    public static PadesSignerBuilder WithIcpBrasilPolicy(
+        this PadesSignerBuilder builder, IcpBrasilPolicy policy, IcpBrasilPadesOptions options)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        if (policy is not (IcpBrasilPolicy.AdRb or IcpBrasilPolicy.AdRt))
+        ArgumentNullException.ThrowIfNull(options);
+        if (policy is not (IcpBrasilPolicy.AdRb or IcpBrasilPolicy.AdRt or IcpBrasilPolicy.AdRc or IcpBrasilPolicy.AdRa))
         {
-            throw new ArgumentException("Only AD-RB and AD-RT are supported for PAdES signing.", nameof(policy));
+            throw new ArgumentException($"{policy} is not an ICP-Brasil PAdES policy.", nameof(policy));
         }
 
-        if (policy == IcpBrasilPolicy.AdRt && timestamp is null)
+        var timestamp = options.Timestamp;
+        if (policy != IcpBrasilPolicy.AdRb && timestamp is null)
         {
-            throw new ArgumentException("AD-RT requires a signature timestamp: pass the TSA (an ICP-Brasil ACT).", nameof(timestamp));
+            throw new ArgumentException($"{PolicyName(policy)} requires a signature timestamp: pass the TSA (an ICP-Brasil ACT).", nameof(options));
         }
 
-        // Older PAs list only the roots that existed when they were issued: pick the newest version
-        // that accepts the signer's root (call after WithCertificate/WithExternalSigner).
+        if (policy == IcpBrasilPolicy.AdRa && options.Artifacts is null)
+        {
+            throw new ArgumentException(
+                "AD-RA embeds the PA, the LPA and its signature in the DSS: pass them as Artifacts (IcpBrasilPolicyArtifacts.DownloadAsync).",
+                nameof(options));
+        }
+
+        if (policy != IcpBrasilPolicy.AdRa && options.Artifacts is not null)
+        {
+            throw new ArgumentException("Policy artifacts are embedded only by AD-RA.", nameof(options));
+        }
+
         var root = builder.SignerCertificate is { } signer
             ? IcpBrasilChainValidator.FindBundledRoot(signer, builder.SignerChain)
             : null;
-        var current = root is null
-            ? IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Pades)
-            : IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Pades, root);
+        var version = ResolveVersion(policy, options.Version ?? options.Artifacts?.Policy, root);
+        if (options.Artifacts is { } artifacts && artifacts.Policy.Oid != version.Oid)
+        {
+            throw new ArgumentException(
+                $"The artifacts are for {artifacts.Policy.Oid}, but the signature uses {version.Oid}.", nameof(options));
+        }
+
         builder = builder
-            .WithSubFilter(PdfSignatureSubFilter.EtsiCadesDetached)
-            .WithSignaturePolicy(current.ToReference());
-        return timestamp is null ? builder : builder.WithLevel(AdesBaselineProfile.Timestamped(timestamp));
+            .WithSubFilter(PdfSignatureSubFilter.PbadPades)
+            .WithSignaturePolicy(version.ToReference());
+        if (timestamp is null)
+        {
+            return builder;
+        }
+
+        var ltv = options.LongTermValidation ?? new LongTermValidationOptions();
+        builder = policy switch
+        {
+            IcpBrasilPolicy.AdRc or IcpBrasilPolicy.AdRa => builder.WithLevel(
+                AdesBaselineProfile.Archive(timestamp, ltv, options.ArchiveTimestamp)),
+            _ => builder.WithLevel(AdesBaselineProfile.Timestamped(timestamp)),
+        };
+        return options.Artifacts is { } embedded ? builder.WithDssArtifacts(embedded.ToDssArtifacts()) : builder;
     }
+
+    /// <summary>
+    /// The version of <paramref name="policy"/> <see cref="WithIcpBrasilPolicy(PadesSignerBuilder, IcpBrasilPolicy, IcpBrasilPadesOptions)"/>
+    /// would pick for this builder's signer: the newest in-force PAdES version that accepts the
+    /// signer's root. Use it to download the AD-RA artifacts of the right version.
+    /// </summary>
+    /// <param name="builder">The PAdES builder, with the signer set.</param>
+    /// <param name="policy">The policy.</param>
+    /// <exception cref="IcpBrasilPolicyException">No version accepts the signer's root.</exception>
+    public static IcpBrasilSignaturePolicy ResolveIcpBrasilPolicy(this PadesSignerBuilder builder, IcpBrasilPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        var root = builder.SignerCertificate is { } signer
+            ? IcpBrasilChainValidator.FindBundledRoot(signer, builder.SignerChain)
+            : null;
+        return ResolveVersion(policy, requested: null, root);
+    }
+
+    private static IcpBrasilSignaturePolicy ResolveVersion(IcpBrasilPolicy policy, IcpBrasilSignaturePolicy? requested, System.Security.Cryptography.X509Certificates.X509Certificate2? root)
+    {
+        if (requested is null)
+        {
+            // Older PAs list only the roots that existed when they were issued: pick the newest
+            // version that accepts the signer's root.
+            return root is null
+                ? IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Pades)
+                : IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Pades, root);
+        }
+
+        if (requested.Info.Policy != policy || requested.Info.Format != IcpBrasilPolicyFormat.Pades)
+        {
+            throw new ArgumentException($"{requested.Oid} is not a PAdES {PolicyName(policy)} policy.", nameof(requested));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (!requested.IsValidAt(now))
+        {
+            throw new IcpBrasilPolicyException(requested.RevokedAt is { } revoked && revoked <= now
+                ? $"The policy {requested.Oid} was revoked on {revoked:yyyy-MM-dd}."
+                : $"The policy {requested.Oid} may be used from {requested.NotBefore:yyyy-MM-dd} to {requested.NotAfter:yyyy-MM-dd}.");
+        }
+
+        if (root is not null && IcpBrasilSignaturePolicies.TryGetRules(requested.Oid, out var rules) && !rules.AcceptsRoot(root))
+        {
+            throw new IcpBrasilPolicyException($"The policy {requested.Oid} does not accept the signer's root ({root.Subject}).");
+        }
+
+        return requested;
+    }
+
+    private static string PolicyName(IcpBrasilPolicy policy) => policy switch
+    {
+        IcpBrasilPolicy.AdRb => "AD-RB",
+        IcpBrasilPolicy.AdRt => "AD-RT",
+        IcpBrasilPolicy.AdRc => "AD-RC",
+        IcpBrasilPolicy.AdRa => "AD-RA",
+        _ => policy.ToString(),
+    };
 
     /// <summary>
     /// Marks the PDF as a health document for VALIDAR: writes the document-type OID
@@ -80,7 +197,7 @@ public static class IcpBrasilSigningExtensions
     /// <remarks>
     /// The VALIDAR guide requires these items "como metadados" but does not say where; this writes
     /// them to the document information dictionary, keyed by OID. Check the result on
-    /// validar.iti.gov.br with your certificate. Combine with <see cref="WithIcpBrasilPolicy"/>.
+    /// validar.iti.gov.br with your certificate. Combine with <see cref="WithIcpBrasilPolicy(PadesSignerBuilder, IcpBrasilPolicy, IcpBrasilPadesOptions)"/>.
     /// </remarks>
     /// <param name="builder">The PAdES builder.</param>
     /// <param name="type">The document type.</param>
