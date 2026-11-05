@@ -36,12 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI: `--archival` requires `--tsa` (it silently produced B-B); `--icp-policy` rejects
   `--sub-filter`, `--ltv` and `--archival` (the policy sets them).
 
-### Added (SimpleSign Desktop — replaces SimpleSign.HostSigner)
+### Added (SimpleSign Agent — replaces SimpleSign.HostSigner)
 
-- New cross-platform app (Avalonia; macOS, Windows, Linux) to sign (PAdES, CAdES, XAdES; A1 file,
-  OS store or A3 token; ICP-Brasil policies), validate, inspect, timestamp (`.tst`), browse tokens
-  and ICP-Brasil policies, and convert HTML to PDF. See `docs/articles/desktop.md`.
-- **Local signing agent** in the app (127.0.0.1:21590), compatible with the HostSigner
+- New cross-platform tray / menu-bar app (Avalonia; macOS, Windows, Linux), `src/SimpleSign.Agent`:
+  the **local signing agent** web pages call to sign with the OS store or an A3 token. The menu
+  pauses the agent, lists and revokes authorized sites, and starts it at login. See
+  `docs/articles/agent.md`.
+- **Local signing agent** (127.0.0.1:21590), compatible with the HostSigner
   `/api/health`, `/api/certificates` and `/api/sign` contract, now with A3 tokens, per-site
   authorization, a consent dialog for every signature, the PIN asked by the app, Chrome Private
   Network Access, rate and size limits.

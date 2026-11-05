@@ -8,7 +8,7 @@ apiRules:
   - exclude:
       uidRegex: ^SimpleSign\.Cli
   - exclude:
-      uidRegex: ^SimpleSign\.Desktop
+      uidRegex: ^SimpleSign\.Agent
   - exclude:
       uidRegex: ^WebSigningSample
   - exclude:

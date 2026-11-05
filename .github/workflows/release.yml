@@ -165,8 +165,8 @@ jobs:
             simplesign-osx-arm64.zip
 
 
-  desktop:
-    name: Publish Desktop (${{ matrix.rid }})
+  agent:
+    name: Publish Agent (${{ matrix.rid }})
     runs-on: ${{ matrix.os }}
     needs: release
     strategy:
@@ -192,24 +192,24 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Test desktop app and agent
-        run: dotnet test tests/unit/SimpleSign.Desktop.Tests --configuration Release --verbosity quiet
+      - name: Test signing agent
+        run: dotnet test tests/unit/SimpleSign.Agent.Tests --configuration Release --verbosity quiet
 
       - name: Package (macOS / Linux)
         if: runner.os != 'Windows'
-        run: scripts/package-desktop.sh ${{ matrix.rid }} ${{ steps.version.outputs.version }} artifacts/desktop
+        run: scripts/package-agent.sh ${{ matrix.rid }} ${{ steps.version.outputs.version }} artifacts/agent
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          dotnet publish src/SimpleSign.Desktop/SimpleSign.Desktop.csproj -c Release -r win-x64 --self-contained true `
-            -p:Version=${{ steps.version.outputs.version }} -o publish-desktop
-          New-Item -ItemType Directory -Force artifacts/desktop | Out-Null
-          Compress-Archive -Path publish-desktop\* -DestinationPath artifacts/desktop/SimpleSign-${{ steps.version.outputs.version }}-win-x64.zip
+          dotnet publish src/SimpleSign.Agent/SimpleSign.Agent.csproj -c Release -r win-x64 --self-contained true `
+            -p:Version=${{ steps.version.outputs.version }} -o publish-agent
+          New-Item -ItemType Directory -Force artifacts/agent | Out-Null
+          Compress-Archive -Path publish-agent\* -DestinationPath artifacts/agent/SimpleSignAgent-${{ steps.version.outputs.version }}-win-x64.zip
 
-      - name: Upload Desktop to Release
+      - name: Upload Agent to Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
-          files: artifacts/desktop/*
+          files: artifacts/agent/*

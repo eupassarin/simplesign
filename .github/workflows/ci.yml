@@ -267,8 +267,8 @@ jobs:
       - name: Run PKCS#11 tests and AOT smoke test
         run: scripts/tests/pkcs11-run.sh
 
-  desktop:
-    name: Desktop (${{ matrix.os }})
+  agent:
+    name: Agent (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: build-and-test
     strategy:
@@ -293,12 +293,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Test desktop app and agent (headless)
-        run: dotnet test tests/unit/SimpleSign.Desktop.Tests --configuration Release --logger "console;verbosity=normal"
+      - name: Test signing agent
+        run: dotnet test tests/unit/SimpleSign.Agent.Tests --configuration Release --logger "console;verbosity=normal"
 
-      - name: Upload page screenshots
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: desktop-screenshots
-          path: tests/unit/SimpleSign.Desktop.Tests/bin/Release/net10.0/screenshots/
+      - name: Build agent app
+        run: dotnet build src/SimpleSign.Agent --configuration Release
+

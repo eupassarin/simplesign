@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SimpleSign.Agent.Views.OriginsWindow"
+        Width="460" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="True"
+        Background="{DynamicResource App.Content}" Title="SimpleSign Agent · Sites autorizados">
+  <StackPanel Margin="24" Spacing="14">
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource App.AccentSoft}">
+        <Path Classes="icon" Data="{StaticResource Icon.Agent}" Width="24" Height="24" />
+      </Border>
+      <StackPanel VerticalAlignment="Center">
+        <TextBlock Classes="title" FontSize="17" Text="Sites autorizados" />
+        <TextBlock Name="StatusText" Classes="caption" />
+      </StackPanel>
+    </StackPanel>
+    <TextBlock TextWrapping="Wrap" Classes="subtitle"
+               Text="Estes sites podem listar seus certificados sem perguntar. Cada assinatura ainda pede a sua confirmação." />
+    <Border Classes="group">
+      <StackPanel Name="OriginList" Spacing="8" />
+    </Border>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Name="CloseButton" Classes="accent" Content="Fechar" IsDefault="True" IsCancel="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>

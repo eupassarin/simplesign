@@ -7,7 +7,7 @@ Step-by-step guide for releasing a new SimpleSign version.
 - [ ] All changes committed on `main`
 - [ ] `dotnet build SimpleSign.sln --no-restore` passes with 0 warnings
 - [ ] Focused projects beneath `tests/unit/` pass on net8.0 and net10.0
-- [ ] `SimpleSign.Desktop.Tests` passes (headless; the CI runs it on Linux, Windows and macOS)
+- [ ] `SimpleSign.Agent.Tests` passes (the CI runs it on Linux, Windows and macOS)
 - [ ] `dotnet test tests/cli/SimpleSign.Cli.Tests` passes
 - [ ] `dotnet test tests/integration/SimpleSign.Integration.Tests` passes when network credentials are available
 - [ ] `dotnet test tests/interop/SimpleSign.Interop.Tests` passes when Docker is available
@@ -64,11 +64,11 @@ grep -r "$OLD" --include="*.md" --include="*.cs" --include="*.tsx" --include="*.
   | grep -v node_modules | grep -v obj/ | grep -v bin/ | grep -v CHANGELOG.md
 ```
 
-### Desktop app
+### Signing agent
 
-SimpleSign Desktop takes its version from `Directory.Build.props` (the agent's `/api/health`
-reports it). The release workflow packages it for osx-arm64, osx-x64, linux-x64 and win-x64
-(`scripts/package-desktop.sh`); the builds are not code-signed.
+SimpleSign Agent takes its version from `Directory.Build.props` (`/api/health` reports it). The
+release workflow packages it for osx-arm64, osx-x64, linux-x64 and win-x64
+(`scripts/package-agent.sh`); the builds are not code-signed.
 
 ## Documentation Updates
 
@@ -152,7 +152,7 @@ git tag vX.Y.Z
 git push origin main --tags
 ```
 
-The tag push triggers `.github/workflows/release.yml` which builds, tests, packs NuGet packages, publishes to NuGet.org, and creates the GitHub Release with CLI and SimpleSign Desktop binaries.
+The tag push triggers `.github/workflows/release.yml` which builds, tests, packs NuGet packages, publishes to NuGet.org, and creates the GitHub Release with CLI and SimpleSign Agent binaries.
 
 ## Manual NuGet Push (if CI fails)
 
