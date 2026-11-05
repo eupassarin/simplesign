@@ -234,4 +234,84 @@ public sealed class IcpBrasilChainValidatorRevocationTests
         result.Metadata!["BR.SignaturePolicyStatus"].ShouldBe("Valid");
         result.Metadata["BR.SignaturePolicy"].ShouldBe("Pades AdRb 1.3");
     }
+
+    [Fact]
+    public async Task ValidateAsync_CrlCacheDirectory_ReusesLcrAcrossValidators()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        var now = DateTimeOffset.UtcNow;
+        var acCrl = pki.AcCrl(now.AddHours(-1), now.AddDays(7));
+        var rootCrl = pki.RootCrl(now.AddHours(-1), now.AddDays(30));
+        int downloads = 0;
+        string dir = Path.Combine(Path.GetTempPath(), "simplesign-lcr-" + Guid.NewGuid().ToString("N"));
+        IcpBrasilChainValidator NewValidator() => new(new HttpClient(new MockHttpHandler(request =>
+        {
+            downloads++;
+            byte[]? body = request.RequestUri!.AbsoluteUri switch
+            {
+                TestPki.AcCrlUrl => acCrl,
+                TestPki.RootCrlUrl => rootCrl,
+                _ => null,
+            };
+            return Task.FromResult(body is null
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) });
+        })))
+        {
+            TrustAnchorsOverride = [pki.Root],
+            CrlCacheDirectory = dir,
+        };
+
+        try
+        {
+            (await NewValidator().ValidateAsync(Context(pki, at: null, online: true))).RevocationStatus.ShouldBe(ChainRevocationStatus.Good);
+            downloads.ShouldBe(2);
+
+            var second = await NewValidator().ValidateAsync(Context(pki, at: null, online: true));
+
+            second.RevocationStatus.ShouldBe(ChainRevocationStatus.Good);
+            downloads.ShouldBe(2, "the LCRs come from the disk cache until their nextUpdate");
+            Directory.GetFiles(dir, "*.crl").Length.ShouldBe(2);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ExpiredCachedLcr_IsDownloadedAgain()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        var now = DateTimeOffset.UtcNow;
+        string dir = Path.Combine(Path.GetTempPath(), "simplesign-lcr-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string name(string url) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url))) + ".crl";
+        File.WriteAllBytes(Path.Combine(dir, name(TestPki.AcCrlUrl)), pki.AcCrl(now.AddDays(-10), now.AddDays(-3)));
+        var requested = new List<string>();
+        var acCrl = pki.AcCrl(now.AddHours(-1), now.AddDays(7));
+        var rootCrl = pki.RootCrl(now.AddHours(-1), now.AddDays(30));
+        var validator = new IcpBrasilChainValidator(new HttpClient(new MockHttpHandler(request =>
+        {
+            requested.Add(request.RequestUri!.AbsoluteUri);
+            byte[] body = request.RequestUri.AbsoluteUri == TestPki.AcCrlUrl ? acCrl : rootCrl;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) });
+        })))
+        {
+            TrustAnchorsOverride = [pki.Root],
+            CrlCacheDirectory = dir,
+        };
+
+        try
+        {
+            var result = await validator.ValidateAsync(Context(pki, at: null, online: true));
+
+            result.RevocationStatus.ShouldBe(ChainRevocationStatus.Good);
+            requested.ShouldContain(TestPki.AcCrlUrl);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

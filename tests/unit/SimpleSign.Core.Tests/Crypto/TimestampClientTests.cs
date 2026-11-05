@@ -53,7 +53,7 @@ public sealed class TimestampClientTests
     public void Constructor_NullUrl_ThrowsArgumentException()
     {
         Assert.Throws<ArgumentNullException>(
-            () => new TimestampClient(new HttpClient(), null!));
+            () => new TimestampClient(new HttpClient(), (string)null!));
     }
 
     [Fact(DisplayName = "Empty URL throws ArgumentException")]

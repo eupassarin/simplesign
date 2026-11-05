@@ -1055,12 +1055,17 @@ public sealed class PadesSignerBuilder
     {
         var logger = _options.Dependencies.Logger;
         logger.TimestampRequested(opId, timestampOptions.Endpoint.ToString());
-        var tsaClient = CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
+        var tsaClient = CreateTimestampClient(timestampOptions);
         byte[] signatureValue = TimestampClient.ExtractSignatureValue(cms);
         byte[] token = await tsaClient.GetTimestampAsync(signatureValue, effectiveHash, cancellationToken).ConfigureAwait(false);
         TimestampClient.ValidateTimestampToken(token, signatureValue, effectiveHash);
         return token;
     }
+
+    private ITimestampClient CreateTimestampClient(TimestampOptions timestampOptions) =>
+        timestampOptions.NeedsDedicatedClient
+            ? TimestampClient.Create(timestampOptions, timestampOptions.HttpClientProvider ?? _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger)
+            : CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
 
     private ITimestampClient CreateTimestampClient(string endpoint, IHttpClientProvider? scopedProvider)
     {

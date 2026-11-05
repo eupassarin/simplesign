@@ -52,17 +52,41 @@ public sealed record IcpBrasilSignaturePolicy(
 /// </remarks>
 public static partial class IcpBrasilSignaturePolicies
 {
-    /// <summary>Every embedded policy, including expired and revoked versions (needed to validate old signatures).</summary>
-    public static IReadOnlyList<IcpBrasilSignaturePolicy> All => Catalog;
+    // Null until RefreshAsync runs. Not initialised from Catalog here: static initialisers in
+    // different files of a partial class run in an unspecified order.
+    private static volatile IcpBrasilSignaturePolicy[]? s_refreshed;
 
-    /// <summary>Finds an embedded policy by OID.</summary>
+    private static IcpBrasilSignaturePolicy[] Effective => s_refreshed ?? Catalog;
+
+    /// <summary>
+    /// Every known policy, including expired and revoked versions (needed to validate old
+    /// signatures): the embedded LPA entries, updated by <see cref="RefreshAsync(HttpClient, IcpBrasilPolicyFormat, CancellationToken)"/> when it ran.
+    /// </summary>
+    public static IReadOnlyList<IcpBrasilSignaturePolicy> All => Effective;
+
+    /// <summary>Finds a policy by OID (embedded or refreshed).</summary>
     /// <param name="oid">The policy OID.</param>
     /// <param name="policy">The policy, when found.</param>
     public static bool TryFind(string? oid, [NotNullWhen(true)] out IcpBrasilSignaturePolicy? policy)
     {
-        policy = oid is null ? null : Array.Find(Catalog, p => p.Oid == oid);
+        policy = oid is null ? null : Array.Find(Effective, p => p.Oid == oid);
         return policy is not null;
     }
+
+    /// <summary>Merges refreshed entries over the current ones (same OID: the refreshed entry wins).</summary>
+    internal static void Apply(IEnumerable<IcpBrasilSignaturePolicy> refreshed)
+    {
+        var byOid = Effective.ToDictionary(p => p.Oid, StringComparer.Ordinal);
+        foreach (var policy in refreshed)
+        {
+            byOid[policy.Oid] = policy;
+        }
+
+        s_refreshed = [.. byOid.Values.OrderBy(p => p.NotBefore).ThenBy(p => p.Oid, StringComparer.Ordinal)];
+    }
+
+    /// <summary>Restores the embedded catalog (tests).</summary>
+    internal static void ResetToEmbedded() => s_refreshed = null;
 
     /// <summary>
     /// The newest version of a policy that can be used to sign at <paramref name="time"/>
@@ -75,7 +99,7 @@ public static partial class IcpBrasilSignaturePolicies
     public static IcpBrasilSignaturePolicy Current(IcpBrasilPolicy policy, IcpBrasilPolicyFormat format, DateTimeOffset? time = null)
     {
         var at = time ?? DateTimeOffset.UtcNow;
-        return Catalog
+        return Effective
             .Where(p => p.IsValidAt(at) && p.Info.Policy == policy && p.Info.Format == format)
             .OrderByDescending(p => p.NotBefore)
             .ThenByDescending(p => p.Oid.Length)

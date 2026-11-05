@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (SimpleSign.Brasil — ICP-Brasil infrastructure)
+
+- **Bundled intermediate ACs:** the ~176 ICP-Brasil intermediates from the ITI's `ACcompactado.zip`
+  (`IcpBrasilChainValidator.LoadBundledIntermediateCerts()`), used for offline chain building by the
+  ICP-Brasil validator and trust anchor provider. Regenerate with `scripts/update-icp-intermediates.sh`.
+- **LPA refresh:** `IcpBrasilSignaturePolicies.RefreshAsync(httpClient, format)` downloads the
+  PAdES/CAdES LPA, verifies its ITI signature (`LPA_*.p7s`) and chain, applies new revocation dates
+  and adds new PAs checked against the LPA digest. `IcpBrasilLpa.Parse` reads an LPA.
+- **LCR disk cache:** `CrlCacheDirectory` on `IcpBrasilChainValidator`, `GovBrChainValidator` and the
+  new `BrasilExtensionOptions`; LCRs are reused until their nextUpdate.
+- **ACT authentication and TCP (Core):** `TimestampOptions.Authorization` (Basic/bearer, per request),
+  `TimestampOptions.ClientCertificate` (mutual TLS) and `tcp://host:port` endpoints (RFC 3161 §3.3
+  socket transport); `TimestampClient.Create(options, provider)`.
+
 ### Fixed (SimpleSign.Brasil — see the [v0.10 → v0.11 migration guide](docs/migration/v0.10-to-v0.11.md))
 
 - **Professional registrations:** CRM/CRO were read from `2.16.76.1.3.4`/`3.5`/`3.6`, which hold

@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Http;
 
 namespace SimpleSign.Core.Signing;
@@ -7,8 +9,29 @@ namespace SimpleSign.Core.Signing;
 /// </summary>
 public sealed record TimestampOptions
 {
-    /// <summary>The absolute TSA endpoint URI.</summary>
+    /// <summary>
+    /// The absolute TSA endpoint URI: <c>http(s)://</c>, or <c>tcp://host:port</c> for the
+    /// socket transport of RFC 3161 §3.3 (port 318 by default), used by some ICP-Brasil ACTs.
+    /// </summary>
     public Uri Endpoint { get; }
+
+    /// <summary>
+    /// Credentials sent with each HTTP request, for ACTs that require them
+    /// (e.g. <c>new AuthenticationHeaderValue("Basic", base64)</c> or a bearer token).
+    /// </summary>
+    public AuthenticationHeaderValue? Authorization { get; init; }
+
+    /// <summary>
+    /// Client certificate (with private key) for ACTs that authenticate with mutual TLS.
+    /// Ignored when <see cref="HttpClientProvider"/> is set: configure the certificate on that client instead.
+    /// </summary>
+    public X509Certificate2? ClientCertificate { get; init; }
+
+    /// <summary>Whether the endpoint uses the RFC 3161 TCP transport.</summary>
+    public bool IsTcp => Endpoint.Scheme == "tcp";
+
+    /// <summary>Whether this TSA needs more than a URL (credentials, client certificate or TCP).</summary>
+    internal bool NeedsDedicatedClient => Authorization is not null || ClientCertificate is not null || IsTcp;
 
     /// <summary>
     /// Optional TSA-specific <see cref="IHttpClientProvider"/>. When <see langword="null"/>,
@@ -20,15 +43,15 @@ public sealed record TimestampOptions
     /// <param name="endpoint">The absolute TSA endpoint URI. Must not be null.</param>
     /// <param name="httpClientProvider">Optional TSA-specific HTTP client provider.</param>
     /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> is null.</exception>
-    /// <exception cref="ArgumentException"><paramref name="endpoint"/> is not absolute.</exception>
+    /// <exception cref="ArgumentException"><paramref name="endpoint"/> is not an absolute http(s) or tcp URI.</exception>
     public TimestampOptions(
         Uri endpoint,
         IHttpClientProvider? httpClientProvider = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        if (!endpoint.IsAbsoluteUri || (endpoint.Scheme != Uri.UriSchemeHttp && endpoint.Scheme != Uri.UriSchemeHttps))
+        if (!endpoint.IsAbsoluteUri || endpoint.Scheme is not ("http" or "https" or "tcp"))
         {
-            throw new ArgumentException("TSA endpoint must be an absolute HTTP(S) URI.", nameof(endpoint));
+            throw new ArgumentException("TSA endpoint must be an absolute http(s):// or tcp:// URI.", nameof(endpoint));
         }
 
         Endpoint = endpoint;

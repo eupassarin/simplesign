@@ -38,14 +38,39 @@ public sealed class BrasilExtension : ICountryExtension
     /// <param name="logger">Optional logger.</param>
     /// <param name="additionalIcpRoots">Extra ICP-Brasil root certificates to trust.</param>
     public BrasilExtension(HttpClient? httpClient, Microsoft.Extensions.Logging.ILogger? logger, IReadOnlyList<X509Certificate2> additionalIcpRoots)
+        : this(new BrasilExtensionOptions { HttpClient = httpClient, Logger = logger, AdditionalIcpRoots = additionalIcpRoots })
     {
-        ArgumentNullException.ThrowIfNull(additionalIcpRoots);
+    }
+
+    /// <summary>Creates a Brasil extension from <paramref name="options"/>.</summary>
+    /// <param name="options">HTTP client, logger, extra ICP-Brasil roots and LCR cache directory.</param>
+    /// <example>
+    /// <code>
+    /// var brasil = new BrasilExtension(new BrasilExtensionOptions
+    /// {
+    ///     CrlCacheDirectory = Path.Combine(Path.GetTempPath(), "simplesign-lcr"),
+    /// });
+    /// </code>
+    /// </example>
+    public BrasilExtension(BrasilExtensionOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var httpClient = options.HttpClient;
+        var logger = options.Logger;
+        var roots = options.AdditionalIcpRoots;
         _trustAnchors = new Lazy<IReadOnlyList<ITrustAnchorProvider>>(() =>
-            [new IcpBrasilTrustAnchorProvider(additionalIcpRoots), new GovBrTrustAnchorProvider()]);
+            [new IcpBrasilTrustAnchorProvider(roots), new GovBrTrustAnchorProvider()]);
         _chainValidators = new Lazy<IReadOnlyList<IChainValidationProvider>>(() =>
         [
-            new IcpBrasilChainValidationProvider(new IcpBrasilChainValidator(httpClient, logger) { AdditionalTrustAnchors = additionalIcpRoots }),
-            new GovBrChainValidationProvider(httpClient, logger),
+            new IcpBrasilChainValidationProvider(new IcpBrasilChainValidator(httpClient, logger)
+            {
+                AdditionalTrustAnchors = roots,
+                CrlCacheDirectory = options.CrlCacheDirectory,
+            }),
+            new GovBrChainValidationProvider(new GovBrChainValidator(httpClient, logger)
+            {
+                CrlCacheDirectory = options.CrlCacheDirectory,
+            }),
         ]);
     }
 
@@ -107,6 +132,8 @@ internal sealed class IcpBrasilTrustAnchorProvider : ITrustAnchorProvider
     public string DisplayName => "ICP-Brasil";
     /// <inheritdoc />
     public IReadOnlyList<X509Certificate2> GetTrustAnchors() => _certs.Value;
+    /// <inheritdoc />
+    public IReadOnlyList<X509Certificate2> GetIntermediateCertificates() => IcpBrasilChainValidator.LoadBundledIntermediateCerts();
 }
 
 internal sealed class GovBrTrustAnchorProvider : ITrustAnchorProvider
@@ -233,8 +260,13 @@ internal sealed class GovBrChainValidationProvider : IChainValidationProvider
     private readonly GovBrChainValidator _validator;
 
     public GovBrChainValidationProvider(HttpClient? httpClient, Microsoft.Extensions.Logging.ILogger? logger)
+        : this(new GovBrChainValidator(httpClient, logger))
     {
-        _validator = new GovBrChainValidator(httpClient, logger);
+    }
+
+    internal GovBrChainValidationProvider(GovBrChainValidator validator)
+    {
+        _validator = validator;
     }
 
     /// <inheritdoc />

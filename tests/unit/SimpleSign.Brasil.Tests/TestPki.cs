@@ -33,7 +33,7 @@ internal sealed class TestPki : IDisposable
     /// <summary>A time when the end entity was valid (one year ago).</summary>
     internal static DateTimeOffset WhileValid => DateTimeOffset.UtcNow.Date.AddYears(-1);
 
-    internal static TestPki Create(string policyOid = "2.16.76.1.2.3.10", bool leafExpired = true)
+    internal static TestPki Create(string policyOid = "2.16.76.1.2.3.10", bool leafExpired = true, params (string Oid, string Value)[] subjectAltNames)
     {
         var now = DateTimeOffset.UtcNow.Date;
         using var rootKey = RSA.Create(2048);
@@ -54,7 +54,13 @@ internal sealed class TestPki : IDisposable
         leafReq.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, true));
         leafReq.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([AcCrlUrl]));
         leafReq.CertificateExtensions.Add(CertificatePolicies(policyOid));
-        var leaf = leafReq.Create(ac, now.AddYears(-3), leafExpired ? LeafNotAfter : now.AddYears(1), [0x20, 0x02]);
+        if (subjectAltNames.Length > 0)
+        {
+            leafReq.CertificateExtensions.Add(SanCertificates.OtherNames(subjectAltNames));
+        }
+
+        using var leafPublic = leafReq.Create(ac, now.AddYears(-3), leafExpired ? LeafNotAfter : now.AddYears(1), [0x20, 0x02]);
+        var leaf = leafPublic.CopyWithPrivateKey(leafKey);
 
         return new TestPki(root, ac, leaf);
     }

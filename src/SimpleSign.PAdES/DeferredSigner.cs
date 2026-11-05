@@ -252,9 +252,11 @@ public static class DeferredSigner
                 var provider = timestampOptions.HttpClientProvider ?? options.HttpClientProvider;
                 var httpClient = provider?.GetClient() ?? DefaultHttpClientProvider.Instance.GetClient();
                 var hashAlg = resolvedAlgorithm.HashAlgorithm;
-                var tsaClient = tsaFactory is not null
-                    ? tsaFactory.Create(endpoint)
-                    : new TimestampClient(httpClient, endpoint, logger);
+                ITimestampClient tsaClient = timestampOptions.NeedsDedicatedClient
+                    ? TimestampClient.Create(timestampOptions, provider ?? DefaultHttpClientProvider.Instance, logger)
+                    : tsaFactory is not null
+                        ? tsaFactory.Create(endpoint)
+                        : new TimestampClient(httpClient, endpoint, logger);
                 timestampToken = await tsaClient.GetTimestampAsync(
                     TimestampClient.ExtractSignatureValue(cms), hashAlg, cancellationToken).ConfigureAwait(false);
                 cms = TimestampClient.EmbedTimestampInCms(cms, timestampToken);
