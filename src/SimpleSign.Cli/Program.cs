@@ -80,6 +80,14 @@ internal static partial class Program
                     .WithDescription("Validate a signed XAdES XML document");
             });
 
+            config.AddBranch("fiscal", fiscal =>
+            {
+                fiscal.AddCommand<FiscalSignCommand>("sign")
+                    .WithDescription("Sign fiscal XML (NF-e, CT-e, MDF-e, events, NFS-e, eSocial, EFD-Reinf)");
+                fiscal.AddCommand<FiscalValidateCommand>("validate")
+                    .WithDescription("Validate the XMLDSig signatures of fiscal XML");
+            });
+
             config.SetExceptionHandler((ex, _) =>
             {
                 AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message.EscapeMarkup()}");

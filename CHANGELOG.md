@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (CAdES — several signers)
+
+- `CadesSigner.CoSign(existing, data?)` (parallel signers, .p7s or .p7m) and
+  `CadesSigner.CounterSign(existing, signerIndex)` (RFC 5652 §11.4, no content-type).
+- `CadesSignatureValidator.ValidateAll` → `CadesValidationReport` with every signer and
+  countersigner; `ValidateWithHash(cms, hash, oid)`; `Validate(cms, null)` validates an attached
+  signature's encapsulated content (passing null used to throw).
+- `CadesSigner.ExtractContent(p7m)`; Core: `CmsParser.ParseAll` / `CmsSignedDataSet`,
+  `CmsSignedData.EncapsulatedContent` and `CounterSignatures`, `Oids.CounterSignature`.
+
+### Added (new package SimpleSign.Brasil.Fiscal)
+
+- `FiscalXmlSigner` / `FiscalXmlValidator`: XMLDSig of NF-e/NFC-e, CT-e, MDF-e, events and
+  inutilização, NFS-e Nacional (DPS), eSocial and EFD-Reinf (`FiscalDocumentProfile`), local key or
+  `IExternalSigner`; validation of digest, signature value and ICP-Brasil chain, rejecting
+  duplicate Ids. CLI: `simplesign fiscal sign|validate`.
+
 ### Added (SimpleSign.Brasil — ICP-Brasil infrastructure)
 
 - **Bundled intermediate ACs:** the ~176 ICP-Brasil intermediates from the ITI's `ACcompactado.zip`

@@ -392,6 +392,36 @@ public sealed class CliCommandTests : IDisposable
         exit.ShouldNotBe(0);
     }
 
+    // ── fiscal ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Fiscal_SignThenValidate_NFe()
+    {
+        string input = Path.Combine(_tempDir, "nfe.xml");
+        await File.WriteAllTextAsync(input,
+            "<NFe xmlns=\"http://www.portalfiscal.inf.br/nfe\"><infNFe versao=\"4.00\" Id=\"NFe35260711222333000181550010000000071123456780\"><ide><cUF>35</cUF></ide></infNFe></NFe>");
+        string output = Path.Combine(_tempDir, "nfe-signed.xml");
+
+        var (signExit, signText) = await RunAsync("fiscal", "sign", input, "--profile", "nfe", "--cert", _pfxPath, "--password", Password, "--output", output);
+        signExit.ShouldBe(0, signText);
+        (await File.ReadAllTextAsync(output)).ShouldContain("<Signature xmlns=\"http://www.w3.org/2000/09/xmldsig#\">");
+
+        var (validateExit, validateText) = await RunAsync("fiscal", "validate", output, "--no-chain");
+        validateExit.ShouldBe(0, validateText);
+        validateText.ShouldContain("infNFe");
+    }
+
+    [Fact]
+    public async Task Fiscal_UnknownProfile_ReturnsError()
+    {
+        string input = Path.Combine(_tempDir, "x.xml");
+        await File.WriteAllTextAsync(input, "<a/>");
+
+        var (exit, _) = await RunAsync("fiscal", "sign", input, "--profile", "xyz", "--cert", _pfxPath, "--password", Password);
+
+        exit.ShouldNotBe(0);
+    }
+
     private async Task<string> SignAsync(string relativeOutput)
     {
         string input = WriteMinimalPdf(Path.GetFileNameWithoutExtension(relativeOutput) + "-input.pdf");

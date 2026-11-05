@@ -108,6 +108,7 @@ dotnet tool install -g SimpleSign.Cli
   - **SimpleSign.XAdES** — XML signature signing & validation (ETSI EN 319 132)
     - **SimpleSign.Core** (shared)
 - **SimpleSign.Brasil** — ICP-Brasil + Gov.br + Lei 14.063 (depends on PAdES)
+- **SimpleSign.Brasil.Fiscal** — XMLDSig for NF-e, CT-e, MDF-e, NFS-e, eSocial and EFD-Reinf (depends on Brasil)
 - **SimpleSign.Signers.Pkcs11** — sign with A3 tokens, smartcards and HSMs through their PKCS#11 driver (depends on Core)
 - **SimpleSign.Signers.Cloud** — sign with cloud certificates: ICP-Brasil PSCs (API v0) and Cloud Signature Consortium API v2 (depends on Core)
 - **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF: CSS cascade, floats, flexbox, grid, multi-column, paginated tables, gradients, SVG, OpenType shaping and RTL text, subset Unicode fonts, PDF/A-2b (independent)
