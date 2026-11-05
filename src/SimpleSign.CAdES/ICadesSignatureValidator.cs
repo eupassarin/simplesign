@@ -11,6 +11,6 @@ public interface ICadesSignatureValidator
     /// <param name="trustAnchors">Optional trust anchors for certificate chain validation.</param>
     CadesValidationResult Validate(
         byte[] cmsBytes,
-        byte[] originalData,
+        byte[]? originalData,
         IEnumerable<X509Certificate2>? trustAnchors = null);
 }

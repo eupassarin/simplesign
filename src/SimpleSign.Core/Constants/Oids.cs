@@ -99,6 +99,9 @@ public static class Oids
     /// <summary>id-signedData — CMS content type for signed data.</summary>
     public const string SignedData = "1.2.840.113549.1.7.2";
 
+    /// <summary>id-countersignature (RFC 5652 §11.4): a SignerInfo over another signer's signature value.</summary>
+    public const string CounterSignature = "1.2.840.113549.1.9.6";
+
     #endregion
 
     #region CMS Signed Attributes

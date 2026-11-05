@@ -115,14 +115,19 @@ public sealed class CadesSignatureValidatorTests : IDisposable
         result.IsCertificateChainValid.ShouldBeFalse();
     }
 
+    // Null data now means "use the encapsulated content" (attached .p7m); with unparseable
+    // CMS it is a validation error, not an exception.
     [Fact]
-    public void Validate_NullOriginalData_Throws()
+    public void Validate_NullOriginalDataAndInvalidCms_ReturnsError()
     {
         var cms = new byte[] { 1, 2, 3 };
         var validator = new CadesSignatureValidator(
             new ValidationOptions { CheckRevocation = false });
 
-        Should.Throw<ArgumentNullException>(() => validator.Validate(cms, null!));
+        var result = validator.Validate(cms, null);
+
+        result.Errors.ShouldNotBeEmpty();
+        result.IsIntegrityValid.ShouldBeFalse();
     }
 
     [Fact]

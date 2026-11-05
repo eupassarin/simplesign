@@ -47,4 +47,16 @@ internal sealed record CadesSigningOptions(
 {
     /// <summary>A signature policy with its hash; takes precedence over <see cref="SignaturePolicyOid"/>.</summary>
     public SignaturePolicyReference? SignaturePolicy { get; init; }
+
+    /// <summary>When set, the new signer is added to this existing CMS (co-signature).</summary>
+    public byte[]? CoSignTarget { get; init; }
+
+    /// <summary>When set, the new signer countersigns signer <see cref="CounterSignIndex"/> of this CMS.</summary>
+    public byte[]? CounterSignTarget { get; init; }
+
+    /// <summary>The signer of <see cref="CounterSignTarget"/> to countersign.</summary>
+    public int CounterSignIndex { get; init; }
+
+    /// <summary>Whether this signs a countersignature (no content-type attribute, RFC 5652 §11.4).</summary>
+    public bool IsCounterSignature => CounterSignTarget is not null;
 }

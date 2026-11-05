@@ -409,19 +409,31 @@ public sealed class CmsSignatureBuilder
     /// <param name="padesAttributes">When true, includes PAdES-specific attributes (signingCertificateV2).</param>
     public static byte[] BuildSignedAttributes(byte[] contentHash, string digestOid, DateTimeOffset time,
         X509Certificate2 signerCertificate, IReadOnlyList<CmsAttribute>? extraAttributes = null,
-        bool padesAttributes = true)
+        bool padesAttributes = true) =>
+        BuildSignedAttributes(contentHash, digestOid, time, signerCertificate, extraAttributes, padesAttributes, includeContentType: true);
+
+    /// <summary>
+    /// Builds the signed attributes; <paramref name="includeContentType"/> = false for a
+    /// countersignature, which must not carry content-type (RFC 5652 §11.4).
+    /// </summary>
+    internal static byte[] BuildSignedAttributes(byte[] contentHash, string digestOid, DateTimeOffset time,
+        X509Certificate2 signerCertificate, IReadOnlyList<CmsAttribute>? extraAttributes,
+        bool padesAttributes, bool includeContentType)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
 
         using (writer.PushSetOf())
         {
             // contentType = id-data
-            using (writer.PushSequence())
+            if (includeContentType)
             {
-                writer.WriteObjectIdentifier(Oids.ContentType);
-                using (writer.PushSetOf())
+                using (writer.PushSequence())
                 {
-                    writer.WriteObjectIdentifier(Oids.Data);
+                    writer.WriteObjectIdentifier(Oids.ContentType);
+                    using (writer.PushSetOf())
+                    {
+                        writer.WriteObjectIdentifier(Oids.Data);
+                    }
                 }
             }
 
@@ -536,7 +548,7 @@ public sealed class CmsSignatureBuilder
 
     #region Cryptography
 
-    private static byte[] SignData(byte[] signedAttrs, X509Certificate2 cert, HashAlgorithmName hashAlg, string signatureOid)
+    internal static byte[] SignData(byte[] signedAttrs, X509Certificate2 cert, HashAlgorithmName hashAlg, string signatureOid)
     {
         // Signs the signedAttrs (not the document — this is the CMS/PAdES standard)
         using var key = cert.GetRSAPrivateKey();

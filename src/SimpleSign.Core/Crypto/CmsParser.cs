@@ -38,7 +38,9 @@ public static class CmsParser
         byte[]? ManifestJson,
         string? ContentTypeOid,
         IReadOnlyDictionary<string, byte[][]>? UnsignedAttributes,
-        byte[]? ArchiveTimestampToken);
+        byte[]? ArchiveTimestampToken,
+        string? DigestAlgorithmOid = null,
+        IReadOnlyList<ParsedSignerInfo>? CounterSigners = null);
 
     /// <summary>Parses a CMS/PKCS#7 SignedData structure.</summary>
     public static CmsSignedData Parse(byte[] cmsBytes, ILogger? logger = null)
@@ -59,7 +61,7 @@ public static class CmsParser
         string digestOid = ParseDigestAlgorithm(signedData);
 
         // encapContentInfo — extract eContentType and, for document timestamps, TSTInfo messageImprint
-        (string? eContentTypeOid, string? tstHashAlgOid, byte[]? tstHashBytes) = ParseEncapContentInfo(signedData, logger);
+        (string? eContentTypeOid, string? tstHashAlgOid, byte[]? tstHashBytes) = ParseEncapContentInfo(signedData, out byte[]? eContent, logger);
 
         var embeddedCerts = ParseEmbeddedCertificates(signedData, logger);
 
@@ -70,10 +72,64 @@ public static class CmsParser
         }
 
         var signerInfo = ParseSignerInfo(signedData, embeddedCerts, logger);
+        return ToSignedData(signerInfo, digestOid, embeddedCerts, eContentTypeOid, tstHashAlgOid, tstHashBytes, eContent);
+    }
 
+    /// <summary>
+    /// Parses a CMS SignedData with every signer: co-signatures (several SignerInfos) and, inside
+    /// each, its countersignatures. <see cref="Parse(byte[], ILogger?)"/> returns the first signer only.
+    /// </summary>
+    /// <param name="cmsBytes">DER or BER encoded CMS ContentInfo.</param>
+    /// <param name="logger">Optional logger.</param>
+    public static CmsSignedDataSet ParseAll(byte[] cmsBytes, ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(cmsBytes);
+        var contentInfo = new AsnReader(cmsBytes, AsnEncodingRules.BER).ReadSequence();
+        _ = contentInfo.ReadObjectIdentifier();
+        var signedData = contentInfo.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)).ReadSequence();
+        _ = signedData.ReadInteger(); // version
+
+        var digestAlgorithms = new List<string>();
+        var digestSet = signedData.ReadSetOf(skipSortOrderValidation: true);
+        while (digestSet.HasData)
+        {
+            digestAlgorithms.Add(digestSet.ReadSequence().ReadObjectIdentifier());
+        }
+
+        (string? eContentTypeOid, string? tstHashAlgOid, byte[]? tstHashBytes) = ParseEncapContentInfo(signedData, out byte[]? eContent, logger);
+        var embeddedCerts = ParseEmbeddedCertificates(signedData, logger);
+        if (signedData.HasData && signedData.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 1, true))
+        {
+            _ = signedData.ReadEncodedValue(); // crls
+        }
+
+        string fallbackDigest = digestAlgorithms.FirstOrDefault() ?? Oids.Sha256;
+        var signers = ParseAllSignerInfos(signedData, embeddedCerts, logger)
+            .Select(si => ToSignedData(si, fallbackDigest, embeddedCerts, eContentTypeOid, tstHashAlgOid, tstHashBytes, eContent))
+            .ToList();
+
+        return new CmsSignedDataSet
+        {
+            DigestAlgorithmOids = digestAlgorithms.AsReadOnly(),
+            Certificates = embeddedCerts.AsReadOnly(),
+            EContentTypeOid = eContentTypeOid,
+            EncapsulatedContent = eContent,
+            Signers = signers.AsReadOnly(),
+        };
+    }
+
+    private static CmsSignedData ToSignedData(
+        ParsedSignerInfo signerInfo,
+        string fallbackDigestOid,
+        List<X509Certificate2> embeddedCerts,
+        string? eContentTypeOid,
+        string? tstHashAlgOid,
+        byte[]? tstHashBytes,
+        byte[]? eContent)
+    {
         return new CmsSignedData
         {
-            DigestAlgorithmOid = digestOid,
+            DigestAlgorithmOid = signerInfo.DigestAlgorithmOid ?? fallbackDigestOid,
             SignatureAlgorithmOid = signerInfo.SignatureAlgorithmOid,
             Certificates = embeddedCerts.AsReadOnly(),
             SignerCertificate = signerInfo.SignerCert,
@@ -92,7 +148,11 @@ public static class CmsParser
             TstMessageImprintHashAlgOid = tstHashAlgOid,
             TstMessageImprintHash = tstHashBytes,
             UnsignedAttributes = signerInfo.UnsignedAttributes,
-            ArchiveTimestampToken = signerInfo.ArchiveTimestampToken
+            ArchiveTimestampToken = signerInfo.ArchiveTimestampToken,
+            EncapsulatedContent = eContent,
+            CounterSignatures = signerInfo.CounterSigners is { Count: > 0 } counter
+                ? [.. counter.Select(c => ToSignedData(c, fallbackDigestOid, embeddedCerts, null, null, null, null))]
+                : [],
         };
     }
 
@@ -115,9 +175,10 @@ public static class CmsParser
     /// eContent contains the TSTInfo from which we extract messageImprint.
     /// </summary>
     private static (string? EContentTypeOid, string? TstHashAlgOid, byte[]? TstHashBytes)
-        ParseEncapContentInfo(AsnReader signedData, ILogger? logger = null)
+        ParseEncapContentInfo(AsnReader signedData, out byte[]? eContent, ILogger? logger = null)
     {
         const string IdCtTstInfo = "1.2.840.113549.1.9.16.1.4";
+        eContent = null;
 
         try
         {
@@ -126,6 +187,12 @@ public static class CmsParser
 
             if (eContentTypeOid != IdCtTstInfo || !encapContent.HasData)
             {
+                if (encapContent.HasData)
+                {
+                    // Attached (.p7m): eContent [0] EXPLICIT OCTET STRING (possibly BER-constructed)
+                    eContent = encapContent.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)).ReadOctetString();
+                }
+
                 return (eContentTypeOid, null, null);
             }
 
@@ -171,6 +238,33 @@ public static class CmsParser
 
     private static ParsedSignerInfo ParseSignerInfo(AsnReader signedData, List<X509Certificate2> embeddedCerts, ILogger? logger = null)
     {
+        var signerInfosSet = signedData.ReadSetOf(skipSortOrderValidation: true);
+        if (!signerInfosSet.HasData)
+        {
+            return new ParsedSignerInfo(null, null, null, null, null, null, null, null, string.Empty, null, null, null, null, null, null);
+        }
+
+        return ParseOneSignerInfo(signerInfosSet.ReadSequence(), embeddedCerts, logger, depth: 0);
+    }
+
+    /// <summary>Parses every SignerInfo of the set, in order.</summary>
+    private static List<ParsedSignerInfo> ParseAllSignerInfos(AsnReader signedData, List<X509Certificate2> embeddedCerts, ILogger? logger)
+    {
+        var result = new List<ParsedSignerInfo>();
+        var signerInfosSet = signedData.ReadSetOf(skipSortOrderValidation: true);
+        while (signerInfosSet.HasData)
+        {
+            result.Add(ParseOneSignerInfo(signerInfosSet.ReadSequence(), embeddedCerts, logger, depth: 0));
+        }
+
+        return result;
+    }
+
+    // Countersignatures nest (a countersignature can be countersigned); bound the recursion.
+    private const int MaxCounterSignatureDepth = 8;
+
+    private static ParsedSignerInfo ParseOneSignerInfo(AsnReader si, List<X509Certificate2> embeddedCerts, ILogger? logger, int depth)
+    {
         X509Certificate2? signerCert = null;
         byte[]? messageDigest = null;
         byte[]? signedAttrs = null;
@@ -186,11 +280,9 @@ public static class CmsParser
         string? contentTypeOid = null;
         Dictionary<string, List<byte[]>>? unsignedAttrsDict = null;
         byte[]? archiveTimestampToken = null;
-
-        var signerInfosSet = signedData.ReadSetOf();
-        if (signerInfosSet.HasData)
+        string? digestAlgorithmOid = null;
+        var counterSigners = new List<ParsedSignerInfo>();
         {
-            var si = signerInfosSet.ReadSequence();
             _ = si.ReadInteger(); // version
 
             // issuerAndSerialNumber → identifies the certificate
@@ -225,7 +317,7 @@ public static class CmsParser
             }
 
             // digestAlgorithm
-            _ = si.ReadEncodedValue();
+            digestAlgorithmOid = si.ReadSequence().ReadObjectIdentifier();
 
             // signedAttrs [0] IMPLICIT OPTIONAL
             if (si.HasData && si.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))
@@ -285,6 +377,14 @@ public static class CmsParser
                         {
                             archiveTimestampToken = values[0];
                         }
+                        else if (uOid == Oids.CounterSignature && depth < MaxCounterSignatureDepth)
+                        {
+                            foreach (byte[] value in values)
+                            {
+                                counterSigners.Add(ParseOneSignerInfo(
+                                    new AsnReader(value, AsnEncodingRules.BER).ReadSequence(), embeddedCerts, logger, depth + 1));
+                            }
+                        }
                     }
                     catch (AsnContentException ex) { logger?.UnsignedAttributeParsingFailed(ex.Message); }
                 }
@@ -296,7 +396,7 @@ public static class CmsParser
 
         return new ParsedSignerInfo(signerCert, messageDigest, signedAttrs, signature, signingTime, timestampToken,
             signingCertHash, signingCertHashAlgOid, signatureAlgorithmOid, commitmentTypeOid, signaturePolicyOid, manifestJson, contentTypeOid,
-            unsignedFinal, archiveTimestampToken);
+            unsignedFinal, archiveTimestampToken, digestAlgorithmOid, counterSigners);
     }
 
     private static ParsedSignedAttributes ParseSignedAttributes(byte[] signedAttrs, ILogger? logger = null)

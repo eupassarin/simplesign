@@ -233,6 +233,23 @@ public sealed class CadesSignerBuilder
         return With(_options with { SignaturePolicy = policy, SignaturePolicyOid = null, SignaturePolicyUri = null });
     }
 
+    /// <summary>Configures the builder to add its signer to <paramref name="existingSignature"/>.</summary>
+    internal CadesSignerBuilder ForCoSignature(byte[] existingSignature, bool attached) =>
+        With(_options with
+        {
+            CoSignTarget = existingSignature,
+            ContentType = attached ? CadesContentType.Enveloped : CadesContentType.Detached,
+        });
+
+    /// <summary>Configures the builder to countersign signer <paramref name="signerIndex"/> of <paramref name="existingSignature"/>.</summary>
+    internal CadesSignerBuilder ForCounterSignature(byte[] existingSignature, int signerIndex) =>
+        With(_options with
+        {
+            CounterSignTarget = existingSignature,
+            CounterSignIndex = signerIndex,
+            ContentType = CadesContentType.Detached,
+        });
+
     /// <summary>Sets the logger for diagnostic output.</summary>
     /// <param name="logger">The logger.</param>
     /// <returns>A new builder with the logger configured.</returns>
@@ -394,6 +411,15 @@ public sealed class CadesSignerBuilder
         }
 
         var achieved = ComputeAchievedLevel(artifactHasTimestamp, artifactHasLtvMaterial, artifactHasArchiveTimestamp);
+
+        if (_options.CoSignTarget is { } coSignTarget)
+        {
+            cms = CmsComposer.AddSigner(coSignTarget, cms);
+        }
+        else if (_options.CounterSignTarget is { } counterSignTarget)
+        {
+            cms = CmsComposer.AddCounterSignature(counterSignTarget, _options.CounterSignIndex, cms);
+        }
 
         return new CadesSigningResult
         {
@@ -584,6 +610,17 @@ public sealed class CadesSignerBuilder
         var extraAttributes = BuildSignedAttributesInternal();
         byte[]? eContent = _options.ContentType == CadesContentType.Enveloped ? _data : null;
 
+        if (_options.IsCounterSignature)
+        {
+            string digestOid = CmsSignatureBuilder.GetDigestOid(hashAlg);
+            byte[] signedAttrs = CmsSignatureBuilder.BuildSignedAttributes(
+                CmsSignatureBuilder.ComputeHash(_data, hashAlg), digestOid, signingTime, certificate, extraAttributes,
+                padesAttributes: false, includeContentType: false);
+            byte[] signatureValue = CmsSignatureBuilder.SignData(signedAttrs, certificate, hashAlg, sigAlgOid);
+            return CmsSignatureBuilder.BuildSignedData(
+                digestOid, sigAlgOid, hashAlg, signedAttrs, signatureValue, certificate, [certificate, .. chain]);
+        }
+
         return CmsSignatureBuilder.Build(
             _data, certificate, hashAlg, signingTime,
             chain, extraAttributes,
@@ -611,7 +648,7 @@ public sealed class CadesSignerBuilder
 
         byte[] signedAttrs = CmsSignatureBuilder.BuildSignedAttributes(
             contentHash, digestOid, signingTime, certificate, extraAttributes,
-            padesAttributes: false);
+            padesAttributes: false, includeContentType: !_options.IsCounterSignature);
 
         var request = new ExternalSigningRequest(
             signedAttrs,
