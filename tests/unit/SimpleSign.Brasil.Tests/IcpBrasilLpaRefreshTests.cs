@@ -59,7 +59,7 @@ public sealed class IcpBrasilLpaRefreshTests
             IcpBrasilSignaturePolicies.TryFind(NewOid, out var added).ShouldBeTrue();
             added.PolicyHashHex.ShouldBe(new string('A', 64));
             added.Uri.ShouldBe(NewPaUri);
-            IcpBrasilSignaturePolicies.All.Count.ShouldBe(56);
+            IcpBrasilSignaturePolicies.All.Count.ShouldBe(101);
         }
         finally
         {

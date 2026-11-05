@@ -63,6 +63,33 @@ public static class IcpBrasilPolicyValidator
     {
         ArgumentNullException.ThrowIfNull(signature);
         var reference = signature.SignedAttrs is { } attrs ? CmsAttribute.ReadSignaturePolicy(attrs) : null;
+        return ValidateReference(reference, signingTime, signature.SignatureTimestampToken is not null, expectedFormat,
+            rules => CheckRules(rules, signature, signerRoot));
+    }
+
+    /// <summary>
+    /// Validates a signature policy reference read from a signature in another format, such as a
+    /// XAdES SignaturePolicyIdentifier (<c>XadesValidationResult.SignaturePolicy</c>): the
+    /// SigPolicyHash matches the PA, the policy could be used at the signing time and AD-RT and
+    /// above carry a signature timestamp. The CMS attribute and algorithm rules of the PA are not
+    /// checked; the accepted roots are, when <paramref name="signerRoot"/> is given and the rules
+    /// of the policy are known (the embedded rules cover the CAdES and PAdES PAs, not the XML ones).
+    /// </summary>
+    /// <param name="reference">The policy reference; null yields <see cref="IcpBrasilPolicyStatus.None"/>.</param>
+    /// <param name="signingTime">The signing time: the signature timestamp time when there is one.</param>
+    /// <param name="hasSignatureTimestamp">Whether the signature carries a signature timestamp.</param>
+    /// <param name="expectedFormat">The container format (<see cref="IcpBrasilPolicyFormat.Xades"/> for XAdES), when known.</param>
+    /// <param name="signerRoot">The root certificate of the signer's chain; null skips the root check.</param>
+    public static IcpBrasilPolicyValidationResult Validate(
+        SignaturePolicyReference? reference, DateTimeOffset signingTime, bool hasSignatureTimestamp,
+        IcpBrasilPolicyFormat? expectedFormat = null, X509Certificate2? signerRoot = null) =>
+        ValidateReference(reference, signingTime, hasSignatureTimestamp, expectedFormat,
+            rules => CheckRoot(rules, signerRoot));
+
+    private static IcpBrasilPolicyValidationResult ValidateReference(
+        SignaturePolicyReference? reference, DateTimeOffset signingTime, bool hasSignatureTimestamp,
+        IcpBrasilPolicyFormat? expectedFormat, Func<IcpBrasilPolicyRules, IEnumerable<string>> checkRules)
+    {
         if (reference is null)
         {
             return new(IcpBrasilPolicyStatus.None, null, null, []);
@@ -98,7 +125,7 @@ public static class IcpBrasilPolicyValidator
             errors.Add($"Policy {policy.Oid} was revoked on {revoked:yyyy-MM-dd}, before the signature ({signingTime:yyyy-MM-dd}).");
         }
 
-        if (policy.RequiresSignatureTimestamp && signature.SignatureTimestampToken is null)
+        if (policy.RequiresSignatureTimestamp && !hasSignatureTimestamp)
         {
             errors.Add($"Policy {info.Policy} requires a signature timestamp, and the signature has none.");
         }
@@ -110,7 +137,7 @@ public static class IcpBrasilPolicyValidator
 
         if (IcpBrasilSignaturePolicies.TryGetRules(policy.Oid, out var rules))
         {
-            CheckRules(rules, signature, signerRoot, errors);
+            errors.AddRange(checkRules(rules));
         }
 
         return new(errors.Count == 0 ? IcpBrasilPolicyStatus.Valid : IcpBrasilPolicyStatus.Invalid, reference, policy, errors.AsReadOnly());
@@ -120,14 +147,21 @@ public static class IcpBrasilPolicyValidator
     // (DSS/VRI/document timestamps), not CMS attributes; they are not checked on the CMS.
     private const string PdfStructureArc = "2.16.76.1.8.";
 
-    private static void CheckRules(IcpBrasilPolicyRules rules, CmsSignedData signature, X509Certificate2? signerRoot, List<string> errors)
+    private static List<string> CheckRoot(IcpBrasilPolicyRules rules, X509Certificate2? signerRoot)
     {
+        var errors = new List<string>();
         if (signerRoot is not null && rules.TrustAnchorKeySha256.Count > 0 && !rules.AcceptsRoot(signerRoot))
         {
             errors.Add($"Policy {rules.Oid} does not accept the signer's root ({signerRoot.GetNameInfo(X509NameType.SimpleName, false)}); "
                 + $"it accepts: {string.Join(", ", rules.TrustAnchorSubjects.Select(SimpleName))}.");
         }
 
+        return errors;
+    }
+
+    private static List<string> CheckRules(IcpBrasilPolicyRules rules, CmsSignedData signature, X509Certificate2? signerRoot)
+    {
+        var errors = CheckRoot(rules, signerRoot);
         var signedOids = SignedAttributeOids(signature.SignedAttrs);
         foreach (string oid in rules.MandatedSignedAttributes.Where(o => !signedOids.Contains(o)))
         {
@@ -152,6 +186,8 @@ public static class IcpBrasilPolicyValidator
                 errors.Add($"Policy {rules.Oid} requires keys of at least {min} bits; the signer key has {size}.");
             }
         }
+
+        return errors;
     }
 
     private static string SimpleName(string subject)

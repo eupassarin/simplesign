@@ -285,6 +285,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             HasValidArchiveTimeStamp = archiveTsValid,
             SignerCertificate = signerCert,
             SigningTime = extraction.SigningTime,
+            SignaturePolicy = ReadSignaturePolicy(sigElement, ns),
             DetectedLevel = detectedLevel,
             Errors = errors,
             Warnings = warnings
@@ -861,6 +862,49 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             XmlDSigUrls.EcdsaSha512 => HashAlgorithmName.SHA512,
             _ => default
         };
+    }
+
+    /// <summary>Reads SignedSignatureProperties/SignaturePolicyIdentifier/SignaturePolicyId, if any.</summary>
+    private static SignaturePolicyReference? ReadSignaturePolicy(XmlElement sigElement, XmlNamespaceManager ns)
+    {
+        if (sigElement.SelectSingleNode(
+                "ds:Object/xades:QualifyingProperties/xades:SignedProperties/xades:SignedSignatureProperties/xades:SignaturePolicyIdentifier/xades:SignaturePolicyId",
+                ns) is not XmlElement policyId
+            || policyId.SelectSingleNode("xades:SigPolicyId/xades:Identifier", ns) is not XmlElement identifier)
+        {
+            return null;
+        }
+
+        string oid = identifier.InnerText.Trim();
+        if (oid.StartsWith("urn:oid:", StringComparison.OrdinalIgnoreCase))
+        {
+            oid = oid["urn:oid:".Length..];
+        }
+
+        string? hashOid = null;
+        byte[] hash = [];
+        if (policyId.SelectSingleNode("xades:SigPolicyHash", ns) is XmlElement policyHash
+            && policyHash.SelectSingleNode("ds:DigestValue", ns) is XmlElement digestValue)
+        {
+            try
+            {
+                hash = DecodeBase64(digestValue);
+                hashOid = DetectHashAlgorithm((XmlElement?)policyHash.SelectSingleNode("ds:DigestMethod", ns)).Name switch
+                {
+                    "SHA1" => Oids.Sha1,
+                    "SHA384" => Oids.Sha384,
+                    "SHA512" => Oids.Sha512,
+                    _ => Oids.Sha256,
+                };
+            }
+            catch (FormatException)
+            {
+                hash = [];
+            }
+        }
+
+        string? uri = policyId.SelectSingleNode("xades:SigPolicyQualifiers/xades:SigPolicyQualifier/xades:SPURI", ns)?.InnerText.Trim();
+        return new SignaturePolicyReference(oid, hashOid, hash, string.IsNullOrEmpty(uri) ? null : uri);
     }
 
     private static HashAlgorithmName DetectHashAlgorithm(XmlElement? digestMethodEl)

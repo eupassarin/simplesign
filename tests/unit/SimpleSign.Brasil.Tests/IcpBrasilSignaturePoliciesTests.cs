@@ -13,7 +13,7 @@ public sealed class IcpBrasilSignaturePoliciesTests
     [Fact]
     public void All_ContainsEveryLpaEntry()
     {
-        IcpBrasilSignaturePolicies.All.Count.ShouldBe(55);
+        IcpBrasilSignaturePolicies.All.Count.ShouldBe(100);
         IcpBrasilSignaturePolicies.All.ShouldAllBe(p => p.PolicyHash.Length == 20 || p.PolicyHash.Length == 32);
     }
 

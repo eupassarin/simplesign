@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
 
 namespace SimpleSign.XAdES;
@@ -35,6 +36,13 @@ public sealed class XadesValidationResult
 
     /// <summary>Signing time from SignedProperties.</summary>
     public DateTimeOffset? SigningTime { get; init; }
+
+    /// <summary>
+    /// The signature policy the signature declares (SignaturePolicyIdentifier), with the OID
+    /// (an OID URN is reduced to the OID), the SigPolicyHash and the SPURI; null when there is none.
+    /// The hash is read, not checked: compare it with the policy (e.g. SimpleSign.Brasil).
+    /// </summary>
+    public SignaturePolicyReference? SignaturePolicy { get; init; }
 
     /// <summary>The baseline level inferred from observed unsigned-property elements, even when those properties fail validation.</summary>
     /// <remarks>
