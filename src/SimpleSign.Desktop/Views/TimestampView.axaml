@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SimpleSign.Desktop.ViewModels"
+             xmlns:s="using:SimpleSign.Desktop.Services"
+             xmlns:c="using:SimpleSign.Desktop.Controls"
+             xmlns:v="using:SimpleSign.Desktop.Views"
+             x:Class="SimpleSign.Desktop.Views.TimestampView"
+             x:DataType="vm:TimestampViewModel">
+  <StackPanel Spacing="16">
+    <c:PageChrome />
+    <c:DropZone FileName="{Binding FileName}" Hint="Qualquer arquivo · só o hash é enviado à TSA" />
+    <Border Classes="card">
+      <StackPanel Spacing="14">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="10">
+            <Button Content="Verificar .tst…" Command="{Binding VerifyCommand}" />
+            <Button Classes="accent" Content="Criar carimbo" Command="{Binding CreateCommand}" />
+          </StackPanel>
+          <StackPanel Spacing="2">
+            <TextBlock Classes="title" Text="Servidor de carimbo do tempo" />
+            <TextBlock Classes="caption" Text="{Binding TsaUrl}" />
+          </StackPanel>
+        </DockPanel>
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <ToggleSwitch IsChecked="{Binding RequireIcpBrasil}" />
+          <TextBlock VerticalAlignment="Center" Text="Na verificação, exigir ACT credenciada na ICP-Brasil" />
+        </StackPanel>
+        <TextBlock Classes="caption" Text="{Binding TokenName, StringFormat='Carimbo: {0}'}" IsVisible="{Binding TokenName, Converter={x:Static v:Converters.NotNull}}" />
+      </StackPanel>
+    </Border>
+    <Border Classes="card" IsVisible="{Binding Verdict, Converter={x:Static v:Converters.NotNull}}">
+      <StackPanel Spacing="12">
+        <TextBlock Classes="title" Text="{Binding Verdict}" />
+        <ItemsControl ItemsSource="{Binding Checks}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="s:CheckItem">
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,3">
+                <Path Classes="icon" Width="15" Height="15" Stroke="{Binding State, Converter={x:Static v:Converters.StateBrush}}" Data="{Binding State, Converter={x:Static v:Converters.StateIcon}}" />
+                <TextBlock Text="{Binding Label}" />
+                <TextBlock Classes="caption" Text="{Binding Detail}" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Border Classes="group">
+          <ItemsControl ItemsSource="{Binding Details}">
+            <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="s:DetailItem">
+                      <Grid ColumnDefinitions="200,*" Margin="0,3">
+                        <TextBlock Classes="caption" Text="{Binding Key}" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

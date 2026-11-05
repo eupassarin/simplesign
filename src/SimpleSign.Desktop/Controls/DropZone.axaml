@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="SimpleSign.Desktop.Controls.DropZone">
+  <Border Name="Zone" CornerRadius="12" BorderThickness="1.5" BorderBrush="{DynamicResource App.Separator}"
+          Background="{DynamicResource App.DropZone}" Padding="24" Cursor="Hand" DragDrop.AllowDrop="True">
+    <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
+      <Border Width="42" Height="42" CornerRadius="21" Background="{DynamicResource App.Card}">
+        <Path Classes="icon" Data="{StaticResource Icon.Upload}" />
+      </Border>
+      <StackPanel VerticalAlignment="Center" Spacing="2">
+        <TextBlock Name="Headline" Classes="title" Text="Arraste um arquivo aqui" />
+        <TextBlock Name="HintText" Classes="caption" Text="ou clique para escolher" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

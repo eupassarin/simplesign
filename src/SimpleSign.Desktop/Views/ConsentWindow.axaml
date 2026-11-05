@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SimpleSign.Desktop.Views.ConsentWindow"
+        Width="440" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
+        Background="{DynamicResource App.Content}" Title="SimpleSign · Confirmação">
+  <StackPanel Margin="24" Spacing="14">
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource App.AccentSoft}">
+        <Path Classes="icon" Data="{StaticResource Icon.Validate}" Width="24" Height="24" />
+      </Border>
+      <StackPanel VerticalAlignment="Center">
+        <TextBlock Name="TitleText" Classes="title" FontSize="17" />
+        <TextBlock Name="OriginText" Classes="caption" />
+      </StackPanel>
+    </StackPanel>
+    <TextBlock Name="MessageText" TextWrapping="Wrap" />
+    <Border Classes="group" Name="CertificateBox">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Path Classes="icon" Data="{StaticResource Icon.Token}" />
+        <TextBlock Name="CertificateText" VerticalAlignment="Center" FontWeight="SemiBold" />
+      </StackPanel>
+    </Border>
+    <TextBlock Classes="caption" TextWrapping="Wrap"
+               Text="Só confirme se você iniciou esta ação no site. A chave privada nunca sai deste computador." />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+      <Button Name="DenyButton" Content="Recusar" IsCancel="True" />
+      <Button Name="AlwaysButton" Content="Permitir sempre" />
+      <Button Name="AllowButton" Classes="accent" Content="Permitir" IsDefault="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>

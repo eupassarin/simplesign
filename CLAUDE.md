@@ -47,7 +47,7 @@ src/
 ├── SimpleSign.Brasil/      ICP-Brasil: chain validation, CPF/CNPJ, Gov.br
 ├── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
 ├── SimpleSign.Cli/         CLI tool
-└── SimpleSign.HostSigner/  Signing service host
+└── SimpleSign.Desktop/     Avalonia desktop app + local signing agent
 ```
 
 ## Coding Conventions

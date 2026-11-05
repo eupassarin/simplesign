@@ -103,9 +103,9 @@ simplesign batch-sign ./documents/ --cert mycert.pfx --parallel 8
 simplesign extract signed.pdf --output signature.p7s
 ```
 
-### HostSigner (local signing API)
+### Desktop agent (local signing API)
 
-A Windows tray app at `http://localhost:21590` exposing certificate and signing endpoints:
+SimpleSign Desktop (macOS/Windows/Linux) runs an agent at `http://127.0.0.1:21590`; sites are authorized by the user and each signature is confirmed in the app:
 ```bash
 # List certificates
 curl http://localhost:21590/api/certificates
@@ -140,7 +140,7 @@ src/
 ├── SimpleSign.Brasil/      ICP-Brasil: chain validation, CPF/CNPJ, Gov.br
 ├── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
 ├── SimpleSign.Cli/         CLI tool (Spectre.Console)
-└── SimpleSign.HostSigner/  Windows tray app — local signing HTTP API
+└── SimpleSign.Desktop/     Avalonia app — local signing agent (HTTP on 127.0.0.1)
 ```
 
 ## Testing

@@ -65,6 +65,6 @@ byte[] signedPdf = await PadesSigner
 - [Benchmarks](benchmarks.md)
 - [ADRs](adr/index.md) — Architecture Decision Records
 - [Migration Guides](migration/index.md)
-- [HostSigner](https://github.com/eupassarin/SimpleSign/tree/main/src/SimpleSign.HostSigner) — Windows tray app for local signing
+- [SimpleSign Desktop](articles/desktop.md) — macOS/Windows/Linux app and local signing agent (A1, OS store and A3 tokens)
 - [CLI Tool](https://www.nuget.org/packages/SimpleSign.Cli) — command-line signing and validation
 - [GitHub Repository](https://github.com/eupassarin/SimpleSign)
