@@ -71,13 +71,31 @@ public sealed class LtvEmbedder : ILtvEmbedder
     /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The PDF bytes with embedded LTV data.</returns>
-    public async Task<byte[]> EmbedLtvDataAsync(
+    public Task<byte[]> EmbedLtvDataAsync(
         byte[] signedPdf,
         IReadOnlyList<X509Certificate2> certificateChain,
         byte[]? timestampTokenBytes = null,
+        CancellationToken cancellationToken = default) =>
+        EmbedLtvDataAsync(signedPdf, certificateChain, timestampTokenBytes, [], cancellationToken);
+
+    /// <summary>
+    /// Collects revocation data and embeds it, with <paramref name="artifacts"/> listed in the DSS
+    /// and referenced from the new signature's VRI.
+    /// </summary>
+    /// <param name="signedPdf">The signed PDF.</param>
+    /// <param name="certificateChain">Signer certificate and chain.</param>
+    /// <param name="timestampTokenBytes">The new signature's timestamp token, for VRI /TS.</param>
+    /// <param name="artifacts">Extra DSS streams.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<byte[]> EmbedLtvDataAsync(
+        byte[] signedPdf,
+        IReadOnlyList<X509Certificate2> certificateChain,
+        byte[]? timestampTokenBytes,
+        IReadOnlyList<PdfDssArtifact> artifacts,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(signedPdf);
+        ArgumentNullException.ThrowIfNull(artifacts);
         ArgumentNullException.ThrowIfNull(certificateChain);
 
         const int MaxIterations = 10;
@@ -278,7 +296,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
         // Parse existing DSS for merge (multi-signature support)
         var existingDss = Validation.DssExtractor.ParseExistingDss(signedPdf);
 
-        return AppendDssDictionary(signedPdf, crlData, ocspData, allCerts, signatureHashes, existingDss, timestampTokenBytes);
+        return AppendDssDictionary(signedPdf, crlData, ocspData, allCerts, signatureHashes, existingDss, timestampTokenBytes, artifacts);
     }
 
     internal static bool HasCompleteEvidence(
@@ -405,7 +423,8 @@ public sealed class LtvEmbedder : ILtvEmbedder
         IReadOnlyList<X509Certificate2> certs,
         List<string> signatureHashes,
         ExistingDssData existingDss,
-        byte[]? timestampTokenBytes = null)
+        byte[]? timestampTokenBytes,
+        IReadOnlyList<PdfDssArtifact> artifacts)
     {
         int nextObj = FindNextObjectNumber(signedPdf);
         int dssObjNum = nextObj;
@@ -486,6 +505,37 @@ public sealed class LtvEmbedder : ILtvEmbedder
             tsRef = $"{tsObjNum} 0 R";
         }
 
+        // Extra artifacts: one stream per distinct content, listed under their DSS key and
+        // referenced from the new signature's VRI under their VRI key.
+        var artifactRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var vriArtifactRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var written = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var artifact in artifacts)
+        {
+            string digest = Convert.ToHexString(SHA256.HashData(artifact.Content.Span));
+            if (!written.TryGetValue(digest, out var objRef))
+            {
+                objRef = WriteStreamObjects(result, [artifact.Content.ToArray()], ref nextObjNum, xrefMap)[0];
+                written[digest] = objRef;
+            }
+
+            Add(artifactRefs, artifact.DssKey, objRef);
+            Add(vriArtifactRefs, artifact.VriKey, objRef);
+        }
+
+        static void Add(Dictionary<string, List<string>> map, string key, string objRef)
+        {
+            if (!map.TryGetValue(key, out var list))
+            {
+                map[key] = list = [];
+            }
+
+            if (!list.Contains(objRef))
+            {
+                list.Add(objRef);
+            }
+        }
+
         // Build a VRI only for the newly added signature. Existing mappings remain active and
         // continue to reference the validation material and timestamp collected for their own
         // signatures. Validation material collected in this pass cannot safely be attributed to
@@ -518,6 +568,11 @@ public sealed class LtvEmbedder : ILtvEmbedder
             if (tsRef is not null)
             {
                 vriSb.Append($"   /TS {tsRef}\n");
+            }
+
+            foreach (var (key, refs) in vriArtifactRefs)
+            {
+                vriSb.Append(refs.Count == 1 ? $"   /{key} {refs[0]}\n" : $"   /{key} [{string.Join(" ", refs)}]\n");
             }
 
             // ISO 32000-2 §12.8.4.4: /TU is the time at which the VRI was created
@@ -558,6 +613,14 @@ public sealed class LtvEmbedder : ILtvEmbedder
         if (allCertRefs is not [])
         {
             dssSb.Append($"   /Certs [{string.Join(" ", allCertRefs)}]\n");
+        }
+
+        foreach (string key in existingDss.ExtraArrays.Keys.Union(artifactRefs.Keys, StringComparer.Ordinal))
+        {
+            var merged = MergeRefs(
+                existingDss.ExtraArrays.TryGetValue(key, out var old) ? old : [],
+                artifactRefs.TryGetValue(key, out var added) ? added : []);
+            dssSb.Append($"   /{key} [{string.Join(" ", merged)}]\n");
         }
 
         if (allVriEntries is not [])

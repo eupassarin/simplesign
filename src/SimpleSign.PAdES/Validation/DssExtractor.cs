@@ -63,7 +63,11 @@ internal static partial class DssExtractor
             var globalCerts = ExtractStreamsFromArray(dssSpan, "/Certs ["u8, data);
             var vriEntries = ExtractVriData(dssSpan, data);
 
-            return new DssValidationData(globalCrls, globalOcsps, globalCerts, vriEntries);
+            return new DssValidationData(globalCrls, globalOcsps, globalCerts, vriEntries)
+            {
+                Present = true,
+                Keys = TopLevelKeys(dssSpan),
+            };
         }
         catch (OperationCanceledException)
         {
@@ -458,7 +462,142 @@ internal static partial class DssExtractor
             certs = ExtractStreamsFromVriArray(vriDictSpan, "/Cert["u8, pdfData);
         }
 
-        return new VriData(crls, ocsps, certs);
+        return new VriData(crls, ocsps, certs) { Keys = TopLevelKeys(vriDictSpan) };
+    }
+
+    /// <summary>
+    /// The keys of a dictionary (the span starts at its <c>&lt;&lt;</c>), skipping the contents of
+    /// nested dictionaries, arrays and strings.
+    /// </summary>
+    internal static IReadOnlyCollection<string> TopLevelKeys(ReadOnlySpan<byte> dict)
+    {
+        int start = IndexOfBytes(dict, "<<"u8);
+        if (start < 0)
+        {
+            return [];
+        }
+
+        // Tokenise the top level: each value is one token, except "n g R" (three).
+        var tokens = new List<string>();
+        int i = start + 2;
+        while (i < dict.Length)
+        {
+            byte b = dict[i];
+            if (b == '>' && i + 1 < dict.Length && dict[i + 1] == '>')
+            {
+                break;
+            }
+
+            if (b is (byte)' ' or (byte)'\r' or (byte)'\n' or (byte)'\t' or (byte)'\f' or 0)
+            {
+                i++;
+            }
+            else if (b == '/')
+            {
+                int end = i + 1;
+                while (end < dict.Length && !IsDelimiter(dict[end]))
+                {
+                    end++;
+                }
+
+                tokens.Add(Encoding.Latin1.GetString(dict[i..end]));
+                i = end;
+            }
+            else if (b is (byte)'<' or (byte)'[' or (byte)'(')
+            {
+                i = SkipNested(dict, i);
+                tokens.Add("{}");
+            }
+            else
+            {
+                int end = i;
+                while (end < dict.Length && !IsDelimiter(dict[end]))
+                {
+                    end++;
+                }
+
+                tokens.Add(Encoding.Latin1.GetString(dict[i..Math.Max(end, i + 1)]));
+                i = Math.Max(end, i + 1);
+            }
+        }
+
+        var keys = new List<string>();
+        for (int t = 0; t < tokens.Count; t++)
+        {
+            if (!tokens[t].StartsWith('/'))
+            {
+                continue;
+            }
+
+            keys.Add(tokens[t][1..]);
+            t++; // the value
+            if (t + 2 < tokens.Count && tokens[t + 2] == "R")
+            {
+                t += 2;
+            }
+        }
+
+        return keys.AsReadOnly();
+    }
+
+    private static bool IsDelimiter(byte b) =>
+        b is (byte)' ' or (byte)'\r' or (byte)'\n' or (byte)'\t' or (byte)'\f' or 0
+            or (byte)'/' or (byte)'<' or (byte)'>' or (byte)'[' or (byte)']' or (byte)'(' or (byte)')';
+
+    // Returns the index after the nested dictionary, array, hex string or literal string at i.
+    private static int SkipNested(ReadOnlySpan<byte> data, int i)
+    {
+        if (data[i] == '(')
+        {
+            int depth = 0;
+            for (; i < data.Length; i++)
+            {
+                if (data[i] == '\\')
+                {
+                    i++;
+                }
+                else if (data[i] == '(')
+                {
+                    depth++;
+                }
+                else if (data[i] == ')' && --depth == 0)
+                {
+                    return i + 1;
+                }
+            }
+
+            return data.Length;
+        }
+
+        if (data[i] == '<' && (i + 1 >= data.Length || data[i + 1] != '<'))
+        {
+            int close = IndexOfBytesFrom(data, ">"u8, i);
+            return close < 0 ? data.Length : close + 1;
+        }
+
+        int nesting = 0;
+        for (; i < data.Length; i++)
+        {
+            if (data[i] == '(')
+            {
+                i = SkipNested(data, i) - 1;
+            }
+            else if (data[i] == '[' || (data[i] == '<' && i + 1 < data.Length && data[i + 1] == '<'))
+            {
+                nesting++;
+                i += data[i] == '<' ? 1 : 0;
+            }
+            else if (data[i] == ']' || (data[i] == '>' && i + 1 < data.Length && data[i + 1] == '>'))
+            {
+                i += data[i] == '>' ? 1 : 0;
+                if (--nesting == 0)
+                {
+                    return i + 1;
+                }
+            }
+        }
+
+        return data.Length;
     }
 
     /// <summary>
@@ -567,7 +706,60 @@ internal static partial class DssExtractor
         var certRefs = ParseArrayRefs(dssSpan, "/Certs ["u8);
         var vriEntries = ParseVriEntries(dssSpan);
 
-        return new Signing.ExistingDssData(crlRefs, ocspRefs, certRefs, vriEntries);
+        return new Signing.ExistingDssData(crlRefs, ocspRefs, certRefs, vriEntries) { ExtraArrays = ParseExtraArrays(dssSpan) };
+    }
+
+    /// <summary>Top-level DSS arrays other than CRLs, OCSPs and Certs (the VRI sub-dictionary is skipped).</summary>
+    internal static Dictionary<string, IReadOnlyList<int>> ParseExtraArrays(ReadOnlySpan<byte> dssDictSlice)
+    {
+        string text = System.Text.Encoding.Latin1.GetString(dssDictSlice);
+        int vri = text.IndexOf("/VRI", StringComparison.Ordinal);
+        if (vri >= 0)
+        {
+            int open = text.IndexOf("<<", vri, StringComparison.Ordinal);
+            int depth = 0;
+            for (int i = open; open >= 0 && i < text.Length - 1; i++)
+            {
+                if (text[i] == '<' && text[i + 1] == '<')
+                {
+                    depth++;
+                    i++;
+                }
+                else if (text[i] == '>' && text[i + 1] == '>')
+                {
+                    depth--;
+                    i++;
+                    if (depth == 0)
+                    {
+                        text = text[..vri] + text[(i + 1)..];
+                        break;
+                    }
+                }
+            }
+        }
+
+        var result = new Dictionary<string, IReadOnlyList<int>>(StringComparer.Ordinal);
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"/([A-Za-z0-9_.\-]+)\s*\[([^\]]*)\]"))
+        {
+            string key = m.Groups[1].Value;
+            if (key is "CRLs" or "OCSPs" or "Certs")
+            {
+                continue;
+            }
+
+            var refs = new List<int>();
+            foreach (System.Text.RegularExpressions.Match r in System.Text.RegularExpressions.Regex.Matches(m.Groups[2].Value, @"(\d+)\s+\d+\s+R"))
+            {
+                refs.Add(int.Parse(r.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            if (refs.Count > 0)
+            {
+                result[key] = refs;
+            }
+        }
+
+        return result;
     }
 
     /// <summary>

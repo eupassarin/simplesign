@@ -41,7 +41,7 @@ public static class SignatureGlossary
             "Signature handler used to validate the signature (e.g., Adobe.PPKLite).",
             "ISO 32000-2 §12.8.1"),
         ["/SubFilter"] = new("/SubFilter", "/SubFilter", Categories.SignatureDictionary,
-            "Encoding format of the signature value. Common values: adbe.pkcs7.detached (CMS/PKCS#7), ETSI.CAdES.detached (CAdES), ETSI.RFC3161 (timestamp).",
+            "Encoding format of the signature value. Common values: adbe.pkcs7.detached (CMS/PKCS#7), ETSI.CAdES.detached (CAdES), PBAD.PAdES (ICP-Brasil PAdES policies, same CMS as ETSI.CAdES.detached), ETSI.RFC3161 (timestamp).",
             "ISO 32000-2 §12.8.3.3"),
         ["/ByteRange"] = new("/ByteRange", "/ByteRange", Categories.SignatureDictionary,
             "Array [offset1 length1 offset2 length2] defining the exact bytes covered by the signature. The gap between the two ranges is the /Contents hex string.",

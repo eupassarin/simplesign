@@ -754,8 +754,8 @@ public sealed class Iso32000ComplianceTests
         locked.ShouldBeTrue("DocMDP NoChanges should lock the document");
     }
 
-    [Fact(DisplayName = "§12.8.2: DocMDP FormFilling locks the document")]
-    public async Task DocMDP_FormFilling_LocksDocument()
+    [Fact(DisplayName = "§12.8.2.2.2: DocMDP FormFilling (P=2) allows further signatures")]
+    public async Task DocMDP_FormFilling_DoesNotLock()
     {
         using var cert = CreateRsaCert();
         byte[] pdf = BuildMinimalPdf();
@@ -765,7 +765,7 @@ public sealed class Iso32000ComplianceTests
 
         using var stream = new MemoryStream(signed);
         bool locked = await PdfStructureReader.IsDocMdpLockedAsync(stream);
-        locked.ShouldBeTrue("DocMDP FormFilling should lock the document");
+        locked.ShouldBeFalse("P=2 permits filling forms and signing, so the document can take more signatures");
     }
 
     [Fact(DisplayName = "§12.8.2: DocMDP FormFillingAndAnnotations does not lock the document")]

@@ -235,9 +235,11 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
             || w.Contains("homologation", StringComparison.Ordinal)));
         if (context.Signature is { } signature)
         {
-            var policy = IcpBrasilPolicyValidator.Validate(
-                signature, context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow, expectedFormat: null,
-                signerRoot: IcpBrasilChainValidator.FindBundledRoot(context.Certificate, context.Certificates, _validator.Environment));
+            var signingTime = context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow;
+            var signerRoot = IcpBrasilChainValidator.FindBundledRoot(context.Certificate, context.Certificates, _validator.Environment);
+            var policy = context.Pdf is { } pdf
+                ? IcpBrasilPolicyValidator.Validate(signature, signingTime, signerRoot, pdf)
+                : IcpBrasilPolicyValidator.Validate(signature, signingTime, expectedFormat: null, signerRoot);
             if (policy.Status != IcpBrasilPolicyStatus.None)
             {
                 metadata["BR.SignaturePolicy"] = policy.Policy is { } p

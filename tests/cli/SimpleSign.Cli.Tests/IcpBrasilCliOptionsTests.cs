@@ -10,11 +10,13 @@ public sealed class IcpBrasilCliOptionsTests
     [Theory]
     [InlineData("ad-rb", IcpBrasilPolicy.AdRb)]
     [InlineData("AD-RT", IcpBrasilPolicy.AdRt)]
+    [InlineData("ad-rc", IcpBrasilPolicy.AdRc)]
+    [InlineData("ad-ra", IcpBrasilPolicy.AdRa)]
     public void ParsePolicy_Known_ReturnsPolicy(string value, IcpBrasilPolicy expected) =>
         IcpBrasilCliOptions.ParsePolicy(value).ShouldBe(expected);
 
     [Fact]
-    public void ParsePolicy_Unknown_ReturnsNull() => IcpBrasilCliOptions.ParsePolicy("ad-ra").ShouldBeNull();
+    public void ParsePolicy_Unknown_ReturnsNull() => IcpBrasilCliOptions.ParsePolicy("ad-rv").ShouldBeNull();
 
     [Theory]
     [InlineData("prescricao", HealthDocumentType.Prescricao)]

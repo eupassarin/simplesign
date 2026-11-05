@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 
 namespace SimpleSign.Brasil.IcpBrasil;
 
@@ -68,6 +69,29 @@ public static class IcpBrasilPolicyValidator
     }
 
     /// <summary>
+    /// Validates a PDF signature against its declared ICP-Brasil PAdES policy: everything
+    /// <see cref="Validate(CmsSignedData, DateTimeOffset, IcpBrasilPolicyFormat?, X509Certificate2?)"/>
+    /// checks, plus the PDF structures the PA mandates (DOC-ICP-15.03, attributes 2.16.76.1.8.1–3):
+    /// the <c>/Filter /PBAD_PAdES /SubFilter /PBAD.PAdES</c> signature dictionary; for AD-RC and
+    /// AD-RA, a DSS with certificates and revocation data, a VRI entry for the signature and a later
+    /// document timestamp; for AD-RA, the PA, LPA and LPA signature in the DSS and the VRI.
+    /// </summary>
+    /// <param name="signature">The parsed CMS signature.</param>
+    /// <param name="signingTime">The signing time: the signature timestamp time when there is one.</param>
+    /// <param name="signerRoot">The root certificate of the signer's chain; null skips the root check.</param>
+    /// <param name="pdf">The PDF structures around the signature.</param>
+    public static IcpBrasilPolicyValidationResult Validate(
+        CmsSignedData signature, DateTimeOffset signingTime, X509Certificate2? signerRoot, PdfSignatureFacts pdf)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        ArgumentNullException.ThrowIfNull(pdf);
+        var reference = signature.SignedAttrs is { } attrs ? CmsAttribute.ReadSignaturePolicy(attrs) : null;
+        return ValidateReference(reference, signingTime, signature.SignatureTimestampToken is not null, IcpBrasilPolicyFormat.Pades,
+            rules => CheckRules(rules, signature, signerRoot),
+            info => info.Format == IcpBrasilPolicyFormat.Pades ? CheckPdf(info.Policy, pdf) : []);
+    }
+
+    /// <summary>
     /// Validates a signature policy reference read from a signature in another format, such as a
     /// XAdES SignaturePolicyIdentifier (<c>XadesValidationResult.SignaturePolicy</c>): the
     /// SigPolicyHash matches the PA, the policy could be used at the signing time and AD-RT and
@@ -88,7 +112,8 @@ public static class IcpBrasilPolicyValidator
 
     private static IcpBrasilPolicyValidationResult ValidateReference(
         SignaturePolicyReference? reference, DateTimeOffset signingTime, bool hasSignatureTimestamp,
-        IcpBrasilPolicyFormat? expectedFormat, Func<IcpBrasilPolicyRules, IEnumerable<string>> checkRules)
+        IcpBrasilPolicyFormat? expectedFormat, Func<IcpBrasilPolicyRules, IEnumerable<string>> checkRules,
+        Func<IcpBrasilPolicyInfo, IEnumerable<string>>? checkPolicy = null)
     {
         if (reference is null)
         {
@@ -140,12 +165,81 @@ public static class IcpBrasilPolicyValidator
             errors.AddRange(checkRules(rules));
         }
 
+        if (checkPolicy is not null)
+        {
+            errors.AddRange(checkPolicy(info));
+        }
+
         return new(errors.Count == 0 ? IcpBrasilPolicyStatus.Valid : IcpBrasilPolicyStatus.Invalid, reference, policy, errors.AsReadOnly());
     }
 
     // PAdES PAs mandate ICP-Brasil attributes in the 2.16.76.1.8 arc that describe PDF structures
-    // (DSS/VRI/document timestamps), not CMS attributes; they are not checked on the CMS.
+    // (DSS/VRI/document timestamps), not CMS attributes; they are checked on the PDF (CheckPdf).
     private const string PdfStructureArc = "2.16.76.1.8.";
+
+    // DOC-ICP-15.03 Table A.22 and the PAs' br_ext_mandatedPdfSigDicEntries, br_ext_dss and
+    // br_ext_mandatedDocTSEntries: the same in every version of a policy.
+    private static List<string> CheckPdf(IcpBrasilPolicy policy, PdfSignatureFacts pdf)
+    {
+        var errors = new List<string>();
+        if (pdf.Filter != "PBAD_PAdES" || pdf.SubFilter != "PBAD.PAdES")
+        {
+            errors.Add($"ICP-Brasil PAdES policies require /Filter /PBAD_PAdES and /SubFilter /PBAD.PAdES (2.16.76.1.8.1); the signature has /Filter /{pdf.Filter} /SubFilter /{pdf.SubFilter}.");
+        }
+
+        if (policy is not (IcpBrasilPolicy.AdRc or IcpBrasilPolicy.AdRa))
+        {
+            return errors;
+        }
+
+        if (!pdf.HasDss)
+        {
+            errors.Add($"{policy} requires a DSS dictionary (2.16.76.1.8.2), and the document has none.");
+        }
+        else
+        {
+            if (!pdf.DssKeys.Contains("Certs"))
+            {
+                errors.Add("The DSS has no Certs (2.16.76.1.8.2).");
+            }
+
+            if (!pdf.DssKeys.Contains("OCSPs") && !pdf.DssKeys.Contains("CRLs"))
+            {
+                errors.Add("The DSS has neither OCSPs nor CRLs; the policy requires either (2.16.76.1.8.2).");
+            }
+
+            if (!pdf.HasVri)
+            {
+                errors.Add("The DSS has no VRI entry for this signature (2.16.76.1.8.2).");
+            }
+            else if (!pdf.VriKeys.Contains("OCSP") && !pdf.VriKeys.Contains("CRL"))
+            {
+                errors.Add("The signature's VRI entry has neither OCSP nor CRL; the policy requires either (2.16.76.1.8.2).");
+            }
+        }
+
+        if (!pdf.HasLaterDocumentTimestamp)
+        {
+            errors.Add($"{policy} requires a document timestamp (ETSI.RFC3161) after the signature (2.16.76.1.8.3).");
+        }
+
+        if (policy == IcpBrasilPolicy.AdRa && pdf.HasDss)
+        {
+            foreach (var key in new[] { IcpBrasilPolicyArtifacts.DssPolicyArtifacts, IcpBrasilPolicyArtifacts.DssLpaArtifacts, IcpBrasilPolicyArtifacts.DssLpaSignatures }
+                .Where(k => !pdf.DssKeys.Contains(k)))
+            {
+                errors.Add($"AD-RA requires {key} in the DSS (2.16.76.1.8.2).");
+            }
+
+            foreach (var key in new[] { IcpBrasilPolicyArtifacts.VriPolicyArtifact, IcpBrasilPolicyArtifacts.VriLpaArtifact, IcpBrasilPolicyArtifacts.VriLpaSignature }
+                .Where(k => pdf.HasVri && !pdf.VriKeys.Contains(k)))
+            {
+                errors.Add($"AD-RA requires {key} in the signature's VRI entry (2.16.76.1.8.2).");
+            }
+        }
+
+        return errors;
+    }
 
     private static List<string> CheckRoot(IcpBrasilPolicyRules rules, X509Certificate2? signerRoot)
     {

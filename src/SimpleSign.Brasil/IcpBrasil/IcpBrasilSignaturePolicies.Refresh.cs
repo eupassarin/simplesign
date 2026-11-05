@@ -305,17 +305,17 @@ public static partial class IcpBrasilSignaturePolicies
         await VerifyLpaSignerAsync(cms.SignerCertificate, cms.Certificates, cms.SigningTime, httpClient, chainValidator, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task<byte[]> DownloadAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken) =>
+    internal static async Task<byte[]> DownloadAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken) =>
         await ResilientHttp.GetBytesAsync(httpClient, uri.AbsoluteUri, ct: cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException($"Could not download {uri}.");
 
-    private static Uri ToHttps(Uri uri) =>
+    internal static Uri ToHttps(Uri uri) =>
         uri.Scheme == Uri.UriSchemeHttp && uri.Host.EndsWith("icpbrasil.gov.br", StringComparison.OrdinalIgnoreCase)
             ? new UriBuilder(uri) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri
             : uri;
 
 #pragma warning disable CA5350 // SHA-1 digests appear in old ICP-Brasil LPA entries and signatures
-    private static byte[] HashData(string algorithmOid, byte[] data) => algorithmOid switch
+    internal static byte[] HashData(string algorithmOid, byte[] data) => algorithmOid switch
     {
         Oids.Sha256 => SHA256.HashData(data),
         Oids.Sha384 => SHA384.HashData(data),

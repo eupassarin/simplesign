@@ -198,14 +198,14 @@ if (IcpBrasilPolicyInfo.TryParse(signaturePolicyOid, out var policy))
 }
 ```
 
-### Sign under an ICP-Brasil policy (AD-RB / AD-RT)
+### Sign under an ICP-Brasil policy
 
 ICP-Brasil signatures name a signature policy (PA) **and carry its hash** (`sigPolicyHash`).
 SimpleSign embeds the ITI's policy lists (LPA_PAdES and LPA_CAdES: 55 policies with their hashes
 and signing periods) and picks the version in force:
 
 ```csharp
-// PAdES AD-RB (current version, e.g. v1.3) — ETSI.CAdES.detached, policy with its hash
+// PAdES AD-RB (current version, e.g. v1.3) — /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES, policy with its hash
 await PadesSigner.Document(pdf).WithCertificate(cert)
     .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRb)
     .SignAsync(output);
@@ -213,6 +213,19 @@ await PadesSigner.Document(pdf).WithCertificate(cert)
 // PAdES AD-RT — needs a signature timestamp; use an ICP-Brasil accredited ACT
 await PadesSigner.Document(pdf).WithCertificate(cert)
     .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt, new TimestampOptions(new Uri(actUrl)))
+    .SignAsync(output);
+
+// PAdES AD-RC — signature timestamp, DSS with VRI, document timestamp
+var act = new TimestampOptions(new Uri(actUrl));
+await PadesSigner.Document(pdf).WithCertificate(cert)
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new IcpBrasilPadesOptions { Timestamp = act })
+    .SignAsync(output);
+
+// PAdES AD-RA — AD-RC plus the PA, LPA and LPA signature in the DSS
+var builder = PadesSigner.Document(pdf).WithCertificate(cert);
+var artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(httpClient, builder.ResolveIcpBrasilPolicy(IcpBrasilPolicy.AdRa));
+await builder
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRa, new IcpBrasilPadesOptions { Timestamp = act, Artifacts = artifacts })
     .SignAsync(output);
 
 // CAdES (.p7s): AD-RB, AD-RT, AD-RV, AD-RC or AD-RA (a TSA is required above AD-RB)
@@ -226,7 +239,9 @@ await XadesSigner.Document(xml).WithCertificate(cert)
     .SignAsync();
 ```
 
-The VALIDAR portal expects PAdES AD-RB or AD-RT. The catalog also holds the 45 XAdES policies of
+`IcpBrasilPadesOptions` also takes a separate document-timestamp TSA (`ArchiveTimestamp`), the
+revocation settings for the DSS (`LongTermValidation`) and a specific `Version` of the policy
+(refused when it is not in force or does not accept the signer's root). The catalog also holds the 45 XAdES policies of
 `LPA_XAdES.xml` (version 2), with their rules.
 
 #### XAdES (SimpleSign.Brasil.Xades)
@@ -287,8 +302,25 @@ the signature timestamp (RFC 5126 extended forms, also available as
 | AD-RC | the above plus certificate-values and revocation-values (LCRs and OCSP responses) |
 | AD-RA | the above plus archive-time-stamp v2 (`1.2.840.113549.1.9.16.2.48`) |
 
-PAdES AD-RC and AD-RA are not supported: their PAs mandate ICP-Brasil attributes
-(`2.16.76.1.8.1` to `.3`) whose definition has not been confirmed.
+#### PAdES: what each policy writes
+
+The PAdES PAs describe PDF structures in the ICP-Brasil attributes `2.16.76.1.8.1` to `.3`
+(DOC-ICP-15.03, Tables A.18–A.22), the same in every version of a policy:
+
+| Policy | Written by `WithIcpBrasilPolicy` |
+|--------|-----------------------------------|
+| every policy | signature dictionary `/Type /Sig /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES` (`.8.1`) |
+| AD-RT | signature timestamp (B-T) |
+| AD-RC | signature timestamp; DSS with `Certs`, `CRLs`/`OCSPs` and the signature's VRI (`.8.2`); a document timestamp `/Type /DocTimeStamp /SubFilter /ETSI.RFC3161` (`.8.3`) |
+| AD-RA | AD-RC plus `PBAD_PolicyArtifacts`, `PBAD_LpaArtifacts` and `PBAD_LpaSignatures` in the DSS and `PBAD_PolicyArtifact`, `PBAD_LpaArtifact`, `PBAD_LpaSignature` in the VRI (Annex 4 §2.4) |
+
+`IcpBrasilPolicyArtifacts.DownloadAsync` gets the current `LPA_PAdES.der` and `.p7s`, checks that
+the ITI signed the LPA, and downloads the PA, checking it against the digest the LPA lists. Any
+PAdES signature can embed its own artifacts with `PadesSignerBuilder.WithDssArtifacts` (B-LT and
+above).
+
+Before this release, ICP-Brasil PAdES signatures used `ETSI.CAdES.detached`; the PAs mandate
+`PBAD.PAdES`, which the policy validator now checks.
 
 The embedded catalog is a snapshot of the LPAs. To pick up policies and revocations the ITI
 published later, refresh it at start-up:
@@ -315,7 +347,9 @@ been checked against VALIDAR yet.
 
 `IcpBrasilPolicyValidator.Validate` checks what DOC-ICP-15.03 requires of a signature that
 declares a policy: the `sigPolicyHash` matches the PA, the policy could be used at the signing
-time (signing period, not revoked), and AD-RT and above have a signature timestamp. The
+time (signing period, not revoked), and AD-RT and above have a signature timestamp. For PDF
+signatures it also checks the PDF structures of the table above (filter and sub-filter; DSS, VRI
+and document timestamp for AD-RC/AD-RA; the policy artifacts for AD-RA). The
 ICP-Brasil provider runs it during PDF validation and reports `BR.SignaturePolicy` and
 `BR.SignaturePolicyStatus` (`Valid`, `Invalid`, `Unknown`, `NotIcpBrasil`) in
 `ChainValidationMetadata`; failures are listed in the warnings.
@@ -490,6 +524,9 @@ simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-rb
 
 # AD-RT with an ICP-Brasil ACT
 simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-rt --tsa https://act.example/tsa
+
+# AD-RC and AD-RA (AD-RA downloads the PA and LPA from the ITI)
+simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-ra --tsa https://act.example/tsa
 
 # Prescription: document type and CRM in the PDF metadata
 simplesign sign receita.pdf --cert cert.pfx --icp-policy ad-rb \

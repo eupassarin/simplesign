@@ -63,7 +63,7 @@ public sealed class IcpBrasilSigningExtensionsTests
         reference.Oid.ShouldBe(expected.Oid);
         reference.Hash.ToArray().ShouldBe(expected.PolicyHash.ToArray());
         reference.Uri.ShouldBe(expected.Uri);
-        Encoding.Latin1.GetString(signed).ShouldContain("/SubFilter /ETSI.CAdES.detached");
+        Encoding.Latin1.GetString(signed).ShouldContain("/Filter /PBAD_PAdES");
 
         var check = IcpBrasilPolicyValidator.Validate(cms, DateTimeOffset.UtcNow, IcpBrasilPolicyFormat.Pades);
         check.Status.ShouldBe(IcpBrasilPolicyStatus.Valid, string.Join("; ", check.Errors));

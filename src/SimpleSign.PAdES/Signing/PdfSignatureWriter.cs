@@ -542,6 +542,21 @@ public sealed class PdfSignatureWriter
             // Insert /V before the closing >>
             updatedField = PdfStructureParser.InsertIntoDict(fieldText, $"   /V {sigObjNum} 0 R\n");
         }
+        // A visible appearance is drawn into the field's own rectangle (merged field/widget).
+        int appObjNum = nextObjNum + 2;
+        int imageObjNum = appObjNum + 1;
+        int fontFileObjNum = appObjNum + 2;
+        int fontDescriptorObjNum = appObjNum + 3;
+        int softMaskObjNum = appObjNum + 4;
+        float appWidth = 0f, appHeight = 0f;
+        if (options.Appearance is not null)
+        {
+            (appWidth, appHeight) = ReadRectSize(fieldText)
+                ?? throw new ArgumentException(
+                    $"Signature field '{options.ExistingFieldName}' has no visible rectangle, so the appearance cannot be drawn. Sign it without an appearance.");
+            updatedField = SetTopLevelValue(updatedField, "/AP", $"<< /N {appObjNum} 0 R >>");
+        }
+
         byte[] updatedFieldBytes = Encoding.Latin1.GetBytes(updatedField);
 
         // Write objects
@@ -556,6 +571,36 @@ public sealed class PdfSignatureWriter
             [sigObjNum] = sigObjOffset,
             [fieldObjNum] = fieldObjOffset
         };
+
+        if (options.Appearance is not null)
+        {
+            objectOffsets[fontFileObjNum] = outputStream.Position;
+            await outputStream.WriteAsync(PdfFontWriter.BuildFontFileObject(fontFileObjNum), cancellationToken).ConfigureAwait(false);
+            objectOffsets[fontDescriptorObjNum] = outputStream.Position;
+            await outputStream.WriteAsync(PdfFontWriter.BuildFontDescriptorObject(fontDescriptorObjNum, fontFileObjNum), cancellationToken).ConfigureAwait(false);
+            bool hasImage = options.Appearance.HasBackgroundImage();
+            byte[] appearanceBytes = SignatureAppearanceRenderer.BuildAppearanceXObject(
+                appObjNum, options, sigNow, appWidth, appHeight,
+                hasImage ? imageObjNum : 0, fontFileObjNum, fontDescriptorObjNum, hasImage ? softMaskObjNum : 0);
+            long appObjOffset = outputStream.Position;
+            objectOffsets[appObjNum] = appObjOffset;
+            await outputStream.WriteAsync(appearanceBytes, cancellationToken).ConfigureAwait(false);
+            if (hasImage)
+            {
+                string appText = Encoding.Latin1.GetString(appearanceBytes);
+                long imageOffset = FindAppendedObject(appText, appObjOffset, imageObjNum);
+                long maskOffset = FindAppendedObject(appText, appObjOffset, softMaskObjNum);
+                if (imageOffset > 0)
+                {
+                    objectOffsets[imageObjNum] = imageOffset;
+                }
+
+                if (maskOffset > 0)
+                {
+                    objectOffsets[softMaskObjNum] = maskOffset;
+                }
+            }
+        }
 
         int catalogObjNum = PdfStructureParser.FindRootObjectNumber(inputMem.Span);
 
@@ -599,6 +644,47 @@ public sealed class PdfSignatureWriter
             ContentsReservedBytes = options.ContentsReservedBytes,
             SigDictObjectNumber = sigObjNum
         };
+    }
+
+    /// <summary>Width and height of a dictionary's top-level /Rect, or null when absent or empty.</summary>
+    internal static (float Width, float Height)? ReadRectSize(string dictText)
+    {
+        int pos = PdfStructureParser.FindTopLevelKey(dictText, "/Rect");
+        if (pos < 0)
+        {
+            return null;
+        }
+
+        int open = dictText.IndexOf('[', pos);
+        int close = open < 0 ? -1 : dictText.IndexOf(']', open);
+        if (close < 0)
+        {
+            return null;
+        }
+
+        var numbers = dictText[(open + 1)..close].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(v => float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f) ? f : float.NaN)
+            .ToArray();
+        if (numbers.Length != 4 || numbers.Any(float.IsNaN))
+        {
+            return null;
+        }
+
+        float width = Math.Abs(numbers[2] - numbers[0]);
+        float height = Math.Abs(numbers[3] - numbers[1]);
+        return width > 0 && height > 0 ? (width, height) : null;
+    }
+
+    private static string SetTopLevelValue(string dictText, string key, string value)
+    {
+        int pos = PdfStructureParser.FindTopLevelKey(dictText, key);
+        if (pos < 0)
+        {
+            return PdfStructureParser.InsertIntoDict(dictText, $"   {key} {value}\n");
+        }
+
+        int end = FindValueEnd(dictText, pos);
+        return string.Concat(dictText.AsSpan(0, pos), $"{key} {value}", dictText.AsSpan(end));
     }
 
     private static async Task<(long OriginalPdfLength, Memory<byte> InputMemory)> CopyAndLoadPdfAsync(Stream inputPdf, Stream outputStream, CancellationToken cancellationToken)
@@ -651,10 +737,13 @@ public sealed class PdfSignatureWriter
         StringBuilder sigDict = new StringBuilder();
         sigDict.Append($"{sigObjNum} 0 obj\n");
         sigDict.Append("<< /Type /Sig\n");
-        sigDict.Append("   /Filter /Adobe.PPKLite\n");
-        string subFilterName = (options.SubFilter == PdfSignatureSubFilter.EtsiCadesDetached)
-            ? "ETSI.CAdES.detached"
-            : "adbe.pkcs7.detached";
+        var (filterName, subFilterName) = options.SubFilter switch
+        {
+            PdfSignatureSubFilter.EtsiCadesDetached => ("Adobe.PPKLite", "ETSI.CAdES.detached"),
+            PdfSignatureSubFilter.PbadPades => ("PBAD_PAdES", "PBAD.PAdES"),
+            _ => ("Adobe.PPKLite", "adbe.pkcs7.detached"),
+        };
+        sigDict.Append($"   /Filter /{filterName}\n");
         sigDict.Append($"   /SubFilter /{subFilterName}\n");
         sigDict.Append("   /ByteRange [0000000000 0000000000 0000000000 0000000000]\n");
         sigDict.Append($"   /Contents <{contentsHexPlaceholder}>\n");

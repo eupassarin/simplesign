@@ -324,11 +324,12 @@ public static class DeferredSigner
 
             if (profile?.Level >= AdesBaselineLevel.Archive)
             {
-                var archive = profile.ArchiveTimestamp;
-                var signatureTimestamp = profile.Timestamp!;
-                var endpoint = archive?.Endpoint ?? signatureTimestamp.Endpoint;
-                var provider = archive?.HttpClientProvider ?? signatureTimestamp.HttpClientProvider ??
-                    options.HttpClientProvider ?? DefaultHttpClientProvider.Instance;
+                var effective = profile.ArchiveTimestamp?.Resolve(profile.Timestamp!) ?? profile.Timestamp!;
+                var endpoint = effective.Endpoint;
+                var provider = effective.HttpClientProvider ?? options.HttpClientProvider ?? DefaultHttpClientProvider.Instance;
+                ITimestampClientFactory? archiveFactory = effective.NeedsDedicatedClient
+                    ? new FixedTimestampClientFactory(TimestampClient.Create(effective, provider, logger))
+                    : tsaFactory;
                 await using var pdfStream = new MemoryStream(signedPdf, writable: false);
                 var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(pdfStream, cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
@@ -338,7 +339,7 @@ public static class DeferredSigner
                     provider.GetClient(),
                     resolvedAlgorithm.HashAlgorithm,
                     pdfALevel,
-                    tsaFactory,
+                    archiveFactory,
                     cancellationToken).ConfigureAwait(false);
             }
 

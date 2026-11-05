@@ -365,7 +365,8 @@ public sealed class CliCommandTests : IDisposable
 
         exit.ShouldBe(0, text);
         string pdf = Encoding.Latin1.GetString(await File.ReadAllBytesAsync(output));
-        pdf.ShouldContain("/SubFilter /ETSI.CAdES.detached");
+        pdf.ShouldContain("/Filter /PBAD_PAdES");
+        pdf.ShouldContain("/SubFilter /PBAD.PAdES");
         pdf.ShouldContain("/2.16.76.1.4.2.2.1 (123456)");
         pdf.ShouldContain("/2.16.76.1.4.2.2.2 (SP)");
 
@@ -390,6 +391,24 @@ public sealed class CliCommandTests : IDisposable
             "--output", Path.Combine(_tempDir, "bad-out.pdf"), option, value);
 
         exit.ShouldNotBe(0);
+    }
+
+    [Theory]
+    [InlineData("requires --tsa", "--icp-policy", "ad-rc")]
+    [InlineData("requires --tsa", "--icp-policy", "ad-ra")]
+    [InlineData("remove --sub-filter", "--icp-policy", "ad-rb", "--sub-filter", "etsi-cades-detached")]
+    [InlineData("sets the level", "--icp-policy", "ad-rt", "--tsa", "http://tsa.example.test", "--ltv")]
+    [InlineData("sets the level", "--icp-policy", "ad-rt", "--tsa", "http://tsa.example.test", "--archival")]
+    [InlineData("--archival requires --tsa", "--archival")]
+    public async Task Sign_IncompatibleLevelOptions_ReturnsError(string expected, params string[] options)
+    {
+        string input = WriteMinimalPdf($"bad-{Guid.NewGuid():N}.pdf");
+
+        var (exit, text) = await RunAsync(["sign", input, "--cert", _pfxPath, "--password", Password,
+            "--output", Path.Combine(_tempDir, "bad-out.pdf"), .. options]);
+
+        exit.ShouldNotBe(0);
+        text.ShouldContain(expected);
     }
 
     // ── fiscal ──────────────────────────────────────────────────────────

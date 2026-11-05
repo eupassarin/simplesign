@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (ICP-Brasil PAdES AD-RC and AD-RA)
+
+- `WithIcpBrasilPolicy(policy, IcpBrasilPadesOptions)` signs PAdES under AD-RB, AD-RT, **AD-RC**
+  (signature timestamp, DSS with VRI, document timestamp) and **AD-RA** (AD-RC plus the PA, LPA and
+  LPA signature in the DSS), with an optional specific policy `Version`, archive TSA and revocation
+  settings. `ResolveIcpBrasilPolicy` returns the version that would be used.
+- `IcpBrasilPolicyArtifacts.DownloadAsync` downloads and verifies the AD-RA artifacts from the ITI.
+- `IcpBrasilPolicyValidator.Validate(cms, time, root, PdfSignatureFacts)` checks the PDF structures
+  the PAdES PAs mandate (`2.16.76.1.8.1`–`.3`); the ICP-Brasil provider runs it for PDF signatures.
+- PAdES: `PdfSignatureSubFilter.PbadPades`, `PadesSignerBuilder.WithDssArtifacts` and
+  `PdfDssArtifact` (custom DSS arrays and VRI entries, kept when a later signature rewrites the
+  DSS); `ChainValidationContext.Pdf` (`PdfSignatureFacts`) and `PdfSignatureField.Filter`.
+- `ArchiveTimestampOptions.Authorization`, `ClientCertificate` and `Resolve`; without its own
+  endpoint the archive timestamp now uses the signature TSA's credentials and client certificate.
+- `DeferredSignerBuilder.WithTimestampOptions` supplies the TSA credentials a resumed session
+  cannot store.
+- CLI: `--icp-policy ad-rc|ad-ra`; the version follows the signer's root.
+
+### Changed
+
+- ICP-Brasil PAdES signatures use `/Filter /PBAD_PAdES /SubFilter /PBAD.PAdES`, as the PAs mandate
+  (previously `ETSI.CAdES.detached`). Same CMS; PDF/A-1 preservation refuses it like ETSI.
+- DocMDP: only P=1 blocks further signatures; P=2 and P=3 documents can be signed again
+  (ISO 32000-1 §12.8.2.2.2). Certifying a document that is already signed is refused.
+- `WithExistingField` draws the configured appearance in the field's rectangle (it was ignored);
+  an appearance on a field without a visible rectangle is refused.
+- CLI: `--archival` requires `--tsa` (it silently produced B-B); `--icp-policy` rejects
+  `--sub-filter`, `--ltv` and `--archival` (the policy sets them).
+
 ### Added (SimpleSign Desktop — replaces SimpleSign.HostSigner)
 
 - New cross-platform app (Avalonia; macOS, Windows, Linux) to sign (PAdES, CAdES, XAdES; A1 file,

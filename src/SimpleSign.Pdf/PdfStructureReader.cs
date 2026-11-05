@@ -83,14 +83,15 @@ public sealed class PdfStructureReader
     }
 
     /// <summary>
-    /// Checks if the PDF has a DocMDP certification signature that prohibits further modifications.
-    /// Returns true if the document is locked (permission level &lt; 3).
+    /// Checks if the PDF has a DocMDP certification signature that prohibits further signatures:
+    /// true only for P=1 (no changes at all). P=2 (form filling) and P=3 (form filling and
+    /// annotations) allow further approval signatures (ISO 32000-1 §12.8.2.2.2, Table 254).
     /// </summary>
     public static async Task<bool> IsDocMdpLockedAsync(
         Stream pdfStream, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         int level = await GetDocMdpPermissionLevelAsync(pdfStream, logger, cancellationToken).ConfigureAwait(false);
-        return level > 0 && level < 3;
+        return level == 1;
     }
 
     /// <summary>
@@ -1718,6 +1719,7 @@ public sealed class PdfStructureReader
         byte[] contentsBytes = ExtractContents(byteRange, fullData);
         DateTimeOffset? signingTime = ExtractPdfDate(dictSpan);
         string? subFilter = ExtractPdfName(dictSpan, "/SubFilter"u8);
+        string? filter = ExtractPdfName(dictSpan, "/Filter"u8);
         string? reason = ExtractPdfString(dictSpan, "/Reason"u8);
         string? location = ExtractPdfString(dictSpan, "/Location"u8);
         string? contactInfo = ExtractPdfString(dictSpan, "/ContactInfo"u8);
@@ -1733,6 +1735,7 @@ public sealed class PdfStructureReader
             ContentsBytes = contentsBytes,
             SigDictObjectNumber = objNumber,
             PdfSigningTime = signingTime,
+            Filter = filter,
             SubFilter = subFilter,
             Reason = reason,
             Location = location,

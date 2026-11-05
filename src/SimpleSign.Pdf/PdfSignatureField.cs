@@ -21,6 +21,9 @@ public sealed class PdfSignatureField
     /// <summary>Signing time from the /M entry in the signature dictionary, if present.</summary>
     public DateTimeOffset? PdfSigningTime { get; init; }
 
+    /// <summary>Filter value: the preferred signature handler (e.g., "Adobe.PPKLite" or "PBAD_PAdES").</summary>
+    public string? Filter { get; init; }
+
     /// <summary>SubFilter value (e.g., "adbe.pkcs7.detached" or "ETSI.CAdES.detached").</summary>
     public string? SubFilter { get; init; }
 

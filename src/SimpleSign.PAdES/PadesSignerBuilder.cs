@@ -415,6 +415,28 @@ public sealed class PadesSignerBuilder
         With(_options with { EnforcePdfA = true });
 
     /// <summary>
+    /// Adds extra streams to the Document Security Store written for B-LT/B-LTA: each one is
+    /// listed in the DSS array <see cref="PdfDssArtifact.DssKey"/> and referenced from this
+    /// signature's VRI as <see cref="PdfDssArtifact.VriKey"/>. The ICP-Brasil AD-RA policy uses
+    /// this for its policy artifacts. Needs a B-LT or B-LTA profile.
+    /// </summary>
+    /// <param name="artifacts">The artifacts.</param>
+    /// <returns>A new builder with the artifacts configured.</returns>
+    /// <exception cref="ArgumentException">An artifact key is not usable.</exception>
+    public PadesSignerBuilder WithDssArtifacts(IEnumerable<PdfDssArtifact> artifacts)
+    {
+        ArgumentNullException.ThrowIfNull(artifacts);
+        var list = artifacts.ToList();
+        foreach (var artifact in list)
+        {
+            ArgumentNullException.ThrowIfNull(artifact, nameof(artifacts));
+            artifact.Validate();
+        }
+
+        return With(_options with { DssArtifacts = [.. _options.DssArtifacts, .. list] });
+    }
+
+    /// <summary>
     /// Sets the signature SubFilter value independently of PAdES attribute configuration.
     /// Default is <see cref="PdfSignatureSubFilter.EtsiCadesDetached"/>.
     /// Use <see cref="PdfSignatureSubFilter.AdbePkcs7Detached"/> for PDF/A-1 compatibility
@@ -571,6 +593,12 @@ public sealed class PadesSignerBuilder
         var chain = GetChain(credential);
         bool useExternal = credential is ExternalCredential;
         var profile = _options.Profile;
+        if (_options.DssArtifacts.Count > 0 && profile.Level < AdesBaselineLevel.LongTerm)
+        {
+            throw new SigningException(
+                "DSS artifacts are written with the long-term validation data: use a B-LT or B-LTA profile.",
+                SigningErrorReason.LevelNotAchievable);
+        }
 
         var opId = _options.OperationId
             ?? System.Diagnostics.Activity.Current?.Id
@@ -919,6 +947,18 @@ public sealed class PadesSignerBuilder
                 SigningErrorReason.DocumentNotSignable);
         }
 
+        if (_options.Field.CertificationLevel is not null)
+        {
+            _inputPdf.Seek(0, SeekOrigin.Begin);
+            var fields = await PdfStructureReader.ReadSignatureFieldsAsync(_inputPdf, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (fields.Any(f => f.IsSigned))
+            {
+                throw new SigningException(
+                    "Only the first signature of a document can certify it (DocMDP): this PDF is already signed. Sign without AsCertification().",
+                    SigningErrorReason.DocumentNotSignable);
+            }
+        }
+
         _inputPdf.Seek(0, SeekOrigin.Begin);
         var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(_inputPdf, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -1105,7 +1145,7 @@ public sealed class PadesSignerBuilder
 
         var chain = BuildChainWithSigner();
 
-        var ltvPdf = await ltvEmbedder.EmbedLtvDataAsync(signedPdf, chain, timestampTokenBytes, cancellationToken).ConfigureAwait(false);
+        var ltvPdf = await ltvEmbedder.EmbedLtvDataAsync(signedPdf, chain, timestampTokenBytes, _options.DssArtifacts, cancellationToken).ConfigureAwait(false);
 
         outputStream.Seek(0, SeekOrigin.Begin);
         outputStream.SetLength(0);
@@ -1158,10 +1198,11 @@ public sealed class PadesSignerBuilder
         CancellationToken cancellationToken)
     {
         var logger = _options.Dependencies.Logger;
-        var archiveOptions = profile.ArchiveTimestamp;
-        var timestampOptions = profile.Timestamp!;
-        var endpoint = archiveOptions?.Endpoint ?? timestampOptions.Endpoint;
-        var scopedProvider = archiveOptions?.HttpClientProvider ?? timestampOptions.HttpClientProvider;
+        // The archive TSA inherits the signature TSA's credentials and transport when it has no
+        // endpoint of its own; with its own endpoint it uses its own credentials.
+        var effective = profile.ArchiveTimestamp?.Resolve(profile.Timestamp!) ?? profile.Timestamp!;
+        var endpoint = effective.Endpoint;
+        var scopedProvider = effective.HttpClientProvider;
 
         logger.ArchivalTimestampAppending(opId, endpoint.ToString());
         try
@@ -1174,7 +1215,7 @@ public sealed class PadesSignerBuilder
             var ltvPdf = await DocTimeStampWriter.AppendDocTimeStampAsync(
                 signedPdf, endpoint.ToString(), provider.GetClient(),
                 effectiveHash, pdfALevel: pdfALevel,
-                tsaFactory: _options.Dependencies.TsaFactory,
+                tsaFactory: new FixedTimestampClientFactory(CreateTimestampClient(effective)),
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
             outputStream.Seek(0, SeekOrigin.Begin);
@@ -1342,4 +1383,10 @@ public sealed class PadesSignerBuilder
     }
 
     #endregion
+}
+
+/// <summary>Hands a prepared timestamp client (with its credentials) to code that takes a factory.</summary>
+internal sealed class FixedTimestampClientFactory(ITimestampClient client) : ITimestampClientFactory
+{
+    public ITimestampClient Create(string tsaUrl) => client;
 }
