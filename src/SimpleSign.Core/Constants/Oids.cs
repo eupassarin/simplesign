@@ -236,6 +236,9 @@ public static class Oids
     /// <summary>id-aa-ets-archiveTimestampV3 (ETSI EN 319 122-1 §5.5.3).</summary>
     public const string ArchiveTimeStampV3 = "0.4.0.1733.2.4";
 
+    /// <summary>id-aa-ets-escTimeStamp (RFC 5126 §5.11.3): CAdES-X type 1 timestamp over the signature, its timestamp and the complete references.</summary>
+    public const string EscTimeStamp = "1.2.840.113549.1.9.16.2.25";
+
     /// <summary>id-aa-ATSHashIndex-v3 (ETSI EN 319 122-1 §5.5.2).</summary>
     public const string AtsHashIndexV3 = "0.4.0.19122.1.5";
 

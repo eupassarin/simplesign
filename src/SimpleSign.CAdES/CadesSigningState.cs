@@ -57,6 +57,9 @@ internal sealed record CadesSigningOptions(
     /// <summary>The signer of <see cref="CounterSignTarget"/> to countersign.</summary>
     public int CounterSignIndex { get; init; }
 
+    /// <summary>The RFC 5126 extended form to add after the signature timestamp.</summary>
+    public CadesExtendedForm ExtendedForm { get; init; }
+
     /// <summary>Whether this signs a countersignature (no content-type attribute, RFC 5652 §11.4).</summary>
     public bool IsCounterSignature => CounterSignTarget is not null;
 }
