@@ -406,12 +406,12 @@ public static class Compatibility
         {
             if (credential.IsExpired)
             {
-                Warn(StepSigner, L.T("The certificate has expired: the signature is made, but validators report it as invalid at signing time."));
+                Error(StepSigner, L.T("The certificate has expired: the library refuses to sign with it (SigningException)."));
             }
 
             if (credential.IsNotYetValid)
             {
-                Warn(StepSigner, L.T("The certificate is not valid yet: validators report it as invalid at signing time."));
+                Error(StepSigner, L.T("The certificate is not valid yet: the library refuses to sign with it (SigningException)."));
             }
 
             if (!credential.HasNonRepudiation)

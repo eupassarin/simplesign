@@ -54,7 +54,34 @@ Sandbox services answer on `*.sandbox.simplesign.test` through an in-process
 The result shows the requested and achieved level, the validation report (`PdfSignatureValidator`
 + `BrasilExtension`), what the output contains (DSS, document timestamp, DocMDP), and a **Code**
 tab with the exact C# builder calls and the equivalent `simplesign sign` command. Secrets are
-never printed.
+never printed. **Validate in Validation** opens the signed file on the Validation page.
+
+## Validation
+
+The *Validation* page has three tabs, all using the settings on the left: trust anchors (sandbox
+root, OS roots, ICP-Brasil production or homologation, uploaded roots), revocation checking,
+network timeout and the ICP-Brasil extension.
+
+- **Validate**: `PdfSignatureValidator` (+ `BrasilExtension`). Per signature: the checks, PAdES
+  level, Lei 14.063 level, policy, signer certificate and the certificates in the CMS, the
+  signature timestamp, which part of the file the ByteRange covers, and the signed attributes;
+  plus the DSS and the C#/CLI code.
+- **Bulk**: `BulkValidator` over many PDFs with a chosen concurrency; one row per file.
+- **Inspect**: `PdfStructureDumper` (signature dictionaries, DSS, VRI, each entry explained) and
+  the CMS of each signature for download (`PadesExtractor`).
+
+Samples built at startup in the sandbox show each kind of result:
+
+| Sample | Expected |
+|---|---|
+| Valid B-LT (control) | Valid |
+| Content changed after signing | Invalid (integrity) |
+| Signature value changed | Invalid (signature) |
+| Bytes appended after signing | Valid, with "ByteRange does not cover entire PDF" |
+| Revoked signer (B-B) | Invalid (revocation) |
+| Expired signer | Indeterminate (chain) |
+| Root outside the trust anchors | Indeterminate (chain) |
+| Untrusted TSA | Valid, with a TSA chain warning |
 
 ## Run matrix
 

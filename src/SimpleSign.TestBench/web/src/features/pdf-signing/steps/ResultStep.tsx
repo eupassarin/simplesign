@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n, useT } from "@/i18n"
 import { api } from "@/lib/api"
+import { useNavigation } from "@/lib/navigation"
 import type { SignatureReport, SigningResult } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { PdfPreview } from "../PdfPreview"
@@ -15,6 +16,7 @@ import { IssueList, KeyValue, Pill } from "../ui"
 export function ResultView({ result }: { result: SigningResult }) {
   const { t, number } = useI18n()
   const yes = (b: boolean) => t(b ? "common.yes" : "common.no")
+  const navigation = useNavigation()
   if (!result.success) {
     return (
       <div className="space-y-4">
@@ -24,7 +26,7 @@ export function ResultView({ result }: { result: SigningResult }) {
           <AlertDescription className="break-words">{result.error}</AlertDescription>
         </Alert>
         <IssueList issues={result.issues} />
-        {result.code.cSharp && <CodeTabs result={result} />}
+        {result.code.cSharp && <CodeTabs code={result.code} />}
       </div>
     )
   }
@@ -41,6 +43,9 @@ export function ResultView({ result }: { result: SigningResult }) {
           </p>
         </div>
         {mine && <Indication value={mine.indication} />}
+        <Button variant="outline" onClick={() => navigation.validate({ id: result.outputId!, name: result.fileName ?? "signed.pdf" })}>
+          <FileCheck2 /> {t("result.openInValidation")}
+        </Button>
         <Button asChild>
           <a href={api.fileUrl(result.outputId!, true)}><Download /> {t("common.download")}</a>
         </Button>
@@ -104,7 +109,7 @@ export function ResultView({ result }: { result: SigningResult }) {
             </Table>
           </TabsContent>
         )}
-        <TabsContent value="code" className="pt-4"><CodeTabs result={result} /></TabsContent>
+        <TabsContent value="code" className="pt-4"><CodeTabs code={result.code} /></TabsContent>
         <TabsContent value="pdf" className="pt-4"><PdfPreview url={api.fileUrl(result.outputId!)} page={1} onPageChange={() => {}} /></TabsContent>
       </Tabs>
     </div>
@@ -112,12 +117,12 @@ export function ResultView({ result }: { result: SigningResult }) {
 }
 
 
-function Indication({ value }: { value: SignatureReport["indication"] }) {
+export function Indication({ value }: { value: SignatureReport["indication"] }) {
   const t = useT()
   return value === "Valid" ? <Pill tone="success">{t("result.indication.Valid")}</Pill> : value === "Invalid" ? <Pill tone="danger">{t("result.indication.Invalid")}</Pill> : <Pill tone="warning">{t("result.indication.Indeterminate")}</Pill>
 }
 
-function SignatureCard({ report }: { report: SignatureReport }) {
+export function SignatureCard({ report }: { report: SignatureReport }) {
   const t = useT()
   return (
     <div className="rounded-lg border">
@@ -159,17 +164,17 @@ function SignatureCard({ report }: { report: SignatureReport }) {
   )
 }
 
-export function CodeTabs({ result }: { result: SigningResult }) {
+export function CodeTabs({ code }: { code: SigningResult["code"] }) {
   return (
     <Tabs defaultValue="csharp">
       <TabsList>
         <TabsTrigger value="csharp">C#</TabsTrigger>
         <TabsTrigger value="cli">CLI</TabsTrigger>
       </TabsList>
-      <TabsContent value="csharp" className="pt-3"><CodeBlock code={result.code.cSharp} /></TabsContent>
+      <TabsContent value="csharp" className="pt-3"><CodeBlock code={code.cSharp} /></TabsContent>
       <TabsContent value="cli" className="space-y-3 pt-3">
-        <CodeBlock code={result.code.cli} />
-        {result.code.cliNotes.length > 0 && <ul className="text-muted-foreground space-y-1 text-xs">{result.code.cliNotes.map((n, i) => <li key={i}>• {n}</li>)}</ul>}
+        <CodeBlock code={code.cli} />
+        {code.cliNotes.length > 0 && <ul className="text-muted-foreground space-y-1 text-xs">{code.cliNotes.map((n, i) => <li key={i}>• {n}</li>)}</ul>}
       </TabsContent>
     </Tabs>
   )

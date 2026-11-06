@@ -23,11 +23,13 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
     private readonly HttpMessageInvoker _csc;
     private readonly Lock _gate = new();
     private readonly List<SandboxRequest> _log = [];
+    private readonly SandboxTsa _untrustedTsa;
 
     public SandboxNetwork(SandboxPki pki, SandboxPsc psc, SandboxCsc csc)
     {
         _pki = pki;
         Tsa = new SandboxTsa(pki);
+        _untrustedTsa = new SandboxTsa(pki.UntrustedTsa, pki.UntrustedTsaKey, []);
         Psc = psc;
         Csc = csc;
         _psc = new HttpMessageInvoker(psc, disposeHandler: false);
@@ -98,7 +100,8 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
         }
 
         byte[] query = await request.Content.ReadAsByteArrayAsync(cancellationToken);
-        return Bytes(Tsa.Respond(query), "application/timestamp-reply");
+        var tsa = request.RequestUri.AbsolutePath == SandboxPki.UntrustedTsaUri.AbsolutePath ? _untrustedTsa : Tsa;
+        return Bytes(tsa.Respond(query), "application/timestamp-reply");
     }
 
     private HttpResponseMessage Crl(Uri uri) => uri.AbsolutePath switch

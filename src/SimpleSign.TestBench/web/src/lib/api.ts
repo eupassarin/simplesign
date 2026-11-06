@@ -13,10 +13,14 @@ import type {
   Pkcs11Driver,
   SampleDocument,
   SandboxRequest,
-  SignatureReport,
   SigningOptions,
   SigningResult,
   StoreCertificate,
+  BulkReport,
+  InspectionReport,
+  ValidationReport,
+  ValidationSample,
+  ValidationSettings,
 } from "./types"
 
 export class ApiError extends Error {}
@@ -65,7 +69,13 @@ export const api = {
     request<IcpVersion[]>("GET", `/api/icp/versions?policy=${policy}${credentialId ? `&credentialId=${credentialId}` : ""}`),
   sign: (options: SigningOptions) => request<SigningResult>("POST", "/api/sign", options),
   preview: (options: SigningOptions) => request<{ fileId: string }>("POST", "/api/preview", options),
-  validate: (fileId: string, environment: EnvironmentMode) => request<SignatureReport[]>("POST", "/api/validate", { fileId, environment }),
+  validation: {
+    samples: () => request<ValidationSample[]>("GET", "/api/validation/samples"),
+    validate: (fileId: string, settings: ValidationSettings) => request<ValidationReport>("POST", "/api/validation", { fileId, settings }),
+    bulk: (fileIds: string[], settings: ValidationSettings, maxConcurrency: number) => request<BulkReport>("POST", "/api/validation/bulk", { fileIds, settings, maxConcurrency }),
+    inspect: (fileId: string) => request<InspectionReport>("POST", "/api/inspect", { fileId }),
+    cmsUrl: (fileId: string, field: string) => `/api/files/${encodeURIComponent(fileId)}/cms/${encodeURIComponent(field)}`,
+  },
   credentials: {
     sandbox: (signerId: string) => request<CredentialFacts>("POST", "/api/credentials/sandbox", { signerId }),
     pfx: (uploadId: string, password: string) => request<CredentialFacts>("POST", "/api/credentials/pfx", { uploadId, password }),

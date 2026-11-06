@@ -1,6 +1,7 @@
 using System.Formats.Asn1;
 using System.Numerics;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SimpleSign.TestBench.Sandbox;
 
@@ -8,8 +9,13 @@ namespace SimpleSign.TestBench.Sandbox;
 /// An RFC 3161 time-stamping authority signed by the sandbox ACT certificate: reads the request
 /// (hash algorithm, imprint, nonce, certReq) and returns a granted response with the current time.
 /// </summary>
-internal sealed class SandboxTsa(SandboxPki pki)
+internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X509Certificate2> chain)
 {
+    public SandboxTsa(SandboxPki pki)
+        : this(pki.Tsa, pki.TsaKey, pki.Chain)
+    {
+    }
+
     private const string TstInfoOid = "1.2.840.113549.1.9.16.1.4";
     private const string SignedDataOid = "1.2.840.113549.1.7.2";
     private long _serial = DateTimeOffset.UtcNow.ToUnixTimeSeconds() * 1000;
@@ -87,7 +93,6 @@ internal sealed class SandboxTsa(SandboxPki pki)
         }
 
         byte[] content = tstInfo.Encode();
-        var tsa = pki.Tsa;
         byte[] contentDigest = SHA256.HashData(content);
 
         var attributes = new AsnWriter(AsnEncodingRules.DER);
@@ -109,7 +114,7 @@ internal sealed class SandboxTsa(SandboxPki pki)
         }
 
         byte[] signedAttributes = attributes.Encode();
-        byte[] signature = pki.TsaKey.SignData(signedAttributes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        byte[] signature = key.SignData(signedAttributes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         signedAttributes[0] = 0xA0; // [0] IMPLICIT in SignerInfo
 
         var writer = new AsnWriter(AsnEncodingRules.DER);
@@ -141,8 +146,10 @@ internal sealed class SandboxTsa(SandboxPki pki)
                     writer.WriteEncodedValue(tsa.RawData);
                     if (includeCertificates)
                     {
-                        writer.WriteEncodedValue(pki.Intermediate.RawData);
-                        writer.WriteEncodedValue(pki.Root.RawData);
+                        foreach (var certificate in chain)
+                        {
+                            writer.WriteEncodedValue(certificate.RawData);
+                        }
                     }
                 }
 

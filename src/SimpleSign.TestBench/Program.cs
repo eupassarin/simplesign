@@ -46,12 +46,18 @@ builder.Services.AddSingleton<CredentialFactory>();
 builder.Services.AddSingleton<SigningRunner>();
 builder.Services.AddSingleton<PreviewService>();
 builder.Services.AddSingleton<MatrixRunner>();
+builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationService>();
+builder.Services.AddSingleton<SimpleSign.TestBench.Validation.InspectionService>();
+builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationSampleStore>();
 
 var app = builder.Build();
 
 // Generate the sandbox (keys, certificates) and the sample PDFs before serving.
 var sandbox = app.Services.GetRequiredService<SandboxEnvironment>();
-app.Services.GetRequiredService<DocumentStore>().AddSamples(await SampleDocuments.CreateAsync(sandbox));
+var documentStore = app.Services.GetRequiredService<DocumentStore>();
+documentStore.AddSamples(await SampleDocuments.CreateAsync(sandbox));
+app.Services.GetRequiredService<SimpleSign.TestBench.Validation.ValidationSampleStore>().Samples =
+    await SimpleSign.TestBench.Validation.InvalidSamples.CreateAsync(sandbox, documentStore);
 
 app.Use(async (context, next) =>
 {

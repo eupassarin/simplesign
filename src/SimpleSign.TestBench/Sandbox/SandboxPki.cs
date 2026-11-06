@@ -39,6 +39,7 @@ internal sealed class SandboxPki : IDisposable
     public static readonly Uri TsaUri = new($"http://tsa.{Host}/tsr");
     public static readonly Uri ArchiveTsaUri = new($"http://tsa.{Host}/archive");
     public static readonly Uri AuthenticatedTsaUri = new($"http://tsa.{Host}/authenticated");
+    public static readonly Uri UntrustedTsaUri = new($"http://tsa.{Host}/untrusted");
     public static readonly Uri RootCrlUri = new($"http://crl.{Host}/root.crl");
     public static readonly Uri IntermediateCrlUri = new($"http://crl.{Host}/intermediate.crl");
     public static readonly Uri IntermediateCertUri = new($"http://aia.{Host}/intermediate.cer");
@@ -71,6 +72,16 @@ internal sealed class SandboxPki : IDisposable
             now.AddYears(-1), now.AddYears(5), eku: [new Oid("1.3.6.1.5.5.7.3.8")], ekuCritical: true, keyUsage: X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation);
         TsaKey = Tsa.GetRSAPrivateKey()!;
 
+        // A TSA under its own self-signed CA, outside every trust anchor (the "untrusted TSA" sample).
+        var untrustedKey = RSA.Create(2048);
+        var untrustedRequest = new CertificateRequest("CN=ACT Fora da Cadeia, O=Outside, C=BR", untrustedKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        untrustedRequest.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new("1.3.6.1.5.5.7.3.8") }, true));
+        untrustedRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, true));
+        UntrustedTsa = untrustedRequest.CreateSelfSigned(now.AddDays(-1), now.AddYears(2));
+        UntrustedTsaKey = untrustedKey;
+        _owned.Add(UntrustedTsa);
+        _owned.Add(untrustedKey);
+
         Signers =
         [
             Person("rsa-2048", "Maria da Silva (RSA 2048)", "e-CPF A1 with an RSA 2048 key — the most common ICP-Brasil certificate.", SandboxKeyType.Rsa2048, "11144477735"),
@@ -80,9 +91,9 @@ internal sealed class SandboxPki : IDisposable
             Person("ecdsa-p384", "Beatriz Costa (ECDSA P-384)", "Elliptic-curve key (NIST P-384).", SandboxKeyType.EcdsaP384, "16899535009"),
             Person("ecdsa-p521", "Rafael Alves (ECDSA P-521)", "Elliptic-curve key (NIST P-521).", SandboxKeyType.EcdsaP521, "05447007081"),
             Company("company", "Empresa Exemplo Ltda (e-CNPJ)", "Company certificate (e-CNPJ) with the responsible person's CPF.", "11222333000181", "11144477735"),
-            Person("expired", "Expired certificate", "Valid chain, but the certificate expired yesterday: signing works, validation reports it.", SandboxKeyType.Rsa2048, "11144477735",
+            Person("expired", "Expired certificate", "Valid chain, but the certificate expired yesterday: the library refuses to sign with it.", SandboxKeyType.Rsa2048, "11144477735",
                 notBefore: now.AddYears(-2), notAfter: now.AddDays(-1), problem: "Expired"),
-            Person("not-yet-valid", "Not yet valid", "The certificate only becomes valid next month.", SandboxKeyType.Rsa2048, "11144477735",
+            Person("not-yet-valid", "Not yet valid", "The certificate only becomes valid next month: the library refuses to sign with it.", SandboxKeyType.Rsa2048, "11144477735",
                 notBefore: now.AddDays(30), notAfter: now.AddYears(2), problem: "Not yet valid"),
             Person("revoked", "Revoked certificate", "Listed in the intermediate CA's CRL: B-LT/LTA embed the CRL, validation reports revoked.", SandboxKeyType.Rsa2048, "11144477735",
                 revoke: true, problem: "Revoked"),
@@ -100,6 +111,10 @@ internal sealed class SandboxPki : IDisposable
     public X509Certificate2 Tsa { get; }
 
     public RSA TsaKey { get; }
+
+    public X509Certificate2 UntrustedTsa { get; }
+
+    public RSA UntrustedTsaKey { get; }
 
     public IReadOnlyList<SandboxSigner> Signers { get; }
 
@@ -121,6 +136,14 @@ internal sealed class SandboxPki : IDisposable
             ECDsa ec => Issue(subject, ec, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1), san: HolderData(cpf)),
             _ => throw new NotSupportedException(key.GetType().Name),
         };
+
+    /// <summary>A sandbox signer valid only for <paramref name="lifetime"/> from now (to produce a signature whose certificate has since expired).</summary>
+    public X509Certificate2 IssueShortLived(string subject, string cpf, TimeSpan lifetime)
+    {
+        using var key = RSA.Create(2048);
+        var now = DateTimeOffset.UtcNow;
+        return Issue(subject, key, now.AddMinutes(-1), now.Add(lifetime), san: HolderData(cpf));
+    }
 
     public void Dispose()
     {

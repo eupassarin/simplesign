@@ -391,3 +391,92 @@ export interface SandboxRequest {
   status: number
   service: string
 }
+
+// ── Validation area ─────────────────────────────────────────────────
+export type TrustChoice = "Sandbox" | "System" | "IcpBrasil" | "IcpHomologation"
+
+export interface ValidationSettings {
+  environment: EnvironmentMode
+  trust: TrustChoice[]
+  customRootUploadIds: string[]
+  checkRevocation: boolean
+  timeoutSeconds: number
+  useBrasil: boolean
+}
+
+export interface ValidationSample {
+  id: string
+  fileId: string
+  title: string
+  description: string
+  expectedIndication: string
+  expectedCheck: string
+}
+
+export interface CertificateView {
+  subject: string
+  issuer: string
+  serialNumber: string
+  notBefore: string
+  notAfter: string
+  keyAlgorithm: string
+  keySize?: number | null
+  hasNonRepudiation: boolean
+  thumbprint: string
+}
+
+export interface DetailedSignature {
+  report: SignatureReport
+  padesLevel?: string | null
+  lei14063Level?: string | null
+  signer?: CertificateView | null
+  embeddedCertificates: CertificateView[]
+  timestamp?: { time: string; tsa?: string | null; policyOid?: string | null; hashAlgorithm?: string | null; serialNumber?: string | null } | null
+  coverage?: { signedUntil: number; fileSize: number; coversWholeFile: boolean; revision: number; revisions: number } | null
+  signatureAlgorithm?: string | null
+  deprecatedAlgorithm: boolean
+  commitmentTypeOid?: string | null
+  policyOid?: string | null
+  policyName?: string | null
+  reason?: string | null
+  location?: string | null
+  contactInfo?: string | null
+}
+
+export interface ValidationReport {
+  fileId: string
+  document: DocumentFacts
+  overall: "Valid" | "Invalid" | "Indeterminate" | "NoSignatures" | "Error"
+  signatures: DetailedSignature[]
+  dss?: { certificates: number; crls: number; ocsps: number; hasVri: boolean; vriEntries: number; warnings: string[] } | null
+  ms: number
+  code: { cSharp: string; cli: string; cliNotes: string[] }
+  error?: string | null
+}
+
+export interface BulkReport {
+  items: { fileId: string; fileName: string; valid: number; total: number; overall: string; ms: number; error?: string | null }[]
+  processed: number
+  failed: number
+  averageMs: number
+  totalMs: number
+}
+
+export interface InspectionReport {
+  fileId: string
+  document: DocumentFacts
+  revisions: number
+  objects: {
+    objectNumber: number
+    label: string
+    icon: string
+    badges: string[]
+    entries: { key: string; value: string; explanation?: string | null }[]
+    references: number[]
+    streamInfo?: string | null
+    cmsContentType?: string | null
+    cmsSigner?: string | null
+  }[]
+  signatureFields: string[]
+  error?: string | null
+}

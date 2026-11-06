@@ -230,9 +230,18 @@ public sealed class CompatibilityTests
     }
 
     [Fact]
-    public void Evaluate_ExpiredCertificate_Warns()
+    public void Evaluate_ExpiredCertificate_IsRefused()
     {
         var report = Compatibility.Evaluate(new SigningOptions(), Plain, Rsa with { IsExpired = true });
+
+        report.CanSign.ShouldBeFalse();
+        report.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error && i.Step == Compatibility.StepSigner);
+    }
+
+    [Fact]
+    public void Evaluate_NoNonRepudiation_OnlyWarns()
+    {
+        var report = Compatibility.Evaluate(new SigningOptions(), Plain, Rsa with { HasNonRepudiation = false });
 
         report.CanSign.ShouldBeTrue();
         report.Issues.ShouldContain(i => i.Severity == IssueSeverity.Warning && i.Step == Compatibility.StepSigner);

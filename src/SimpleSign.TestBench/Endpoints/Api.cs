@@ -8,6 +8,7 @@ using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Matrix;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
+using SimpleSign.TestBench.Validation;
 
 namespace SimpleSign.TestBench.Endpoints;
 
@@ -38,7 +39,9 @@ public sealed record IcpVersionView(
 
 public sealed record UploadView(string Id, string FileName, long Size);
 
-public sealed record ValidateRequest(string FileId, EnvironmentMode Environment);
+public sealed record ValidateRequest(string FileId, ValidationSettings? Settings);
+
+public sealed record InspectRequest(string FileId);
 
 internal static class Api
 {
@@ -149,8 +152,16 @@ internal static class Api
                 return Results.BadRequest(new { error = ex.Message });
             }
         });
-        api.MapPost("/validate", async (ValidateRequest body, SigningRunner runner, DocumentStore documents, CancellationToken ct) =>
-            await runner.ValidateAsync(documents.Get(body.FileId).Content, body.Environment, ct));
+        // Validation area
+        api.MapGet("/validation/samples", (ValidationSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
+        api.MapPost("/validation", async (ValidateRequest body, ValidationService validation, CancellationToken ct) =>
+            await validation.ReportAsync(body.FileId, body.Settings ?? ValidationSettings.For(EnvironmentMode.Sandbox), ct));
+        api.MapPost("/validation/bulk", async (BulkRequest body, InspectionService inspection, CancellationToken ct) => await inspection.BulkAsync(body, ct));
+        api.MapPost("/inspect", async (InspectRequest body, InspectionService inspection, CancellationToken ct) => await inspection.InspectAsync(body.FileId, ct));
+        api.MapGet("/files/{id}/cms/{field}", async (string id, string field, InspectionService inspection, CancellationToken ct) =>
+            await inspection.CmsAsync(id, field, ct) is { } cms
+                ? Results.File(cms, "application/pkcs7-signature", $"{field}.p7s")
+                : Results.NotFound());
 
         // Run matrix
         api.MapGet("/matrix/cases", (MatrixRunner matrix) => matrix.Cases());

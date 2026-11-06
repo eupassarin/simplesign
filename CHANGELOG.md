@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (SimpleSign TestBench)
 
+- TestBench **Validation** page: full report per signature (checks, PAdES and Lei 14.063 levels,
+  certificates, timestamp, ByteRange coverage, DSS) with configurable trust, bulk validation
+  (`BulkValidator`), structural inspection (`PdfStructureDumper`, CMS download), and sample PDFs
+  broken in specific ways (tampered content or CMS, appended bytes, revoked or expired signer,
+  unknown root, untrusted TSA). The signing result links to it.
+
 - The TestBench is available in English (en-US), Portuguese (pt-BR) and Spanish (es): browser
   language by default, with a selector in the top bar. Server texts (explanations, compatibility
   messages, samples) follow `Accept-Language`; a test checks every text has its translations.

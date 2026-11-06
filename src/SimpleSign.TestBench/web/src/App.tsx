@@ -9,21 +9,23 @@ import { MatrixPage } from "@/features/matrix/MatrixPage"
 import { SigningPage } from "@/features/pdf-signing/SigningPage"
 import { SigningProvider } from "@/features/pdf-signing/state"
 import { SandboxPage } from "@/features/sandbox/SandboxPage"
+import { ValidationPage } from "@/features/validation/ValidationPage"
 import { useTheme } from "@/hooks/use-theme"
 import { locales, useI18n, type Locale, type MessageKey } from "@/i18n"
+import { NavigationContext } from "@/lib/navigation"
 import type { EnvironmentMode } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-type Page = "sign" | "matrix" | "sandbox"
+type Page = "sign" | "validation" | "matrix" | "sandbox"
 
 const nav: { id: Page; label: MessageKey; icon: typeof PenTool }[] = [
   { id: "sign", label: "app.nav.sign", icon: PenTool },
+  { id: "validation", label: "app.nav.validation", icon: FileCheck2 },
   { id: "matrix", label: "app.nav.matrix", icon: Grid3x3 },
   { id: "sandbox", label: "app.nav.sandbox", icon: FlaskConical },
 ]
 
 const comingNext: { label: MessageKey; icon: typeof PenTool }[] = [
-  { label: "app.nav.validation", icon: FileCheck2 },
   { label: "app.nav.cades", icon: FileCode2 },
   { label: "app.nav.xades", icon: Code2 },
   { label: "app.nav.htmlToPdf", icon: FileText },
@@ -31,6 +33,7 @@ const comingNext: { label: MessageKey; icon: typeof PenTool }[] = [
 
 export default function App() {
   const [page, setPage] = useState<Page>("sign")
+  const [toValidate, setToValidate] = useState<{ id: string; name: string } | null>(null)
   const [environment, setEnvironment] = useState<EnvironmentMode>("Sandbox")
   const { theme, setTheme } = useTheme()
   const { t, locale, setLocale } = useI18n()
@@ -102,11 +105,14 @@ export default function App() {
             </div>
           </header>
           <main className="flex min-h-0 flex-1 flex-col">
-            <SigningProvider environment={environment}>
-              {page === "sign" && <SigningPage />}
-              {page === "matrix" && <MatrixPage />}
-              {page === "sandbox" && <SandboxPage />}
-            </SigningProvider>
+            <NavigationContext.Provider value={{ validate: (file) => { setToValidate(file); setPage("validation") } }}>
+              <SigningProvider environment={environment}>
+                {page === "sign" && <SigningPage />}
+                {page === "validation" && <ValidationPage environment={environment} initialFile={toValidate} />}
+                {page === "matrix" && <MatrixPage />}
+                {page === "sandbox" && <SandboxPage />}
+              </SigningProvider>
+            </NavigationContext.Provider>
           </main>
         </div>
       </div>

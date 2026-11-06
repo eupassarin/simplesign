@@ -1,17 +1,15 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using SimpleSign.Brasil;
 using SimpleSign.Core.Signing;
-using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.PAdES.Validation;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Sandbox;
+using SimpleSign.TestBench.Validation;
 
 namespace SimpleSign.TestBench.Signing;
 
@@ -75,6 +73,8 @@ public sealed record SigningResult(
 /// <summary>Signs with the effective options, validates the output and produces the matching code.</summary>
 internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials)
 {
+    private readonly ValidationService _validation = new(sandbox, documents);
+
     public async Task<SigningResult> RunAsync(SigningOptions options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -233,50 +233,11 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         string fileName = Path.GetFileNameWithoutExtension(source.FileName) + "-signed.pdf";
         var stored = documents.Add(fileName, signed);
         var watch = Stopwatch.StartNew();
-        IReadOnlyList<SignatureReport> validation = o.Validate ? await ValidateAsync(signed, o.Environment, cancellationToken) : [];
+        IReadOnlyList<SignatureReport> validation = o.Validate ? await _validation.ValidateAsync(signed, ValidationSettings.For(o.Environment), cancellationToken) : [];
         long validateMs = watch.ElapsedMilliseconds;
         var output = await InspectAsync(signed, cancellationToken);
         return new SigningResult(true, null, null, stored.Id, fileName, signed.Length, Compatibility.LevelName(o), achieved,
             hasTimestamp, hasLtv, hasArchive, warnings, signMs, validateMs, validation, output, deferred, batch, code, report.Issues);
-    }
-
-    /// <summary>Validates every signature; the sandbox trusts the sandbox root, Real trusts the OS and ICP-Brasil roots.</summary>
-    public async Task<IReadOnlyList<SignatureReport>> ValidateAsync(byte[] pdf, EnvironmentMode mode, CancellationToken cancellationToken)
-    {
-        bool isSandbox = mode == EnvironmentMode.Sandbox;
-        var http = sandbox.HttpFor(mode);
-        var brasil = new BrasilExtension(http.GetClient(), null);
-        var validator = new PdfSignatureValidator(http,
-            new ValidationOptions
-            {
-                TrustSystemRoots = !isSandbox,
-                TrustedRoots = isSandbox ? [sandbox.Pki.Root] : null,
-            },
-            null,
-            isSandbox ? [] : brasil.TrustAnchorProviders,
-            brasil.ChainValidationProviders);
-        using var stream = new MemoryStream(pdf, writable: false);
-        var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);
-        return [.. results.Select(ToReport)];
-    }
-
-    private static SignatureReport ToReport(SignatureValidationResult r)
-    {
-        static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
-        var checks = new List<CheckRow>
-        {
-            new("integrity", L.T("Integrity (ByteRange digest)"), Status(r.IsIntegrityValid), L.T("The signed bytes were not changed after signing.")),
-            new("signature", L.T("Signature value"), Status(r.IsSignatureValid), r.DigestAlgorithmName is { } digest ? L.T("Digest {0}.", digest) : null),
-            new("chain", L.T("Certificate chain"), r.IsChainTrustWarning ? "warn" : Status(r.IsCertificateChainValid), r.ChainValidationRegion),
-            new("revocation", L.T("Revocation"), Status(r.IsNotRevoked), r.RevocationSource.ToString()),
-            new("timestamp", L.T("Signature timestamp"), Status(r.HasValidTimestamp), r.IsTsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
-        };
-        return new SignatureReport(
-            r.FieldName, r.Indication.ToString(), r.IsDocumentTimestamp,
-            r.SignerName ?? r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false),
-            r.SubFilter, r.DigestAlgorithmName,
-            r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
-            r.PolicyLevel, r.SignerId, checks, r.Errors, r.Warnings, r.ChainValidationMetadata);
     }
 
     private static async Task<OutputFacts?> InspectAsync(byte[] pdf, CancellationToken cancellationToken)
