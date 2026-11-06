@@ -2,7 +2,8 @@
 # Starts the DSS web application. Before that, builds a trust store from:
 #   - every certificate (PEM or DER) mounted in /trust,
 #   - the ICP-Brasil roots mounted in /trust-icp-brasil, when $DSS_TRUST_ICP_BRASIL is "true",
-#   - the Gov.br root mounted in /trust-govbr, when $DSS_TRUST_GOVBR is "true", and
+#   - the Gov.br root mounted in /trust-govbr, when $DSS_TRUST_GOVBR is "true",
+#   - the CAs of the Peruvian trusted list (INDECOPI), when $DSS_TRUST_PERU is "true", and
 #   - the TestBench's sandbox root, fetched from $TESTBENCH_URL when it is set and reachable,
 # and tells DSS to trust it (trusted.source.keystore.* in dss-custom.properties).
 set -eu
@@ -10,8 +11,11 @@ set -eu
 LIB=/opt/tomcat/lib
 STORE="$LIB/extra-trust.p12"
 PASS=dss-extra-trust
-# Where the downloaded EU trusted lists are kept between runs (a volume in docker-compose.yml).
-TL_CACHE=${DSS_TL_CACHE:-/var/cache/dss-tl}
+# What is downloaded is kept between runs (a volume in docker-compose.yml).
+CACHE=/var/cache/dss
+TL_CACHE="$CACHE/eu-tl"
+PERU_COPY="$CACHE/tsl-pe.xml"
+PERU_URL=${DSS_PERU_TSL_URL:-https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml}
 count=0
 
 # Prints the certificate as text (PEM or DER); nothing when it is not a certificate.
@@ -42,7 +46,7 @@ trust() {
   esac
   if keytool -importcert -noprompt -trustcacerts -storetype PKCS12 -keystore "$STORE" -storepass "$PASS" -alias "$1" -file "$2" >/dev/null 2>&1; then
     count=$((count + 1))
-    echo "[dss] trusting $1"
+    echo "[dss] trusting $1${3:+ ($3)}"
   else
     echo "[dss] keytool could not import $2; skipped"
   fi
@@ -61,6 +65,47 @@ trust_bundled() {
   fi
 }
 
+# The CAs of the Peruvian trusted list (ETSI TSL version 3, which DSS cannot load as a trusted
+# list): the certificates of the services of type CA/QC under supervision. The list's XML
+# signature is not checked; it comes over HTTPS from INDECOPI. A copy is kept for offline starts.
+trust_peru() {
+  tsl=/tmp/tsl-pe.xml
+  ns=http://uri.etsi.org/02231/v2#
+  if curl -fsS -m 20 "$PERU_URL" -o "$tsl" 2>/dev/null && xmlstarlet sel -N t="$ns" -t -v "//t:TSLSequenceNumber" "$tsl" >/dev/null 2>&1; then
+    mkdir -p "$CACHE"
+    cp "$tsl" "$PERU_COPY"
+    origin="downloaded"
+  elif [ -f "$PERU_COPY" ]; then
+    cp "$PERU_COPY" "$tsl"
+    origin="the copy kept from an earlier run"
+    echo "[dss] could not download the Peruvian trusted list from $PERU_URL; using $origin"
+  else
+    echo "[dss] could not download the Peruvian trusted list from $PERU_URL and no copy is kept; Peru skipped"
+    return 0
+  fi
+
+  xmlstarlet sel -N t="$ns" -t \
+    -m "//t:TSPService/t:ServiceInformation[t:ServiceTypeIdentifier='http://uri.etsi.org/TrstSvc/Svctype/CA/QC' and contains(t:ServiceStatus, '/undersupervision')]/t:ServiceDigitalIdentity/t:DigitalId/t:X509Certificate" \
+    -v "normalize-space(.)" -n "$tsl" 2>/dev/null | tr -d ' ' | grep -v '^$' | sort -u > /tmp/peru-certs.b64 || true
+
+  before=$count
+  mkdir -p /tmp/peru
+  while read -r b64; do
+    der=/tmp/peru/cert.der
+    if ! printf '%s' "$b64" | base64 -d > "$der" 2>/dev/null; then
+      echo "[dss] a certificate of the Peruvian trusted list is not valid base64; skipped"
+      continue
+    fi
+    id=$(sha256sum "$der" | cut -c1-12)
+    cn=$(openssl x509 -inform DER -in "$der" -noout -subject -nameopt multiline 2>/dev/null | sed -n 's/^ *commonName *= *//p' | head -n 1)
+    trust "peru-$id" "$der" "$cn"
+  done < /tmp/peru-certs.b64
+
+  seq=$(xmlstarlet sel -N t="$ns" -t -v "//t:SchemeInformation/t:TSLSequenceNumber" "$tsl" 2>/dev/null || true)
+  next=$(xmlstarlet sel -N t="$ns" -t -v "//t:SchemeInformation/t:NextUpdate/t:dateTime" "$tsl" 2>/dev/null || true)
+  echo "[dss] Peru: $((count - before)) of $(wc -l < /tmp/peru-certs.b64 | tr -d ' ') CA certificate(s) trusted from the trusted list ($origin; sequence $seq, next update $next)"
+}
+
 rm -f "$STORE"
 for file in /trust/*.pem /trust/*.cer /trust/*.crt /trust/*.der; do
   [ -f "$file" ] && trust "$(basename "$file")" "$file"
@@ -73,6 +118,9 @@ if [ "${DSS_TRUST_ICP_BRASIL:-true}" = "true" ]; then
 fi
 if [ "${DSS_TRUST_GOVBR:-true}" = "true" ]; then
   trust_bundled Gov.br /trust-govbr/GovBr-ACRaiz-*.crt
+fi
+if [ "${DSS_TRUST_PERU:-true}" = "true" ]; then
+  trust_peru
 fi
 
 if [ -n "${TESTBENCH_URL:-}" ]; then
@@ -117,5 +165,5 @@ esac
   fi
 } > "$LIB/dss-custom.properties"
 
-echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; EU trusted lists: $EU_TL"
+echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; Peru: ${DSS_TRUST_PERU:-true}; EU trusted lists: $EU_TL"
 exec /opt/tomcat/bin/catalina.sh run
