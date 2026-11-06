@@ -338,7 +338,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         {
             if (cmsBytes is not null && content is not null && isFirstSigner)
             {
-                archiveTsValid = ValidateArchiveTimestamp(cmsBytes, content, cmsData, errors, warnings);
+                archiveTsValid = ValidateArchiveTimestamp(cmsBytes, content, cmsData, warnings);
             }
             else
             {
@@ -538,16 +538,12 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             {
                 foreach (byte[] raw in material.Certificates)
                 {
-#if NET10_0_OR_GREATER
-                    certificates.Add(X509CertificateLoader.LoadCertificate(raw));
-#else
-                    certificates.Add(new X509Certificate2(raw));
-#endif
+                    certificates.Add(CertificateLoader.LoadCertificate(raw));
                 }
 
                 if (!EmbeddedRevocationEvidence.CoversAll(
                     certificates, material.OcspResponses, material.Crls,
-                    cmsData.SigningTime ?? DateTimeOffset.UtcNow, new OcspClient(Core.Http.DefaultHttpClientProvider.Instance.GetClient())))
+                    cmsData.SigningTime ?? DateTimeOffset.UtcNow, RevocationEvidence.MatchingOcspClient()))
                 {
                     warnings.Add("CAdES-B-LT: Embedded revocation evidence is not authenticated or does not cover the certificate paths.");
                     return false;
@@ -600,7 +596,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     }
 
     private static bool ValidateArchiveTimestamp(
-        byte[] cmsBytes, byte[] originalData, CmsSignedData cmsData, List<string> errors, List<string> warnings)
+        byte[] cmsBytes, byte[] originalData, CmsSignedData cmsData, List<string> warnings)
     {
         byte[]? archiveToken = cmsData.ArchiveTimestampToken;
         if (archiveToken is null)

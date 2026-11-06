@@ -62,7 +62,7 @@ public sealed partial class PdfStructureReader
         // Resolve Object Streams: decompress ObjStm objects to find byte offsets of compressed objects
         if (compressedEntries.Count > 0)
         {
-            ResolveObjectStreams(data, crossRefs, seenObjects, compressedEntries);
+            ResolveObjectStreams(data, crossRefs, compressedEntries);
         }
 
         return crossRefs;
@@ -392,7 +392,7 @@ public sealed partial class PdfStructureReader
     /// The stream header lists N (object_number, byte_offset) pairs, followed by the object data.
     /// </summary>
     private static void ResolveObjectStreams(
-        ReadOnlySpan<byte> data, List<PdfCrossRef> crossRefs, HashSet<int> seenObjects,
+        ReadOnlySpan<byte> data, List<PdfCrossRef> crossRefs,
         List<PdfCompressedObjectRef> compressedEntries, ILogger? logger = null)
     {
         // Group entries by their containing ObjStm

@@ -57,7 +57,7 @@ internal static partial class XadesSignatureBuilder
         }
 
         var signedProperties = CreateSignedProperties(outDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType, signaturePolicy, signingCertificateForm,
+            signedPropertiesId, commitmentType, signaturePolicy, signingCertificateForm,
             signerRoles, dataObjectFormat);
         var qualifyingProps = CreateQualifyingProperties(outDoc, signatureId, signedProperties);
         var spObject = outDoc.CreateElement("Object", XmlDSigUrls.DsNamespace);
@@ -181,7 +181,7 @@ internal static partial class XadesSignatureBuilder
         }
 
         var signedProperties = CreateSignedProperties(outDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType, signaturePolicy, signingCertificateForm,
+            signedPropertiesId, commitmentType, signaturePolicy, signingCertificateForm,
             signerRoles, dataObjectFormat);
         var qualifyingProps = CreateQualifyingProperties(outDoc, signatureId, signedProperties);
         var spObject = outDoc.CreateElement("Object", XmlDSigUrls.DsNamespace);
@@ -243,14 +243,12 @@ internal static partial class XadesSignatureBuilder
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
         XadesSigningCertificateForm signingCertificateForm,
-        string signatureAlgorithmOid,
         byte[] signedInfoBytes,
         byte[] signatureValue,
         string signedPropertiesId,
         IReadOnlyList<string>? signerRoles,
         DataObjectFormat? dataObjectFormat,
         XadesForm form,
-        string? dataUri,
         string? dataObjectId)
     {
         bool isEnveloping = form == XadesForm.Enveloping;
@@ -298,7 +296,7 @@ internal static partial class XadesSignatureBuilder
         }
 
         var signedProperties = CreateSignedProperties(outDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType, signaturePolicy, signingCertificateForm,
+            signedPropertiesId, commitmentType, signaturePolicy, signingCertificateForm,
             signerRoles, dataObjectFormat);
         var qualifyingProps = CreateQualifyingProperties(outDoc, signatureId, signedProperties);
         var objElement = outDoc.CreateElement("Object", XmlDSigUrls.DsNamespace);

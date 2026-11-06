@@ -94,7 +94,7 @@ internal static partial class XadesSignatureBuilder
 
         var signedProperties = CreateSignedProperties(
             xmlDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType,
+            signedPropertiesId, commitmentType,
             signaturePolicy, signingCertificateForm, signerRoles, dataObjectFormat);
 
         var qualifyingProps = CreateQualifyingProperties(xmlDoc, signatureId, signedProperties);
@@ -225,7 +225,7 @@ internal static partial class XadesSignatureBuilder
 
         var signedProperties = CreateSignedProperties(
             xmlDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType,
+            signedPropertiesId, commitmentType,
             signaturePolicy, signingCertificateForm, signerRoles, dataObjectFormat);
 
         var qualifyingProps = CreateQualifyingProperties(xmlDoc, signatureId, signedProperties);
@@ -294,8 +294,8 @@ internal static partial class XadesSignatureBuilder
         {
             return CompleteStandaloneExternalSignature(xmlData, certificate, hashAlgorithm, signingTime,
                 extraCertificates, commitmentType, signaturePolicy, signingCertificateForm,
-                signatureAlgorithmOid, signedInfoBytes, signatureValue, signedPropertiesId,
-                signerRoles, dataObjectFormat, form, dataUri, dataObjectId);
+                signedInfoBytes, signatureValue, signedPropertiesId,
+                signerRoles, dataObjectFormat, form, dataObjectId);
         }
 
         var xmlDoc = LoadDocument(xmlData);
@@ -336,7 +336,7 @@ internal static partial class XadesSignatureBuilder
 
         var signedProperties = CreateSignedProperties(
             xmlDoc, certificate, hashAlgorithm, signingTime,
-            signedPropertiesId, signatureId, commitmentType,
+            signedPropertiesId, commitmentType,
             signaturePolicy, signingCertificateForm, signerRoles, dataObjectFormat);
 
         var qualifyingProps = CreateQualifyingProperties(xmlDoc, signatureId, signedProperties);
@@ -527,7 +527,8 @@ internal static partial class XadesSignatureBuilder
         return HashData(hashAlgorithm, canonical);
     }
 
-    private static byte[] CanonicalizeXml(XmlDocument doc, string algorithm = XmlDSigUrls.ExcC14N)
+    /// <summary>The canonical octets of the document under one of the four C14N algorithms.</summary>
+    internal static byte[] CanonicalizeXml(XmlDocument doc, string algorithm = XmlDSigUrls.ExcC14N)
     {
         Transform transform = algorithm switch
         {
@@ -544,34 +545,8 @@ internal static partial class XadesSignatureBuilder
         return ms.ToArray();
     }
 
-    private static byte[] HashData(HashAlgorithmName algorithm, byte[] data)
-    {
-        if (algorithm == HashAlgorithmName.SHA256)
-        {
-            return SHA256.HashData(data);
-        }
-        if (algorithm == HashAlgorithmName.SHA384)
-        {
-            return SHA384.HashData(data);
-        }
-        if (algorithm == HashAlgorithmName.SHA512)
-        {
-            return SHA512.HashData(data);
-        }
-        if (algorithm == HashAlgorithmName.SHA3_256)
-        {
-            return SHA3_256.HashData(data);
-        }
-        if (algorithm == HashAlgorithmName.SHA3_384)
-        {
-            return SHA3_384.HashData(data);
-        }
-        if (algorithm == HashAlgorithmName.SHA3_512)
-        {
-            return SHA3_512.HashData(data);
-        }
-        throw new NotSupportedException($"Hash algorithm '{algorithm.Name}' is not supported.");
-    }
+    private static byte[] HashData(HashAlgorithmName algorithm, byte[] data) =>
+        CryptoUtility.ComputeHash(data, algorithm);
 
     private static XmlElement CreateDocRef(
         XmlDocument doc,

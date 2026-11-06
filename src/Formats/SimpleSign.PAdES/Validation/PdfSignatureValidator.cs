@@ -777,7 +777,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // Auto-load bundled Brazilian trust anchors (ICP-Brasil + Gov.br)
         // so that valid government signatures validate out of the box.
-        LoadBundledTrustAnchors(chain, signerCert);
+        LoadBundledTrustAnchors(chain);
 
         // User-provided trusted roots
         if (_options.TrustedRoots is not null)
@@ -925,7 +925,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     /// Loads trust anchor certificates from registered providers into the chain policy,
     /// placing self-signed roots in CustomTrustStore and intermediates in ExtraStore.
     /// </summary>
-    private void LoadBundledTrustAnchors(X509Chain chain, X509Certificate2 signerCert)
+    private void LoadBundledTrustAnchors(X509Chain chain)
     {
         foreach (var provider in _trustAnchorProviders)
         {
