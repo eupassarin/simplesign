@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using Shouldly;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
@@ -76,6 +77,31 @@ public sealed class CadesExtendedFormTests : IDisposable
         {
             validation.HasValidArchiveTimestamp.ShouldBe(true);
         }
+    }
+
+    [SkippableTheory]
+    [InlineData("SHA3-256", AdesBaselineLevel.Timestamped, CadesExtendedForm.CompleteReferences)]
+    [InlineData("SHA3-384", AdesBaselineLevel.LongTerm, CadesExtendedForm.ExtendedLong)]
+    [InlineData("SHA3-512", AdesBaselineLevel.Archive, CadesExtendedForm.Archive)]
+    public async Task SignWithDetailsAsync_Sha3ExtendedForm_ValidatesTheExtendedTimestamps(string hash, AdesBaselineLevel level, CadesExtendedForm form)
+    {
+        // The escTimeStamp and archive-time-stamp v2 imprints use the signer's digest; the validator
+        // used to recompute them with SHA-256 for SHA-3 signatures (macOS has no SHA-3, hence the skip).
+        Skip.IfNot(SHA3_256.IsSupported, "SHA-3 is unavailable on this platform.");
+
+        var result = await CadesSigner.Document(_data)
+            .WithCertificate(_pki.Leaf, _pki.IntermediatesAndRoot())
+            .WithHttpClientProvider(new SingleClientProvider(_http))
+            .WithHashAlgorithm(new HashAlgorithmName(hash))
+            .WithLevel(Profile(level))
+            .WithExtendedValidationData(form)
+            .SignWithDetailsAsync();
+
+        result.AchievedLevel.ShouldBe(level);
+        var validation = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false })
+            .Validate(result.SignedArtifact, _data, [_pki.IntermediateCa, _pki.RootCa]);
+        validation.Errors.ShouldBeEmpty();
+        validation.IsValid.ShouldBeTrue();
     }
 
     private AdesBaselineProfile Profile(AdesBaselineLevel level)

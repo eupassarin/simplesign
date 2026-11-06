@@ -335,7 +335,8 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
             context.DocumentFacts[key] = documents.FactsAsync(key).GetAwaiter().GetResult();
         }
 
-        context.ImageUploadId = documents.Add("stamp.png", StampPng()).Id;
+        // Pinned: the matrix stores more signed outputs than the upload limit, which would evict an ordinary upload.
+        context.ImageUploadId = documents.AddPinned("stamp.png", StampPng()).Id;
         _cases = Generate(context, out _uncoverable);
         _context = context;
         return context;

@@ -59,6 +59,43 @@ public sealed class RobustnessTests
         Should.NotThrow(() => HtmlToPdfConverter.Html(html).Convert());
     }
 
+    [Theory]
+    [InlineData("<div>", "</div>")]
+    [InlineData("<div style='display:flex'>", "</div>")]
+    [InlineData("<div style='display:grid'>", "</div>")]
+    [InlineData("<span style='display:inline-block'>", "</span>")]
+    [InlineData("<div style='float:left'>", "</div>")]
+    [InlineData("<div style='position:absolute'>", "</div>")]
+    [InlineData("<ul><li>", "</li></ul>")]
+    [InlineData("<table><tr><td>", "</td></tr></table>")]
+    public void Convert_DeepNestingOnSmallStack_DoesNotOverflowStack(string open, string close)
+    {
+        // 256 levels (the parser's cap) used to overflow the 512 KiB stack .NET 8 gives secondary
+        // threads on macOS, killing the test host. A 256 KiB thread reproduces it on every platform.
+        string html = Repeat(open, 256) + "<h1>deep</h1>" + Repeat(close, 256);
+        byte[]? pdf = null;
+        Exception? error = null;
+        var thread = new Thread(
+            () =>
+            {
+                try
+                {
+                    pdf = HtmlToPdfConverter.Html(html).Convert();
+                }
+                catch (Exception e)
+                {
+                    error = e;
+                }
+            },
+            maxStackSize: 256 * 1024);
+
+        thread.Start();
+        thread.Join();
+
+        error.ShouldBeNull();
+        Encoding.ASCII.GetString(pdf!, 0, 5).ShouldBe("%PDF-");
+    }
+
     [Fact]
     public void Convert_DeepTableNesting_DoesNotThrow()
     {

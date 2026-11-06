@@ -1,6 +1,7 @@
 // Licensed to SimpleSign under the MIT License.
 
 using SimpleSign.HtmlToPdf.Fonts;
+using SimpleSign.HtmlToPdf.Internal;
 using SimpleSign.HtmlToPdf.Parsing;
 using SimpleSign.HtmlToPdf.Rendering;
 
@@ -126,6 +127,12 @@ public sealed partial class LayoutEngine
 
     private void LayoutBlockChildren(HtmlNode parent, float availableWidth, float offsetX)
     {
+        if (!StackGuard.HasSufficientStack)
+        {
+            LayoutBlockChildrenOnEmptyStack(parent, availableWidth, offsetX);
+            return;
+        }
+
         ListCounter? counter = null;
 
         for (int i = 0; i < parent.Children.Count; i++)
@@ -190,6 +197,16 @@ public sealed partial class LayoutEngine
         }
     }
 
+    // Deeply nested documents recurse here once per level; these continue on a fresh stack instead
+    // of overflowing (kept out of line so the hot methods capture nothing).
+    private void LayoutBlockChildrenOnEmptyStack(HtmlNode parent, float availableWidth, float offsetX) =>
+        StackGuard.RunOnEmptyStack(static s => s.Engine.LayoutBlockChildren(s.Parent, s.AvailableWidth, s.OffsetX), (Engine: this, Parent: parent, AvailableWidth: availableWidth, OffsetX: offsetX));
+
+    private void LayoutBlockOnEmptyStack(HtmlNode node, float availableWidth, float offsetX, bool ignoreExplicitWidth, MarkerInfo? marker) =>
+        StackGuard.RunOnEmptyStack(
+            static s => s.Engine.LayoutBlock(s.Node, s.AvailableWidth, s.OffsetX, s.IgnoreExplicitWidth, s.Marker),
+            (Engine: this, Node: node, AvailableWidth: availableWidth, OffsetX: offsetX, IgnoreExplicitWidth: ignoreExplicitWidth, Marker: marker));
+
     private static bool IsInlineLevel(HtmlNode node, ComputedStyle style) =>
         style.Float == FloatMode.None
         && style.Display is DisplayType.Inline or DisplayType.InlineBlock
@@ -230,6 +247,12 @@ public sealed partial class LayoutEngine
     /// <param name="marker">List marker to draw next to the first line, if any.</param>
     private void LayoutBlock(HtmlNode node, float availableWidth, float offsetX, bool ignoreExplicitWidth = false, MarkerInfo? marker = null)
     {
+        if (!StackGuard.HasSufficientStack)
+        {
+            LayoutBlockOnEmptyStack(node, availableWidth, offsetX, ignoreExplicitWidth, marker);
+            return;
+        }
+
         ComputedStyle style = StyleFor(node, availableWidth);
 
         // Block formatting context roots are placed beside floats instead of under them.
