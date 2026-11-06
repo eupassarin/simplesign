@@ -54,6 +54,14 @@ jobs:
             --output publish-aot-smoke
           ./publish-aot-smoke/SimpleSign.AotSmokeTest
 
+      - name: Test CLI
+        run: >-
+          dotnet test tests/cli/SimpleSign.Cli.Tests/SimpleSign.Cli.Tests.csproj
+          --configuration Release
+          --framework net8.0
+          --filter "Category!=Stress"
+          --verbosity quiet
+
       - name: Pack
         shell: bash
         run: |
@@ -103,69 +111,6 @@ jobs:
         with:
           name: nupkgs-${{ steps.version.outputs.version }}
           path: nupkgs/
-
-  cli:
-    name: Publish CLI (multi-platform)
-    runs-on: ubuntu-latest
-    needs: release
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
-
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Test CLI
-        run: >-
-          dotnet test tests/cli/SimpleSign.Cli.Tests/SimpleSign.Cli.Tests.csproj
-          --configuration Release
-          --framework net8.0
-          --filter "Category!=Stress"
-          --verbosity quiet
-
-      - name: Publish CLI (framework-dependent)
-        shell: bash
-        run: |
-          for runtime in linux-x64 win-x64 osx-x64 osx-arm64; do
-            dotnet publish src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj \
-              --configuration Release \
-              --framework net8.0 \
-              --runtime "$runtime" \
-              --self-contained false \
-              -p:Version=${{ steps.version.outputs.version }} \
-              --output "publish-cli/$runtime"
-          done
-
-      - name: Package (linux-x64)
-        run: (cd publish-cli/linux-x64 && zip -r ../../simplesign-linux-x64.zip .)
-
-      - name: Package (win-x64)
-        run: (cd publish-cli/win-x64 && zip -r ../../simplesign-win-x64.zip .)
-
-      - name: Package (osx-x64)
-        run: (cd publish-cli/osx-x64 && zip -r ../../simplesign-osx-x64.zip .)
-
-      - name: Package (osx-arm64)
-        run: (cd publish-cli/osx-arm64 && zip -r ../../simplesign-osx-arm64.zip .)
-
-      - name: Upload CLI to Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            simplesign-linux-x64.zip
-            simplesign-win-x64.zip
-            simplesign-osx-x64.zip
-            simplesign-osx-arm64.zip
-
 
   agent:
     name: Publish Agent (${{ matrix.rid }})

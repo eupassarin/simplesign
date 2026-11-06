@@ -128,7 +128,7 @@ git tag vX.Y.Z
 git push origin main --tags
 ```
 
-The tag push triggers `.github/workflows/release.yml` which builds, tests, packs NuGet packages, publishes to NuGet.org, and creates the GitHub Release with CLI and SimpleSign Agent binaries.
+The tag push triggers `.github/workflows/release.yml` which builds, tests, packs NuGet packages, publishes to NuGet.org, and creates the GitHub Release with the SimpleSign Agent binaries. The CLI ships only as the `SimpleSign.Cli` .NET tool on NuGet.
 
 ## Manual NuGet Push (if CI fails)
 

@@ -27,6 +27,10 @@ CAdES and XAdES only (no `InternalsVisibleTo`).
 - `samples/`, `bench/`, `interop/` and the interop tests, the fuzz harness, Stryker, the docfx site,
   migration guides, `llms*.txt`, `AGENTS.md` and `.github/copilot-instructions.md`. The README now
   links to `docs/articles/`.
+- The `simplesign-<rid>.zip` CLI archives on GitHub Releases and `scripts/install/install-cli.sh` /
+  `.ps1`. They were framework-dependent, so they needed .NET anyway: install the CLI with
+  `dotnet tool install -g SimpleSign.Cli`. The release workflow now runs the CLI tests before
+  pushing to NuGet.
 
 ### Changed — SimpleSign.XAdES no longer depends on SimpleSign.CAdES
 
