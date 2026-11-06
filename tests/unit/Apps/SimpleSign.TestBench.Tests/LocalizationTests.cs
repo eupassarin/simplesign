@@ -10,7 +10,7 @@ using SimpleSign.TestBench.Signing;
 
 namespace SimpleSign.TestBench.Tests;
 
-/// <summary>Every text the backend shows has its pt-BR and es versions, with the same placeholders.</summary>
+/// <summary>Every text the backend shows has its pt-BR version, with the same placeholders.</summary>
 [Collection(TestBenchCollection.Name)]
 [Trait("Category", "Unit")]
 public sealed partial class LocalizationTests(TestBenchFixture fixture)
@@ -67,19 +67,16 @@ public sealed partial class LocalizationTests(TestBenchFixture fixture)
     [Fact]
     public void Translations_Placeholders_MatchTheEnglishText()
     {
-        foreach (var (english, (pt, es)) in Translations.All)
+        foreach (var (english, pt) in Translations.All)
         {
-            var expected = Placeholders(english);
-            Placeholders(pt).ShouldBe(expected, english);
-            Placeholders(es).ShouldBe(expected, english);
+            Placeholders(pt).ShouldBe(Placeholders(english), english);
             pt.ShouldNotBeNullOrWhiteSpace();
-            es.ShouldNotBeNullOrWhiteSpace();
         }
     }
 
     [Theory]
     [InlineData("pt-BR", "O documento está certificado com DocMDP P=1")]
-    [InlineData("es", "El documento está certificado con DocMDP P=1")]
+    [InlineData("es", "The document is certified with DocMDP P=1")]
     [InlineData("en-US", "The document is certified with DocMDP P=1")]
     [InlineData("fr-FR", "The document is certified with DocMDP P=1")]
     public async Task Evaluate_UiCulture_ReturnsTextInThatLanguage(string culture, string expectedStart)
@@ -101,7 +98,7 @@ public sealed partial class LocalizationTests(TestBenchFixture fixture)
 
     [Theory]
     [InlineData("pt-PT", "pt-BR")]
-    [InlineData("es-AR", "es")]
+    [InlineData("es-AR", "en-US")]
     [InlineData("de-DE", "en-US")]
     public void Language_Culture_MapsToSupportedLanguage(string culture, string expected) =>
         L.Language(CultureInfo.GetCultureInfo(culture)).ShouldBe(expected);

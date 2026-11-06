@@ -55,6 +55,8 @@ builder.Services.AddSingleton<CadesMatrix>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Xml.XmlRunner>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Xml.XmlSampleStore>();
 builder.Services.AddSingleton<XmlMatrix>();
+builder.Services.AddSingleton<SimpleSign.TestBench.CrossValidation.DssClient>();
+builder.Services.AddSingleton<SimpleSign.TestBench.Runs.RunService>();
 
 var app = builder.Build();
 

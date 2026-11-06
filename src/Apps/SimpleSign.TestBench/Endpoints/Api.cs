@@ -210,6 +210,8 @@ internal static class Api
                 _ => await matrix.RunAsync(body, ct),
             });
 
+        RunApi.Map(api);
+
         api.MapFallback(() => Results.NotFound(new { error = "Unknown API route." }));
     }
 

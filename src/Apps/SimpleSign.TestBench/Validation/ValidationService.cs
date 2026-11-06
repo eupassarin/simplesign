@@ -9,6 +9,7 @@ using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
+using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.Core.Extensions;
@@ -161,7 +162,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     internal PdfSignatureValidator CreateValidator(ValidationSettings settings)
     {
         var trust = Trust(settings);
-        return new PdfSignatureValidator(sandbox.HttpFor(settings.Environment), trust.Options, null,
+        return new PdfSignatureValidator(sandbox.HttpFor(settings.Environment), trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger),
             trust.UsesIcp ? [.. trust.Brazil.SelectMany(e => e.TrustAnchorProviders)] : [],
             settings.UseBrasil ? [.. trust.Brazil.SelectMany(e => e.ChainValidationProviders)] : []);
     }
@@ -183,7 +184,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
 
         bool icp = settings.Trust.Contains(TrustChoice.IcpBrasil);
         IReadOnlyList<ICountryExtension> brazil =
-            [new IcpBrasilExtension(http.GetClient(), null), new GovBrExtension(http.GetClient(), null)];
+            [new IcpBrasilExtension(http.GetClient(), RunLog.Logger), new GovBrExtension(http.GetClient(), RunLog.Logger)];
         var options = new ValidationOptions
         {
             TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),

@@ -30,6 +30,21 @@ public sealed class TestBenchFixture : IAsyncLifetime, IDisposable
 
     internal SimpleSign.TestBench.Xml.XmlRunner Xml => new(Sandbox, Documents, Credentials, Validation);
 
+    private readonly List<IDisposable> _owned = [];
+
+    /// <summary>A run service; <paramref name="dss"/> sets where the DSS cross-validation service is.</summary>
+    internal SimpleSign.TestBench.Runs.RunService Runs(SimpleSign.TestBench.CrossValidation.DssSettings? dss = null)
+    {
+        var client = new SimpleSign.TestBench.CrossValidation.DssClient(Documents);
+        _owned.Add(client);
+        if (dss is not null)
+        {
+            client.Settings = dss;
+        }
+
+        return new(Runner, Cades, Xml, client);
+    }
+
     public async Task InitializeAsync()
     {
         Documents.AddSamples(await SampleDocuments.CreateAsync(Sandbox));
@@ -42,6 +57,11 @@ public sealed class TestBenchFixture : IAsyncLifetime, IDisposable
 
     public void Dispose()
     {
+        foreach (var owned in _owned)
+        {
+            owned.Dispose();
+        }
+
         Credentials.Dispose();
         Sandbox.Dispose();
     }

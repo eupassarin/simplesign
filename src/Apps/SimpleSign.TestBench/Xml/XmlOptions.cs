@@ -71,7 +71,7 @@ public sealed record XmlOptions
 
     public XadesIcpPolicy IcpPolicy { get; init; } = XadesIcpPolicy.AdRb;
 
-    public string PolicyOid { get; init; } = "2.16.76.1.7.1.6.2.3";
+    public string PolicyOid { get; init; } = "1.2.3.4.5";
 
     public string? PolicyUri { get; init; }
 

@@ -8,6 +8,7 @@ using SimpleSign.PAdES.Signing;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
+using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Validation;
 
@@ -113,7 +114,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
     private async Task<SigningResult> SignAsync(SigningOptions o, SigningPlan plan, IReadOnlyList<PlanStep> steps, byte[] pdf,
         OptionsReport report, CodeSnippets code, Stopwatch watch, CancellationToken cancellationToken)
     {
-        var builder = PadesSigner.Document(pdf);
+        var builder = PadesSigner.Document(pdf).WithLogger(RunLog.Logger);
         foreach (var step in steps)
         {
             builder = step.Apply(builder);
@@ -136,6 +137,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
             .WithHashAlgorithm(plan.HashAlgorithm)
             .WithFieldOptions(plan.Field)
             .WithLevel(plan.Profile!)
+            .WithLogger(RunLog.Logger)
             .WithSessionIntegrityKey(integrityKey);
         if (plan.SignatureAlgorithmOid is { } oid)
         {
@@ -150,7 +152,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         byte[] raw = await SignPreparedAsync(credential, prepared, plan, cancellationToken);
 
         // Phase 3 (server): resume the session and embed the signature (plus timestamps / LTV).
-        var resume = DeferredSigner.Resume(prepared.SessionData, integrityKey).WithHttpClientProvider(plan.Http);
+        var resume = DeferredSigner.Resume(prepared.SessionData, integrityKey).WithHttpClientProvider(plan.Http).WithLogger(RunLog.Logger);
         if (plan.Timestamp is { } tsa && (tsa.Authorization is not null || tsa.ClientCertificate is not null || plan.ArchiveTimestamp?.Authorization is not null))
         {
             // Secrets are never stored in the session: supply them again on resume.
@@ -175,6 +177,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
             .WithHashAlgorithm(plan.HashAlgorithm)
             .WithFieldOptions(plan.Field)
             .WithLevel(plan.Profile!)
+            .WithLogger(RunLog.Logger)
             .WithMaxConcurrency(o.MaxConcurrency);
         if (credential.External is { } external)
         {
@@ -233,7 +236,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         string fileName = Path.GetFileNameWithoutExtension(source.FileName) + "-signed.pdf";
         var stored = documents.Add(fileName, signed);
         var watch = Stopwatch.StartNew();
-        IReadOnlyList<SignatureReport> validation = o.Validate ? await _validation.ValidateAsync(signed, ValidationSettings.For(o.Environment), cancellationToken) : [];
+        IReadOnlyList<SignatureReport> validation = o.Validate ? await _validation.ValidateAsync(signed, o.Validation ?? ValidationSettings.For(o.Environment), cancellationToken) : [];
         long validateMs = watch.ElapsedMilliseconds;
         var output = await InspectAsync(signed, cancellationToken);
         return new SigningResult(true, null, null, stored.Id, fileName, signed.Length, Compatibility.LevelName(o), achieved,
@@ -245,7 +248,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         try
         {
             using var stream = new MemoryStream(pdf, writable: false);
-            var inspection = await PdfSignatureInspector.InspectAsync(stream, cancellationToken: cancellationToken);
+            var inspection = await PdfSignatureInspector.InspectAsync(stream, RunLog.Logger, cancellationToken);
             var dss = inspection.Document.SecurityStore;
             var level = new ConformanceDetectorService().DetectHighest(inspection);
             return new OutputFacts(inspection.Signatures.Count, level.ToString(), dss?.IsPresent == true,

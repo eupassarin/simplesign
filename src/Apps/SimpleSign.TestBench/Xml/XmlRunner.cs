@@ -12,6 +12,7 @@ using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
+using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Validation;
@@ -109,7 +110,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             {
                 var plan = new XadesPlan(o, context);
                 code = plan.Code(credential.Facts);
-                var builder = XadesSigner.Document(data.Content);
+                var builder = XadesSigner.Document(data.Content).WithLogger(RunLog.Logger);
                 foreach (var (_, apply) in plan.Steps)
                 {
                     builder = apply(builder);
@@ -174,7 +175,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
 
     private static List<XmlSignatureReport> ValidateXades(byte[] xml, byte[]? data, ValidationTrust trust, ValidationSettings settings)
     {
-        var validator = new XadesSignatureValidator(trust.Options);
+        var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger);
         var results = validator.ValidateAll(xml, trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null, data);
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
         var reports = new List<XmlSignatureReport>();
