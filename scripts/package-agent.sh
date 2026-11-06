@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Packages SimpleSign Agent (self-contained tray app) for one runtime:
+# Packages SimpleSign Agent (tray app, one native executable built with Native AOT) for one runtime:
 #   osx-arm64 / osx-x64  → SimpleSignAgent-<version>-<rid>.zip with "SimpleSign Agent.app" (menu bar only, no Dock icon)
 #   linux-x64 / linux-arm64 → SimpleSignAgent-<version>-<rid>.tar.gz
 # Usage: scripts/package-agent.sh <rid> [version] [output-dir]
@@ -14,20 +14,26 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$out"
 
-dotnet publish "$repo/src/Apps/SimpleSign.Agent/SimpleSign.Agent.csproj" -c Release -r "$rid" --self-contained true \
-  -p:Version="$version" -p:PublishSingleFile=false -o "$tmp/publish"
+# Native AOT (see the csproj): needs the platform toolchain (Xcode command line tools, or clang + zlib on Linux)
+# and must run on the target OS; on macOS both architectures build from either one.
+dotnet publish "$repo/src/Apps/SimpleSign.Agent/SimpleSign.Agent.csproj" -c Release -r "$rid" \
+  -p:Version="$version" -o "$tmp/publish"
+# Debug symbols are not shipped.
+rm -rf "$tmp/publish"/*.dSYM "$tmp/publish"/*.pdb "$tmp/publish"/*.dbg "$tmp/publish"/*.xml
 
 case "$rid" in
   osx-*)
     app="$tmp/SimpleSign Agent.app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
     cp -R "$tmp/publish/." "$app/Contents/MacOS/"
+    # The app icon is drawn by the agent itself (SimpleSign.Agent --export-icons) and kept in Assets/.
+    icon="$repo/src/Apps/SimpleSign.Agent/Assets/icon-1024.png"
     if command -v sips >/dev/null && command -v iconutil >/dev/null; then
       iconset="$tmp/SimpleSign.iconset"
       mkdir -p "$iconset"
       for size in 16 32 128 256 512; do
-        sips -z $size $size "$repo/assets/icon.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
-        sips -z $((size * 2)) $((size * 2)) "$repo/assets/icon.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+        sips -z $size $size "$icon" --out "$iconset/icon_${size}x${size}.png" >/dev/null
+        sips -z $((size * 2)) $((size * 2)) "$icon" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
       done
       iconutil -c icns "$iconset" -o "$app/Contents/Resources/SimpleSign.icns"
     fi
@@ -59,6 +65,7 @@ PLIST
     fi
     ;;
   linux-*)
+    cp "$repo/src/Apps/SimpleSign.Agent/Assets/icon-256.png" "$tmp/publish/simplesign-agent.png"
     target="$out/SimpleSignAgent-$version-$rid.tar.gz"
     tar -C "$tmp/publish" -czf "$target" .
     ;;

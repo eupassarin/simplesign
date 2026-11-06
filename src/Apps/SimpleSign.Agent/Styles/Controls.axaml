@@ -1,0 +1,261 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{StaticResource Sans}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="{DynamicResource Bg}" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+  </Style>
+
+  <!-- Typography -->
+  <Style Selector="TextBlock, SelectableTextBlock">
+    <Setter Property="FontFeatures" Value="cv11, ss01" />
+  </Style>
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.4" />
+  </Style>
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.2" />
+  </Style>
+  <Style Selector="TextBlock.h3">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.strong">
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="TextBlock.muted, SelectableTextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource MutedFg}" />
+  </Style>
+  <Style Selector="TextBlock.small, SelectableTextBlock.small">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TextBlock.xs">
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+  <Style Selector="TextBlock.wrap, SelectableTextBlock.wrap">
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.relaxed, SelectableTextBlock.relaxed">
+    <Setter Property="LineHeight" Value="20" />
+  </Style>
+  <Style Selector="TextBlock.mono, SelectableTextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource Mono}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontFeatures" Value="" />
+  </Style>
+  <Style Selector="TextBlock.success">
+    <Setter Property="Foreground" Value="{DynamicResource Success}" />
+  </Style>
+  <Style Selector="TextBlock.warning">
+    <Setter Property="Foreground" Value="{DynamicResource Warning}" />
+  </Style>
+  <Style Selector="TextBlock.destructive, SelectableTextBlock.destructive">
+    <Setter Property="Foreground" Value="{DynamicResource Destructive}" />
+  </Style>
+  <Style Selector="TextBlock.link">
+    <Setter Property="Foreground" Value="{DynamicResource Info}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="SelectableTextBlock">
+    <Setter Property="SelectionBrush" Value="{DynamicResource Selection}" />
+  </Style>
+
+  <!-- Surfaces -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+  <Style Selector="Border.card.flush">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.well">
+    <Setter Property="Background" Value="{DynamicResource Muted}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+  <Style Selector="Border.segmented">
+    <Setter Property="Background" Value="{DynamicResource Muted}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="2" />
+  </Style>
+  <Style Selector="Border.line">
+    <Setter Property="Background" Value="{DynamicResource Line}" />
+    <Setter Property="Height" Value="1" />
+  </Style>
+  <Style Selector="Border.topbar">
+    <Setter Property="Background" Value="{DynamicResource Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="16,0" />
+  </Style>
+  <Style Selector="Border.mark">
+    <Setter Property="Background" Value="{DynamicResource Primary}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+  </Style>
+  <Style Selector="Border.iconbox">
+    <Setter Property="Background" Value="{DynamicResource Muted}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+  </Style>
+  <Style Selector="Border.iconbox.ok">
+    <Setter Property="Background" Value="{DynamicResource SuccessSoft}" />
+  </Style>
+  <Style Selector="Border.iconbox.warn">
+    <Setter Property="Background" Value="{DynamicResource WarningSoft}" />
+  </Style>
+  <Style Selector="Border.iconbox.err">
+    <Setter Property="Background" Value="{DynamicResource DestructiveSoft}" />
+  </Style>
+  <Style Selector="Border.iconbox.info">
+    <Setter Property="Background" Value="{DynamicResource InfoSoft}" />
+  </Style>
+
+  <!-- Badges and the status pill -->
+  <Style Selector="Border.badge">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.badge TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="Border.badge.ok">
+    <Setter Property="Background" Value="{DynamicResource SuccessSoft}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.badge.ok TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Success}" />
+  </Style>
+  <Style Selector="Border.badge.warn">
+    <Setter Property="Background" Value="{DynamicResource WarningSoft}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.badge.warn TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Warning}" />
+  </Style>
+  <Style Selector="Border.badge.err">
+    <Setter Property="Background" Value="{DynamicResource DestructiveSoft}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.badge.err TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Destructive}" />
+  </Style>
+  <Style Selector="Border.badge.solid">
+    <Setter Property="Background" Value="{DynamicResource Muted}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.dot">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource MutedFg}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.dot.ok">
+    <Setter Property="Background" Value="{DynamicResource Success}" />
+  </Style>
+  <Style Selector="Border.dot.warn">
+    <Setter Property="Background" Value="{DynamicResource Warning}" />
+  </Style>
+  <Style Selector="Border.dot.err">
+    <Setter Property="Background" Value="{DynamicResource Destructive}" />
+  </Style>
+
+  <!-- Notes inside the documentation -->
+  <Style Selector="Border.note">
+    <Setter Property="Background" Value="{DynamicResource InfoSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Info}" />
+    <Setter Property="BorderThickness" Value="2,0,0,0" />
+    <Setter Property="CornerRadius" Value="0,8,8,0" />
+    <Setter Property="Padding" Value="12,10" />
+  </Style>
+
+  <!-- The panel that slides over the window (Settings, About): the TestBench's Sheet. -->
+  <Style Selector="Border.scrim">
+    <Setter Property="Background" Value="{DynamicResource Scrim}" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.scrim.open">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Border.sheet">
+    <Setter Property="Background" Value="{DynamicResource Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="1,0,0,0" />
+    <Setter Property="BoxShadow" Value="-8 0 24 0 #1F000000" />
+    <Setter Property="RenderTransform" Value="translateX(32px)" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="CubicEaseOut" />
+        <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.sheet.open">
+    <Setter Property="RenderTransform" Value="translateX(0px)" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- Switch: a ToggleButton drawn as a track and a knob. -->
+  <Style Selector="ToggleButton.switch">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Background" Value="{DynamicResource Line}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Track" Background="{TemplateBinding Background}" CornerRadius="10">
+          <Border Name="Knob" Width="16" Height="16" CornerRadius="8" Background="{DynamicResource Bg}"
+                  HorizontalAlignment="Left" Margin="2,0,0,0" BoxShadow="0 1 2 0 #33000000">
+            <Border.Transitions>
+              <Transitions>
+                <ThicknessTransition Property="Margin" Duration="0:0:0.12" />
+              </Transitions>
+            </Border.Transitions>
+          </Border>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ToggleButton.switch:checked">
+    <Setter Property="Background" Value="{DynamicResource Primary}" />
+  </Style>
+  <Style Selector="ToggleButton.switch:checked /template/ Border#Knob">
+    <Setter Property="Margin" Value="18,0,0,0" />
+  </Style>
+  <Style Selector="ToggleButton.switch:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+</Styles>

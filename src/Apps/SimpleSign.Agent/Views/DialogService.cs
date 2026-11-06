@@ -4,7 +4,7 @@ using SimpleSign.Agent.Services;
 
 namespace SimpleSign.Agent.Views;
 
-/// <summary>Agent prompts on the UI thread, shown on top of the browser (the agent has no main window).</summary>
+/// <summary>Agent prompts on the UI thread, shown on top of the browser.</summary>
 internal sealed class DialogService : IDialogService
 {
     public Task<string?> AskSecretAsync(string title, string message, string confirmText) => OnUi(async () =>

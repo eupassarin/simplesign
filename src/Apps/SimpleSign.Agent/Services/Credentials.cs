@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Agent.Localization;
 using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Signing;
 using SimpleSign.Signers.Pkcs11;
@@ -31,11 +32,11 @@ internal sealed record CertificateEntry(CertificateSourceKind Kind, X509Certific
     public string Source => Kind switch
     {
         CertificateSourceKind.Token => $"Token {Token!.TokenLabel.Trim()} · {Token.DriverName}",
-        CertificateSourceKind.File => $"Arquivo {Path.GetFileName(FilePath)}",
-        _ => OperatingSystem.IsMacOS() ? "Chaves do macOS" : "Repositório do sistema",
+        CertificateSourceKind.File => L.T("cert.source.file", Path.GetFileName(FilePath)),
+        _ => L.T(OperatingSystem.IsMacOS() ? "cert.source.keychain" : "cert.source.store"),
     };
 
-    public string Validity => $"Válido até {Certificate.NotAfter:dd/MM/yyyy}";
+    public string Validity => L.T("cert.validUntil", Certificate.NotAfter.ToString("d", L.Culture));
 
     public bool IsExpired => Certificate.NotAfter < DateTime.Now;
 
@@ -45,6 +46,18 @@ internal sealed record CertificateEntry(CertificateSourceKind Kind, X509Certific
         {
             var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(Certificate);
             return cpf is not null ? $"CPF {FormatCpf(cpf)}" : cnpj is not null ? $"CNPJ {FormatCnpj(cnpj)}" : null;
+        }
+    }
+
+    /// <summary>The holder's CPF or CNPJ with most digits hidden, for display.</summary>
+    public string? MaskedDocument
+    {
+        get
+        {
+            var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(Certificate);
+            return cpf is { Length: 11 } ? $"CPF ***.{cpf[3..6]}.{cpf[6..9]}-**"
+                : cnpj is { Length: 14 } ? $"CNPJ {cnpj[..2]}.***.***/{cnpj[8..12]}-**"
+                : null;
         }
     }
 

@@ -2,8 +2,9 @@ using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Constants;
-using SimpleSign.Core.Signing;
+using SimpleSign.Agent.Localization;
 using SimpleSign.Agent.Services;
+using SimpleSign.Core.Signing;
 using SimpleSign.Signers.Pkcs11;
 
 namespace SimpleSign.Agent.Server;
@@ -104,10 +105,10 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
     {
         var items = request.SignRequests ?? [];
         var entry = (await _certificates(cancellationToken)).FirstOrDefault(e => Same(e, request.Thumbprint))
-            ?? throw new KeyNotFoundException($"Certificado não encontrado: {request.Thumbprint}");
-        string what = request.DocumentName is { Length: > 0 } name ? $"“{Trim(name, 80)}”" : $"{items.Count} documento(s)";
-        var decision = await services.Dialogs.AskConsentAsync(new ConsentRequest(originLabel, "Assinar documento",
-            $"{originLabel} quer assinar {what} com o certificado de {entry.Holder}.", entry.Holder, OfferRemember: false));
+            ?? throw new KeyNotFoundException(L.T("api.certificateNotFound", request.Thumbprint));
+        string what = request.DocumentName is { Length: > 0 } name ? $"“{Trim(name, 80)}”" : L.T("consent.sign.documents", items.Count);
+        var decision = await services.Dialogs.AskConsentAsync(new ConsentRequest(originLabel, L.T("consent.sign.title"),
+            L.T("consent.sign.message", originLabel, what, entry.Holder), entry.Holder, OfferRemember: false));
         if (decision == ConsentDecision.Deny)
         {
             return null;
@@ -139,8 +140,8 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
         string? pin = null;
         if (!entry.Token.HasPinPad)
         {
-            pin = await services.Dialogs.AskSecretAsync("PIN do token",
-                $"Digite o PIN de {entry.Token.TokenLabel.Trim()} para assinar com {entry.Holder}.", "Assinar");
+            pin = await services.Dialogs.AskSecretAsync(L.T("pin.title"),
+                L.T("pin.message", entry.Token.TokenLabel.Trim(), entry.Holder), L.T("pin.confirm"));
             if (pin is null)
             {
                 return null;
@@ -169,7 +170,7 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
             using var ecdsa = certificate.GetECDsaPrivateKey();
             return ecdsa is not null
                 ? new AgentSignResult { Id = id, SignedHashBase64 = Convert.ToBase64String(ecdsa.SignData(data, hash)) }
-                : new AgentSignResult { Id = id, Error = "Tipo de chave não suportado." };
+                : new AgentSignResult { Id = id, Error = L.T("api.unsupportedKey") };
         }
         catch (Exception ex) when (ex is FormatException or CryptographicException)
         {

@@ -20,6 +20,15 @@ internal sealed class AppSettings
 
     /// <summary>Minutes a token PIN is kept in memory after use; 0 = ask every time.</summary>
     public int PinCacheMinutes { get; set; }
+
+    /// <summary>"en-US" or "pt-BR"; null follows the operating system.</summary>
+    public string? Language { get; set; }
+
+    /// <summary>"system", "light" or "dark".</summary>
+    public string Theme { get; set; } = "system";
+
+    /// <summary>False until the window was shown once (it opens by itself on the first run).</summary>
+    public bool FirstRunDone { get; set; }
 }
 
 [JsonSerializable(typeof(AppSettings))]
@@ -40,6 +49,9 @@ internal sealed class SettingsStore
         _path = Path.Combine(folder, "settings.json");
         Current = Load();
     }
+
+    /// <summary>The folder that holds settings.json.</summary>
+    public string Folder => Path.GetDirectoryName(_path)!;
 
     public AppSettings Current { get; }
 

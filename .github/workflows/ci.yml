@@ -307,3 +307,18 @@ jobs:
       - name: Build agent app
         run: dotnet build src/Apps/SimpleSign.Agent --configuration Release
 
+      # The agent ships as one native executable: publish it as the release does and run its
+      # self-check (texts, embedded documentation, an HTTP round trip), which needs no display.
+      - name: Publish the native agent (AOT) and check it
+        shell: bash
+        run: |
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-ARM64) rid=linux-arm64 ;;
+            Linux-*) rid=linux-x64 ;;
+            Windows-*) rid=win-x64 ;;
+            macOS-ARM64) rid=osx-arm64 ;;
+            *) rid=osx-x64 ;;
+          esac
+          dotnet publish src/Apps/SimpleSign.Agent/SimpleSign.Agent.csproj -c Release -r "$rid" -o publish-agent
+          ./publish-agent/SimpleSign.Agent --self-check
+

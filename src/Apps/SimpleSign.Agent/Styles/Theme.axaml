@@ -1,0 +1,229 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    The TestBench design tokens (web/src/index.css: shadcn "new-york", zinc), light and dark,
+    so the agent and the TestBench look like one product.
+  -->
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="Bg" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="Fg" Color="#09090B" />
+      <SolidColorBrush x:Key="Card" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="Primary" Color="#18181B" />
+      <SolidColorBrush x:Key="PrimaryFg" Color="#FAFAFA" />
+      <SolidColorBrush x:Key="Muted" Color="#F4F4F5" />
+      <SolidColorBrush x:Key="MutedFg" Color="#71717B" />
+      <SolidColorBrush x:Key="Line" Color="#E4E4E7" />
+      <SolidColorBrush x:Key="Ring" Color="#9F9FA9" />
+      <SolidColorBrush x:Key="Destructive" Color="#E7000B" />
+      <SolidColorBrush x:Key="DestructiveSoft" Color="#14E7000B" />
+      <SolidColorBrush x:Key="Success" Color="#009956" />
+      <SolidColorBrush x:Key="SuccessSoft" Color="#1F009956" />
+      <SolidColorBrush x:Key="Warning" Color="#B26F00" />
+      <SolidColorBrush x:Key="WarningSoft" Color="#26E38F00" />
+      <SolidColorBrush x:Key="Info" Color="#2784D5" />
+      <SolidColorBrush x:Key="InfoSoft" Color="#172784D5" />
+      <SolidColorBrush x:Key="Selection" Color="#402784D5" />
+      <SolidColorBrush x:Key="Scrim" Color="#66000000" />
+      <SolidColorBrush x:Key="SegmentOn" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#E4E4E7" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#9F9FA9" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#71717B" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#09090B" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#09090B" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#09090B" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#9F9FA9" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#9F9FA9" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#9F9FA9" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="Bg" Color="#09090B" />
+      <SolidColorBrush x:Key="Fg" Color="#FAFAFA" />
+      <SolidColorBrush x:Key="Card" Color="#18181B" />
+      <SolidColorBrush x:Key="Primary" Color="#E4E4E7" />
+      <SolidColorBrush x:Key="PrimaryFg" Color="#18181B" />
+      <SolidColorBrush x:Key="Muted" Color="#27272A" />
+      <SolidColorBrush x:Key="MutedFg" Color="#9F9FA9" />
+      <SolidColorBrush x:Key="Line" Color="#1FFFFFFF" />
+      <SolidColorBrush x:Key="Ring" Color="#71717B" />
+      <SolidColorBrush x:Key="Destructive" Color="#FF6467" />
+      <SolidColorBrush x:Key="DestructiveSoft" Color="#24FF6467" />
+      <SolidColorBrush x:Key="Success" Color="#43C07A" />
+      <SolidColorBrush x:Key="SuccessSoft" Color="#2443C07A" />
+      <SolidColorBrush x:Key="Warning" Color="#F5AE39" />
+      <SolidColorBrush x:Key="WarningSoft" Color="#24F5AE39" />
+      <SolidColorBrush x:Key="Info" Color="#53A3F2" />
+      <SolidColorBrush x:Key="InfoSoft" Color="#2453A3F2" />
+      <SolidColorBrush x:Key="Selection" Color="#5953A3F2" />
+      <SolidColorBrush x:Key="Scrim" Color="#99000000" />
+      <SolidColorBrush x:Key="SegmentOn" Color="#09090B" />
+      <SolidColorBrush x:Key="TextControlBackground" Color="#0DFFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#0DFFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#0DFFFFFF" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#26FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#71717B" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#9F9FA9" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#FAFAFA" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FAFAFA" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FAFAFA" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#71717B" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#71717B" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#71717B" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+
+  <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
+  <FontFamily x:Key="Sans">fonts:Inter#Inter, $Default</FontFamily>
+  <FontFamily x:Key="Mono">JetBrains Mono, SF Mono, Menlo, Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace</FontFamily>
+
+  <!-- Every button: flat, 8px radius. Variants are classes (primary, outline, destructive, icon, sm, seg, tab, link, row). -->
+  <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Bg"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}">
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Padding="{TemplateBinding Padding}"
+                            Foreground="{TemplateBinding Foreground}"
+                            RecognizesAccessKey="False"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{DynamicResource Muted}" />
+    </Style>
+    <Style Selector="^:pressed">
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45" />
+      <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+
+    <Style Selector="^.primary">
+      <Setter Property="Background" Value="{DynamicResource Primary}" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryFg}" />
+      <Setter Property="Padding" Value="14,0" />
+    </Style>
+    <Style Selector="^.primary:pointerover">
+      <Setter Property="Background" Value="{DynamicResource Primary}" />
+      <Setter Property="Opacity" Value="0.9" />
+    </Style>
+
+    <Style Selector="^.outline">
+      <Setter Property="Background" Value="{DynamicResource Bg}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    </Style>
+    <Style Selector="^.outline:pointerover">
+      <Setter Property="Background" Value="{DynamicResource Muted}" />
+    </Style>
+
+    <Style Selector="^.destructive">
+      <Setter Property="Foreground" Value="{DynamicResource Destructive}" />
+    </Style>
+    <Style Selector="^.destructive:pointerover">
+      <Setter Property="Background" Value="{DynamicResource DestructiveSoft}" />
+    </Style>
+
+    <Style Selector="^.sm">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="^.icon">
+      <Setter Property="Width" Value="32" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="^.icon.sm">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+    </Style>
+
+    <!-- A segment of a segmented control (the TestBench's task switch). -->
+    <Style Selector="^.seg">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedFg}" />
+    </Style>
+    <Style Selector="^.seg:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+    </Style>
+    <Style Selector="^.seg.on">
+      <Setter Property="Background" Value="{DynamicResource SegmentOn}" />
+      <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+    </Style>
+    <Style Selector="^.seg.on /template/ Border#PART_Bg">
+      <Setter Property="BoxShadow" Value="0 1 2 0 #1F000000" />
+    </Style>
+
+    <!-- An underlined tab (the documentation topics). -->
+    <Style Selector="^.tab">
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="2,0" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedFg}" />
+    </Style>
+    <Style Selector="^.tab:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+    </Style>
+    <Style Selector="^.tab.on">
+      <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Primary}" />
+    </Style>
+
+    <Style Selector="^.link">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Foreground" Value="{DynamicResource Info}" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="^.link:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+
+    <!-- A selectable row (the certificate to test with). -->
+    <Style Selector="^.row">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+    <Style Selector="^.row.on">
+      <Setter Property="BorderBrush" Value="{DynamicResource Primary}" />
+      <Setter Property="Background" Value="{DynamicResource Muted}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

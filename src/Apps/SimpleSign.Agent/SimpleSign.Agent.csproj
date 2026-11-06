@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- SimpleSign Agent: a tray app that lets web pages request signatures with the user's certificates (H1). -->
+  <!-- SimpleSign Agent: a tray app with a window that lets web pages request signatures with the user's certificates (H1). -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFrameworks></TargetFrameworks>
@@ -16,10 +16,31 @@
     <ApplicationIcon Condition="Exists('Assets\icon.ico')">Assets\icon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <!-- The trim and AOT analyzers run on every build, so a publish does not find surprises. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <!--
+    Small and fast: a publish for a runtime (-r osx-arm64, win-x64…) produces one native
+    executable (Native AOT), without the .NET runtime or a JIT. Only then, so `dotnet run` and the
+    tests keep using the installed runtime.
+    RuntimeFrameworkVersion pins the runtime pack and ILCompiler to a patched servicing release:
+    the ones bundled with SDK 10.0.300 (10.0.8) are affected by GHSA-p3jp-9v83-76w9 (NU1903).
+    Same pin as tests/smoke/SimpleSign.AotSmokeTest; bump on new servicing releases.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishAot>true</PublishAot>
+    <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <StackTraceSupport>false</StackTraceSupport>
+    <EventSourceSupport>false</EventSourceSupport>
+    <DebuggerSupport>false</DebuggerSupport>
   </PropertyGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="Assets\**" />
+    <!-- The built-in documentation: Docs/<language>/<topic>.md, read by DocLibrary. -->
+    <EmbeddedResource Include="Docs\**\*.md" WithCulture="false"
+                      LogicalName="Docs/$([System.String]::Copy('%(RecursiveDir)').Replace('\', '/'))%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
