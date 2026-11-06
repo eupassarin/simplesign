@@ -4,6 +4,7 @@
 export const en = {
   app: {
     nav: {
+      coverage: "Coverage",
       workbench: "Workbench",
       matrix: "Run matrix",
       sandbox: "Sandbox",
@@ -204,6 +205,7 @@ export const en = {
     page: "Page {page} of {total}",
   },
   matrix: {
+    stop: "Stop",
     title: "Run matrix",
     intro: "Proves every option is testable. Cases are generated from the same Compatibility rules the signing page uses: every value of every dimension on its own, plus pairwise combinations (every pair of values appears in at least one valid case). Each case signs in the sandbox, validates, and checks the output has what was asked (level, sub-filter, field, timestamps, DSS, document timestamp, DocMDP, mode).",
     run: "Run {n} cases",
@@ -375,6 +377,7 @@ export const en = {
       validation: "Validation",
       logs: "Logs",
       code: "Code",
+      variants: "Variants",
     },
     result: {
       emptyTitle: "Nothing signed yet",
@@ -420,12 +423,30 @@ export const en = {
       indication: "Indication",
       level: "Level",
     },
+    variants: {
+      title: "Vary",
+      about: "Signs once for every value of one option, keeping the rest as it is, and lists the results side by side: every level, every digest, every packaging…",
+      run: "Sign {n} variants",
+      hint: "Click a row to open that run: result, verdicts, log and code.",
+      value: "Value",
+      incompatible: "Not run",
+    },
     history: {
       title: "History",
       hint: "The runs of this session, newest first. Open one to see its result and log again.",
       empty: "No runs yet.",
       running: "running…",
     },
+  },
+  coverage: {
+    title: "Standard coverage",
+    intro: "What SimpleSign implements of each standard, from the same schema the workbench is drawn from: every option with the clause that defines it and the library call it becomes. Lines without a check are defined by the standard and not implemented.",
+    all: "Everything",
+    onlyMissing: "Not implemented",
+    summary: "{supported} of {total} implemented, {missing} not",
+    option: "Option",
+    standard: "Standard",
+    api: "Library call",
   },
   sandbox: {
     intro: "Everything the sandbox simulates, generated when the TestBench starts and kept in memory. Services answer on *.sandbox.simplesign.test through an in-process IHttpClientProvider, so the library runs its normal code paths (including its SSRF checks) without touching the network.",

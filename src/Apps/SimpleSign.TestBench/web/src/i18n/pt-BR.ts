@@ -3,6 +3,7 @@ import type { Messages } from "./en"
 export const ptBR: Messages = {
   app: {
     nav: {
+      coverage: "Cobertura",
       workbench: "Bancada",
       matrix: "Matriz de testes",
       sandbox: "Sandbox",
@@ -203,6 +204,7 @@ export const ptBR: Messages = {
     page: "Página {page} de {total}",
   },
   matrix: {
+    stop: "Parar",
     title: "Matriz de testes",
     intro: "Prova que toda opção é testável. Os casos são gerados pelas mesmas regras de Compatibilidade da página de assinatura: cada valor de cada dimensão isolado, mais combinações em pares (todo par de valores aparece em ao menos um caso válido). Cada caso assina no sandbox, valida e confere se a saída tem o que foi pedido (nível, sub-filter, campo, carimbos do tempo, DSS, carimbo de documento, DocMDP, modo).",
     run: "Rodar {n} casos",
@@ -374,6 +376,7 @@ export const ptBR: Messages = {
       validation: "Validação",
       logs: "Logs",
       code: "Código",
+      variants: "Variações",
     },
     result: {
       emptyTitle: "Nada assinado ainda",
@@ -419,12 +422,30 @@ export const ptBR: Messages = {
       indication: "Indicação",
       level: "Nível",
     },
+    variants: {
+      title: "Variar",
+      about: "Assina uma vez para cada valor de uma opção, mantendo o resto como está, e lista os resultados lado a lado: todos os níveis, todos os resumos, todos os empacotamentos…",
+      run: "Assinar {n} variações",
+      hint: "Clique numa linha para abrir aquela execução: resultado, vereditos, log e código.",
+      value: "Valor",
+      incompatible: "Não executado",
+    },
     history: {
       title: "Histórico",
       hint: "As execuções desta sessão, da mais nova para a mais antiga. Abra uma para ver de novo o resultado e o log.",
       empty: "Nenhuma execução ainda.",
       running: "em execução…",
     },
+  },
+  coverage: {
+    title: "Cobertura das normas",
+    intro: "O que o SimpleSign implementa de cada norma, a partir do mesmo esquema que desenha a bancada: cada opção com a cláusula que a define e a chamada da biblioteca correspondente. As linhas sem marca são definidas pela norma e não estão implementadas.",
+    all: "Tudo",
+    onlyMissing: "Não implementado",
+    summary: "{supported} de {total} implementados, {missing} não",
+    option: "Opção",
+    standard: "Norma",
+    api: "Chamada da biblioteca",
   },
   sandbox: {
     intro: "Tudo o que o sandbox simula, gerado quando o TestBench inicia e mantido em memória. Os serviços respondem em *.sandbox.simplesign.test por um IHttpClientProvider no próprio processo, então a biblioteca percorre seus caminhos normais (inclusive as checagens de SSRF) sem tocar a rede.",

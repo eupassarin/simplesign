@@ -1,8 +1,9 @@
 import { useState } from "react"
-import { CircleAlert, History, Loader2, PenTool, RotateCcw, ShieldCheck } from "lucide-react"
+import { CircleAlert, History, Loader2, PenTool, RotateCcw, ShieldCheck, Shuffle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -64,6 +65,7 @@ function TopBar() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <VaryControl />
           <DssControl />
           <HistoryDrawer />
           <Tooltip>
@@ -102,6 +104,40 @@ function TopBar() {
         {evaluating && <Loader2 className="text-muted-foreground size-3 animate-spin" />}
       </div>
     </div>
+  )
+}
+
+/** Signs once per value of one option, keeping everything else: every level, every digest, every packaging… */
+function VaryControl() {
+  const { schema, isVisible, visibleValues, runVariants, variantsRunning, running, evaluation } = useWorkbench()
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [optionId, setOptionId] = useState<string>("")
+  const candidates = schema.options.filter((o) => o.kind === "choice" && o.path && o.support === "supported" && isVisible(o)
+    && visibleValues(o).filter((v) => v.support === "supported").length > 1)
+  const chosen = candidates.find((o) => o.id === optionId) ?? candidates.find((o) => o.path === "level") ?? candidates[0]
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8"><Shuffle /> {t("wb.variants.title")}</Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-96 space-y-3 text-sm">
+        <div>
+          <p className="font-medium">{t("wb.variants.title")}</p>
+          <p className="text-muted-foreground text-xs leading-relaxed">{t("wb.variants.about")}</p>
+        </div>
+        <Select value={chosen?.id ?? ""} onValueChange={setOptionId}>
+          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {candidates.map((o) => <SelectItem key={o.id} value={o.id}>{schema.sections.find((s) => s.id === o.section)?.title} · {o.title} ({visibleValues(o).length})</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button className="w-full" disabled={!chosen || variantsRunning || running || !evaluation} onClick={() => { setOpen(false); void runVariants(chosen!) }}>
+          {variantsRunning ? <Loader2 className="animate-spin" /> : <Shuffle />}
+          {chosen ? t("wb.variants.run", { n: visibleValues(chosen).filter((v) => v.support === "supported").length }) : t("wb.variants.title")}
+        </Button>
+      </PopoverContent>
+    </Popover>
   )
 }
 

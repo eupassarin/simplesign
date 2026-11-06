@@ -42,11 +42,31 @@ interface WorkbenchValue {
   history: RunSummary[]
   openRun: (id: string) => Promise<void>
   reuse: (run: RunView) => void
+  // Variants: the same options with every value of one option
+  variants: Variants | null
+  variantsRunning: boolean
+  runVariants: (option: SchemaOption) => Promise<void>
+  stopVariants: () => void
   // DSS
   dss: DssSettings
   dssStatus: DssStatus | null
   saveDss: (settings: DssSettings) => Promise<void>
   checkDss: () => Promise<void>
+}
+
+export interface VariantRow {
+  value: string
+  title: string
+  status: "pending" | "running" | "done" | "skipped"
+  /** Why the value was not run (the rules refuse the combination). */
+  reason?: string
+  run?: RunView
+}
+
+export interface Variants {
+  option: SchemaOption
+  format: Format
+  rows: VariantRow[]
 }
 
 const Context = createContext<WorkbenchValue | null>(null)
@@ -270,6 +290,47 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
     setByFormat((all) => ({ ...all, [source.format]: withoutFrameworks(schema, source.format, structuredClone(source.options), frameworks) }))
   }, [schema, frameworks, setFormat])
 
+  // ── Variants ──────────────────────────────────────────────────────
+
+  const [variants, setVariants] = useState<Variants | null>(null)
+  const [variantsRunning, setVariantsRunning] = useState(false)
+  const stopRequested = useRef(false)
+  const stopVariants = useCallback(() => { stopRequested.current = true }, [])
+
+  const runVariants = useCallback(async (option: SchemaOption) => {
+    if (!option.path) return
+    const values = visibleValues(option).filter((v) => v.support === "supported")
+    const update = (value: string, change: Partial<VariantRow>) =>
+      setVariants((current) => current && { ...current, rows: current.rows.map((r) => (r.value === value ? { ...r, ...change } : r)) })
+    stopRequested.current = false
+    setVariantsRunning(true)
+    setVariants({ option, format, rows: values.map((v) => ({ value: v.value, title: v.title, status: "pending" })) })
+    try {
+      for (const v of values) {
+        if (stopRequested.current) break
+        const candidate = setPath(options, option.path, v.value === "" ? null : v.value)
+        update(v.value, { status: "running" })
+        const rules = await api.workbench.evaluate(format, candidate)
+        if (!rules.canSign) {
+          update(v.value, { status: "skipped", reason: rules.issues.find((i) => i.severity === "Error")?.message })
+          continue
+        }
+        const { id } = await api.workbench.start(format, candidate, dss.enabled)
+        let result: RunView | undefined
+        while (!result) {
+          await new Promise((resolve) => setTimeout(resolve, 250))
+          result = await api.workbench.run(id)
+        }
+        update(v.value, { status: "done", run: result })
+      }
+    } catch (e) {
+      toast.error(t("wb.run.failedToStart"), { description: (e as Error).message })
+    } finally {
+      setVariantsRunning(false)
+      api.workbench.history().then(setHistory).catch(() => {})
+    }
+  }, [visibleValues, options, format, dss.enabled, t])
+
   const saveDss = useCallback(async (settings: DssSettings) => {
     try {
       setDss(await api.dss.save(settings))
@@ -283,8 +344,8 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const value = useMemo<WorkbenchValue>(() => ({
     schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, credential: evaluation?.credential ?? null, isVisible, visibleValues,
-    run, logs, running, sign, history, openRun, reuse, dss, dssStatus, saveDss, checkDss,
-  }), [schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
+    run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, runVariants, stopVariants, dss, dssStatus, saveDss, checkDss,
+  }), [variants, variantsRunning, runVariants, stopVariants, schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, dss, dssStatus, saveDss, checkDss])
 
   return <Context.Provider value={value}>{children}</Context.Provider>

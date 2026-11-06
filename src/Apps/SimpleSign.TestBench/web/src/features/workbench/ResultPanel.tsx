@@ -21,7 +21,7 @@ import { useWorkbench } from "./state"
 
 /** Everything a run produced: the result, what is inside the file, the verdicts (SimpleSign and DSS), the log and the code. */
 export function ResultPanel() {
-  const { run, logs, running, format } = useWorkbench()
+  const { run, logs, running, format, variants, variantsRunning } = useWorkbench()
   const t = useT()
   const [tab, setTab] = useState("result")
   // While signing, the log is what there is to look at.
@@ -32,7 +32,11 @@ export function ResultPanel() {
     if (run) setTab((current) => (current === "logs" && run.success ? "result" : !run.success ? "result" : current))
   }, [run?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!run && !running) {
+  useEffect(() => {
+    if (variantsRunning) setTab("variants")
+  }, [variantsRunning])
+
+  if (!run && !running && !variants) {
     return (
       <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
         <FileCheck2 className="size-8 opacity-40" />
@@ -53,8 +57,10 @@ export function ResultPanel() {
         </TabsTrigger>
         <TabsTrigger value="logs">{t("wb.tabs.logs")}<span className="text-muted-foreground ml-1.5 text-[10px] tabular-nums">{logs.length}</span></TabsTrigger>
         <TabsTrigger value="code" disabled={!run?.code?.cSharp}>{t("wb.tabs.code")}</TabsTrigger>
+        {variants && <TabsTrigger value="variants">{t("wb.tabs.variants")}{variantsRunning && <Loader2 className="ml-1 size-3 animate-spin" />}</TabsTrigger>}
       </TabsList>
-      <TabsContent value="result">{run ? <Summary run={run} /> : <Signing />}</TabsContent>
+      <TabsContent value="result">{run ? <Summary run={run} /> : running ? <Signing /> : null}</TabsContent>
+      <TabsContent value="variants">{variants && <VariantsTable onOpen={() => setTab("result")} />}</TabsContent>
       <TabsContent value="inspection">{run?.success && <Inspection run={run} />}</TabsContent>
       <TabsContent value="validation">{run?.success && <Validation run={run} />}</TabsContent>
       <TabsContent value="logs"><LogView logs={logs} format={run?.format ?? format} running={running} /></TabsContent>
@@ -291,6 +297,57 @@ function DssReport({ comparison }: { comparison: DssComparison }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/** The same options signed once per value of one option: which values work, at what level, and what the validators say. */
+function VariantsTable({ onOpen }: { onOpen: () => void }) {
+  const { variants, variantsRunning, stopVariants, openRun, schema } = useWorkbench()
+  const t = useT()
+  if (!variants) return null
+  const done = variants.rows.filter((r) => r.status === "done" || r.status === "skipped").length
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-medium">{schema.formats.find((f) => f.id === variants.format)?.title} · {variants.option.title}</p>
+        <StandardBadge explanation={{ title: variants.option.title, summary: variants.option.summary, standards: variants.option.standards, api: variants.option.api }} />
+        <span className="text-muted-foreground ml-auto text-xs tabular-nums">{done} / {variants.rows.length}</span>
+        {variantsRunning && <Button variant="outline" size="sm" onClick={stopVariants}>{t("matrix.stop")}</Button>}
+      </div>
+      <p className="text-muted-foreground text-xs">{t("wb.variants.hint")}</p>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t("wb.variants.value")}</TableHead>
+            <TableHead>{t("wb.result.achieved")}</TableHead>
+            <TableHead>SimpleSign</TableHead>
+            <TableHead>DSS</TableHead>
+            <TableHead className="text-right">ms</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {variants.rows.map((row) => (
+            <TableRow key={row.value} className={cn(row.run && "hover:bg-accent/50 cursor-pointer", row.run && !row.run.success && "bg-destructive/5")}
+              onClick={() => { if (row.run) { void openRun(row.run.id); onOpen() } }}>
+              <TableCell className="text-sm font-medium">{row.title}</TableCell>
+              {row.status === "pending" && <TableCell colSpan={4} className="text-muted-foreground text-xs">—</TableCell>}
+              {row.status === "running" && <TableCell colSpan={4}><Loader2 className="size-4 animate-spin" /></TableCell>}
+              {row.status === "skipped" && <TableCell colSpan={4} className="text-muted-foreground text-xs whitespace-normal">{t("wb.variants.incompatible")}: {row.reason}</TableCell>}
+              {row.status === "done" && row.run && (row.run.success ? (
+                <>
+                  <TableCell className="font-mono text-xs">{row.run.achievedLevel ?? "—"}</TableCell>
+                  <TableCell>{row.run.overall ? <Indication value={row.run.overall} /> : "—"}</TableCell>
+                  <TableCell>{row.run.crossValidation?.available
+                    ? <Pill tone={row.run.crossValidation.agree ? "success" : "warning"}>{row.run.crossValidation.signatures.map((s) => s.subIndication ?? s.indication).join(", ") || "—"}</Pill>
+                    : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+                  <TableCell className="text-right text-xs tabular-nums">{row.run.totalMs}</TableCell>
+                </>
+              ) : <TableCell colSpan={4} className="text-destructive text-xs whitespace-normal">{row.run.errorType}: {row.run.error}</TableCell>)}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }

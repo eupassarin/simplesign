@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react"
-import { FileCheck2, FileText, FlaskConical, Globe, Grid3x3, Loader2, Moon, PenTool, Server, Sun, SunMoon } from "lucide-react"
+import { FileCheck2, FileText, FlaskConical, Globe, Grid3x3, ListChecks, Loader2, Moon, PenTool, Server, Sun, SunMoon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Toaster } from "@/components/ui/sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { CoveragePage } from "@/features/coverage/CoveragePage"
 import { MatrixPage } from "@/features/matrix/MatrixPage"
 import { CatalogProvider } from "@/features/shared/catalog"
 import { SandboxPage } from "@/features/sandbox/SandboxPage"
@@ -19,12 +20,13 @@ import { NavigationContext } from "@/lib/navigation"
 import type { EnvironmentMode } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-type Page = "workbench" | "validation" | "matrix" | "sandbox"
+type Page = "workbench" | "validation" | "matrix" | "coverage" | "sandbox"
 
 const nav: { id: Page; label: MessageKey; icon: typeof PenTool }[] = [
   { id: "workbench", label: "app.nav.workbench", icon: PenTool },
   { id: "validation", label: "app.nav.validation", icon: FileCheck2 },
   { id: "matrix", label: "app.nav.matrix", icon: Grid3x3 },
+  { id: "coverage", label: "app.nav.coverage", icon: ListChecks },
   { id: "sandbox", label: "app.nav.sandbox", icon: FlaskConical },
 ]
 
@@ -118,6 +120,7 @@ export default function App() {
                     {page === "workbench" && <WorkbenchPage />}
                     {page === "validation" && <ValidationArea environment={environment} initialFile={toValidate} />}
                     {page === "matrix" && <MatrixPage />}
+                    {page === "coverage" && <CoveragePage />}
                     {page === "sandbox" && <SandboxPage />}
                   </WorkbenchProvider>
                 )}

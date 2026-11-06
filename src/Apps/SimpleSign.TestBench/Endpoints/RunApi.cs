@@ -4,6 +4,7 @@ using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.CrossValidation;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
+using SimpleSign.TestBench.Matrix;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Schema;
@@ -30,6 +31,11 @@ public sealed record WorkbenchOptionsResponse(
 public sealed record RunStarted(string Id);
 
 public sealed record DssValidateRequest(string FileId, string? DataId);
+
+public sealed record MatrixDone(int Total, long Ms, int UncoverablePairs);
+
+/// <summary>What the matrix stream sends: one finished case, then the totals.</summary>
+public sealed record MatrixEvent(string Type, MatrixCaseResult? Case, MatrixDone? Done);
 
 /// <summary>The workbench API: the option schema, the rules, runs with a live log, and DSS cross-validation.</summary>
 internal static class RunApi
@@ -105,6 +111,42 @@ internal static class RunApi
             catch (OperationCanceledException)
             {
                 // The browser closed the stream.
+            }
+        });
+
+        // The run matrix, one case at a time: the page shows progress and can stop by closing the stream.
+        api.MapGet("/matrix/stream", async (string? format, string? group, MatrixRunner pades, CadesMatrix cades, XmlMatrix xml, HttpContext context) =>
+        {
+            string name = format ?? "pades";
+            var cases = (name switch { "cades" => cades.Cases(), "xml" => xml.Cases(), _ => pades.Cases() })
+                .Where(c => group is null or "all" || c.Group == group).ToList();
+            context.Response.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-store";
+            var ct = context.RequestAborted;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            int uncoverable = 0;
+            try
+            {
+                foreach (var matrixCase in cases)
+                {
+                    var request = new MatrixRunRequest(CaseId: matrixCase.Id, Format: name);
+                    var result = name switch
+                    {
+                        "cades" => await cades.RunAsync(request, ct),
+                        "xml" => await xml.RunAsync(request, ct),
+                        _ => await pades.RunAsync(request, ct),
+                    };
+                    uncoverable = result.UncoverablePairs;
+                    await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(new MatrixEvent("case", result.Cases.Single(), null), WorkbenchJson.Options)}\n\n", ct);
+                    await context.Response.Body.FlushAsync(ct);
+                }
+
+                var done = new MatrixEvent("done", null, new MatrixDone(cases.Count, watch.ElapsedMilliseconds, uncoverable));
+                await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(done, WorkbenchJson.Options)}\n\n", ct);
+            }
+            catch (OperationCanceledException)
+            {
+                // The page stopped the matrix.
             }
         });
 

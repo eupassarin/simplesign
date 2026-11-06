@@ -7,7 +7,6 @@ import type {
   IcpPolicyKind,
   IcpVersion,
   MatrixCase,
-  MatrixRunResult,
   OptionInfo,
   Pkcs11Driver,
   SampleDocument,
@@ -122,6 +121,6 @@ export const api = {
   },
   matrix: {
     cases: (format = "pades") => request<MatrixCase[]>("GET", `/api/matrix/cases?format=${format}`),
-    run: (body: { group?: string; limit?: number; caseId?: string; format?: string }) => request<MatrixRunResult>("POST", "/api/matrix/run", body),
+    streamUrl: (format = "pades", group = "all") => `/api/matrix/stream?format=${format}&group=${group}`,
   },
 }
