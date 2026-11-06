@@ -65,6 +65,7 @@ PadesSigner.Document(pdf)
 | **Inspection** | None (OID hard-coded) | `CmsParser` recognises manifest OID directly; no provider needed |
 
 **Consequences:**
+- Country packages build against the public API of Core/PAdES/CAdES/XAdES only (no `InternalsVisibleTo`). Generic building blocks they need (CRL evaluation, CRL/OCSP URLs, resilient downloads, the builder's signer certificate) are public in Core; country-specific constants and logs live in the country package.
 - Adding a new country requires implementing 2 interfaces and registering the composite
 - Trust anchors can be offline (embedded resources) or online (AIA chasing or downloaded lists)
 - `IChainValidationProvider` is wired into `PdfSignatureValidator`'s built-in validation pipeline. After standard `X509Chain.Build()`, the first matching provider (via `CanValidate`) enriches the result. If the standard chain fails but a country provider trusts it, chain errors are demoted to warnings (`IsChainTrustWarning = true`).

@@ -3,4 +3,20 @@
 The ADRs document the architectural constraints and decisions that shape
 SimpleSign, including their rationale, consequences, and alternatives.
 
-Use the navigation menu to browse the records in chronological order.
+- [ADR 0001: Use System.Security.Cryptography (No BouncyCastle)](0001-use-system-security-cryptography.md)
+- [ADR 0002: Incremental PDF Save (Append-Only)](0002-incremental-pdf-save.md)
+- [ADR 0003: Result Objects for Validation (Not Exceptions)](0003-result-objects-for-validation.md)
+- [ADR 0004: AOT Compatibility (No Reflection, No Dynamic)](0004-aot-compatibility.md)
+- [ADR 0005: Custom PDF Parser (No Third-Party PDF Library)](0005-custom-pdf-parser.md)
+- [ADR 0006: External Signer / Deferred Signing](0006-external-signer-deferred-signing.md)
+- [ADR 0007: Multi-targeting (.NET 8 + .NET 10)](0007-multi-targeting.md)
+- [ADR 0008: HTTP Client Provider Pattern](0008-http-client-provider.md)
+- [ADR 0009: Country Extension / Plug-in Architecture](0009-country-extension-plugin-architecture.md)
+- [ADR 0010: Fluent Builder API Pattern](0010-fluent-builder-api-pattern.md)
+- [ADR 0011: Validation Pipeline Architecture](0011-validation-pipeline-architecture.md)
+- [ADR 0012: LTV Architecture (B-LT / B-LTA)](0012-ltv-architecture.md)
+- [ADR 0013: Certificate Chain Validation Strategy](0013-certificate-chain-validation-strategy.md)
+- [ADR 0014: PDF/A Conformance Strategy](0014-pdfa-conformance-strategy.md)
+- [ADR 0015: Cross-Format Signing Contract (PAdES, CAdES, XAdES)](0015-cross-format-signing-contract.md)
+- [ADR 0016: Verifiable AdES Level Fulfillment](0016-verifiable-ades-level-fulfillment.md)
+- [ADR 0017: Managed HTML Layout and OpenType Shaping](0017-managed-html-layout-and-text-shaping.md)
