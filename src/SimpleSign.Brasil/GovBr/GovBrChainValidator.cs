@@ -1,12 +1,10 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using SimpleSign.Brasil.Revocation;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Validation;
-using SimpleSign.Brasil.Constants;
 using SimpleSign.Brasil.Internal;
 
 namespace SimpleSign.Brasil.GovBr;

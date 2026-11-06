@@ -28,6 +28,19 @@ CAdES and XAdES only (no `InternalsVisibleTo`).
   migration guides, `llms*.txt`, `AGENTS.md` and `.github/copilot-instructions.md`. The README now
   links to `docs/articles/`.
 
+### Changed — SimpleSign.XAdES no longer depends on SimpleSign.CAdES
+
+The LTV collection and revocation-evidence helpers that XAdES borrowed from CAdES (internals)
+moved into `SimpleSign.Core`. `LtvDataCollector` and `LtvCollectionResult` stay public in CAdES,
+with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `SimpleSign.CAdES`.
+
+### Changed — homologation hierarchy from SERPRO
+
+- `IcpBrasilHomologation.pem` now comes from SERPRO's homologation repository
+  (repositoriohom.serpro.gov.br), where every bundled certificate is published.
+  `scripts/update-icp-homologation.sh` downloads it from there and keeps only certificates that
+  chain to five pinned test roots. It drops anything that is also a production certificate.
+
 ### Fixed
 
 - CAdES: `WithExtendedValidationData` combined with B-LT or B-LTA. The extended form was applied
@@ -155,7 +168,7 @@ CAdES and XAdES only (no `InternalsVisibleTo`).
 
 - `WithSigningCertificateForm(XadesSigningCertificateForm.V1)`: XAdES 1.3.2 SigningCertificate; the
   validator now resolves the signer from SigningCertificate as well as SigningCertificateV2 (it
-  failed on ICP-Brasil and Demoiselle signatures).
+  failed on signatures from other ICP-Brasil signers).
 - `WithExtendedValidationData(XadesExtendedForm)`: CompleteCertificateRefs, CompleteRevocationRefs,
   SigAndRefsTimeStamp, CertificateValues/RevocationValues and ArchiveTimeStamp (XAdES-C/X/X-L/A);
   `XadesValidationResult.HasValidSigAndRefsTimeStamp` and `HasValidCompleteReferences`.

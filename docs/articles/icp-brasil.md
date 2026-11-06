@@ -111,8 +111,9 @@ checks any TSA. CLI: `simplesign timestamp create contrato.pdf --tsa <url>` and
 ### Homologation (test) certificates
 
 SERPRO and the ACs issue test certificates under an ICP-Brasil homologation hierarchy ("AC Raiz
-Brasileira v12 - HOM", "AC Raiz Hom do SERPRO" …). SimpleSign bundles it (50 certificates, from the
-keystore Demoiselle Signer ships; `scripts/update-icp-homologation.sh`) but trusts it only on request:
+Brasileira v12 - HOM", "AC Raiz Hom do SERPRO" …). SimpleSign bundles it (from
+SERPRO's homologation repository, repositoriohom.serpro.gov.br; `scripts/update-icp-homologation.sh`)
+but trusts it only on request:
 
 ```csharp
 var brasil = new BrasilExtension(new BrasilExtensionOptions { IcpEnvironment = IcpBrasilEnvironment.Homologation });
@@ -340,7 +341,7 @@ obtained yourself.
 Signatures carry the PA's own `signPolicyHash` in `sigPolicyHash` (not the digest of the PA file
 that the LPA lists): a production PAdES AD-RB signature in the integration tests confirms it.
 XAdES signatures likewise carry the XML PA's own `SignPolicyDigest` in `SigPolicyHash`, with the
-identifier written as `urn:oid:…` (`Qualifier="OIDAsURN"`), as Demoiselle Signer does; this has not
+identifier written as `urn:oid:…` (`Qualifier="OIDAsURN"`), as the ITI's XML PAs and `LPA_XAdES.xml` write it; this has not
 been checked against VALIDAR yet.
 
 ### Check a signature against its policy

@@ -7,6 +7,7 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Crypto;
 

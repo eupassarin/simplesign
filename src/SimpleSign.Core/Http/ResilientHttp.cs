@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Polly;
 using Polly.Retry;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Http;
 

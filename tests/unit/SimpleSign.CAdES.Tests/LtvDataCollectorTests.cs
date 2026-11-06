@@ -3,6 +3,7 @@ using System.Formats.Asn1;
 using SimpleSign.TestHelpers;
 using Shouldly;
 using Xunit;
+using SimpleSign.Core.Revocation;
 
 namespace SimpleSign.CAdES.Tests;
 
@@ -129,8 +130,8 @@ public sealed class LtvDataCollectorTests : IDisposable
         var leafCrlReader = new AsnReader(leafCrl, AsnEncodingRules.DER).ReadSequence().ReadSequence();
         _ = leafCrlReader.ReadSequence();
         leafCrlReader.ReadEncodedValue().ToArray().ShouldBe(pki.IntermediateCa.SubjectName.RawData);
-        LtvDataCollector.IsCrlIssuedFor(leafCrl, pki.Leaf, null).ShouldBeTrue();
-        LtvDataCollector.IsCrlIssuedFor(intermediateCrl, pki.IntermediateCa, null).ShouldBeTrue();
+        LtvEvidenceCollector.IsCrlIssuedFor(leafCrl, pki.Leaf, null).ShouldBeTrue();
+        LtvEvidenceCollector.IsCrlIssuedFor(intermediateCrl, pki.IntermediateCa, null).ShouldBeTrue();
         using var httpClient = new HttpClient(new MockHttpHandler(request =>
         {
             byte[]? response = request.RequestUri?.AbsolutePath switch

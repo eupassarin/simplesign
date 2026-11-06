@@ -38,6 +38,31 @@ public sealed class IcpBrasilHomologationTests
     }
 
     [Fact]
+    public void Bundled_EveryIntermediate_ChainsToABundledHomologationRoot()
+    {
+        var roots = IcpBrasilChainValidator.LoadBundledHomologationRoots();
+        var intermediates = IcpBrasilChainValidator.LoadBundledHomologationIntermediates();
+        var failures = new List<string>();
+        foreach (var certificate in intermediates)
+        {
+            using var chain = new X509Chain();
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+            chain.ChainPolicy.CustomTrustStore.AddRange(roots.ToArray());
+            chain.ChainPolicy.ExtraStore.AddRange(intermediates.ToArray());
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            // Chaining, not validity in time, is what this checks.
+            chain.ChainPolicy.VerificationFlags = X509VerificationFlags.IgnoreNotTimeValid;
+            chain.ChainPolicy.VerificationTime = certificate.NotBefore.AddDays(1);
+            if (!chain.Build(certificate) || !IcpBrasilChainValidator.IsHomologationRoot(chain.ChainElements[^1].Certificate))
+            {
+                failures.Add($"{certificate.Subject}: {string.Join(", ", chain.ChainStatus.Select(s => s.Status))}");
+            }
+        }
+
+        failures.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void IsHomologationRoot_TestRootWithProductionV12Name_IsHomologationNotProduction()
     {
         // A test root reuses the exact name of the production AC Raiz v12 with another key.

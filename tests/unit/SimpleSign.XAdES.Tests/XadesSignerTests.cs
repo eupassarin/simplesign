@@ -2,7 +2,7 @@ using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
-using SimpleSign.CAdES;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
@@ -934,15 +934,15 @@ public sealed class XadesSignerTests
         byte[] signed = await XadesSigner.Document(System.Text.Encoding.UTF8.GetBytes("<doc>ltv inspection</doc>"))
             .WithCertificate(s_cert)
             .SignAsync();
-        var evidence = new LtvCollectionResult(
+        var evidence = new LtvEvidence(
             CertificateRawData: [s_cert.RawData, pki.Leaf.RawData, pki.IntermediateCa.RawData, pki.RootCa.RawData],
             OcspResponses: [],
             Crls: [pki.BuildLeafCrl(), pki.BuildIntermediateCrl()],
             CertificateEvidence:
             [
-                new LtvCertificateEvidence("signer", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.NotRequired },
-                new LtvCertificateEvidence("leaf", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Crl },
-                new LtvCertificateEvidence("intermediate", true) { RevocationEvidenceKind = LtvRevocationEvidenceKind.Crl },
+                new LtvEvidenceItem("signer", true) { RevocationEvidenceKind = LtvEvidenceKind.NotRequired },
+                new LtvEvidenceItem("leaf", true) { RevocationEvidenceKind = LtvEvidenceKind.Crl },
+                new LtvEvidenceItem("intermediate", true) { RevocationEvidenceKind = LtvEvidenceKind.Crl },
             ]);
         byte[] withLtv = XadesSignatureBuilder.EmbedLtvData(signed, evidence);
 

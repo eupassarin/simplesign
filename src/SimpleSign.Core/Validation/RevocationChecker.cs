@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Validation;
 

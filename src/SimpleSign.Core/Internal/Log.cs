@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace SimpleSign.Core;
+namespace SimpleSign.Core.Internal;
 
 /// <summary>
 /// High-performance source-generated log messages for core infrastructure.

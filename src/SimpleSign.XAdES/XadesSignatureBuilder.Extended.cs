@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml;
-using SimpleSign.CAdES;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Constants;
 using SimpleSign.XAdES.Constants;
 
@@ -75,7 +75,7 @@ internal static partial class XadesSignatureBuilder
             var crlRefs = doc.CreateElement("CRLRefs", XadesUris.XadesNamespace);
             foreach (byte[] crl in coveringCrls)
             {
-                var (issuer, thisUpdate) = CadesExtendedValidationData.ReadCrlIdentifier(crl);
+                var (issuer, thisUpdate) = RevocationEvidence.ReadCrlIdentifier(crl);
                 var crlRef = doc.CreateElement("CRLRef", XadesUris.XadesNamespace);
                 var digest = doc.CreateElement("DigestAlgAndValue", XadesUris.XadesNamespace);
                 AppendDigest(doc, digest, crl);
@@ -95,8 +95,8 @@ internal static partial class XadesSignatureBuilder
             var ocspRefs = doc.CreateElement("OCSPRefs", XadesUris.XadesNamespace);
             foreach (byte[] response in coveringOcsp)
             {
-                byte[] basic = CadesExtendedValidationData.BasicResponse(response);
-                var (responderId, producedAt) = CadesExtendedValidationData.ReadOcspIdentifier(basic);
+                byte[] basic = RevocationEvidence.BasicResponse(response);
+                var (responderId, producedAt) = RevocationEvidence.ReadOcspIdentifier(basic);
                 var ocspRef = doc.CreateElement("OCSPRef", XadesUris.XadesNamespace);
                 var identifier = doc.CreateElement("OCSPIdentifier", XadesUris.XadesNamespace);
                 identifier.AppendChild(ResponderIdElement(doc, responderId));
@@ -207,7 +207,7 @@ internal static partial class XadesSignatureBuilder
             .Concat(Base64Values(signature, ns, "ds:KeyInfo/ds:X509Data/ds:X509Certificate")).ToList();
         var revocations = Base64Values(signature, ns, usp + "xades:RevocationValues/xades:CRLValues/xades:EncapsulatedCRLValue")
             .Concat(Base64Values(signature, ns, usp + "xades:RevocationValues/xades:OCSPValues/xades:EncapsulatedOCSPValue")
-                .Select(CadesExtendedValidationData.BasicResponse))
+                .Select(RevocationEvidence.BasicResponse))
             .ToList();
         bool hasValues = signature.SelectSingleNode(usp + "xades:RevocationValues", ns) is not null;
 
@@ -239,13 +239,13 @@ internal static partial class XadesSignatureBuilder
     private static (List<byte[]> Crls, List<byte[]> Ocsp) CoveringEvidence(
         IReadOnlyList<X509Certificate2> path, IReadOnlyList<byte[]> crls, IReadOnlyList<byte[]> ocspResponses)
     {
-        var ocsp = CadesExtendedValidationData.MatchingOcspClient();
+        var ocsp = RevocationEvidence.MatchingOcspClient();
         var coveringCrls = new List<byte[]>();
         var coveringOcsp = new List<byte[]>();
         for (int i = 0; i < Math.Max(1, path.Count - 1); i++)
         {
             var issuer = i + 1 < path.Count ? path[i + 1] : null;
-            var (c, o) = CadesExtendedValidationData.CoveringEvidence(ocsp, path[i], issuer, crls, ocspResponses);
+            var (c, o) = RevocationEvidence.CoveringEvidence(ocsp, path[i], issuer, crls, ocspResponses);
             coveringCrls.AddRange(c.Where(x => !coveringCrls.Any(y => y.AsSpan().SequenceEqual(x))));
             coveringOcsp.AddRange(o.Where(x => !coveringOcsp.Any(y => y.AsSpan().SequenceEqual(x))));
         }

@@ -7,7 +7,7 @@ using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 
-namespace SimpleSign.Brasil.Revocation;
+namespace SimpleSign.Brasil.Internal;
 
 /// <summary>
 /// Checks the revocation of every non-root certificate of a built chain at a given time. ICP-Brasil

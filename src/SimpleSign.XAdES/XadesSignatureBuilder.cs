@@ -7,7 +7,6 @@ using System.Security.Cryptography.Xml;
 using System.Text;
 using System.Xml;
 using Microsoft.Extensions.Logging;
-using SimpleSign.CAdES;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Revocation;
@@ -449,7 +448,7 @@ internal static partial class XadesSignatureBuilder
         return Convert.FromBase64String(timestamp.InnerText);
     }
 
-    internal static bool HasLtvData(byte[] signedXml, LtvCollectionResult expectedEvidence)
+    internal static bool HasLtvData(byte[] signedXml, LtvEvidence expectedEvidence)
     {
         ArgumentNullException.ThrowIfNull(expectedEvidence);
         if (!expectedEvidence.HasCompleteCoverage)
@@ -545,7 +544,7 @@ internal static partial class XadesSignatureBuilder
         return true;
     }
 
-    internal static byte[] EmbedLtvData(byte[] signedXml, LtvCollectionResult ltvData,
+    internal static byte[] EmbedLtvData(byte[] signedXml, LtvEvidence ltvData,
         string? signatureId = null)
     {
         var doc = new XmlDocument { PreserveWhitespace = true };

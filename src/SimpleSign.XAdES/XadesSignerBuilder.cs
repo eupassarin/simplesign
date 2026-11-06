@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using SimpleSign.CAdES;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
@@ -701,7 +701,7 @@ public sealed class XadesSignerBuilder
         }
 
         var provider = _options.Profile.LongTermValidation?.HttpClientProvider ?? timestamp.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
-        var evidence = await LtvDataCollector.CollectAsync(
+        var evidence = await LtvEvidenceCollector.CollectAsync(
             provider.GetClient(), certificate, known, _options.Dependencies.Logger, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (!evidence.HasCompleteCoverage)
         {
@@ -710,7 +710,7 @@ public sealed class XadesSignerBuilder
                 SigningErrorReason.LevelNotAchievable);
         }
 
-        var path = CadesExtendedValidationData.BuildPath(certificate, [.. evidence.CertificateRawData, .. known.Select(k => k.RawData)]);
+        var path = RevocationEvidence.BuildPath(certificate, [.. evidence.CertificateRawData, .. known.Select(k => k.RawData)]);
         signedXml = XadesSignatureBuilder.EmbedCompleteReferences(signedXml, path, evidence.Crls, evidence.OcspResponses, signatureId);
         if (_options.ExtendedForm is XadesExtendedForm.CompleteReferences or XadesExtendedForm.ExtendedLong)
         {
@@ -761,7 +761,7 @@ public sealed class XadesSignerBuilder
             }
         }
 
-        var ltvData = await LtvDataCollector.CollectAsync(
+        var ltvData = await LtvEvidenceCollector.CollectAsync(
             ltvProvider.GetClient(), certificate, chainCerts, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         bool hasLtvMaterial = ltvData.CertificateRawData.Count > 0 && ltvData.HasCompleteCoverage;
@@ -819,7 +819,7 @@ public sealed class XadesSignerBuilder
     private XadesSignerBuilder WithCredential(XadesSigningCredential credential) =>
         With(_options with { Credential = credential });
 
-    private sealed record XadesLtvEmbeddingResult(byte[] SignedXml, LtvCollectionResult Evidence);
+    private sealed record XadesLtvEmbeddingResult(byte[] SignedXml, LtvEvidence Evidence);
 
     private XadesSignerBuilder With(XadesSigningOptions options) =>
         new(_xmlData, options);

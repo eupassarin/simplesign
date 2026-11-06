@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace SimpleSign.Pdf;
+namespace SimpleSign.Pdf.Internal;
 
 /// <summary>
 /// High-performance source-generated log messages for PDF structure parsing.

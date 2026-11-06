@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace SimpleSign.PAdES;
+namespace SimpleSign.PAdES.Internal;
 
 /// <summary>
 /// High-performance source-generated log messages for PAdES operations.

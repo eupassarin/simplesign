@@ -2,6 +2,7 @@ using System.Formats.Asn1;
 using System.Numerics;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Revocation;
 

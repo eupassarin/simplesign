@@ -800,7 +800,7 @@ public sealed class CadesSignerBuilder
                 SigningErrorReason.LevelNotAchievable);
         }
 
-        var path = CadesExtendedValidationData.BuildPath(certificate, [.. evidence.CertificateRawData, .. known.Select(k => k.RawData)]);
+        var path = RevocationEvidence.BuildPath(certificate, [.. evidence.CertificateRawData, .. known.Select(k => k.RawData)]);
         var refs = new List<CmsAttribute>
         {
             CadesExtendedValidationData.CompleteCertificateRefs(path),
