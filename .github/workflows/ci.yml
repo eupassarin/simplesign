@@ -273,7 +273,7 @@ jobs:
           npm run build
 
       - name: Test the TestBench (compatibility rules, every credential kind, full run matrix)
-        run: dotnet test tests/unit/SimpleSign.TestBench.Tests --configuration Release --logger "console;verbosity=normal"
+        run: dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --configuration Release --logger "console;verbosity=normal"
 
   agent:
     name: Agent (${{ matrix.os }})
@@ -302,7 +302,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Test signing agent
-        run: dotnet test tests/unit/SimpleSign.Agent.Tests --configuration Release --logger "console;verbosity=normal"
+        run: dotnet test tests/unit/Apps/SimpleSign.Agent.Tests --configuration Release --logger "console;verbosity=normal"
 
       - name: Build agent app
         run: dotnet build src/Apps/SimpleSign.Agent --configuration Release

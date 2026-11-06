@@ -32,7 +32,7 @@ Keep the immutable fluent-builder architecture, but define it as a real cross-fo
 - Strict level guarantees can change observable behavior: B-LT/B-LTA requests that previously "succeeded" without complete material now throw (or explicitly downgrade).
 - A shared contract vocabulary (`AdesBaselineProfile`, `ISigningResult`, `SigningWarning`, `IExternalSigner`, `SigningErrorReason`) lives in `SimpleSign.Core` and is used by all three format packages.
 - A single profile-based signing surface replaces independent capability methods, enum-based level selection, and static options shortcuts. Maintaining parallel configuration surfaces would reintroduce contradictory states and format-specific behavior.
-- Cross-format invariants are guarded by `tests/unit/SimpleSign.Contracts.Tests`.
+- Cross-format invariants are guarded by `tests/unit/Formats/SimpleSign.Contracts.Tests`.
 - The AOT constraint is preserved: no reflection, no generic base builder, minimal interfaces.
 
 **Alternatives considered:**

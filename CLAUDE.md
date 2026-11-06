@@ -16,16 +16,16 @@ dotnet build
 dotnet test SimpleSign.sln --filter "Category!=Stress"
 
 # Run specific test project
-dotnet test tests/unit/SimpleSign.PAdES.Tests
-dotnet test tests/unit/SimpleSign.Core.Tests
-dotnet test tests/unit/SimpleSign.Brazil.IcpBrasil.Tests
-dotnet test tests/unit/SimpleSign.HtmlToPdf.Tests
+dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests
+dotnet test tests/unit/Core/SimpleSign.Core.Tests
+dotnet test tests/unit/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Tests
+dotnet test tests/unit/Extras/SimpleSign.HtmlToPdf.Tests
 
 # Integration tests (requires network for TSA/OCSP)
 dotnet test tests/integration/SimpleSign.Integration.Tests
 
 # CLI tests
-dotnet test tests/cli/SimpleSign.Cli.Tests
+dotnet test tests/unit/Apps/SimpleSign.Cli.Tests
 
 # AOT smoke test
 dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64
@@ -123,6 +123,11 @@ await CadesSigner.Document(data).WithCertificate(cert)
 ## Test Conventions
 
 - Unit tests use xUnit
+- `tests/unit/` mirrors `src/`: `src/Formats/SimpleSign.CAdES` is tested by
+  `tests/unit/Formats/SimpleSign.CAdES.Tests` (the CLI too: `tests/unit/Apps/SimpleSign.Cli.Tests`).
+  Every test project is in `SimpleSign.sln`.
+- Every test class has `[Trait("Category", …)]`: `Unit` by default, `Contract` in Contracts.Tests,
+  `Integration` (network), `Stress` (excluded from the regular CI run)
 - Test fixtures in `tests/shared/SimpleSign.TestFixtures`
 - Test helpers in `tests/shared/SimpleSign.TestHelpers`
 - Test cert generation: use helpers, don't commit real certificates

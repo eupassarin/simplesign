@@ -154,7 +154,7 @@ Secret options accept `env:NAME` to keep values out of the shell history.
 
    ```bash
    PSC_BASE_URL=https://<provider-sandbox>/v0/ PSC_CLIENT_ID=... PSC_CLIENT_SECRET=... \
-   PSC_CPF=... PSC_OTP=... dotnet test tests/unit/SimpleSign.Signers.Cloud.Tests --filter Category=Integration
+   PSC_CPF=... PSC_OTP=... dotnet test tests/unit/Signers/SimpleSign.Signers.Cloud.Tests --filter Category=Integration
    ```
 
    For CSC: `CSC_BASE_URL`, `CSC_TOKEN`, `CSC_CREDENTIAL` and `CSC_PIN`.

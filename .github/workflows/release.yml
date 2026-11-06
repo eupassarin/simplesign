@@ -54,14 +54,6 @@ jobs:
             --output publish-aot-smoke
           ./publish-aot-smoke/SimpleSign.AotSmokeTest
 
-      - name: Test CLI
-        run: >-
-          dotnet test tests/cli/SimpleSign.Cli.Tests/SimpleSign.Cli.Tests.csproj
-          --configuration Release
-          --framework net8.0
-          --filter "Category!=Stress"
-          --verbosity quiet
-
       - name: Pack
         shell: bash
         run: |
@@ -143,7 +135,7 @@ jobs:
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Test signing agent
-        run: dotnet test tests/unit/SimpleSign.Agent.Tests --configuration Release --verbosity quiet
+        run: dotnet test tests/unit/Apps/SimpleSign.Agent.Tests --configuration Release --verbosity quiet
 
       - name: Package (macOS / Linux)
         if: runner.os != 'Windows'

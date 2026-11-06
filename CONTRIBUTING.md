@@ -26,10 +26,10 @@ dotnet build
 dotnet build SimpleSign.sln
 
 # Specific project
-dotnet test tests/unit/SimpleSign.PAdES.Tests
+dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests
 
 # Cross-format signing contract
-dotnet test tests/unit/SimpleSign.Contracts.Tests
+dotnet test tests/unit/Formats/SimpleSign.Contracts.Tests
 
 # With coverage
 dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings

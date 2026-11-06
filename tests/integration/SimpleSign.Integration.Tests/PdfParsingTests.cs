@@ -126,7 +126,6 @@ public sealed class PdfParsingTests(ITestOutputHelper output)
     [InlineData("pades-ltv-reason.pdf")]
     [InlineData("pades-ltv-full.pdf")]
     [InlineData("51sigs.pdf")]
-    [InlineData("dss-1443.pdf")]
     [InlineData("dss-3567.pdf")]
     [InlineData("belgian-multi-ocsp.pdf")]
     [InlineData("pades-enveloping-cms.pdf")]

@@ -26,7 +26,7 @@ printf 'directories.tokendir = %s\nobjectstore.backend = file\nlog.level = ERROR
 export SOFTHSM2_CONF="$WORK/softhsm2.conf"
 
 echo "-> PKCS#11 tests (unit + SoftHSM token)"
-dotnet test tests/unit/SimpleSign.Signers.Pkcs11.Tests -c Release --filter "Category=Pkcs11|Category=Unit" \
+dotnet test tests/unit/Signers/SimpleSign.Signers.Pkcs11.Tests -c Release --filter "Category=Pkcs11|Category=Unit" \
   --logger "console;verbosity=normal"
 
 echo "-> Native AOT smoke test with a SoftHSM token"

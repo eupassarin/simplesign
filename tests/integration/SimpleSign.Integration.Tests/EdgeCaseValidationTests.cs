@@ -142,7 +142,7 @@ public sealed class EdgeCaseValidationTests(ITestOutputHelper output)
     [SkippableFact(DisplayName = "DSS-1443 edge case should parse without hanging")]
     public async Task Dss1443_ParsesWithoutHanging()
     {
-        const string fixture = "dss-1443.pdf";
+        const string fixture = "pades-lta.pdf"; // the DSS-1443 sample: same bytes as pades-lta.pdf
         Skip.IfNot(FixturePath.Exists(fixture), $"Fixture {fixture} not found");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));

@@ -72,6 +72,11 @@ CAdES and XAdES only (no `InternalsVisibleTo`).
 - `samples/`, `bench/`, `interop/` and the interop tests, the fuzz harness, Stryker, the docfx site,
   migration guides, `llms*.txt`, `AGENTS.md` and `.github/copilot-instructions.md`. The README now
   links to `docs/articles/`.
+- `tests/unit/` now mirrors `src/` (`Core/`, `Formats/`, `TrustFrameworks/Brazil/…`, `Signers/`,
+  `Extras/`, `Apps/`), the CLI tests moved there and into `SimpleSign.sln` (so CI runs them on every
+  PR), every test class has a `Category` trait, and `dss-1443.pdf` (a byte-identical copy of
+  `pades-lta.pdf`) is gone. New tests cover `ResilientHttp` (SSRF refusal, retries) and the
+  ICP-Brasil and Gov.br extensions registered together.
 - The `simplesign-<rid>.zip` CLI archives on GitHub Releases and `scripts/install/install-cli.sh` /
   `.ps1`. They were framework-dependent, so they needed .NET anyway: install the CLI with
   `dotnet tool install -g SimpleSign.Cli`. The release workflow now runs the CLI tests before
@@ -84,6 +89,11 @@ moved into `SimpleSign.Core`. `LtvDataCollector` and `LtvCollectionResult` stay 
 with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `SimpleSign.CAdES`.
 
 ### Fixed
+
+- `AddSimpleSignIcpBrasil()` / `AddSimpleSignGovBr()` (before: `AddSimpleSignBrasil()`) registered
+  `IcpBrasilChainValidator` and `GovBrChainValidator` so that the container could not build them
+  (two ambiguous constructors): resolving either one threw. They are now created from the registered
+  `IHttpClientProvider` and `ILoggerFactory`, and the extensions use them too.
 
 - HtmlToPdf: deeply nested HTML crashed the process with a stack overflow. Layout recurses once
   or more per nesting level, and the 256 levels the parser allows overflowed small thread stacks

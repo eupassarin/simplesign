@@ -8,7 +8,7 @@ Step-by-step guide for releasing a new SimpleSign version.
 - [ ] `dotnet build SimpleSign.sln --no-restore` passes with 0 warnings
 - [ ] Focused projects beneath `tests/unit/` pass on net8.0 and net10.0
 - [ ] `SimpleSign.Agent.Tests` passes (the CI runs it on Linux, Windows and macOS)
-- [ ] `dotnet test tests/cli/SimpleSign.Cli.Tests` passes
+- [ ] `dotnet test tests/unit/Apps/SimpleSign.Cli.Tests` passes
 - [ ] `dotnet test tests/integration/SimpleSign.Integration.Tests` passes when network credentials are available
 - [ ] No vulnerable packages: `dotnet list SimpleSign.sln package --vulnerable --no-restore`
 
@@ -109,11 +109,11 @@ If this release introduced **significant architectural decisions**:
 
 ```bash
 dotnet build SimpleSign.sln --no-restore
-dotnet test tests/unit/SimpleSign.Contracts.Tests --no-restore
-dotnet test tests/unit/SimpleSign.PAdES.Tests --no-restore
-dotnet test tests/unit/SimpleSign.CAdES.Tests --no-restore
-dotnet test tests/unit/SimpleSign.XAdES.Tests --no-restore
-dotnet test tests/cli/SimpleSign.Cli.Tests --no-restore
+dotnet test tests/unit/Formats/SimpleSign.Contracts.Tests --no-restore
+dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests --no-restore
+dotnet test tests/unit/Formats/SimpleSign.CAdES.Tests --no-restore
+dotnet test tests/unit/Formats/SimpleSign.XAdES.Tests --no-restore
+dotnet test tests/unit/Apps/SimpleSign.Cli.Tests --no-restore
 ```
 
 Run the AOT smoke publish on a Linux x64 runner (the release workflow is the
