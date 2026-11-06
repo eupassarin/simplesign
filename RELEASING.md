@@ -27,6 +27,9 @@ Update `<Version>` in all `.csproj` files:
 | `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj` | ICP-Brasil XAdES |
 | `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj` | Fiscal XML |
 | `src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj` | Gov.br |
+| `src/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj` | IOFE (Peru) |
+| `src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj` | PKCS#11 tokens and HSMs |
+| `src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj` | Cloud certificates (PSC, CSC) |
 | `src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
 | `src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
 | `src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
@@ -47,6 +50,9 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj \
   src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj \
   src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj \
+  src/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
+  src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj \
+  src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj \
   src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
   src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
   src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
@@ -114,6 +120,8 @@ dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests --no-restore
 dotnet test tests/unit/Formats/SimpleSign.CAdES.Tests --no-restore
 dotnet test tests/unit/Formats/SimpleSign.XAdES.Tests --no-restore
 dotnet test tests/unit/Apps/SimpleSign.Cli.Tests --no-restore
+dotnet test tests/unit/Core/SimpleSign.Core.Tests --no-restore
+dotnet test tests/unit/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe.Tests --no-restore
 ```
 
 Run the AOT smoke publish on a Linux x64 runner (the release workflow is the
@@ -140,13 +148,10 @@ The tag push triggers `.github/workflows/release.yml` which builds, tests, packs
 
 ```bash
 dotnet pack -c Release -o ./artifacts
-dotnet nuget push ./artifacts/SimpleSign.Core.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
-dotnet nuget push ./artifacts/SimpleSign.PAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
-dotnet nuget push ./artifacts/SimpleSign.Brazil.IcpBrasil.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
-dotnet nuget push ./artifacts/SimpleSign.CAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
-dotnet nuget push ./artifacts/SimpleSign.XAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
-dotnet nuget push ./artifacts/SimpleSign.HtmlToPdf.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
-dotnet nuget push ./artifacts/SimpleSign.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
+# Push every package of this version (Core, formats, country packages, signers, HtmlToPdf, the CLI tool, the meta-package)
+for package in ./artifacts/*.X.Y.Z.nupkg; do
+  dotnet nuget push "$package" --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
+done
 ```
 
 ## GitHub Release

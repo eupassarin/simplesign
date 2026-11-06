@@ -1,9 +1,13 @@
 # SimpleSign.Core
 
 Shared crypto foundation for the SimpleSign packages: CMS/PKCS#7 parsing and
-building, RFC 3161 timestamp client, OCSP/CRL revocation, certificate chain
-utilities, and the cross-format signing contracts (`AdesBaselineProfile`,
-`IExternalSigner`, `SigningErrorReason`).
+building, RFC 3161 timestamp client (with TSA name and revocation checks), OCSP/CRL
+revocation (HTTP, and LDAP when allowed; CRLs checked against their issuer, cached until
+nextUpdate), chain revocation (`ChainRevocationChecker`), certificate chain utilities, a
+folder trust store with a signed manifest (`DirectoryTrustAnchorProvider`), and the
+cross-format contracts: `AdesBaselineProfile`, `IExternalSigner`, `SigningPolicy` (checks
+before signing), `SigningErrorReason`, and `ValidationPolicy` with ETSI EN 319 102-1
+sub-indications.
 
 Built only on `System.Security.Cryptography` — no BouncyCastle — and native AOT
 compatible. Usually consumed transitively via `SimpleSign.PAdES`,
