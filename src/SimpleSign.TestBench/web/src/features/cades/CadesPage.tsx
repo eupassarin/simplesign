@@ -267,7 +267,7 @@ function SignWizard({ cades }: { cades: ReturnType<typeof useCadesState> }) {
   )
 }
 
-function UploadButton({ label, accept, onUploaded }: { label: string; accept: string; onUploaded: (file: { id: string; fileName: string }) => void }) {
+export function UploadButton({ label, accept, onUploaded }: { label: string; accept: string; onUploaded: (file: { id: string; fileName: string }) => void }) {
   const input = useRef<HTMLInputElement>(null)
   return (
     <>

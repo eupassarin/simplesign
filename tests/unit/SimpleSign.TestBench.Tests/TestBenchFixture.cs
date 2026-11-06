@@ -26,11 +26,16 @@ public sealed class TestBenchFixture : IAsyncLifetime, IDisposable
 
     internal SimpleSign.TestBench.Cades.CadesRunner Cades => new(Sandbox, Documents, Credentials, Validation);
 
+    internal IReadOnlyList<SimpleSign.TestBench.Xml.XmlSample> XmlSamples { get; private set; } = [];
+
+    internal SimpleSign.TestBench.Xml.XmlRunner Xml => new(Sandbox, Documents, Credentials, Validation);
+
     public async Task InitializeAsync()
     {
         Documents.AddSamples(await SampleDocuments.CreateAsync(Sandbox));
         ValidationSamples = await SimpleSign.TestBench.Validation.InvalidSamples.CreateAsync(Sandbox, Documents);
         CadesSamples = await SimpleSign.TestBench.Cades.CadesSamples.CreateAsync(Sandbox, Documents);
+        XmlSamples = await SimpleSign.TestBench.Xml.XmlSamples.CreateAsync(Sandbox, Documents);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

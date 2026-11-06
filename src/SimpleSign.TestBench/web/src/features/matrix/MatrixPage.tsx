@@ -15,7 +15,7 @@ export function MatrixPage() {
   const [result, setResult] = useState<MatrixRunResult | null>(null)
   const [running, setRunning] = useState(false)
   const [filter, setFilter] = useState("all")
-  const [format, setFormat] = useState<"pades" | "cades">("pades")
+  const [format, setFormat] = useState<"pades" | "cades" | "xml">("pades")
   const { t, number } = useI18n()
   useEffect(() => {
     setCases(null)
@@ -49,10 +49,11 @@ export function MatrixPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-          <Tabs value={format} onValueChange={(v) => setFormat(v as "pades" | "cades")}>
+          <Tabs value={format} onValueChange={(v) => setFormat(v as "pades" | "cades" | "xml")}>
             <TabsList>
               <TabsTrigger value="pades">PAdES</TabsTrigger>
               <TabsTrigger value="cades">CAdES</TabsTrigger>
+              <TabsTrigger value="xml">XML</TabsTrigger>
             </TabsList>
           </Tabs>
           <Button onClick={run} disabled={running || !cases}>{running ? <Loader2 className="animate-spin" /> : <Play />} {t("matrix.run", { n: cases?.length ?? 0 })}</Button>

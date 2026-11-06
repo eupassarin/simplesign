@@ -27,6 +27,11 @@ import type {
   CadesSignResult,
   CadesValidationView,
   CmsFacts,
+  XmlOptions,
+  XmlOptionsResponse,
+  XmlSample,
+  XmlSignResult,
+  XmlValidationView,
 } from "./types"
 
 export class ApiError extends Error {}
@@ -89,6 +94,13 @@ export const api = {
     validate: (signatureId: string, dataId: string | null, settings: ValidationSettings) =>
       request<CadesValidationView>("POST", "/api/cades/validate", { signatureId, dataId, settings }),
     inspect: (fileId: string) => request<CmsFacts>("POST", "/api/cades/inspect", { fileId }),
+  },
+  xml: {
+    samples: () => request<XmlSample[]>("GET", "/api/xml/samples"),
+    options: (options: XmlOptions) => request<XmlOptionsResponse>("POST", "/api/xml/options", options),
+    sign: (options: XmlOptions) => request<XmlSignResult>("POST", "/api/xml/sign", options),
+    validate: (signatureId: string, dataId: string | null, settings: ValidationSettings) =>
+      request<XmlValidationView>("POST", "/api/xml/validate", { signatureId, dataId, settings }),
   },
   credentials: {
     sandbox: (signerId: string) => request<CredentialFacts>("POST", "/api/credentials/sandbox", { signerId }),

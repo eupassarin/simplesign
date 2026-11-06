@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (SimpleSign TestBench)
 
+- TestBench **XML** page: XAdES (enveloped, detached, enveloping; B-B…B-LTA, ICP-Brasil XML
+  policies, custom policy, extended forms, roles, DataObjectFormat, SigningCertificate V1) and the
+  fiscal XML-DSig layouts (NF-e, events, voiding, CT-e, MDF-e, NFS-e DPS, eSocial, EFD-Reinf; sign
+  one or all), with validation, the Signature element, generated C# and CLI, broken samples and an
+  XML run matrix.
+
 - TestBench **CAdES** page: sign, co-sign and countersign any file (detached .p7s or enveloped
   .p7m) at every CAdES baseline level, ICP-Brasil CAdES policy (AD-RB…AD-RA) or custom policy,
   with RFC 5126 extended forms; validation tree with countersignatures, CMS structure, generated

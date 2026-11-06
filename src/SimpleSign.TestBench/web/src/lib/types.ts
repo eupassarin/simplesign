@@ -609,3 +609,117 @@ export interface CadesSample {
   expectedIndication?: string | null
   expectedCheck?: string | null
 }
+
+// ── XML: XAdES and fiscal XML-DSig ──────────────────────────────────
+export type XmlMode = "Xades" | "Fiscal"
+export type XadesFormChoice = "Enveloped" | "Detached" | "Enveloping"
+export type XadesKind = "Baseline" | "IcpBrasil" | "CustomPolicy"
+export type XadesIcpPolicy = "AdRb" | "AdRt" | "AdRv" | "AdRc" | "AdRa"
+export type XadesExtendedChoice = "None" | "CompleteReferences" | "ExtendedLong" | "Archive"
+
+export interface XmlOptions {
+  environment: EnvironmentMode
+  mode: XmlMode
+  dataId?: string | null
+  credentialId?: string | null
+  form: XadesFormChoice
+  dataUri: string
+  kind: XadesKind
+  level: BaselineLevel
+  icpPolicy: XadesIcpPolicy
+  policyOid: string
+  policyUri?: string | null
+  extendedForm: XadesExtendedChoice
+  timestamp: TimestampChoice
+  hash: HashChoice
+  padding: RsaPadding
+  signingCertificateV1: boolean
+  signerRoles: string[]
+  mimeType?: string | null
+  commitment?: string | null
+  signingTime?: string | null
+  operationId?: string | null
+  profile: string
+  elementId?: string | null
+  signAll: boolean
+  validate: boolean
+  validation?: ValidationSettings | null
+}
+
+export interface XmlFacts {
+  fileId: string
+  fileName: string
+  size: number
+  root?: string | null
+  namespace?: string | null
+  signatures: number
+  fiscalTargets: Record<string, string[]>
+  error?: string | null
+}
+
+export interface XmlOptionsResponse {
+  report: {
+    options: Record<string, OptionState>
+    issues: OptionIssue[]
+    effective: XmlOptions
+    effectiveLevel: string
+    canSign: boolean
+  }
+  data?: XmlFacts | null
+  credential?: CredentialFacts | null
+}
+
+export interface XmlSignatureReport {
+  index: number
+  reference?: string | null
+  signer?: string | null
+  cnpj?: string | null
+  cpf?: string | null
+  indication: "Valid" | "Invalid" | "Indeterminate"
+  level?: string | null
+  signingTime?: string | null
+  checks: CheckRow[]
+  errors: string[]
+  warnings: string[]
+}
+
+export interface XmlValidationView {
+  overall: "Valid" | "Invalid" | "Indeterminate"
+  mode: XmlMode
+  signatures: XmlSignatureReport[]
+  errors: string[]
+  signatureXml?: string | null
+  documentPreview: string
+  ms: number
+  code: SigningResult["code"]
+}
+
+export interface XmlSignResult {
+  success: boolean
+  error?: string | null
+  errorType?: string | null
+  outputId?: string | null
+  fileName?: string | null
+  bytes: number
+  requestedLevel: string
+  achievedLevel?: string | null
+  warnings: string[]
+  signMs: number
+  validation?: XmlValidationView | null
+  code: SigningResult["code"]
+  issues: OptionIssue[]
+}
+
+export interface XmlSample {
+  id: string
+  kind: "data" | "validation"
+  mode: XmlMode
+  profile?: string | null
+  fileId: string
+  fileName: string
+  dataId?: string | null
+  title: string
+  description: string
+  expectedIndication?: string | null
+  expectedCheck?: string | null
+}

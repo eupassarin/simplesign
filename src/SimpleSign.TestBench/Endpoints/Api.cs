@@ -10,6 +10,7 @@ using SimpleSign.TestBench.Matrix;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Validation;
+using SimpleSign.TestBench.Xml;
 
 namespace SimpleSign.TestBench.Endpoints;
 
@@ -43,6 +44,8 @@ public sealed record UploadView(string Id, string FileName, long Size);
 public sealed record ValidateRequest(string FileId, ValidationSettings? Settings);
 
 public sealed record InspectRequest(string FileId);
+
+public sealed record XmlOptionsResponse(XmlOptionsReport Report, XmlFacts? Data, CredentialFacts? Credential);
 
 public sealed record CadesOptionsResponse(CadesOptionsReport Report, CadesInputs Inputs, CredentialFacts? Credential);
 
@@ -185,9 +188,28 @@ internal static class Api
             return CadesInspector.Inspect(body.FileId, file.FileName, file.Content);
         });
 
-        api.MapGet("/matrix/cases", (string? format, MatrixRunner matrix, CadesMatrix cadesMatrix) => format == "cades" ? cadesMatrix.Cases() : matrix.Cases());
-        api.MapPost("/matrix/run", async (MatrixRunRequest body, MatrixRunner matrix, CadesMatrix cadesMatrix, CancellationToken ct) =>
-            body.Format == "cades" ? await cadesMatrix.RunAsync(body, ct) : await matrix.RunAsync(body, ct));
+        // XML: XAdES and fiscal XML-DSig
+        var xml = api.MapGroup("/xml");
+        xml.MapGet("/samples", (XmlSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
+        xml.MapPost("/options", (XmlOptions options, XmlRunner runner, CredentialStore store) =>
+        {
+            store.TryGet(options.CredentialId, out var credential);
+            var facts = runner.Facts(options.DataId);
+            return new XmlOptionsResponse(XmlCompatibility.Evaluate(options, facts, credential?.Facts), facts, credential?.Facts);
+        });
+        xml.MapPost("/sign", async (XmlOptions options, XmlRunner runner, CancellationToken ct) => await runner.RunAsync(options, ct));
+        xml.MapPost("/validate", (XmlValidateRequest body, XmlRunner runner) =>
+            runner.Validate(body.SignatureId, body.DataId, body.Settings ?? new ValidationSettings()));
+
+        api.MapGet("/matrix/cases", (string? format, MatrixRunner matrix, CadesMatrix cadesMatrix, XmlMatrix xmlMatrix) =>
+            format switch { "cades" => cadesMatrix.Cases(), "xml" => xmlMatrix.Cases(), _ => matrix.Cases() });
+        api.MapPost("/matrix/run", async (MatrixRunRequest body, MatrixRunner matrix, CadesMatrix cadesMatrix, XmlMatrix xmlMatrix, CancellationToken ct) =>
+            body.Format switch
+            {
+                "cades" => await cadesMatrix.RunAsync(body, ct),
+                "xml" => await xmlMatrix.RunAsync(body, ct),
+                _ => await matrix.RunAsync(body, ct),
+            });
 
         api.MapFallback(() => Results.NotFound(new { error = "Unknown API route." }));
     }

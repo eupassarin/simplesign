@@ -104,6 +104,24 @@ The *CAdES* page signs any file with `CadesSigner` and validates with `CadesSign
 The run matrix has a CAdES set as well (operation × content × type × extended form × hash ×
 padding × signer).
 
+## XML (XAdES and fiscal XML-DSig)
+
+The *XML* page has two modes.
+
+- **XAdES** (`XadesSigner`): enveloped, detached (with the data URI) or enveloping; XAdES baseline
+  B-B…B-LTA, ICP-Brasil XML policies AD-RB…AD-RA (`WithIcpBrasilPolicy`, which also sets the
+  SigningCertificate V1) or a policy OID; extended forms XAdES-X, X-L and A (on B-T: they replace the
+  B-LT / B-LTA data); signer roles, DataObjectFormat, commitment, signing time, hash and RSASSA-PSS.
+  Validation with `XadesSignatureValidator.ValidateAll`, plus the ICP-Brasil policy check.
+- **Fiscal XML-DSig** (`FiscalXmlSigner`): NF-e/NFC-e, events, voiding, CT-e, MDF-e, NFS-e DPS,
+  eSocial and EFD-Reinf, with synthetic samples. The layout fixes the algorithms (RSA-SHA1 or
+  RSA-SHA256), so only RSA certificates can sign; batches can be signed by Id or all at once.
+  Validation checks each reference digest, signature value and chain, and reads the CNPJ/CPF.
+
+The result shows the verdict of every `ds:Signature`, the Signature element (indented, base64
+shortened), the start of the document, and the C# / `simplesign xades` / `simplesign fiscal` code.
+The run matrix has an XML set (XAdES pairwise plus every fiscal layout).
+
 ## Run matrix
 
 The *Run matrix* page (and `SimpleSign.TestBench.Tests` in CI) generates cases from the same

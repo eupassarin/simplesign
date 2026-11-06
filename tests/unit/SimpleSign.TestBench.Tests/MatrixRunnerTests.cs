@@ -86,3 +86,26 @@ public sealed class CadesMatrixTests(TestBenchFixture fixture, ITestOutputHelper
         result.Failed.ShouldBe(0);
     }
 }
+
+[Collection(TestBenchCollection.Name)]
+public sealed class XmlMatrixTests(TestBenchFixture fixture, ITestOutputHelper output)
+{
+    [Fact]
+    public async Task RunAsync_AllCases_EveryCasePasses()
+    {
+        using var matrix = new XmlMatrix(fixture.Xml, new SimpleSign.TestBench.Xml.XmlSampleStore { Samples = fixture.XmlSamples }, fixture.Credentials, fixture.Factory);
+
+        var cases = matrix.Cases();
+        cases.ShouldContain(c => c.Group == "fiscal");
+        cases.ShouldContain(c => c.Values["extended"] == "Archive");
+        var result = await matrix.RunAsync(new MatrixRunRequest(Format: "xml"), default);
+
+        foreach (var failed in result.Cases.Where(c => c.Status != "pass"))
+        {
+            output.WriteLine($"{failed.Id} {string.Join(" ", failed.Values.Select(v => $"{v.Key}={v.Value}"))}\n    → {failed.Detail}");
+        }
+
+        output.WriteLine($"{result.Passed}/{result.Total} passed in {result.Ms} ms; {result.UncoverablePairs} pairs can never be combined.");
+        result.Failed.ShouldBe(0);
+    }
+}

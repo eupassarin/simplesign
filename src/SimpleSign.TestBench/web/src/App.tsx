@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { CadesPage } from "@/features/cades/CadesPage"
 import { MatrixPage } from "@/features/matrix/MatrixPage"
+import { XmlPage } from "@/features/xml/XmlPage"
 import { SigningPage } from "@/features/pdf-signing/SigningPage"
 import { SigningProvider } from "@/features/pdf-signing/state"
 import { SandboxPage } from "@/features/sandbox/SandboxPage"
@@ -17,18 +18,18 @@ import { NavigationContext } from "@/lib/navigation"
 import type { EnvironmentMode } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-type Page = "sign" | "validation" | "cades" | "matrix" | "sandbox"
+type Page = "sign" | "validation" | "cades" | "xml" | "matrix" | "sandbox"
 
 const nav: { id: Page; label: MessageKey; icon: typeof PenTool }[] = [
   { id: "sign", label: "app.nav.sign", icon: PenTool },
   { id: "validation", label: "app.nav.validation", icon: FileCheck2 },
   { id: "cades", label: "app.nav.cades", icon: FileCode2 },
+  { id: "xml", label: "app.nav.xades", icon: Code2 },
   { id: "matrix", label: "app.nav.matrix", icon: Grid3x3 },
   { id: "sandbox", label: "app.nav.sandbox", icon: FlaskConical },
 ]
 
 const comingNext: { label: MessageKey; icon: typeof PenTool }[] = [
-  { label: "app.nav.xades", icon: Code2 },
   { label: "app.nav.htmlToPdf", icon: FileText },
 ]
 
@@ -111,6 +112,7 @@ export default function App() {
                 {page === "sign" && <SigningPage />}
                 {page === "validation" && <ValidationPage environment={environment} initialFile={toValidate} />}
                 {page === "cades" && <CadesPage environment={environment} />}
+                {page === "xml" && <XmlPage environment={environment} />}
                 {page === "matrix" && <MatrixPage />}
                 {page === "sandbox" && <SandboxPage />}
               </SigningProvider>
