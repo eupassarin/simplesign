@@ -252,23 +252,6 @@ internal static partial class DssExtractor
         return -1;
     }
 
-    /// <summary>
-    /// Finds the LAST occurrence of <paramref name="needle"/> in <paramref name="haystack"/>.
-    /// Used to resolve object definitions in incremental PDF updates, where the latest
-    /// revision's definition of an object number wins.
-    /// </summary>
-    internal static int LastIndexOfBytes(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle)
-    {
-        for (int i = haystack.Length - needle.Length; i >= 0; i--)
-        {
-            if (haystack[i..].StartsWith(needle))
-            {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     internal static int IndexOfBytesFrom(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle, int from)
     {
         if (from < 0 || from >= haystack.Length)

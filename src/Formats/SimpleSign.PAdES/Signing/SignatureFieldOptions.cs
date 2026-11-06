@@ -19,7 +19,7 @@ public sealed class SignatureFieldOptions
     public string? ContactInfo { get; init; }
 
     /// <summary>Number of bytes reserved for the /Contents value. Defaults to 16384 (16 KB).</summary>
-    public int ContentsReservedBytes { get; init; } = 16384;
+    public int ContentsReservedBytes { get; init; } = PdfSignatureWriter.DefaultContentsReservedBytes;
 
     /// <summary>SubFilter value identifying the CMS format. Defaults to <see cref="PdfSignatureSubFilter.EtsiCadesDetached"/>.</summary>
     public PdfSignatureSubFilter SubFilter { get; init; } = PdfSignatureSubFilter.EtsiCadesDetached;

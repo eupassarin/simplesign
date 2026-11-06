@@ -351,22 +351,6 @@ internal static partial class XadesSignatureBuilder
         return ms.ToArray();
     }
 
-    internal static byte[] ExtractSignatureValue(byte[] signedXml)
-    {
-        var doc = new XmlDocument();
-        doc.Load(new MemoryStream(signedXml));
-        var ns = new XmlNamespaceManager(doc.NameTable);
-        ns.AddNamespace("ds", XmlDSigUrls.DsNamespace);
-
-        var sigValue = doc.SelectSingleNode("//ds:Signature/ds:SignatureValue", ns);
-        if (sigValue is null)
-        {
-            throw new InvalidOperationException("SignatureValue not found in signed XML.");
-        }
-
-        return Convert.FromBase64String(sigValue.InnerText);
-    }
-
     /// <summary>
     /// Builds the XAdES SignatureTimeStamp input by canonicalizing the SignatureValue element.
     /// </summary>
@@ -408,9 +392,6 @@ internal static partial class XadesSignatureBuilder
 
         return CanonicalizeElement(signatureValue);
     }
-
-    internal static byte[] EmbedSignatureTimeStamp(byte[] signedXml, byte[] tsToken) =>
-        EmbedSignatureTimeStamp(signedXml, tsToken, signatureId: null);
 
     /// <summary>Embeds a signature timestamp in the identified XMLDSig signature.</summary>
     internal static byte[] EmbedSignatureTimeStamp(byte[] signedXml, byte[] tsToken, string? signatureId)

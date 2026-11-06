@@ -168,26 +168,6 @@ internal static partial class XadesSignatureBuilder
         return Save(doc);
     }
 
-    /// <summary>The SigAndRefsTimeStamp token of the signature, or null.</summary>
-    internal static byte[]? ExtractSigAndRefsTimeStamp(byte[] signedXml, string? signatureId)
-    {
-        var doc = LoadDocument(signedXml);
-        var ns = CreateNamespaceManager(doc);
-        XmlElement signature;
-        try
-        {
-            signature = ResolveSignature(doc, ns, signatureId);
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-
-        var token = signature.SelectSingleNode(
-            "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties/xades:SigAndRefsTimeStamp/xades:EncapsulatedTimeStamp", ns);
-        return token is null || string.IsNullOrWhiteSpace(token.InnerText) ? null : Convert.FromBase64String(token.InnerText);
-    }
-
     /// <summary>
     /// Checks the references against the embedded values: every CertRefs digest matches a
     /// certificate in CertificateValues or KeyInfo, every CRL/OCSP reference digest matches a value

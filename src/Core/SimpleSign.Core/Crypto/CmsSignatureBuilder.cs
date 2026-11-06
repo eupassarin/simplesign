@@ -657,9 +657,6 @@ public sealed class CmsSignatureBuilder
         _ => throw new NotSupportedException($"Hash algorithm '{alg.Name}' is not supported.")
     };
 
-    private static string GetSignatureAlgorithmOid(X509Certificate2 cert, HashAlgorithmName hashAlg)
-        => CryptoUtility.DetectSignatureAlgorithmOid(cert, hashAlg);
-
     /// <summary>
     /// Validates that the requested signature algorithm OID is compatible with the
     /// certificate's public key type. Throws <see cref="ArgumentException"/> if not.

@@ -34,9 +34,6 @@ internal sealed class AppearanceImage
     /// <summary>Image height in pixels.</summary>
     public int PixelHeight { get; }
 
-    /// <summary>True when the image needs a soft mask object for its transparency.</summary>
-    public bool HasSoftMask => _softMaskData is not null;
-
     /// <summary>Creates the image for an appearance, or returns null when it has no background image.</summary>
     /// <exception cref="ArgumentException">The PNG data is malformed.</exception>
     /// <exception cref="NotSupportedException">The PNG uses a format the stamp does not support.</exception>
