@@ -17,7 +17,7 @@ echo "=============================="
 echo
 
 pushd "$REPO_ROOT" >/dev/null
-dotnet test tests/interop/SimpleSign.Interop.Tests --logger "console;verbosity=normal"
+dotnet test tests/integration/SimpleSign.Integration.Tests --logger "console;verbosity=normal"
 dotnet test tests/unit/SimpleSign.Brasil.Tests --filter Category=Integration --logger "console;verbosity=normal"
 popd >/dev/null
 

@@ -21,7 +21,6 @@
     <InternalsVisibleTo Include="SimpleSign.Pdf.Tests" />
     <InternalsVisibleTo Include="SimpleSign.PAdES.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Brasil.Tests" />
-    <InternalsVisibleTo Include="SimpleSign.Fuzz" />
     <InternalsVisibleTo Include="SimpleSign.CAdES" />
     <InternalsVisibleTo Include="SimpleSign.CAdES.Tests" />
     <InternalsVisibleTo Include="SimpleSign.XAdES" />

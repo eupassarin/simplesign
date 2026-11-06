@@ -18,7 +18,7 @@ docker run --rm \
   -v simplesign-pkcs11-nuget:/root/.nuget/packages \
   "$IMAGE" bash -c '
     set -euo pipefail
-    tar -C /src --exclude=./.git --exclude=./node_modules --exclude=./BenchmarkDotNet.Artifacts \
+    tar -C /src --exclude=./.git --exclude=./node_modules \
       --exclude="*/bin" --exclude="*/obj" --exclude="*/TestResults" -cf - . | tar -C /work -xf -
     cd /work
     scripts/tests/pkcs11-run.sh

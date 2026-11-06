@@ -2,7 +2,6 @@
 bin/
 obj/
 artifacts/
-BenchmarkDotNet.Artifacts/
 Findings/
 
 ## Debug / test output files
@@ -33,8 +32,6 @@ Thumbs.db
 node_modules/
 *.tsbuildinfo
 
-## Sample generated files
-samples/WebHtmlToPDF/wwwroot/samples/
 *.p12
 *.snk
 !tests/SimpleSign.TestFixtures/**/*.pem
@@ -45,13 +42,8 @@ coverage/
 *.trx
 tests-local/
 
-# Local benchmark results
-bench-results-docker/
-copilot-report-*
 nupkgs/
 
-# Docfx
-docs/_site/
 
 
 /publish-cli-local

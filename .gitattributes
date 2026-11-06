@@ -13,6 +13,3 @@
 *.xml text eol=lf
 *.md text eol=lf
 
-# External ETSI corpus vectors are byte-exact fixtures with recorded SHA-256 hashes.
-tests/interop/SimpleSign.Interop.Tests/corpus/cades/** binary
-tests/interop/SimpleSign.Interop.Tests/corpus/xades/** binary
