@@ -1,10 +1,6 @@
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
-using SimpleSign.Core.Extensions;
-using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
-using SimpleSign.Core.Validation;
 
 namespace SimpleSign.CAdES;
 
@@ -72,216 +68,25 @@ public static class LtvDataCollector
         IOcspClient? ocspClient = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(httpClient);
-        ArgumentNullException.ThrowIfNull(signerCert);
-
-        var allCerts = new List<X509Certificate2> { signerCert };
-        if (chainCertificates is not null)
-        {
-            foreach (var cert in chainCertificates)
-            {
-                if (!allCerts.Any(c => c.Thumbprint == cert.Thumbprint))
-                {
-                    allCerts.Add(cert);
-                }
-            }
-        }
-
-        var ownedAiaCertificates = new List<X509Certificate2>();
-        var aiaWarnings = new List<string>();
-        IReadOnlyList<X509Certificate2> configuredCertificates = [.. allCerts];
-        List<X509Certificate2> aiaCertificates = await CertificateChainUtility.DownloadAiaCertsAsync(
-            httpClient,
-            signerCert,
-            configuredCertificates,
-            aiaWarnings,
-            cancellationToken).ConfigureAwait(false);
-        foreach (var aiaCertificate in aiaCertificates)
-        {
-            if (allCerts.Any(cert => cert.Thumbprint == aiaCertificate.Thumbprint))
-            {
-                aiaCertificate.Dispose();
-                continue;
-            }
-
-            allCerts.Add(aiaCertificate);
-            ownedAiaCertificates.Add(aiaCertificate);
-        }
-
-        foreach (string warning in aiaWarnings)
-        {
-            logger?.LogWarning("AIA certificate discovery: {Warning}", warning);
-        }
-
-        var ocspResponses = new List<byte[]>();
-        var crls = new List<byte[]>();
-        var evidence = new List<LtvCertificateEvidence>();
-        var pending = new Queue<X509Certificate2>(allCerts);
-        var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var ownedResponderCertificates = new List<X509Certificate2>();
-        var ocsp = ocspClient ?? new OcspClient(httpClient, logger);
-
-        try
-        {
-            while (pending.Count > 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                X509Certificate2 cert = pending.Dequeue();
-                string thumbprint = cert.Thumbprint ?? string.Empty;
-                if (!processed.Add(thumbprint))
-                {
-                    continue;
-                }
-
-                X509Certificate2? issuer = allCerts.FindIssuerOf(cert);
-                if (cert.IsSelfSigned())
-                {
-                    evidence.Add(new LtvCertificateEvidence(thumbprint, true)
-                    {
-                        RevocationEvidenceKind = LtvRevocationEvidenceKind.NotRequired,
-                    });
-                    continue;
-                }
-
-                bool hasOcspForCertificate = false;
-                bool hasCrlForCertificate = false;
-                string? absenceReason = issuer is null ? "The issuer certificate is not available." : null;
-
-                string? ocspUrl = OcspClient.GetOcspUrl(cert);
-                if (issuer is not null && ocspUrl is not null)
-                {
-                    try
-                    {
-                        var result = await ocsp.FetchOcspResponseAsync(cert, issuer, ocspUrl, cancellationToken)
-                            .ConfigureAwait(false);
-                        if (result.IsValid)
-                        {
-                            ocspResponses.Add(result.ResponseBytes);
-                            hasOcspForCertificate = true;
-                            foreach (var responderCertificate in result.ResponderCertificates)
-                            {
-                                if (allCerts.Any(candidate => candidate.Thumbprint == responderCertificate.Thumbprint))
-                                {
-                                    responderCertificate.Dispose();
-                                    continue;
-                                }
-
-                                allCerts.Add(responderCertificate);
-                                ownedResponderCertificates.Add(responderCertificate);
-                                pending.Enqueue(responderCertificate);
-                            }
-                        }
-                        else
-                        {
-                            absenceReason = "The OCSP responder did not report a good status for the certificate.";
-                            DisposeResponderCertificates(result.ResponderCertificates);
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        absenceReason = $"OCSP retrieval or validation failed: {ex.Message}";
-                    }
-                }
-
-                if (!hasOcspForCertificate && issuer is not null)
-                {
-                    string? crlUrl = CrlClient.GetCrlUrl(cert, logger);
-                    if (crlUrl is not null)
-                    {
-                        try
-                        {
-                            byte[]? crlBytes = await ResilientHttp.GetBytesAsync(
-                                httpClient, crlUrl, logger: logger, ct: cancellationToken).ConfigureAwait(false);
-                            // Collection establishes that the embedded CRL is structurally relevant to this
-                            // certificate. Trust-policy validation of the CRL signature is deliberately left
-                            // to validation time, where the full issuer path and validation time are available.
-                            if (crlBytes is not null && IsCrlIssuedFor(crlBytes, cert, logger))
-                            {
-                                crls.Add(crlBytes);
-                                hasCrlForCertificate = true;
-                            }
-                            else
-                            {
-                                absenceReason = "The downloaded CRL does not cover the certificate and issuer.";
-                            }
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            throw;
-                        }
-                        catch (Exception ex)
-                        {
-                            absenceReason = $"CRL retrieval or validation failed: {ex.Message}";
-                        }
-                    }
-                }
-
-                LtvRevocationEvidenceKind kind = hasOcspForCertificate
-                    ? LtvRevocationEvidenceKind.Ocsp
-                    : hasCrlForCertificate ? LtvRevocationEvidenceKind.Crl : LtvRevocationEvidenceKind.None;
-                evidence.Add(new LtvCertificateEvidence(thumbprint, kind != LtvRevocationEvidenceKind.None)
-                {
-                    IssuerThumbprint = issuer?.Thumbprint,
-                    RevocationEvidenceKind = kind,
-                    AbsenceReason = kind == LtvRevocationEvidenceKind.None
-                        ? absenceReason ?? "The certificate does not publish a usable revocation endpoint."
-                        : null,
-                });
-            }
-
-            return new LtvCollectionResult(
-                allCerts.Select(cert => cert.RawData).ToList().AsReadOnly(),
-                ocspResponses.AsReadOnly(),
-                crls.AsReadOnly(),
-                evidence.AsReadOnly());
-        }
-        finally
-        {
-            foreach (var certificate in ownedResponderCertificates)
-            {
-                certificate.Dispose();
-            }
-
-            foreach (var certificate in ownedAiaCertificates)
-            {
-                certificate.Dispose();
-            }
-        }
+        var evidence = await LtvEvidenceCollector.CollectAsync(
+            httpClient, signerCert, chainCertificates, logger, ocspClient, cancellationToken).ConfigureAwait(false);
+        return new LtvCollectionResult(
+            evidence.CertificateRawData,
+            evidence.OcspResponses,
+            evidence.Crls,
+            evidence.CertificateEvidence?.Select(ToPublic).ToList().AsReadOnly());
     }
 
-    private static void DisposeResponderCertificates(IReadOnlyList<X509Certificate2> certificates)
+    private static LtvCertificateEvidence ToPublic(LtvEvidenceItem item) => new(item.Thumbprint, item.IsComplete)
     {
-        foreach (var certificate in certificates)
+        IssuerThumbprint = item.IssuerThumbprint,
+        RevocationEvidenceKind = item.RevocationEvidenceKind switch
         {
-            certificate.Dispose();
-        }
-    }
-
-    internal static bool IsCrlIssuedFor(byte[] crlBytes, X509Certificate2 certificate, ILogger? logger)
-    {
-        byte[]? issuerName = CrlClient.ExtractCrlIssuerDn(crlBytes, logger);
-        if (issuerName is null)
-        {
-            return false;
-        }
-
-        if (issuerName.AsSpan().SequenceEqual(certificate.IssuerName.RawData))
-        {
-            return true;
-        }
-
-        try
-        {
-            var crlIssuer = new X500DistinguishedName(issuerName);
-            return string.Equals(crlIssuer.Name, certificate.Issuer, StringComparison.OrdinalIgnoreCase);
-        }
-        catch (CryptographicException)
-        {
-            return false;
-        }
-    }
+            LtvEvidenceKind.Ocsp => LtvRevocationEvidenceKind.Ocsp,
+            LtvEvidenceKind.Crl => LtvRevocationEvidenceKind.Crl,
+            LtvEvidenceKind.NotRequired => LtvRevocationEvidenceKind.NotRequired,
+            _ => LtvRevocationEvidenceKind.None,
+        },
+        AbsenceReason = item.AbsenceReason,
+    };
 }

@@ -28,6 +28,12 @@ CAdES and XAdES only (no `InternalsVisibleTo`).
   migration guides, `llms*.txt`, `AGENTS.md` and `.github/copilot-instructions.md`. The README now
   links to `docs/articles/`.
 
+### Changed — SimpleSign.XAdES no longer depends on SimpleSign.CAdES
+
+The LTV collection and revocation-evidence helpers that XAdES borrowed from CAdES (internals)
+moved into `SimpleSign.Core`. `LtvDataCollector` and `LtvCollectionResult` stay public in CAdES,
+with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `SimpleSign.CAdES`.
+
 ### Changed — homologation hierarchy from SERPRO
 
 - `IcpBrasilHomologation.pem` now comes from SERPRO's homologation repository
