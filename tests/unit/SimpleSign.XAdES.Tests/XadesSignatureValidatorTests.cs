@@ -171,6 +171,37 @@ public sealed class XadesSignatureValidatorTests
     }
 
     [Fact]
+    public async Task Validate_RootInTrustedRoots_UsesIntermediateFromKeyInfo()
+    {
+        using var pki = new SyntheticPki();
+        byte[] signed = await XadesSigner.Document(s_xmlBytes)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .SignAsync();
+
+        var validator = new XadesSignatureValidator(
+            new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false, TrustedRoots = [pki.RootCa] });
+        var result = validator.Validate(signed);
+
+        var diag = "Errors: " + string.Join("; ", result.Errors);
+        result.IsCertificateChainValid.ShouldBeTrue(diag);
+    }
+
+    [Fact]
+    public async Task Validate_RootAsTrustAnchor_UsesIntermediateFromKeyInfo()
+    {
+        using var pki = new SyntheticPki();
+        byte[] signed = await XadesSigner.Document(s_xmlBytes)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .SignAsync();
+
+        var validator = new XadesSignatureValidator(new ValidationOptions { CheckRevocation = false });
+        var result = validator.Validate(signed, trustAnchors: [pki.RootCa]);
+
+        var diag = "Errors: " + string.Join("; ", result.Errors);
+        result.IsCertificateChainValid.ShouldBeTrue(diag);
+    }
+
+    [Fact]
     public async Task Validate_UntrustedChain_ReturnsInvalid()
     {
         var otherCert = TestCertificateFactory.CreateSelfSignedCert("CN=Wrong Anchor, O=Tests");

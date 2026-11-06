@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CMS, as it already did for the TSA. Before, a signer under an intermediate CA was reported with
   `PartialChain` (chain not valid) unless the intermediate was itself passed as a trust anchor or
   was in the OS store.
+- `XadesSignatureValidator` builds the signer's chain with the certificates in `KeyInfo/X509Data`
+  (it already did for the TSA) and honours `ValidationOptions.TrustedRoots` and
+  `TrustSystemRoots = false`, like the CAdES validator (including its tolerance of unknown
+  revocation status under custom roots). Before, a signer under an intermediate CA
+  failed with `PartialChain`, and `TrustedRoots` was ignored (only the `trustAnchors` argument
+  counted).
 
 ### Added (SimpleSign TestBench)
 

@@ -271,7 +271,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
 
         // Certificate chain validation
-        bool chainValid = ValidateCertificateChain(signerCert, trustAnchors, errors);
+        bool chainValid = ValidateCertificateChain(signerCert, trustAnchors, sigElement, ns, errors);
 
         return new XadesValidationResult
         {
@@ -297,6 +297,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     private bool ValidateCertificateChain(
         X509Certificate2? signerCert,
         IEnumerable<X509Certificate2>? trustAnchors,
+        XmlElement sigElement,
+        XmlNamespaceManager ns,
         List<string> errors)
     {
         if (signerCert is null)
@@ -305,19 +307,33 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             return false;
         }
 
+        // Intermediates come from KeyInfo/X509Data, as for the TSA chain.
+        var embedded = KeyInfoCertificates(sigElement, ns);
         try
         {
             using var chain = new X509Chain { ChainPolicy = { TrustMode = X509ChainTrustMode.System } };
             CryptoUtility.ConfigureChainPolicy(chain, _options.CheckRevocation);
-
-            if (trustAnchors is not null)
+            foreach (var certificate in embedded)
             {
-                foreach (var anchor in trustAnchors)
+                chain.ChainPolicy.ExtraStore.Add(certificate);
+            }
+
+            // Same trust rules as CadesSignatureValidator: explicit anchors or ValidationOptions.TrustedRoots
+            // (or TrustSystemRoots = false) switch to custom root trust.
+            bool hasCustomRoots = trustAnchors is not null
+                || _options.TrustedRoots is { Count: > 0 }
+                || !_options.TrustSystemRoots;
+            if (hasCustomRoots)
+            {
+                foreach (var anchor in (trustAnchors ?? []).Concat(_options.TrustedRoots ?? []))
                 {
                     chain.ChainPolicy.CustomTrustStore.Add(anchor);
                 }
 
                 chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+                chain.ChainPolicy.VerificationFlags =
+                    X509VerificationFlags.IgnoreEndRevocationUnknown |
+                    X509VerificationFlags.IgnoreCertificateAuthorityRevocationUnknown;
             }
 
             bool chainValid = chain.Build(signerCert);
@@ -337,6 +353,37 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             errors.Add($"Certificate chain validation threw: {ex.Message}");
             return false;
         }
+        finally
+        {
+            foreach (var certificate in embedded)
+            {
+                certificate.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Every certificate in KeyInfo/X509Data (signer and chain); unreadable entries are skipped.</summary>
+    private static List<X509Certificate2> KeyInfoCertificates(XmlElement sigElement, XmlNamespaceManager ns)
+    {
+        var certificates = new List<X509Certificate2>();
+        if (sigElement.SelectNodes("ds:KeyInfo/ds:X509Data/ds:X509Certificate", ns) is not { } nodes)
+        {
+            return certificates;
+        }
+
+        foreach (XmlNode node in nodes)
+        {
+            try
+            {
+                certificates.Add(X509CertificateLoader.LoadCertificate(DecodeBase64(node)));
+            }
+            catch (Exception ex) when (ex is CryptographicException or FormatException)
+            {
+                // A malformed extra certificate only means the chain may not be built.
+            }
+        }
+
+        return certificates;
     }
 
     private static bool VerifyWithSignedXml(
