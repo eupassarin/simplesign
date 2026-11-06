@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
+  schemes (e.g. `file:`), which the OS shell would hand to other programs, throw `ArgumentException`.
+
+### Added (SimpleSign TestBench)
+
+- New `src/SimpleSign.TestBench`: a local web app (ASP.NET Core minimal API + React, Vite,
+  Tailwind and shadcn/ui) to try every PDF signing option, explained, in a step-by-step flow that
+  only offers compatible options. Signers: sandbox A1, PFX, OS store, A3 tokens (PKCS#11), ICP-Brasil
+  PSC and CSC v2. Signature types: PAdES B-B…B-LTA, every ICP-Brasil PAdES policy and version, or a
+  custom policy. Live stamp preview (pdf.js), validation report, and the matching C# and CLI code.
+- **Sandbox** mode: offline test PKI (every key type and the edge cases), RFC 3161 TSA (plain and
+  with Basic auth), CRLs, and simulated PSC and CSC v2 services, served through an in-process
+  `IHttpClientProvider`. **Real** mode uses your certificates and real services.
+- **Run matrix**: cases generated from the compatibility rules (every value, plus pairwise
+  combinations), signed and validated in the sandbox; part of the CI (`testbench` job). See
+  `docs/articles/testbench.md`.
+
 ### Added (ICP-Brasil PAdES AD-RC and AD-RA)
 
 - `WithIcpBrasilPolicy(policy, IcpBrasilPadesOptions)` signs PAdES under AD-RB, AD-RT, **AD-RC**

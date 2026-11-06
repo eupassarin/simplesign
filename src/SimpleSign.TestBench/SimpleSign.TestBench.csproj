@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    SimpleSign TestBench: a local web app (ASP.NET Core + React/shadcn in web/) that exercises
+    every PDF signing option of the library, with an offline sandbox (PKI, TSA, CRL, fake PSC/CSC).
+    Not packaged; listens on 127.0.0.1 only.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SimpleSign.TestBench</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- App code (not a library): no ConfigureAwait, UI text, internal types, logging templates not needed. -->
+    <NoWarn>$(NoWarn);CS1591;CA2007;CA1303;CA1515;CA1848;CA1873;CA1031;CA2000;CA5394;CA1707</NoWarn>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <WebDir>$(MSBuildProjectDirectory)/web</WebDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
+    <ProjectReference Include="..\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
+    <ProjectReference Include="..\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
+    <ProjectReference Include="..\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
+    <ProjectReference Include="..\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.TestBench.Tests" />
+    <Content Remove="web/**" />
+    <None Remove="web/**" />
+    <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Condition="Exists('web/dist')" />
+  </ItemGroup>
+
+  <!-- Builds the UI when its sources are newer than web/dist (Node.js required). Skip with -p:SkipWeb=true. -->
+  <Target Name="BuildWeb" BeforeTargets="AssignTargetPaths" Condition="'$(SkipWeb)' != 'true' And Exists('$(WebDir)/package.json')"
+          Inputs="@(WebSources);$(WebDir)/package.json;$(WebDir)/index.html" Outputs="$(WebDir)/dist/index.html">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(WebDir)" Condition="!Exists('$(WebDir)/node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(WebDir)" />
+    <ItemGroup>
+      <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Exclude="@(Content)" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <WebSources Include="web/src/**/*" />
+  </ItemGroup>
+</Project>

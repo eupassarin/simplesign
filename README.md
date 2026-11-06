@@ -113,6 +113,7 @@ dotnet tool install -g SimpleSign.Cli
 - **SimpleSign.Signers.Cloud** — sign with cloud certificates: ICP-Brasil PSCs (API v0) and Cloud Signature Consortium API v2 (depends on Core)
 - **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF: CSS cascade, floats, flexbox, grid, multi-column, paginated tables, gradients, SVG, OpenType shaping and RTL text, subset Unicode fonts, PDF/A-2b (independent)
 - **SimpleSign.Cli** — CLI tool (install as dotnet tool)
+- **SimpleSign TestBench** — local web app to try every PDF signing option (A1, A3, cloud; PAdES levels and every ICP-Brasil policy) with an offline sandbox, live stamp preview, validation report and the matching C#/CLI code, see [docs/articles/testbench.md](docs/articles/testbench.md)
 - **SimpleSign Agent** — macOS/Windows/Linux tray app: the local signing agent web pages call to sign with the OS store or an A3 token, see [docs/articles/agent.md](docs/articles/agent.md)
 
 ---
@@ -863,6 +864,7 @@ contract-signed.pdf  1/1 valid
 | [Interoperability](docs/interoperability.md) | PDF generators tested, cross-validation matrix, ETSI corpus |
 | [Conformance](docs/conformance.md) | ISO 32000, PAdES ETSI EN 319 142, RFC 5652 compliance |
 | [Benchmark Results](docs/benchmarks.md) | Comprehensive benchmark report — 69 benchmarks across 15 suites |
+| [TestBench](docs/articles/testbench.md) | Local web app to try every signing option |
 | [Signing agent](docs/articles/agent.md) | Cross-platform tray app with a local signing API (replaces HostSigner) |
 | [Web Signing Sample](samples/WebSigningSample/README.md) | Browser-based PDF signing demo |
 | [Web Inspect Sample](samples/WebInspectSample/README.md) | Browser-based PDF inspector & validator |

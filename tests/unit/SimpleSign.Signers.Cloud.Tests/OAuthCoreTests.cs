@@ -181,4 +181,11 @@ public sealed class LoopbackAuthorizationHandlerTests
     public async Task AuthorizeAsync_NonLoopbackRedirect_Throws(string redirect) =>
         await Should.ThrowAsync<ArgumentException>(async () => await new LoopbackAuthorizationHandler(_ => { })
             .AuthorizeAsync(new Uri("https://psc.example/a"), new Uri(redirect), CancellationToken.None));
+
+    [Theory]
+    [InlineData("file:///etc/passwd")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("ms-settings:privacy")]
+    public void OpenInSystemBrowser_NonHttpScheme_Throws(string uri) =>
+        Should.Throw<ArgumentException>(() => LoopbackAuthorizationHandler.OpenInSystemBrowser(new Uri(uri)));
 }

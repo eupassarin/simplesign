@@ -7,6 +7,8 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # The TestBench (a local dev tool) is not released; skip building its UI.
+  SkipWeb: true
 
 permissions:
   contents: write

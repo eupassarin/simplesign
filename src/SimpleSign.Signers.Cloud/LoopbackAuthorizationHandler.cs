@@ -94,10 +94,16 @@ public sealed class LoopbackAuthorizationHandler : IAuthorizationCodeHandler
     }
 
     /// <summary>Opens <paramref name="uri"/> in the system's default browser.</summary>
-    /// <param name="uri">The page to open.</param>
+    /// <param name="uri">The page to open: an absolute http or https URL.</param>
+    /// <exception cref="ArgumentException"><paramref name="uri"/> is not an absolute http(s) URL (the shell would open other schemes, such as file:, with other programs).</exception>
     public static void OpenInSystemBrowser(Uri uri)
     {
         ArgumentNullException.ThrowIfNull(uri);
+        if (!uri.IsAbsoluteUri || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            throw new ArgumentException("Only absolute http(s) URLs are opened in the browser.", nameof(uri));
+        }
+
         var start = OperatingSystem.IsWindows()
             ? new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }
             : new ProcessStartInfo(OperatingSystem.IsMacOS() ? "open" : "xdg-open") { UseShellExecute = false };

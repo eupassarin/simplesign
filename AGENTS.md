@@ -29,6 +29,7 @@ SimpleSign/
 │   ├── SimpleSign.HtmlToPdf/     HTML→PDF layout engine
 │   ├── SimpleSign.Cli/           CLI tool (Spectre.Console)
 │   ├── SimpleSign.Agent/         Avalonia tray app: local signing agent (macOS/Windows/Linux)
+│   ├── SimpleSign.TestBench/     Local web app to try every PDF signing option (sandbox + real)
 │   └── ...
 ├── tests/
 │   ├── unit/                     Unit tests (~1,500 tests, < 5s)
