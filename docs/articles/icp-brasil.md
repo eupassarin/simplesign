@@ -272,8 +272,8 @@ intermediates and picks the newest version of the policy that accepts its root; 
 `IcpBrasilPolicyException` when none does. `IcpBrasilSignaturePolicies.TryGetRules(oid, out rules)`
 gives the rules of each CAdES/PAdES PA: accepted roots (matched by public key, since the PAs embed
 re-encoded roots), mandatory signed and unsigned attributes, and allowed signature algorithms with
-their minimum key size. `IcpBrasilPolicyRules.Parse` reads them from a PA file;
-`scripts/IcpBrasilPolicyRulesGenerator` regenerates the embedded table.
+their minimum key size. `IcpBrasilPolicyRules.Parse` (or `ParseXml`) reads them from a PA file, and `RefreshAsync`
+picks up the rules of PAs published after the embedded table.
 
 #### CAdES AD-RV, AD-RC and AD-RA
 

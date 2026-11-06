@@ -182,7 +182,7 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
 - **PA rules:** `IcpBrasilPolicyRules` (accepted roots, mandatory signed/unsigned attributes,
   signature algorithms and key sizes) for the 55 CAdES/PAdES PAs, via
   `IcpBrasilSignaturePolicies.TryGetRules`; `IcpBrasilPolicyRules.Parse`; `RefreshAsync` parses the
-  rules of new PAs. Generator in `scripts/IcpBrasilPolicyRulesGenerator`.
+  rules of new PAs.
 - **Root-aware policy selection:** `Current(policy, format, signerRoot)` and `WithIcpBrasilPolicy`
   pick the newest PA that accepts the signer's AC Raiz (v12 signers get CAdES ≥ 2.4 / PAdES ≥ 1.2)
   and throw `IcpBrasilPolicyException` when none does. `IcpBrasilChainValidator.FindBundledRoot`.
