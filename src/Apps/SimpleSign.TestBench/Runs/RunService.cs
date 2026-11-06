@@ -195,7 +195,7 @@ internal sealed class RunService(
                 };
                 if (crossValidate && view.Success && view.OutputId is not null)
                 {
-                    view = view with { CrossValidation = await dss.CompareAsync(run.Format, view, DetachedDataId(run), logger, CancellationToken.None) };
+                    view = view with { CrossValidation = await dss.CompareAsync(run.Format, view, DetachedDataId(run), DetachedDataName(run), logger, CancellationToken.None) };
                 }
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException or KeyNotFoundException)
@@ -220,6 +220,15 @@ internal sealed class RunService(
     private static string? DetachedDataId(Run run) =>
         run.Format != RunFormats.Pades && run.Options.TryGetProperty("dataId", out var data) && data.ValueKind == JsonValueKind.String
             ? data.GetString()
+            : null;
+
+    /// <summary>
+    /// The name a detached XAdES signature refers to its data by (the Reference URI): an external
+    /// validator matches the original document to the reference by this name.
+    /// </summary>
+    private static string? DetachedDataName(Run run) =>
+        run.Format == RunFormats.Xades && run.Options.TryGetProperty("dataUri", out var uri) && uri.ValueKind == JsonValueKind.String
+            ? uri.GetString()
             : null;
 
     private static RunView Empty(Run run) => new(

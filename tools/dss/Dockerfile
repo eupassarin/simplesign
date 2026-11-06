@@ -16,7 +16,7 @@ RUN apk add --no-cache curl unzip
 # The Commission's server is slow (about 0.5 MB/s, so around 13 minutes). The zip is kept in a
 # build cache and the download resumes (-C -), so an interrupted build does not start over.
 RUN --mount=type=cache,target=/var/cache/dss \
-    curl -fSL --retry 5 -C - -o "/var/cache/dss/dss-demo-bundle-${DSS_VERSION}.zip" \
+    curl -fSL --retry 8 --retry-all-errors -C - -o "/var/cache/dss/dss-demo-bundle-${DSS_VERSION}.zip" \
       "https://ec.europa.eu/digital-building-blocks/artifact/repository/esignaturedss/eu/europa/ec/joinup/sd-dss/dss-demo-bundle/${DSS_VERSION}/dss-demo-bundle-${DSS_VERSION}.zip" \
  && unzip -q "/var/cache/dss/dss-demo-bundle-${DSS_VERSION}.zip" "dss-demo-bundle-${DSS_VERSION}/apache-tomcat-*" -d /tmp/dss \
  && mv /tmp/dss/dss-demo-bundle-${DSS_VERSION}/apache-tomcat-* /opt/tomcat \

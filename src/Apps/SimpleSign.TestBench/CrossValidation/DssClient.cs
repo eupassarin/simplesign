@@ -78,14 +78,14 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
     }
 
     /// <summary>Sends a run's output to DSS and lines its verdict up with SimpleSign's.</summary>
-    public async Task<DssComparison> CompareAsync(string format, RunView run, string? detachedDataId, RunLogger logger, CancellationToken cancellationToken)
+    public async Task<DssComparison> CompareAsync(string format, RunView run, string? detachedDataId, string? detachedDataName, RunLogger logger, CancellationToken cancellationToken)
     {
-        var report = await ValidateAsync(run.OutputId!, detachedDataId, logger, cancellationToken);
+        var report = await ValidateAsync(run.OutputId!, detachedDataId, logger, cancellationToken, detachedDataName);
         return report.Available ? Compare(format, run, report) : report;
     }
 
     /// <summary>Validates a stored file with DSS (the original document goes along for detached signatures).</summary>
-    public async Task<DssComparison> ValidateAsync(string fileId, string? detachedDataId, RunLogger? logger, CancellationToken cancellationToken)
+    public async Task<DssComparison> ValidateAsync(string fileId, string? detachedDataId, RunLogger? logger, CancellationToken cancellationToken, string? detachedDataName = null)
     {
         var settings = Settings;
         var watch = Stopwatch.StartNew();
@@ -94,7 +94,7 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
         {
             ["signedDocument"] = Document(file),
             ["originalDocuments"] = detachedDataId is not null && documents.TryGet(detachedDataId, out var original)
-                ? new JsonArray(Document(original!))
+                ? new JsonArray(Document(original!, detachedDataName))
                 : null,
             ["policy"] = null,
             ["tokenExtractionStrategy"] = "NONE",
@@ -353,11 +353,11 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
         }
     }
 
-    private static JsonObject Document(StoredFile file) => new()
+    private static JsonObject Document(StoredFile file, string? name = null) => new()
     {
         ["bytes"] = Convert.ToBase64String(file.Content),
         ["digestAlgorithm"] = null,
-        ["name"] = file.FileName,
+        ["name"] = string.IsNullOrWhiteSpace(name) ? file.FileName : name,
     };
 
     private static Uri BaseUri(DssSettings settings) =>
