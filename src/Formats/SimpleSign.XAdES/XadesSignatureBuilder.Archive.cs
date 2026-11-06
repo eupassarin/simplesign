@@ -33,7 +33,9 @@ internal static partial class XadesSignatureBuilder
         var canonicalizationMethod = doc.CreateElement("CanonicalizationMethod", XmlDSigUrls.DsNamespace);
         canonicalizationMethod.SetAttribute("Algorithm", XmlDSigUrls.ExcC14N);
         atsElement.AppendChild(canonicalizationMethod);
-        var encElement = doc.CreateElement("EncapsulatedTimeStamp", XadesUris.Xades141Namespace);
+        // xades141:ArchiveTimeStamp is of type xades:XAdESTimeStampType (ETSI EN 319 132-1 §5.5.2.1), so its
+        // children are in the XAdES v1.3.2 namespace. Other validators do not find the token otherwise.
+        var encElement = doc.CreateElement("EncapsulatedTimeStamp", XadesUris.XadesNamespace);
         encElement.InnerText = Convert.ToBase64String(tsToken);
         atsElement.AppendChild(encElement);
         unsignedProps.AppendChild(atsElement);
@@ -127,8 +129,9 @@ internal static partial class XadesSignatureBuilder
             return null;
         }
 
-        XmlNode? encapsulated = archiveTimeStamp.SelectSingleNode("xades141:EncapsulatedTimeStamp", ns) ??
-            archiveTimeStamp.SelectSingleNode("xades:EncapsulatedTimeStamp", ns);
+        // The v1.4.1 form is read too: older SimpleSign versions wrote it.
+        XmlNode? encapsulated = archiveTimeStamp.SelectSingleNode("xades:EncapsulatedTimeStamp", ns) ??
+            archiveTimeStamp.SelectSingleNode("xades141:EncapsulatedTimeStamp", ns);
         return encapsulated is null ? null : Convert.FromBase64String(encapsulated.InnerText.Trim());
     }
 

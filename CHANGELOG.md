@@ -90,6 +90,13 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
 
 ### Fixed
 
+- **XAdES B-LTA was not recognized as LTA by other validators.** The `EncapsulatedTimeStamp` of
+  `xades141:ArchiveTimeStamp` was written in the XAdES v1.4.1 namespace; its type is
+  `xades:XAdESTimeStampType`, so the child belongs to v1.3.2. EU DSS did not find the token and
+  reported XAdES-BASELINE-LT. It is now written in the v1.3.2 namespace, and DSS reports
+  XAdES-BASELINE-LTA (and XAdES-A for the extended form). Signatures made by earlier versions are
+  still read and validated by SimpleSign. Found with the TestBench's DSS cross-validation.
+
 - Log EventId 2401 was used by two different events (Core "certificate revoked in embedded CRL"
   and PAdES "revocation check failed"); the PAdES event is now 2032. The never-emitted event 2712
   was removed, and 1023 ("LTV embedded, no archival timestamp") is now emitted for B-LT.

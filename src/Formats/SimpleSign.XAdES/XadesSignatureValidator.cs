@@ -1164,7 +1164,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             return null;
         }
 
-        var encTs = atsEl.SelectSingleNode("xades141:EncapsulatedTimeStamp", ns);
+        var encTs = atsEl.SelectSingleNode("xades:EncapsulatedTimeStamp", ns) ?? atsEl.SelectSingleNode("xades141:EncapsulatedTimeStamp", ns);
         encTs ??= atsEl.SelectSingleNode("xades:EncapsulatedTimeStamp", ns);
 
         if (encTs is null)
