@@ -23,7 +23,8 @@ RUN --mount=type=cache,target=/var/cache/dss \
  && rm -rf /tmp/dss
 
 FROM eclipse-temurin:21-jre
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# xmlstarlet reads the certificates out of the Peruvian trusted list (entrypoint.sh).
+RUN apt-get update && apt-get install -y --no-install-recommends curl xmlstarlet && rm -rf /var/lib/apt/lists/*
 COPY --from=bundle /opt/tomcat /opt/tomcat
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /opt/tomcat/bin/*.sh /entrypoint.sh

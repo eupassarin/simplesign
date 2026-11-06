@@ -69,6 +69,32 @@ unsupported certificate is skipped instead of keeping DSS from starting.
 Neither ICP-Brasil nor Gov.br publishes an ETSI trusted list, so DSS treats these roots as plain
 trust anchors: it validates the chain but does not report a qualification (QES/QSCD).
 
+## Peru trusted list
+
+The container also trusts the certification authorities of the Peruvian trusted list, published
+by INDECOPI (the IOFE's accreditation authority) at `https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml`.
+It is downloaded at every start. A copy is kept in the `tl-cache` volume and used when the
+download fails. Set `DSS_TRUST_PERU=false` to turn this off.
+
+DSS cannot load this list as a trusted list. It only loads lists through a LOTL, and the
+Peruvian list is an ETSI TSL version 3, while DSS reads versions 5 and 6. So the entrypoint takes
+out the certificates and adds them to the trust store, like the ICP-Brasil roots:
+
+- **In:** every service of type CA/QC whose status is "undersupervision" (66 certificates in
+  sequence 25).
+- **Out:** registration authorities, time-stamping authorities, signing software, and anything
+  "No acredited".
+
+Two things to know:
+
+- The XML signature of the list is not checked. The list comes over HTTPS from indecopi.gob.pe.
+- The list includes global roots that some Peruvian providers chain to: GlobalSign Root CA and R6,
+  COMODO, WISeKey, emSign, Certisign, Entrust. DSS then trusts anything issued under them, not
+  only Peruvian certificates.
+
+DSS reports no qualification for these certificates: a Peruvian "qualified" status has no
+meaning under eIDAS.
+
 ## EU trusted lists
 
 DSS can also load the EU trusted lists (the EU LOTL and the national lists it points to), to
@@ -84,8 +110,8 @@ DSS_LOAD_EU_TRUSTED_LISTS=true docker compose -f tools/dss/docker-compose.yml up
 | `true` | Loads the copy kept from earlier runs, then downloads the lists at start and every hour (internet). |
 | `cached` | Only loads the copy kept from an earlier `true` run, and never downloads. Works offline. |
 
-DSS keeps what it downloads in the `tl-cache` volume (about 30 MB), so it survives restarts and
-rebuilds. Run once with `true` to fill it; after that `cached` starts with the lists, without
+DSS keeps what it downloads in the `tl-cache` volume (`eu-tl/`, about 30 MB), so it survives
+restarts and rebuilds. Run once with `true` to fill it; after that `cached` starts with the lists, without
 the internet. The download took under two minutes here, and loading the copy adds about 20
 seconds to the start. With `false` the copy is kept but not used. To delete it:
 `docker compose -f tools/dss/docker-compose.yml down -v`.
@@ -110,6 +136,7 @@ list (a TSL XML) on its own. To trust the services of such a list, put their cer
 | B-LT, B-LTA with sandbox certificates | the same verdict as SimpleSign | The certificates and CRLs are embedded in the signature. |
 | Any level, sandbox root not trusted | INDETERMINATE / NO_CERTIFICATE_CHAIN_FOUND | See "Trusting the sandbox certificates". |
 | Real ICP-Brasil or Gov.br certificates | validated against their roots | See "ICP-Brasil and Gov.br roots". |
+| Real Peruvian certificates | validated against the CAs of the Peruvian trusted list | See "Peru trusted list". |
 | Other real certificates | depends on the roots DSS trusts | Add your roots to `trust/`, or load the EU trusted lists (above). |
 
 ## Options
@@ -121,6 +148,8 @@ list (a TSL XML) on its own. To trust the services of such a list, put their cer
 | `DSS_LOAD_EU_TRUSTED_LISTS` | `false` | `true` downloads the EU trusted lists; `cached` only uses the copy kept from an earlier run. See "EU trusted lists". |
 | `DSS_TRUST_ICP_BRASIL` | `true` | `true` trusts the ICP-Brasil roots (all but v4, v7 and v13; see above). |
 | `DSS_TRUST_GOVBR` | `true` | `true` trusts the Gov.br root. |
+| `DSS_TRUST_PERU` | `true` | `true` trusts the CAs of the Peruvian trusted list (downloaded at start; see above). |
+| `DSS_PERU_TSL_URL` | INDECOPI's address | Where to download the Peruvian trusted list from. |
 
 To use another DSS version, change `DSS_VERSION` in `docker-compose.yml`.
 
