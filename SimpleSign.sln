@@ -15,7 +15,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Brasil", "Brasil", "{A2F6CC
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Signers", "Signers", "{501C4375-C945-5340-9903-634363D68EA9}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "HtmlToPdf", "HtmlToPdf", "{5DD846B2-16CF-5EF5-A817-CBFF3DE3140F}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Extras", "Extras", "{5DD846B2-16CF-5EF5-A817-CBFF3DE3140F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Apps", "Apps", "{90B2F993-2074-584C-A553-C4864A6E6FAF}"
 EndProject
@@ -29,7 +29,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil", "src\Br
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil.Tests", "tests\unit\SimpleSign.Brasil.Tests\SimpleSign.Brasil.Tests.csproj", "{618B8681-2707-43C1-BF64-A8273AD898D5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.HtmlToPdf", "src\HtmlToPdf\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj", "{F196FB11-857E-4536-BF1D-EA4B9AD7A10D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.HtmlToPdf", "src\Extras\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj", "{F196FB11-857E-4536-BF1D-EA4B9AD7A10D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.HtmlToPdf.Tests", "tests\unit\SimpleSign.HtmlToPdf.Tests\SimpleSign.HtmlToPdf.Tests.csproj", "{43D8ECE1-2508-4DAD-9CFE-F35250DF6C91}"
 EndProject

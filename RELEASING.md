@@ -26,7 +26,7 @@ Update `<Version>` in all `.csproj` files:
 | `src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj` | ICP-Brasil |
 | `src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
 | `src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
-| `src/HtmlToPdf/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
+| `src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
 | `src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj` | CLI tool |
 
 ### Quick sed (macOS):
@@ -43,7 +43,7 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
   src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
   src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
-  src/HtmlToPdf/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
+  src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
   src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj
 ```
 

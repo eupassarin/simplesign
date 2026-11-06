@@ -51,7 +51,7 @@ src/
 ├── Signers/
 │   ├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
 │   └── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2
-├── HtmlToPdf/
+├── Extras/
 │   └── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
 └── Apps/
     ├── SimpleSign.Cli/         CLI tool

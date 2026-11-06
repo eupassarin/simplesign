@@ -155,7 +155,7 @@ jobs:
                      src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
                      src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
                      src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
-                     src/HtmlToPdf/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
+                     src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
                      src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj \
                      src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
                      src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
