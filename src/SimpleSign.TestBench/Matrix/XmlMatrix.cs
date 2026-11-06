@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Xml;
@@ -247,6 +246,7 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
         return null;
     }
 
-    private static IEnumerable<HashChoice> HashValues() =>
-        SHA3_256.IsSupported ? Enum.GetValues<HashChoice>() : [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512];
+    // XML-DSig as implemented by SimpleSign.XAdES has signature-method URIs for SHA-2 only (XmlDSigUrls):
+    // SHA-3 cases cannot be signed, whether or not the platform supports SHA-3 hashing.
+    private static IEnumerable<HashChoice> HashValues() => [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512];
 }
