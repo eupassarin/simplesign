@@ -7,12 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
-
-- `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
-  schemes (e.g. `file:`), which the OS shell would hand to other programs, throw `ArgumentException`.
-
 ### Fixed
+
+- CAdES: `WithExtendedValidationData` combined with B-LT or B-LTA. The extended form was applied
+  before the B-LT certificate and revocation values, so with `CadesExtendedForm.Archive` the
+  archive-time-stamp v2 did not cover them (B-LT: the signature failed validation; B-LTA: signing
+  threw because the archive-time-stamp-v3 did not validate). The extended form now goes after the
+  LT values and before the archive-time-stamp-v3; every form works on B-T, B-LT and B-LTA.
 
 - `CadesSignatureValidator` now builds the signer's chain with the certificates embedded in the
   CMS, as it already did for the TSA. Before, a signer under an intermediate CA was reported with
@@ -24,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   revocation status under custom roots). Before, a signer under an intermediate CA
   failed with `PartialChain`, and `TrustedRoots` was ignored (only the `trustAnchors` argument
   counted).
+
+### Security
+
+- `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
+  schemes (e.g. `file:`), which the OS shell would hand to other programs, throw `ArgumentException`.
 
 ### Added (SimpleSign TestBench)
 

@@ -94,7 +94,7 @@ The *CAdES* page signs any file with `CadesSigner` and validates with `CadesSign
   co-signing a detached signature needs the same data (the message digest is checked first).
 - **Type**: CAdES baseline B-B…B-LTA, ICP-Brasil CAdES policies AD-RB, AD-RT, AD-RV, AD-RC and AD-RA
   (`WithIcpBrasilPolicy`), or a policy OID. RFC 5126 extended forms (CAdES-X, X Long, A) need a
-  signature timestamp; CAdES-A only works on B-T.
+  signature timestamp (B-T, B-LT or B-LTA).
 - **Result**: the validation tree (signers, with their countersignatures nested), the CMS structure
   (signed and unsigned attributes of every signer) and the C# / `simplesign cades` code.
 - **Validate**: samples built at startup (valid, two signers plus a countersignature, data changed,

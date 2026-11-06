@@ -91,6 +91,19 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Validation.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
     }
 
+    [Theory]
+    [InlineData(BaselineLevel.BLT)]
+    [InlineData(BaselineLevel.BLTA)]
+    public async Task RunAsync_ArchiveFormOnLongTermLevels_IsValid(BaselineLevel level)
+    {
+        var result = await fixture.Cades.RunAsync(Options() with { Level = level, ExtendedForm = CadesExtendedChoice.Archive }, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.AchievedLevel.ShouldBe(level == BaselineLevel.BLT ? "B-LT" : "B-LTA");
+        result.Validation!.Structure.Signers[0].UnsignedAttributes.ShouldContain(a => a.Name == "archive-time-stamp-v2");
+        result.Validation.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
+    }
+
     [Fact]
     public async Task RunAsync_PssAndSha512_AreInTheCode()
     {

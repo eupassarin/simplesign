@@ -237,8 +237,11 @@ public sealed class CadesSignerBuilder
     /// Adds RFC 5126 extended validation data after the signature timestamp: complete references
     /// and an escTimeStamp (CAdES-C/X), plus certificate and revocation values (X-L), or references,
     /// values and an archive-time-stamp v2 (CAdES-A) — the forms ICP-Brasil's AD-RV, AD-RC and AD-RA
-    /// policies mandate. Requires a timestamped level (<c>WithLevel(AdesBaselineProfile.Timestamped(tsa))</c>);
-    /// the TSA also stamps the escTimeStamp / archive time-stamp.
+    /// policies mandate. Requires a timestamped level: B-T, B-LT or B-LTA
+    /// (<c>WithLevel(AdesBaselineProfile.Timestamped(tsa))</c> or above); the TSA also stamps the
+    /// escTimeStamp / archive time-stamp. On B-LT and B-LTA the extended attributes are added after
+    /// the LT certificate and revocation values, so an archive-time-stamp v2 covers them, and before
+    /// the B-LTA archive-time-stamp-v3, which covers everything.
     /// </summary>
     /// <param name="form">The extended form.</param>
     /// <returns>A new builder with the extended form configured.</returns>
@@ -353,18 +356,6 @@ public sealed class CadesSignerBuilder
             }
         }
 
-        if (_options.ExtendedForm != CadesExtendedForm.None)
-        {
-            if (profile.Timestamp is null || timestampTokenBytes is null)
-            {
-                throw new SigningException(
-                    "Extended validation data needs a signature timestamp: use WithLevel(AdesBaselineProfile.Timestamped(tsa)).",
-                    SigningErrorReason.LevelNotAchievable);
-            }
-
-            cms = await ApplyExtendedFormAsync(cms, certificate, chain, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
-        }
-
         CadesLtvEmbeddingResult? ltvEmbedding = null;
         if (timestampTokenBytes is not null && profile.Level >= AdesBaselineLevel.LongTerm)
         {
@@ -378,6 +369,21 @@ public sealed class CadesSignerBuilder
                 AddDowngradeWarnings(warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
                     "LTV was requested but no certificate and revocation data could be collected.");
             }
+        }
+
+        // The extended form goes after the B-LT material and before the B-LTA archive-time-stamp-v3:
+        // an archive-time-stamp v2 must cover the certificate and revocation values the LT step
+        // adds, and the v3 timestamp must cover everything, the extended attributes included.
+        if (_options.ExtendedForm != CadesExtendedForm.None)
+        {
+            if (profile.Timestamp is null || timestampTokenBytes is null)
+            {
+                throw new SigningException(
+                    "Extended validation data needs a signature timestamp: use WithLevel(AdesBaselineProfile.Timestamped(tsa)).",
+                    SigningErrorReason.LevelNotAchievable);
+            }
+
+            cms = await ApplyExtendedFormAsync(cms, certificate, chain, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
         }
 
         bool hasArchiveTimestamp = false;

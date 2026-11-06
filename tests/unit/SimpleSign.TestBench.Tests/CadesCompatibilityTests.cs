@@ -52,9 +52,9 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
     [InlineData(BaselineLevel.BB, CadesExtendedChoice.CompleteReferences, false)]
     [InlineData(BaselineLevel.BT, CadesExtendedChoice.Archive, true)]
     [InlineData(BaselineLevel.BLT, CadesExtendedChoice.ExtendedLong, true)]
-    [InlineData(BaselineLevel.BLT, CadesExtendedChoice.Archive, false)]
+    [InlineData(BaselineLevel.BLT, CadesExtendedChoice.Archive, true)]
     [InlineData(BaselineLevel.BLTA, CadesExtendedChoice.CompleteReferences, true)]
-    [InlineData(BaselineLevel.BLTA, CadesExtendedChoice.Archive, false)]
+    [InlineData(BaselineLevel.BLTA, CadesExtendedChoice.Archive, true)]
     public void Evaluate_ExtendedForm_FollowsTheLevel(BaselineLevel level, CadesExtendedChoice form, bool allowed) =>
         Evaluate(Options() with { Level = level, ExtendedForm = form }).CanSign.ShouldBe(allowed);
 
