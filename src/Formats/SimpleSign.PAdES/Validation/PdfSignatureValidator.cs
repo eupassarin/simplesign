@@ -8,6 +8,7 @@ using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
+using SimpleSign.Core.Validation.Policy;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Internal;
@@ -408,6 +409,12 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // 4a. Signature timestamp: its genTime is the time the chain is validated at (B-T and above).
         TimestampTokenValidationResult timestamp = _timestampValidator.ValidateWithTrust(
             cmsData, warnings, ValidateCertificateChain, _logger);
+        if (_options.CheckRevocation && cmsData.SignatureTimestampToken is { } signatureTimestampToken)
+        {
+            timestamp = await TimestampTsaChecks.CheckTsaRevocationAsync(
+                timestamp, signatureTimestampToken, [.. cmsData.Certificates, .. TrustAnchorCertificates()],
+                TsaRevocationChecker, embeddedCrls, embeddedOcsps, allowOnline: true, warnings, cancellationToken).ConfigureAwait(false);
+        }
         DateTimeOffset? provenTime = timestamp is { IsIntegrityValid: true, IsTsaTrusted: true } ? timestamp.GenTime : null;
 
         // 4b. Country-specific chain validation providers (enrich with policy level, signer ID, etc.)
@@ -434,8 +441,28 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
             field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken).ConfigureAwait(false);
 
+        var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
+        {
+            IsIntegrityValid = integrityValid,
+            IsSignatureValid = sigValid,
+            IsSignatureVerificationIndeterminate = signatureVerificationIndeterminate,
+            SignerCertificate = cmsData.SignerCertificate,
+            IsCertificateChainValid = chainValid,
+            IsChainTrustWarning = chainTrustWarning,
+            IsNotRevoked = RevocationFact(notRevoked, revocationSource),
+            RevocationSource = revocationSource,
+            IsDocumentTimestamp = false,
+            IsTsaTrusted = timestamp.IsTsaTrusted,
+            DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
+            ProofOfExistence = provenTime,
+        }, _options.Policy);
+        warnings.AddRange(evaluation.Warnings);
+
         return new SignatureValidationResult
         {
+            Indication = evaluation.Indication,
+            SubIndication = evaluation.SubIndication,
+            Constraints = evaluation.Constraints,
             FieldName = field.FieldName,
             IsIntegrityValid = integrityValid,
             IsSignatureValid = sigValid,
@@ -536,8 +563,28 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
             field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken).ConfigureAwait(false);
 
+        var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
+        {
+            IsIntegrityValid = integrityValid,
+            IsSignatureValid = sigValid,
+            IsSignatureVerificationIndeterminate = signatureVerificationIndeterminate,
+            SignerCertificate = cmsData.SignerCertificate,
+            IsCertificateChainValid = chainValid,
+            IsChainTrustWarning = chainTrustWarning,
+            IsNotRevoked = RevocationFact(notRevoked, revocationSource),
+            RevocationSource = revocationSource,
+            IsDocumentTimestamp = true,
+            IsTsaTrusted = null,
+            DigestAlgorithmOid = cmsData.TstMessageImprintHashAlgOid ?? cmsData.DigestAlgorithmOid,
+            ProofOfExistence = null,
+        }, _options.Policy);
+        warnings.AddRange(evaluation.Warnings);
+
         return new SignatureValidationResult
         {
+            Indication = evaluation.Indication,
+            SubIndication = evaluation.SubIndication,
+            Constraints = evaluation.Constraints,
             FieldName = field.FieldName,
             IsIntegrityValid = integrityValid,
             IsSignatureValid = sigValid,
@@ -563,6 +610,12 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             Warnings = warnings.AsReadOnly()
         };
     }
+
+    /// <summary>Null when revocation was not checked; otherwise whether the certificate is not revoked.</summary>
+    private static bool? RevocationFact(bool notRevoked, RevocationSource source) =>
+        source == RevocationSource.Indeterminate ? false
+        : notRevoked && source == RevocationSource.None ? null
+        : notRevoked;
 
     private bool ValidateSignatureStep(CmsSignedData cmsData, List<string> errors, out bool isIndeterminate)
     {
@@ -934,6 +987,17 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         return null;
     }
+
+    private ChainRevocationChecker? _tsaRevocationChecker;
+
+    /// <summary>The checker for the revocation of TSA chains, created on first use.</summary>
+    private ChainRevocationChecker TsaRevocationChecker =>
+        _tsaRevocationChecker ??= new ChainRevocationChecker(_httpClient, _logger, _outboundPolicy);
+
+    /// <summary>The trust anchors and intermediates of the providers and the options, to complete TSA chains.</summary>
+    private IEnumerable<X509Certificate2> TrustAnchorCertificates() =>
+        _trustAnchorProviders.SelectMany(p => p.GetTrustAnchors().Concat(p.GetIntermediateCertificates()))
+            .Concat(_options.TrustedRoots ?? []);
 
     /// <summary>
     /// Loads trust anchor certificates from registered providers into the chain policy,

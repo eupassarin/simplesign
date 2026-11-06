@@ -23,3 +23,5 @@ SimpleSign, including their rationale, consequences, and alternatives.
 - [ADR 0018: Repository Layout and Package Boundaries](0018-repository-layout-and-package-boundaries.md)
 - [ADR 0019: Hardware and Cloud Signers (PKCS#11, PSC, CSC)](0019-hardware-and-cloud-signers.md)
 - [ADR 0020: Outbound HTTP — Retries and SSRF Guard](0020-outbound-http-resilience-and-ssrf-guard.md)
+- [ADR 0021: Signing Policy, LDAP CRLs and the Revocation Cache](0021-signing-policy-ldap-crl-and-revocation-cache.md)
+- [ADR 0022: Validation Policy and ETSI Sub-Indications](0022-validation-policy-and-etsi-report.md)

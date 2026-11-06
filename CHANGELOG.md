@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — signing policy: checks before signing (INDECOPI Req. 11–13, 16)
+
+- `SigningPolicy` (`Default`, `Strict`, `Minimal`) with `WithSigningPolicy(...)` on the PAdES, CAdES, XAdES,
+  deferred and batch builders. Before anything is signed it checks the validity of every certificate of the
+  chain, the key usage of the signing certificate (digitalSignature or nonRepudiation), the RSA key size
+  (2048 bits or more), the elliptic curve and the hash algorithm (SHA-2 and SHA-3 only).
+  `SigningPolicy.Strict` also checks the revocation of the whole chain (CRL and OCSP) and refuses a revoked
+  certificate or one whose status cannot be established.
+- `IChainRevocationChecker` and `ChainRevocationChecker` are now public in `SimpleSign.Core.Revocation`
+  (moved from the Brazil package), with `WithChainRevocationChecker(...)` on the builders.
+- New `SigningErrorReason` values: `CertificateRevoked`, `RevocationStatusUnknown`, `ChainCertificateNotValid`,
+  `KeyUsageNotPermitted`, `AlgorithmNotPermitted`, `KeyTooWeak`.
+
+### Added — revocation: LDAP CRLs, cache, verified online CRLs (INDECOPI Req. 11, 21)
+
+- CRLs from `ldap://` and `ldaps://` distribution points (read-only LDAPv3 on the BCL), used when a certificate
+  has no HTTP distribution point and `OutboundHttpPolicy.AllowLdap` is set. LDAP hosts get the same address checks
+  as HTTP.
+- `IRevocationCache` and `InMemoryRevocationCache`: CRLs are kept until their nextUpdate.
+  `ChainRevocationChecker.Cache` (15 minutes by default) and `CrlClient.Cache`.
+- `CrlClient.CheckCrlAsync(cert, issuer, url, ct)` and `ICrlClient` default member: the CRL is checked against the
+  issuer (signature, issuer name, validity). `RevocationChecker` uses it whenever the issuer is in the chain.
+- ADR 0021.
+
+### Added — timestamp authority checks (INDECOPI Req. 30)
+
+- `TimestampTsaChecks.TsaNameMatches`: the `tsa` name of TSTInfo must name the TSA certificate (RFC 3161 §2.4.2);
+  `TimestampValidator.ValidateWithTrust` makes a mismatching TSA untrusted.
+- `TimestampTsaChecks.CheckTsaRevocationAsync`: the revocation of the TSA chain at genTime, with the embedded
+  evidence and online CRL/OCSP. A revoked or unknown status makes the TSA untrusted. PAdES validation runs it when
+  `ValidationOptions.CheckRevocation` is on.
+- At signing time a token received from the TSA (or from an injected client) must be validly signed by a
+  certificate with the critical, exclusive timeStamping EKU; otherwise `TimestampException`.
+
+### Added — INDECOPI evidence tests
+
+- `IndecopiEvidenceContractTests` (tagged `Indecopi=ReqNN`): refusals at signing time (revoked chain, CRL with a bad
+  signature, expired CRL, expired intermediate, missing key usage, SHA-1, MD5, RSA-1024, tampered TSA token), an
+  altered document is INVALID, signatures by PFX and by a remote signer are VALID, a revoked TSA is untrusted.
+- `Pkcs11RealDeviceTests`: the three formats on a real token or HSM, set with `SIMPLESIGN_PKCS11_MODULE`.
+- Test helpers: `SyntheticPki.IssueTimestampingCertificate`, `BuildCrlRevoking`, `BuildLeafCrl(thisUpdate, nextUpdate)`,
+  `ConstraintTestCertificates`, `TimestampTokenOptions` (TSA certificate, tsa name, genTime, tampered signature).
+- Articles: `remote-signing.md`, `indecopi-evidence.md`.
+
+### Added — CLI verification report (INDECOPI Req. 18/28)
+
+- `validate`, `cades validate` and `xades validate`: `--policy`, `--policy-signer`, `--trust-dir`,
+  `--trust-dir-signer`, `--tsl`, `--tsl-signer`, `--lang es`; `cades validate --check-revocation`.
+- A verification report per signature: indication, ETSI sub-indication, public key (algorithm, size, SPKI SHA-256,
+  PEM) and every check; in JSON as `subIndication`, `publicKey` and `constraints`.
+- `timestamp verify` shows whether the TSA name in the token matches its certificate
+  (`TimestampTsaChecks.TsaNameMatches(byte[])`).
+
+### Added — trust store, trusted lists and the Peru extension (INDECOPI "trust list", Req. 14/24)
+
+- `DirectoryTrustAnchorProvider` (Core): trust anchors from a folder of certificates, changeable without a rebuild,
+  optionally protected by a signed manifest (`manifest.json` + `manifest.json.p7s`) with the SHA-256 of every file.
+- `TrustedList` (XAdES, `SimpleSign.XAdES.TrustedLists`): ETSI TS 119 612 and TS 102 231 v3 trusted lists, read
+  after their XML signature is checked against the scheme operator's certificate; active CA and TSA services become
+  trust anchors; an expired list is refused; `DownloadAsync` keeps the last good copy.
+- New package `SimpleSign.Peru.Iofe`: `IofeExtension` (anchors from INDECOPI's trusted list), `IofePolicies.Signing`
+  and `IofePolicies.Validation` (INDECOPI accreditation guide v4.0), `AddSimpleSignIofe`.
+
+### Added — validation policy and ETSI sub-indications (INDECOPI Req. 14, 16, 21–29)
+
+- `ValidationPolicy` on `ValidationOptions.Policy`: accepted digest algorithms with dates, minimum RSA size,
+  accepted curves, key usage of the signing certificate, each with a `fail`/`warn`/`ignore` level. Loaded from JSON
+  at run time (`ValidationPolicy.Load`, `FromJson`, `ToJson`); `ValidationPolicy.LoadSigned` checks a detached CMS
+  signature over the file first.
+- `SignatureSubIndication` (ETSI EN 319 102-1 names), `ValidationConstraintResult` and `ConstraintStatus`.
+  `SignatureValidationResult`, `CadesValidationResult` and `XadesValidationResult` expose `Indication`,
+  `SubIndication` and `Constraints`.
+- `CadesSignatureValidator.ValidateAsync` and `XadesSignatureValidator.ValidateAsync`: revocation of the signer chain
+  and of the TSA chain through `IChainRevocationChecker`; results expose `IsNotRevoked` and `RevocationSource`
+  (new value `CertificateChain`). `CadesValidationResult` and `XadesValidationResult` are now records.
+- ADR 0022.
+
+### Changed
+
+- **Breaking:** with the default policy a SHA-1 or MD5 signature without a timestamp proving it existed before the
+  algorithm's limit, or a signing key under 2048 bits, is INDETERMINATE (`CryptoConstraintsFailureNoPoe`) instead of
+  VALID with a warning. `IsValid` of CAdES and XAdES results follows the indication.
+- **Breaking:** `CrlClient.CheckCrlAsync(cert, url, ct)` without the issuer no longer reports "not revoked" from a
+  CRL whose signature it cannot check; it throws `RevocationCheckException`. A revocation is still reported.
+- OCSP and caIssuers locations other than HTTP(S) are skipped instead of failing the request.
+- **Breaking:** signing now refuses, by default, a certificate without the key usage extension or without
+  digitalSignature/nonRepudiation, an RSA key under 2048 bits and a chain with an expired certificate.
+  Use `WithSigningPolicy(SigningPolicy.Minimal)` to keep the previous behaviour.
+
 ### Added — B-LT behind corporate proxies (#215)
 
 - `LongTermValidationOptions.ClockSkewTolerance` (default 5 minutes, `OcspClient.DefaultClockSkewTolerance`):

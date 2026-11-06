@@ -668,7 +668,10 @@ public sealed class OcspClient : IOcspClient
                         string uri = accessDesc.ReadCharacterString(
                             UniversalTagNumber.IA5String,
                             new Asn1Tag(TagClass.ContextSpecific, 6));
-                        if (oid == targetOid)
+                        // Only HTTP(S) locations are usable: an ldap:// entry is skipped for the next one.
+                        if (oid == targetOid
+                            && (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                                || uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
                         {
                             return uri;
                         }

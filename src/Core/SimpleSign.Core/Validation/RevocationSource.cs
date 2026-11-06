@@ -22,5 +22,8 @@ public enum RevocationSource
     OnlineOcsp,
 
     /// <summary>Revocation check was attempted but could not be completed (network failure, no URL, etc.).</summary>
-    Indeterminate
+    Indeterminate,
+
+    /// <summary>Every certificate of the chain was checked against its issuer (embedded or online CRL and OCSP).</summary>
+    CertificateChain,
 }

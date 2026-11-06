@@ -1,3 +1,5 @@
+using SimpleSign.Core.Validation.Policy;
+using SimpleSign.Core.Validation;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
@@ -5,7 +7,7 @@ using SimpleSign.Core.Signing;
 namespace SimpleSign.XAdES;
 
 /// <summary>Result of a XAdES signature validation.</summary>
-public sealed class XadesValidationResult
+public sealed record XadesValidationResult
 {
     /// <summary>The optional XMLDSig <c>Id</c> of the validated signature.</summary>
     public string? SignatureId { get; init; }
@@ -112,7 +114,45 @@ public sealed class XadesValidationResult
     /// <summary>Non-blocking warnings.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 
-    /// <summary>True when all fundamental checks pass.</summary>
+    /// <summary>True when all fundamental checks pass, the validation policy's constraints included.</summary>
     public bool IsValid =>
-        IsIntegrityValid && IsSignatureValid && IsCertificateChainValid;
+        IsIntegrityValid && IsSignatureValid && IsCertificateChainValid && Indication == SignatureIndication.Valid;
+
+    private SignatureIndication? _indication;
+
+    /// <summary>
+    /// The ETSI EN 319 102-1 indication, including the validation policy's constraints. Without an
+    /// evaluation (a document that could not be read) it follows the integrity, signature and chain checks.
+    /// </summary>
+    public SignatureIndication Indication
+    {
+        get => _indication ?? (IsIntegrityValid && IsSignatureValid
+            ? (IsCertificateChainValid ? SignatureIndication.Valid : SignatureIndication.Indeterminate)
+            : SignatureIndication.Invalid);
+        init => _indication = value;
+    }
+
+    /// <summary>The ETSI EN 319 102-1 sub-indication of an INVALID or INDETERMINATE result, or null.</summary>
+    public SignatureSubIndication? SubIndication { get; init; }
+
+    /// <summary>The checks of the validation and their outcome, including the validation policy's constraints.</summary>
+    public IReadOnlyList<ValidationConstraintResult> Constraints { get; init; } = [];
+
+    /// <summary>
+    /// Whether the signing certificate chain is not revoked: null when revocation was not checked by
+    /// <c>ValidateAsync</c>; false when a certificate is revoked or the status is unknown (see <see cref="RevocationSource"/>).
+    /// </summary>
+    public bool? IsNotRevoked { get; init; }
+
+    /// <summary>How revocation was established (<see cref="RevocationSource.CertificateChain"/>) or why it was not.</summary>
+    public RevocationSource RevocationSource { get; init; }
+
+    /// <summary>What the validation found, for the revocation step of <c>ValidateAsync</c>.</summary>
+    internal ValidationFacts? Facts { get; init; }
+
+    /// <summary>The certificates that may complete the signer and TSA chains (embedded certificates, trust anchors).</summary>
+    internal IReadOnlyList<X509Certificate2> ChainCandidates { get; init; } = [];
+
+    /// <summary>The signature timestamp token, for the TSA revocation check.</summary>
+    internal byte[]? SignatureTimestampToken { get; init; }
 }

@@ -34,6 +34,7 @@ public sealed class LtvEmbedderTests
     {
         using RSA key = RSA.Create(2048);
         CertificateRequest certificateRequest = new CertificateRequest("CN=CRL Test", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        certificateRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, critical: true));
         byte[] bytes = Encoding.ASCII.GetBytes(url);
         byte b = 134;
         byte b2 = (byte)bytes.Length;

@@ -8,6 +8,7 @@ using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Validation;
 using SimpleSign.Brazil.Internal;
+using SimpleSign.Core.Revocation;
 
 namespace SimpleSign.Brazil.IcpBrasil;
 

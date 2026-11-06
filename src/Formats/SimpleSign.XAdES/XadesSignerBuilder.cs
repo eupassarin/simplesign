@@ -170,6 +170,27 @@ public sealed class XadesSignerBuilder
         });
     }
 
+    /// <summary>
+    /// Sets the checks run before signing: validity of the chain, key usage, key size, hash algorithm
+    /// and, with <see cref="SigningPolicy.Strict"/>, the revocation of the chain. Default: <see cref="SigningPolicy.Default"/>.
+    /// </summary>
+    /// <param name="policy">The signing policy.</param>
+    /// <returns>A new builder with the policy configured.</returns>
+    public XadesSignerBuilder WithSigningPolicy(SigningPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        return With(_options with { SigningPolicy = policy });
+    }
+
+    /// <summary>Sets the checker used for the revocation check of <see cref="SigningPolicy.CheckRevocation"/>.</summary>
+    /// <param name="checker">The chain revocation checker.</param>
+    /// <returns>A new builder with the checker configured.</returns>
+    public XadesSignerBuilder WithChainRevocationChecker(SimpleSign.Core.Revocation.IChainRevocationChecker checker)
+    {
+        ArgumentNullException.ThrowIfNull(checker);
+        return With(_options with { Dependencies = _options.Dependencies with { ChainRevocationChecker = checker } });
+    }
+
     /// <summary>Sets an operation ID for log correlation.</summary>
     /// <param name="operationId">The operation ID.</param>
     /// <returns>A new builder with the operation ID configured.</returns>
@@ -471,6 +492,9 @@ public sealed class XadesSignerBuilder
         var profile = _options.Profile;
 
         ValidatePrerequisites(credential);
+        await SignerAcceptance.EnsureSignerAcceptableAsync(
+            certificate, chain, _options.SigningPolicy, _options.Dependencies.ChainRevocationChecker,
+            _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger, cancellationToken).ConfigureAwait(false);
         if (_options.ExtendedForm != XadesExtendedForm.None && profile.Timestamp is null)
         {
             throw new SigningException(
@@ -515,9 +539,15 @@ public sealed class XadesSignerBuilder
         }
 
         var warnings = new List<SigningWarning>();
+        if (_options.HashAlgorithmExplicitlySet)
+        {
+            SignerAcceptance.EnsureHashAllowed(_options.HashAlgorithm, _options.SigningPolicy);
+        }
+
         var resolvedAlgorithm = SigningAlgorithmResolver.Resolve(
             certificate, _options.HashAlgorithm, _options.HashAlgorithmExplicitlySet, _options.SignatureAlgorithmOid);
         var hashAlg = resolvedAlgorithm.HashAlgorithm;
+        SignerAcceptance.EnsureHashAllowed(hashAlg, _options.SigningPolicy);
         string sigAlgOid = resolvedAlgorithm.SignatureAlgorithmOid;
 
         var logger = _options.Dependencies.Logger;

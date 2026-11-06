@@ -384,6 +384,7 @@ public sealed class TimestampClient : ITimestampClient
 
             byte[] tokenBytes = seq.ReadEncodedValue().ToArray();
             ValidateTimestampToken(tokenBytes, expectedHashOid, expectedHash, requestNonce);
+            EnsureTokenSignedByTsa(tokenBytes);
             return tokenBytes;
         }
         catch (TimestampException) { throw; }
@@ -415,6 +416,27 @@ public sealed class TimestampClient : ITimestampClient
         string hashOid = CmsSignatureBuilder.GetDigestOid(hashAlgorithm);
         byte[] hash = CryptoUtility.ComputeHash(dataToTimestamp, hashAlgorithm);
         ValidateTimestampToken(timestampToken, hashOid, hash, null);
+        EnsureTokenSignedByTsa(timestampToken);
+    }
+
+    /// <summary>Throws when the TSA's signature or its timeStamping EKU do not check out.</summary>
+    private static void EnsureTokenSignedByTsa(byte[] timestampToken)
+    {
+        var errors = new List<string>();
+        bool valid;
+        try
+        {
+            valid = Validation.TimestampValidator.VerifyTokenSignatureAndEku(timestampToken, errors);
+        }
+        catch (Exception ex) when (ex is AsnContentException or CryptographicException or NotSupportedException)
+        {
+            throw new TimestampException("The TSA signature of the timestamp token could not be verified.", ex);
+        }
+
+        if (!valid)
+        {
+            throw new TimestampException("The timestamp token is not validly signed by a time-stamping authority: " + string.Join(" ", errors));
+        }
     }
 
     private static void ValidateTimestampToken(

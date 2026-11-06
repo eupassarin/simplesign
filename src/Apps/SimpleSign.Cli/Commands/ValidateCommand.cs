@@ -57,7 +57,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
     }
 
     /// <summary>Validate command settings.</summary>
-    internal sealed class Settings : CommonSettings
+    internal sealed class Settings : TrustedValidationSettings
     {
         /// <summary>Input PDF file to validate.</summary>
         [CommandArgument(0, "<input>")]
@@ -96,19 +96,26 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
                 return ValidationResult.Error($"Trust anchor file not found: {TrustPath}");
             }
 
-            return ValidationResult.Success();
+            return ValidateTrustOptions();
         }
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var loggerFactory = settings.CreateLoggerFactory();
+        var (policy, extraAnchors) = await settings.LoadTrustAsync(cancellationToken);
+        List<System.Security.Cryptography.X509Certificates.X509Certificate2> roots =
+        [
+            .. settings.TrustPath is null
+                ? []
+                : _certChainService.LoadCertsFromBytes(await File.ReadAllBytesAsync(settings.TrustPath, cancellationToken)),
+            .. extraAnchors,
+        ];
         var options = new ValidationOptions
         {
             CheckRevocation = !settings.NoRevocation,
-            TrustedRoots = settings.TrustPath is null
-                ? null
-                : [.. _certChainService.LoadCertsFromBytes(await File.ReadAllBytesAsync(settings.TrustPath, cancellationToken))],
+            TrustedRoots = roots.Count == 0 ? null : roots,
+            Policy = policy,
         };
         var logger = settings.CreateLogger<PdfSignatureValidator>();
         var validator = new PdfSignatureValidator(
@@ -155,7 +162,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         }
         else
         {
-            OutputText(settings.InputPath, results, conformanceLevels, aeaInfo, inspection, inspectionLookup);
+            OutputText(settings.InputPath, results, conformanceLevels, aeaInfo, inspection, inspectionLookup, settings.Spanish);
         }
 
         bool hasUnvalidated = results.Any(r => r.Indication != SignatureIndication.Valid);
@@ -281,7 +288,8 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         Dictionary<string, PAdESConformanceLevel> conformanceLevels,
         Dictionary<string, (string CommitmentOid, string? PolicyOid, byte[]? ManifestJson)> aeaInfo,
         PdfInspectionResult inspection,
-        Dictionary<string, SignatureFieldInfo> inspectionLookup)
+        Dictionary<string, SignatureFieldInfo> inspectionLookup,
+        bool spanish)
     {
         var fileName = Path.GetFileName(inputPath);
 
@@ -415,6 +423,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             }
 
             // Validation status
+            ValidationReportRenderer.AddNodes(sigNode, result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, spanish);
             var valNode = sigNode.AddNode("[blue]Validation[/]");
             valNode.AddNode($"Integrity:  {Check(result.IsIntegrityValid)}");
             valNode.AddNode($"Signature:  {Check(result.IsSignatureValid)}");

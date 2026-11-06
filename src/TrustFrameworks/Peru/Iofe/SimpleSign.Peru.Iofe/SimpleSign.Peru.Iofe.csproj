@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Peru.Iofe</AssemblyName>
+    <RootNamespace>SimpleSign.Peru.Iofe</RootNamespace>
+    <PackageId>SimpleSign.Peru.Iofe</PackageId>
+    <Description>IOFE (Peru, Ley 27269) for SimpleSign: trust anchors from INDECOPI's signed trusted list, the signing and validation policies of the INDECOPI accreditation guide.</Description>
+    <PackageTags>iofe;indecopi;peru;digital-signature;trusted-list</PackageTags>
+    <Version>0.10.1</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Peru.Iofe.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

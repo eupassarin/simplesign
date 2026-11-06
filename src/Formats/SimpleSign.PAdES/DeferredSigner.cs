@@ -80,10 +80,16 @@ public static class DeferredSigner
         options ??= new DeferredSigningOptions();
         ArgumentNullException.ThrowIfNull(sessionIntegrityKey);
 
+        if (options.HashAlgorithmExplicitlySet)
+        {
+            SignerAcceptance.EnsureHashAllowed(options.HashAlgorithm, options.SigningPolicy);
+        }
+
         var resolvedAlgorithm = SigningAlgorithmResolver.Resolve(
             certificate, options.HashAlgorithm, options.HashAlgorithmExplicitlySet,
             options.SignatureAlgorithmOid);
         HashAlgorithmName effectiveHash = resolvedAlgorithm.HashAlgorithm;
+        SignerAcceptance.EnsureHashAllowed(effectiveHash, options.SigningPolicy);
 
         (logger ?? NullLogger.Instance).DeferredPrepareStarted(certificate.Subject, effectiveHash.Name!);
 
@@ -103,6 +109,10 @@ public static class DeferredSigner
                 $"Certificate '{certificate.Subject}' expired on {certificate.NotAfter:yyyy-MM-dd} UTC.",
                 SigningErrorReason.CertificateExpired);
         }
+
+        await SignerAcceptance.EnsureSignerAcceptableAsync(
+            certificate, options.ExtraCertificates ?? [], options.SigningPolicy, options.ChainRevocationChecker,
+            options.HttpClientProvider ?? DefaultHttpClientProvider.Instance, logger ?? NullLogger.Instance, cancellationToken).ConfigureAwait(false);
 
         string sigAlgOid = resolvedAlgorithm.SignatureAlgorithmOid;
         string digestOid = CmsSignatureBuilder.GetDigestOid(effectiveHash);
@@ -472,6 +482,15 @@ internal sealed class DeferredSigningOptions
 
     /// <summary>Baseline profile persisted into the session for phase-two resumption.</summary>
     public AdesBaselineProfile? Profile { get; init; }
+
+    /// <summary>The checks run on the certificate, chain and algorithms before the hash is prepared.</summary>
+    public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
+
+    /// <summary>The checker for the revocation check; null creates one from <see cref="HttpClientProvider"/>.</summary>
+    public SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; init; }
+
+    /// <summary>The HTTP provider for the revocation check; null uses the default provider.</summary>
+    public IHttpClientProvider? HttpClientProvider { get; init; }
 }
 
 /// <summary>Internal configuration used while a deferred builder completes a signature.</summary>

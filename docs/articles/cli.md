@@ -168,3 +168,42 @@ contract-signed.pdf  1/1 valid
     ├── Byte Range:   [0, 1234, 5678, 9012]  ✓
     └── Signed at:    2025-04-28 14:30:00 UTC
 ```
+
+## Validation Policy, Trust Store and Verification Report
+
+`validate`, `cades validate` and `xades validate` share these options:
+
+| Option | What it does |
+|---|---|
+| `--policy <file>` | Validation policy (JSON): accepted digest algorithms and their dates, minimum RSA size, accepted curves, key usage of the signing certificate |
+| `--policy-signer <cert>` | The policy must be signed with this certificate (detached CMS in `<policy>.p7s`) |
+| `--trust-dir <dir>` | Folder of trust anchor certificates (`.cer`, `.crt`, `.der`, `.pem`) |
+| `--trust-dir-signer <cert>` | The folder must carry `manifest.json` (SHA-256 of every file) signed with this certificate |
+| `--tsl <url\|file>` + `--tsl-signer <cert>` | Trusted list (ETSI TS 119 612 / TS 102 231): its active CA and TSA services become trust anchors |
+| `--lang es` | Write the verification report in Spanish |
+| `--check-revocation` (CAdES, XAdES) | Check the revocation of the signer and TSA chains |
+
+Every signature gets a verification report: the indication (TOTAL-PASSED, TOTAL-FAILED, INDETERMINATE), the
+ETSI EN 319 102-1 sub-indication, the signer's public key (algorithm, size, SHA-256 of the SubjectPublicKeyInfo and
+the PEM) and each check of the validation. With `--json` the same data is in `subIndication`, `publicKey` and
+`constraints`.
+
+```bash
+simplesign validate contrato.pdf --policy indecopi.json --tsl tsl-pe.xml --tsl-signer indecopi-tsl.cer --lang es
+```
+
+A policy file (every property is optional):
+
+```json
+{
+  "name": "INDECOPI",
+  "cryptographic": {
+    "level": "fail",
+    "digestAlgorithms": [ { "name": "SHA1", "acceptedUntil": "2012-08-01T00:00:00Z" }, "SHA256", "SHA384", "SHA512" ],
+    "minimumRsaKeySize": 2048
+  },
+  "signingCertificate": { "keyUsage": "fail" }
+}
+```
+
+`timestamp verify` also tells whether the `tsa` name of the token matches the TSA certificate (RFC 3161 §2.4.2).

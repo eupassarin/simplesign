@@ -130,13 +130,14 @@ public sealed class XadesSignerTests
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>bad hash</doc>";
         byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
 
-        var ex = await Should.ThrowAsync<NotSupportedException>(async () =>
+        var ex = await Should.ThrowAsync<SigningException>(async () =>
         {
             await XadesSigner.Document(xmlBytes)
                 .WithCertificate(s_cert)
                 .WithHashAlgorithm(System.Security.Cryptography.HashAlgorithmName.MD5)
                 .SignAsync();
         });
+        ex.Reason.ShouldBe(SigningErrorReason.AlgorithmNotPermitted);
     }
 
     [Fact]

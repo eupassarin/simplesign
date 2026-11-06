@@ -49,4 +49,22 @@ public enum SigningErrorReason
 
     /// <summary>An unspecified signing failure occurred.</summary>
     Unspecified = 11,
+
+    /// <summary>A certificate of the signing chain is revoked.</summary>
+    CertificateRevoked = 15,
+
+    /// <summary>The revocation status of a certificate of the signing chain could not be established.</summary>
+    RevocationStatusUnknown = 16,
+
+    /// <summary>A certificate of the signing chain, other than the signing certificate, is outside its validity period.</summary>
+    ChainCertificateNotValid = 17,
+
+    /// <summary>The signing certificate does not allow digital signatures (key usage digitalSignature or nonRepudiation).</summary>
+    KeyUsageNotPermitted = 18,
+
+    /// <summary>The hash algorithm or elliptic curve is not allowed by the signing policy.</summary>
+    AlgorithmNotPermitted = 19,
+
+    /// <summary>The signing key is smaller than the signing policy allows.</summary>
+    KeyTooWeak = 20,
 }
