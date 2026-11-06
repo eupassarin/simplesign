@@ -4,11 +4,11 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useT, type MessageKey } from "@/i18n"
 import { api } from "@/lib/api"
-import type { BaselineLevel, IcpPolicyKind, IcpVersion, TimestampChoice, TsaProvider } from "@/lib/types"
+import type { BaselineLevel, EnvironmentInfo, IcpPolicyKind, IcpVersion, OptionState, TimestampChoice, TsaProvider } from "@/lib/types"
 import { ChoiceCard, Field, Pill, Section, ToggleRow } from "../ui"
 import { useSigning } from "../state"
 
-const levels: { id: BaselineLevel; title: string }[] = [
+export const levels: { id: BaselineLevel; title: string }[] = [
   { id: "BB", title: "B-B" },
   { id: "BT", title: "B-T" },
   { id: "BLT", title: "B-LT" },
@@ -23,7 +23,7 @@ const policies: { id: IcpPolicyKind; title: string; level: string }[] = [
 ]
 
 export function TypeStep() {
-  const { options, update, state, report } = useSigning()
+  const { options, update, state, report, env } = useSigning()
   const level = report?.effective.level ?? options.level
   const needsTsa = state("timestamp").visible
   const t = useT()
@@ -71,7 +71,7 @@ export function TypeStep() {
 
       {needsTsa && (
         <Section title={t("type.timestamp")} description={t("type.timestampHint", { level: report?.effectiveLevel ?? level })} infoId="timestamp">
-          <TsaPicker value={options.timestamp} onChange={(timestamp) => update({ timestamp })} />
+          <TsaPicker value={options.timestamp} onChange={(timestamp) => update({ timestamp })} state={state} env={env} />
         </Section>
       )}
 
@@ -79,7 +79,7 @@ export function TypeStep() {
         <Section title={t("type.archive")} description={t("type.archiveHint")} infoId="archiveTimestamp">
           <ToggleRow checked={options.separateArchiveTsa} onChange={(separateArchiveTsa) => update({ separateArchiveTsa })} label={t("type.separateArchive")}
             description={t("type.separateArchiveHint")} />
-          {options.separateArchiveTsa && <TsaPicker value={options.archiveTimestamp} onChange={(archiveTimestamp) => update({ archiveTimestamp })} />}
+          {options.separateArchiveTsa && <TsaPicker value={options.archiveTimestamp} onChange={(archiveTimestamp) => update({ archiveTimestamp })} state={state} env={env} />}
         </Section>
       )}
 
@@ -137,8 +137,12 @@ function shortRoot(subject: string) {
 
 const providers: TsaProvider[] = ["Sandbox", "SandboxAuthenticated", "DigiCert", "Sectigo", "FreeTsa", "Custom"]
 
-function TsaPicker({ value, onChange }: { value: TimestampChoice; onChange: (v: TimestampChoice) => void }) {
-  const { state, env } = useSigning()
+export function TsaPicker({ value, onChange, state, env }: {
+  value: TimestampChoice
+  onChange: (v: TimestampChoice) => void
+  state: (key: string) => OptionState
+  env: EnvironmentInfo | null
+}) {
   const set = (patch: Partial<TimestampChoice>) => onChange({ ...value, ...patch })
   const [uploading, setUploading] = useState(false)
   const t = useT()

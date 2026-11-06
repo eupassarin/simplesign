@@ -21,6 +21,12 @@ import type {
   ValidationReport,
   ValidationSample,
   ValidationSettings,
+  CadesOptions,
+  CadesOptionsResponse,
+  CadesSample,
+  CadesSignResult,
+  CadesValidationView,
+  CmsFacts,
 } from "./types"
 
 export class ApiError extends Error {}
@@ -76,6 +82,14 @@ export const api = {
     inspect: (fileId: string) => request<InspectionReport>("POST", "/api/inspect", { fileId }),
     cmsUrl: (fileId: string, field: string) => `/api/files/${encodeURIComponent(fileId)}/cms/${encodeURIComponent(field)}`,
   },
+  cades: {
+    samples: () => request<CadesSample[]>("GET", "/api/cades/samples"),
+    options: (options: CadesOptions) => request<CadesOptionsResponse>("POST", "/api/cades/options", options),
+    sign: (options: CadesOptions) => request<CadesSignResult>("POST", "/api/cades/sign", options),
+    validate: (signatureId: string, dataId: string | null, settings: ValidationSettings) =>
+      request<CadesValidationView>("POST", "/api/cades/validate", { signatureId, dataId, settings }),
+    inspect: (fileId: string) => request<CmsFacts>("POST", "/api/cades/inspect", { fileId }),
+  },
   credentials: {
     sandbox: (signerId: string) => request<CredentialFacts>("POST", "/api/credentials/sandbox", { signerId }),
     pfx: (uploadId: string, password: string) => request<CredentialFacts>("POST", "/api/credentials/pfx", { uploadId, password }),
@@ -93,7 +107,7 @@ export const api = {
     close: (id: string) => request<void>("DELETE", `/api/credentials/${id}`),
   },
   matrix: {
-    cases: () => request<MatrixCase[]>("GET", "/api/matrix/cases"),
-    run: (body: { group?: string; limit?: number; caseId?: string }) => request<MatrixRunResult>("POST", "/api/matrix/run", body),
+    cases: (format = "pades") => request<MatrixCase[]>("GET", `/api/matrix/cases?format=${format}`),
+    run: (body: { group?: string; limit?: number; caseId?: string; format?: string }) => request<MatrixRunResult>("POST", "/api/matrix/run", body),
   },
 }

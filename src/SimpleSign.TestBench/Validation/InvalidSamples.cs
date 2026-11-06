@@ -66,7 +66,7 @@ internal static class InvalidSamples
         byte[] untrustedTsa = await Sign(maria, pki.Chain, AdesBaselineProfile.Timestamped(new TimestampOptions(SandboxPki.UntrustedTsaUri, sandbox.Network)));
 
         ValidationSample Add(string id, string fileName, byte[] content, string title, string description, string indication, string check) =>
-            new(id, documents.Add(fileName, content).Id, title, description, indication, check);
+            new(id, documents.AddPinned(fileName, content).Id, title, description, indication, check);
 
         return
         [

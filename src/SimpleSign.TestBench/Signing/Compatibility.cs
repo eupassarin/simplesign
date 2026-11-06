@@ -183,24 +183,13 @@ public static class Compatibility
         Set("returnLowerLevel", !needsTsa || icp ? OptionState.Hidden
             : o.Mode != RunMode.Sign ? OptionState.Off(L.T("Only SignWithDetailsAsync (Sign now) reports a lower achieved level; deferred and batch always throw."))
             : OptionState.Shown);
-        foreach (var provider in Enum.GetValues<TsaProvider>())
-        {
-            bool sandboxProvider = provider is TsaProvider.Sandbox or TsaProvider.SandboxAuthenticated;
-            Set($"tsa.{provider}", sandbox && !sandboxProvider && provider != TsaProvider.Custom
-                    ? OptionState.Off(L.T("The sandbox is offline. Switch to Real to use public TSAs."))
-                : !sandbox && sandboxProvider ? OptionState.Off(L.T("Sandbox services exist only in Sandbox mode."))
-                : OptionState.Shown);
-        }
-
-        Set("tsa.clientCertificate", sandbox
-            ? new OptionState(true, Note: L.T("The sandbox TSA does not check TLS client certificates; the option is still passed to TimestampOptions.ClientCertificate."))
-            : OptionState.Shown);
+        SharedRules.TsaProviders(sandbox, Set);
         if (needsTsa)
         {
-            CheckTsa(o.Timestamp, L.T("Signature TSA"), state, Error, sandbox);
+            SharedRules.CheckTsa(o.Timestamp, L.T("Signature TSA"), state, Error, sandbox, StepType);
             if (needsArchive && o.SeparateArchiveTsa)
             {
-                CheckTsa(o.ArchiveTimestamp, L.T("Archive TSA"), state, Error, sandbox);
+                SharedRules.CheckTsa(o.ArchiveTimestamp, L.T("Archive TSA"), state, Error, sandbox, StepType);
             }
         }
 
@@ -215,55 +204,7 @@ public static class Compatibility
         }
 
         // ── 4. Cryptography ────────────────────────────────────────────
-        IReadOnlyList<HashChoice> hashes = credential?.Hashes ?? Enum.GetValues<HashChoice>();
-        foreach (var hash in Enum.GetValues<HashChoice>())
-        {
-            Set($"hash.{hash}", hashes.Contains(hash) ? OptionState.Shown
-                : credential is null ? OptionState.Shown
-                : OptionState.Off(hash is HashChoice.Sha3_256 or HashChoice.Sha3_384 or HashChoice.Sha3_512 && credential.CanSignHashLocally
-                    ? L.T("SHA-3 is not available in this runtime (needs OpenSSL 1.1.1+ or Windows 11).")
-                    : L.T("{0} signers accept SHA-256, SHA-384 and SHA-512 only.", credential.Kind)));
-        }
-
-        var effective = o;
-        if (credential is not null && !hashes.Contains(o.Hash))
-        {
-            Error(StepCrypto, state[$"hash.{o.Hash}"].Disabled ?? L.T("This hash is not available."));
-        }
-
-        bool isRsa = credential is null || credential.KeyAlgorithm == "RSA";
-        Set("padding", isRsa ? OptionState.Shown : new OptionState(false, Note: L.T("ECDSA keys sign with ECDSA; RSA padding does not apply.")));
-        foreach (var padding in Enum.GetValues<RsaPadding>())
-        {
-            Set($"padding.{padding}", credential is null || credential.Paddings.Contains(padding) ? OptionState.Shown
-                : OptionState.Off(credential.Kind switch
-                {
-                    CredentialKind.Psc => L.T("PSCs only produce RSA PKCS#1 v1.5 signatures."),
-                    CredentialKind.Csc => L.T("This CSC credential does not list the algorithm in its key/algo."),
-                    _ => L.T("Not supported by this key."),
-                }));
-        }
-
-        bool sha3 = o.Hash is HashChoice.Sha3_256 or HashChoice.Sha3_384 or HashChoice.Sha3_512;
-        if (sha3 && state["padding.Pss"].Disabled is null)
-        {
-            Set("padding.Pss", OptionState.Off(L.T("The library supports RSASSA-PSS with SHA-256, SHA-384 and SHA-512 only (salt = hash length).")));
-        }
-
-        if (isRsa && sha3 && o.Padding == RsaPadding.Pss && credential?.Paddings.Contains(RsaPadding.Pss) == true)
-        {
-            Error(StepCrypto, L.T("RSASSA-PSS cannot be combined with a SHA-3 digest: choose SHA-2 or PKCS#1 v1.5."));
-        }
-
-        if (isRsa && credential is not null && !credential.Paddings.Contains(o.Padding))
-        {
-            effective = effective with { Padding = credential.Paddings.FirstOrDefault() };
-        }
-
-        if (!isRsa)
-        {
-            effective = effective with { Padding = RsaPadding.Pkcs1 };
-        }
+        var effective = o with { Padding = SharedRules.Crypto(o.Hash, o.Padding, credential, state, Error, StepCrypto) };
 
         Set("subFilter", icp ? new OptionState(true, L.T("ICP-Brasil PAdES policies mandate /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES (DOC-ICP-15.03).")) : OptionState.Shown);
         Set("subFilter.EtsiCadesDetached", icp ? OptionState.Off(L.T("Fixed by the ICP-Brasil policy."))
@@ -398,27 +339,9 @@ public static class Compatibility
         Set("operationId", OptionState.Shown);
 
         // ── 2. Signer ──────────────────────────────────────────────────
-        if (credential is null)
+        SharedRules.Signer(credential, Error, Warn, StepSigner);
+        if (credential is not null)
         {
-            Error(StepSigner, L.T("Choose a signer (certificate)."));
-        }
-        else
-        {
-            if (credential.IsExpired)
-            {
-                Error(StepSigner, L.T("The certificate has expired: the library refuses to sign with it (SigningException)."));
-            }
-
-            if (credential.IsNotYetValid)
-            {
-                Error(StepSigner, L.T("The certificate is not valid yet: the library refuses to sign with it (SigningException)."));
-            }
-
-            if (!credential.HasNonRepudiation)
-            {
-                Warn(StepSigner, L.T("The certificate lacks the nonRepudiation key usage: ICP-Brasil validators warn about it."));
-            }
-
             if (icp && !sandbox && !credential.ChainsToIcpBrasil)
             {
                 Warn(StepType, L.T("The certificate does not chain to an ICP-Brasil root: the signature will carry the policy, but it will not be valid under it."));
@@ -447,41 +370,6 @@ public static class Compatibility
                 BaselineLevel.BLT => "B-LT",
                 _ => "B-LTA",
             };
-    }
-
-    private static void CheckTsa(TimestampChoice tsa, string label, Dictionary<string, OptionState> state, Action<string, string> error, bool sandbox)
-    {
-        if (state[$"tsa.{tsa.Provider}"].Disabled is { } reason)
-        {
-            error(StepType, $"{label}: {reason}");
-        }
-
-        if (tsa.Provider == TsaProvider.Custom)
-        {
-            if (!Uri.TryCreate(tsa.Url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https" or "tcp"))
-            {
-                error(StepType, L.T("{0}: enter an absolute http://, https:// or tcp:// URL.", label));
-            }
-            else if (sandbox && !uri.Host.EndsWith(SandboxPki.Host, StringComparison.OrdinalIgnoreCase))
-            {
-                error(StepType, L.T("{0}: the sandbox is offline; only *.{1} URLs answer.", label, SandboxPki.Host));
-            }
-        }
-
-        if (tsa.Auth == TsaAuth.Basic && (string.IsNullOrEmpty(tsa.User) || tsa.Password is null))
-        {
-            error(StepType, L.T("{0}: Basic authentication needs a user and a password.", label));
-        }
-
-        if (tsa.Auth == TsaAuth.Bearer && string.IsNullOrWhiteSpace(tsa.Token))
-        {
-            error(StepType, L.T("{0}: Bearer authentication needs a token.", label));
-        }
-
-        if (tsa.Provider == TsaProvider.SandboxAuthenticated && tsa.Auth != TsaAuth.Basic)
-        {
-            error(StepType, L.T("{0}: the authenticated sandbox TSA needs Basic authentication ({1} / {2}).", label, SandboxPki.TsaUser, SandboxPki.TsaPassword));
-        }
     }
 
     internal static bool IsOid(string value) =>

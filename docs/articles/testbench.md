@@ -83,6 +83,27 @@ Samples built at startup in the sandbox show each kind of result:
 | Root outside the trust anchors | Indeterminate (chain) |
 | Untrusted TSA | Valid, with a TSA chain warning |
 
+## CAdES
+
+The *CAdES* page signs any file with `CadesSigner` and validates with `CadesSignatureValidator`.
+
+- **Operation**: sign, co-sign (`CoSign`: another signer of the same content) or countersign
+  (`CounterSign`: a signature over one signer's signature value). The result offers *Co-sign this*
+  and *Countersign this* to build multi-signer files step by step.
+- **Content**: detached (.p7s) or enveloped (.p7m). A co-signature keeps the existing content type;
+  co-signing a detached signature needs the same data (the message digest is checked first).
+- **Type**: CAdES baseline B-B…B-LTA, ICP-Brasil CAdES policies AD-RB, AD-RT, AD-RV, AD-RC and AD-RA
+  (`WithIcpBrasilPolicy`), or a policy OID. RFC 5126 extended forms (CAdES-X, X Long, A) need a
+  signature timestamp; CAdES-A only works on B-T.
+- **Result**: the validation tree (signers, with their countersignatures nested), the CMS structure
+  (signed and unsigned attributes of every signer) and the C# / `simplesign cades` code.
+- **Validate**: samples built at startup (valid, two signers plus a countersignature, data changed,
+  signature value changed, unknown root) or your own .p7s / .p7m and data, with the same trust
+  settings as the Validation page.
+
+The run matrix has a CAdES set as well (operation × content × type × extended form × hash ×
+padding × signer).
+
 ## Run matrix
 
 The *Run matrix* page (and `SimpleSign.TestBench.Tests` in CI) generates cases from the same

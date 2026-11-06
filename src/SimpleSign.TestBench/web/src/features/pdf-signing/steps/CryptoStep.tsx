@@ -4,7 +4,7 @@ import type { HashChoice, RsaPadding, SubFilterChoice } from "@/lib/types"
 import { ChoiceCard, Field, Section, ToggleRow } from "../ui"
 import { useSigning } from "../state"
 
-const hashes: { id: HashChoice; title: string }[] = [
+export const hashes: { id: HashChoice; title: string }[] = [
   { id: "Sha256", title: "SHA-256" },
   { id: "Sha384", title: "SHA-384" },
   { id: "Sha512", title: "SHA-512" },
@@ -13,7 +13,7 @@ const hashes: { id: HashChoice; title: string }[] = [
   { id: "Sha3_512", title: "SHA3-512" },
 ]
 
-const paddings: { id: RsaPadding; title: string }[] = [
+export const paddings: { id: RsaPadding; title: string }[] = [
   { id: "Pkcs1", title: "PKCS#1 v1.5" },
   { id: "Pss", title: "RSASSA-PSS" },
 ]

@@ -140,31 +140,7 @@ internal static class CodeGenerator
     {
         var args = new List<string> { "simplesign sign document.pdf", "--output signed.pdf" };
         var notes = new List<string>();
-        switch (credential.Kind)
-        {
-            case CredentialKind.Pfx:
-            case CredentialKind.SandboxA1:
-                args.Add("--cert signer.pfx --password \"$PFX_PASSWORD\"");
-                if (credential.Kind == CredentialKind.SandboxA1)
-                {
-                    notes.Add("The sandbox certificate exists only inside the TestBench; export your own PFX to run this.");
-                }
-
-                break;
-            case CredentialKind.OsStore:
-                args.Add($"--store --thumbprint {credential.Id}");
-                notes.Add("Use the certificate's thumbprint from your OS store.");
-                break;
-            case CredentialKind.Pkcs11:
-                args.Add("--pkcs11-lib /path/to/driver --thumbprint <thumbprint>");
-                break;
-            case CredentialKind.Psc:
-                args.Add("--psc-url https://<psc>/v0/");
-                break;
-            case CredentialKind.Csc:
-                args.Add("--csc-url https://<qtsp>/csc/v2/");
-                break;
-        }
+        CliCredential(credential, args, notes);
 
         bool needsTsa = o.Kind == SignatureKind.IcpBrasil ? o.IcpPolicy != IcpPolicyKind.AdRb || o.IcpAdRbTimestamp : o.Level != BaselineLevel.BB;
         if (needsTsa)
@@ -326,7 +302,37 @@ internal static class CodeGenerator
         return (string.Join(" \\\n  ", args), notes);
     }
 
-    private static void AddIf(List<string> args, string flag, string? value)
+    /// <summary>The CLI flags that pick the signer (shared by <c>sign</c>, <c>cades sign</c> and <c>xades sign</c>).</summary>
+    internal static void CliCredential(CredentialFacts credential, List<string> args, List<string> notes)
+    {
+        switch (credential.Kind)
+        {
+            case CredentialKind.Pfx:
+            case CredentialKind.SandboxA1:
+                args.Add("--cert signer.pfx --password \"$PFX_PASSWORD\"");
+                if (credential.Kind == CredentialKind.SandboxA1)
+                {
+                    notes.Add("The sandbox certificate exists only inside the TestBench; export your own PFX to run this.");
+                }
+
+                break;
+            case CredentialKind.OsStore:
+                args.Add($"--store --thumbprint {credential.Id}");
+                notes.Add("Use the certificate's thumbprint from your OS store.");
+                break;
+            case CredentialKind.Pkcs11:
+                args.Add("--pkcs11-lib /path/to/driver --thumbprint <thumbprint>");
+                break;
+            case CredentialKind.Psc:
+                args.Add("--psc-url https://<psc>/v0/");
+                break;
+            case CredentialKind.Csc:
+                args.Add("--csc-url https://<qtsp>/csc/v2/");
+                break;
+        }
+    }
+
+    internal static void AddIf(List<string> args, string flag, string? value)
     {
         if (!string.IsNullOrWhiteSpace(value))
         {

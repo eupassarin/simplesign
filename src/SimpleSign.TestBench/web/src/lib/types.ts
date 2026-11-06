@@ -284,6 +284,7 @@ export interface IcpVersion {
 }
 
 export interface CheckRow {
+  id: string
   name: string
   status: "pass" | "fail" | "warn" | "n/a"
   detail?: string | null
@@ -479,4 +480,132 @@ export interface InspectionReport {
   }[]
   signatureFields: string[]
   error?: string | null
+}
+
+// ── CAdES ───────────────────────────────────────────────────────────
+export type CadesOperation = "Sign" | "CoSign" | "CounterSign"
+export type CadesContentChoice = "Detached" | "Enveloped"
+export type CadesKind = "Baseline" | "IcpBrasil" | "CustomPolicy"
+export type CadesIcpPolicy = "AdRb" | "AdRt" | "AdRv" | "AdRc" | "AdRa"
+export type CadesExtendedChoice = "None" | "CompleteReferences" | "ExtendedLong" | "Archive"
+
+export interface CadesOptions {
+  environment: EnvironmentMode
+  operation: CadesOperation
+  dataId?: string | null
+  existingSignatureId?: string | null
+  signerIndex: number
+  contentType: CadesContentChoice
+  credentialId?: string | null
+  kind: CadesKind
+  level: BaselineLevel
+  icpPolicy: CadesIcpPolicy
+  policyOid: string
+  policyUri?: string | null
+  extendedForm: CadesExtendedChoice
+  timestamp: TimestampChoice
+  hash: HashChoice
+  padding: RsaPadding
+  signingTime?: string | null
+  commitment?: string | null
+  operationId?: string | null
+  validate: boolean
+  validation?: ValidationSettings | null
+}
+
+export interface CmsAttributeView {
+  oid: string
+  name: string
+}
+
+export interface CmsSignerView {
+  index: number
+  subject?: string | null
+  issuer?: string | null
+  serialNumber?: string | null
+  digestAlgorithm: string
+  signatureAlgorithm: string
+  signingTime?: string | null
+  policyOid?: string | null
+  commitmentTypeOid?: string | null
+  hasSignatureTimestamp: boolean
+  hasArchiveTimestamp: boolean
+  signedAttributes: CmsAttributeView[]
+  unsignedAttributes: CmsAttributeView[]
+  counterSignatures: CmsSignerView[]
+}
+
+export interface CmsFacts {
+  fileId: string
+  fileName: string
+  size: number
+  isDetached: boolean
+  contentSize?: number | null
+  contentType?: string | null
+  certificates: number
+  signers: CmsSignerView[]
+  error?: string | null
+}
+
+export interface CadesOptionsResponse {
+  report: {
+    options: Record<string, OptionState>
+    issues: OptionIssue[]
+    effective: CadesOptions
+    effectiveLevel: string
+    canSign: boolean
+  }
+  inputs: { dataName?: string | null; existing?: CmsFacts | null; dataMatchesExisting?: boolean | null }
+  credential?: CredentialFacts | null
+}
+
+export interface CadesSignerReport {
+  index: number
+  signer?: string | null
+  indication: "Valid" | "Invalid" | "Indeterminate"
+  signingTime?: string | null
+  checks: CheckRow[]
+  errors: string[]
+  warnings: string[]
+  counterSignatures: CadesSignerReport[]
+}
+
+export interface CadesValidationView {
+  overall: "Valid" | "Invalid" | "Indeterminate"
+  signers: CadesSignerReport[]
+  errors: string[]
+  structure: CmsFacts
+  ms: number
+  code: SigningResult["code"]
+}
+
+export interface CadesSignResult {
+  success: boolean
+  error?: string | null
+  errorType?: string | null
+  outputId?: string | null
+  fileName?: string | null
+  bytes: number
+  requestedLevel: string
+  achievedLevel?: string | null
+  hasSignatureTimestamp: boolean
+  hasLongTermValidation: boolean
+  hasArchiveTimestamp: boolean
+  warnings: string[]
+  signMs: number
+  validation?: CadesValidationView | null
+  code: SigningResult["code"]
+  issues: OptionIssue[]
+}
+
+export interface CadesSample {
+  id: string
+  kind: "data" | "signature" | "validation"
+  fileId: string
+  fileName: string
+  dataId?: string | null
+  title: string
+  description: string
+  expectedIndication?: string | null
+  expectedCheck?: string | null
 }

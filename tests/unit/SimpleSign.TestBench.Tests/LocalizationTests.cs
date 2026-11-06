@@ -43,6 +43,7 @@ public sealed partial class LocalizationTests(TestBenchFixture fixture)
             .Concat(fixture.Sandbox.Pki.Signers.SelectMany(s => new[] { s.Title, s.Description, s.Problem }))
             .Concat(fixture.Sandbox.Csc.Credentials.Select(c => c.Description))
             .Concat(fixture.ValidationSamples.SelectMany(s => new[] { s.Title, s.Description }))
+            .Concat(fixture.CadesSamples.SelectMany(s => new[] { s.Title, s.Description }))
             .OfType<string>();
 
         texts.Where(t => !Translations.All.ContainsKey(t)).ShouldBeEmpty();

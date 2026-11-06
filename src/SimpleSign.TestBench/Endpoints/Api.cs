@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using SimpleSign.Brasil.IcpBrasil;
 using SimpleSign.Brasil.Signing;
 using SimpleSign.PAdES;
+using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
@@ -42,6 +43,8 @@ public sealed record UploadView(string Id, string FileName, long Size);
 public sealed record ValidateRequest(string FileId, ValidationSettings? Settings);
 
 public sealed record InspectRequest(string FileId);
+
+public sealed record CadesOptionsResponse(CadesOptionsReport Report, CadesInputs Inputs, CredentialFacts? Credential);
 
 internal static class Api
 {
@@ -164,8 +167,27 @@ internal static class Api
                 : Results.NotFound());
 
         // Run matrix
-        api.MapGet("/matrix/cases", (MatrixRunner matrix) => matrix.Cases());
-        api.MapPost("/matrix/run", async (MatrixRunRequest body, MatrixRunner matrix, CancellationToken ct) => await matrix.RunAsync(body, ct));
+        // CAdES
+        var cades = api.MapGroup("/cades");
+        cades.MapGet("/samples", (CadesSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
+        cades.MapPost("/options", (CadesOptions options, CadesRunner runner, CredentialStore store) =>
+        {
+            store.TryGet(options.CredentialId, out var credential);
+            var inputs = runner.Inputs(options);
+            return new CadesOptionsResponse(CadesCompatibility.Evaluate(options, inputs, credential?.Facts), inputs, credential?.Facts);
+        });
+        cades.MapPost("/sign", async (CadesOptions options, CadesRunner runner, CancellationToken ct) => await runner.RunAsync(options, ct));
+        cades.MapPost("/validate", (CadesValidateRequest body, CadesRunner runner) =>
+            runner.Validate(body.SignatureId, body.DataId, body.Settings ?? new ValidationSettings()));
+        cades.MapPost("/inspect", (InspectRequest body, DocumentStore documents) =>
+        {
+            var file = documents.Get(body.FileId);
+            return CadesInspector.Inspect(body.FileId, file.FileName, file.Content);
+        });
+
+        api.MapGet("/matrix/cases", (string? format, MatrixRunner matrix, CadesMatrix cadesMatrix) => format == "cades" ? cadesMatrix.Cases() : matrix.Cases());
+        api.MapPost("/matrix/run", async (MatrixRunRequest body, MatrixRunner matrix, CadesMatrix cadesMatrix, CancellationToken ct) =>
+            body.Format == "cades" ? await cadesMatrix.RunAsync(body, ct) : await matrix.RunAsync(body, ct));
 
         api.MapFallback(() => Results.NotFound(new { error = "Unknown API route." }));
     }

@@ -35,7 +35,7 @@ public sealed record MatrixCaseResult(
     string? AchievedLevel,
     IReadOnlyList<string> Checks);
 
-public sealed record MatrixRunRequest(string Group = "all", int? Limit = null, string? CaseId = null);
+public sealed record MatrixRunRequest(string Group = "all", int? Limit = null, string? CaseId = null, string Format = "pades");
 
 public sealed record MatrixRunResult(int Total, int Passed, int Failed, int Skipped, long Ms, int UncoverablePairs, IReadOnlyList<MatrixCaseResult> Cases);
 
@@ -345,135 +345,14 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
     internal static IReadOnlyList<MatrixCase> Generate(MatrixContext context, out int uncoverable)
     {
         var dims = Dimensions();
-        var defaults = dims.Select(d => d[0].Value).ToArray();
-        var cases = new List<MatrixCase>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
         bool Valid(string[] values)
         {
-            var c = new MatrixCase("", "", Map(dims, values));
-            var options = Build(c, context);
-            var report = Compatibility.Evaluate(options, context.DocumentFacts[options.DocumentId!], context.CredentialFacts[values[0]]);
-            return report.CanSign;
+            var options = Build(new MatrixCase("", "", Map(dims, values)), context);
+            return Compatibility.Evaluate(options, context.DocumentFacts[options.DocumentId!], context.CredentialFacts[values[0]]).CanSign;
         }
 
-        void Add(string group, string[] values)
-        {
-            string key = string.Join("|", values);
-            if (seen.Add(key))
-            {
-                cases.Add(new MatrixCase($"{group[0]}{cases.Count + 1:D3}", group, Map(dims, values)));
-            }
-        }
-
-        // 1. Every value on its own (with a compatible partner when the default is not compatible).
-        var random = new Random(3161);
-        for (int d = 0; d < dims.Count; d++)
-        {
-            foreach (var value in dims[d])
-            {
-                var values = (string[])defaults.Clone();
-                values[d] = value.Value;
-                for (int attempt = 0; attempt < 300 && !Valid(values); attempt++)
-                {
-                    values = RandomAssignment(dims, random);
-                    values[d] = value.Value;
-                }
-
-                if (Valid(values))
-                {
-                    Add("single", values);
-                }
-            }
-        }
-
-        // 2. Pairwise: greedily pick valid candidates that cover the most uncovered pairs.
-        var uncovered = new HashSet<(int, string, int, string)>();
-        for (int a = 0; a < dims.Count; a++)
-        {
-            for (int b = a + 1; b < dims.Count; b++)
-            {
-                foreach (var va in dims[a])
-                {
-                    foreach (var vb in dims[b])
-                    {
-                        uncovered.Add((a, va.Value, b, vb.Value));
-                    }
-                }
-            }
-        }
-
-        foreach (var c in cases)
-        {
-            Cover(uncovered, dims, [.. dims.Select(d => c.Values[d[0].Dimension])]);
-        }
-
-        int stale = 0;
-        int impossible = 0;
-        while (uncovered.Count > 0 && stale < 40 && cases.Count < 400)
-        {
-            string[]? best = null;
-            int bestGain = 0;
-            var target = uncovered.ElementAt(random.Next(uncovered.Count));
-            for (int candidate = 0; candidate < 60; candidate++)
-            {
-                var values = RandomAssignment(dims, random);
-                values[target.Item1] = target.Item2;
-                values[target.Item3] = target.Item4;
-                int gain = Gain(uncovered, dims, values);
-                if (gain > bestGain && Valid(values))
-                {
-                    best = values;
-                    bestGain = gain;
-                }
-            }
-
-            if (best is null)
-            {
-                uncovered.Remove(target); // never valid together (e.g. adbe.pkcs7.detached + B-T)
-                impossible++;
-                stale++;
-                continue;
-            }
-
-            stale = 0;
-            Add("pairwise", best);
-            Cover(uncovered, dims, best);
-        }
-
-        uncoverable = impossible + uncovered.Count;
-        return cases;
-    }
-
-    private static string[] RandomAssignment(IReadOnlyList<IReadOnlyList<MatrixValue>> dims, Random random) =>
-        [.. dims.Select(d => d[random.Next(d.Count)].Value)];
-
-    private static int Gain(HashSet<(int, string, int, string)> uncovered, IReadOnlyList<IReadOnlyList<MatrixValue>> dims, string[] values)
-    {
-        int gain = 0;
-        for (int a = 0; a < dims.Count; a++)
-        {
-            for (int b = a + 1; b < dims.Count; b++)
-            {
-                if (uncovered.Contains((a, values[a], b, values[b])))
-                {
-                    gain++;
-                }
-            }
-        }
-
-        return gain;
-    }
-
-    private static void Cover(HashSet<(int, string, int, string)> uncovered, IReadOnlyList<IReadOnlyList<MatrixValue>> dims, string[] values)
-    {
-        for (int a = 0; a < dims.Count; a++)
-        {
-            for (int b = a + 1; b < dims.Count; b++)
-            {
-                uncovered.Remove((a, values[a], b, values[b]));
-            }
-        }
+        var generated = Pairwise.Generate([.. dims.Select(d => (IReadOnlyList<string>)[.. d.Select(v => v.Value)])], Valid, 400, out uncoverable);
+        return [.. generated.Select((c, i) => new MatrixCase($"{c.Group[0]}{i + 1:D3}", c.Group, Map(dims, c.Values)))];
     }
 
     private static Dictionary<string, string> Map(IReadOnlyList<IReadOnlyList<MatrixValue>> dims, string[] values)

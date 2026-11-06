@@ -49,6 +49,9 @@ builder.Services.AddSingleton<MatrixRunner>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.InspectionService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationSampleStore>();
+builder.Services.AddSingleton<SimpleSign.TestBench.Cades.CadesRunner>();
+builder.Services.AddSingleton<SimpleSign.TestBench.Cades.CadesSampleStore>();
+builder.Services.AddSingleton<CadesMatrix>();
 
 var app = builder.Build();
 
@@ -58,6 +61,8 @@ var documentStore = app.Services.GetRequiredService<DocumentStore>();
 documentStore.AddSamples(await SampleDocuments.CreateAsync(sandbox));
 app.Services.GetRequiredService<SimpleSign.TestBench.Validation.ValidationSampleStore>().Samples =
     await SimpleSign.TestBench.Validation.InvalidSamples.CreateAsync(sandbox, documentStore);
+app.Services.GetRequiredService<SimpleSign.TestBench.Cades.CadesSampleStore>().Samples =
+    await SimpleSign.TestBench.Cades.CadesSamples.CreateAsync(sandbox, documentStore);
 
 app.Use(async (context, next) =>
 {

@@ -25,7 +25,7 @@ public sealed record DocumentFacts(
     string? Error);
 
 /// <summary>A stored file: a PDF to sign, an image for the stamp, or a PFX.</summary>
-internal sealed record StoredFile(string Id, string FileName, byte[] Content, DateTimeOffset Created);
+internal sealed record StoredFile(string Id, string FileName, byte[] Content, DateTimeOffset Created, bool Pinned = false);
 
 /// <summary>In-memory store for samples, uploads and signed outputs (never written to disk).</summary>
 internal sealed partial class DocumentStore
@@ -48,11 +48,20 @@ internal sealed partial class DocumentStore
 
     public static string SampleKey(string sampleId) => "sample:" + sampleId;
 
+    /// <summary>Adds a file built at startup (validation and CAdES samples): never evicted.</summary>
+    public StoredFile AddPinned(string fileName, byte[] content)
+    {
+        string id = Guid.NewGuid().ToString("N")[..12];
+        var file = new StoredFile(id, Path.GetFileName(fileName), content, DateTimeOffset.UtcNow, Pinned: true);
+        _files[id] = file;
+        return file;
+    }
+
     public StoredFile Add(string fileName, byte[] content)
     {
-        if (_files.Count > MaxUploads)
+        if (_files.Count(f => !f.Value.Pinned) > MaxUploads)
         {
-            foreach (var old in _files.Values.Where(f => !f.Id.StartsWith("sample:", StringComparison.Ordinal)).OrderBy(f => f.Created).Take(50))
+            foreach (var old in _files.Values.Where(f => !f.Pinned && !f.Id.StartsWith("sample:", StringComparison.Ordinal)).OrderBy(f => f.Created).Take(50))
             {
                 _files.TryRemove(old.Id, out _);
                 _facts.TryRemove(old.Id, out _);

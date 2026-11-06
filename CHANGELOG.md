@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (SimpleSign TestBench)
 
+- TestBench **CAdES** page: sign, co-sign and countersign any file (detached .p7s or enveloped
+  .p7m) at every CAdES baseline level, ICP-Brasil CAdES policy (AD-RB…AD-RA) or custom policy,
+  with RFC 5126 extended forms; validation tree with countersignatures, CMS structure, generated
+  C# and CLI, broken samples, and a CAdES run matrix. The signer picker is shared with PDF signing.
+- Validation samples are no longer evicted from the in-memory store after 200 uploads.
+
 - TestBench **Validation** page: full report per signature (checks, PAdES and Lei 14.063 levels,
   certificates, timestamp, ByteRange coverage, DSS) with configurable trust, bulk validation
   (`BulkValidator`), structural inspection (`PdfStructureDumper`, CMS download), and sample PDFs

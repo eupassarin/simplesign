@@ -15,10 +15,13 @@ export function MatrixPage() {
   const [result, setResult] = useState<MatrixRunResult | null>(null)
   const [running, setRunning] = useState(false)
   const [filter, setFilter] = useState("all")
+  const [format, setFormat] = useState<"pades" | "cades">("pades")
   const { t, number } = useI18n()
   useEffect(() => {
-    api.matrix.cases().then(setCases)
-  }, [])
+    setCases(null)
+    setResult(null)
+    api.matrix.cases(format).then(setCases)
+  }, [format])
   const dimensions = useMemo(() => (cases?.[0] ? Object.keys(cases[0].values) : []), [cases])
   const byId = useMemo(() => new Map(result?.cases.map((c) => [c.id, c]) ?? []), [result])
   const shown = (cases ?? []).filter((c) => {
@@ -29,7 +32,7 @@ export function MatrixPage() {
   async function run() {
     setRunning(true)
     try {
-      setResult(await api.matrix.run({ group: "all" }))
+      setResult(await api.matrix.run({ group: "all", format }))
     } finally {
       setRunning(false)
     }
@@ -45,7 +48,15 @@ export function MatrixPage() {
               {t("matrix.intro")}
             </p>
           </div>
+          <div className="flex items-center gap-2">
+          <Tabs value={format} onValueChange={(v) => setFormat(v as "pades" | "cades")}>
+            <TabsList>
+              <TabsTrigger value="pades">PAdES</TabsTrigger>
+              <TabsTrigger value="cades">CAdES</TabsTrigger>
+            </TabsList>
+          </Tabs>
           <Button onClick={run} disabled={running || !cases}>{running ? <Loader2 className="animate-spin" /> : <Play />} {t("matrix.run", { n: cases?.length ?? 0 })}</Button>
+          </div>
         </header>
 
         {running && <Progress value={undefined} className="h-1 animate-pulse" />}

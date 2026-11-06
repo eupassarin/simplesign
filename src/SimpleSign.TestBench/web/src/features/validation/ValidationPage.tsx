@@ -18,7 +18,7 @@ import { ChoiceCard, Field, KeyValue, Pill, Section } from "../pdf-signing/ui"
 
 const trustChoices: TrustChoice[] = ["Sandbox", "System", "IcpBrasil", "IcpHomologation"]
 
-function defaults(environment: EnvironmentMode): ValidationSettings {
+export function defaultValidationSettings(environment: EnvironmentMode): ValidationSettings {
   return {
     environment,
     trust: environment === "Sandbox" ? ["Sandbox"] : ["System", "IcpBrasil"],
@@ -36,11 +36,11 @@ interface FileRef {
 
 export function ValidationPage({ environment, initialFile }: { environment: EnvironmentMode; initialFile?: FileRef | null }) {
   const { t } = useI18n()
-  const [settings, setSettings] = useState<ValidationSettings>(() => defaults(environment))
+  const [settings, setSettings] = useState<ValidationSettings>(() => defaultValidationSettings(environment))
   const [samples, setSamples] = useState<ValidationSample[]>([])
   const [file, setFile] = useState<FileRef | null>(initialFile ?? null)
   const [tab, setTab] = useState("validate")
-  useEffect(() => setSettings(defaults(environment)), [environment])
+  useEffect(() => setSettings(defaultValidationSettings(environment)), [environment])
   useEffect(() => {
     api.validation.samples().then(setSamples).catch(() => {})
   }, [t])
@@ -83,7 +83,7 @@ export function ValidationPage({ environment, initialFile }: { environment: Envi
   )
 }
 
-function SettingsCard({ settings, onChange }: { settings: ValidationSettings; onChange: (s: ValidationSettings) => void }) {
+export function SettingsCard({ settings, onChange }: { settings: ValidationSettings; onChange: (s: ValidationSettings) => void }) {
   const { t } = useI18n()
   const set = (patch: Partial<ValidationSettings>) => onChange({ ...settings, ...patch })
   const toggle = (choice: TrustChoice, on: boolean) => set({ trust: on ? [...settings.trust, choice] : settings.trust.filter((c) => c !== choice) })

@@ -1,7 +1,5 @@
 using System.Globalization;
-using System.Net.Http.Headers;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using SimpleSign.Brasil.IcpBrasil;
 using SimpleSign.Brasil.Signing;
@@ -30,15 +28,16 @@ internal sealed class SigningPlan
     private readonly SigningOptions _o;
     private readonly CredentialHandle _credential;
     private readonly DocumentStore _documents;
-    private readonly List<string> _setup = [];
+    private readonly PlanContext _context;
 
     public SigningPlan(SigningOptions effective, CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents)
     {
         _o = effective;
         _credential = credential;
         _documents = documents;
-        IsSandbox = effective.Environment == EnvironmentMode.Sandbox;
-        Http = sandbox.HttpFor(effective.Environment);
+        _context = new PlanContext(effective.Environment, credential, sandbox, documents);
+        IsSandbox = _context.IsSandbox;
+        Http = _context.Http;
         HashAlgorithm = ToHash(effective.Hash);
         SignatureAlgorithmOid = _credential.Facts.KeyAlgorithm == "RSA" && effective.Padding == RsaPadding.Pss ? Oids.RsaPss : null;
         Field = BuildField();
@@ -63,7 +62,7 @@ internal sealed class SigningPlan
     public ArchiveTimestampOptions? ArchiveTimestamp { get; private set; }
 
     /// <summary>Statements that must run before the builder chain (variables, clients).</summary>
-    public IReadOnlyList<string> Setup => _setup;
+    public IReadOnlyList<string> Setup => _context.Setup;
 
     /// <summary>The builder steps after <c>PadesSigner.Document(pdf)</c>, in order.</summary>
     public async Task<IReadOnlyList<PlanStep>> SignStepsAsync(CancellationToken cancellationToken)
@@ -147,35 +146,10 @@ internal sealed class SigningPlan
 
     private PlanStep CredentialStep()
     {
-        if (_credential.External is { } external)
-        {
-            string variable = _credential.Kind switch
-            {
-                CredentialKind.Pkcs11 => "token",
-                CredentialKind.Psc => "psc",
-                _ => "csc",
-            };
-            _setup.Add(_credential.Kind switch
-            {
-                CredentialKind.Pkcs11 => "using var token = Pkcs11Signer.Open(new Pkcs11SignerOptions { LibraryPath = libraryPath, TokenSerial = serial, Pin = pin });",
-                CredentialKind.Psc => "var pscClient = new PscClient(new PscClientOptions { BaseUri = pscUrl, ClientId = clientId, ClientSecret = clientSecret });\n" +
-                    "var pscToken = await pscClient.AuthorizeAsync(new LoopbackAuthorizationHandler(), PscScope.SignatureSession);\n" +
-                    "using var psc = await PscSigner.CreateAsync(pscClient, pscToken);",
-                _ => "var cscClient = new CscClient(new CscClientOptions { BaseUri = cscUrl, AccessToken = serviceToken });\n" +
-                    "using var csc = await CscSigner.CreateAsync(cscClient, credentialId, new ExplicitCscAuthorizer(pin, otp));",
-            });
-            return new($".WithExternalSigner({variable}.Certificate, {variable}, {variable}.Chain)",
-                b => b.WithExternalSigner(_credential.Certificate, external, _credential.Chain));
-        }
-
-        _setup.Add(_credential.Kind switch
-        {
-            CredentialKind.Pfx => "var certificate = X509CertificateLoader.LoadPkcs12FromFile(\"signer.pfx\", password);",
-            CredentialKind.OsStore => "var certificate = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false)[0];",
-            _ => "var certificate = sandboxSigner; // sandbox A1 certificate with its private key",
-        });
-        return new(_credential.Chain.Count > 0 ? ".WithCertificate(certificate, chain)" : ".WithCertificate(certificate)",
-            b => b.WithCertificate(_credential.Certificate, _credential.Chain));
+        string code = _context.CredentialCode();
+        return _credential.External is { } external
+            ? new(code, b => b.WithExternalSigner(_credential.Certificate, external, _credential.Chain))
+            : new(code, b => b.WithCertificate(_credential.Certificate, _credential.Chain));
     }
 
     private PlanStep MetadataStep()
@@ -301,7 +275,7 @@ internal sealed class SigningPlan
             }
 
             // The artifacts must be those of the version the signature will carry.
-            _setup.Add("using var http = new HttpClient();\n"
+            _context.AddSetup("using var http = new HttpClient();\n"
                 + (version is null
                     ? "var adRa = PadesSigner.Document(pdf).WithCertificate(certificate, chain).ResolveIcpBrasilPolicy(IcpBrasilPolicy.AdRa); // the version picked by the signer's root\n"
                     : $"var adRa = IcpBrasilSignaturePolicies.All.Single(p => p.Oid == \"{version.Oid}\");\n")
@@ -366,58 +340,9 @@ internal sealed class SigningPlan
         };
     }
 
-    private TimestampOptions BuildTimestamp(TimestampChoice choice, string variable)
-    {
-        var endpoint = Endpoint(choice);
-        var options = new TimestampOptions(endpoint, IsSandbox ? Http : null)
-        {
-            Authorization = Authorization(choice),
-            ClientCertificate = ClientCertificate(choice),
-        };
-        _setup.Add($"var {variable} = new TimestampOptions(new Uri(\"{endpoint}\"){(IsSandbox ? ", sandboxHttp" : "")})"
-            + (options.Authorization is null && options.ClientCertificate is null ? ";" :
-                "\n{"
-                + (choice.Auth == TsaAuth.Basic ? "\n    Authorization = new AuthenticationHeaderValue(\"Basic\", Convert.ToBase64String(Encoding.UTF8.GetBytes($\"{user}:{password}\"))),"
-                    : choice.Auth == TsaAuth.Bearer ? "\n    Authorization = new AuthenticationHeaderValue(\"Bearer\", token)," : "")
-                + (options.ClientCertificate is not null ? "\n    ClientCertificate = X509CertificateLoader.LoadPkcs12FromFile(\"tsa-client.pfx\", pfxPassword)," : "")
-                + "\n};"));
-        return options;
-    }
+    private TimestampOptions BuildTimestamp(TimestampChoice choice, string variable) => _context.BuildTimestamp(choice, variable);
 
-    private ArchiveTimestampOptions BuildArchive(TimestampChoice choice)
-    {
-        var endpoint = Endpoint(choice);
-        _setup.Add($"var archiveTsa = new ArchiveTimestampOptions(new Uri(\"{endpoint}\"){(IsSandbox ? ", sandboxHttp" : "")})"
-            + (choice.Auth == TsaAuth.None ? ";" : " { Authorization = /* as above */ };"));
-        return new ArchiveTimestampOptions(endpoint, IsSandbox ? Http : null)
-        {
-            Authorization = Authorization(choice),
-            ClientCertificate = ClientCertificate(choice),
-        };
-    }
-
-    private static Uri Endpoint(TimestampChoice choice) => choice.Provider switch
-    {
-        TsaProvider.Sandbox => SandboxPki.TsaUri,
-        TsaProvider.SandboxAuthenticated => SandboxPki.AuthenticatedTsaUri,
-        TsaProvider.DigiCert => TimestampOptions.DigiCert.Endpoint,
-        TsaProvider.Sectigo => TimestampOptions.Sectigo.Endpoint,
-        TsaProvider.FreeTsa => TimestampOptions.FreeTsa.Endpoint,
-        _ => new Uri(choice.Url!),
-    };
-
-    private static AuthenticationHeaderValue? Authorization(TimestampChoice choice) => choice.Auth switch
-    {
-        TsaAuth.Basic => new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{choice.User}:{choice.Password}"))),
-        TsaAuth.Bearer => new AuthenticationHeaderValue("Bearer", choice.Token),
-        _ => null,
-    };
-
-    private X509Certificate2? ClientCertificate(TimestampChoice choice) =>
-        string.IsNullOrEmpty(choice.ClientCertificateUploadId)
-            ? null
-            : X509CertificateLoader.LoadPkcs12(_documents.Get(choice.ClientCertificateUploadId).Content, choice.ClientCertificatePassword,
-                OperatingSystem.IsMacOS() ? X509KeyStorageFlags.DefaultKeySet : X509KeyStorageFlags.EphemeralKeySet);
+    private ArchiveTimestampOptions BuildArchive(TimestampChoice choice) => _context.BuildArchive(choice);
 
     private SignatureFieldOptions BuildField()
     {

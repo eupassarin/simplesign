@@ -78,6 +78,9 @@ public sealed record DetailedSignature(
     string? Location,
     string? ContactInfo);
 
+/// <summary>Trust settings turned into library objects.</summary>
+internal sealed record ValidationTrust(ValidationOptions Options, BrasilExtension Brasil, bool UsesIcp, IReadOnlyList<X509Certificate2> IcpAnchors);
+
 public sealed record DssView(int Certificates, int Crls, int Ocsps, bool HasVri, int VriEntries, IReadOnlyList<string> Warnings);
 
 public sealed record ValidationReport(
@@ -158,6 +161,15 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
 
     internal PdfSignatureValidator CreateValidator(ValidationSettings settings)
     {
+        var trust = Trust(settings);
+        return new PdfSignatureValidator(sandbox.HttpFor(settings.Environment), trust.Options, null,
+            trust.UsesIcp ? trust.Brasil.TrustAnchorProviders : [],
+            settings.UseBrasil ? trust.Brasil.ChainValidationProviders : []);
+    }
+
+    /// <summary>The trust settings as library objects, shared by the PAdES, CAdES and XAdES validators.</summary>
+    internal ValidationTrust Trust(ValidationSettings settings)
+    {
         var http = sandbox.HttpFor(settings.Environment);
         var roots = new List<X509Certificate2>();
         if (settings.Trust.Contains(TrustChoice.Sandbox))
@@ -176,17 +188,15 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             HttpClient = http.GetClient(),
             IcpEnvironment = settings.Trust.Contains(TrustChoice.IcpHomologation) ? IcpBrasilEnvironment.Homologation : IcpBrasilEnvironment.Production,
         });
-        return new PdfSignatureValidator(http,
-            new ValidationOptions
-            {
-                TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),
-                TrustedRoots = roots.Count > 0 ? roots : null,
-                CheckRevocation = settings.CheckRevocation,
-                NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 120)),
-            },
-            null,
-            icp ? brasil.TrustAnchorProviders : [],
-            settings.UseBrasil ? brasil.ChainValidationProviders : []);
+        var options = new ValidationOptions
+        {
+            TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),
+            TrustedRoots = roots.Count > 0 ? roots : null,
+            CheckRevocation = settings.CheckRevocation,
+            NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 120)),
+        };
+        IReadOnlyList<X509Certificate2> icpAnchors = icp ? [.. brasil.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors())] : [];
+        return new ValidationTrust(options, brasil, icp, icpAnchors);
     }
 
     internal static SignatureReport ToReport(SignatureValidationResult r)
