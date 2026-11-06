@@ -12,11 +12,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="SimpleSign.Pdf" />
     <InternalsVisibleTo Include="SimpleSign.PAdES" />
     <InternalsVisibleTo Include="SimpleSign.TestHelpers" />
     <InternalsVisibleTo Include="SimpleSign.Core.Tests" />
-    <InternalsVisibleTo Include="SimpleSign.Pdf.Tests" />
     <InternalsVisibleTo Include="SimpleSign.PAdES.Tests" />
     <InternalsVisibleTo Include="SimpleSign.CAdES" />
     <InternalsVisibleTo Include="SimpleSign.CAdES.Tests" />

@@ -6,7 +6,7 @@ conversion.
 
 Install `SimpleSign` to pull in every package at once, or install the
 individual packages (`SimpleSign.PAdES`, `SimpleSign.CAdES`,
-`SimpleSign.XAdES`, `SimpleSign.Brasil`, `SimpleSign.Pdf`,
+`SimpleSign.XAdES`, `SimpleSign.Brasil`,
 `SimpleSign.HtmlToPdf`, `SimpleSign.Cli`) for only what you need.
 
 ```csharp

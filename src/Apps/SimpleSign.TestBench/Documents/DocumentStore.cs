@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using SimpleSign.PAdES.Inspection;
-using SimpleSign.Pdf;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Enums;
 
 namespace SimpleSign.TestBench.Documents;
 

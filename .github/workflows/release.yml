@@ -67,7 +67,6 @@ jobs:
         run: |
           projects=(
             src/Core/SimpleSign.Core/SimpleSign.Core.csproj
-            src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj
             src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj
             src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj
             src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj

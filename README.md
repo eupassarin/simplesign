@@ -40,7 +40,7 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.PAdES` | PDF signing, validation and inspection (B-B/T/LT/LTA) |
 | `SimpleSign.CAdES` | Standalone CMS/PKCS#7 signatures |
 | `SimpleSign.XAdES` | XML signatures |
-| `SimpleSign.Pdf` / `SimpleSign.Core` | PDF structure; CMS, TSA, OCSP, CRL (used by the above) |
+| `SimpleSign.Core` | CMS, TSA, OCSP, CRL (used by the above) |
 | `SimpleSign.Brasil` | ICP-Brasil chain and policies, Gov.br, CPF/CNPJ, Lei 14.063 |
 | `SimpleSign.Brasil.Fiscal` | XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf |
 | `SimpleSign.Signers.Pkcs11` | Sign through a token's PKCS#11 driver |

@@ -5,8 +5,8 @@ using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf;
-using SimpleSign.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Exceptions;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Validation;

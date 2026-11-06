@@ -61,7 +61,7 @@ public sealed class ExtractOutputRendererTests
             SignedData = [0x01, 0x02, 0x03],
             CmsSignature = [0x04, 0x05, 0x06],
             PdfRevision = [0x07, 0x08, 0x09],
-            ByteRange = new Pdf.PdfByteRange { Offset1 = 0, Length1 = 100, Offset2 = 200, Length2 = 50 },
+            ByteRange = new SimpleSign.PAdES.Pdf.PdfByteRange { Offset1 = 0, Length1 = 100, Offset2 = 200, Length2 = 50 },
         };
     }
 }

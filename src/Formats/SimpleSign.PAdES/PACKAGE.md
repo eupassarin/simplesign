@@ -39,5 +39,24 @@ IReadOnlyList<SignatureValidationResult> results =
   background images (PNG transparency kept)
 - Zero third-party crypto; AOT-compatible
 
+## Reading PDF structure
+
+The built-in PDF parser (`SimpleSign.PAdES.Pdf`) reads cross-reference tables and
+streams, object streams (ObjStm), page trees, AcroForm fields, signature dictionaries
+and byte ranges — read-only and offline.
+
+```csharp
+using SimpleSign.PAdES.Pdf;
+
+await using var stream = File.OpenRead("signed.pdf");
+IReadOnlyList<PdfSignatureField> fields =
+    await PdfStructureReader.ReadSignatureFieldsAsync(stream);
+
+foreach (PdfSignatureField field in fields)
+{
+    Console.WriteLine($"{field.FieldName}: {field.Reason}");
+}
+```
+
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
 and the [docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles). MIT licensed.

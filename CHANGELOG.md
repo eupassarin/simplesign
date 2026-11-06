@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (Breaking) — SimpleSign.Pdf merged into SimpleSign.PAdES
+
+The PDF structure parser is now part of `SimpleSign.PAdES`; the `SimpleSign.Pdf` package is
+discontinued and no longer published.
+
+- Remove any `SimpleSign.Pdf` package reference; `SimpleSign.PAdES` contains the same types.
+- **Namespaces renamed:** `SimpleSign.Pdf` → `SimpleSign.PAdES.Pdf`, and likewise
+  `.Constants`, `.Enums` and `.Exceptions` (e.g. `using SimpleSign.PAdES.Pdf.Exceptions;`).
+- Type names are unchanged (`PdfStructureReader`, `PdfSignatureField`, `PdfByteRange`,
+  `PdfVersion`, `PdfALevel`, `PdfStructureException`, `EncryptedPdfException`, …).
+
 ### Changed (Breaking) — SimpleSign.Brasil no longer uses Core internals
 
 `SimpleSign.Brasil`, `.Fiscal` and `.Xades` now build against the public API of Core, PAdES,

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Crypto;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 
 namespace SimpleSign.PAdES.Validation;
 

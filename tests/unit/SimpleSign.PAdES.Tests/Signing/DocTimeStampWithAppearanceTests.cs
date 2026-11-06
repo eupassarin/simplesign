@@ -4,7 +4,7 @@ using Shouldly;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using SimpleSign.TestHelpers;
 using Xunit;
 

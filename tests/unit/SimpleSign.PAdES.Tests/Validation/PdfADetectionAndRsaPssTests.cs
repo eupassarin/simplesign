@@ -7,8 +7,8 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Enums;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Validation;

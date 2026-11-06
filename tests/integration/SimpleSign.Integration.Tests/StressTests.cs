@@ -107,7 +107,7 @@ public sealed class StressTests : IDisposable
 
         // Verify structure is not corrupted — should find signature fields
         using var ms = new MemoryStream(currentPdf);
-        var fields = await SimpleSign.Pdf.PdfStructureReader.ReadSignatureFieldsAsync(ms);
+        var fields = await SimpleSign.PAdES.Pdf.PdfStructureReader.ReadSignatureFieldsAsync(ms);
         fields.Count.ShouldBeGreaterThanOrEqualTo(100);
     }
 

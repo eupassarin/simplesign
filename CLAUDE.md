@@ -18,7 +18,6 @@ dotnet test SimpleSign.sln --filter "Category!=Stress"
 # Run specific test project
 dotnet test tests/unit/SimpleSign.PAdES.Tests
 dotnet test tests/unit/SimpleSign.Core.Tests
-dotnet test tests/unit/SimpleSign.Pdf.Tests
 dotnet test tests/unit/SimpleSign.Brasil.Tests
 dotnet test tests/unit/SimpleSign.HtmlToPdf.Tests
 
@@ -37,10 +36,9 @@ dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64
 ```
 src/
 ├── Core/
-│   ├── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL, hashing
-│   └── SimpleSign.Pdf/         PDF structure: xref, objects, incremental save, fields
+│   └── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL, hashing
 ├── Formats/
-│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package)
+│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/ = PDF parser
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
 │   ├── SimpleSign.XAdES/       XML signatures
 │   └── SimpleSign/             Meta-package
@@ -137,7 +135,7 @@ await CadesSigner.Document(data).WithCertificate(cert)
 
 ```
 SimpleSign.PAdES (most users install this)
-  └── depends on SimpleSign.Pdf + SimpleSign.Core
+  └── depends on SimpleSign.Core (the PDF parser is part of it, namespace SimpleSign.PAdES.Pdf)
 
 SimpleSign.Brasil (adds ICP-Brasil on top of PAdES/CAdES)
   └── depends on SimpleSign.PAdES + SimpleSign.CAdES — public API only, no InternalsVisibleTo

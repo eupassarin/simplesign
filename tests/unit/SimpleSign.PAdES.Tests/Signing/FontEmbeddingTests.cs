@@ -3,7 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Shouldly;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using SimpleSign.TestHelpers;
 using Xunit;
 

@@ -11,9 +11,9 @@ using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf;
-using SimpleSign.Pdf.Enums;
-using SimpleSign.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Enums;
+using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES;

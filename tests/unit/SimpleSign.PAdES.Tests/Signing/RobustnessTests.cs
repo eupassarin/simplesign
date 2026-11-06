@@ -7,7 +7,7 @@ using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using Xunit;
 namespace SimpleSign.PAdES.Tests.Signing;
 

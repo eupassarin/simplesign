@@ -8,7 +8,7 @@ using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 #pragma warning disable CA1822, IDE0005, IDE0055
 using SimpleSign.TestHelpers;
 using Xunit;

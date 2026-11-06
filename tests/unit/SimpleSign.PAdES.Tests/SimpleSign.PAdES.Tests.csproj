@@ -34,7 +34,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\Core\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
     <ProjectReference Include="..\..\..\src\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
     <ProjectReference Include="..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
     <ProjectReference Include="..\..\shared\SimpleSign.TestFixtures\SimpleSign.TestFixtures.csproj" />

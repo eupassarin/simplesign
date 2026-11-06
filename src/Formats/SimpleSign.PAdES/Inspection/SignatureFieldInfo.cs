@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using SimpleSign.Core.Inspection;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 
 namespace SimpleSign.PAdES.Inspection;
 

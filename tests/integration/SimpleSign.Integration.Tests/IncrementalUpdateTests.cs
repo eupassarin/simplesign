@@ -1,6 +1,6 @@
 using Shouldly;
 using SimpleSign.Integration.Tests.Helpers;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using Xunit;
 using Xunit.Abstractions;
 

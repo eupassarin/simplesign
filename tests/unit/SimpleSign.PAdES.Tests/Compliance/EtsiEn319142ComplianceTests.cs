@@ -8,7 +8,7 @@ using SimpleSign.Core.Inspection;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using SimpleSign.TestHelpers;
 using Xunit;
 

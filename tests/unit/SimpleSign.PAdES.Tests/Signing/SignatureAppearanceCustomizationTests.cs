@@ -9,7 +9,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf.Enums;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Signing;
@@ -535,7 +535,7 @@ public sealed class SignatureAppearanceCustomizationTests
             .SignAsync();
 
         using var stream = new MemoryStream(signed);
-        var fields = await Pdf.PdfStructureReader.ReadSignatureFieldsAsync(stream);
+        var fields = await SimpleSign.PAdES.Pdf.PdfStructureReader.ReadSignatureFieldsAsync(stream);
         fields.Count.ShouldBe(1);
         fields[0].SignerName.ShouldBe(name);
         fields[0].Reason.ShouldBe(reason);

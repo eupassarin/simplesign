@@ -99,7 +99,7 @@ public sealed class InspectOutputRendererTests
             Timestamp = timestamp,
             EmbeddedCertificates = embedded ?? new List<CertificateInfo>(),
             CmsRawData = new byte[100],
-            ByteRange = new Pdf.PdfByteRange { Offset1 = 0, Length1 = 50, Offset2 = 100, Length2 = 30 },
+            ByteRange = new SimpleSign.PAdES.Pdf.PdfByteRange { Offset1 = 0, Length1 = 50, Offset2 = 100, Length2 = 30 },
             SigningTime = null,
             Reason = "Approval",
             Location = "Office",

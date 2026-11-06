@@ -4,7 +4,7 @@ using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using SimpleSign.Signers.Cloud.Csc;
 using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.Signers.Pkcs11;

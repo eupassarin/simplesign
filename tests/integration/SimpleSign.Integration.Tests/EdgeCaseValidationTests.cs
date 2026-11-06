@@ -1,8 +1,8 @@
 using Shouldly;
 using SimpleSign.Integration.Tests.Helpers;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf;
-using SimpleSign.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Exceptions;
 using Xunit;
 using Xunit.Abstractions;
 

@@ -3,7 +3,7 @@ using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Inspection;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf.Enums;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -47,9 +47,9 @@ public sealed class FormattingTests
         Formatting.FormatPdfAFull(level).ShouldBe(expected);
 
     [Theory]
-    [InlineData(Pdf.PdfVersion.Pdf17, "1.7")]
-    [InlineData(Pdf.PdfVersion.Pdf20, "2.0")]
-    public void FormatVersion_ReturnsExpected(Pdf.PdfVersion version, string expected) =>
+    [InlineData(SimpleSign.PAdES.Pdf.PdfVersion.Pdf17, "1.7")]
+    [InlineData(SimpleSign.PAdES.Pdf.PdfVersion.Pdf20, "2.0")]
+    public void FormatVersion_ReturnsExpected(SimpleSign.PAdES.Pdf.PdfVersion version, string expected) =>
         Formatting.FormatVersion(version).ShouldBe(expected);
 
     [Theory]

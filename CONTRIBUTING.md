@@ -91,8 +91,7 @@ Use clear, descriptive commit messages. Include a `Co-authored-by` trailer when 
 ```
 src/
   SimpleSign.Core/           # CMS, TSA, OCSP, CRL, hashing, extension points
-  SimpleSign.Pdf/            # PDF structure parsing and incremental save
-  SimpleSign.PAdES/          # PAdES signing, validation, inspection
+  SimpleSign.PAdES/          # PAdES signing, validation, inspection; Pdf/ = PDF structure parser
   SimpleSign.CAdES/          # CAdES signing and validation
   SimpleSign.XAdES/          # XAdES signing and validation
   SimpleSign.Signers.Pkcs11/ # tokens, smartcards, HSMs

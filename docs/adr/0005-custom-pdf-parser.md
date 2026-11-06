@@ -47,3 +47,5 @@ It does **not** attempt to be a general-purpose PDF library — no rendering, no
 | **SimpleSign.Pdf** | **MIT** | **Yes** | **Yes** | **Yes** | **Chosen** |
 
 **Status:** This decision is permanent. No third-party PDF library dependency will be added.
+
+**Update (v0.11):** the parser is no longer a separate package. It lives in `SimpleSign.PAdES` under `Pdf/`, namespace `SimpleSign.PAdES.Pdf`. See ADR 0018.

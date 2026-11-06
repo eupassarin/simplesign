@@ -2,7 +2,8 @@ using System.Globalization;
 using SimpleSign.Core.Inspection;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Enums;
 
 namespace SimpleSign.Cli.Rendering;
 
@@ -65,17 +66,17 @@ internal static class Formatting
         _ => level.ToString()
     };
 
-    internal static string FormatVersion(Pdf.PdfVersion version) => version switch
+    internal static string FormatVersion(PdfVersion version) => version switch
     {
-        Pdf.PdfVersion.Pdf10 => "1.0",
-        Pdf.PdfVersion.Pdf11 => "1.1",
-        Pdf.PdfVersion.Pdf12 => "1.2",
-        Pdf.PdfVersion.Pdf13 => "1.3",
-        Pdf.PdfVersion.Pdf14 => "1.4",
-        Pdf.PdfVersion.Pdf15 => "1.5",
-        Pdf.PdfVersion.Pdf16 => "1.6",
-        Pdf.PdfVersion.Pdf17 => "1.7",
-        Pdf.PdfVersion.Pdf20 => "2.0",
+        PdfVersion.Pdf10 => "1.0",
+        PdfVersion.Pdf11 => "1.1",
+        PdfVersion.Pdf12 => "1.2",
+        PdfVersion.Pdf13 => "1.3",
+        PdfVersion.Pdf14 => "1.4",
+        PdfVersion.Pdf15 => "1.5",
+        PdfVersion.Pdf16 => "1.6",
+        PdfVersion.Pdf17 => "1.7",
+        PdfVersion.Pdf20 => "2.0",
         _ => "Unknown"
     };
 

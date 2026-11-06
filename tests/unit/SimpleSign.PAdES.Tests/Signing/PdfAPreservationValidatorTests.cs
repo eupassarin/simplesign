@@ -1,6 +1,6 @@
 using Shouldly;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf.Enums;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Signing;

@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 
 namespace SimpleSign.PAdES.Inspection;
 

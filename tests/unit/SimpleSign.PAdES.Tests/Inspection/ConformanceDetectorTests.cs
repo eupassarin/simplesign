@@ -1,7 +1,7 @@
 using Shouldly;
 using SimpleSign.Core.Inspection;
 using SimpleSign.PAdES.Inspection;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Inspection;

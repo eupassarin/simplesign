@@ -10,7 +10,7 @@ using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES.Signing;

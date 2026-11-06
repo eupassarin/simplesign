@@ -1,7 +1,7 @@
 using System.Text;
 using Shouldly;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.Pdf;
+using SimpleSign.PAdES.Pdf;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Signing;

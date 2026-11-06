@@ -4,7 +4,7 @@ using System.Text;
 using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.PAdES.Inspection;
-using SimpleSign.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.TestHelpers;
 using Xunit;
 namespace SimpleSign.PAdES.Tests.Inspection;

@@ -152,7 +152,6 @@ jobs:
         run: |
           for proj in src/Formats/SimpleSign/SimpleSign.csproj \
                      src/Core/SimpleSign.Core/SimpleSign.Core.csproj \
-                     src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
                      src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
                      src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
                      src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \

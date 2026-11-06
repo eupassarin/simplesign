@@ -1,5 +1,5 @@
-using SimpleSign.Pdf;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Enums;
 
 namespace SimpleSign.PAdES.Signing;
 

@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using SimpleSign.Core.Crypto;
-using SimpleSign.Pdf;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Enums;
 
 namespace SimpleSign.PAdES.Signing;
 

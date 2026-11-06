@@ -2,9 +2,9 @@ using System.IO.Compression;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using SimpleSign.Pdf;
-using SimpleSign.Pdf.Constants;
-using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Constants;
+using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES.Signing;

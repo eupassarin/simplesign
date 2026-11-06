@@ -21,7 +21,6 @@ Update `<Version>` in all `.csproj` files:
 | `Directory.Build.props` | Global default for all projects |
 | `src/Formats/SimpleSign/SimpleSign.csproj` | Meta-package |
 | `src/Core/SimpleSign.Core/SimpleSign.Core.csproj` | Core crypto |
-| `src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj` | PDF parser |
 | `src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj` | Main package |
 | `src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj` | ICP-Brasil |
 | `src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
@@ -38,7 +37,6 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   Directory.Build.props \
   src/Formats/SimpleSign/SimpleSign.csproj \
   src/Core/SimpleSign.Core/SimpleSign.Core.csproj \
-  src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
   src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
   src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
   src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
@@ -135,7 +133,6 @@ The tag push triggers `.github/workflows/release.yml` which builds, tests, packs
 ```bash
 dotnet pack -c Release -o ./artifacts
 dotnet nuget push ./artifacts/SimpleSign.Core.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
-dotnet nuget push ./artifacts/SimpleSign.Pdf.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.PAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.Brasil.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.CAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json

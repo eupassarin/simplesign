@@ -7,7 +7,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.TestHelpers;
 using Xunit;
 namespace SimpleSign.PAdES.Tests.Validation;

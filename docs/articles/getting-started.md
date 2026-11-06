@@ -20,8 +20,7 @@ dotnet add package SimpleSign.HtmlToPdf # HTML-to-PDF conversion
 
 ```
 SimpleSign (meta-package)
-├── SimpleSign.PAdES        PDF signing & validation (PAdES B-B/T/LT/LTA)
-│   ├── SimpleSign.Pdf      PDF structure parser (xref, objects, fields)
+├── SimpleSign.PAdES        PDF signing & validation (PAdES B-B/T/LT/LTA), PDF parser
 │   └── SimpleSign.Core     Crypto primitives, CMS, TSA, revocation
 ├── SimpleSign.CAdES        standalone CMS/PKCS#7 signing & validation
 │   └── SimpleSign.Core     (shared)
