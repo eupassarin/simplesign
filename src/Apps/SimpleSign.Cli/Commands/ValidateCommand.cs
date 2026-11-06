@@ -73,11 +73,6 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         [Description("Skip CRL/OCSP revocation checks")]
         public bool NoRevocation { get; init; }
 
-        /// <summary>Also trust the ICP-Brasil homologation (test) hierarchy.</summary>
-        [CommandOption("--icp-homologation")]
-        [Description("Also trust the ICP-Brasil homologation (test) hierarchy; test certificates are reported as such")]
-        public bool IcpHomologation { get; init; }
-
         /// <summary>Output as JSON (machine-readable).</summary>
         [CommandOption("--json")]
         [Description("Output as JSON (machine-readable)")]
@@ -127,7 +122,6 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             {
                 HttpClient = _httpClientProvider.GetClient(),
                 Logger = logger,
-                IcpEnvironment = settings.IcpHomologation ? IcpBrasilEnvironment.Homologation : IcpBrasilEnvironment.Production,
             }).ChainValidationProviders);
 
         await using var stream = File.OpenRead(settings.InputPath);

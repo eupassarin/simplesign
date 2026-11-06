@@ -59,7 +59,7 @@ never printed. **Validate in Validation** opens the signed file on the Validatio
 ## Validation
 
 The *Validation* page has three tabs, all using the settings on the left: trust anchors (sandbox
-root, OS roots, ICP-Brasil production or homologation, uploaded roots), revocation checking,
+root, OS roots, ICP-Brasil, uploaded roots), revocation checking,
 network timeout and the ICP-Brasil extension.
 
 - **Validate**: `PdfSignatureValidator` (+ `BrasilExtension`). Per signature: the checks, PAdES

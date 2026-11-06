@@ -34,13 +34,6 @@ The LTV collection and revocation-evidence helpers that XAdES borrowed from CAdE
 moved into `SimpleSign.Core`. `LtvDataCollector` and `LtvCollectionResult` stay public in CAdES,
 with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `SimpleSign.CAdES`.
 
-### Changed — homologation hierarchy from SERPRO
-
-- `IcpBrasilHomologation.pem` now comes from SERPRO's homologation repository
-  (repositoriohom.serpro.gov.br), where every bundled certificate is published.
-  `scripts/update-icp-homologation.sh` downloads it from there and keeps only certificates that
-  chain to five pinned test roots. It drops anything that is also a production certificate.
-
 ### Fixed
 
 - CAdES: `WithExtendedValidationData` combined with B-LT or B-LTA. The extended form was applied
@@ -173,12 +166,8 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
   SigAndRefsTimeStamp, CertificateValues/RevocationValues and ArchiveTimeStamp (XAdES-C/X/X-L/A);
   `XadesValidationResult.HasValidSigAndRefsTimeStamp` and `HasValidCompleteReferences`.
 
-### Added (SimpleSign.Brasil — homologation, XML policies, timestamps)
+### Added (SimpleSign.Brasil — XML policies, timestamps)
 
-- ICP-Brasil homologation hierarchy (50 test certificates), opt-in with
-  `IcpBrasilEnvironment.Homologation` (`BrasilExtensionOptions.IcpEnvironment`, chain validator,
-  `FindBundledRoot`); `IcpBrasilValidationResult.IsHomologation`, `BR.Environment`. CLI:
-  `validate --icp-homologation`.
 - Rules of the 45 XML PAs in the catalog; `IcpBrasilPolicyRules.ParseXml`,
   `IcpBrasilSignaturePolicies.FromXmlPolicyDocument`, `IcpBrasilLpa.ParseXml`.
 - `IcpBrasilTimestamp.Verify` / `VerifyHash`: standalone timestamps from ICP-Brasil ACTs.

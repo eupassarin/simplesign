@@ -394,7 +394,7 @@ export interface SandboxRequest {
 }
 
 // ── Validation area ─────────────────────────────────────────────────
-export type TrustChoice = "Sandbox" | "System" | "IcpBrasil" | "IcpHomologation"
+export type TrustChoice = "Sandbox" | "System" | "IcpBrasil"
 
 export interface ValidationSettings {
   environment: EnvironmentMode

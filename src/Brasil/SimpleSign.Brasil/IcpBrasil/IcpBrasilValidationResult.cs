@@ -50,13 +50,6 @@ public sealed class IcpBrasilValidationResult
     /// <summary>Non-blocking warnings found during chain validation.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 
-    /// <summary>
-    /// The chain ends in an ICP-Brasil homologation (test) root: the certificate is a test
-    /// certificate and the signature has no legal value. Only possible with
-    /// <see cref="IcpBrasilEnvironment.Homologation"/>.
-    /// </summary>
-    public bool IsHomologation { get; init; }
-
     /// <summary>Indicates whether the overall validation passed (chain valid and no errors).</summary>
     public bool IsValid => IsChainValid && Errors.Count == 0;
 }

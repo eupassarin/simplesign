@@ -540,7 +540,6 @@ export const es: Messages = {
       Sandbox: { title: "Raíz del sandbox", hint: "La PKI de prueba del TestBench." },
       System: { title: "Raíces del sistema operativo", hint: "El almacén de confianza del SO." },
       IcpBrasil: { title: "ICP-Brasil (producción)", hint: "Raíces oficiales ICP-Brasil v5–v10." },
-      IcpHomologation: { title: "ICP-Brasil (homologación)", hint: "Raíces de prueba del entorno de homologación del ITI." },
     },
     files: "Documento",
     filesHint: "Elija una muestra, cada una rota de una forma concreta, o suba su propio PDF. La etiqueta muestra el resultado esperado.",

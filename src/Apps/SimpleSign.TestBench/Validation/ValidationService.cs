@@ -25,9 +25,6 @@ public enum TrustChoice
 
     /// <summary>The ICP-Brasil roots bundled with SimpleSign.Brasil.</summary>
     IcpBrasil,
-
-    /// <summary>The ICP-Brasil homologation (test) hierarchy.</summary>
-    IcpHomologation,
 }
 
 /// <summary>How to validate.</summary>
@@ -182,11 +179,10 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             roots.Add(LoadCertificate(documents.Get(id).Content));
         }
 
-        bool icp = settings.Trust.Contains(TrustChoice.IcpBrasil) || settings.Trust.Contains(TrustChoice.IcpHomologation);
+        bool icp = settings.Trust.Contains(TrustChoice.IcpBrasil);
         var brasil = new BrasilExtension(new BrasilExtensionOptions
         {
             HttpClient = http.GetClient(),
-            IcpEnvironment = settings.Trust.Contains(TrustChoice.IcpHomologation) ? IcpBrasilEnvironment.Homologation : IcpBrasilEnvironment.Production,
         });
         var options = new ValidationOptions
         {
@@ -298,7 +294,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         sb.Append('\n');
-        bool icp = s.Trust.Contains(TrustChoice.IcpBrasil) || s.Trust.Contains(TrustChoice.IcpHomologation);
+        bool icp = s.Trust.Contains(TrustChoice.IcpBrasil);
         var options = new List<string>();
         if (!s.Trust.Contains(TrustChoice.System))
         {
@@ -331,9 +327,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             sb.Append("var options = ").Append(optionsCode).Append(";\n");
             if (s.UseBrasil)
             {
-                sb.Append(s.Trust.Contains(TrustChoice.IcpHomologation)
-                    ? "var brasil = new BrasilExtension(new BrasilExtensionOptions { IcpEnvironment = IcpBrasilEnvironment.Homologation });\n"
-                    : "var brasil = new BrasilExtension();\n");
+                sb.Append("var brasil = new BrasilExtension();\n");
                 sb.Append(icp
                     ? "var validator = new PdfSignatureValidator(options, httpClient: null, logger: null, brasil.TrustAnchorProviders, brasil.ChainValidationProviders);\n"
                     : "var validator = new PdfSignatureValidator(options, httpClient: null, logger: null, trustAnchorProviders: [], brasil.ChainValidationProviders);\n");
@@ -354,7 +348,6 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
 
         string cli = "simplesign validate signed.pdf"
             + (s.Trust.Contains(TrustChoice.Sandbox) || s.CustomRootUploadIds.Count > 0 ? " --trust root.cer" : "")
-            + (s.Trust.Contains(TrustChoice.IcpHomologation) ? " --icp-homologation" : "")
             + (s.CheckRevocation ? "" : " --no-revocation");
         var notes = new List<string>
         {

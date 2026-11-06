@@ -541,7 +541,6 @@ export const en = {
       Sandbox: { title: "Sandbox root", hint: "The TestBench test PKI." },
       System: { title: "Operating system roots", hint: "The OS trust store." },
       IcpBrasil: { title: "ICP-Brasil (production)", hint: "Official ICP-Brasil roots v5–v10." },
-      IcpHomologation: { title: "ICP-Brasil (homologation)", hint: "Test roots of ITI's homologation environment." },
     },
     files: "Document",
     filesHint: "Pick a sample, each broken in one specific way, or upload your own PDF. The badge shows the expected result.",

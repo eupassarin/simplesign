@@ -108,22 +108,6 @@ Console.WriteLine($"{check.IsValid} at {check.Info?.GenerationTime}");
 checks any TSA. CLI: `simplesign timestamp create contrato.pdf --tsa <url>` and
 `simplesign timestamp verify contrato.pdf --token contrato.pdf.tst --icp`.
 
-### Homologation (test) certificates
-
-SERPRO and the ACs issue test certificates under an ICP-Brasil homologation hierarchy ("AC Raiz
-Brasileira v12 - HOM", "AC Raiz Hom do SERPRO" …). SimpleSign bundles it (from
-SERPRO's homologation repository, repositoriohom.serpro.gov.br; `scripts/update-icp-homologation.sh`)
-but trusts it only on request:
-
-```csharp
-var brasil = new BrasilExtension(new BrasilExtensionOptions { IcpEnvironment = IcpBrasilEnvironment.Homologation });
-```
-
-Chains that end in a test root are reported with `IcpBrasilValidationResult.IsHomologation`,
-`BR.Environment = Homologation` and a warning, and never as qualified (Lei 14.063). One test root
-uses the exact name of the production AC Raiz v12 with another key, so roots are compared by
-their bytes. CLI: `simplesign validate signed.pdf --icp-homologation`.
-
 ## CPF and CNPJ
 
 `Cpf` and `Cnpj` validate and format numbers, formatted or not; CNPJs may be alphanumeric:
@@ -534,10 +518,9 @@ simplesign sign receita.pdf --cert cert.pfx --icp-policy ad-rb \
   --health-document prescricao --registration crm:123456/SP
 ```
 
-Test certificates and standalone timestamps:
+Standalone timestamps:
 
 ```bash
-simplesign validate signed.pdf --icp-homologation
 simplesign timestamp create contrato.pdf --tsa https://act.example/tsa
 simplesign timestamp verify contrato.pdf --token contrato.pdf.tst --icp
 ```

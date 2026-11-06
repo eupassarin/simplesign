@@ -19,19 +19,17 @@ public static class IcpBrasilXadesPolicyValidator
     /// </summary>
     /// <param name="signedXml">The signed XML.</param>
     /// <param name="result">Its validation result, from <see cref="XadesSignatureValidator"/>.</param>
-    /// <param name="environment">Also accept homologation roots with <see cref="IcpBrasilEnvironment.Homologation"/>.</param>
-    public static IcpBrasilPolicyValidationResult Validate(
-        byte[] signedXml, XadesValidationResult result, IcpBrasilEnvironment environment = IcpBrasilEnvironment.Production)
+    public static IcpBrasilPolicyValidationResult Validate(byte[] signedXml, XadesValidationResult result)
     {
         ArgumentNullException.ThrowIfNull(signedXml);
         ArgumentNullException.ThrowIfNull(result);
         var root = result.SignerCertificate is { } signer
-            ? IcpBrasilChainValidator.FindBundledRoot(signer, null, environment)
+            ? IcpBrasilChainValidator.FindBundledRoot(signer)
             : null;
         var check = IcpBrasilPolicyValidator.Validate(
             result.SignaturePolicy, result.SigningTime ?? DateTimeOffset.UtcNow,
             hasSignatureTimestamp: result.HasValidSignatureTimeStamp is not null,
-            IcpBrasilPolicyFormat.Xades, root is not null && IcpBrasilChainValidator.IsHomologationRoot(root) ? null : root);
+            IcpBrasilPolicyFormat.Xades, root);
         if (check.Policy is null || !IcpBrasilSignaturePolicies.TryGetRules(check.Policy.Oid, out var rules))
         {
             return check;

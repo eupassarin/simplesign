@@ -45,7 +45,6 @@
     <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv12.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv12.crt" />
     <EmbeddedResource Include="IcpBrasil\Certs\ICP-Brasilv13.crt" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.ICP-Brasilv13.crt" />
     <EmbeddedResource Include="IcpBrasil\Certs\IcpBrasilIntermediates.pem" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.IcpBrasilIntermediates.pem" />
-    <EmbeddedResource Include="IcpBrasil\Certs\IcpBrasilHomologation.pem" LogicalName="SimpleSign.Brasil.IcpBrasil.Certs.IcpBrasilHomologation.pem" />
     <!-- Gov.br root CAs -->
     <EmbeddedResource Include="GovBr\Certs\GovBr-ACRaiz-v1.crt" LogicalName="SimpleSign.Brasil.GovBr.Certs.GovBr-ACRaiz-v1.crt" />
     <EmbeddedResource Include="GovBr\Certs\GovBr-ACIntermediaria-v1.crt" LogicalName="SimpleSign.Brasil.GovBr.Certs.GovBr-ACIntermediaria-v1.crt" />

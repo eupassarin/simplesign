@@ -107,13 +107,6 @@ public sealed class IcpBrasilChainValidator
     internal IReadOnlyList<X509Certificate2>? TrustAnchorsOverride { get; init; }
 
     /// <summary>
-    /// Which hierarchy to trust. <see cref="IcpBrasilEnvironment.Homologation"/> adds the bundled
-    /// homologation (test) roots and intermediates; chains ending in them are reported with
-    /// <see cref="IcpBrasilValidationResult.IsHomologation"/> and a warning.
-    /// </summary>
-    public IcpBrasilEnvironment Environment { get; init; }
-
-    /// <summary>
     /// AC Raiz certificates to trust in addition to the bundled v4–v13 — e.g. a new root version
     /// obtained with <see cref="IcpBrasilRoots.DownloadAsync"/>.
     /// </summary>
@@ -227,7 +220,7 @@ public sealed class IcpBrasilChainValidator
         try
         {
             // 4. Builds the chain at the validation time with the AC Raiz as trust anchor
-            using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts, validationTime, TrustAnchorsOverride is null, Environment);
+            using var chain = BuildChainWithPolicy(certificate, acRaizCerts, extraCerts, aiaCerts, validationTime, TrustAnchorsOverride is null);
             var chainElements = ProcessChainErrors(chain, errors);
             if (errors is [] && chain.ChainElements.Count > 0
                 && !acRaizCerts.Any(r => r.RawData.AsSpan().SequenceEqual(chain.ChainElements[^1].Certificate.RawData)))
@@ -236,14 +229,6 @@ public sealed class IcpBrasilChainValidator
             }
 
             bool isChainValid = errors is [] && chainElements is not [];
-            bool isHomologation = Environment == IcpBrasilEnvironment.Homologation
-                && chain.ChainElements.Count > 0
-                && IsHomologationRoot(chain.ChainElements[^1].Certificate);
-            if (isHomologation)
-            {
-                warnings.Add("The chain ends in an ICP-Brasil homologation (test) root: test certificate, not valid for production.");
-            }
-
             // 5. Revocation of the certificate and of every CA, at the validation time
             var revocationStatus = ChainRevocationStatus.NotChecked;
             bool hasEvidence = context.EmbeddedCrls.Count > 0 || context.EmbeddedOcsps.Count > 0;
@@ -277,7 +262,6 @@ public sealed class IcpBrasilChainValidator
                 CertificateData = IcpBrasilCertificateData.FromCertificate(certificate, _logger),
                 ValidationTime = validationTime,
                 RevocationStatus = revocationStatus,
-                IsHomologation = isHomologation,
                 ChainElements = chainElements.AsReadOnly(),
                 AcRaizCertificates = acRaizCerts.AsReadOnly(),
                 Errors = errors.AsReadOnly(),
@@ -717,31 +701,10 @@ public sealed class IcpBrasilChainValidator
     /// <param name="certificate">The end-entity certificate.</param>
     /// <param name="extraCerts">Intermediates that came with it.</param>
     /// <returns>The root, or null when the certificate does not chain to a bundled ICP-Brasil root.</returns>
-    public static X509Certificate2? FindBundledRoot(X509Certificate2 certificate, IEnumerable<X509Certificate2>? extraCerts = null) =>
-        FindBundledRoot(certificate, extraCerts, IcpBrasilEnvironment.Production);
-
-    /// <summary>
-    /// The bundled root the certificate chains to, built offline (validity in time is not
-    /// checked); with <see cref="IcpBrasilEnvironment.Homologation"/> the homologation roots and
-    /// intermediates are included (use <see cref="IsHomologationRoot"/> to tell them apart).
-    /// </summary>
-    /// <param name="certificate">The end-entity certificate.</param>
-    /// <param name="extraCerts">Intermediates that came with it.</param>
-    /// <param name="environment">Which hierarchy to search.</param>
-    /// <returns>The root, or null when the certificate does not chain to a bundled root.</returns>
-    public static X509Certificate2? FindBundledRoot(
-        X509Certificate2 certificate, IEnumerable<X509Certificate2>? extraCerts, IcpBrasilEnvironment environment)
+    public static X509Certificate2? FindBundledRoot(X509Certificate2 certificate, IEnumerable<X509Certificate2>? extraCerts = null)
     {
         ArgumentNullException.ThrowIfNull(certificate);
-        bool homologation = environment == IcpBrasilEnvironment.Homologation;
-        IReadOnlyList<X509Certificate2> roots = homologation
-            ? [.. LoadBundledAcRaizCerts(), .. LoadBundledHomologationRoots()]
-            : LoadBundledAcRaizCerts();
-        if (homologation)
-        {
-            extraCerts = [.. extraCerts ?? [], .. LoadBundledHomologationIntermediates()];
-        }
-
+        IReadOnlyList<X509Certificate2> roots = LoadBundledAcRaizCerts();
         using var chain = new X509Chain();
         chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
         chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
@@ -782,47 +745,6 @@ public sealed class IcpBrasilChainValidator
         chain.ChainElements.All(e => e.ChainElementStatus.All(s => (s.Status & ~BenignStatus) == 0))
         && chain.ChainStatus.All(s => (s.Status & ~BenignStatus) == 0);
 
-    private static readonly Lazy<(IReadOnlyList<X509Certificate2> Roots, IReadOnlyList<X509Certificate2> Intermediates)> BundledHomologation =
-        new(LoadHomologation);
-
-    /// <summary>
-    /// The bundled ICP-Brasil homologation (test) roots: AC Raiz Brasileira v12 - HOM, the SERPRO
-    /// test roots, and a test root that reuses the subject of the production v12 with another key.
-    /// Never trusted unless <see cref="IcpBrasilEnvironment.Homologation"/> is chosen. Shared: do not dispose.
-    /// </summary>
-    public static IReadOnlyList<X509Certificate2> LoadBundledHomologationRoots() => BundledHomologation.Value.Roots;
-
-    /// <summary>The bundled ICP-Brasil homologation intermediate CAs (chain-building help only). Shared: do not dispose.</summary>
-    public static IReadOnlyList<X509Certificate2> LoadBundledHomologationIntermediates() => BundledHomologation.Value.Intermediates;
-
-    /// <summary>
-    /// Whether <paramref name="root"/> is one of the bundled homologation roots, compared by
-    /// certificate bytes (one test root has the same name as the production AC Raiz v12).
-    /// </summary>
-    /// <param name="root">A root certificate.</param>
-    public static bool IsHomologationRoot(X509Certificate2 root)
-    {
-        ArgumentNullException.ThrowIfNull(root);
-        return LoadBundledHomologationRoots().Any(r => r.RawData.AsSpan().SequenceEqual(root.RawData));
-    }
-
-    private static (IReadOnlyList<X509Certificate2> Roots, IReadOnlyList<X509Certificate2> Intermediates) LoadHomologation()
-    {
-        using var stream = typeof(IcpBrasilChainValidator).Assembly
-            .GetManifestResourceStream("SimpleSign.Brasil.IcpBrasil.Certs.IcpBrasilHomologation.pem");
-        if (stream is null)
-        {
-            return ([], []);
-        }
-
-        using var reader = new StreamReader(stream);
-        var collection = new X509Certificate2Collection();
-        collection.ImportFromPem(reader.ReadToEnd());
-        var all = collection.ToList();
-        return ([.. all.Where(c => c.SubjectName.RawData.AsSpan().SequenceEqual(c.IssuerName.RawData))],
-            [.. all.Where(c => !c.SubjectName.RawData.AsSpan().SequenceEqual(c.IssuerName.RawData))]);
-    }
-
     /// <summary>
     /// Loads the bundled AC Raiz certificates from the assembly (offline, no network).
     /// </summary>
@@ -851,8 +773,7 @@ public sealed class IcpBrasilChainValidator
         IReadOnlyList<X509Certificate2>? extraCerts,
         List<X509Certificate2> aiaCerts,
         DateTimeOffset validationTime,
-        bool useBundledIntermediates,
-        IcpBrasilEnvironment environment)
+        bool useBundledIntermediates)
     {
         var chain = new X509Chain();
         // Revocation is checked by ChainRevocationChecker at the validation time, with the
@@ -890,14 +811,6 @@ public sealed class IcpBrasilChainValidator
         if (useBundledIntermediates)
         {
             foreach (var intermediate in LoadBundledIntermediateCerts())
-            {
-                chain.ChainPolicy.ExtraStore.Add(intermediate);
-            }
-        }
-
-        if (environment == IcpBrasilEnvironment.Homologation)
-        {
-            foreach (var intermediate in LoadBundledHomologationIntermediates())
             {
                 chain.ChainPolicy.ExtraStore.Add(intermediate);
             }
@@ -950,11 +863,6 @@ public sealed class IcpBrasilChainValidator
         ct.ThrowIfCancellationRequested();
         var result = new List<X509Certificate2>(TrustAnchorsOverride ?? LoadBundledAcRaizCerts());
         result.AddRange(AdditionalTrustAnchors);
-        if (Environment == IcpBrasilEnvironment.Homologation)
-        {
-            result.AddRange(LoadBundledHomologationRoots());
-        }
-
         if (result is [])
         {
             warnings.Add("Could not load any ICP-Brasil root certificate.");

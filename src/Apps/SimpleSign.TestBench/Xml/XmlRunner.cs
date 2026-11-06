@@ -192,8 +192,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             };
             if (r.SignaturePolicy is not null && settings.UseBrasil)
             {
-                var policy = IcpBrasilXadesPolicyValidator.Validate(xml, r,
-                    settings.Trust.Contains(TrustChoice.IcpHomologation) ? IcpBrasilEnvironment.Homologation : IcpBrasilEnvironment.Production);
+                var policy = IcpBrasilXadesPolicyValidator.Validate(xml, r);
                 checks.Add(new("policy", L.T("ICP-Brasil policy"), policy.Status switch
                 {
                     IcpBrasilPolicyStatus.Valid => "pass",

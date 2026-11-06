@@ -22,15 +22,4 @@ public sealed class IcpBrasilTimestampTests
         result.IsTsaTrusted.ShouldBe(false);
         result.IsValid.ShouldBeFalse();
     }
-
-    [Fact]
-    public void VerifyHash_NonIcpTsa_NotTrustedEvenInHomologation()
-    {
-        byte[] token = TimestampTestResponseBuilder.CreateTokenForData(s_data, HashAlgorithmName.SHA256);
-
-        var result = IcpBrasilTimestamp.VerifyHash(token, SHA256.HashData(s_data), HashAlgorithmName.SHA256, IcpBrasilEnvironment.Homologation);
-
-        result.IsImprintValid.ShouldBeTrue();
-        result.IsTsaTrusted.ShouldBe(false);
-    }
 }

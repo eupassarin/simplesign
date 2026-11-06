@@ -188,7 +188,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     private static CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool sandboxRoot = settings.Trust.Contains(TrustChoice.Sandbox);
-        bool icp = settings.Trust.Contains(TrustChoice.IcpBrasil) || settings.Trust.Contains(TrustChoice.IcpHomologation);
+        bool icp = settings.Trust.Contains(TrustChoice.IcpBrasil);
         var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n");
         if (icp)
         {
@@ -210,7 +210,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         sb.Append("});\n");
         if (icp)
         {
-            sb.Append(CultureInfo.InvariantCulture, $"var icpRoots = new BrasilExtension(new BrasilExtensionOptions {{ IcpEnvironment = IcpBrasilEnvironment.{(settings.Trust.Contains(TrustChoice.IcpHomologation) ? "Homologation" : "Production")} }})\n");
+            sb.Append("var icpRoots = new BrasilExtension()\n");
             sb.Append("    .TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()).ToList();\n");
         }
 

@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 import { CodeTabs, Indication, SignatureCard } from "../pdf-signing/steps/ResultStep"
 import { ChoiceCard, Field, KeyValue, Pill, Section } from "../pdf-signing/ui"
 
-const trustChoices: TrustChoice[] = ["Sandbox", "System", "IcpBrasil", "IcpHomologation"]
+const trustChoices: TrustChoice[] = ["Sandbox", "System", "IcpBrasil"]
 
 export function defaultValidationSettings(environment: EnvironmentMode): ValidationSettings {
   return {
