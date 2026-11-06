@@ -20,3 +20,6 @@ SimpleSign, including their rationale, consequences, and alternatives.
 - [ADR 0015: Cross-Format Signing Contract (PAdES, CAdES, XAdES)](0015-cross-format-signing-contract.md)
 - [ADR 0016: Verifiable AdES Level Fulfillment](0016-verifiable-ades-level-fulfillment.md)
 - [ADR 0017: Managed HTML Layout and OpenType Shaping](0017-managed-html-layout-and-text-shaping.md)
+- [ADR 0018: Repository Layout and Package Boundaries](0018-repository-layout-and-package-boundaries.md)
+- [ADR 0019: Hardware and Cloud Signers (PKCS#11, PSC, CSC)](0019-hardware-and-cloud-signers.md)
+- [ADR 0020: Outbound HTTP — Retries and SSRF Guard](0020-outbound-http-resilience-and-ssrf-guard.md)
