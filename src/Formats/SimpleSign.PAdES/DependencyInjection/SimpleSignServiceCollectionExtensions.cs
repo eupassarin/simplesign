@@ -93,12 +93,18 @@ public static class SimpleSignServiceCollectionExtensions
         services.TryAddSingleton<IOcspClient>(sp =>
         {
             var http = sp.GetRequiredService<IHttpClientProvider>().GetClient();
-            return new OcspClient(http, sp.GetService<ILogger<OcspClient>>());
+            return new OcspClient(http, sp.GetService<ILogger<OcspClient>>())
+            {
+                OutboundPolicy = sp.GetRequiredService<IHttpClientProvider>().OutboundPolicy ?? OutboundHttpPolicy.Default,
+            };
         });
         services.TryAddSingleton<ICrlClient>(sp =>
         {
             var http = sp.GetRequiredService<IHttpClientProvider>().GetClient();
-            return new CrlClient(http, sp.GetService<ILogger<CrlClient>>());
+            return new CrlClient(http, sp.GetService<ILogger<CrlClient>>())
+            {
+                OutboundPolicy = sp.GetRequiredService<IHttpClientProvider>().OutboundPolicy ?? OutboundHttpPolicy.Default,
+            };
         });
         services.TryAddSingleton<IRevocationChecker>(sp =>
         {

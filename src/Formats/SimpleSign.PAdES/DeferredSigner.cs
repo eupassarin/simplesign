@@ -257,7 +257,10 @@ public static class DeferredSigner
                     ? TimestampClient.Create(timestampOptions, provider ?? DefaultHttpClientProvider.Instance, logger)
                     : tsaFactory is not null
                         ? tsaFactory.Create(endpoint)
-                        : new TimestampClient(httpClient, endpoint, logger);
+                        : new TimestampClient(httpClient, endpoint, logger)
+                        {
+                            OutboundPolicy = (provider ?? DefaultHttpClientProvider.Instance).OutboundPolicy ?? OutboundHttpPolicy.Default,
+                        };
                 timestampToken = await tsaClient.GetTimestampAsync(
                     TimestampClient.ExtractSignatureValue(cms), hashAlg, cancellationToken).ConfigureAwait(false);
                 cms = TimestampClient.EmbedTimestampInCms(cms, timestampToken);
@@ -296,7 +299,11 @@ public static class DeferredSigner
 
                 var ltvProvider = profile.LongTermValidation!.HttpClientProvider ??
                     options.HttpClientProvider ?? DefaultHttpClientProvider.Instance;
-                signedPdf = await new LtvEmbedder(ltvProvider, logger).EmbedLtvDataAsync(
+                var ltvEmbedder = new LtvEmbedder(ltvProvider, logger)
+                {
+                    ClockSkewTolerance = profile.LongTermValidation.ClockSkewTolerance,
+                };
+                signedPdf = await ltvEmbedder.EmbedLtvDataAsync(
                     signedPdf, allCerts, timestampToken, cancellationToken).ConfigureAwait(false);
 
                 var requiredCertificates = new List<X509Certificate2>(allCerts);
@@ -330,7 +337,7 @@ public static class DeferredSigner
                 var provider = effective.HttpClientProvider ?? options.HttpClientProvider ?? DefaultHttpClientProvider.Instance;
                 ITimestampClientFactory? archiveFactory = effective.NeedsDedicatedClient
                     ? new FixedTimestampClientFactory(TimestampClient.Create(effective, provider, logger))
-                    : tsaFactory;
+                    : tsaFactory ?? new TimestampClientFactory(provider, logger);
                 await using var pdfStream = new MemoryStream(signedPdf, writable: false);
                 var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(pdfStream, cancellationToken: cancellationToken)
                     .ConfigureAwait(false);

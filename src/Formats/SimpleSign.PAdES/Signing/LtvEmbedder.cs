@@ -26,6 +26,24 @@ public sealed class LtvEmbedder : ILtvEmbedder
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly IOcspClient? _ocspClient;
+    private readonly OutboundHttpPolicy _outboundPolicy = OutboundHttpPolicy.Default;
+    private readonly TimeSpan _clockSkewTolerance = OcspClient.DefaultClockSkewTolerance;
+
+    /// <summary>
+    /// Clock skew allowed for the OCSP responses this embedder fetches (see
+    /// <see cref="Core.Signing.LongTermValidationOptions.ClockSkewTolerance"/>). Ignored when an <see cref="IOcspClient"/>
+    /// is injected. Default: <see cref="OcspClient.DefaultClockSkewTolerance"/>.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+    public TimeSpan ClockSkewTolerance
+    {
+        get => _clockSkewTolerance;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, TimeSpan.Zero);
+            _clockSkewTolerance = value;
+        }
+    }
 
     /// <param name="httpClient">
     /// <see cref="HttpClient"/> instance for downloading CRL/OCSP.
@@ -47,6 +65,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         _httpClient = httpClientProvider.GetClient();
+        _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
         _logger = logger ?? NullLogger.Instance;
     }
 
@@ -57,6 +76,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         _httpClient = httpClientProvider.GetClient();
+        _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
         _ocspClient = ocspClient;
         _logger = logger ?? NullLogger.Instance;
     }
@@ -103,7 +123,11 @@ public sealed class LtvEmbedder : ILtvEmbedder
         var crlData = new List<byte[]>();
         var ocspData = new List<byte[]>();
         var allCerts = new List<X509Certificate2>(certificateChain);
-        var ocspClient = _ocspClient ?? new OcspClient(_httpClient, _logger);
+        var ocspClient = _ocspClient ?? new OcspClient(_httpClient, _logger)
+        {
+            ClockSkewTolerance = _clockSkewTolerance,
+            OutboundPolicy = _outboundPolicy,
+        };
 
         if (timestampTokenBytes is { Length: > 0 })
         {
@@ -212,7 +236,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
                 {
                     try
                     {
-                        var crl = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, ct: ct).ConfigureAwait(false);
+                        var crl = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false);
                         if (crl is not null && IsCrlIssuedFor(crl, cert))
                         {
                             crlBag.Add(crl);
@@ -941,7 +965,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
 
         try
         {
-            var certBytes = await ResilientHttp.GetBytesAsync(_httpClient, caIssuersUrl, logger: _logger, ct: ct).ConfigureAwait(false);
+            var certBytes = await ResilientHttp.GetBytesAsync(_httpClient, caIssuersUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false);
             if (certBytes is null)
             {
                 return null;

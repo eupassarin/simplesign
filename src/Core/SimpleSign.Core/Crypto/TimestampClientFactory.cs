@@ -22,6 +22,6 @@ public sealed class TimestampClientFactory : ITimestampClientFactory
     public ITimestampClient Create(string tsaUrl)
     {
         var httpClient = _httpClientProvider.GetClient();
-        return new TimestampClient(httpClient, tsaUrl, _logger);
+        return new TimestampClient(httpClient, tsaUrl, _logger) { OutboundPolicy = _httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default };
     }
 }

@@ -34,6 +34,7 @@ public sealed class GovBrChainValidator
     ];
 
     private readonly HttpClient _httpClient;
+    private readonly OutboundHttpPolicy _outboundPolicy = OutboundHttpPolicy.Default;
     private readonly ILogger _logger;
     private readonly ICertificateChainService _certChainService;
     private readonly ChainRevocationChecker _revocationChecker;
@@ -60,7 +61,7 @@ public sealed class GovBrChainValidator
         _httpClient = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _logger = logger ?? NullLogger.Instance;
         _certChainService = certChainService ?? new CertificateChainService();
-        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger);
+        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger, _outboundPolicy);
     }
 
     /// <summary>
@@ -71,9 +72,10 @@ public sealed class GovBrChainValidator
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         _httpClient = httpClientProvider.GetClient();
+        _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
         _logger = logger ?? NullLogger.Instance;
         _certChainService = certChainService ?? new CertificateChainService();
-        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger);
+        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger, _outboundPolicy);
     }
 
     /// <summary>
@@ -376,7 +378,9 @@ public sealed class GovBrChainValidator
         X509Certificate2 cert,
         List<string> warnings,
         CancellationToken ct)
-        => _certChainService.DownloadAiaCertsAsync(_httpClient, cert, extraCerts: null, warnings, ct);
+        => _outboundPolicy.PrivateNetworkHosts.Count == 0
+            ? _certChainService.DownloadAiaCertsAsync(_httpClient, cert, extraCerts: null, warnings, ct)
+            : _certChainService.DownloadAiaCertsAsync(_httpClient, cert, extraCerts: null, warnings, _outboundPolicy, ct);
 
     private static bool IsRootCert(X509Certificate2 cert) =>
         cert.IsSelfSigned();

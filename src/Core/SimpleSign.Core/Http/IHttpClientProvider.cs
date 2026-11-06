@@ -11,6 +11,12 @@ public interface IHttpClientProvider
 {
     /// <summary>Returns an <see cref="HttpClient"/> suitable for OCSP, CRL, TSA, and AIA requests.</summary>
     HttpClient GetClient();
+
+    /// <summary>
+    /// Outbound rules for the requests made with this provider's clients, such as hosts allowed to
+    /// resolve to private addresses behind a split-DNS proxy. Default: <see cref="OutboundHttpPolicy.Default"/>.
+    /// </summary>
+    OutboundHttpPolicy OutboundPolicy => OutboundHttpPolicy.Default;
 }
 
 /// <summary>

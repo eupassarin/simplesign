@@ -89,6 +89,7 @@ public sealed class IcpBrasilChainValidator
     };
 
     private readonly HttpClient _httpClient;
+    private readonly OutboundHttpPolicy _outboundPolicy = OutboundHttpPolicy.Default;
     private readonly ILogger _logger;
     private readonly ICertificateChainService _certChainService;
     private readonly ChainRevocationChecker _revocationChecker;
@@ -123,7 +124,7 @@ public sealed class IcpBrasilChainValidator
         _httpClient = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _logger = logger ?? NullLogger.Instance;
         _certChainService = certChainService ?? new CertificateChainService();
-        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger);
+        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger, _outboundPolicy);
     }
 
     /// <summary>
@@ -134,9 +135,10 @@ public sealed class IcpBrasilChainValidator
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         _httpClient = httpClientProvider.GetClient();
+        _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
         _logger = logger ?? NullLogger.Instance;
         _certChainService = certChainService ?? new CertificateChainService();
-        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger);
+        _revocationChecker = new ChainRevocationChecker(_httpClient, _logger, _outboundPolicy);
     }
 
     /// <summary>
@@ -722,7 +724,9 @@ public sealed class IcpBrasilChainValidator
         IReadOnlyList<X509Certificate2>? extraCerts,
         List<string> warnings,
         CancellationToken ct)
-        => _certChainService.DownloadAiaCertsAsync(_httpClient, cert, extraCerts, warnings, ct);
+        => _outboundPolicy.PrivateNetworkHosts.Count == 0
+            ? _certChainService.DownloadAiaCertsAsync(_httpClient, cert, extraCerts, warnings, ct)
+            : _certChainService.DownloadAiaCertsAsync(_httpClient, cert, extraCerts, warnings, _outboundPolicy, ct);
 
     private static bool ContainsOid(byte[] data, string oid, ILogger? logger = null)
     {

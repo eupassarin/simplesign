@@ -27,6 +27,11 @@ public sealed class CrlClient : ICrlClient
         _logger = logger ?? NullLogger.Instance;
     }
 
+    /// <summary>
+    /// Outbound URL policy applied to CRL distribution point URLs. Default: <see cref="OutboundHttpPolicy.Default"/>.
+    /// </summary>
+    public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
+
     /// <inheritdoc />
     public async Task<bool> CheckCrlAsync(X509Certificate2 cert, string crlUrl, CancellationToken ct)
     {
@@ -34,7 +39,7 @@ public sealed class CrlClient : ICrlClient
         ArgumentException.ThrowIfNullOrWhiteSpace(crlUrl);
 
         _logger.CrlDownloading(crlUrl);
-        var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, ct: ct).ConfigureAwait(false)
+        var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: OutboundPolicy, ct: ct).ConfigureAwait(false)
             ?? throw new HttpRequestException($"CRL download failed after retries: {crlUrl}");
         _logger.CrlDownloaded(crlBytes.Length);
         bool? result = IsSerialInCrl(cert, crlBytes);

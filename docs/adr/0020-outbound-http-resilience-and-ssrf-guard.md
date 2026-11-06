@@ -32,7 +32,7 @@ All library-initiated HTTP goes through `ResilientHttp` (`src/Core/SimpleSign.Co
 
 **Consequences:**
 - Validating hostile documents cannot make SimpleSign call internal endpoints, whichever `HttpClient` the caller injects.
-- TSAs, OCSP responders and CRL servers on private networks are **not reachable**, and there is no opt-out today. Deployments that need an internal TSA or responder must expose it on a public address, or the guard must gain an explicit allow-list (a future, deliberate API change).
+- Hosts that resolve to private addresses are refused by default. `OutboundHttpPolicy.PrivateNetworkHosts` (exact names or `*.` subdomain wildcards), returned by `IHttpClientProvider.OutboundPolicy`, lets listed hosts resolve to RFC 1918 addresses. It exists for split-DNS corporate networks, where the internal resolver answers a public CA host with a private address while the request leaves through a proxy (issue #215), and for internal TSAs or responders. The allow-list is per provider, not global, so a validation service and a signing service in one process can differ. Even for listed hosts, loopback, link-local (`169.254.0.0/16`, cloud metadata), unspecified addresses and literal IPs in the URL stay blocked.
 - `X509Chain`'s own online retrieval is done by the operating system and is outside this guard. SimpleSign limits it with the chain retrieval timeout and prefers its own AIA and revocation downloads.
 - Polly is a runtime dependency of `SimpleSign.Core`. It is AOT compatible and used only through `ResilientHttp`.
 - Transient failures cost up to roughly 1.4 s of backoff before a fetch is declared failed.
@@ -44,4 +44,7 @@ All library-initiated HTTP goes through `ResilientHttp` (`src/Core/SimpleSign.Co
 | **No guard; trust the injected `HttpClient`** | Simplest; caller decides | Every server-side validator would need its own SSRF defense; most would not have one | Rejected |
 | **Guard on the URL string only** | No DNS lookup | Bypassed by DNS names that resolve to private addresses | Rejected (sync `IsSafeUrl` kept only for constructor checks) |
 | **Resolve-and-check guard + retries (chosen)** | Safe by default; consistent behavior for TSA, OCSP, CRL, AIA and extensions | Private-network services unreachable without a future allow-list | **Chosen** |
+| **Skip the DNS check when the client uses a proxy** | No configuration | The proxy of an injected `HttpClient` cannot be detected reliably; with a proxy, internal hosts are still reachable through it | Rejected |
+| **Guard only caller-supplied URLs (TSA), not certificate URLs** | Fixes split DNS for revocation | Certificate URLs are the attacker-controlled ones when validating uploaded documents | Rejected |
+| **Per-provider host allow-list (`OutboundHttpPolicy`)** | Explicit, scoped, keeps metadata/loopback blocked | Hosts must be listed by the deployer | **Added** (issue #215) |
 | **`Microsoft.Extensions.Http.Resilience` handlers** | Standard in ASP.NET Core | Only applies to factory-created clients; not to clients users pass directly | Rejected |

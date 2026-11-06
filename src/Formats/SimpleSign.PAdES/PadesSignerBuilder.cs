@@ -1059,7 +1059,8 @@ public sealed class PadesSignerBuilder
 
         var ltvOptions = profile.LongTermValidation!;
         var ltvProvider = ltvOptions.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
-        var ltvEmbedder = _options.Dependencies.LtvEmbedder ?? new LtvEmbedder(ltvProvider, logger);
+        var ltvEmbedder = _options.Dependencies.LtvEmbedder
+            ?? new LtvEmbedder(ltvProvider, logger) { ClockSkewTolerance = ltvOptions.ClockSkewTolerance };
 
         var chain = BuildChainWithSigner();
 

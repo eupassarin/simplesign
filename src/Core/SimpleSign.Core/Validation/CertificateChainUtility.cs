@@ -132,11 +132,25 @@ internal static class CertificateChainUtility
     /// using iterative BFS so that each downloaded intermediate's own AIA is also chased.
     /// This is needed for chains with multiple intermediate CAs (e.g. ICP-Brasil).
     /// </summary>
+    internal static Task<List<X509Certificate2>> DownloadAiaCertsAsync(
+        HttpClient httpClient,
+        X509Certificate2 cert,
+        IReadOnlyList<X509Certificate2>? extraCerts,
+        List<string> warnings,
+        CancellationToken ct) =>
+        DownloadAiaCertsAsync(httpClient, cert, extraCerts, warnings, OutboundHttpPolicy.Default, ct);
+
+    /// <summary>
+    /// Downloads intermediate certificates via AIA like
+    /// <see cref="DownloadAiaCertsAsync(HttpClient, X509Certificate2, IReadOnlyList{X509Certificate2}?, List{string}, CancellationToken)"/>,
+    /// under <paramref name="policy"/>.
+    /// </summary>
     internal static async Task<List<X509Certificate2>> DownloadAiaCertsAsync(
         HttpClient httpClient,
         X509Certificate2 cert,
         IReadOnlyList<X509Certificate2>? extraCerts,
         List<string> warnings,
+        OutboundHttpPolicy? policy,
         CancellationToken ct)
     {
         var result = new List<X509Certificate2>();
@@ -160,7 +174,7 @@ internal static class CertificateChainUtility
         {
             var current = queue.Dequeue();
             int countBefore = result.Count;
-            await DownloadAiaForCertAsync(httpClient, current, result, visited, warnings, ct).ConfigureAwait(false);
+            await DownloadAiaForCertAsync(httpClient, current, result, visited, warnings, policy, ct).ConfigureAwait(false);
             // Enqueue any newly discovered intermediates for further chasing
             for (int i = countBefore; i < result.Count; i++)
             {
@@ -181,6 +195,7 @@ internal static class CertificateChainUtility
         List<X509Certificate2> result,
         HashSet<string> visited,
         List<string> warnings,
+        OutboundHttpPolicy? policy,
         CancellationToken ct)
     {
         var aiaExt = cert.Extensions[Oids.AuthorityInfoAccess];
@@ -195,7 +210,7 @@ internal static class CertificateChainUtility
             { continue; }
             try
             {
-                var bytes = await ResilientHttp.GetBytesAsync(httpClient, url, ct: ct).ConfigureAwait(false);
+                var bytes = await ResilientHttp.GetBytesAsync(httpClient, url, policy: policy, ct: ct).ConfigureAwait(false);
                 if (bytes is not null)
                 {
                     foreach (var loaded in LoadCertsFromBytes(bytes))
