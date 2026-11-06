@@ -211,7 +211,3 @@ invalid LTV or archive properties likewise retain their structural level.
 signer-chain checks. Inspect the optional timestamp/LTV/archive outcomes as well
 when the application requires B-T, B-LT, or B-LTA. Structural `DetectedLevel` is
 not the signing result's checked `AchievedLevel`.
-
-## Web Sample
-
-A web-based inspection and validation UI is available at [`samples/WebInspectSample/`](https://github.com/eupassarin/SimpleSign/tree/main/samples/WebInspectSample), featuring collapsible signature cards, search, and ICP-Brasil certificate detection.

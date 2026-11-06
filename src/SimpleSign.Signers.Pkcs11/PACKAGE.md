@@ -27,4 +27,4 @@ byte[] signed = await PadesSigner.Document(pdfBytes)
 used in Brazil (SafeNet, SafeSign, Watchdata, Gemalto, Oberthur, OpenSC…), so the path is optional.
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [PKCS#11 guide](https://eupassarin.github.io/SimpleSign/articles/pkcs11.html). MIT licensed.
+and the [PKCS#11 guide](https://github.com/eupassarin/SimpleSign/blob/main/docs/articles/pkcs11.md). MIT licensed.

@@ -23,4 +23,4 @@ XadesValidationResult result = new XadesSignatureValidator(
 ```
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [docs](https://eupassarin.github.io/SimpleSign/). MIT licensed.
+and the [docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles). MIT licensed.
