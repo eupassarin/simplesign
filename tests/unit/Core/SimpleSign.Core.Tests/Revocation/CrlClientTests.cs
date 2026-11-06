@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -293,8 +294,8 @@ public sealed class CrlClientTests
 
     // ── Instance method tests (mocked HTTP) ──────────────────────────────────
 
-    [Fact(DisplayName = "CRL check via HTTP with empty CRL returns true")]
-    public async Task CheckCrlAsync_EmptyCrl_ReturnsTrue()
+    [Fact(DisplayName = "CRL check without the issuer does not trust a CRL that omits the certificate")]
+    public async Task CheckCrlAsync_WithoutIssuerCertificateNotListed_ThrowsRevocationCheckException()
     {
         using var issuer = TestCertificateFactory.CreateCaCert();
         using var leaf = TestCertificateFactory.CreateLeafCert(issuer);
@@ -303,9 +304,44 @@ public sealed class CrlClientTests
         using var httpClient = MockHttpHandler.ForGetBytes(crl);
 
         var client = new CrlClient(httpClient);
-        bool result = await client.CheckCrlAsync(leaf, "http://example.com/test.crl", CancellationToken.None);
+        await Should.ThrowAsync<RevocationCheckException>(
+            () => client.CheckCrlAsync(leaf, "http://example.com/test.crl", CancellationToken.None));
+    }
+
+    [Fact(DisplayName = "CRL check with the issuer accepts a signed CRL that omits the certificate")]
+    public async Task CheckCrlAsync_WithIssuerSignedCrl_ReturnsTrue()
+    {
+        using var pki = new SyntheticPki();
+        using var httpClient = MockHttpHandler.ForGetBytes(pki.BuildLeafCrl());
+
+        bool result = await new CrlClient(httpClient).CheckCrlAsync(
+            pki.Leaf, pki.IntermediateCa, "http://198.51.100.1/leaf.crl", CancellationToken.None);
 
         result.ShouldBeTrue();
+    }
+
+    [Fact(DisplayName = "CRL check with the issuer reports a revoked certificate")]
+    public async Task CheckCrlAsync_WithIssuerRevokedCrl_ReturnsFalse()
+    {
+        using var pki = new SyntheticPki();
+        using var httpClient = MockHttpHandler.ForGetBytes(pki.BuildRevokedLeafCrl());
+
+        bool result = await new CrlClient(httpClient).CheckCrlAsync(
+            pki.Leaf, pki.IntermediateCa, "http://198.51.100.1/leaf.crl", CancellationToken.None);
+
+        result.ShouldBeFalse();
+    }
+
+    [Fact(DisplayName = "CRL check with the issuer refuses a CRL with an invalid signature")]
+    public async Task CheckCrlAsync_WithIssuerTamperedCrl_ThrowsRevocationCheckException()
+    {
+        using var pki = new SyntheticPki();
+        byte[] crl = pki.BuildLeafCrl();
+        crl[^1] ^= 0xFF;
+        using var httpClient = MockHttpHandler.ForGetBytes(crl);
+
+        await Should.ThrowAsync<RevocationCheckException>(() => new CrlClient(httpClient).CheckCrlAsync(
+            pki.Leaf, pki.IntermediateCa, "http://198.51.100.1/leaf.crl", CancellationToken.None));
     }
 
     [Fact(DisplayName = "CRL network failure throws HttpRequestException")]

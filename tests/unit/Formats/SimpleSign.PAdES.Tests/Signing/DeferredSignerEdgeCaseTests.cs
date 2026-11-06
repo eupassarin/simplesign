@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Constants;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -81,7 +82,7 @@ public sealed class DeferredSignerEdgeCaseTests
         result.SignatureAlgorithmOid.ShouldBe(Oids.RsaPss);
     }
 
-    [Fact(DisplayName = "PrepareAsync with unsupported key + hash combo throws NotSupportedException")]
+    [Fact(DisplayName = "PrepareAsync with SHA-1 is refused by the signing policy")]
     public async Task PrepareAsync_UnsupportedKeyHashCombo_Throws()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert(); // RSA
@@ -95,7 +96,8 @@ public sealed class DeferredSignerEdgeCaseTests
         };
 
         Func<Task> act = () => DeferredSigningEngineTestAdapter.PrepareAsync(TestPdfFactory.CreateMinimalPdf(), cert, options);
-        (await Should.ThrowAsync<NotSupportedException>(act)).Message.ShouldContain("detect signature OID");
+        // The signing policy refuses SHA-1 before the algorithm is resolved.
+        (await Should.ThrowAsync<SigningException>(act)).Reason.ShouldBe(SigningErrorReason.AlgorithmNotPermitted);
     }
 
     // ── Extra certificates in chain ──────────────────────────────────────────

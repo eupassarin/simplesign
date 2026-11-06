@@ -15,6 +15,12 @@ public sealed class ValidationOptions
     /// <summary>Timeout for AIA downloads, revocation checks (CRL/OCSP), and certificate-chain URL retrieval. Default: 10 seconds.</summary>
     public TimeSpan NetworkTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// The validation policy: accepted algorithms and key sizes, constraints on the signing certificate.
+    /// Default: <see cref="Policy.ValidationPolicy.Default"/>. Load one with <see cref="Policy.ValidationPolicy.Load"/>.
+    /// </summary>
+    public Policy.ValidationPolicy Policy { get; init; } = SimpleSign.Core.Validation.Policy.ValidationPolicy.Default;
+
     /// <summary>Default instance with all options at their default values.</summary>
     public static ValidationOptions Default { get; } = new();
 }

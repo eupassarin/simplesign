@@ -76,6 +76,83 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_Json_HasConstraintsAndPublicKey()
+    {
+        string signed = await SignAsync("report.pdf");
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--json");
+
+        exit.ShouldBe(0);
+        using var json = JsonDocument.Parse(output);
+        var signature = json.RootElement.GetProperty("signatures")[0];
+        signature.GetProperty("constraints").EnumerateArray().Select(c => c.GetProperty("id").GetString())
+            .ShouldContain("integrity");
+        signature.GetProperty("publicKey").GetProperty("pem").GetString()!.ShouldStartWith("-----BEGIN PUBLIC KEY-----");
+        signature.GetProperty("publicKey").GetProperty("spkiSha256").GetString()!.Length.ShouldBe(64);
+    }
+
+    [Fact]
+    public async Task Validate_UntrustedSignatureJson_HasEtsiSubIndication()
+    {
+        string signed = await SignAsync("untrusted-sub.pdf");
+
+        var (_, output) = await RunAsync("validate", signed, "--no-revocation", "--json");
+
+        using var json = JsonDocument.Parse(output);
+        json.RootElement.GetProperty("signatures")[0].GetProperty("subIndication").GetString().ShouldBe("NO_CERTIFICATE_CHAIN_FOUND");
+    }
+
+    [Fact]
+    public async Task Validate_Spanish_PrintsTheReportInSpanish()
+    {
+        string signed = await SignAsync("es.pdf");
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--lang", "es");
+
+        exit.ShouldBe(0);
+        output.ShouldContain("Informe de verificación");
+        output.ShouldContain("FIRMA VÁLIDA");
+        output.ShouldContain("Clave pública");
+    }
+
+    [Fact]
+    public async Task Validate_TrustDirectory_TrustsTheSigner()
+    {
+        string signed = await SignAsync("trust-dir.pdf");
+        string trustDir = Path.Combine(_tempDir, "trust");
+        Directory.CreateDirectory(trustDir);
+        File.Copy(_cerPath, Path.Combine(trustDir, "signer.cer"));
+
+        var (exit, _) = await RunAsync("validate", signed, "--no-revocation", "--trust-dir", trustDir, "--json");
+
+        exit.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Validate_PolicyRequiringLargerKeys_IsIndeterminate()
+    {
+        string signed = await SignAsync("policy.pdf");
+        string policy = Path.Combine(_tempDir, "policy.json");
+        await File.WriteAllTextAsync(policy, """{ "cryptographic": { "minimumRsaKeySize": 8192 } }""");
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--policy", policy, "--json");
+
+        exit.ShouldBe(1);
+        using var json = JsonDocument.Parse(output);
+        json.RootElement.GetProperty("signatures")[0].GetProperty("subIndication").GetString().ShouldBe("CRYPTO_CONSTRAINTS_FAILURE_NO_POE");
+    }
+
+    [Fact]
+    public async Task Validate_TslWithoutSigner_IsRefused()
+    {
+        string signed = await SignAsync("tsl.pdf");
+
+        var (exit, _) = await RunAsync("validate", signed, "--tsl", "https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml");
+
+        exit.ShouldNotBe(0);
+    }
+
+    [Fact]
     public async Task Validate_UntrustedSignature_IsIndeterminateWithExitCode1()
     {
         string signed = await SignAsync("untrusted.pdf");
@@ -288,6 +365,23 @@ public sealed class CliCommandTests : IDisposable
         using var json = JsonDocument.Parse(output);
         json.RootElement.GetProperty("isValid").GetBoolean().ShouldBeTrue();
         json.RootElement.GetProperty("isIntegrityValid").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task CadesValidate_Json_HasIndicationAndConstraints()
+    {
+        string data = Path.Combine(_tempDir, "cades-report.txt");
+        await File.WriteAllTextAsync(data, "report");
+        string signature = Path.Combine(_tempDir, "cades-report.p7s");
+        (await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--password", Password, "-o", signature)).Exit.ShouldBe(0);
+
+        var (exit, output) = await RunAsync("cades", "validate", signature, "--data", data, "--trust", _cerPath, "--json");
+
+        exit.ShouldBe(0);
+        using var json = JsonDocument.Parse(output);
+        json.RootElement.GetProperty("indication").GetString().ShouldBe("Valid");
+        json.RootElement.GetProperty("constraints").GetArrayLength().ShouldBeGreaterThan(0);
+        json.RootElement.GetProperty("publicKey").GetProperty("sizeBits").GetInt32().ShouldBe(2048);
     }
 
     [Fact]

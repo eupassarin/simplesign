@@ -47,6 +47,7 @@ public sealed class LtvArchivalCorruptionTests
     {
         using RSA key = RSA.Create(2048);
         var req = new CertificateRequest("CN=LTV Test", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, critical: true));
         byte[] urlBytes = Encoding.ASCII.GetBytes(url);
         // Build CRL Distribution Points extension (DER)
         var uri = new byte[2 + urlBytes.Length];

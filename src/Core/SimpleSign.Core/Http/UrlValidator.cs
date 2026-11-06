@@ -68,6 +68,16 @@ internal static class UrlValidator
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Whether a connection to <paramref name="address"/>, resolved from <paramref name="host"/>, is refused
+    /// by <paramref name="policy"/>. Used by transports that connect to an address themselves (LDAP).
+    /// </summary>
+    internal static bool IsBlockedAddress(string host, IPAddress address, OutboundHttpPolicy policy) =>
+        string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+        || (!IPAddress.TryParse(host, out _) && policy.AllowsPrivateAddressesFor(host)
+            ? IsLocalOrLinkLocal(address)
+            : IsPrivateOrReserved(address));
+
     private static bool IsBlockedHost(string host)
     {
         if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))

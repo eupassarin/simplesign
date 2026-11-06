@@ -1,3 +1,4 @@
+using SimpleSign.Cli.Rendering;
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
@@ -22,7 +23,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
     }
 
     /// <summary>XAdES validate command settings.</summary>
-    internal sealed class Settings : CommonSettings
+    internal sealed class Settings : TrustedValidationSettings
     {
         /// <summary>Signed XML file.</summary>
         [CommandArgument(0, "<signature>")]
@@ -84,7 +85,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 }
             }
 
-            return ValidationResult.Success();
+            return ValidateTrustOptions();
         }
     }
 
@@ -93,10 +94,15 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
     {
         byte[] signedXml = await CommonSettings.ReadInputBytesAsync(settings.SignaturePath, cancellationToken);
 
-        var trustAnchors = LoadTrustAnchors(settings.TrustPath);
+        var (policy, extraAnchors) = await settings.LoadTrustAsync(cancellationToken);
+        List<X509Certificate2>? trustAnchors = [.. LoadTrustAnchors(settings.TrustPath) ?? [], .. extraAnchors];
+        if (trustAnchors.Count == 0)
+        {
+            trustAnchors = null;
+        }
 
         var validator = new XadesSignatureValidator(
-            new ValidationOptions { CheckRevocation = settings.CheckRevocation });
+            new ValidationOptions { CheckRevocation = settings.CheckRevocation, Policy = policy });
         byte[]? originalData = settings.DataPath is null
             ? null
             : await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
@@ -114,16 +120,22 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         }
         else
         {
-            result = validator.Validate(signedXml, trustAnchors: trustAnchors, originalData: originalData);
+            result = await validator.ValidateAsync(signedXml, trustAnchors, originalData, cancellationToken);
         }
 
 
         if (settings.Json)
         {
+            var report = ValidationReportRenderer.ToDto(result.SubIndication, result.Constraints, result.SignerCertificate);
             var output = new XadesValidateOutput
             {
                 File = settings.SignaturePath,
                 IsValid = result.IsValid,
+                Indication = result.Indication.ToString(),
+                SubIndication = report.SubIndication,
+                NotRevoked = result.IsNotRevoked,
+                PublicKey = report.PublicKey,
+                Constraints = report.Constraints,
                 IsSignatureValid = result.IsSignatureValid,
                 IsIntegrityValid = result.IsIntegrityValid,
                 IsCertificateChainValid = result.IsCertificateChainValid,
@@ -208,6 +220,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
             }
         }
 
+        ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, settings.Spanish);
         var isValid = result.IsValid;
         AnsiConsole.MarkupLine(isValid ? "\n[green]✓ Signature is VALID[/]" : "\n[red]✗ Signature is INVALID[/]");
 

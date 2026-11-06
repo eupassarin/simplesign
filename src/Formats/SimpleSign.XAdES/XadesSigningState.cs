@@ -27,7 +27,11 @@ internal sealed record XadesExternalCredential(
 internal sealed record XadesDependencies(
     ITimestampClientFactory? TsaFactory,
     ILogger Logger,
-    IHttpClientProvider HttpClientProvider);
+    IHttpClientProvider HttpClientProvider)
+{
+    /// <summary>Checks the revocation of the chain before signing; when null, one is created from the HTTP provider.</summary>
+    public SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; init; }
+}
 
 /// <summary>Immutable signing configuration for the XAdES builder.</summary>
 internal sealed record XadesSigningOptions(
@@ -80,4 +84,7 @@ internal sealed record XadesSigningOptions(
 
     /// <summary>The SignaturePolicyStore unsigned property to add, or null.</summary>
     public SignaturePolicyStore? PolicyStore { get; init; }
+
+    /// <summary>The checks run on the certificate, chain and algorithms before signing.</summary>
+    public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
 }

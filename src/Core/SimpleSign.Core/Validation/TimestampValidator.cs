@@ -78,6 +78,16 @@ public static class TimestampValidator
             };
         bool? integrity = Validate(timestampToken, signatureValueBytes, signingTime,
             warnings, capturedPolicy, logger);
+#pragma warning disable CA1508 // trusted is set by the chain policy callback; the analyzer does not see the lambda
+        if (integrity == true && trusted == true
+            && ReadTokenCertificates(timestampToken) is [var tsaCertificate, ..]
+            && TimestampTsaChecks.TsaNameMatches(timestampToken, tsaCertificate) == false)
+#pragma warning restore CA1508
+        {
+            warnings.Add("TSA: the tsa name in TSTInfo does not match the TSA certificate (RFC 3161 §2.4.2).");
+            trusted = false;
+        }
+
         return new TimestampTokenValidationResult
         {
             IsIntegrityValid = integrity,
@@ -287,6 +297,17 @@ public static class TimestampValidator
             validateChain,
             logger);
     }
+
+    /// <summary>The TSTInfo bytes of a token, or null when it is not a timestamp token.</summary>
+    internal static byte[]? ExtractTstInfoBytes(byte[] timestampToken) => ExtractTstInfo(timestampToken);
+
+    /// <summary>
+    /// Verifies the TSA's signature over TSTInfo and its signed attributes, and that the TSA certificate
+    /// carries the critical, exclusive timeStamping EKU. Used when a token is received at signing time.
+    /// </summary>
+    internal static bool VerifyTokenSignatureAndEku(byte[] timestampToken, List<string> errors) =>
+        VerifyTokenSignature(timestampToken, errors)
+        && HasTimestampingEku(ReadTokenCertificates(timestampToken).FirstOrDefault(), errors);
 
     private static byte[]? ExtractTstInfo(byte[] timestampToken)
     {

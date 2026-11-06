@@ -32,22 +32,65 @@ public sealed class CrlClient : ICrlClient
     /// </summary>
     public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
 
-    /// <inheritdoc />
-    public async Task<bool> CheckCrlAsync(X509Certificate2 cert, string crlUrl, CancellationToken ct)
+    /// <summary>
+    /// Keeps downloaded CRLs until their nextUpdate, so the same CRL is not downloaded for every check.
+    /// Null (the default) downloads every time.
+    /// </summary>
+    public IRevocationCache? Cache { get; init; }
+
+    private async Task<byte[]> DownloadAsync(string crlUrl, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(cert);
-        ArgumentException.ThrowIfNullOrWhiteSpace(crlUrl);
+        if (Cache is not null && Cache.TryGet(crlUrl, out var cached))
+        {
+            return cached;
+        }
 
         _logger.CrlDownloading(crlUrl);
         var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: OutboundPolicy, ct: ct).ConfigureAwait(false)
             ?? throw new HttpRequestException($"CRL download failed after retries: {crlUrl}");
         _logger.CrlDownloaded(crlBytes.Length);
+        Cache?.Set(crlUrl, crlBytes, CrlEvaluator.ReadNextUpdate(crlBytes) ?? DateTimeOffset.MaxValue);
+        return crlBytes;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> CheckCrlAsync(X509Certificate2 cert, X509Certificate2 issuer, string crlUrl, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(cert);
+        ArgumentNullException.ThrowIfNull(issuer);
+        ArgumentException.ThrowIfNullOrWhiteSpace(crlUrl);
+
+        var crlBytes = await DownloadAsync(crlUrl, ct).ConfigureAwait(false);
+        return CrlEvaluator.Evaluate(cert, crlBytes, issuer, DateTimeOffset.UtcNow, _logger) switch
+        {
+            CrlStatus.Good => true,
+            CrlStatus.Revoked => false,
+            _ => throw new RevocationCheckException(
+                $"Online CRL from '{crlUrl}' is not signed by the issuer of the certificate, is not current, or could not be parsed.",
+                cert.Thumbprint, null, new Uri(crlUrl)),
+        };
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Without the issuer the CRL signature cannot be checked, so only a revocation is believed:
+    /// a certificate absent from the CRL throws <see cref="RevocationCheckException"/>. Use the
+    /// overload that takes the issuer to get a "not revoked" answer.
+    /// </remarks>
+    public async Task<bool> CheckCrlAsync(X509Certificate2 cert, string crlUrl, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(cert);
+        ArgumentException.ThrowIfNullOrWhiteSpace(crlUrl);
+
+        var crlBytes = await DownloadAsync(crlUrl, ct).ConfigureAwait(false);
         bool? result = IsSerialInCrl(cert, crlBytes);
         // null means CRL could not be parsed or doesn't belong to this issuer — indeterminate
         return result switch
         {
             true => false,  // cert IS in CRL → revoked → not ok
-            false => true,  // cert NOT in CRL → ok
+            false => throw new RevocationCheckException(
+                $"Online CRL from '{crlUrl}' does not list the certificate, but its signature cannot be checked without the issuer certificate.",
+                cert.Thumbprint, null, new Uri(crlUrl)),
             null => throw new RevocationCheckException(
                 $"Online CRL from '{crlUrl}' could not be parsed or is not relevant for this certificate.",
                 cert.Thumbprint, null, crlUrl is not null ? new Uri(crlUrl) : null)
@@ -328,12 +371,17 @@ public sealed class CrlClient : ICrlClient
         return GetCrlUrl(certificate, logger) is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri : null;
     }
 
-    internal static string? GetCrlUrl(X509Certificate2 cert, ILogger? logger = null)
+    internal static string? GetCrlUrl(X509Certificate2 cert, ILogger? logger = null) =>
+        GetCrlUrls(cert, logger).FirstOrDefault(u => u.StartsWith("http", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Every URI of the certificate's CRL distribution points, in the order they appear (any scheme).</summary>
+    internal static IReadOnlyList<string> GetCrlUrls(X509Certificate2 cert, ILogger? logger = null)
     {
+        var urls = new List<string>();
         var cdp = cert.Extensions[Oids.CrlDistributionPoints];
         if (cdp is null)
         {
-            return null;
+            return urls;
         }
 
         try
@@ -368,10 +416,7 @@ public sealed class CrlClient : ICrlClient
                                 string uri = generalNames.ReadCharacterString(
                                     UniversalTagNumber.IA5String,
                                     new Asn1Tag(TagClass.ContextSpecific, 6));
-                                if (uri.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return uri;
-                                }
+                                urls.Add(uri);
                             }
                             else
                             {
@@ -383,7 +428,7 @@ public sealed class CrlClient : ICrlClient
             }
         }
         catch (AsnContentException ex) { logger?.CrlUrlExtensionParsingFailed(ex.Message); }
-        return null;
+        return urls;
     }
 
     /// <summary>

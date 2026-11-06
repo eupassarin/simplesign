@@ -39,7 +39,26 @@ internal sealed class ValidateSignatureDto
     public DateTimeOffset? SigningTime { get; init; }
     public string? Lei14063 { get; init; }
     public ValidateBrasilDto? Brasil { get; init; }
+    public string? SubIndication { get; init; }
+    public PublicKeyDto? PublicKey { get; init; }
+    public List<ConstraintDto> Constraints { get; init; } = [];
     public List<string> Errors { get; init; } = [];
+}
+
+internal sealed class ConstraintDto
+{
+    public string Id { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public string? SubIndication { get; init; }
+    public string Message { get; init; } = string.Empty;
+}
+
+internal sealed class PublicKeyDto
+{
+    public string Algorithm { get; init; } = string.Empty;
+    public int SizeBits { get; init; }
+    public string SpkiSha256 { get; init; } = string.Empty;
+    public string Pem { get; init; } = string.Empty;
 }
 
 internal sealed class ValidateBrasilDto
@@ -196,6 +215,11 @@ internal sealed class CadesValidateOutput
 {
     public string File { get; init; } = string.Empty;
     public bool IsValid { get; init; }
+    public string Indication { get; init; } = "Indeterminate";
+    public string? SubIndication { get; init; }
+    public bool? NotRevoked { get; init; }
+    public PublicKeyDto? PublicKey { get; init; }
+    public List<ConstraintDto> Constraints { get; init; } = [];
     public bool IsSignatureValid { get; init; }
     public bool IsIntegrityValid { get; init; }
     public bool IsCertificateChainValid { get; init; }
@@ -217,6 +241,11 @@ internal sealed class XadesValidateOutput
 {
     public string File { get; init; } = string.Empty;
     public bool IsValid { get; init; }
+    public string Indication { get; init; } = "Indeterminate";
+    public string? SubIndication { get; init; }
+    public bool? NotRevoked { get; init; }
+    public PublicKeyDto? PublicKey { get; init; }
+    public List<ConstraintDto> Constraints { get; init; } = [];
     public bool IsSignatureValid { get; init; }
     public bool IsIntegrityValid { get; init; }
     public bool IsCertificateChainValid { get; init; }

@@ -236,6 +236,10 @@ public sealed class SyntheticPki : IDisposable
     /// </summary>
     public byte[] BuildLeafCrl() => BuildCrl(IntermediateCa, _intermediateKey);
 
+    /// <summary>Builds an intermediate-signed CRL for the leaf with the given thisUpdate and nextUpdate (an expired CRL, for instance).</summary>
+    public byte[] BuildLeafCrl(DateTimeOffset thisUpdate, DateTimeOffset nextUpdate) =>
+        BuildCrl(IntermediateCa, _intermediateKey, null, thisUpdate, nextUpdate);
+
     /// <summary>Builds an issuer-signed CRL that revokes the leaf certificate.</summary>
     public byte[] BuildRevokedLeafCrl()
     {
@@ -247,7 +251,43 @@ public sealed class SyntheticPki : IDisposable
     /// <summary>Builds a DER-encoded CRL signed by the root CA covering the intermediate CA.</summary>
     public byte[] BuildIntermediateCrl() => BuildCrl(RootCa, _rootKey);
 
-    private static byte[] BuildCrl(X509Certificate2 issuer, RSA issuerKey, byte[]? revokedSerial = null)
+    /// <summary>Builds an intermediate-signed CRL that revokes <paramref name="certificate"/> (issued by the intermediate).</summary>
+    public byte[] BuildCrlRevoking(X509Certificate2 certificate)
+    {
+        byte[] serial = certificate.GetSerialNumber();
+        Array.Reverse(serial);
+        return BuildCrl(IntermediateCa, _intermediateKey, serial);
+    }
+
+    /// <summary>
+    /// Issues a time-stamping authority certificate under the intermediate CA: critical, exclusive
+    /// timeStamping EKU, the leaf's CRL distribution point and OCSP responder. The certificate carries its key.
+    /// </summary>
+    public X509Certificate2 IssueTimestampingCertificate(string subject = "CN=SimpleSign Synthetic TSA, O=SimpleSign Tests")
+    {
+        using var key = RSA.Create(2048);
+        var req = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(
+            new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+        req.CertificateExtensions.Add(
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, critical: true));
+        req.CertificateExtensions.Add(
+            new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.8") }, critical: true));
+        req.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(req.PublicKey, critical: false));
+        AddAuthorityKeyIdentifier(req, IntermediateCa);
+        AddCrlAndOcspExtensions(req, CrlDistributionPoint, LeafCaIssuersUrl);
+
+        byte[] serial = RandomNumberGenerator.GetBytes(16);
+        serial[0] &= 0x7F;
+        var notBefore = IntermediateCa.NotBefore.ToUniversalTime().AddMinutes(1);
+        using var cert = req.Create(IntermediateCa, notBefore, notBefore.AddYears(2), serial);
+        using var withKey = cert.CopyWithPrivateKey(key);
+        return ExportAndReload(withKey);
+    }
+
+    private static byte[] BuildCrl(
+        X509Certificate2 issuer, RSA issuerKey, byte[]? revokedSerial = null,
+        DateTimeOffset? thisUpdate = null, DateTimeOffset? nextUpdate = null)
     {
         var tbsWriter = new AsnWriter(AsnEncodingRules.DER);
         using (tbsWriter.PushSequence())
@@ -259,8 +299,8 @@ public sealed class SyntheticPki : IDisposable
             }
 
             tbsWriter.WriteEncodedValue(issuer.SubjectName.RawData);
-            tbsWriter.WriteUtcTime(DateTimeOffset.UtcNow.AddDays(-1));
-            tbsWriter.WriteUtcTime(DateTimeOffset.UtcNow.AddDays(30));
+            tbsWriter.WriteUtcTime(thisUpdate ?? DateTimeOffset.UtcNow.AddDays(-1));
+            tbsWriter.WriteUtcTime(nextUpdate ?? DateTimeOffset.UtcNow.AddDays(30));
             if (revokedSerial is not null)
             {
                 using (tbsWriter.PushSequence())

@@ -31,7 +31,11 @@ internal sealed record PadesDependencies(
     ITimestampClientFactory? TsaFactory,
     ILtvEmbedder? LtvEmbedder,
     ILogger Logger,
-    IHttpClientProvider HttpClientProvider);
+    IHttpClientProvider HttpClientProvider)
+{
+    /// <summary>Checks the revocation of the chain before signing; when null, one is created from the HTTP provider.</summary>
+    public SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; init; }
+}
 
 /// <summary>
 /// Immutable signing configuration for the PAdES builder. One state value; every
@@ -59,4 +63,7 @@ internal sealed record PadesSigningOptions(
 
     /// <summary>Extra streams to add to the DSS and to this signature's VRI.</summary>
     public IReadOnlyList<PdfDssArtifact> DssArtifacts { get; init; } = [];
+
+    /// <summary>The checks run on the certificate, chain and algorithms before signing.</summary>
+    public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
 }

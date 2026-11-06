@@ -28,7 +28,11 @@ internal sealed record CadesDependencies(
     ITimestampClientFactory? TsaFactory,
     ICmsParser? CmsParser,
     ILogger Logger,
-    IHttpClientProvider HttpClientProvider);
+    IHttpClientProvider HttpClientProvider)
+{
+    /// <summary>Checks the revocation of the chain before signing; when null, one is created from the HTTP provider.</summary>
+    public SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; init; }
+}
 
 /// <summary>Immutable signing configuration for the CAdES builder.</summary>
 internal sealed record CadesSigningOptions(
@@ -83,6 +87,9 @@ internal sealed record CadesSigningOptions(
 
     /// <summary>The signature-policy-store unsigned attribute to add, or null.</summary>
     public SignaturePolicyStore? PolicyStore { get; init; }
+
+    /// <summary>The checks run on the certificate, chain and algorithms before signing.</summary>
+    public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
 
     /// <summary>Whether this signs a countersignature (no content-type attribute, RFC 5652 §11.4).</summary>
     public bool IsCounterSignature => CounterSignTarget is not null;

@@ -1,3 +1,4 @@
+using SimpleSign.Cli.Rendering;
 using SimpleSign.Brazil;
 using SimpleSign.Brazil.Signing;
 using SimpleSign.Core.Validation;
@@ -28,8 +29,12 @@ internal static class JsonMapper
                     level = l;
                 }
 
+                var report = ValidationReportRenderer.ToDto(r.SubIndication, r.Constraints, r.SignerCertificate);
                 return new ValidateSignatureDto
                 {
+                    SubIndication = report.SubIndication,
+                    Constraints = report.Constraints,
+                    PublicKey = report.PublicKey,
                     FieldName = r.FieldName,
                     Indication = r.Indication.ToString(),
                     IsDocumentTimestamp = r.IsDocumentTimestamp,

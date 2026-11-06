@@ -1,3 +1,4 @@
+using SimpleSign.Cli.Rendering;
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
@@ -21,7 +22,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
     }
 
     /// <summary>CAdES validate command settings.</summary>
-    internal sealed class Settings : CommonSettings
+    internal sealed class Settings : TrustedValidationSettings
     {
         /// <summary>CAdES signature file (.p7s).</summary>
         [CommandArgument(0, "<signature>")]
@@ -43,6 +44,10 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
         [Description("Output result as JSON")]
         public bool Json { get; init; }
 
+        [CommandOption("--check-revocation")]
+        [Description("Check the revocation of the signer and TSA chains (CRL/OCSP, needs network)")]
+        public bool CheckRevocation { get; init; }
+
         public override ValidationResult Validate()
         {
             if (!File.Exists(SignaturePath))
@@ -55,7 +60,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
                 return ValidationResult.Error($"Data file not found: {DataPath}");
             }
 
-            return ValidationResult.Success();
+            return ValidateTrustOptions();
         }
     }
 
@@ -70,22 +75,34 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             originalData = await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
         }
 
-        var trustAnchors = LoadTrustAnchors(settings.TrustPath);
+        var (policy, extraAnchors) = await settings.LoadTrustAsync(cancellationToken);
+        List<X509Certificate2>? trustAnchors = [.. LoadTrustAnchors(settings.TrustPath) ?? [], .. extraAnchors];
+        if (trustAnchors.Count == 0)
+        {
+            trustAnchors = null;
+        }
 
         var validator = new CadesSignatureValidator(
-            new ValidationOptions { CheckRevocation = false, TrustSystemRoots = trustAnchors is null });
+            new ValidationOptions { CheckRevocation = settings.CheckRevocation, TrustSystemRoots = trustAnchors is null, Policy = policy });
 
-        var result = validator.Validate(
+        var result = await validator.ValidateAsync(
             cmsBytes,
             originalData ?? throw new InvalidOperationException("Original data file is required. Use --data <path>."),
-            trustAnchors);
+            trustAnchors,
+            cancellationToken);
 
         if (settings.Json)
         {
+            var report = ValidationReportRenderer.ToDto(result.SubIndication, result.Constraints, result.SignerCertificate);
             var output = new CadesValidateOutput
             {
                 File = settings.SignaturePath,
                 IsValid = result.IsValid,
+                Indication = result.Indication.ToString(),
+                SubIndication = report.SubIndication,
+                NotRevoked = result.IsNotRevoked,
+                PublicKey = report.PublicKey,
+                Constraints = report.Constraints,
                 IsSignatureValid = result.IsSignatureValid,
                 IsIntegrityValid = result.IsIntegrityValid,
                 IsCertificateChainValid = result.IsCertificateChainValid,
@@ -156,6 +173,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             }
         }
 
+        ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, settings.Spanish);
         var isValid = result.IsValid;
         AnsiConsole.MarkupLine(isValid ? "\n[green]✓ Signature is VALID[/]" : "\n[red]✗ Signature is INVALID[/]");
 

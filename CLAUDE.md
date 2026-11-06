@@ -52,7 +52,8 @@ src/
 │   │   └── GovBr/
 │   │       └── SimpleSign.Brazil.GovBr/            Gov.br: chain validation, assurance level
 │   ├── Europe/Eidas/                   planned (README only)
-│   └── Peru/Iofe/                      planned (README only)
+│   └── Peru/Iofe/
+│       └── SimpleSign.Peru.Iofe/        IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
 ├── Signers/
 │   ├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
 │   └── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2

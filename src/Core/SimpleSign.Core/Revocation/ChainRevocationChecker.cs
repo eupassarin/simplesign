@@ -1,40 +1,39 @@
-using System.Collections.Concurrent;
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
-using SimpleSign.Core.Revocation;
-
-namespace SimpleSign.Brazil.Internal;
+namespace SimpleSign.Core.Revocation;
 
 /// <summary>
-/// Checks the revocation of every non-root certificate of a built chain at a given time. ICP-Brasil
-/// CAs publish LCRs (CRLs); OCSP is rare. Order per certificate: embedded CRLs, embedded OCSP
-/// responses, then (when allowed) the online LCR from the CRL distribution point and online OCSP.
+/// Checks the revocation of every non-root certificate of a built chain at a given time. Order per
+/// certificate: embedded CRLs, embedded OCSP responses, then (when allowed) the online CRL from the
+/// CRL distribution point and online OCSP. Every CRL is checked against its issuer: signature,
+/// issuer name and validity at the given time.
 /// </summary>
-internal sealed class ChainRevocationChecker
+public sealed class ChainRevocationChecker : IChainRevocationChecker
 {
-    private static readonly TimeSpan CrlCacheLifetime = TimeSpan.FromMinutes(15);
-
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly OcspClient _ocspClient;
     private readonly OutboundHttpPolicy _outboundPolicy;
-    private readonly ConcurrentDictionary<string, (byte[] Bytes, DateTimeOffset FetchedAt)> _crlCache = new(StringComparer.Ordinal);
 
-    internal ChainRevocationChecker(HttpClient httpClient, ILogger logger, OutboundHttpPolicy? outboundPolicy = null)
+    /// <summary>Creates a checker that downloads CRLs and asks OCSP responders through <paramref name="httpClient"/>.</summary>
+    /// <param name="httpClient">The client for CRL and OCSP requests.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="outboundPolicy">The outbound HTTP policy (SSRF guard, private hosts); the default when null.</param>
+    public ChainRevocationChecker(HttpClient httpClient, ILogger? logger = null, OutboundHttpPolicy? outboundPolicy = null)
     {
+        ArgumentNullException.ThrowIfNull(httpClient);
         _httpClient = httpClient;
-        _logger = logger;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
         _outboundPolicy = outboundPolicy ?? OutboundHttpPolicy.Default;
         _ocspClient = new OcspClient(httpClient, logger) { OutboundPolicy = _outboundPolicy };
     }
 
-    /// <summary>Checks <paramref name="chain"/> (leaf first, root last) at <paramref name="time"/>.</summary>
-    /// <returns>The chain status, and one message per certificate that is revoked or unknown.</returns>
-    internal async Task<(ChainRevocationStatus Status, List<string> Messages)> CheckAsync(
+    /// <inheritdoc />
+    public async Task<ChainRevocationResult> CheckAsync(
         IReadOnlyList<X509Certificate2> chain,
         DateTimeOffset time,
         IReadOnlyList<byte[]> embeddedCrls,
@@ -42,6 +41,9 @@ internal sealed class ChainRevocationChecker
         bool allowOnline,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(chain);
+        ArgumentNullException.ThrowIfNull(embeddedCrls);
+        ArgumentNullException.ThrowIfNull(embeddedOcsps);
         var messages = new List<string>();
         var status = ChainRevocationStatus.Good;
         for (int i = 0; i < chain.Count - 1; i++)
@@ -58,7 +60,7 @@ internal sealed class ChainRevocationChecker
             }
             else if (certStatus == ChainRevocationStatus.Unknown)
             {
-                messages.Add($"[{name}] Revocation status could not be established (no valid LCR or OCSP response).");
+                messages.Add($"[{name}] Revocation status could not be established (no valid CRL or OCSP response).");
                 if (status != ChainRevocationStatus.Revoked)
                 {
                     status = ChainRevocationStatus.Unknown;
@@ -66,7 +68,7 @@ internal sealed class ChainRevocationChecker
             }
         }
 
-        return (status, messages);
+        return new ChainRevocationResult(status, messages);
     }
 
     private async Task<ChainRevocationStatus> CheckCertificateAsync(
@@ -109,7 +111,8 @@ internal sealed class ChainRevocationChecker
             return ChainRevocationStatus.Unknown;
         }
 
-        string? crlUrl = CrlClient.GetCrlUri(certificate, _logger)?.AbsoluteUri;
+        string? crlUrl = CrlClient.GetCrlUri(certificate, _logger)?.AbsoluteUri
+            ?? (_outboundPolicy.AllowLdap ? CrlClient.GetCrlUrls(certificate, _logger).FirstOrDefault(LdapCrlClient.IsLdapUrl) : null);
         if (crlUrl is not null)
         {
             byte[]? crl = await DownloadCrlAsync(crlUrl, cancellationToken).ConfigureAwait(false);
@@ -149,16 +152,25 @@ internal sealed class ChainRevocationChecker
     }
 
     /// <summary>
-    /// Directory where downloaded LCRs are kept between runs (ICP-Brasil LCRs reach several
-    /// megabytes). A cached LCR is reused until its nextUpdate. Null = memory only.
+    /// Keeps downloaded CRLs until their nextUpdate (at most the cache's own lifetime). Default: an
+    /// <see cref="InMemoryRevocationCache"/> of 15 minutes per entry.
     /// </summary>
-    internal string? CacheDirectory { get; set; }
+    public IRevocationCache Cache { get; set; } = new InMemoryRevocationCache(TimeSpan.FromMinutes(15));
+
+    /// <summary>How long an LDAP CRL download may take. Default: 30 seconds.</summary>
+    public TimeSpan LdapTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Directory where downloaded CRLs are kept between runs (some CRLs reach several megabytes).
+    /// A cached CRL is reused until its nextUpdate. Null keeps them in memory only.
+    /// </summary>
+    public string? CacheDirectory { get; set; }
 
     private async Task<byte[]?> DownloadCrlAsync(string url, CancellationToken cancellationToken)
     {
-        if (_crlCache.TryGetValue(url, out var cached) && DateTimeOffset.UtcNow - cached.FetchedAt < CrlCacheLifetime)
+        if (Cache.TryGet(url, out var cached))
         {
-            return cached.Bytes;
+            return cached;
         }
 
         string? file = CacheDirectory is null
@@ -166,16 +178,18 @@ internal sealed class ChainRevocationChecker
             : Path.Combine(CacheDirectory, Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url))) + ".crl");
         if (file is not null && TryReadCurrent(file) is { } fromDisk)
         {
-            _crlCache[url] = (fromDisk, DateTimeOffset.UtcNow);
+            Remember(url, fromDisk);
             return fromDisk;
         }
 
         try
         {
-            byte[]? bytes = await ResilientHttp.GetBytesAsync(_httpClient, new Uri(url), _outboundPolicy, _logger, cancellationToken).ConfigureAwait(false);
+            byte[]? bytes = LdapCrlClient.IsLdapUrl(url)
+                ? await LdapCrlClient.GetCrlAsync(url, _outboundPolicy, LdapTimeout, cancellationToken).ConfigureAwait(false)
+                : await ResilientHttp.GetBytesAsync(_httpClient, new Uri(url), _outboundPolicy, _logger, cancellationToken).ConfigureAwait(false);
             if (bytes is not null)
             {
-                _crlCache[url] = (bytes, DateTimeOffset.UtcNow);
+                Remember(url, bytes);
                 if (file is not null)
                 {
                     TryWrite(file, bytes);
@@ -188,11 +202,17 @@ internal sealed class ChainRevocationChecker
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException
+            or System.Net.Sockets.SocketException or IOException or InvalidDataException
+            or System.Formats.Asn1.AsnContentException or System.Security.Authentication.AuthenticationException)
         {
             return null;
         }
     }
+
+    /// <summary>Caches a CRL until its nextUpdate, or for the cache's lifetime when it has none.</summary>
+    private void Remember(string url, byte[] crl) =>
+        Cache.Set(url, crl, CrlEvaluator.ReadNextUpdate(crl) ?? DateTimeOffset.MaxValue);
 
     /// <summary>The cached LCR, if the file exists and its nextUpdate has not passed.</summary>
     private static byte[]? TryReadCurrent(string file)

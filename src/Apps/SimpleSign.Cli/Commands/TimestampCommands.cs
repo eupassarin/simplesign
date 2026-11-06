@@ -240,6 +240,8 @@ internal sealed class TimestampVerifyCommand : AsyncCommand<TimestampVerifyComma
             AnsiConsole.MarkupLine($"  Covers the data: {Yes(result.IsImprintValid)}");
             AnsiConsole.MarkupLine($"  TSA signature:   {Yes(result.IsIntegrityValid)}");
             AnsiConsole.MarkupLine($"  TSA trusted:     {(result.IsTsaTrusted is { } t ? Yes(t) : "not checked (use --trust or --icp)")}");
+            bool? nameMatches = SimpleSign.Core.Validation.TimestampTsaChecks.TsaNameMatches(token);
+            AnsiConsole.MarkupLine($"  TSA name:        {(nameMatches is { } m ? Yes(m) : "not in the token")}");
             foreach (string error in result.Errors)
             {
                 AnsiConsole.MarkupLine($"  [red]•[/] {error.EscapeMarkup()}");

@@ -13,7 +13,16 @@ public static class TimestampTestResponseBuilder
     /// <param name="alterImprint">Whether to return a different message imprint for negative tests.</param>
     /// <param name="alterNonce">Whether to return a different nonce for negative tests.</param>
     /// <returns>A DER-encoded granted timestamp response.</returns>
-    public static byte[] CreateForRequest(byte[] requestBytes, bool alterImprint = false, bool alterNonce = false)
+    public static byte[] CreateForRequest(byte[] requestBytes, bool alterImprint = false, bool alterNonce = false) =>
+        CreateForRequest(requestBytes, null, alterImprint, alterNonce);
+
+    /// <summary>Builds a granted response for a request, with the given TSA and token choices.</summary>
+    /// <param name="requestBytes">DER-encoded RFC 3161 timestamp request.</param>
+    /// <param name="options">The TSA certificate, its chain, the tsa name, genTime and tampering; null for a fresh self-signed TSA.</param>
+    /// <param name="alterImprint">Whether to return a different message imprint for negative tests.</param>
+    /// <param name="alterNonce">Whether to return a different nonce for negative tests.</param>
+    /// <returns>A DER-encoded granted timestamp response.</returns>
+    public static byte[] CreateForRequest(byte[] requestBytes, TimestampTokenOptions? options, bool alterImprint = false, bool alterNonce = false)
     {
         ArgumentNullException.ThrowIfNull(requestBytes);
 
@@ -38,7 +47,7 @@ public static class TimestampTestResponseBuilder
         {
             nonce += 1;
         }
-        byte[] token = BuildToken(hashOid, hash, nonce);
+        byte[] token = BuildToken(hashOid, hash, nonce, false, options);
 
         var responseWriter = new AsnWriter(AsnEncodingRules.DER);
         using (responseWriter.PushSequence())
@@ -76,8 +85,18 @@ public static class TimestampTestResponseBuilder
         return BuildToken(oid, hash, System.Numerics.BigInteger.Zero, omitSignedAttributes);
     }
 
+    /// <summary>Builds a SHA-256 timestamp token over a supplied datum with the given TSA and TSTInfo choices.</summary>
+    /// <param name="dataToTimestamp">The raw bytes to timestamp.</param>
+    /// <param name="options">The TSA certificate, extra certificates, tsa name, genTime and tampering.</param>
+    /// <returns>A signed RFC 3161 CMS token.</returns>
+    public static byte[] CreateTokenForData(ReadOnlySpan<byte> dataToTimestamp, TimestampTokenOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return BuildToken("2.16.840.1.101.3.4.2.1", SHA256.HashData(dataToTimestamp), System.Numerics.BigInteger.Zero, false, options);
+    }
+
     private static byte[] BuildToken(string hashOid, byte[] hash, System.Numerics.BigInteger nonce,
-        bool omitSignedAttributes = false)
+        bool omitSignedAttributes = false, TimestampTokenOptions? options = null)
     {
         var tstInfoWriter = new AsnWriter(AsnEncodingRules.DER);
         using (tstInfoWriter.PushSequence())
@@ -96,8 +115,16 @@ public static class TimestampTestResponseBuilder
             }
 
             tstInfoWriter.WriteInteger(1);
-            tstInfoWriter.WriteGeneralizedTime(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
+            tstInfoWriter.WriteGeneralizedTime(options?.GenTime ?? new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
             tstInfoWriter.WriteInteger(nonce);
+            if (options?.TsaName is { } tsaName)
+            {
+                using (tstInfoWriter.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
+                using (tstInfoWriter.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 4, true)))
+                {
+                    tstInfoWriter.WriteEncodedValue(tsaName.RawData);
+                }
+            }
         }
 
         byte[] tstInfo = tstInfoWriter.Encode();
@@ -112,14 +139,16 @@ public static class TimestampTestResponseBuilder
             _ => throw new NotSupportedException($"Test timestamp token does not support '{hashOid}'.")
         };
         byte[] digest = CryptoHash(tstInfo, hashAlgorithm);
-        using RSA certificateKey = RSA.Create(2048);
-        var certificateRequest = new CertificateRequest("CN=Test Timestamp Authority", certificateKey,
+        using RSA ownKey = RSA.Create(2048);
+        RSA certificateKey = options?.TsaCertificate?.GetRSAPrivateKey() ?? ownKey;
+        var certificateRequest = new CertificateRequest("CN=Test Timestamp Authority", ownKey,
             HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         var usages = new OidCollection { new Oid("1.3.6.1.5.5.7.3.8") };
         certificateRequest.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(usages, critical: true));
-        using var tsaCertificate = certificateRequest.CreateSelfSigned(
+        using var ownCertificate = certificateRequest.CreateSelfSigned(
             new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        X509Certificate2 tsaCertificate = options?.TsaCertificate ?? ownCertificate;
         var attributes = new AsnWriter(AsnEncodingRules.DER);
         using (attributes.PushSetOf())
         {
@@ -168,6 +197,10 @@ public static class TimestampTestResponseBuilder
         byte[] signature = certificateKey.SignData(
             omitSignedAttributes ? tstInfo : signedAttributes, hashAlgorithm, RSASignaturePadding.Pkcs1);
         signedAttributes[0] = 0xA0;
+        if (options?.TamperSignature == true)
+        {
+            signature[^1] ^= 0xFF;
+        }
 
         var writer = new AsnWriter(AsnEncodingRules.DER);
         using (writer.PushSequence())
@@ -195,6 +228,10 @@ public static class TimestampTestResponseBuilder
                 using (writer.PushSetOf(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
                 {
                     writer.WriteEncodedValue(tsaCertificate.RawData);
+                    foreach (var extra in options?.ExtraCertificates ?? [])
+                    {
+                        writer.WriteEncodedValue(extra.RawData);
+                    }
                 }
 
                 using (writer.PushSetOf())
@@ -253,4 +290,23 @@ public static class TimestampTestResponseBuilder
             _ => throw new NotSupportedException()
         };
     }
+}
+
+/// <summary>Choices for a test timestamp token.</summary>
+public sealed record TimestampTokenOptions
+{
+    /// <summary>The TSA certificate, with its RSA private key; a fresh self-signed one when null.</summary>
+    public X509Certificate2? TsaCertificate { get; init; }
+
+    /// <summary>Certificates added to the token besides the TSA certificate (its chain).</summary>
+    public IReadOnlyList<X509Certificate2> ExtraCertificates { get; init; } = [];
+
+    /// <summary>The directoryName written in TSTInfo's tsa field; none when null.</summary>
+    public X500DistinguishedName? TsaName { get; init; }
+
+    /// <summary>The genTime; 2024-01-01 when null.</summary>
+    public DateTimeOffset? GenTime { get; init; }
+
+    /// <summary>Whether to corrupt the TSA's signature.</summary>
+    public bool TamperSignature { get; init; }
 }

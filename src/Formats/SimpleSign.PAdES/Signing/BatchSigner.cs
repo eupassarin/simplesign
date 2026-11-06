@@ -25,6 +25,8 @@ public sealed class BatchSigner : IAsyncDisposable
     private readonly SignatureFieldOptions? _fieldOptions;
     private readonly string? _operationId;
     private readonly int _maxConcurrency;
+    private readonly SigningPolicy _signingPolicy;
+    private readonly SimpleSign.Core.Revocation.IChainRevocationChecker? _chainRevocationChecker;
     private int _successCount;
     private int _failureCount;
     private long _totalElapsedMs;
@@ -43,6 +45,8 @@ public sealed class BatchSigner : IAsyncDisposable
         _fieldOptions = builder.FieldOptions?.Snapshot();
         _operationId = builder.OperationId;
         _maxConcurrency = builder.MaxConcurrency;
+        _signingPolicy = builder.SigningPolicy;
+        _chainRevocationChecker = builder.ChainRevocationChecker;
     }
 
     /// <summary>Creates a batch configuration for <paramref name="certificate"/>.</summary>
@@ -176,7 +180,13 @@ public sealed class BatchSigner : IAsyncDisposable
             builder = builder.WithHashAlgorithm(_hashAlgorithm);
         }
 
-        builder = builder.WithLevel(_profile).WithHttpClientProvider(_httpClientProvider).WithLogger(_logger);
+        builder = builder.WithLevel(_profile).WithHttpClientProvider(_httpClientProvider).WithLogger(_logger)
+            .WithSigningPolicy(_signingPolicy);
+        if (_chainRevocationChecker is not null)
+        {
+            builder = builder.WithChainRevocationChecker(_chainRevocationChecker);
+        }
+
         if (_signatureAlgorithmOid is not null)
         {
             builder = builder.WithSignatureAlgorithm(_signatureAlgorithmOid);
@@ -249,6 +259,7 @@ public sealed class BatchSigner : IAsyncDisposable
             HttpClientProvider = DefaultHttpClientProvider.Instance;
             Logger = NullLogger.Instance;
             MaxConcurrency = 4;
+            SigningPolicy = SigningPolicy.Default;
         }
 
         private BatchSignerBuilder(BatchSignerBuilder source, IReadOnlyList<X509Certificate2>? chain = null,
@@ -258,7 +269,9 @@ public sealed class BatchSigner : IAsyncDisposable
             bool replaceSignatureAlgorithm = false, AdesBaselineProfile? profile = null,
             IHttpClientProvider? httpClientProvider = null, ILogger? logger = null,
             SignatureFieldOptions? fieldOptions = null, bool replaceFieldOptions = false,
-            string? operationId = null, bool replaceOperationId = false, int? maxConcurrency = null)
+            string? operationId = null, bool replaceOperationId = false, int? maxConcurrency = null,
+            SigningPolicy? signingPolicy = null,
+            SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker = null)
         {
             Certificate = source.Certificate;
             Chain = chain ?? source.Chain;
@@ -272,6 +285,8 @@ public sealed class BatchSigner : IAsyncDisposable
             FieldOptions = replaceFieldOptions ? fieldOptions?.Snapshot() : source.FieldOptions;
             OperationId = replaceOperationId ? operationId : source.OperationId;
             MaxConcurrency = maxConcurrency ?? source.MaxConcurrency;
+            SigningPolicy = signingPolicy ?? source.SigningPolicy;
+            ChainRevocationChecker = chainRevocationChecker ?? source.ChainRevocationChecker;
         }
 
         internal X509Certificate2 Certificate { get; }
@@ -286,6 +301,22 @@ public sealed class BatchSigner : IAsyncDisposable
         internal SignatureFieldOptions? FieldOptions { get; }
         internal string? OperationId { get; }
         internal int MaxConcurrency { get; }
+        internal SigningPolicy SigningPolicy { get; }
+        internal SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; }
+
+        /// <summary>Sets the checks run before each signature (see <see cref="PadesSignerBuilder.WithSigningPolicy"/>).</summary>
+        public BatchSignerBuilder WithSigningPolicy(SigningPolicy policy)
+        {
+            ArgumentNullException.ThrowIfNull(policy);
+            return new BatchSignerBuilder(this, signingPolicy: policy);
+        }
+
+        /// <summary>Sets the checker used for the revocation check of <see cref="SigningPolicy.CheckRevocation"/>.</summary>
+        public BatchSignerBuilder WithChainRevocationChecker(SimpleSign.Core.Revocation.IChainRevocationChecker checker)
+        {
+            ArgumentNullException.ThrowIfNull(checker);
+            return new BatchSignerBuilder(this, chainRevocationChecker: checker);
+        }
 
         /// <summary>Sets the certificate chain included with every signature.</summary>
         public BatchSignerBuilder WithChain(IReadOnlyList<X509Certificate2> chain)

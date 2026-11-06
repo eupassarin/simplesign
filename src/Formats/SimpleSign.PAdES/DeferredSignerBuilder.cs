@@ -31,6 +31,8 @@ public sealed class DeferredSignerBuilder
     private readonly AdesBaselineProfile? _profile;
     private readonly IHttpClientProvider? _httpClientProvider;
     private readonly byte[]? _sessionIntegrityKey;
+    private readonly SigningPolicy _signingPolicy = SigningPolicy.Default;
+    private readonly SimpleSign.Core.Revocation.IChainRevocationChecker? _chainRevocationChecker;
 
     /// <summary>Initializes a deferred builder without credentials.</summary>
     internal DeferredSignerBuilder(byte[] pdfBytes)
@@ -86,8 +88,12 @@ public sealed class DeferredSignerBuilder
         ILogger logger,
         AdesBaselineProfile? profile,
         IHttpClientProvider? httpClientProvider,
-        byte[]? sessionIntegrityKey)
+        byte[]? sessionIntegrityKey,
+        SigningPolicy signingPolicy,
+        SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker)
     {
+        _signingPolicy = signingPolicy;
+        _chainRevocationChecker = chainRevocationChecker;
         _pdfBytes = pdfBytes;
         _sessionData = sessionData;
         _certificate = certificate;
@@ -205,6 +211,24 @@ public sealed class DeferredSignerBuilder
         return With(httpClientProvider: provider);
     }
 
+    /// <summary>
+    /// Sets the checks run before the hash is prepared: validity of the chain, key usage, key size,
+    /// hash algorithm and, with <see cref="SigningPolicy.Strict"/>, the revocation of the chain.
+    /// Default: <see cref="SigningPolicy.Default"/>.
+    /// </summary>
+    public DeferredSignerBuilder WithSigningPolicy(SigningPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        return With(signingPolicy: policy);
+    }
+
+    /// <summary>Sets the checker used for the revocation check of <see cref="SigningPolicy.CheckRevocation"/>.</summary>
+    public DeferredSignerBuilder WithChainRevocationChecker(SimpleSign.Core.Revocation.IChainRevocationChecker checker)
+    {
+        ArgumentNullException.ThrowIfNull(checker);
+        return With(chainRevocationChecker: checker);
+    }
+
     /// <summary>Sets a custom logger for diagnostic output.</summary>
     public DeferredSignerBuilder WithLogger(ILogger logger)
     {
@@ -280,7 +304,10 @@ public sealed class DeferredSignerBuilder
             FieldOptions = _fieldOptions,
             SignatureAlgorithmOid = _signatureAlgorithmOid,
             ExtraCertificates = _extraCertificates,
-            Profile = _profile
+            Profile = _profile,
+            SigningPolicy = _signingPolicy,
+            ChainRevocationChecker = _chainRevocationChecker,
+            HttpClientProvider = _httpClientProvider
         };
 
         return await DeferredSigner.PrepareAsync(
@@ -354,7 +381,9 @@ public sealed class DeferredSignerBuilder
         AdesBaselineProfile? profile = null,
         IHttpClientProvider? httpClientProvider = null,
         byte[]? sessionIntegrityKey = null,
-        bool replaceSessionIntegrityKey = false)
+        bool replaceSessionIntegrityKey = false,
+        SigningPolicy? signingPolicy = null,
+        SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker = null)
     {
         return new(
             _pdfBytes,
@@ -368,7 +397,9 @@ public sealed class DeferredSignerBuilder
             logger ?? _logger,
             profile ?? _profile,
             httpClientProvider ?? _httpClientProvider,
-            replaceSessionIntegrityKey ? sessionIntegrityKey : _sessionIntegrityKey);
+            replaceSessionIntegrityKey ? sessionIntegrityKey : _sessionIntegrityKey,
+            signingPolicy ?? _signingPolicy,
+            chainRevocationChecker ?? _chainRevocationChecker);
     }
 
     private byte[] RequireSessionIntegrityKey()

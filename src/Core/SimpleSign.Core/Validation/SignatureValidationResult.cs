@@ -129,6 +129,12 @@ public sealed class SignatureValidationResult
         internal init => _indication = value;
     }
 
+    /// <summary>The ETSI EN 319 102-1 sub-indication of an INVALID or INDETERMINATE result, or null.</summary>
+    public SignatureSubIndication? SubIndication { get; init; }
+
+    /// <summary>The checks of the validation and their outcome, including the validation policy's constraints.</summary>
+    public IReadOnlyList<ValidationConstraintResult> Constraints { get; init; } = [];
+
     /// <summary>Errors found during validation.</summary>
     public IReadOnlyList<string> Errors { get; init; } = [];
 

@@ -10,6 +10,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
+using SimpleSign.Core.Validation.Policy;
 using SimpleSign.XAdES.Constants;
 using SimpleSign.XAdES.Internal;
 
@@ -25,6 +26,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 {
     private readonly ValidationOptions _options;
     private readonly ITimestampValidator _timestampValidator;
+    private readonly IChainRevocationChecker _chainRevocationChecker;
     private readonly ILogger _logger;
 
     private sealed record XadesPropertyExtractionResult(
@@ -44,14 +46,57 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     /// <param name="options">Validation options; defaults apply when <see langword="null"/>.</param>
     /// <param name="timestampValidator">Timestamp validator; the built-in one is used when <see langword="null"/>.</param>
     /// <param name="logger">Receives diagnostics of each validation; nothing is logged when <see langword="null"/>.</param>
+    /// <param name="chainRevocationChecker">The revocation checker of <see cref="ValidateAsync"/>; one on the default HTTP client when <see langword="null"/>.</param>
     public XadesSignatureValidator(
         ValidationOptions? options = null,
         ITimestampValidator? timestampValidator = null,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        IChainRevocationChecker? chainRevocationChecker = null)
     {
         _options = options ?? new ValidationOptions();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
         _logger = logger ?? NullLogger.Instance;
+        _chainRevocationChecker = chainRevocationChecker
+            ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), _logger);
+    }
+
+    /// <summary>
+    /// Validates like <see cref="Validate(byte[], IEnumerable{X509Certificate2}, byte[])"/>, then, when
+    /// <see cref="ValidationOptions.CheckRevocation"/> is on, checks the revocation of the signer chain and of the
+    /// signature timestamp's TSA chain (CRL and OCSP, at the time a trusted timestamp proves).
+    /// </summary>
+    /// <param name="signedXml">The signed XML document.</param>
+    /// <param name="trustAnchors">The trust anchors; null uses the options.</param>
+    /// <param name="originalData">The signed data of a detached signature.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The validation result with its revocation outcome.</returns>
+    public async Task<XadesValidationResult> ValidateAsync(
+        byte[] signedXml,
+        IEnumerable<X509Certificate2>? trustAnchors = null,
+        byte[]? originalData = null,
+        CancellationToken cancellationToken = default)
+    {
+        var anchors = trustAnchors?.ToList();
+        var result = Validate(signedXml, anchors, originalData);
+        if (!_options.CheckRevocation || result.Facts is null)
+        {
+            return result;
+        }
+
+        var (facts, evaluation, revocationWarnings) = await RevocationStep.RunAsync(
+            result.Facts, result.ChainCandidates, result.SignatureTimestampToken, _chainRevocationChecker,
+            [], [], _options.Policy, cancellationToken).ConfigureAwait(false);
+        return result with
+        {
+            Indication = evaluation.Indication,
+            SubIndication = evaluation.SubIndication,
+            Constraints = evaluation.Constraints,
+            Facts = facts,
+            IsNotRevoked = facts.IsNotRevoked,
+            RevocationSource = facts.RevocationSource,
+            IsTsaTrusted = facts.IsTsaTrusted,
+            Warnings = [.. result.Warnings, .. revocationWarnings],
+        };
     }
 
     private XadesValidationResult Logged(XadesValidationResult result)
@@ -336,12 +381,14 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         // Timestamp validation
         bool? tsValid = null;
         bool? tsaTrusted = null;
+        DateTimeOffset? provenTime = null;
         if (extraction.HasSignatureTimeStamp)
         {
             TimestampTokenValidationResult timestamp = ValidateSignatureTimeStamp(
                 sigElement, ns, extraction.SigningTime, trustAnchors, warnings);
             tsValid = timestamp.IsIntegrityValid;
             tsaTrusted = timestamp.IsTsaTrusted;
+            provenTime = timestamp is { IsIntegrityValid: true, IsTsaTrusted: true } ? timestamp.GenTime : null;
         }
 
         // AllDataObjectsTimeStamp: a signed property whose token covers the signed data objects
@@ -365,9 +412,27 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         // Certificate chain validation
         bool chainValid = ValidateCertificateChain(signerCert, trustAnchors, sigElement, ns, errors);
         var (claimedRoles, attributeCertificates, signedAssertions) = ReadSignerRoles(sigElement, ns, warnings);
+        var facts = new ValidationFacts
+        {
+            IsIntegrityValid = sigValid,
+            IsSignatureValid = sigValid,
+            SignerCertificate = signerCert,
+            IsCertificateChainValid = chainValid,
+            IsTsaTrusted = tsaTrusted,
+            DigestAlgorithmOid = SignatureMethodDigestOid(sigElement, ns),
+            ProofOfExistence = provenTime,
+        };
+        var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.Policy);
+        warnings.AddRange(evaluation.Warnings);
 
         return new XadesValidationResult
         {
+            Indication = evaluation.Indication,
+            SubIndication = evaluation.SubIndication,
+            Constraints = evaluation.Constraints,
+            Facts = facts,
+            ChainCandidates = [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+            SignatureTimestampToken = SignatureTimeStampToken(sigElement, ns),
             SignatureId = extraction.SignatureId,
             IsSignatureValid = sigValid,
             IsIntegrityValid = sigValid,
@@ -392,6 +457,27 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             Errors = errors,
             Warnings = warnings
         };
+    }
+
+    /// <summary>The OID of the digest of the SignedInfo's SignatureMethod (RSA, ECDSA), or null when it has none of its own (RSA-PSS).</summary>
+    private static string? SignatureMethodDigestOid(XmlElement sigElement, XmlNamespaceManager ns)
+    {
+        string? uri = (sigElement.SelectSingleNode("ds:SignedInfo/ds:SignatureMethod", ns) as XmlElement)?.GetAttribute("Algorithm");
+        if (string.IsNullOrEmpty(uri) || uri.Contains("MGF1", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return uri.EndsWith("sha1", StringComparison.OrdinalIgnoreCase) ? "1.3.14.3.2.26"
+            : uri.EndsWith("sha224", StringComparison.OrdinalIgnoreCase) ? "2.16.840.1.101.3.4.2.4"
+            : uri.EndsWith("sha3-256", StringComparison.OrdinalIgnoreCase) ? "2.16.840.1.101.3.4.2.8"
+            : uri.EndsWith("sha3-384", StringComparison.OrdinalIgnoreCase) ? "2.16.840.1.101.3.4.2.9"
+            : uri.EndsWith("sha3-512", StringComparison.OrdinalIgnoreCase) ? "2.16.840.1.101.3.4.2.10"
+            : uri.EndsWith("sha256", StringComparison.OrdinalIgnoreCase) ? "2.16.840.1.101.3.4.2.1"
+            : uri.EndsWith("sha384", StringComparison.OrdinalIgnoreCase) ? "2.16.840.1.101.3.4.2.2"
+            : uri.EndsWith("sha512", StringComparison.OrdinalIgnoreCase) ? "2.16.840.1.101.3.4.2.3"
+            : uri.EndsWith("md5", StringComparison.OrdinalIgnoreCase) ? "1.2.840.113549.2.5"
+            : null;
     }
 
     /// <summary>Validates the countersignatures in the CounterSignature unsigned properties of a signature.</summary>
@@ -1232,6 +1318,24 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         catch (Exception)
         {
             return HashAlgorithmName.SHA256;
+        }
+    }
+
+    /// <summary>The token of the SignatureTimeStamp property, or null when there is none or it cannot be read.</summary>
+    private static byte[]? SignatureTimeStampToken(XmlElement sigElement, XmlNamespaceManager ns)
+    {
+        var encapsulated = SelectByNestedPath(sigElement, ns,
+            "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties" +
+            "/xades:UnsignedSignatureProperties/xades:SignatureTimeStamp",
+            "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:SignatureTimeStamp")
+            ?.SelectSingleNode("xades:EncapsulatedTimeStamp", ns);
+        try
+        {
+            return encapsulated is null ? null : DecodeBase64(encapsulated);
+        }
+        catch (FormatException)
+        {
+            return null;
         }
     }
 

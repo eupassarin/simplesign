@@ -29,6 +29,13 @@ public sealed record OutboundHttpPolicy
     /// <summary>The default policy: no host may resolve to a private address.</summary>
     public static OutboundHttpPolicy Default { get; } = new();
 
+    /// <summary>
+    /// Whether CRLs may be fetched from <c>ldap://</c> and <c>ldaps://</c> distribution points when the
+    /// certificate has no HTTP one. The host checks of this policy apply to LDAP hosts too.
+    /// Default: <see langword="false"/>.
+    /// </summary>
+    public bool AllowLdap { get; init; }
+
     private readonly IReadOnlyList<string> _privateNetworkHosts = [];
 
     /// <summary>

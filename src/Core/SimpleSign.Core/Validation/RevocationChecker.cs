@@ -131,7 +131,10 @@ internal sealed class RevocationChecker : IRevocationChecker
         if (crlUrl is not null)
         {
             _logger.TryingCrlDownload(cert.Subject, crlUrl);
-            bool ok = await _crlClient.CheckCrlAsync(cert, crlUrl, ct).ConfigureAwait(false);
+            var crlIssuer = chain.FindIssuerOf(cert);
+            bool ok = crlIssuer is not null
+                ? await _crlClient.CheckCrlAsync(cert, crlIssuer, crlUrl, ct).ConfigureAwait(false)
+                : await _crlClient.CheckCrlAsync(cert, crlUrl, ct).ConfigureAwait(false);
             return (ok, RevocationSource.OnlineCrl);
         }
 

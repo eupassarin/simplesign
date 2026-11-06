@@ -459,6 +459,7 @@ public sealed class DependencyAndLifecycleContractTests
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
+    [Trait("Indecopi", "Req12")]
     public async Task ExpiredCertificate_FailsOnAllFormats(string format)
     {
         using var cert = CreateExpiredCertificate();
