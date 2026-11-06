@@ -451,6 +451,7 @@ internal static class Translations
         ["Signer {0}"] = "Signatário {0}",
         ["DSS does not trust the signer's root. For sandbox certificates, mount the sandbox root into DSS (see tools/dss/README.md)."] = "O DSS não confia na raiz do signatário. Para certificados do sandbox, monte a raiz do sandbox no DSS (veja tools/dss/README.md).",
         ["DSS could not get revocation data. The sandbox CRL and OCSP addresses only exist inside the TestBench; sign at B-LT or B-LTA so the data is embedded."] = "O DSS não conseguiu os dados de revogação. Os endereços de LCR e OCSP do sandbox só existem dentro do TestBench; assine em B-LT ou B-LTA para que os dados fiquem embutidos.",
+        ["DSS detects a different level than the one SimpleSign reports for this signature."] = "O DSS detecta um nível diferente do que o SimpleSign informa para esta assinatura.",
         ["DSS did not report this signature."] = "O DSS não relatou esta assinatura.",
         ["DSS is not reachable at {0} ({1}). Start it with: docker compose -f tools/dss/docker-compose.yml up"] = "O DSS não responde em {0} ({1}). Inicie com: docker compose -f tools/dss/docker-compose.yml up",
         ["The DSS address must be an http or https URL."] = "O endereço do DSS deve ser uma URL http ou https.",

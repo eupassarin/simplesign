@@ -31,7 +31,8 @@ public sealed record RunVerdict(
     IReadOnlyList<CheckRow> Checks,
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
-    IReadOnlyList<RunVerdict> Children);
+    IReadOnlyList<RunVerdict> Children,
+    bool IsTimestamp = false);
 
 /// <summary>Everything about one run: what was asked, what came out, the verdicts, the code and the log.</summary>
 public sealed record RunView(
@@ -246,7 +247,7 @@ internal sealed class RunService(
         Issues = r.Issues,
         Overall = Overall(r.Validation.Select(v => v.Indication)),
         Validation = [.. r.Validation.Select(v => new RunVerdict(
-            v.FieldName, v.Signer, v.Indication, v.PolicyLevel, v.SigningTime, v.Checks, v.Errors, v.Warnings, []))],
+            v.FieldName, v.Signer, v.Indication, v.PolicyLevel, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp))],
         Detail = r,
     };
 

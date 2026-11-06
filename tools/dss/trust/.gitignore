@@ -1,0 +1,3 @@
+# Certificates you ask the DSS container to trust (for example the sandbox root). Not committed.
+*
+!.gitignore

@@ -147,6 +147,30 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
   receive diagnostics of token, CSC and PSC signatures (events 72xx, 73xx). PINs, OTPs, tokens and
   client secrets are never logged.
 
+### Changed (SimpleSign TestBench) — one workbench for PAdES, CAdES and XAdES
+
+- The PDF wizard and the separate CAdES and XML pages are replaced by a single **workbench**: pick
+  the format, set any option, sign, and read the result, the verdicts, the log and the code on the
+  same screen. Baseline presets (B-B…B-LTA) and **Vary** (sign once per value of one option) make
+  many combinations quick; every run is kept in a history.
+- **Every option names its standard.** The form is drawn from one option schema
+  (`/api/schema`): each option carries its explanation, the clause that defines it (ETSI EN 319
+  142-1, 122-1, 132-1, 102-1, RFC 5652/3161/6960/5280, ISO 32000-1, XMLDSig) and the library call it
+  becomes. Options the standards define and SimpleSign does not implement are listed too, disabled;
+  the new **Coverage** page shows them for each format.
+- **Logs.** Each run passes a logger to every builder and validator and shows the library events
+  and the network requests live, grouped by signing stage; each stage names its clause.
+- **Cross-validation with the EU DSS** (off by default): each run is also sent to the DSS REST
+  validation service and the two verdicts are shown side by side. `tools/dss/` runs DSS in Docker
+  and makes it trust the sandbox root, which the TestBench now keeps between runs
+  (`--ephemeral-sandbox` for a new root every start).
+- **Trust frameworks are off by default.** The Brazil chip shows the ICP-Brasil, Gov.br, health
+  and fiscal options in their own color and turns the Brazilian validation rules on.
+- The run matrix reports cases as they finish and can be stopped.
+- The UI and the server texts are in English and Portuguese; Spanish was removed.
+- API: `/api/options`, `/api/sign`, `/api/cades/options|sign` and `/api/xml/options|sign` are
+  replaced by `/api/workbench/options` and `/api/runs` (with a server-sent events stream).
+
 ### Added (SimpleSign TestBench)
 
 - TestBench **XML** page: XAdES (enveloped, detached, enveloping; B-B…B-LTA, ICP-Brasil XML

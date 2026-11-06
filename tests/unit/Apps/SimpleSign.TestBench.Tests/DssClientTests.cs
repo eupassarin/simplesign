@@ -90,6 +90,34 @@ public sealed class DssClientTests
         comparison.Notes.ShouldBeEmpty();
     }
 
+    [Fact]
+    public void Compare_DocumentTimestampVerdict_IsNotLinedUpWithADssSignature()
+    {
+        string passed = Report.Replace("\"INDETERMINATE\"", "\"TOTAL_PASSED\"", StringComparison.Ordinal)
+            .Replace("\"NO_CERTIFICATE_CHAIN_FOUND\"", "null", StringComparison.Ordinal)
+            .Replace("PAdES-BASELINE-LT", "PAdES-BASELINE-LTA", StringComparison.Ordinal);
+        var run = Run("Valid", "B-LTA");
+        run = run with { Validation = [.. run.Validation, new RunVerdict("DocTimeStamp_1", "TSA", "Valid", null, null, [], [], [], [], IsTimestamp: true)] };
+
+        var comparison = DssClient.Compare(RunFormats.Pades, run, Dss(passed));
+
+        comparison.Agree.ShouldBeTrue();
+        comparison.Rows.Count.ShouldBe(2);
+        comparison.Rows.Single(r => r.Topic == "level").Library.ShouldBe("B-LTA");
+    }
+
+    [Fact]
+    public void Compare_RevocationDataMissing_ExplainsTheSandboxAddresses()
+    {
+        string noRevocation = Report.Replace("NO_CERTIFICATE_CHAIN_FOUND", "CERTIFICATE_CHAIN_GENERAL_FAILURE", StringComparison.Ordinal)
+            .Replace("Unable to build a certificate chain up to a trusted list!", "No revocation data found for the certificate!", StringComparison.Ordinal);
+
+        var comparison = DssClient.Compare(RunFormats.Pades, Run("Valid", "B-B"), Dss(noRevocation));
+
+        comparison.Agree.ShouldBeFalse();
+        comparison.Notes.ShouldHaveSingleItem().ShouldContain("revocation");
+    }
+
     [Theory]
     [InlineData("Valid", "TOTAL_PASSED", true)]
     [InlineData("Valid", "PASSED", true)]

@@ -150,8 +150,8 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
     {
         var rows = new List<DssComparisonRow>();
         var notes = new List<string>();
-        var library = Flatten(run.Validation).ToList();
-        // DSS lists document timestamps too; SimpleSign reports them as verdicts only for PDF.
+        // DSS reports document timestamps apart from signatures, so only signatures are lined up.
+        var library = Flatten(run.Validation).Where(v => !v.IsTimestamp).ToList();
         var dssSignatures = dss.Signatures.Where(s => s.Format is not null || s.SignedBy is not null).ToList();
         int count = Math.Max(library.Count, dssSignatures.Count);
         for (int i = 0; i < count; i++)
@@ -166,9 +166,11 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
                 indicationAgrees ? null : Explain(theirs)));
             if (theirs?.Format is not null)
             {
-                string? oursLevel = i == library.Count - 1 || library.Count == 1 ? run.AchievedLevel : ours?.Level;
+                // The run's achieved level is the level of the signature it just made: the last one.
+                string? oursLevel = i == library.Count - 1 ? run.AchievedLevel : ours?.Level;
                 bool levelAgrees = oursLevel is null || SameLevel(oursLevel, theirs.Format);
-                rows.Add(new DssComparisonRow(label, "level", oursLevel, theirs.Format, levelAgrees, null));
+                rows.Add(new DssComparisonRow(label, "level", oursLevel, theirs.Format, levelAgrees,
+                    levelAgrees ? null : L.T("DSS detects a different level than the one SimpleSign reports for this signature.")));
             }
         }
 
@@ -177,7 +179,9 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
             notes.Add(L.T("DSS does not trust the signer's root. For sandbox certificates, mount the sandbox root into DSS (see tools/dss/README.md)."));
         }
 
-        if (dss.Signatures.Any(s => s.SubIndication is { } sub && (sub.Contains("REVOCATION", StringComparison.OrdinalIgnoreCase) || sub.Contains("TRY_LATER", StringComparison.OrdinalIgnoreCase))))
+        if (dss.Signatures.Any(s => s.Indication == "INDETERMINATE"
+            && ((s.SubIndication is { } sub && (sub.Contains("REVOCATION", StringComparison.OrdinalIgnoreCase) || sub.Contains("TRY_LATER", StringComparison.OrdinalIgnoreCase)))
+                || s.Errors.Any(e => e.Contains("revocation", StringComparison.OrdinalIgnoreCase)))))
         {
             notes.Add(L.T("DSS could not get revocation data. The sandbox CRL and OCSP addresses only exist inside the TestBench; sign at B-LT or B-LTA so the data is embedded."));
         }

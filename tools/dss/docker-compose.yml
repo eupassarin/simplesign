@@ -1,0 +1,22 @@
+# The EU DSS validation service for the TestBench's cross-validation.
+#   docker compose -f tools/dss/docker-compose.yml up --build
+# Then turn "DSS" on in the TestBench's top bar (address: http://localhost:8080).
+services:
+  dss:
+    build:
+      context: .
+      args:
+        DSS_VERSION: "6.3"
+    image: simplesign-dss-webapp:6.3
+    ports:
+      - "127.0.0.1:${DSS_PORT:-8080}:8080"
+    environment:
+      # Where the TestBench is, to fetch its sandbox root at start (Docker Desktop reaches the host this way).
+      TESTBENCH_URL: ${TESTBENCH_URL:-http://host.docker.internal:5199}
+      # "true" also loads the EU trusted lists (internet, slow start), to validate real EU signatures.
+      DSS_LOAD_EU_TRUSTED_LISTS: ${DSS_LOAD_EU_TRUSTED_LISTS:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Certificates (PEM or DER) in this folder are trusted too.
+      - ./trust:/trust:ro

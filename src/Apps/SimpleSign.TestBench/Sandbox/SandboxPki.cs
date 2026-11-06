@@ -59,11 +59,17 @@ internal sealed class SandboxPki : IDisposable
     private readonly List<IDisposable> _owned = [];
     private long _serial = 0x1000;
 
-    public SandboxPki()
+    /// <summary>Creates the sandbox PKI.</summary>
+    /// <param name="rootStorePath">
+    /// A file where the root CA (certificate and key, PEM) is kept between runs, so an external
+    /// validator that was told to trust the sandbox root keeps trusting it. Null: a new root every time.
+    /// </param>
+    public SandboxPki(string? rootStorePath = null)
     {
         var now = DateTimeOffset.UtcNow;
-        Root = BuildCa("CN=AC Raiz Sandbox SimpleSign, OU=Sandbox, O=SimpleSign TestBench, C=BR", _rootKey, null, null,
-            now.AddYears(-2), now.AddYears(20), pathLength: 1);
+        Root = LoadRoot(rootStorePath, now) ?? SaveRoot(rootStorePath, BuildCa(
+            "CN=AC Raiz Sandbox SimpleSign, OU=Sandbox, O=SimpleSign TestBench, C=BR", _rootKey, null, null,
+            now.AddYears(-2), now.AddYears(20), pathLength: 1));
         Intermediate = BuildCa("CN=AC Sandbox SimpleSign v1, OU=Sandbox, O=SimpleSign TestBench, C=BR", _intermediateKey, Root, _rootKey,
             now.AddYears(-1), now.AddYears(10), pathLength: 0);
 
@@ -247,6 +253,67 @@ internal sealed class SandboxPki : IDisposable
         };
         _owned.Add(certificate);
         return certificate;
+    }
+
+    /// <summary>Reads the stored root if it is there, still has years to live and its key is with it.</summary>
+    private X509Certificate2? LoadRoot(string? path, DateTimeOffset now)
+    {
+        if (path is null || !File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            string pem = File.ReadAllText(path);
+            var certificate = X509Certificate2.CreateFromPem(pem);
+            if (certificate.NotAfter < now.AddYears(11))
+            {
+                // Too close to the end of the intermediate CA's life: make a new root.
+                certificate.Dispose();
+                return null;
+            }
+
+            _rootKey.ImportFromPem(pem);
+            using var publicKey = certificate.GetRSAPublicKey();
+            if (publicKey is null || !publicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(_rootKey.ExportSubjectPublicKeyInfo()))
+            {
+                certificate.Dispose();
+                return null;
+            }
+
+            _owned.Add(certificate);
+            return certificate;
+        }
+        catch (Exception ex) when (ex is CryptographicException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Stores the root and its key (a test CA: nothing outside the sandbox should trust it).</summary>
+    private X509Certificate2 SaveRoot(string? path, X509Certificate2 root)
+    {
+        if (path is null)
+        {
+            return root;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, root.ExportCertificatePem() + "\n" + _rootKey.ExportPkcs8PrivateKeyPem() + "\n");
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The root is simply not kept: the sandbox works, with a new root on the next start.
+        }
+
+        return root;
     }
 
     private X509Certificate2 BuildCa(string subject, RSA key, X509Certificate2? issuer, RSA? issuerKey, DateTimeOffset from, DateTimeOffset to, int pathLength)

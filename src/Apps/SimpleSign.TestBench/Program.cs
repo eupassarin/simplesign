@@ -11,8 +11,11 @@ using SimpleSign.TestBench.Signing;
 // SimpleSign TestBench: a local web app to try every PDF signing option of the library.
 //   dotnet run --project src/Apps/SimpleSign.TestBench            (http://127.0.0.1:5199, opens the browser)
 //   dotnet run --project src/Apps/SimpleSign.TestBench -- --port 5200 --no-browser
+//   --ephemeral-sandbox: a new sandbox root CA on every start (by default the root is kept in the
+//   user's local application data, so an external validator such as DSS can keep trusting it).
 int port = 5199;
 bool openBrowser = true;
+bool keepSandboxRoot = true;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--port" && i + 1 < args.Length && int.TryParse(args[i + 1], out int p))
@@ -22,6 +25,10 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--no-browser")
     {
         openBrowser = false;
+    }
+    else if (args[i] == "--ephemeral-sandbox")
+    {
+        keepSandboxRoot = false;
     }
 }
 
@@ -39,7 +46,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
     o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
 });
-builder.Services.AddSingleton<SandboxEnvironment>();
+builder.Services.AddSingleton(new SandboxEnvironment(keepSandboxRoot ? SandboxEnvironment.DefaultRootStorePath : null));
 builder.Services.AddSingleton<DocumentStore>();
 builder.Services.AddSingleton<CredentialStore>();
 builder.Services.AddSingleton<CredentialFactory>();
