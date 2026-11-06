@@ -22,7 +22,7 @@ Update `<Version>` in all `.csproj` files:
 | `src/Formats/SimpleSign/SimpleSign.csproj` | Meta-package |
 | `src/Core/SimpleSign.Core/SimpleSign.Core.csproj` | Core crypto |
 | `src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj` | Main package |
-| `src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj` | ICP-Brasil |
+| `src/TrustFrameworks/SimpleSign.Brasil/SimpleSign.Brasil.csproj` | ICP-Brasil |
 | `src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
 | `src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
 | `src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
@@ -38,7 +38,7 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/Formats/SimpleSign/SimpleSign.csproj \
   src/Core/SimpleSign.Core/SimpleSign.Core.csproj \
   src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
-  src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
+  src/TrustFrameworks/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
   src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
   src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
   src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \

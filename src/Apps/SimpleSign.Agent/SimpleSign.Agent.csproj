@@ -32,7 +32,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
-    <ProjectReference Include="..\..\Brasil\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
   </ItemGroup>
 

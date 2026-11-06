@@ -42,7 +42,7 @@ src/
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
 │   ├── SimpleSign.XAdES/       XML signatures
 │   └── SimpleSign/             Meta-package
-├── Brasil/
+├── TrustFrameworks/
 │   ├── SimpleSign.Brasil/          ICP-Brasil: chain validation, policies, CPF/CNPJ, Gov.br
 │   ├── SimpleSign.Brasil.Fiscal/   XML-DSig for NF-e, CT-e, eSocial…
 │   └── SimpleSign.Brasil.Xades/    ICP-Brasil XAdES policies

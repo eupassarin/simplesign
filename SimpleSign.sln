@@ -11,7 +11,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Core", "Core", "{478D0FB8-C
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Formats", "Formats", "{F0A91962-DCE6-547C-9186-1E4AFBD44919}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Brasil", "Brasil", "{A2F6CC26-4E63-5587-9806-258FC230F3CF}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TrustFrameworks", "TrustFrameworks", "{A2F6CC26-4E63-5587-9806-258FC230F3CF}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Signers", "Signers", "{501C4375-C945-5340-9903-634363D68EA9}"
 EndProject
@@ -25,7 +25,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Integration.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Cli", "src\Apps\SimpleSign.Cli\SimpleSign.Cli.csproj", "{7395D060-DA5A-47B2-ACB9-805065F89784}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil", "src\Brasil\SimpleSign.Brasil\SimpleSign.Brasil.csproj", "{C20F52C9-13DC-4B55-BF19-4AC4F1976AAB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil", "src\TrustFrameworks\SimpleSign.Brasil\SimpleSign.Brasil.csproj", "{C20F52C9-13DC-4B55-BF19-4AC4F1976AAB}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil.Tests", "tests\unit\SimpleSign.Brasil.Tests\SimpleSign.Brasil.Tests.csproj", "{618B8681-2707-43C1-BF64-A8273AD898D5}"
 EndProject
@@ -78,11 +78,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Signers.Cloud", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Signers.Cloud.Tests", "tests\unit\SimpleSign.Signers.Cloud.Tests\SimpleSign.Signers.Cloud.Tests.csproj", "{ACBC221D-3667-4915-81B8-4E7FA0C1E924}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil.Fiscal", "src\Brasil\SimpleSign.Brasil.Fiscal\SimpleSign.Brasil.Fiscal.csproj", "{046F317C-CE51-439E-A353-BD93E99615BF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil.Fiscal", "src\TrustFrameworks\SimpleSign.Brasil.Fiscal\SimpleSign.Brasil.Fiscal.csproj", "{046F317C-CE51-439E-A353-BD93E99615BF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil.Fiscal.Tests", "tests\unit\SimpleSign.Brasil.Fiscal.Tests\SimpleSign.Brasil.Fiscal.Tests.csproj", "{E28A818F-FF15-4521-8834-402A98E8BF4D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil.Xades", "src\Brasil\SimpleSign.Brasil.Xades\SimpleSign.Brasil.Xades.csproj", "{D39C41DA-85E0-460D-89EC-FF54BBF0A7B8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil.Xades", "src\TrustFrameworks\SimpleSign.Brasil.Xades\SimpleSign.Brasil.Xades.csproj", "{D39C41DA-85E0-460D-89EC-FF54BBF0A7B8}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleSign.Brasil.Xades.Tests", "tests\unit\SimpleSign.Brasil.Xades.Tests\SimpleSign.Brasil.Xades.Tests.csproj", "{39BAF1EB-850A-4201-8F89-93B4B7EC0FF5}"
 EndProject

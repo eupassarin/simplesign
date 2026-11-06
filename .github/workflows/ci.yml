@@ -153,7 +153,7 @@ jobs:
           for proj in src/Formats/SimpleSign/SimpleSign.csproj \
                      src/Core/SimpleSign.Core/SimpleSign.Core.csproj \
                      src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
-                     src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
+                     src/TrustFrameworks/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
                      src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
                      src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj \
                      src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
