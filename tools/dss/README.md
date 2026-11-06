@@ -155,3 +155,15 @@ To use another DSS version, change `DSS_VERSION` in `docker-compose.yml`.
 
 You can also point the TestBench at a DSS you already run: set its address in the **DSS** panel
 or in the `SIMPLESIGN_DSS_URL` environment variable.
+
+## Automated check
+
+With the container up, the test suite also uses it:
+
+```bash
+dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --filter "FullyQualifiedName~DssCrossValidationTests"
+```
+
+The tests sign in the sandbox and assert what DSS reads from each file (signatures and timestamps
+intact, references found, structure valid, baseline level). They do not depend on the roots DSS
+trusts, and they are skipped when nothing answers at `SIMPLESIGN_DSS_URL`.

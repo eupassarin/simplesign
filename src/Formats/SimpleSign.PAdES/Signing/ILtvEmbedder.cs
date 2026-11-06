@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Signing;
 
 namespace SimpleSign.PAdES.Signing;
 
@@ -19,4 +20,16 @@ public interface ILtvEmbedder
         artifacts.Count == 0
             ? EmbedLtvDataAsync(signedPdf, certificateChain, timestampTokenBytes, cancellationToken)
             : throw new NotSupportedException($"{GetType().Name} does not support DSS artifacts.");
+
+    /// <summary>
+    /// Collects revocation data and embeds it for a signature made with <paramref name="options"/>.
+    /// The signer calls this overload, so an embedder that honours the options (the revocation source
+    /// tried first, the OCSP clock skew) overrides it; by default the options are ignored and the
+    /// call goes to the overload without them.
+    /// </summary>
+    Task<byte[]> EmbedLtvDataAsync(
+        byte[] signedPdf, IReadOnlyList<X509Certificate2> certificateChain, byte[]? timestampTokenBytes,
+        IReadOnlyList<PdfDssArtifact> artifacts, LongTermValidationOptions options,
+        CancellationToken cancellationToken = default) =>
+        EmbedLtvDataAsync(signedPdf, certificateChain, timestampTokenBytes, artifacts, cancellationToken);
 }

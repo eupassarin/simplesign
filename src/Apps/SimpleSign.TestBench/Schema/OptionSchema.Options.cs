@@ -75,10 +75,18 @@ public static partial class OptionSchema
             "The private key signs the digest of the signed attributes. With a token or a cloud service the key never leaves the device: the library sends the bytes to sign through IExternalSigner.",
             R("RFC 5280|§4 Certificate profile", "ETSI EN 319 412-2|Certificate profile for natural persons"), "WithCertificate(cert, chain) / WithExternalSigner(cert, IExternalSigner, chain)"),
 
-        Missing("xades.references", "input", s_xades, "Additional references and transforms", "Sign several data objects, or apply XPath or XSLT transforms. SimpleSign signs one data object with fixed transforms.",
-            "W3C XMLDSig Core 1.1|§4.4.3 The Reference element", "W3C XMLDSig Core 1.1|§6.6 Transform algorithms"),
-        Missing("xades.counterSignature", "input", s_xades, "XAdES countersignature", "A signature over another signature's value, stored in the CounterSignature unsigned property.",
-            "ETSI EN 319 132-1|§5.2.7 CounterSignature"),
+        O("xades.embeddedObject", "input", s_xades, "upload", "embeddedObjectId", "Additional data object (embedded)", "A file signed together with the document and carried inside the signature, as a base64 ds:Object with its own ds:Reference.",
+            standards: R("W3C XMLDSig Core 1.1|§4.4.3 The Reference element"), api: "WithAdditionalDataObject(XadesDataObject.Embedded(content))", stateKey: "additionalObjects"),
+        O("xades.externalObject", "input", s_xades, "upload", "externalObjectId", "Additional data object (external)", "A file signed together with the document and kept outside the signature: its ds:Reference points to the file name and digests the file as it is.",
+            "The validator needs the file again. The TestBench gives it back after signing; a signature validated on its own page reports the reference as not verifiable.",
+            R("W3C XMLDSig Core 1.1|§4.4.3 The Reference element"), "WithAdditionalDataObject(XadesDataObject.External(uri, content))", stateKey: "additionalObjects"),
+        Missing("xades.transforms", "input", s_xades, "XPath and XSLT transforms", "Sign a part of the data chosen by an XPath filter, or the output of an XSLT. SimpleSign applies its own fixed transforms.",
+            "W3C XMLDSig Core 1.1|§6.6 Transform algorithms"),
+        O("xades.counterSignature", "input", s_xades, "toggle", "counterSign", "XAdES countersignature", "Countersign a signature the document already has: the new signature signs its SignatureValue and is stored in its CounterSignature unsigned property.",
+            "The result is the same document with the countersignature added. Built at B-B or B-T; the validator reports it under the signature it signs.",
+            R("ETSI EN 319 132-1|§5.2.7 Countersignatures"), "XadesSigner.CounterSign(signedXml, signatureId)", stateKey: "counterSign"),
+        O("xades.counterSignatureId", "input", s_xades, "text", "counterSignatureId", "Signature to countersign", "The Id of the ds:Signature to countersign. Empty: the only signature of the document.",
+            standards: R("ETSI EN 319 132-1|§5.2.7 Countersignatures"), api: "XadesSigner.CounterSign(signedXml, signatureId)", stateKey: "counterSignatureId"),
     ];
 
     // ── Signature level ─────────────────────────────────────────────────
@@ -161,6 +169,12 @@ public static partial class OptionSchema
                 standards: R("ETSI EN 319 122-1|§5.2.9 signature-policy-identifier", "ETSI EN 319 132-1|§5.2.9 SignaturePolicyIdentifier"), api: "WithSignaturePolicy(oid, uri)", stateKey: "customPolicy"),
             O("cx.policyUri", "level", s_cadesXades, "text", "policyUri", "Policy URI", "Where the policy document can be downloaded (SPuri qualifier). Optional.",
                 standards: R("ETSI EN 319 122-1|§5.2.9 sigPolicyQualifiers", "ETSI EN 319 132-1|§5.2.9 SigPolicyQualifiers"), api: "WithSignaturePolicy(oid, uri)", stateKey: "customPolicy"),
+            O("cx.policyDocument", "level", s_cadesXades, "upload", "policyDocumentId", "Policy document (policy store)", "The signature policy file. Its SHA-256 goes into the policy identifier and the file is embedded in the signature, so the policy can be read offline.",
+                "The store is an unsigned attribute: what protects the document is the hash in the signed policy identifier, so the library refuses a store when the policy is declared without its hash.",
+                R("ETSI EN 319 122-1|§5.2.10 signature-policy-store", "ETSI EN 319 132-1|§5.2.10 SignaturePolicyStore", "ETSI EN 319 122-1|§5.2.9 sigPolicyHash"),
+                "WithSignaturePolicy(SignaturePolicyReference) + WithSignaturePolicyStore(SignaturePolicyStore.FromDocument(spec, document))", stateKey: "customPolicy"),
+            O("cx.policySpecification", "level", s_cadesXades, "text", "policySpecification", "Policy document specification", "The OID or URI of the specification that defines the syntax of the policy document (SPDocSpecification). Used with a policy document.",
+                standards: R("ETSI EN 319 122-1|§5.2.9 sp-doc-specification", "ETSI EN 319 132-1|§5.2.9 SPDocSpecification"), api: "SignaturePolicyStore.Specification", stateKey: "customPolicy"),
 
             O("cades.extendedForm", "level", s_cades, "choice", "extendedForm", "Extended form", "The older CAdES forms with references to the validation data, still required by some policies.",
                 standards: R("ETSI EN 319 122-2|Extended CAdES signatures", "RFC 5126|§5.7.3–§6.4"), api: "WithExtendedValidationData(CadesExtendedForm)", stateKey: "extendedForm", valueStateKey: "extendedForm",
@@ -171,8 +185,13 @@ public static partial class OptionSchema
 
             OC("pades.returnLowerLevel", "level", s_pades, "toggle", "returnLowerLevel", "returnLowerLevel", R("ETSI EN 319 142-1|§6.2 Signature levels"), stateKey: "returnLowerLevel"),
 
-            Missing("common.revocationPreference", "level", s_all, "Prefer OCSP or CRL", "Choose which revocation source is tried first when collecting validation data. SimpleSign tries OCSP and falls back to CRL.",
-                "RFC 6960|OCSP", "RFC 5280|§5 CRL", "ETSI EN 319 102-1|§5.2.5 Revocation freshness"),
+            O("common.revocationPreference", "level", s_all, "choice", "revocationPreference", "Prefer OCSP or CRL", "Which revocation source is tried first when collecting the validation data; the other one is the fallback.",
+                standards: R("RFC 6960|OCSP", "RFC 5280|§5 CRL", "ETSI EN 319 102-1|§5.2.5 Revocation freshness"), api: "new LongTermValidationOptions { RevocationPreference }", stateKey: "revocationPreference",
+                values:
+                [
+                    V("OcspFirst", "OCSP first", "Ask the OCSP responder and download the CRL only when OCSP gives no usable answer. The default.", api: "RevocationPreference.OcspFirst"),
+                    V("CrlFirst", "CRL first", "Download the CRL and ask the OCSP responder only when no usable CRL is found.", api: "RevocationPreference.CrlFirst"),
+                ]),
         ];
     }
 
@@ -187,10 +206,14 @@ public static partial class OptionSchema
         OC("pades.archiveTimestamp", "timestamp", s_pades, "tsa", "archiveTimestamp", "archiveTimestamp",
             R("ETSI EN 319 142-1|§5.4.3 Document time-stamp", "RFC 3161|Time-Stamp Protocol"), stateKey: "archiveTimestamp", when: When("separateArchiveTsa", "true")),
 
-        Missing("cades.contentTimestamp", "timestamp", s_cades, "Content timestamp", "A timestamp over the content before it is signed: proves the content existed before the signature.",
-            "ETSI EN 319 122-1|§5.2.8 content-time-stamp"),
-        Missing("xades.dataObjectsTimestamp", "timestamp", s_xades, "Data objects timestamp", "A timestamp over the signed data objects before signing (AllDataObjectsTimeStamp, IndividualDataObjectsTimeStamp).",
-            "ETSI EN 319 132-1|§5.2.8 AllDataObjectsTimeStamp and IndividualDataObjectsTimeStamp"),
+        O("cades.contentTimestamp", "timestamp", s_cades, "toggle", "contentTimestamp", "Content timestamp", "A timestamp over the content, asked from the signature TSA before signing: proves the content existed before the signature.",
+            "It is a signed attribute, independent of the level: a B-B signature can carry it. The validator checks that the token covers the content.",
+            R("ETSI EN 319 122-1|§5.2.8 content-time-stamp"), "WithContentTimestamp(TimestampOptions)", stateKey: "contentTimestamp"),
+        O("xades.dataObjectsTimestamp", "timestamp", s_xades, "toggle", "dataObjectsTimestamp", "Data objects timestamp", "A timestamp over the signed data, asked from the signature TSA before signing (AllDataObjectsTimeStamp).",
+            "It is a signed property, independent of the level: a B-B signature can carry it. The validator checks that the token covers what the data reference digests.",
+            R("ETSI EN 319 132-1|§5.2.8.1 AllDataObjectsTimeStamp"), "WithDataObjectsTimestamp(TimestampOptions)", stateKey: "dataObjectsTimestamp"),
+        Missing("xades.individualDataObjectsTimestamp", "timestamp", s_xades, "Individual data objects timestamp", "A timestamp over some of the signed data objects only. SimpleSign signs one data object, which AllDataObjectsTimeStamp already covers.",
+            "ETSI EN 319 132-1|§5.2.8.2 IndividualDataObjectsTimeStamp"),
     ];
 
     // ── Cryptography ────────────────────────────────────────────────────
@@ -220,8 +243,17 @@ public static partial class OptionSchema
             standards: R("FIPS 186-5|ECDSA", "RFC 5753|ECC algorithms in CMS", "ETSI TS 119 312|Signature schemes")),
         Missing("common.eddsa", "crypto", s_all, "EdDSA (Ed25519, Ed448)", "Edwards-curve signatures. .NET has no EdDSA signing API, so SimpleSign refuses these keys.",
             "RFC 8032|EdDSA", "RFC 8419|EdDSA in CMS", "ETSI TS 119 312|Signature schemes"),
-        Missing("xades.canonicalization", "crypto", s_xades, "Canonicalization method", "Choose the canonicalization of SignedInfo and of the references. SimpleSign always uses Exclusive C14N.",
-            "W3C XMLDSig Core 1.1|§4.4.1 CanonicalizationMethod", "W3C Exclusive XML Canonicalization 1.0|xml-exc-c14n"),
+        O("xades.canonicalization", "crypto", s_xades, "choice", "canonicalization", "Canonicalization method", "The canonicalization of SignedInfo and of the references. The time-stamps keep the exclusive one.",
+            standards: R("W3C XMLDSig Core 1.1|§4.4.1 CanonicalizationMethod"), api: "WithCanonicalization(XadesCanonicalization)", stateKey: "canonicalization",
+            values:
+            [
+                V("Exclusive", "Exclusive C14N 1.0", "The signed parts do not depend on the namespaces of the surrounding document. The default.",
+                    standards: R("W3C Exclusive XML Canonicalization 1.0|xml-exc-c14n"), api: "XadesCanonicalization.Exclusive"),
+                V("Inclusive", "Canonical XML 1.0", "The signed parts carry the namespace declarations in scope around them, as some profiles require.",
+                    standards: R("W3C Canonical XML 1.0|xml-c14n"), api: "XadesCanonicalization.Inclusive"),
+                V("C14N11", "Canonical XML 1.1", "Fixes how xml:id and xml:base are inherited. .NET has no implementation of it.",
+                    standards: R("W3C Canonical XML 1.1|xml-c14n11"), support: NotInLibrary),
+            ]),
     ];
 
     // ── Signed attributes ───────────────────────────────────────────────
@@ -306,18 +338,36 @@ public static partial class OptionSchema
         O("xades.mimeType", "attributes", s_xades, "text", "mimeType", "Data MIME type", "The media type of the signed data (DataObjectFormat). Empty: none.",
             standards: R("ETSI EN 319 132-1|§5.2.4 DataObjectFormat"), api: "WithDataObjectFormat(new DataObjectFormat { MimeType })", stateKey: "mimeType"),
 
-        Missing("cades.signerLocation", "attributes", s_cades, "Signer location", "Where the signer was when signing (country, locality, postal address).",
-            "ETSI EN 319 122-1|§5.2.5 signer-location"),
-        Missing("cades.signerAttributes", "attributes", s_cades, "Signer attributes (roles)", "Claimed or certified roles of the signer.",
-            "ETSI EN 319 122-1|§5.2.6 signer-attributes-v2"),
-        Missing("cades.contentHints", "attributes", s_cades, "Content hints and MIME type", "Describes the signed content (content-hints, mime-type).",
-            "ETSI EN 319 122-1|§5.2.4 Attributes for identifying the signed data type"),
-        Missing("cades.policyStore", "attributes", s_cadesXades, "Signature policy store", "Embeds the signature policy document, or a reference to where it is stored.",
-            "ETSI EN 319 122-1|§5.2.10 signature-policy-store", "ETSI EN 319 132-1|§5.2.10 SignaturePolicyStore"),
-        Missing("xades.productionPlace", "attributes", s_xades, "Signature production place", "Where the signer was when signing (city, region, postal code, country).",
-            "ETSI EN 319 132-1|§5.2.5 SignatureProductionPlaceV2"),
-        Missing("xades.certifiedRoles", "attributes", s_xades, "Certified and signed roles", "Roles backed by an attribute certificate or a signed assertion. SimpleSign writes claimed roles only.",
-            "ETSI EN 319 132-1|§5.2.6 SignerRoleV2"),
+        O("cades.signerLocation", "attributes", s_cades, "text", "signerCountry", "Signer location: country", "The country where the signer was when signing (signer-location). Empty: none.",
+            standards: R("ETSI EN 319 122-1|§5.2.5 signer-location"), api: "WithSignerLocation(new CadesSignerLocation { CountryName })", stateKey: "signerLocation"),
+        O("cades.signerLocality", "attributes", s_cades, "text", "signerLocality", "Signer location: locality", "The locality (a city, for example) where the signer was when signing. Empty: none.",
+            standards: R("ETSI EN 319 122-1|§5.2.5 signer-location"), api: "WithSignerLocation(new CadesSignerLocation { LocalityName })", stateKey: "signerLocation"),
+        O("cades.signerPostalAddress", "attributes", s_cades, "lines", "signerPostalAddress", "Signer location: postal address", "The postal address of the signer, one line each, at most six.",
+            standards: R("ETSI EN 319 122-1|§5.2.5 signer-location"), api: "WithSignerLocation(new CadesSignerLocation { PostalAddress })", stateKey: "signerLocation"),
+        O("cades.signerAttributes", "attributes", s_cades, "lines", "signerRoles", "Signer roles", "The roles the signer claims, one per line (signer-attributes-v2, claimedAttributes).",
+            standards: R("ETSI EN 319 122-1|§5.2.6 signer-attributes-v2"), api: "WithSignerRoles(IReadOnlyList<string>)", stateKey: "roles"),
+        O("cades.mimeType", "attributes", s_cades, "text", "mimeType", "Data MIME type", "The media type of the signed data (mime-type attribute). Empty: none.",
+            standards: R("ETSI EN 319 122-1|§5.2.4 Attributes for identifying the signed data type"), api: "WithMimeType(string)", stateKey: "mimeType"),
+        O("cades.contentHints", "attributes", s_cades, "text", "contentDescription", "Content description", "Describes the signed content (content-hints, with the content type id-data). Empty: none.",
+            standards: R("ETSI EN 319 122-1|§5.2.4 Attributes for identifying the signed data type", "RFC 2634|§2.9 Content hints"), api: "WithContentHints(new CadesContentHints { Description })", stateKey: "contentHints"),
+        O("cx.attributeCertificate", "attributes", s_cadesXades, "upload", "attributeCertificateId", "Attribute certificate", "An X.509 attribute certificate issued to the signer (DER): a role an Attribute Authority certifies.",
+            "The certificate is embedded as given. SimpleSign does not verify its signature, its holder or its validity.",
+            R("ETSI EN 319 122-1|§5.2.6 signer-attributes-v2", "ETSI EN 319 132-1|§5.2.6 SignerRoleV2", "RFC 5755|Attribute certificate profile"),
+            "WithAttributeCertificates(IReadOnlyList<ReadOnlyMemory<byte>>)", stateKey: "certifiedRoles"),
+        O("cx.signedAssertion", "attributes", s_cadesXades, "upload", "signedAssertionId", "Signed assertion (SAML)", "An assertion about the signer that a third party signed, for example a SAML assertion (an XML file).",
+            "The assertion is embedded as given. SimpleSign does not verify the third party's signature.",
+            R("ETSI EN 319 122-1|§5.2.6 signer-attributes-v2", "ETSI EN 319 132-1|§5.2.6 SignerRoleV2"),
+            "WithSignedAssertions(…)", stateKey: "certifiedRoles"),
+        O("xades.productionPlace", "attributes", s_xades, "text", "placeCity", "Production place: city", "The city where the signer was when signing (SignatureProductionPlaceV2; SignatureProductionPlace with the XAdES 1.3.2 form). Empty: none.",
+            standards: R("ETSI EN 319 132-1|§5.2.5 SignatureProductionPlaceV2"), api: "WithSignatureProductionPlace(new SignatureProductionPlace { City })", stateKey: "productionPlace"),
+        O("xades.productionPlaceStreet", "attributes", s_xades, "text", "placeStreet", "Production place: street address", "The street address of the production place. Not available with the XAdES 1.3.2 form. Empty: none.",
+            standards: R("ETSI EN 319 132-1|§5.2.5 SignatureProductionPlaceV2"), api: "WithSignatureProductionPlace(new SignatureProductionPlace { StreetAddress })", stateKey: "productionPlace"),
+        O("xades.productionPlaceState", "attributes", s_xades, "text", "placeState", "Production place: state or province", "The state or province of the production place. Empty: none.",
+            standards: R("ETSI EN 319 132-1|§5.2.5 SignatureProductionPlaceV2"), api: "WithSignatureProductionPlace(new SignatureProductionPlace { StateOrProvince })", stateKey: "productionPlace"),
+        O("xades.productionPlacePostalCode", "attributes", s_xades, "text", "placePostalCode", "Production place: postal code", "The postal code of the production place. Empty: none.",
+            standards: R("ETSI EN 319 132-1|§5.2.5 SignatureProductionPlaceV2"), api: "WithSignatureProductionPlace(new SignatureProductionPlace { PostalCode })", stateKey: "productionPlace"),
+        O("xades.productionPlaceCountry", "attributes", s_xades, "text", "placeCountry", "Production place: country", "The country of the production place. Empty: none.",
+            standards: R("ETSI EN 319 132-1|§5.2.5 SignatureProductionPlaceV2"), api: "WithSignatureProductionPlace(new SignatureProductionPlace { CountryName })", stateKey: "productionPlace"),
     ];
 
     // ── PDF signature field ─────────────────────────────────────────────

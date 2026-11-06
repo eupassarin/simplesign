@@ -95,11 +95,96 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         [Description("Data URI for Detached form (e.g., 'document.xml'). Required when --form detached.")]
         public string? DataUri { get; init; }
 
+        /// <summary>Production place: city.</summary>
+        [CommandOption("--place-city <TEXT>")]
+        [Description("Where the signature was produced: city")]
+        public string? PlaceCity { get; init; }
+
+        /// <summary>Production place: street address.</summary>
+        [CommandOption("--place-street <TEXT>")]
+        [Description("Where the signature was produced: street address")]
+        public string? PlaceStreet { get; init; }
+
+        /// <summary>Production place: state or province.</summary>
+        [CommandOption("--place-state <TEXT>")]
+        [Description("Where the signature was produced: state or province")]
+        public string? PlaceState { get; init; }
+
+        /// <summary>Production place: postal code.</summary>
+        [CommandOption("--place-postal-code <TEXT>")]
+        [Description("Where the signature was produced: postal code")]
+        public string? PlacePostalCode { get; init; }
+
+        /// <summary>Production place: country.</summary>
+        [CommandOption("--place-country <TEXT>")]
+        [Description("Where the signature was produced: country")]
+        public string? PlaceCountry { get; init; }
+
+        /// <summary>Canonicalization: exclusive (default) or inclusive.</summary>
+        [CommandOption("--canonicalization <ALGO>")]
+        [Description("Canonicalization: exclusive (default) or inclusive (Canonical XML 1.0)")]
+        public string? Canonicalization { get; init; }
+
+        /// <summary>Revocation source tried first at longterm/archive: ocsp (default) or crl.</summary>
+        [CommandOption("--revocation-preference <SOURCE>")]
+        [Description("Revocation source tried first at longterm/archive: ocsp (default) or crl")]
+        public string? RevocationPreference { get; init; }
+
+        /// <summary>Policy document: hashed into the policy identifier and embedded in the SignaturePolicyStore.</summary>
+        [CommandOption("--policy-document <PATH>")]
+        [Description("Policy document: its SHA-256 goes in the policy identifier and the file is embedded in the signature (SignaturePolicyStore)")]
+        public string? PolicyDocumentPath { get; init; }
+
+        /// <summary>OID or URI of the specification that defines the policy document's syntax.</summary>
+        [CommandOption("--policy-specification <OID|URI>")]
+        [Description("OID or URI of the specification that defines the policy document's syntax (with --policy-document)")]
+        public string? PolicySpecification { get; init; }
+
+        /// <summary>Timestamp the signed data before signing (AllDataObjectsTimeStamp, requires --tsa).</summary>
+        [CommandOption("--data-objects-timestamp")]
+        [Description("Timestamp the signed data before signing (AllDataObjectsTimeStamp, requires --tsa)")]
+        public bool DataObjectsTimestamp { get; init; }
+
+        /// <summary>X.509 attribute certificate file (DER), a certified signer role.</summary>
+        [CommandOption("--attribute-certificate <PATH>")]
+        [Description("X.509 attribute certificate (DER) certifying a signer role (may be specified multiple times)")]
+        public string[]? AttributeCertificates { get; init; }
+
+        /// <summary>Signed assertion file (XML, e.g. SAML) about the signer.</summary>
+        [CommandOption("--signed-assertion <PATH>")]
+        [Description("Signed assertion about the signer, an XML file such as a SAML assertion (may be specified multiple times)")]
+        public string[]? SignedAssertions { get; init; }
+
+        /// <summary>File signed together with the document and embedded in the signature.</summary>
+        [CommandOption("--embed-object <PATH[,MIME]>")]
+        [Description("File signed together with the document and embedded in the signature (may be specified multiple times)")]
+        public string[]? EmbeddedObjects { get; init; }
+
+        /// <summary>File signed together with the document and referenced by URI.</summary>
+        [CommandOption("--external-object <URI=PATH[,MIME]>")]
+        [Description("File signed together with the document and referenced by its URI (may be specified multiple times)")]
+        public string[]? ExternalObjects { get; init; }
+
+        /// <summary>Countersign a signature of the signed XML given as input.</summary>
+        [CommandOption("--countersign")]
+        [Description("Countersign a signature of <input>, an already signed XML (levels basic and timestamped)")]
+        public bool CounterSign { get; init; }
+
+        /// <summary>Id of the signature to countersign.</summary>
+        [CommandOption("--countersign-id <ID>")]
+        [Description("Id of the ds:Signature to countersign (with --countersign; optional when there is a single signature)")]
+        public string? CounterSignatureId { get; init; }
+
         public override ValidationResult Validate()
         {
             if (!File.Exists(InputPath))
             {
                 return ValidationResult.Error($"File not found: {InputPath}");
+            }
+
+            if (ValidateExtras() is { } extrasError)
+            {
+                return ValidationResult.Error(extrasError);
             }
 
             if (CertPath is not null && !File.Exists(CertPath))
@@ -130,6 +215,36 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
 
             return ValidationResult.Success();
         }
+
+        private string? ValidateExtras()
+        {
+            if (Canonicalization is not null && ParseCanonicalization(Canonicalization) is null)
+            {
+                return $"Invalid canonicalization: {Canonicalization}. Valid: exclusive, inclusive";
+            }
+
+            if (DataObjectsTimestamp && TsaUrl is null)
+            {
+                return "--data-objects-timestamp requires --tsa";
+            }
+
+            if (CounterSignatureId is not null && !CounterSign)
+            {
+                return "--countersign-id is used with --countersign";
+            }
+
+            if (ExternalObjects?.FirstOrDefault(o => AdesOptionSupport.SplitUriAndPath(o) is null) is { } malformed)
+            {
+                return $"Invalid --external-object: {malformed}. Expected URI=PATH[,MIME]";
+            }
+
+            return AdesOptionSupport.ValidateRevocationPreference(RevocationPreference)
+                ?? AdesOptionSupport.ValidatePolicyDocument(PolicyOid, PolicyDocumentPath, PolicySpecification)
+                ?? AdesOptionSupport.ValidateFiles("--attribute-certificate", AttributeCertificates)
+                ?? AdesOptionSupport.ValidateFiles("--signed-assertion", SignedAssertions)
+                ?? AdesOptionSupport.ValidateFiles("--embed-object", EmbeddedObjects?.Select(o => AdesOptionSupport.SplitPathAndMimeType(o).Path))
+                ?? AdesOptionSupport.ValidateFiles("--external-object", ExternalObjects?.Select(o => AdesOptionSupport.SplitUriAndPath(o)!.Value.Path));
+        }
     }
 
     public override async Task<int> ExecuteAsync(
@@ -145,10 +260,9 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         var commitment = settings.Commitment is not null ? ParseCommitment(settings.Commitment) : null;
 
         var logger = settings.CreateLogger<XadesSignCommand>();
-        var builder = XadesSigner.Document(xmlData)
-            .WithCertificate(cert)
-            .WithHashAlgorithm(hashAlg)
-            .WithForm(form);
+        var builder = settings.CounterSign
+            ? XadesSigner.CounterSign(xmlData, settings.CounterSignatureId).WithCertificate(cert).WithHashAlgorithm(hashAlg)
+            : XadesSigner.Document(xmlData).WithCertificate(cert).WithHashAlgorithm(hashAlg).WithForm(form);
 
         if (logger is not null)
         {
@@ -157,7 +271,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
 
         if (settings.TsaUrl is not null && level >= AdesBaselineLevel.Timestamped)
         {
-            builder = builder.WithLevel(BuildBaselineProfile(settings.TsaUrl, level));
+            builder = builder.WithLevel(BuildBaselineProfile(settings.TsaUrl, level, settings.RevocationPreference));
         }
         if (settings.DataUri is not null)
         {
@@ -167,7 +281,13 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         {
             builder = builder.WithCommitmentType(commitment.Value);
         }
-        if (settings.PolicyOid is not null)
+        if (settings.PolicyOid is not null && settings.PolicyDocumentPath is not null)
+        {
+            var (policy, store) = await AdesOptionSupport.LoadPolicyAsync(
+                settings.PolicyOid, settings.PolicyUri, settings.PolicyDocumentPath, settings.PolicySpecification!, cancellationToken);
+            builder = builder.WithSignaturePolicy(policy).WithSignaturePolicyStore(store);
+        }
+        else if (settings.PolicyOid is not null)
         {
             builder = builder.WithSignaturePolicy(settings.PolicyOid, settings.PolicyUri);
         }
@@ -175,6 +295,8 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         {
             builder = builder.WithSignerRoles(settings.SignerRoles);
         }
+
+        builder = await ApplyExtrasAsync(builder, settings, cancellationToken);
 
         if (settings.ChainPath is not null)
         {
@@ -189,6 +311,64 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         AnsiConsole.MarkupLine($"[green]XAdES signature saved to:[/] {outputPath}");
 
         return 0;
+    }
+
+    /// <summary>The options beyond the baseline: place, canonicalization, data timestamp, certified roles, more data objects.</summary>
+    private static async Task<XadesSignerBuilder> ApplyExtrasAsync(
+        XadesSignerBuilder builder, Settings settings, CancellationToken cancellationToken)
+    {
+        if (settings.PlaceCity is not null || settings.PlaceStreet is not null || settings.PlaceState is not null
+            || settings.PlacePostalCode is not null || settings.PlaceCountry is not null)
+        {
+            builder = builder.WithSignatureProductionPlace(new SignatureProductionPlace
+            {
+                City = settings.PlaceCity,
+                StreetAddress = settings.PlaceStreet,
+                StateOrProvince = settings.PlaceState,
+                PostalCode = settings.PlacePostalCode,
+                CountryName = settings.PlaceCountry,
+            });
+        }
+
+        if (ParseCanonicalization(settings.Canonicalization) is { } canonicalization)
+        {
+            builder = builder.WithCanonicalization(canonicalization);
+        }
+
+        if (settings.DataObjectsTimestamp)
+        {
+            builder = builder.WithDataObjectsTimestamp(new TimestampOptions(new Uri(settings.TsaUrl!)));
+        }
+
+        if (settings.AttributeCertificates is { Length: > 0 })
+        {
+            builder = builder.WithAttributeCertificates(await AdesOptionSupport.ReadFilesAsync(settings.AttributeCertificates, cancellationToken));
+        }
+
+        if (settings.SignedAssertions is { Length: > 0 })
+        {
+            var assertions = new List<string>();
+            foreach (string path in settings.SignedAssertions)
+            {
+                assertions.Add(await File.ReadAllTextAsync(path, cancellationToken));
+            }
+
+            builder = builder.WithSignedAssertions(assertions);
+        }
+
+        foreach (string value in settings.EmbeddedObjects ?? [])
+        {
+            var (path, mimeType) = AdesOptionSupport.SplitPathAndMimeType(value);
+            builder = builder.WithAdditionalDataObject(XadesDataObject.Embedded(await File.ReadAllBytesAsync(path, cancellationToken), mimeType));
+        }
+
+        foreach (string value in settings.ExternalObjects ?? [])
+        {
+            var (uri, path, mimeType) = AdesOptionSupport.SplitUriAndPath(value)!.Value;
+            builder = builder.WithAdditionalDataObject(XadesDataObject.External(uri, await File.ReadAllBytesAsync(path, cancellationToken), mimeType));
+        }
+
+        return builder;
     }
 
     private async Task<X509Certificate2> LoadCertificateAsync(Settings settings, CancellationToken ct)
@@ -219,16 +399,23 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         return certs.ToList().AsReadOnly();
     }
 
-    private static AdesBaselineProfile BuildBaselineProfile(string tsaUrl, AdesBaselineLevel level)
+    private static AdesBaselineProfile BuildBaselineProfile(string tsaUrl, AdesBaselineLevel level, string? revocationPreference)
     {
         var timestampOptions = new TimestampOptions(new Uri(tsaUrl));
         return level switch
         {
             AdesBaselineLevel.Timestamped => AdesBaselineProfile.Timestamped(timestampOptions),
-            AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(timestampOptions, new LongTermValidationOptions()),
-            _ => AdesBaselineProfile.Archive(timestampOptions, new LongTermValidationOptions())
+            AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(timestampOptions, AdesOptionSupport.LongTermOptions(revocationPreference)),
+            _ => AdesBaselineProfile.Archive(timestampOptions, AdesOptionSupport.LongTermOptions(revocationPreference))
         };
     }
+
+    private static XadesCanonicalization? ParseCanonicalization(string? value) => value?.ToLowerInvariant() switch
+    {
+        "exclusive" or "exc-c14n" => XadesCanonicalization.Exclusive,
+        "inclusive" or "c14n" => XadesCanonicalization.Inclusive,
+        _ => null
+    };
 
     private static AdesBaselineLevel? ParseLevel(string? level) => level?.ToLowerInvariant() switch
     {

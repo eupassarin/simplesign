@@ -179,6 +179,11 @@ internal static class CodeGenerator
                 args.Add("--archival");
             }
 
+            if (o.Level >= BaselineLevel.BLT && o.RevocationPreference == Core.Signing.RevocationPreference.CrlFirst)
+            {
+                args.Add("--revocation-preference crl");
+            }
+
             if (o.Kind == SignatureKind.CustomPolicy)
             {
                 args.Add($"--policy-oid {o.CustomPolicy.Oid}");

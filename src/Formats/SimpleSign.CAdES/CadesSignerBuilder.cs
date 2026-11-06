@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -236,6 +237,170 @@ public sealed class CadesSignerBuilder
     }
 
     /// <summary>
+    /// Adds the content-time-stamp signed attribute: a timestamp over the content, requested from
+    /// <paramref name="timestamp"/> before signing, which proves the content existed before the
+    /// signature (ETSI EN 319 122-1 §5.2.8). It is independent of the level: a B-B signature can
+    /// carry it. Signing fails when the TSA does not answer. Not allowed in a countersignature,
+    /// which has no content of its own.
+    /// </summary>
+    /// <param name="timestamp">The TSA that timestamps the content.</param>
+    /// <returns>A new builder with the content timestamp configured.</returns>
+    public CadesSignerBuilder WithContentTimestamp(TimestampOptions timestamp)
+    {
+        ArgumentNullException.ThrowIfNull(timestamp);
+        return With(_options with { ContentTimestamp = timestamp });
+    }
+
+    /// <summary>
+    /// Adds the signature-policy-store unsigned attribute: the policy document itself, or the URI
+    /// of a local store that holds it, so the policy can be read offline
+    /// (ETSI EN 319 122-1 §5.2.10). Signing fails unless the signature also declares the policy
+    /// with its hash (<see cref="WithSignaturePolicy(SignaturePolicyReference)"/>), which is what
+    /// protects the stored document.
+    /// </summary>
+    /// <param name="store">The policy document or its local URI.</param>
+    /// <returns>A new builder with the policy store configured.</returns>
+    public CadesSignerBuilder WithSignaturePolicyStore(SignaturePolicyStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        return With(_options with { PolicyStore = store });
+    }
+
+    /// <summary>
+    /// Adds the signer-location attribute: an address associated with the signer at the place of
+    /// signing (ETSI EN 319 122-1 §5.2.5).
+    /// </summary>
+    /// <param name="location">The location; at least one of its fields must be set, with at most six postal address lines.</param>
+    /// <returns>A new builder with the signer location configured.</returns>
+    /// <exception cref="ArgumentException">No field is set, or the postal address has more than six lines or an empty line.</exception>
+    public CadesSignerBuilder WithSignerLocation(CadesSignerLocation location)
+    {
+        ArgumentNullException.ThrowIfNull(location);
+        ArgumentNullException.ThrowIfNull(location.PostalAddress, nameof(location));
+        if (string.IsNullOrWhiteSpace(location.CountryName) && string.IsNullOrWhiteSpace(location.LocalityName)
+            && location.PostalAddress.Count == 0)
+        {
+            throw new ArgumentException("The signer location needs a country, a locality or a postal address.", nameof(location));
+        }
+
+        if (location.PostalAddress.Count > 6 || location.PostalAddress.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("The postal address takes one to six non-empty lines.", nameof(location));
+        }
+
+        return With(_options with { SignerLocation = location with { PostalAddress = location.PostalAddress.ToList().AsReadOnly() } });
+    }
+
+    /// <summary>
+    /// Adds the content-hints attribute, which describes the signed content
+    /// (IETF RFC 2634 §2.9, ETSI EN 319 122-1 §5.2.4.1). Not allowed in a countersignature.
+    /// </summary>
+    /// <param name="hints">The content type and, optionally, its description.</param>
+    /// <returns>A new builder with the content hints configured.</returns>
+    /// <exception cref="ArgumentException">The content type OID is empty, or the description is an empty string.</exception>
+    public CadesSignerBuilder WithContentHints(CadesContentHints hints)
+    {
+        ArgumentNullException.ThrowIfNull(hints);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hints.ContentTypeOid, nameof(hints));
+        if (hints.Description is { Length: 0 })
+        {
+            throw new ArgumentException("The content description cannot be empty; leave it null to omit it.", nameof(hints));
+        }
+
+        return With(_options with { ContentHints = hints });
+    }
+
+    /// <summary>
+    /// Adds the mime-type attribute: the MIME type of the signed data, written as IETF RFC 2045
+    /// defines it, for example "application/pdf" (ETSI EN 319 122-1 §5.2.4.2).
+    /// Not allowed in a countersignature.
+    /// </summary>
+    /// <param name="mimeType">The MIME type.</param>
+    /// <returns>A new builder with the MIME type configured.</returns>
+    public CadesSignerBuilder WithMimeType(string mimeType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(mimeType);
+        return With(_options with { MimeType = mimeType.Trim() });
+    }
+
+    /// <summary>
+    /// Adds the roles the signer claims, in the signer-attributes-v2 attribute
+    /// (ETSI EN 319 122-1 §5.2.6.1, claimedAttributes). Each role is written as an X.509 role
+    /// attribute (id-at-role) holding the role as text. Empty roles are left out.
+    /// </summary>
+    /// <param name="roles">The claimed roles.</param>
+    /// <returns>A new builder with the signer roles configured.</returns>
+    public CadesSignerBuilder WithSignerRoles(IReadOnlyList<string> roles)
+    {
+        ArgumentNullException.ThrowIfNull(roles);
+        return With(_options with
+        {
+            SignerRoles = roles.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()).ToList().AsReadOnly(),
+        });
+    }
+
+    /// <summary>
+    /// Adds X.509 attribute certificates issued to the signer by an Attribute Authority, in the
+    /// signer-attributes-v2 attribute (ETSI EN 319 122-1 §5.2.6.1, certifiedAttributesV2). The
+    /// certificates are embedded as given: the library does not verify their signature, their
+    /// holder or their validity.
+    /// </summary>
+    /// <param name="attributeCertificates">The DER-encoded attribute certificates (IETF RFC 5755).</param>
+    /// <returns>A new builder with the attribute certificates configured.</returns>
+    /// <exception cref="ArgumentException">An item is not one DER-encoded SEQUENCE.</exception>
+    public CadesSignerBuilder WithAttributeCertificates(IReadOnlyList<ReadOnlyMemory<byte>> attributeCertificates)
+    {
+        ArgumentNullException.ThrowIfNull(attributeCertificates);
+        var copies = new List<ReadOnlyMemory<byte>>(attributeCertificates.Count);
+        foreach (ReadOnlyMemory<byte> attributeCertificate in attributeCertificates)
+        {
+            try
+            {
+                var reader = new AsnReader(attributeCertificate, AsnEncodingRules.DER);
+                _ = reader.ReadSequence();
+                reader.ThrowIfNotEmpty();
+            }
+            catch (AsnContentException ex)
+            {
+                throw new ArgumentException("An attribute certificate must be one DER-encoded SEQUENCE.", nameof(attributeCertificates), ex);
+            }
+
+            copies.Add(attributeCertificate.ToArray());
+        }
+
+        return With(_options with { AttributeCertificates = copies.AsReadOnly() });
+    }
+
+    /// <summary>
+    /// Adds assertions about the signer signed by third parties, in the signer-attributes-v2
+    /// attribute (ETSI EN 319 122-1 §5.2.6.1, signedAssertions), for example
+    /// <see cref="CadesSignedAssertion.Saml(ReadOnlySpan{byte})"/>. The assertions are embedded as
+    /// given: the library does not verify the third party's signature.
+    /// </summary>
+    /// <param name="assertions">The signed assertions.</param>
+    /// <returns>A new builder with the signed assertions configured.</returns>
+    /// <exception cref="ArgumentException">An assertion has no OID.</exception>
+    public CadesSignerBuilder WithSignedAssertions(IReadOnlyList<CadesSignedAssertion> assertions)
+    {
+        ArgumentNullException.ThrowIfNull(assertions);
+        if (assertions.Any(a => a is null || string.IsNullOrWhiteSpace(a.Oid)))
+        {
+            throw new ArgumentException("Every signed assertion needs the OID of its kind.", nameof(assertions));
+        }
+
+        return With(_options with { SignedAssertions = assertions.ToList().AsReadOnly() });
+    }
+
+    /// <summary>Adds one role the signer claims (see <see cref="WithSignerRoles(IReadOnlyList{string})"/>).</summary>
+    /// <param name="role">The claimed role.</param>
+    /// <returns>A new builder with the signer role configured.</returns>
+    public CadesSignerBuilder WithSignerRole(string role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+        return WithSignerRoles([role]);
+    }
+
+    /// <summary>
     /// Adds RFC 5126 extended validation data after the signature timestamp: complete references
     /// and an escTimeStamp (CAdES-C/X), plus certificate and revocation values (X-L), or references,
     /// values and an archive-time-stamp v2 (CAdES-A) — the forms ICP-Brasil's AD-RV, AD-RC and AD-RA
@@ -310,6 +475,19 @@ public sealed class CadesSignerBuilder
         var profile = _options.Profile;
 
         ValidatePrerequisites(credential);
+        if (_options.IsCounterSignature && (_options.ContentHints is not null || _options.MimeType is not null))
+        {
+            throw new SigningException(
+                "A countersignature cannot carry the content-hints or mime-type attributes (ETSI EN 319 122-1 §5.2.4).",
+                SigningErrorReason.Unspecified);
+        }
+
+        if (_options.PolicyStore is not null && _options.SignaturePolicy is not { Hash.IsEmpty: false })
+        {
+            throw new SigningException(
+                "A signature-policy-store needs the signature policy declared with its hash: call WithSignaturePolicy(SignaturePolicyReference) (ETSI EN 319 122-1 §6.3).",
+                SigningErrorReason.Unspecified);
+        }
 
         var warnings = new List<SigningWarning>();
         var resolvedAlgorithm = SigningAlgorithmResolver.Resolve(
@@ -327,14 +505,34 @@ public sealed class CadesSignerBuilder
         logger.SignedAttributesSelected(_options.CommitmentType.HasValue,
             _options.SignaturePolicy is not null || _options.SignaturePolicyOid is not null);
 
+        // The content timestamp is a signed attribute, so the TSA is asked before the signature is made.
+        CmsAttribute? contentTimestamp = null;
+        if (_options.ContentTimestamp is { } contentTsa)
+        {
+            if (_options.IsCounterSignature)
+            {
+                throw new SigningException(
+                    "A countersignature cannot carry a content-time-stamp: it signs a signature value, not content (ETSI EN 319 122-1 §5.2.8).",
+                    SigningErrorReason.Unspecified);
+            }
+
+            contentTimestamp = await RequestContentTimestampAsync(contentTsa, hashAlg, operationId, cancellationToken).ConfigureAwait(false);
+        }
+
         byte[] cms;
         if (credential is CadesExternalCredential external)
         {
-            cms = await SignExternalCoreAsync(external, certificate, chain, hashAlg, sigAlgOid, resolvedAlgorithm.RsaPssParameters, cancellationToken).ConfigureAwait(false);
+            cms = await SignExternalCoreAsync(external, certificate, chain, hashAlg, sigAlgOid, resolvedAlgorithm.RsaPssParameters, contentTimestamp, cancellationToken).ConfigureAwait(false);
         }
         else
         {
-            cms = SignLocalCore(certificate, chain, hashAlg, sigAlgOid);
+            cms = SignLocalCore(certificate, chain, hashAlg, sigAlgOid, contentTimestamp);
+        }
+
+        // The policy store goes in before the timestamps, so an archive timestamp covers it.
+        if (_options.PolicyStore is { } policyStore)
+        {
+            cms = CmsSignatureBuilder.AddUnsignedAttributes(cms, [CadesSignaturePolicyStore.Encode(policyStore)]);
         }
 
         byte[]? timestampTokenBytes = null;
@@ -602,10 +800,11 @@ public sealed class CadesSignerBuilder
         X509Certificate2 certificate,
         IReadOnlyList<X509Certificate2> chain,
         HashAlgorithmName hashAlg,
-        string sigAlgOid)
+        string sigAlgOid,
+        CmsAttribute? contentTimestamp)
     {
         var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
-        var extraAttributes = BuildSignedAttributesInternal();
+        var extraAttributes = BuildSignedAttributesInternal(contentTimestamp);
         byte[]? eContent = _options.ContentType == CadesContentType.Enveloped ? _data : null;
 
         if (_options.IsCounterSignature)
@@ -635,6 +834,7 @@ public sealed class CadesSignerBuilder
         HashAlgorithmName hashAlg,
         string sigAlgOid,
         RsaPssParameters? rsaPssParameters,
+        CmsAttribute? contentTimestamp,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -642,7 +842,7 @@ public sealed class CadesSignerBuilder
         string digestOid = CmsSignatureBuilder.GetDigestOid(hashAlg);
 
         byte[] contentHash = CmsSignatureBuilder.ComputeHash(_data, hashAlg);
-        var extraAttributes = BuildSignedAttributesInternal();
+        var extraAttributes = BuildSignedAttributesInternal(contentTimestamp);
 
         byte[] signedAttrs = CmsSignatureBuilder.BuildSignedAttributes(
             contentHash, digestOid, signingTime, certificate, extraAttributes,
@@ -668,9 +868,39 @@ public sealed class CadesSignerBuilder
             eContent: eContent);
     }
 
-    private IReadOnlyList<CmsAttribute>? BuildSignedAttributesInternal()
+    /// <summary>
+    /// Asks the TSA for a timestamp whose message imprint is the hash of the content
+    /// (the eContent of an attached signature, the external data of a detached one).
+    /// </summary>
+    private async Task<CmsAttribute> RequestContentTimestampAsync(
+        TimestampOptions timestamp, HashAlgorithmName hashAlg, string operationId, CancellationToken cancellationToken)
+    {
+        var logger = _options.Dependencies.Logger;
+        try
+        {
+            logger.TimestampRequested(operationId, timestamp.Endpoint.ToString());
+            byte[] token = await CreateTimestampClient(timestamp).GetTimestampAsync(_data, hashAlg, cancellationToken).ConfigureAwait(false);
+            TimestampClient.ValidateTimestampToken(token, _data, hashAlg);
+            return CmsAttribute.Create(Oids.ContentTimestamp, token);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.TimestampFailed(operationId, ex.Message);
+            throw new SigningException($"Content timestamp request failed: {ex.Message}", SigningErrorReason.NetworkFailure, ex);
+        }
+    }
+
+    private IReadOnlyList<CmsAttribute>? BuildSignedAttributesInternal(CmsAttribute? contentTimestamp)
     {
         var attrs = new List<CmsAttribute>();
+        if (contentTimestamp is not null)
+        {
+            attrs.Add(contentTimestamp);
+        }
 
         if (_options.CommitmentType.HasValue)
         {
@@ -685,6 +915,30 @@ public sealed class CadesSignerBuilder
         {
             attrs.Add(CmsAttribute.SignaturePolicyIdentifier(
                 _options.SignaturePolicyOid, _options.SignaturePolicyUri));
+        }
+
+        if (_options.ContentHints is not null)
+        {
+            attrs.Add(CadesSignedAttributes.EncodeContentHints(_options.ContentHints));
+        }
+
+        if (_options.MimeType is not null)
+        {
+            attrs.Add(CadesSignedAttributes.EncodeMimeType(_options.MimeType));
+        }
+
+        if (_options.SignerLocation is not null)
+        {
+            attrs.Add(CadesSignedAttributes.EncodeSignerLocation(_options.SignerLocation));
+        }
+
+        // An empty signer-attributes-v2 shall not be created (§5.2.6.1).
+        IReadOnlyList<string> roles = _options.SignerRoles ?? [];
+        IReadOnlyList<ReadOnlyMemory<byte>> attributeCertificates = _options.AttributeCertificates ?? [];
+        IReadOnlyList<CadesSignedAssertion> signedAssertions = _options.SignedAssertions ?? [];
+        if (roles.Count > 0 || attributeCertificates.Count > 0 || signedAssertions.Count > 0)
+        {
+            attrs.Add(CadesSignedAttributes.EncodeSignerAttributes(roles, attributeCertificates, signedAssertions));
         }
 
         return attrs.Count > 0 ? attrs : null;

@@ -1060,11 +1060,15 @@ public sealed class PadesSignerBuilder
         var ltvOptions = profile.LongTermValidation!;
         var ltvProvider = ltvOptions.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
         var ltvEmbedder = _options.Dependencies.LtvEmbedder
-            ?? new LtvEmbedder(ltvProvider, logger) { ClockSkewTolerance = ltvOptions.ClockSkewTolerance };
+            ?? new LtvEmbedder(ltvProvider, logger)
+            {
+                RevocationPreference = ltvOptions.RevocationPreference,
+                ClockSkewTolerance = ltvOptions.ClockSkewTolerance,
+            };
 
         var chain = BuildChainWithSigner();
 
-        var ltvPdf = await ltvEmbedder.EmbedLtvDataAsync(signedPdf, chain, timestampTokenBytes, _options.DssArtifacts, cancellationToken).ConfigureAwait(false);
+        var ltvPdf = await ltvEmbedder.EmbedLtvDataAsync(signedPdf, chain, timestampTokenBytes, _options.DssArtifacts, ltvOptions, cancellationToken).ConfigureAwait(false);
 
         outputStream.Seek(0, SeekOrigin.Begin);
         outputStream.SetLength(0);

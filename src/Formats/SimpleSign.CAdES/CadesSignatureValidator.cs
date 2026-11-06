@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
@@ -35,6 +36,16 @@ public sealed class CadesValidationResult
 
     /// <summary>Whether the escTimeStamp (CAdES-X type 1) covers the signature, its timestamp and the complete references; null when absent.</summary>
     public bool? HasValidEscTimestamp { get; init; }
+
+    /// <summary>
+    /// The content-time-stamp signed attribute (ETSI EN 319 122-1 §5.2.8) is an intact token whose
+    /// message imprint is the hash of the signed content; null when there is none or the content
+    /// was not available to check it. TSA trust is not evaluated.
+    /// </summary>
+    public bool? HasValidContentTimestamp { get; init; }
+
+    /// <summary>The time of the content timestamp, when it is valid: the content existed at this time.</summary>
+    public DateTimeOffset? ContentTimestampTime { get; init; }
 
     /// <summary>The signer certificate.</summary>
     public X509Certificate2? SignerCertificate { get; init; }
@@ -309,6 +320,32 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             tsaTrusted = timestamp.IsTsaTrusted;
         }
 
+        // 6a. content-time-stamp: a signed attribute whose token covers the content itself
+        bool? contentTsValid = null;
+        DateTimeOffset? contentTsTime = null;
+        if (ReadSignedAttribute(cmsData.SignedAttrs, Oids.ContentTimestamp) is { } contentToken)
+        {
+            if (content is null)
+            {
+                warnings.Add("The content timestamp was not validated (it needs the signed content).");
+            }
+            else
+            {
+                var verification = TimestampToken.Verify(contentToken, content);
+                contentTsValid = verification.IsImprintValid && verification.IsIntegrityValid;
+                if (contentTsValid == true)
+                {
+                    contentTsTime = verification.Info?.GenerationTime;
+                }
+                else
+                {
+                    errors.Add(verification.IsImprintValid
+                        ? "content-time-stamp is not an intact timestamp token."
+                        : "content-time-stamp does not cover the signed content.");
+                }
+            }
+        }
+
         // 7. LTV data validation (root SignedData certificate and revocation sets)
         bool? ltvValid = cmsBytes is null ? null : ValidateLtvData(cmsBytes, cmsData, warnings);
 
@@ -356,11 +393,42 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             IsLtvDataValid = ltvValid,
             HasValidArchiveTimestamp = archiveTsValid,
             HasValidEscTimestamp = escValid,
+            HasValidContentTimestamp = contentTsValid,
+            ContentTimestampTime = contentTsTime,
             SignerCertificate = cmsData.SignerCertificate,
             SigningTime = cmsData.SigningTime,
             Errors = errors.AsReadOnly(),
             Warnings = warnings.Count > 0 ? warnings.AsReadOnly() : []
         };
+    }
+
+    /// <summary>The first value of a signed attribute, DER-encoded; null when the attribute is absent or the set is malformed.</summary>
+    private static byte[]? ReadSignedAttribute(byte[]? signedAttrs, string oid)
+    {
+        if (signedAttrs is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var set = new AsnReader(signedAttrs, AsnEncodingRules.BER).ReadSetOf(skipSortOrderValidation: true);
+            while (set.HasData)
+            {
+                var attribute = set.ReadSequence();
+                if (attribute.ReadObjectIdentifier() == oid)
+                {
+                    var values = attribute.ReadSetOf(skipSortOrderValidation: true);
+                    return values.HasData ? values.ReadEncodedValue().ToArray() : null;
+                }
+            }
+        }
+        catch (AsnContentException)
+        {
+            // Malformed attributes: treated as absent.
+        }
+
+        return null;
     }
 
     /// <summary>Whether the RFC 3161 token's message imprint is the hash of <paramref name="data"/>.</summary>

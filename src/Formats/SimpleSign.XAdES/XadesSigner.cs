@@ -16,4 +16,22 @@ public static class XadesSigner
         ArgumentNullException.ThrowIfNull(xmlData);
         return new XadesSignerBuilder(xmlData, logger: null);
     }
+
+    /// <summary>
+    /// Creates a builder that countersigns a signature of an already signed document: the new
+    /// signature signs the ds:SignatureValue of that signature and is embedded in its
+    /// CounterSignature unsigned property (ETSI EN 319 132-1 §5.2.7.2). The result is the same
+    /// document with the countersignature added. The builder accepts the B-B and B-T levels.
+    /// </summary>
+    /// <param name="signedXml">The signed XML document. The array is copied.</param>
+    /// <param name="signatureId">
+    /// The Id of the ds:Signature to countersign; null when the document has a single signature.
+    /// </param>
+    /// <returns>A <see cref="XadesSignerBuilder"/> that produces the countersigned document.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="signedXml"/> is null.</exception>
+    public static XadesSignerBuilder CounterSign(byte[] signedXml, string? signatureId = null)
+    {
+        ArgumentNullException.ThrowIfNull(signedXml);
+        return new XadesSignerBuilder(signedXml, logger: null).ForCounterSignature(signatureId);
+    }
 }

@@ -85,6 +85,31 @@ public sealed class DeferredSignerTests
         readOnlyList[0].Indication.ShouldBe(SignatureIndication.Valid, "ECDSA deferred-signed PDF should be valid");
     }
 
+    [Fact(DisplayName = "The revocation preference travels in the session and its default is not written")]
+    public async Task SessionData_RevocationPreference_RoundTripsAndDefaultIsOmitted()
+    {
+        using X509Certificate2 fullCert = CreateRsaCertWithPrivateKey();
+        using X509Certificate2 publicCert = GetPublicCertOnly(fullCert);
+        byte[] key = DeferredSigningEngineTestAdapter.SessionIntegrityKey;
+        var tsa = new TimestampOptions(new Uri("http://tsa.example.com"));
+        var builder = global::SimpleSign.PAdES.DeferredSigner.Document(TestPdfFactory.CreateMinimalPdf())
+            .WithCertificate(publicCert)
+            .WithSessionIntegrityKey(key);
+
+        var crlFirst = await builder
+            .WithLevel(AdesBaselineProfile.LongTerm(tsa, new LongTermValidationOptions { RevocationPreference = RevocationPreference.CrlFirst }))
+            .PrepareAsync();
+        var ocspFirst = await builder
+            .WithLevel(AdesBaselineProfile.LongTerm(tsa, new LongTermValidationOptions()))
+            .PrepareAsync();
+
+        DeferredSigningSession.Deserialize(crlFirst.SessionData, key).RevocationPreference.ShouldBe(RevocationPreference.CrlFirst);
+        DeferredSigningSession.Deserialize(ocspFirst.SessionData, key).RevocationPreference.ShouldBe(RevocationPreference.OcspFirst);
+        // A session written before the option existed has no such field: the default must stay unwritten so its HMAC still verifies.
+        System.Text.Encoding.UTF8.GetString(ocspFirst.SessionData).ShouldNotContain("RevocationPreference", Case.Insensitive);
+        System.Text.Encoding.UTF8.GetString(crlFirst.SessionData).ShouldContain("RevocationPreference", Case.Insensitive);
+    }
+
     [Fact(DisplayName = "Session serializes and deserializes correctly")]
     public async Task SessionData_RoundTrip_PreservesState()
     {

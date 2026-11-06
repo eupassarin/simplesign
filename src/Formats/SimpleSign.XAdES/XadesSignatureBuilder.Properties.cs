@@ -85,6 +85,90 @@ internal static partial class XadesSignatureBuilder
         _ => throw new SigningException($"Unsupported signature policy hash algorithm {oid}.", SigningErrorReason.AlgorithmIncompatible),
     };
 
+    /// <summary>
+    /// <code>
+    /// &lt;SignerRoleV2&gt;
+    ///   &lt;ClaimedRoles&gt;&lt;ClaimedRole&gt;…&lt;/ClaimedRole&gt;&lt;/ClaimedRoles&gt;
+    ///   &lt;CertifiedRolesV2&gt;&lt;CertifiedRole&gt;&lt;X509AttributeCertificate&gt;base64&lt;/X509AttributeCertificate&gt;&lt;/CertifiedRole&gt;&lt;/CertifiedRolesV2&gt;
+    ///   &lt;SignedAssertions&gt;&lt;SignedAssertion&gt;…any XML…&lt;/SignedAssertion&gt;&lt;/SignedAssertions&gt;
+    /// &lt;/SignerRoleV2&gt;
+    /// </code>
+    /// EN 319 132-1 obsoletes SignerRole, so it is written only with the XAdES 1.3.2 signing
+    /// certificate form, which is the element set policies such as ICP-Brasil's ask for; that form
+    /// carries claimed roles only. Returns null when there is nothing to write: an empty property
+    /// shall not be generated.
+    /// </summary>
+    private static XmlElement? CreateSignerRole(XmlDocument doc, XadesSignerRoles roles, XadesSigningCertificateForm form)
+    {
+        bool legacy = form == XadesSigningCertificateForm.V1;
+        var signerRole = doc.CreateElement(legacy ? "SignerRole" : "SignerRoleV2", XadesUris.XadesNamespace);
+
+        var claimedRoles = doc.CreateElement("ClaimedRoles", XadesUris.XadesNamespace);
+        foreach (string role in roles.Claimed.Where(r => !string.IsNullOrWhiteSpace(r)))
+        {
+            var claimedRole = doc.CreateElement("ClaimedRole", XadesUris.XadesNamespace);
+            claimedRole.InnerText = role;
+            claimedRoles.AppendChild(claimedRole);
+        }
+
+        if (claimedRoles.HasChildNodes)
+        {
+            signerRole.AppendChild(claimedRoles);
+        }
+
+        if (!legacy && roles.AttributeCertificates.Count > 0)
+        {
+            var certifiedRoles = doc.CreateElement("CertifiedRolesV2", XadesUris.XadesNamespace);
+            foreach (ReadOnlyMemory<byte> attributeCertificate in roles.AttributeCertificates)
+            {
+                var certifiedRole = doc.CreateElement("CertifiedRole", XadesUris.XadesNamespace);
+                var encapsulated = doc.CreateElement("X509AttributeCertificate", XadesUris.XadesNamespace);
+                encapsulated.InnerText = Convert.ToBase64String(attributeCertificate.Span);
+                certifiedRole.AppendChild(encapsulated);
+                certifiedRoles.AppendChild(certifiedRole);
+            }
+
+            signerRole.AppendChild(certifiedRoles);
+        }
+
+        if (!legacy && roles.SignedAssertions.Count > 0)
+        {
+            var signedAssertions = doc.CreateElement("SignedAssertions", XadesUris.XadesNamespace);
+            foreach (string assertion in roles.SignedAssertions)
+            {
+                var signedAssertion = doc.CreateElement("SignedAssertion", XadesUris.XadesNamespace);
+                signedAssertion.AppendChild(doc.ImportNode(ParseAssertion(assertion), true));
+                signedAssertions.AppendChild(signedAssertion);
+            }
+
+            signerRole.AppendChild(signedAssertions);
+        }
+
+        return signerRole.HasChildNodes ? signerRole : null;
+    }
+
+    /// <summary>Parses a signed assertion (one XML element, for example a SAML assertion) without DTDs or external resolution.</summary>
+    internal static XmlElement ParseAssertion(string assertion)
+    {
+        var document = new XmlDocument { PreserveWhitespace = true, XmlResolver = null };
+        using var reader = XmlReader.Create(
+            new StringReader(assertion), new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+        document.Load(reader);
+        return document.DocumentElement!;
+    }
+
+    private static void AppendPlaceField(XmlElement place, string name, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        var field = place.OwnerDocument.CreateElement(name, XadesUris.XadesNamespace);
+        field.InnerText = value.Trim();
+        place.AppendChild(field);
+    }
+
     private static XmlElement CreateSignedProperties(
         XmlDocument doc,
         X509Certificate2 certificate,
@@ -94,8 +178,12 @@ internal static partial class XadesSignatureBuilder
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
         XadesSigningCertificateForm signingCertificateForm,
-        IReadOnlyList<string>? signerRoles,
-        DataObjectFormat? dataObjectFormat)
+        XadesSignerRoles? signerRoles,
+        DataObjectFormat? dataObjectFormat,
+        SignatureProductionPlace? productionPlace,
+        XadesDataObjectsTimeStamp? dataObjectsTimeStamp,
+        IReadOnlyList<XadesAdditionalReference>? additionalReferences,
+        bool signsDocument = true)
     {
         var signedProps = doc.CreateElement("SignedProperties", XadesUris.XadesNamespace);
         signedProps.SetAttribute("Id", signedPropertiesId);
@@ -117,32 +205,49 @@ internal static partial class XadesSignatureBuilder
             signedSigProps.AppendChild(CreateSignaturePolicyIdentifier(doc, signaturePolicy, hashAlgorithm));
         }
 
-        // SignerRole — child of SignedSignatureProperties per §5.2.2
-        if (signerRoles is not null && signerRoles.Count > 0)
+        // SignatureProductionPlaceV2 — after the policy and before the signer role, as the schema orders them
+        // (§5.2.5). The XAdES 1.3.2 form writes the SignatureProductionPlace it obsoletes, which has no street.
+        if (productionPlace is not null)
         {
-            var srElement = doc.CreateElement("SignerRole", XadesUris.XadesNamespace);
-            var claimedRoles = doc.CreateElement("ClaimedRoles", XadesUris.XadesNamespace);
-            foreach (var role in signerRoles)
+            bool legacy = signingCertificateForm == XadesSigningCertificateForm.V1;
+            var placeElement = doc.CreateElement(legacy ? "SignatureProductionPlace" : "SignatureProductionPlaceV2", XadesUris.XadesNamespace);
+            AppendPlaceField(placeElement, "City", productionPlace.City);
+            if (!legacy)
             {
-                if (string.IsNullOrWhiteSpace(role))
-                {
-                    continue;
-                }
-                var crElement = doc.CreateElement("ClaimedRole", XadesUris.XadesNamespace);
-                crElement.InnerText = role;
-                claimedRoles.AppendChild(crElement);
+                AppendPlaceField(placeElement, "StreetAddress", productionPlace.StreetAddress);
             }
-            if (claimedRoles.HasChildNodes)
+
+            AppendPlaceField(placeElement, "StateOrProvince", productionPlace.StateOrProvince);
+            AppendPlaceField(placeElement, "PostalCode", productionPlace.PostalCode);
+            AppendPlaceField(placeElement, "CountryName", productionPlace.CountryName);
+            if (placeElement.HasChildNodes)
             {
-                srElement.AppendChild(claimedRoles);
-                signedSigProps.AppendChild(srElement);
+                signedSigProps.AppendChild(placeElement);
             }
+        }
+
+        // SignerRoleV2 (§5.2.6), or the SignerRole it obsoletes when the XAdES 1.3.2 form is asked for
+        if (signerRoles is not null && CreateSignerRole(doc, signerRoles, signingCertificateForm) is { } signerRole)
+        {
+            signedSigProps.AppendChild(signerRole);
         }
 
         signedProps.AppendChild(signedSigProps);
 
         // SignedDataObjectProperties — per ETSI EN 319 132-1 §5.2.3
-        if (commitmentType.HasValue || dataObjectFormat is not null)
+        // Every signed data object gets its DataObjectFormat (§6.3, requirement on DataObjectFormat),
+        // the document included. A countersignature signs no data object, and the XAdES 1.3.2 form
+        // keeps the property optional.
+        string? documentReference = signsDocument
+            && DocumentReferenceId(signedPropertiesId, signingCertificateForm, dataObjectFormat, additionalReferences) is { } documentReferenceId
+            ? "#" + documentReferenceId
+            : null;
+        if (documentReference is not null)
+        {
+            dataObjectFormat ??= new DataObjectFormat { MimeType = "text/xml" };
+        }
+
+        if (commitmentType.HasValue || dataObjectFormat is not null || dataObjectsTimeStamp is not null)
         {
             var signedDataObjProps = doc.CreateElement("SignedDataObjectProperties", XadesUris.XadesNamespace);
 
@@ -154,6 +259,10 @@ internal static partial class XadesSignatureBuilder
                 {
                     dofElement.SetAttribute("ObjectReference", dataObjectFormat.ObjectReference);
                 }
+                else if (documentReference is not null)
+                {
+                    dofElement.SetAttribute("ObjectReference", documentReference);
+                }
                 if (dataObjectFormat.MimeType is not null)
                 {
                     var mtElement = doc.CreateElement("MimeType", XadesUris.XadesNamespace);
@@ -162,6 +271,8 @@ internal static partial class XadesSignatureBuilder
                 }
                 signedDataObjProps.AppendChild(dofElement);
             }
+
+            AppendAdditionalDataObjectFormats(doc, signedDataObjProps, additionalReferences);
 
             if (commitmentType.HasValue)
             {
@@ -184,6 +295,12 @@ internal static partial class XadesSignatureBuilder
                 ctvElement.AppendChild(idElement);
                 ctElement.AppendChild(ctvElement);
                 signedDataObjProps.AppendChild(ctElement);
+            }
+
+            // AllDataObjectsTimeStamp after the commitment, as the schema orders them (§5.2.8.1)
+            if (dataObjectsTimeStamp is not null)
+            {
+                signedDataObjProps.AppendChild(CreateAllDataObjectsTimeStamp(doc, dataObjectsTimeStamp.Token));
             }
 
             signedProps.AppendChild(signedDataObjProps);

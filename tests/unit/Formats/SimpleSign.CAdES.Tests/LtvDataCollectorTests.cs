@@ -4,6 +4,7 @@ using SimpleSign.TestHelpers;
 using Shouldly;
 using Xunit;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Signing;
 
 namespace SimpleSign.CAdES.Tests;
 
@@ -246,5 +247,79 @@ public sealed class LtvDataCollectorTests : IDisposable
                 cancellationToken: cts.Token));
 
         requestedPaths.ShouldHaveSingleItem().ShouldBe("/ocsp");
+    }
+
+    [Fact]
+    public async Task CollectAsync_CrlFirst_DownloadsTheCrlsAndNeverAsksOcsp()
+    {
+        using var pki = PkiWithCrlAndOcsp();
+        var requestedPaths = new List<string>();
+        using var httpClient = RecordingClient(pki, serveCrls: true, requestedPaths);
+
+        var result = await LtvDataCollector.CollectAsync(
+            httpClient, pki.Leaf, pki.IntermediatesAndRoot(), null, RevocationPreference.CrlFirst);
+
+        requestedPaths.ShouldContain("/leaf.crl");
+        requestedPaths.ShouldNotContain("/ocsp");
+        result.OcspResponses.ShouldBeEmpty();
+        result.HasCompleteCoverage.ShouldBeTrue();
+        result.CertificateEvidence!.ShouldContain(e =>
+            e.Thumbprint == pki.Leaf.Thumbprint && e.RevocationEvidenceKind == LtvRevocationEvidenceKind.Crl);
+    }
+
+    [Fact]
+    public async Task CollectAsync_DefaultPreference_AsksOcspBeforeTheCrl()
+    {
+        using var pki = PkiWithCrlAndOcsp();
+        var requestedPaths = new List<string>();
+        using var httpClient = RecordingClient(pki, serveCrls: true, requestedPaths);
+
+        var result = await LtvDataCollector.CollectAsync(httpClient, pki.Leaf, pki.IntermediatesAndRoot(), null);
+
+        // The mock answers OCSP with 404, so the collector falls back to the CRL.
+        requestedPaths.IndexOf("/ocsp").ShouldBe(0);
+        requestedPaths.IndexOf("/leaf.crl").ShouldBeGreaterThan(0);
+        result.CertificateEvidence!.ShouldContain(e =>
+            e.Thumbprint == pki.Leaf.Thumbprint && e.RevocationEvidenceKind == LtvRevocationEvidenceKind.Crl);
+    }
+
+    [Fact]
+    public async Task CollectAsync_CrlFirstWithoutUsableCrl_FallsBackToOcsp()
+    {
+        using var pki = PkiWithCrlAndOcsp();
+        var requestedPaths = new List<string>();
+        using var httpClient = RecordingClient(pki, serveCrls: false, requestedPaths);
+
+        await LtvDataCollector.CollectAsync(
+            httpClient, pki.Leaf, pki.IntermediatesAndRoot(), null, RevocationPreference.CrlFirst);
+
+        requestedPaths.IndexOf("/leaf.crl").ShouldBe(0);
+        requestedPaths.ShouldContain("/ocsp");
+    }
+
+    private static SyntheticPki PkiWithCrlAndOcsp() => new(
+        crlDistributionPoint: "http://198.51.100.1/leaf.crl",
+        ocspResponder: "http://198.51.100.1/ocsp",
+        intermediateCrlDistributionPoint: "http://198.51.100.1/intermediate.crl");
+
+    /// <summary>Serves each certificate's CRL when asked to, answers 404 to everything else and records every path.</summary>
+    private static HttpClient RecordingClient(SyntheticPki pki, bool serveCrls, List<string> requestedPaths)
+    {
+        byte[] leafCrl = pki.BuildLeafCrl();
+        byte[] intermediateCrl = pki.BuildIntermediateCrl();
+        return new HttpClient(new MockHttpHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            requestedPaths.Add(path);
+            byte[]? crl = !serveCrls ? null : path switch
+            {
+                "/leaf.crl" => leafCrl,
+                "/intermediate.crl" => intermediateCrl,
+                _ => null,
+            };
+            return Task.FromResult(crl is null
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
+                : new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new ByteArrayContent(crl) });
+        }));
     }
 }

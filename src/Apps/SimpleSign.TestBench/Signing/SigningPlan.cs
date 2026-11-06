@@ -288,14 +288,14 @@ internal sealed class SigningPlan
         {
             Timestamp = Timestamp,
             ArchiveTimestamp = ArchiveTimestamp,
-            LongTermValidation = longTerm ? new LongTermValidationOptions(Http) : null,
+            LongTermValidation = longTerm ? _context.BuildLongTerm(_o.RevocationPreference) : null,
             Version = version,
             Artifacts = artifacts,
         };
         string code = $".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}, new IcpBrasilPadesOptions\n    {{"
             + (Timestamp is not null ? "\n        Timestamp = tsa," : "")
             + (ArchiveTimestamp is not null ? "\n        ArchiveTimestamp = archiveTsa," : "")
-            + (longTerm ? $"\n        LongTermValidation = new LongTermValidationOptions({(IsSandbox ? "sandboxHttp" : "")})," : "")
+            + (longTerm ? $"\n        LongTermValidation = {_context.LongTermCode(_o.RevocationPreference)}," : "")
             + (version is not null ? $"\n        Version = IcpBrasilSignaturePolicies.All.Single(p => p.Oid == \"{version.Oid}\")," : "")
             + artifactsCode
             + "\n    })";
@@ -319,18 +319,18 @@ internal sealed class SigningPlan
                 return AdesBaselineProfile.Timestamped(Timestamp, failure);
             case BaselineLevel.BLT:
                 Timestamp = BuildTimestamp(_o.Timestamp, "tsa");
-                return AdesBaselineProfile.LongTerm(Timestamp, new LongTermValidationOptions(Http), failure);
+                return AdesBaselineProfile.LongTerm(Timestamp, _context.BuildLongTerm(_o.RevocationPreference), failure);
             default:
                 Timestamp = BuildTimestamp(_o.Timestamp, "tsa");
                 ArchiveTimestamp = _o.SeparateArchiveTsa ? BuildArchive(_o.ArchiveTimestamp) : null;
-                return AdesBaselineProfile.Archive(Timestamp, new LongTermValidationOptions(Http), ArchiveTimestamp, failure);
+                return AdesBaselineProfile.Archive(Timestamp, _context.BuildLongTerm(_o.RevocationPreference), ArchiveTimestamp, failure);
         }
     }
 
     public string ProfileCode()
     {
         string failure = _o.ReturnLowerLevel && _o.Mode == RunMode.Sign ? ", SigningLevelFailureBehavior.ReturnLowerLevel" : "";
-        string ltv = $"new LongTermValidationOptions({(IsSandbox ? "sandboxHttp" : "")})";
+        string ltv = _context.LongTermCode(_o.RevocationPreference);
         return _o.Level switch
         {
             BaselineLevel.BB => "AdesBaselineProfile.Basic()",
@@ -607,6 +607,15 @@ internal sealed class SigningPlan
     }
 
     internal static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <summary>Adds <c>Name = "value"</c> to the fields of an object initializer when the value is set.</summary>
+    internal static void AddField(List<string> fields, string name, string? value)
+    {
+        if (value is not null)
+        {
+            fields.Add($"{name} = {Str(value)}");
+        }
+    }
 
     internal static string Str(string? value) =>
         value is null ? "null" : "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal) + "\"";

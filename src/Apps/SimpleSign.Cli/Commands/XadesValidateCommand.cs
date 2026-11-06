@@ -34,6 +34,11 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         [Description("Original data file (required for detached signatures)")]
         public string? DataPath { get; init; }
 
+        /// <summary>Content of a data object the signature references by URI.</summary>
+        [CommandOption("--external-object <URI=PATH>")]
+        [Description("Content of a data object the signature references by URI (may be specified multiple times; use it for the detached document too)")]
+        public string[]? ExternalObjects { get; init; }
+
         /// <summary>Trust anchor certificate(s) — PEM or DER.</summary>
         [CommandOption("--trust <PATH>")]
         [Description("Trust anchor certificate(s) — PEM or DER")]
@@ -61,6 +66,24 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 return ValidationResult.Error($"Data file not found: {DataPath}");
             }
 
+            if (ExternalObjects is { Length: > 0 })
+            {
+                if (DataPath is not null)
+                {
+                    return ValidationResult.Error("Use either --data or --external-object: with --external-object, give the detached document as URI=PATH too.");
+                }
+
+                if (ExternalObjects.FirstOrDefault(o => AdesOptionSupport.SplitUriAndPath(o) is null) is { } malformed)
+                {
+                    return ValidationResult.Error($"Invalid --external-object: {malformed}. Expected URI=PATH");
+                }
+
+                if (AdesOptionSupport.ValidateFiles("--external-object", ExternalObjects.Select(o => AdesOptionSupport.SplitUriAndPath(o)!.Value.Path)) is { } missing)
+                {
+                    return ValidationResult.Error(missing);
+                }
+            }
+
             return ValidationResult.Success();
         }
     }
@@ -77,7 +100,23 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         byte[]? originalData = settings.DataPath is null
             ? null
             : await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
-        var result = validator.Validate(signedXml, trustAnchors: trustAnchors, originalData: originalData);
+        XadesValidationResult result;
+        if (settings.ExternalObjects is { Length: > 0 })
+        {
+            var externalData = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            foreach (string value in settings.ExternalObjects)
+            {
+                var (uri, path, _) = AdesOptionSupport.SplitUriAndPath(value)!.Value;
+                externalData[uri] = await File.ReadAllBytesAsync(path, cancellationToken);
+            }
+
+            result = validator.Validate(signedXml, trustAnchors, externalData);
+        }
+        else
+        {
+            result = validator.Validate(signedXml, trustAnchors: trustAnchors, originalData: originalData);
+        }
+
 
         if (settings.Json)
         {

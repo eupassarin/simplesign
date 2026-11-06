@@ -54,7 +54,7 @@ internal static partial class XadesSignatureBuilder
     /// </remarks>
     internal static byte[] CreateArchiveTimeStampInput(
         byte[] signedXml,
-        byte[]? detachedData = null,
+        XadesDetachedData? detachedData = null,
         string? signatureId = null)
     {
         var doc = new XmlDocument { PreserveWhitespace = true };
@@ -138,7 +138,7 @@ internal static partial class XadesSignatureBuilder
     /// <summary>Verifies the archive timestamp message imprint against the ETSI-defined preimage.</summary>
     internal static bool ValidateArchiveTimeStamp(
         byte[] signedXml,
-        byte[]? detachedData,
+        XadesDetachedData? detachedData,
         List<string> warnings,
         string? signatureId = null)
     {
@@ -244,7 +244,7 @@ internal static partial class XadesSignatureBuilder
         XmlDocument doc,
         XmlElement reference,
         string uri,
-        byte[]? detachedData,
+        XadesDetachedData? detachedData,
         string canonicalizationAlgorithm)
     {
         XmlNamespaceManager ns = CreateNamespaceManager(doc);
@@ -266,25 +266,26 @@ internal static partial class XadesSignatureBuilder
             return ApplyReferenceTransforms(doc, target, reference, referenceCanonicalizationAlgorithm);
         }
 
-        if (detachedData is null)
+        byte[]? externalData = detachedData?.Resolve(uri);
+        if (externalData is null)
         {
             throw new InvalidOperationException("Detached data is required to validate an external archive reference.");
         }
 
         if (HasTransform(reference, XmlDSigUrls.Base64Transform, ns))
         {
-            return Convert.FromBase64String(Encoding.UTF8.GetString(detachedData).Trim());
+            return Convert.FromBase64String(Encoding.UTF8.GetString(externalData).Trim());
         }
 
         XmlNodeList? detachedTransforms = reference.SelectNodes("ds:Transforms/ds:Transform", ns);
         if (detachedTransforms is null || detachedTransforms.Count == 0)
         {
             // An external XMLDSig reference without transforms produces the resource octets as-is.
-            return detachedData;
+            return externalData;
         }
 
         var detachedDocument = new XmlDocument { PreserveWhitespace = true };
-        detachedDocument.Load(new MemoryStream(detachedData));
+        detachedDocument.Load(new MemoryStream(externalData));
         return ApplyReferenceTransforms(
             detachedDocument,
             detachedDocument.DocumentElement!,
@@ -446,8 +447,7 @@ internal static partial class XadesSignatureBuilder
             return Convert.FromBase64String(target.InnerText.Trim());
         }
 
-        XmlDocument working = new() { PreserveWhitespace = true };
-        working.AppendChild(working.ImportNode(target, true));
+        XmlDocument working = CopyAsDocument(target, canonicalizationAlgorithm);
         if (HasTransform(reference, XmlDSigUrls.EnvelopedSignatureTransform, ns) ||
             HasSignatureExclusionXPath(reference, ns))
         {
@@ -581,17 +581,9 @@ internal static partial class XadesSignatureBuilder
         }
     }
 
-    private static byte[] CanonicalizeElement(XmlElement element, string canonicalizationAlgorithm = XmlDSigUrls.ExcC14N)
-    {
-        var document = new XmlDocument { PreserveWhitespace = true };
-        document.AppendChild(document.ImportNode(element, true));
-        return CanonicalizeXml(document, canonicalizationAlgorithm);
-    }
-
     private static byte[] CanonicalizeElementWithoutComments(XmlElement element, string canonicalizationAlgorithm)
     {
-        var document = new XmlDocument { PreserveWhitespace = true };
-        document.AppendChild(document.ImportNode(element, true));
+        XmlDocument document = CopyAsDocument(element, canonicalizationAlgorithm);
         RemoveCommentNodes(document);
         return CanonicalizeXml(document, canonicalizationAlgorithm);
     }

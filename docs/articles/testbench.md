@@ -142,6 +142,12 @@ time) and what to expect: at B-B and B-T, DSS cannot reach the sandbox CRLs and 
 INDETERMINATE; at B-LT and B-LTA the data is embedded and the verdicts can be compared. The
 address can also point to a DSS you already run.
 
+The same service backs an automated check: `DssCrossValidationTests` (in
+`tests/unit/Apps/SimpleSign.TestBench.Tests`) signs with the optional CAdES attributes and XAdES
+properties and asserts what DSS reads from each file: signatures and timestamps intact, every signed
+reference found, the structure valid, the baseline level the one asked for. It runs with the rest of
+the suite and is skipped when no DSS answers at `SIMPLESIGN_DSS_URL` (default `http://localhost:8080`).
+
 ## Validate
 
 The Validate task checks a file that already exists. Drop a signed PDF, a CMS signature (.p7s,

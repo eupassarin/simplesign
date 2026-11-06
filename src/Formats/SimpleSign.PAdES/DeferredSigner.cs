@@ -153,7 +153,8 @@ public static class DeferredSigner
             RequestedLevel = options.Profile?.Level ?? AdesBaselineLevel.Basic,
             LevelFailureBehavior = options.Profile?.FailureBehavior ?? SigningLevelFailureBehavior.Throw,
             TimestampEndpoint = options.Profile?.Timestamp?.Endpoint.ToString(),
-            ArchiveTimestampEndpoint = options.Profile?.ArchiveTimestamp?.Endpoint?.ToString()
+            ArchiveTimestampEndpoint = options.Profile?.ArchiveTimestamp?.Endpoint?.ToString(),
+            RevocationPreference = options.Profile?.LongTermValidation?.RevocationPreference ?? RevocationPreference.OcspFirst,
         };
 
         var result = new DeferredSigningPrepareResult
@@ -301,6 +302,7 @@ public static class DeferredSigner
                     options.HttpClientProvider ?? DefaultHttpClientProvider.Instance;
                 var ltvEmbedder = new LtvEmbedder(ltvProvider, logger)
                 {
+                    RevocationPreference = profile.LongTermValidation.RevocationPreference,
                     ClockSkewTolerance = profile.LongTermValidation.ClockSkewTolerance,
                 };
                 signedPdf = await ltvEmbedder.EmbedLtvDataAsync(
@@ -403,10 +405,12 @@ public static class DeferredSigner
         {
             AdesBaselineLevel.Timestamped => AdesBaselineProfile.Timestamped(timestamp, session.LevelFailureBehavior),
             AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(
-                timestamp, new LongTermValidationOptions(), session.LevelFailureBehavior),
+                timestamp,
+                new LongTermValidationOptions { RevocationPreference = session.RevocationPreference },
+                session.LevelFailureBehavior),
             AdesBaselineLevel.Archive => AdesBaselineProfile.Archive(
                 timestamp,
-                new LongTermValidationOptions(),
+                new LongTermValidationOptions { RevocationPreference = session.RevocationPreference },
                 string.IsNullOrWhiteSpace(session.ArchiveTimestampEndpoint)
                     ? null
                     : new ArchiveTimestampOptions(new Uri(session.ArchiveTimestampEndpoint, UriKind.Absolute)),

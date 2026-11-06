@@ -1,6 +1,9 @@
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using SimpleSign.Core.Constants;
+using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Credentials;
@@ -8,6 +11,9 @@ using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Sandbox;
 
 namespace SimpleSign.TestBench.Signing;
+
+/// <summary>A signature policy declared with the hash of an uploaded document, and the store that embeds the document.</summary>
+internal sealed record UploadedPolicy(SignaturePolicyReference Policy, string PolicyCode, SignaturePolicyStore Store, string StoreCode);
 
 /// <summary>
 /// What every signing plan (PAdES, CAdES, XAdES) shares: the setup statements printed before the
@@ -92,6 +98,43 @@ internal sealed class PlanContext
                 + "\n};"));
         return options;
     }
+
+    /// <summary>
+    /// A custom signature policy whose document was uploaded: the policy reference with the
+    /// SHA-256 of the file as its hash, the policy store that embeds the file, and their C#.
+    /// </summary>
+    public UploadedPolicy BuildUploadedPolicy(string oid, string? uri, string documentId, string specification)
+    {
+        var file = _documents.Get(documentId);
+        _setup.Add($"byte[] policyDocument = File.ReadAllBytes({SigningPlan.Str(file.FileName)});");
+        var policy = new SignaturePolicyReference(oid, Oids.Sha256, SHA256.HashData(file.Content), uri);
+        var store = SignaturePolicyStore.FromDocument(specification, file.Content);
+        return new UploadedPolicy(
+            policy,
+            $".WithSignaturePolicy(new SignaturePolicyReference({SigningPlan.Str(oid)}, Oids.Sha256, SHA256.HashData(policyDocument){(uri is null ? "" : ", " + SigningPlan.Str(uri))}))",
+            store,
+            $".WithSignaturePolicyStore(SignaturePolicyStore.FromDocument({SigningPlan.Str(store.Specification)}, policyDocument)) // the policy travels with the signature");
+    }
+
+    /// <summary>The name of an uploaded file, for the CLI command that takes it as a path.</summary>
+    public string FileName(string documentId) => _documents.Get(documentId).FileName;
+
+    /// <summary>An uploaded file, with the setup statement that reads it into <paramref name="variable"/>.</summary>
+    public StoredFile Upload(string documentId, string variable)
+    {
+        var file = _documents.Get(documentId);
+        _setup.Add($"byte[] {variable} = File.ReadAllBytes({SigningPlan.Str(file.FileName)});");
+        return file;
+    }
+
+    /// <summary>The long-term validation options for a revocation preference.</summary>
+    public LongTermValidationOptions BuildLongTerm(RevocationPreference preference) =>
+        new(Http) { RevocationPreference = preference };
+
+    /// <summary>The C# of <see cref="BuildLongTerm"/>.</summary>
+    public string LongTermCode(RevocationPreference preference) =>
+        $"new LongTermValidationOptions({(IsSandbox ? "sandboxHttp" : "")})"
+        + (preference == RevocationPreference.CrlFirst ? " { RevocationPreference = RevocationPreference.CrlFirst }" : "");
 
     public ArchiveTimestampOptions BuildArchive(TimestampChoice choice)
     {

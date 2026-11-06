@@ -12,9 +12,9 @@ from the published standards; check them against the version you follow before q
 
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
-| PAdES | 129 | 127 | 2 |
-| CAdES | 56 | 49 | 7 |
-| XAdES | 63 | 54 | 9 |
+| PAdES | 131 | 130 | 1 |
+| CAdES | 64 | 63 | 1 |
+| XAdES | 78 | 74 | 4 |
 
 ## PAdES
 
@@ -51,7 +51,9 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Policy hash (hex) | ETSI EN 319 122-1 · §5.2.9 sigPolicyHash |  | yes |
 | Signature level | Policy URI | ETSI EN 319 122-1 · §5.2.9 sigPolicyQualifiers |  | yes |
 | Signature level | If the TSA or revocation fails | ETSI EN 319 142-1 · §6.2 Signature levels | `SigningLevelFailureBehavior.ReturnLowerLevel` | yes |
-| Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness |  | **no** |
+| Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness | `new LongTermValidationOptions { RevocationPreference }` | yes |
+| Signature level | Prefer OCSP or CRL: OCSP first |  | `RevocationPreference.OcspFirst` | yes |
+| Signature level | Prefer OCSP or CRL: CRL first |  | `RevocationPreference.CrlFirst` | yes |
 | Timestamps | Time-stamping authority (TSA) | RFC 3161 · Time-Stamp Protocol<br>RFC 5816 · ESSCertIDv2 in timestamps<br>ETSI EN 319 422 · Time-stamping protocol and token profiles | `new TimestampOptions(Uri endpoint) { Authorization, ClientCertificate }` | yes |
 | Timestamps | Different TSA for the archive timestamp | ETSI EN 319 142-1 · §5.4.3 Document time-stamp | `new ArchiveTimestampOptions(Uri)` | yes |
 | Timestamps | Archive TSA | ETSI EN 319 142-1 · §5.4.3 Document time-stamp<br>RFC 3161 · Time-Stamp Protocol | `new ArchiveTimestampOptions(Uri)` | yes |
@@ -184,13 +186,17 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | ICP-Brasil policy: AD-RA — archive (**BR**) | DOC-ICP-15.03 · AD-RA | `IcpBrasilPolicy.AdRa + IcpBrasilPolicyArtifacts.DownloadAsync` | yes |
 | Signature level | Policy OID | ETSI EN 319 122-1 · §5.2.9 signature-policy-identifier<br>ETSI EN 319 132-1 · §5.2.9 SignaturePolicyIdentifier | `WithSignaturePolicy(oid, uri)` | yes |
 | Signature level | Policy URI | ETSI EN 319 122-1 · §5.2.9 sigPolicyQualifiers<br>ETSI EN 319 132-1 · §5.2.9 SigPolicyQualifiers | `WithSignaturePolicy(oid, uri)` | yes |
+| Signature level | Policy document (policy store) | ETSI EN 319 122-1 · §5.2.10 signature-policy-store<br>ETSI EN 319 132-1 · §5.2.10 SignaturePolicyStore<br>ETSI EN 319 122-1 · §5.2.9 sigPolicyHash | `WithSignaturePolicy(SignaturePolicyReference) + WithSignaturePolicyStore(SignaturePolicyStore.FromDocument(spec, document))` | yes |
+| Signature level | Policy document specification | ETSI EN 319 122-1 · §5.2.9 sp-doc-specification<br>ETSI EN 319 132-1 · §5.2.9 SPDocSpecification | `SignaturePolicyStore.Specification` | yes |
 | Signature level | Extended form | ETSI EN 319 122-2 · Extended CAdES signatures<br>RFC 5126 · §5.7.3–§6.4 | `WithExtendedValidationData(CadesExtendedForm)` | yes |
 | Signature level | Extended form: C / X — complete references | RFC 5126 · §6.2 complete-certificate-references and complete-revocation-references | `CadesExtendedForm.CompleteReferences` | yes |
 | Signature level | Extended form: X-L — references and values | RFC 5126 · §6.3 certificate-values and revocation-values | `CadesExtendedForm.ExtendedLong` | yes |
 | Signature level | Extended form: A — archive | RFC 5126 · §6.4.1 archive-time-stamp | `CadesExtendedForm.Archive` | yes |
-| Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness |  | **no** |
+| Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness | `new LongTermValidationOptions { RevocationPreference }` | yes |
+| Signature level | Prefer OCSP or CRL: OCSP first |  | `RevocationPreference.OcspFirst` | yes |
+| Signature level | Prefer OCSP or CRL: CRL first |  | `RevocationPreference.CrlFirst` | yes |
 | Timestamps | Time-stamping authority (TSA) | RFC 3161 · Time-Stamp Protocol<br>RFC 5816 · ESSCertIDv2 in timestamps<br>ETSI EN 319 422 · Time-stamping protocol and token profiles | `new TimestampOptions(Uri endpoint) { Authorization, ClientCertificate }` | yes |
-| Timestamps | Content timestamp | ETSI EN 319 122-1 · §5.2.8 content-time-stamp |  | **no** |
+| Timestamps | Content timestamp | ETSI EN 319 122-1 · §5.2.8 content-time-stamp | `WithContentTimestamp(TimestampOptions)` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
 | Cryptography | Digest algorithm: SHA-256 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
 | Cryptography | Digest algorithm: SHA-384 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
@@ -205,10 +211,14 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Cryptography | EdDSA (Ed25519, Ed448) | RFC 8032 · EdDSA<br>RFC 8419 · EdDSA in CMS<br>ETSI TS 119 312 · Signature schemes |  | **no** |
 | Signed attributes | Claimed signing time | ETSI EN 319 122-1 · §5.2.1 signing-time<br>ETSI EN 319 132-1 · §5.2.1 SigningTime | `WithSigningTime(DateTimeOffset)` | yes |
 | Signed attributes | Commitment type | ETSI EN 319 122-1 · §5.2.3 commitment-type-indication<br>ETSI EN 319 132-1 · §5.2.3 CommitmentTypeIndication<br>ETSI TS 119 172-1 · Annex B Commitment types | `WithCommitmentType(CommitmentType)` | yes |
-| Signed attributes | Signer location | ETSI EN 319 122-1 · §5.2.5 signer-location |  | **no** |
-| Signed attributes | Signer attributes (roles) | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2 |  | **no** |
-| Signed attributes | Content hints and MIME type | ETSI EN 319 122-1 · §5.2.4 Attributes for identifying the signed data type |  | **no** |
-| Signed attributes | Signature policy store | ETSI EN 319 122-1 · §5.2.10 signature-policy-store<br>ETSI EN 319 132-1 · §5.2.10 SignaturePolicyStore |  | **no** |
+| Signed attributes | Signer location: country | ETSI EN 319 122-1 · §5.2.5 signer-location | `WithSignerLocation(new CadesSignerLocation { CountryName })` | yes |
+| Signed attributes | Signer location: locality | ETSI EN 319 122-1 · §5.2.5 signer-location | `WithSignerLocation(new CadesSignerLocation { LocalityName })` | yes |
+| Signed attributes | Signer location: postal address | ETSI EN 319 122-1 · §5.2.5 signer-location | `WithSignerLocation(new CadesSignerLocation { PostalAddress })` | yes |
+| Signed attributes | Signer roles | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2 | `WithSignerRoles(IReadOnlyList<string>)` | yes |
+| Signed attributes | Data MIME type | ETSI EN 319 122-1 · §5.2.4 Attributes for identifying the signed data type | `WithMimeType(string)` | yes |
+| Signed attributes | Content description | ETSI EN 319 122-1 · §5.2.4 Attributes for identifying the signed data type<br>RFC 2634 · §2.9 Content hints | `WithContentHints(new CadesContentHints { Description })` | yes |
+| Signed attributes | Attribute certificate | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2<br>RFC 5755 · Attribute certificate profile | `WithAttributeCertificates(IReadOnlyList<ReadOnlyMemory<byte>>)` | yes |
+| Signed attributes | Signed assertion (SAML) | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2 | `WithSignedAssertions(…)` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustSystemRoots` | yes |
@@ -232,8 +242,11 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | What to sign | Element Id (**BR**) |  | `FiscalXmlSigner.Sign(…, elementId)` | yes |
 | What to sign | Sign every element (**BR**) |  | `FiscalXmlSigner.SignAll(xml, profile, certificate)` | yes |
 | Signer | Certificate and key | RFC 5280 · §4 Certificate profile<br>ETSI EN 319 412-2 · Certificate profile for natural persons | `WithCertificate(cert, chain) / WithExternalSigner(cert, IExternalSigner, chain)` | yes |
-| What to sign | Additional references and transforms | W3C XMLDSig Core 1.1 · §4.4.3 The Reference element<br>W3C XMLDSig Core 1.1 · §6.6 Transform algorithms |  | **no** |
-| What to sign | XAdES countersignature | ETSI EN 319 132-1 · §5.2.7 CounterSignature |  | **no** |
+| What to sign | Additional data object (embedded) | W3C XMLDSig Core 1.1 · §4.4.3 The Reference element | `WithAdditionalDataObject(XadesDataObject.Embedded(content))` | yes |
+| What to sign | Additional data object (external) | W3C XMLDSig Core 1.1 · §4.4.3 The Reference element | `WithAdditionalDataObject(XadesDataObject.External(uri, content))` | yes |
+| What to sign | XPath and XSLT transforms | W3C XMLDSig Core 1.1 · §6.6 Transform algorithms |  | **no** |
+| What to sign | XAdES countersignature | ETSI EN 319 132-1 · §5.2.7 Countersignatures | `XadesSigner.CounterSign(signedXml, signatureId)` | yes |
+| What to sign | Signature to countersign | ETSI EN 319 132-1 · §5.2.7 Countersignatures | `XadesSigner.CounterSign(signedXml, signatureId)` | yes |
 | Signature level | Signature type | ETSI EN 319 132-1 · §6 XAdES baseline signatures |  | yes |
 | Signature level | Signature type: Baseline | ETSI EN 319 102-1 · Annex B Signature classes | `WithLevel(AdesBaselineProfile.…)` | yes |
 | Signature level | Signature type: Explicit signature policy | ETSI EN 319 132-1 · §5.2.9 SignaturePolicyIdentifier | `WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))` | yes |
@@ -251,13 +264,18 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | ICP-Brasil policy: AD-RA — archive (**BR**) | DOC-ICP-15.03 · AD-RA | `IcpBrasilPolicy.AdRa + IcpBrasilPolicyArtifacts.DownloadAsync` | yes |
 | Signature level | Policy OID | ETSI EN 319 122-1 · §5.2.9 signature-policy-identifier<br>ETSI EN 319 132-1 · §5.2.9 SignaturePolicyIdentifier | `WithSignaturePolicy(oid, uri)` | yes |
 | Signature level | Policy URI | ETSI EN 319 122-1 · §5.2.9 sigPolicyQualifiers<br>ETSI EN 319 132-1 · §5.2.9 SigPolicyQualifiers | `WithSignaturePolicy(oid, uri)` | yes |
+| Signature level | Policy document (policy store) | ETSI EN 319 122-1 · §5.2.10 signature-policy-store<br>ETSI EN 319 132-1 · §5.2.10 SignaturePolicyStore<br>ETSI EN 319 122-1 · §5.2.9 sigPolicyHash | `WithSignaturePolicy(SignaturePolicyReference) + WithSignaturePolicyStore(SignaturePolicyStore.FromDocument(spec, document))` | yes |
+| Signature level | Policy document specification | ETSI EN 319 122-1 · §5.2.9 sp-doc-specification<br>ETSI EN 319 132-1 · §5.2.9 SPDocSpecification | `SignaturePolicyStore.Specification` | yes |
 | Signature level | Extended form | ETSI EN 319 132-2 · Extended XAdES signatures<br>ETSI TS 101 903 · §7.4–§7.6 | `WithExtendedValidationData(XadesExtendedForm)` | yes |
 | Signature level | Extended form: C / X — complete references | ETSI TS 101 903 · §7.4 CompleteCertificateRefs and CompleteRevocationRefs | `XadesExtendedForm.CompleteReferences` | yes |
 | Signature level | Extended form: X-L — references and values | ETSI TS 101 903 · §7.6 CertificateValues and RevocationValues | `XadesExtendedForm.ExtendedLong` | yes |
 | Signature level | Extended form: A — archive | ETSI TS 101 903 · §7.7 ArchiveTimeStamp | `XadesExtendedForm.Archive` | yes |
-| Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness |  | **no** |
+| Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness | `new LongTermValidationOptions { RevocationPreference }` | yes |
+| Signature level | Prefer OCSP or CRL: OCSP first |  | `RevocationPreference.OcspFirst` | yes |
+| Signature level | Prefer OCSP or CRL: CRL first |  | `RevocationPreference.CrlFirst` | yes |
 | Timestamps | Time-stamping authority (TSA) | RFC 3161 · Time-Stamp Protocol<br>RFC 5816 · ESSCertIDv2 in timestamps<br>ETSI EN 319 422 · Time-stamping protocol and token profiles | `new TimestampOptions(Uri endpoint) { Authorization, ClientCertificate }` | yes |
-| Timestamps | Data objects timestamp | ETSI EN 319 132-1 · §5.2.8 AllDataObjectsTimeStamp and IndividualDataObjectsTimeStamp |  | **no** |
+| Timestamps | Data objects timestamp | ETSI EN 319 132-1 · §5.2.8.1 AllDataObjectsTimeStamp | `WithDataObjectsTimestamp(TimestampOptions)` | yes |
+| Timestamps | Individual data objects timestamp | ETSI EN 319 132-1 · §5.2.8.2 IndividualDataObjectsTimeStamp |  | **no** |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
 | Cryptography | Digest algorithm: SHA-256 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
 | Cryptography | Digest algorithm: SHA-384 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
@@ -270,15 +288,22 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Cryptography | RSA signature scheme: RSASSA-PSS | RFC 8017 · §8.1 RSASSA-PSS<br>RFC 4056 · RSASSA-PSS in CMS | `WithSignatureAlgorithm(Oids.RsaPss)` | yes |
 | Cryptography | ECDSA | FIPS 186-5 · ECDSA<br>RFC 5753 · ECC algorithms in CMS<br>ETSI TS 119 312 · Signature schemes |  | yes |
 | Cryptography | EdDSA (Ed25519, Ed448) | RFC 8032 · EdDSA<br>RFC 8419 · EdDSA in CMS<br>ETSI TS 119 312 · Signature schemes |  | **no** |
-| Cryptography | Canonicalization method | W3C XMLDSig Core 1.1 · §4.4.1 CanonicalizationMethod<br>W3C Exclusive XML Canonicalization 1.0 · xml-exc-c14n |  | **no** |
+| Cryptography | Canonicalization method | W3C XMLDSig Core 1.1 · §4.4.1 CanonicalizationMethod | `WithCanonicalization(XadesCanonicalization)` | yes |
+| Cryptography | Canonicalization method: Exclusive C14N 1.0 | W3C Exclusive XML Canonicalization 1.0 · xml-exc-c14n | `XadesCanonicalization.Exclusive` | yes |
+| Cryptography | Canonicalization method: Canonical XML 1.0 | W3C Canonical XML 1.0 · xml-c14n | `XadesCanonicalization.Inclusive` | yes |
+| Cryptography | Canonicalization method: Canonical XML 1.1 | W3C Canonical XML 1.1 · xml-c14n11 |  | **no** |
 | Signed attributes | Claimed signing time | ETSI EN 319 122-1 · §5.2.1 signing-time<br>ETSI EN 319 132-1 · §5.2.1 SigningTime | `WithSigningTime(DateTimeOffset)` | yes |
 | Signed attributes | Commitment type | ETSI EN 319 122-1 · §5.2.3 commitment-type-indication<br>ETSI EN 319 132-1 · §5.2.3 CommitmentTypeIndication<br>ETSI TS 119 172-1 · Annex B Commitment types | `WithCommitmentType(CommitmentType)` | yes |
 | Signed attributes | SigningCertificate (XAdES 1.3.2) | ETSI EN 319 132-1 · §5.2.2 SigningCertificateV2<br>ETSI TS 101 903 · §7.2.2 SigningCertificate | `WithSigningCertificateForm(XadesSigningCertificateForm.V1)` | yes |
 | Signed attributes | Signer roles | ETSI EN 319 132-1 · §5.2.6 SignerRoleV2 | `WithSignerRoles(IReadOnlyList<string>)` | yes |
 | Signed attributes | Data MIME type | ETSI EN 319 132-1 · §5.2.4 DataObjectFormat | `WithDataObjectFormat(new DataObjectFormat { MimeType })` | yes |
-| Signed attributes | Signature policy store | ETSI EN 319 122-1 · §5.2.10 signature-policy-store<br>ETSI EN 319 132-1 · §5.2.10 SignaturePolicyStore |  | **no** |
-| Signed attributes | Signature production place | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 |  | **no** |
-| Signed attributes | Certified and signed roles | ETSI EN 319 132-1 · §5.2.6 SignerRoleV2 |  | **no** |
+| Signed attributes | Attribute certificate | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2<br>RFC 5755 · Attribute certificate profile | `WithAttributeCertificates(IReadOnlyList<ReadOnlyMemory<byte>>)` | yes |
+| Signed attributes | Signed assertion (SAML) | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2 | `WithSignedAssertions(…)` | yes |
+| Signed attributes | Production place: city | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { City })` | yes |
+| Signed attributes | Production place: street address | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { StreetAddress })` | yes |
+| Signed attributes | Production place: state or province | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { StateOrProvince })` | yes |
+| Signed attributes | Production place: postal code | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { PostalCode })` | yes |
+| Signed attributes | Production place: country | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { CountryName })` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustSystemRoots` | yes |
@@ -313,7 +338,7 @@ Each clause and the options that implement it.
 |---|---|---|---|
 | Annex B Signature classes | Signature type: Baseline | PAdES, CAdES, XAdES | yes |
 | §5 Validation process | Validate after signing | PAdES, CAdES, XAdES | yes |
-| §5.2.5 Revocation freshness | Prefer OCSP or CRL | PAdES, CAdES, XAdES | **no** |
+| §5.2.5 Revocation freshness | Prefer OCSP or CRL | PAdES, CAdES, XAdES | yes |
 | §5.2.6 X.509 certificate validation | Check revocation | PAdES, CAdES, XAdES | yes |
 | §5.2.6 X.509 certificate validation | Trusted roots | PAdES, CAdES, XAdES | yes |
 
@@ -322,21 +347,28 @@ Each clause and the options that implement it.
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
 | §5.2.1 signing-time | Claimed signing time | CAdES, XAdES | yes |
-| §5.2.10 signature-policy-store | Signature policy store | CAdES, XAdES | **no** |
+| §5.2.10 signature-policy-store | Policy document (policy store) | CAdES, XAdES | yes |
 | §5.2.3 commitment-type-indication | Commitment type | CAdES, XAdES, PAdES | yes |
 | §5.2.3 commitment-type-indication | Kind of signer details: Signer metadata | PAdES | yes |
 | §5.2.3 commitment-type-indication | Signer details | PAdES | yes |
-| §5.2.4 Attributes for identifying the signed data type | Content hints and MIME type | CAdES | **no** |
-| §5.2.5 signer-location | Signer location | CAdES | **no** |
-| §5.2.6 signer-attributes-v2 | Signer attributes (roles) | CAdES | **no** |
+| §5.2.4 Attributes for identifying the signed data type | Content description | CAdES | yes |
+| §5.2.4 Attributes for identifying the signed data type | Data MIME type | CAdES | yes |
+| §5.2.5 signer-location | Signer location: country | CAdES | yes |
+| §5.2.5 signer-location | Signer location: locality | CAdES | yes |
+| §5.2.5 signer-location | Signer location: postal address | CAdES | yes |
+| §5.2.6 signer-attributes-v2 | Attribute certificate | CAdES, XAdES | yes |
+| §5.2.6 signer-attributes-v2 | Signed assertion (SAML) | CAdES, XAdES | yes |
+| §5.2.6 signer-attributes-v2 | Signer roles | CAdES | yes |
 | §5.2.7 countersignature | Operation | CAdES | yes |
 | §5.2.7 countersignature | Operation: Countersign | CAdES | yes |
-| §5.2.8 content-time-stamp | Content timestamp | CAdES | **no** |
+| §5.2.8 content-time-stamp | Content timestamp | CAdES | yes |
+| §5.2.9 sigPolicyHash | Policy document (policy store) | CAdES, XAdES | yes |
 | §5.2.9 sigPolicyHash | Policy hash (hex) | PAdES | yes |
 | §5.2.9 sigPolicyHash | Policy hash algorithm | PAdES | yes |
 | §5.2.9 sigPolicyQualifiers | Policy URI | PAdES, CAdES, XAdES | yes |
 | §5.2.9 signature-policy-identifier | Policy OID | PAdES, CAdES, XAdES | yes |
 | §5.2.9 signature-policy-identifier | Signature type: Explicit signature policy | PAdES, CAdES | yes |
+| §5.2.9 sp-doc-specification | Policy document specification | CAdES, XAdES | yes |
 | §5.3 signature-time-stamp (CAdES-B-T) | Baseline level: B-T (timestamp) | CAdES | yes |
 | §5.4 Validation data (CAdES-B-LT) | Baseline level: B-LT (long term) | CAdES | yes |
 | §5.5 archive-time-stamp-v3 (CAdES-B-LTA) | Baseline level: B-LTA (archive) | CAdES | yes |
@@ -357,15 +389,23 @@ Each clause and the options that implement it.
 |---|---|---|---|
 | §4 General syntax | XML signature kind: XAdES (**BR**) | XAdES | yes |
 | §5.2.1 SigningTime | Claimed signing time | CAdES, XAdES | yes |
-| §5.2.10 SignaturePolicyStore | Signature policy store | CAdES, XAdES | **no** |
+| §5.2.10 SignaturePolicyStore | Policy document (policy store) | CAdES, XAdES | yes |
 | §5.2.2 SigningCertificateV2 | SigningCertificate (XAdES 1.3.2) | XAdES | yes |
 | §5.2.3 CommitmentTypeIndication | Commitment type | CAdES, XAdES | yes |
 | §5.2.4 DataObjectFormat | Data MIME type | XAdES | yes |
-| §5.2.5 SignatureProductionPlaceV2 | Signature production place | XAdES | **no** |
-| §5.2.6 SignerRoleV2 | Certified and signed roles | XAdES | **no** |
+| §5.2.5 SignatureProductionPlaceV2 | Production place: city | XAdES | yes |
+| §5.2.5 SignatureProductionPlaceV2 | Production place: country | XAdES | yes |
+| §5.2.5 SignatureProductionPlaceV2 | Production place: postal code | XAdES | yes |
+| §5.2.5 SignatureProductionPlaceV2 | Production place: state or province | XAdES | yes |
+| §5.2.5 SignatureProductionPlaceV2 | Production place: street address | XAdES | yes |
+| §5.2.6 SignerRoleV2 | Attribute certificate | CAdES, XAdES | yes |
+| §5.2.6 SignerRoleV2 | Signed assertion (SAML) | CAdES, XAdES | yes |
 | §5.2.6 SignerRoleV2 | Signer roles | XAdES | yes |
-| §5.2.7 CounterSignature | XAdES countersignature | XAdES | **no** |
-| §5.2.8 AllDataObjectsTimeStamp and IndividualDataObjectsTimeStamp | Data objects timestamp | XAdES | **no** |
+| §5.2.7 Countersignatures | Signature to countersign | XAdES | yes |
+| §5.2.7 Countersignatures | XAdES countersignature | XAdES | yes |
+| §5.2.8.1 AllDataObjectsTimeStamp | Data objects timestamp | XAdES | yes |
+| §5.2.8.2 IndividualDataObjectsTimeStamp | Individual data objects timestamp | XAdES | **no** |
+| §5.2.9 SPDocSpecification | Policy document specification | CAdES, XAdES | yes |
 | §5.2.9 SigPolicyQualifiers | Policy URI | CAdES, XAdES | yes |
 | §5.2.9 SignaturePolicyIdentifier | Policy OID | CAdES, XAdES | yes |
 | §5.2.9 SignaturePolicyIdentifier | Signature type: Explicit signature policy | XAdES | yes |
@@ -580,6 +620,12 @@ Each clause and the options that implement it.
 |---|---|---|---|
 | §4.1 Assinatura digital | XML signature kind: Fiscal XML-DSig (**BR**) | XAdES | yes |
 
+### RFC 2634
+
+| Clause | Option | Formats | Implemented |
+|---|---|---|---|
+| §2.9 Content hints | Content description | CAdES | yes |
+
 ### RFC 3161
 
 | Clause | Option | Formats | Implemented |
@@ -609,7 +655,7 @@ Each clause and the options that implement it.
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
 | §4 Certificate profile | Certificate and key | PAdES, CAdES, XAdES | yes |
-| §5 CRL | Prefer OCSP or CRL | PAdES, CAdES, XAdES | **no** |
+| §5 CRL | Prefer OCSP or CRL | PAdES, CAdES, XAdES | yes |
 | §6.1 Basic path validation | Trusted roots | PAdES, CAdES, XAdES | yes |
 | §6.3 CRL validation | Check revocation | PAdES, CAdES, XAdES | yes |
 
@@ -634,6 +680,12 @@ Each clause and the options that implement it.
 |---|---|---|---|
 | ECC algorithms in CMS | ECDSA | PAdES, CAdES, XAdES | yes |
 
+### RFC 5755
+
+| Clause | Option | Formats | Implemented |
+|---|---|---|---|
+| Attribute certificate profile | Attribute certificate | CAdES, XAdES | yes |
+
 ### RFC 5816
 
 | Clause | Option | Formats | Implemented |
@@ -645,7 +697,7 @@ Each clause and the options that implement it.
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
 | OCSP | Check revocation | PAdES, CAdES, XAdES | yes |
-| OCSP | Prefer OCSP or CRL | PAdES, CAdES, XAdES | **no** |
+| OCSP | Prefer OCSP or CRL | PAdES, CAdES, XAdES | yes |
 
 ### RFC 8017
 
@@ -667,11 +719,23 @@ Each clause and the options that implement it.
 |---|---|---|---|
 | EdDSA in CMS | EdDSA (Ed25519, Ed448) | PAdES, CAdES, XAdES | **no** |
 
+### W3C Canonical XML 1.0
+
+| Clause | Option | Formats | Implemented |
+|---|---|---|---|
+| xml-c14n | Canonicalization method: Canonical XML 1.0 | XAdES | yes |
+
+### W3C Canonical XML 1.1
+
+| Clause | Option | Formats | Implemented |
+|---|---|---|---|
+| xml-c14n11 | Canonicalization method: Canonical XML 1.1 | XAdES | **no** |
+
 ### W3C Exclusive XML Canonicalization 1.0
 
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
-| xml-exc-c14n | Canonicalization method | XAdES | **no** |
+| xml-exc-c14n | Canonicalization method: Exclusive C14N 1.0 | XAdES | yes |
 
 ### W3C XMLDSig Core 1.1
 
@@ -679,10 +743,11 @@ Each clause and the options that implement it.
 |---|---|---|---|
 | §10 Definitions: enveloped, enveloping, detached | Packaging | XAdES | yes |
 | §3 Processing rules | XML signature kind: Fiscal XML-DSig (**BR**) | XAdES | yes |
-| §4.4.1 CanonicalizationMethod | Canonicalization method | XAdES | **no** |
-| §4.4.3 The Reference element | Additional references and transforms | XAdES | **no** |
+| §4.4.1 CanonicalizationMethod | Canonicalization method | XAdES | yes |
+| §4.4.3 The Reference element | Additional data object (embedded) | XAdES | yes |
+| §4.4.3 The Reference element | Additional data object (external) | XAdES | yes |
 | §4.4.3 The Reference element | XML to sign | XAdES | yes |
 | §4.4.3.1 The URI attribute | Reference URI | XAdES | yes |
 | §6.2 Message digests | Digest algorithm | PAdES, CAdES, XAdES | yes |
-| §6.6 Transform algorithms | Additional references and transforms | XAdES | **no** |
+| §6.6 Transform algorithms | XPath and XSLT transforms | XAdES | **no** |
 | §6.6.4 Enveloped signature transform | Packaging: Enveloped | XAdES | yes |

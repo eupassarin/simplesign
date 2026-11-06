@@ -106,6 +106,137 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
     }
 
     [Fact]
+    public async Task RunAsync_SignerAndContentAttributes_AreInTheSignatureAndTheCode()
+    {
+        var options = Options() with
+        {
+            SignerCountry = "BR",
+            SignerLocality = " São Paulo ",
+            SignerPostalAddress = ["Av. Paulista, 1000", " "],
+            SignerRoles = ["Diretor"],
+            MimeType = "text/plain",
+            ContentDescription = "Texto de exemplo",
+        };
+
+        var result = await fixture.Cades.RunAsync(options, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.Validation!.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
+        var signed = result.Validation.Structure.Signers[0].SignedAttributes.Select(a => a.Name).ToList();
+        signed.ShouldContain("signer-location");
+        signed.ShouldContain("signer-attributes-v2");
+        signed.ShouldContain("mime-type");
+        signed.ShouldContain("content-hints");
+        result.Code.CSharp.ShouldContain(".WithSignerLocation(new CadesSignerLocation { CountryName = \"BR\", LocalityName = \" São Paulo \", PostalAddress = [\"Av. Paulista, 1000\"] })");
+        result.Code.CSharp.ShouldContain(".WithSignerRoles([\"Diretor\"])");
+        result.Code.CSharp.ShouldContain(".WithMimeType(\"text/plain\")");
+        result.Code.CSharp.ShouldContain(".WithContentHints(new CadesContentHints { Description = \"Texto de exemplo\" })");
+        result.Code.Cli.ShouldContain("--signer-country \"BR\"");
+        result.Code.Cli.ShouldContain("--signer-postal-address \"Av. Paulista, 1000\"");
+        result.Code.Cli.ShouldContain("--signer-role \"Diretor\"");
+        result.Code.Cli.ShouldContain("--mime-type \"text/plain\"");
+        result.Code.Cli.ShouldContain("--content-description \"Texto de exemplo\"");
+        result.Code.CliNotes.ShouldNotContain(n => n.Contains("no cades flag", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunAsync_CounterSignWithMimeType_LeavesTheAttributeOut()
+    {
+        var options = Options("rsa-4096") with
+        {
+            Operation = CadesOperation.CounterSign,
+            ExistingSignatureId = Sample("enveloped"),
+            DataId = null,
+            MimeType = "text/plain",
+            ContentDescription = "x",
+        };
+
+        var result = await fixture.Cades.RunAsync(options, default);
+
+        // The rules switch both options off for a countersignature, so the run still succeeds.
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.Code.CSharp.ShouldNotContain("WithMimeType");
+        result.Code.CSharp.ShouldNotContain("WithContentHints");
+    }
+
+    [Fact]
+    public async Task RunAsync_CrlFirstAtLongTerm_IsValidAndInTheCode()
+    {
+        var options = Options() with { Level = BaselineLevel.BLT, RevocationPreference = SimpleSign.Core.Signing.RevocationPreference.CrlFirst };
+
+        var result = await fixture.Cades.RunAsync(options, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.AchievedLevel.ShouldBe("B-LT");
+        result.Validation!.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
+        result.Code.CSharp.ShouldContain("{ RevocationPreference = RevocationPreference.CrlFirst }");
+        result.Code.Cli.ShouldContain("--revocation-preference crl");
+    }
+
+    [Theory]
+    [InlineData(BaselineLevel.BB)]
+    [InlineData(BaselineLevel.BLTA)]
+    public async Task RunAsync_CustomPolicyWithDocument_EmbedsThePolicyStore(BaselineLevel level)
+    {
+        var policy = fixture.Documents.Add("policy.der", "a signature policy document"u8.ToArray());
+        var options = Options() with { Kind = CadesKind.CustomPolicy, Level = level, PolicyDocumentId = policy.Id, PolicySpecification = "1.2.3.4.5.1" };
+
+        var result = await fixture.Cades.RunAsync(options, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.Validation!.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
+        result.Validation.Structure.Signers[0].UnsignedAttributes.ShouldContain(a => a.Name == "signature-policy-store");
+        result.Code.CSharp.ShouldContain("byte[] policyDocument = File.ReadAllBytes(\"policy.der\");");
+        result.Code.Cli.ShouldContain("--policy-document \"policy.der\"");
+        result.Code.Cli.ShouldContain("--policy-specification \"1.2.3.4.5.1\"");
+        result.Code.CSharp.ShouldContain(".WithSignaturePolicy(new SignaturePolicyReference(\"1.2.3.4.5\", Oids.Sha256, SHA256.HashData(policyDocument)))");
+        result.Code.CSharp.ShouldContain(".WithSignaturePolicyStore(SignaturePolicyStore.FromDocument(\"1.2.3.4.5.1\", policyDocument))");
+    }
+
+    [Fact]
+    public async Task RunAsync_CustomPolicyWithoutDocument_HasNoPolicyStore()
+    {
+        var result = await fixture.Cades.RunAsync(Options() with { Kind = CadesKind.CustomPolicy }, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.Validation!.Structure.Signers[0].UnsignedAttributes.ShouldNotContain(a => a.Name == "signature-policy-store");
+        result.Code.CSharp.ShouldNotContain("WithSignaturePolicyStore");
+    }
+
+    [Theory]
+    [InlineData(BaselineLevel.BB)]
+    [InlineData(BaselineLevel.BLTA)]
+    public async Task RunAsync_ContentTimestamp_IsSignedValidatedAndInTheCode(BaselineLevel level)
+    {
+        var result = await fixture.Cades.RunAsync(Options() with { Level = level, ContentTimestamp = true }, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.Validation!.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
+        result.Validation.Structure.Signers[0].SignedAttributes.ShouldContain(a => a.Name == "content-time-stamp");
+        result.Validation.Signers[0].Checks.ShouldContain(c => c.Id == "contentTimestamp" && c.Status == "pass");
+        // At B-B the content timestamp is the only timestamp.
+        result.HasSignatureTimestamp.ShouldBe(level != BaselineLevel.BB);
+        result.Code.CSharp.ShouldContain(".WithContentTimestamp(tsa)");
+    }
+
+    [Fact]
+    public async Task RunAsync_CertifiedAttributeAndSignedAssertion_AreInTheSignerAttributes()
+    {
+        // Any single DER SEQUENCE stands for the attribute certificate: the library embeds it as given.
+        var attributeCertificate = fixture.Documents.Add("role.ac", [0x30, 0x03, 0x04, 0x01, 0xAA]);
+        var assertion = fixture.Documents.Add("assertion.xml", "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"/>"u8.ToArray());
+        var options = Options() with { AttributeCertificateId = attributeCertificate.Id, SignedAssertionId = assertion.Id };
+
+        var result = await fixture.Cades.RunAsync(options, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.Validation!.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
+        result.Validation.Structure.Signers[0].SignedAttributes.ShouldContain(a => a.Name == "signer-attributes-v2");
+        result.Code.CSharp.ShouldContain(".WithAttributeCertificates([attributeCertificate])");
+        result.Code.CSharp.ShouldContain(".WithSignedAssertions([CadesSignedAssertion.Saml(samlAssertion)])");
+    }
+
+    [Fact]
     public async Task RunAsync_PssAndSha512_AreInTheCode()
     {
         var result = await fixture.Cades.RunAsync(Options() with { Hash = HashChoice.Sha512, Padding = RsaPadding.Pss, Commitment = "ProofOfOrigin" }, default);

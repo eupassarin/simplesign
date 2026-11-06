@@ -313,6 +313,9 @@ public sealed record SigningOptions
 
     public bool ReturnLowerLevel { get; init; }
 
+    /// <summary>The revocation source tried first when collecting B-LT data.</summary>
+    public Core.Signing.RevocationPreference RevocationPreference { get; init; }
+
     // 4. Cryptography
     public HashChoice Hash { get; init; } = HashChoice.Sha256;
 

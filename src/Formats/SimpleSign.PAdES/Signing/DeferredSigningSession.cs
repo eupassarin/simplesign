@@ -71,6 +71,13 @@ public sealed class DeferredSigningSession
     /// <summary>Dedicated archive TSA endpoint for B-LTA, when configured.</summary>
     public string? ArchiveTimestampEndpoint { get; init; }
 
+    /// <summary>
+    /// The revocation source tried first when collecting B-LT data in phase two. The default is
+    /// not written, so sessions prepared before this option existed keep a valid HMAC.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public RevocationPreference RevocationPreference { get; init; }
+
     /// <summary>HMAC-SHA256 over the session payload, keyed with a server-side secret.</summary>
     public byte[]? Hmac { get; set; }
 

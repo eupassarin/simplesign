@@ -190,6 +190,151 @@ public sealed class XadesSignerTests
     }
 
     [Fact]
+    public async Task SignAsync_WithSignatureProductionPlace_WritesTheV2PropertyInSchemaOrder()
+    {
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>place</doc>");
+
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithSignaturePolicy("1.2.3.4.5", "https://example.com/policy")
+            .WithSignatureProductionPlace(new SignatureProductionPlace
+            {
+                City = "São Paulo",
+                StreetAddress = "Av. Paulista, 1000",
+                StateOrProvince = "SP",
+                PostalCode = "01310-100",
+                CountryName = "BR",
+            })
+            .WithSignerRole("Diretor")
+            .SignAsync();
+
+        var (properties, ns) = SignedSignatureProperties(signed);
+        properties.ChildNodes.OfType<System.Xml.XmlElement>().Select(e => e.LocalName).ShouldBe(
+            ["SigningTime", "SigningCertificateV2", "SignaturePolicyIdentifier", "SignatureProductionPlaceV2", "SignerRoleV2"]);
+        var place = properties.SelectSingleNode("xades:SignatureProductionPlaceV2", ns)!;
+        place.ChildNodes.OfType<System.Xml.XmlElement>().Select(e => (e.LocalName, e.NamespaceURI, e.InnerText)).ShouldBe(
+        [
+            ("City", "http://uri.etsi.org/01903/v1.3.2#", "São Paulo"),
+            ("StreetAddress", "http://uri.etsi.org/01903/v1.3.2#", "Av. Paulista, 1000"),
+            ("StateOrProvince", "http://uri.etsi.org/01903/v1.3.2#", "SP"),
+            ("PostalCode", "http://uri.etsi.org/01903/v1.3.2#", "01310-100"),
+            ("CountryName", "http://uri.etsi.org/01903/v1.3.2#", "BR"),
+        ]);
+    }
+
+    [Fact]
+    public async Task SignAsync_WithSignatureProductionPlace_WritesOnlyTheFieldsThatAreSetAndValidates()
+    {
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>place</doc>");
+
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithSignatureProductionPlace(new SignatureProductionPlace { City = "Recife", CountryName = " " })
+            .SignAsync();
+
+        var (properties, ns) = SignedSignatureProperties(signed);
+        var place = properties.SelectSingleNode("xades:SignatureProductionPlaceV2", ns)!;
+        place.ChildNodes.OfType<System.Xml.XmlElement>().Select(e => e.LocalName).ShouldBe(["City"]);
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert]);
+        result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors));
+    }
+
+    [Theory]
+    [InlineData(XadesForm.Enveloping)]
+    [InlineData(XadesForm.Detached)]
+    public async Task SignAsync_WithSignatureProductionPlace_IsWrittenInTheStandaloneForms(XadesForm form)
+    {
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>place</doc>");
+        var builder = XadesSigner.Document(xmlBytes).WithCertificate(s_cert).WithForm(form)
+            .WithSignatureProductionPlace(new SignatureProductionPlace { City = "Recife" });
+
+        byte[] signed = await (form == XadesForm.Detached ? builder.WithDataUri("document.xml") : builder).SignAsync();
+
+        var (properties, ns) = SignedSignatureProperties(signed);
+        properties.SelectSingleNode("xades:SignatureProductionPlaceV2/xades:City", ns)!.InnerText.ShouldBe("Recife");
+    }
+
+    [Fact]
+    public async Task SignAsync_ExternalSignerWithSignatureProductionPlace_SignsThePropertyAndValidates()
+    {
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>place</doc>");
+
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithExternalSigner(s_cert, new DelegatingExternalSigner(data =>
+            {
+                using var rsa = s_cert.GetRSAPrivateKey()!;
+                return Task.FromResult(rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+            }))
+            .WithSignatureAlgorithm("1.2.840.113549.1.1.11")
+            .WithSignatureProductionPlace(new SignatureProductionPlace { City = "Recife" })
+            .SignAsync();
+
+        var (properties, ns) = SignedSignatureProperties(signed);
+        properties.SelectSingleNode("xades:SignatureProductionPlaceV2/xades:City", ns)!.InnerText.ShouldBe("Recife");
+        var result = new XadesSignatureValidator().Validate(signed, trustAnchors: [s_cert]);
+        result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors));
+    }
+
+    [Fact]
+    public async Task SignAsync_ProductionPlaceWithThe132Form_WritesTheLegacyPropertyAndValidates()
+    {
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>place</doc>");
+
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithSigningCertificateForm(XadesSigningCertificateForm.V1)
+            .WithSignatureProductionPlace(new SignatureProductionPlace
+            {
+                City = "São Paulo",
+                StateOrProvince = "SP",
+                PostalCode = "01310-100",
+                CountryName = "BR",
+            })
+            .WithSignerRole("Diretor")
+            .SignAsync();
+
+        var (properties, ns) = SignedSignatureProperties(signed);
+        properties.ChildNodes.OfType<System.Xml.XmlElement>().Select(e => e.LocalName).ShouldBe(
+            ["SigningTime", "SigningCertificate", "SignatureProductionPlace", "SignerRole"]);
+        properties.SelectSingleNode("xades:SignatureProductionPlace", ns)!
+            .ChildNodes.OfType<System.Xml.XmlElement>().Select(e => (e.LocalName, e.InnerText)).ShouldBe(
+            [("City", "São Paulo"), ("StateOrProvince", "SP"), ("PostalCode", "01310-100"), ("CountryName", "BR")]);
+        new XadesSignatureValidator().Validate(signed).IsSignatureValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SignAsync_StreetAddressWithThe132Form_IsRefused()
+    {
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes("<doc>place</doc>");
+        var builder = XadesSigner.Document(xmlBytes)
+            .WithCertificate(s_cert)
+            .WithSigningCertificateForm(XadesSigningCertificateForm.V1)
+            .WithSignatureProductionPlace(new SignatureProductionPlace { City = "Recife", StreetAddress = "Rua da Aurora, 1" });
+
+        var exception = await Should.ThrowAsync<SigningException>(() => builder.SignAsync());
+
+        exception.Message.ShouldContain("SignatureProductionPlaceV2");
+    }
+
+    [Fact]
+    public void Builder_WithSignatureProductionPlace_Null_Throws() =>
+        Should.Throw<ArgumentNullException>(() => XadesSigner.Document([]).WithSignatureProductionPlace(null!));
+
+    [Fact]
+    public void Builder_WithSignatureProductionPlace_NoField_Throws() =>
+        Should.Throw<ArgumentException>(() => XadesSigner.Document([]).WithSignatureProductionPlace(new SignatureProductionPlace { City = " " }));
+
+    private static (System.Xml.XmlNode Properties, System.Xml.XmlNamespaceManager Ns) SignedSignatureProperties(byte[] signed)
+    {
+        var doc = new System.Xml.XmlDocument { PreserveWhitespace = true };
+        using var stream = new MemoryStream(signed);
+        doc.Load(stream);
+        var ns = new System.Xml.XmlNamespaceManager(doc.NameTable);
+        ns.AddNamespace("xades", "http://uri.etsi.org/01903/v1.3.2#");
+        return (doc.SelectSingleNode("//xades:SignedSignatureProperties", ns)!, ns);
+    }
+
+    [Fact]
     public async Task SignThenValidate_RoundTrip_ReturnsIsValid()
     {
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>roundtrip</doc>";

@@ -46,4 +46,38 @@ internal sealed record XadesSigningOptions(
     IReadOnlyList<string>? SignerRoles,
     DataObjectFormat? DataObjectFormat,
     string? OperationId,
-    XadesDependencies Dependencies);
+    XadesDependencies Dependencies)
+{
+    /// <summary>The SignatureProductionPlaceV2 property to add, or null.</summary>
+    public SignatureProductionPlace? ProductionPlace { get; init; }
+
+    /// <summary>The TSA that timestamps the signed data objects before signing (AllDataObjectsTimeStamp), or null.</summary>
+    public TimestampOptions? DataObjectsTimestamp { get; init; }
+
+    /// <summary>The data objects signed besides the document, or null.</summary>
+    public IReadOnlyList<XadesDataObject>? AdditionalDataObjects { get; init; }
+
+    /// <summary>The X.509 attribute certificates of the signer (CertifiedRolesV2), or null.</summary>
+    public IReadOnlyList<ReadOnlyMemory<byte>>? AttributeCertificates { get; init; }
+
+    /// <summary>The assertions third parties signed about the signer (SignedAssertions), each one XML element, or null.</summary>
+    public IReadOnlyList<string>? SignedAssertions { get; init; }
+
+    /// <summary>The signer roles of all three kinds, or null when there are none.</summary>
+    public XadesSignerRoles? Roles =>
+        SignerRoles is { Count: > 0 } || AttributeCertificates is { Count: > 0 } || SignedAssertions is { Count: > 0 }
+            ? new XadesSignerRoles(SignerRoles ?? [], AttributeCertificates ?? [], SignedAssertions ?? [])
+            : null;
+
+    /// <summary>Whether the builder countersigns a signature of the document instead of signing the document.</summary>
+    public bool IsCounterSignature { get; init; }
+
+    /// <summary>The Id of the signature to countersign; null for the only signature of the document.</summary>
+    public string? CounterSignTargetId { get; init; }
+
+    /// <summary>The canonicalization of SignedInfo and of the references.</summary>
+    public XadesCanonicalization Canonicalization { get; init; }
+
+    /// <summary>The SignaturePolicyStore unsigned property to add, or null.</summary>
+    public SignaturePolicyStore? PolicyStore { get; init; }
+}
