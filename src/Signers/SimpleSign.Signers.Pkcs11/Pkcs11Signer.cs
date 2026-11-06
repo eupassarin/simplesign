@@ -1,8 +1,12 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.Signers.Pkcs11.Internal;
 using SimpleSign.Signers.Pkcs11.Interop;
 
 namespace SimpleSign.Signers.Pkcs11;
@@ -42,6 +46,7 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
     private readonly ulong _key;
     private readonly Pkcs11KeyAlgorithm _keyAlgorithm;
     private readonly bool _loggedIn;
+    private readonly ILogger _logger;
 #if NET9_0_OR_GREATER
     private readonly Lock _gate = new();
 #else
@@ -56,13 +61,15 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
         bool loggedIn,
         X509Certificate2 certificate,
         IReadOnlyList<X509Certificate2> chain,
-        string tokenLabel)
+        string tokenLabel,
+        ILogger logger)
     {
         _module = module;
         _session = session;
         _key = key.Handle;
         _keyAlgorithm = key.Algorithm;
         _loggedIn = loggedIn;
+        _logger = logger;
         Certificate = certificate;
         Chain = chain;
         TokenLabel = tokenLabel;
@@ -123,9 +130,11 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
                 unused.Certificate.Dispose();
             }
 
+            var logger = options.Logger ?? NullLogger.Instance;
+            logger.TokenOpened(info.Label, certificate.Certificate.Subject, chain.Count, loggedIn);
             return new Pkcs11Signer(
                 module, session.Value, key, loggedIn, certificate.Certificate,
-                chain.Select(c => c.Certificate).ToList().AsReadOnly(), info.Label);
+                chain.Select(c => c.Certificate).ToList().AsReadOnly(), info.Label, logger);
         }
         catch
         {
@@ -216,11 +225,15 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
         var plan = Pkcs11SignatureEncoder.Prepare(request, _keyAlgorithm, _module.Layout);
 
         byte[] signature;
+        long started = Stopwatch.GetTimestamp();
+        _logger.SignRequested(plan.Mechanism, plan.Data.Length);
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             signature = _module.Sign(_session, _key, plan.Mechanism, plan.MechanismParameter, plan.Data);
         }
+
+        _logger.SignCompleted(signature.Length, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
 
         return ValueTask.FromResult<ReadOnlyMemory<byte>>(
             plan.IsEcdsa ? Pkcs11SignatureEncoder.EcdsaRawToDer(signature) : signature);
@@ -246,6 +259,7 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
             _module.Release();
         }
 
+        _logger.SessionClosed(TokenLabel);
         Certificate.Dispose();
         foreach (var certificate in Chain)
         {

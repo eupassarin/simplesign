@@ -1,7 +1,11 @@
+using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.Signers.Cloud.Internal;
 
 namespace SimpleSign.Signers.Cloud.Psc;
 
@@ -80,6 +84,11 @@ public sealed class PscSigner : IExternalSigner, IDisposable
             other.Certificate.Dispose();
         }
 
+        if (matches.Count == 1)
+        {
+            Logger(client).PscCertificateSelected(matches[0].Alias, matches[0].Certificate.Subject);
+        }
+
         return matches.Count switch
         {
             1 => new PscSigner(client, token, matches[0], timeProvider ?? TimeProvider.System),
@@ -111,10 +120,16 @@ public sealed class PscSigner : IExternalSigner, IDisposable
 
         byte[] hash = CmsSignatureBuilder.ComputeHash(request.DataToSign.Span, request.HashAlgorithm);
         string id = $"{request.OperationId ?? "simplesign"}-{Interlocked.Increment(ref _sequence)}";
+        var logger = Logger(_client);
+        long started = Stopwatch.GetTimestamp();
+        logger.PscSignRequested(id, request.HashAlgorithm.Name ?? "?");
         var signatures = await _client.SignHashesAsync(
             Token, CertificateAlias, [new PscHashToSign(id, hash, request.HashAlgorithm)], cancellationToken).ConfigureAwait(false);
+        logger.PscSignCompleted(signatures[0].Length, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return signatures[0];
     }
+
+    private static ILogger Logger(PscClient client) => client.Options.Logger ?? NullLogger.Instance;
 
     /// <summary>Disposes <see cref="Certificate"/>. The token is not revoked.</summary>
     public void Dispose()

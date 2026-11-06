@@ -615,6 +615,10 @@ public sealed class PadesSignerBuilder
             certificate, _options.HashAlgorithm, _options.HashAlgorithmExplicitlySet, _options.SignatureAlgorithmOid);
         var effectiveHash = resolvedAlgorithm.HashAlgorithm;
         var sigOid = resolvedAlgorithm.SignatureAlgorithmOid;
+        logger.AlgorithmResolved(opId, effectiveHash.Name ?? "?", sigOid, _options.Profile.Level.ToString(), _options.Field.SubFilter.ToString());
+        logger.FieldConfigured(opId, _options.Field.ExistingFieldName ?? _options.Field.FieldName,
+            _options.Field.ExistingFieldName is not null, _options.Field.Appearance is not null,
+            _options.Field.CertificationLevel?.ToString() ?? "none");
 
         var warnings = new List<SigningWarning>();
         var kuExt = certificate.Extensions.OfType<X509KeyUsageExtension>().FirstOrDefault();
@@ -679,6 +683,11 @@ public sealed class PadesSignerBuilder
                 outputStream, timestampTokenBytes, effectiveHash, opId, warnings, cancellationToken).ConfigureAwait(false);
         }
 
+        if (hasLtvMaterial && profile.Level == AdesBaselineLevel.LongTerm)
+        {
+            logger.LtvEmbeddedNoArchival(opId);
+        }
+
         if (hasLtvMaterial && profile.Level >= AdesBaselineLevel.Archive)
         {
             hasArchiveTimestamp = await ApplyArchiveTimestampAsync(
@@ -738,6 +747,8 @@ public sealed class PadesSignerBuilder
         var achieved = ComputeAchievedLevel(
             artifactFacts.HasTimestamp, artifactFacts.HasLtvMaterial, artifactFacts.HasArchiveTimestamp);
 
+        logger.ReadBackVerified(opId, artifactFacts.BaseSignatureValid, artifactFacts.HasTimestamp,
+            artifactFacts.HasLtvMaterial, artifactFacts.HasArchiveTimestamp, achieved.ToString());
         logger.SigningCompleted(opId, sw.ElapsedMilliseconds, outputStream.Length);
 
         return new PadesSigningResult
@@ -963,6 +974,8 @@ public sealed class PadesSignerBuilder
         _inputPdf.Seek(0, SeekOrigin.Begin);
         var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(_inputPdf, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        _options.Dependencies.Logger.PdfALevelDetected(
+            _options.OperationId ?? "-", pdfALevel.ToString(), _options.EnforcePdfA);
         if (_options.EnforcePdfA)
         {
             var pdfAIssues = PdfAPreservationValidator.Validate(pdfALevel, _options.Field);
@@ -1214,7 +1227,7 @@ public sealed class PadesSignerBuilder
 
             var provider = scopedProvider ?? _options.Dependencies.HttpClientProvider;
             var ltvPdf = await DocTimeStampWriter.AppendDocTimeStampAsync(
-                signedPdf, endpoint.ToString(), provider.GetClient(),
+                signedPdf, endpoint.ToString(), provider.GetClient(), logger,
                 effectiveHash, pdfALevel: pdfALevel,
                 tsaFactory: new FixedTimestampClientFactory(CreateTimestampClient(effective)),
                 cancellationToken: cancellationToken).ConfigureAwait(false);

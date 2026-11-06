@@ -135,10 +135,6 @@ internal static partial class Log
         Message = "Timestamp response received ({Size} bytes)")]
     internal static partial void TimestampResponseReceived(this ILogger logger, int size);
 
-    [LoggerMessage(EventId = 2712, Level = LogLevel.Warning,
-        Message = "Nonce verification skipped: {Message}")]
-    internal static partial void NonceVerificationSkipped(this ILogger logger, string message);
-
     [LoggerMessage(EventId = 2713, Level = LogLevel.Debug,
         Message = "Skipping unhealthy TSA {TsaUrl} (failures: {Failures})")]
     internal static partial void TsaSkippingUnhealthy(this ILogger logger, string tsaUrl, int failures);

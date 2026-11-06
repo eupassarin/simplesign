@@ -369,4 +369,7 @@ public sealed record SigningOptions
 
     /// <summary>Validate the signed PDF after signing (sandbox trusts the sandbox root).</summary>
     public bool Validate { get; init; } = true;
+
+    /// <summary>Trust for the validation that follows the signature (null: the environment's default).</summary>
+    public Validation.ValidationSettings? Validation { get; init; }
 }

@@ -1,31 +1,32 @@
-import { useState } from "react"
-import { Code2, FileCheck2, FileCode2, FileText, FlaskConical, Globe, Grid3x3, Moon, PenTool, Server, Sun, SunMoon } from "lucide-react"
+import { useEffect, useState } from "react"
+import { FileCheck2, FileText, FlaskConical, Globe, Grid3x3, ListChecks, Loader2, Moon, PenTool, Server, Sun, SunMoon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Toaster } from "@/components/ui/sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { CadesPage } from "@/features/cades/CadesPage"
+import { CoveragePage } from "@/features/standards/CoveragePage"
 import { MatrixPage } from "@/features/matrix/MatrixPage"
-import { XmlPage } from "@/features/xml/XmlPage"
-import { SigningPage } from "@/features/pdf-signing/SigningPage"
-import { SigningProvider } from "@/features/pdf-signing/state"
+import { CatalogProvider } from "@/features/shared/catalog"
 import { SandboxPage } from "@/features/sandbox/SandboxPage"
-import { ValidationPage } from "@/features/validation/ValidationPage"
+import { ValidationArea } from "@/features/validation/ValidationArea"
+import type { WorkbenchSchema } from "@/features/workbench/schema"
+import { WorkbenchProvider } from "@/features/workbench/state"
+import { WorkbenchPage } from "@/features/workbench/WorkbenchPage"
 import { useTheme } from "@/hooks/use-theme"
 import { locales, useI18n, type Locale, type MessageKey } from "@/i18n"
+import { api } from "@/lib/api"
 import { NavigationContext } from "@/lib/navigation"
 import type { EnvironmentMode } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-type Page = "sign" | "validation" | "cades" | "xml" | "matrix" | "sandbox"
+type Page = "workbench" | "validation" | "matrix" | "coverage" | "sandbox"
 
 const nav: { id: Page; label: MessageKey; icon: typeof PenTool }[] = [
-  { id: "sign", label: "app.nav.sign", icon: PenTool },
+  { id: "workbench", label: "app.nav.workbench", icon: PenTool },
   { id: "validation", label: "app.nav.validation", icon: FileCheck2 },
-  { id: "cades", label: "app.nav.cades", icon: FileCode2 },
-  { id: "xml", label: "app.nav.xades", icon: Code2 },
   { id: "matrix", label: "app.nav.matrix", icon: Grid3x3 },
+  { id: "coverage", label: "app.nav.coverage", icon: ListChecks },
   { id: "sandbox", label: "app.nav.sandbox", icon: FlaskConical },
 ]
 
@@ -34,11 +35,16 @@ const comingNext: { label: MessageKey; icon: typeof PenTool }[] = [
 ]
 
 export default function App() {
-  const [page, setPage] = useState<Page>("sign")
+  const [page, setPage] = useState<Page>("workbench")
+  const [schema, setSchema] = useState<WorkbenchSchema | null>(null)
   const [toValidate, setToValidate] = useState<{ id: string; name: string } | null>(null)
   const [environment, setEnvironment] = useState<EnvironmentMode>("Sandbox")
   const { theme, setTheme } = useTheme()
   const { t, locale, setLocale } = useI18n()
+  // The schema carries the explanations, so it is fetched again in the new language.
+  useEffect(() => {
+    api.workbench.schema().then(setSchema).catch(() => setSchema(null))
+  }, [locale])
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex h-screen overflow-hidden">
@@ -108,14 +114,17 @@ export default function App() {
           </header>
           <main className="flex min-h-0 flex-1 flex-col">
             <NavigationContext.Provider value={{ validate: (file) => { setToValidate(file); setPage("validation") } }}>
-              <SigningProvider environment={environment}>
-                {page === "sign" && <SigningPage />}
-                {page === "validation" && <ValidationPage environment={environment} initialFile={toValidate} />}
-                {page === "cades" && <CadesPage environment={environment} />}
-                {page === "xml" && <XmlPage environment={environment} />}
-                {page === "matrix" && <MatrixPage />}
-                {page === "sandbox" && <SandboxPage />}
-              </SigningProvider>
+              <CatalogProvider>
+                {!schema ? <div className="text-muted-foreground flex flex-1 items-center justify-center"><Loader2 className="size-5 animate-spin" /></div> : (
+                  <WorkbenchProvider schema={schema} environment={environment}>
+                    {page === "workbench" && <WorkbenchPage />}
+                    {page === "validation" && <ValidationArea environment={environment} initialFile={toValidate} />}
+                    {page === "matrix" && <MatrixPage />}
+                    {page === "coverage" && <CoveragePage />}
+                    {page === "sandbox" && <SandboxPage />}
+                  </WorkbenchProvider>
+                )}
+              </CatalogProvider>
             </NavigationContext.Provider>
           </main>
         </div>

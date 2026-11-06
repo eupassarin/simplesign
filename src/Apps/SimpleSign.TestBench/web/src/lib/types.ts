@@ -283,6 +283,12 @@ export interface IcpVersion {
   uri: string
 }
 
+export interface CodeSnippets {
+  cSharp: string
+  cli: string
+  cliNotes: string[]
+}
+
 export interface CheckRow {
   id: string
   name: string

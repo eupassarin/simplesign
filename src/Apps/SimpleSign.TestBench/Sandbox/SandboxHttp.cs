@@ -69,6 +69,7 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
             _ when host == $"csc.{SandboxPki.Host}" => ("CSC", await _csc.SendAsync(request, cancellationToken)),
             _ => ("Blocked", Text(HttpStatusCode.BadGateway, $"The sandbox is offline: {host} is not a sandbox service. Switch to Real to reach the internet.")),
         };
+        Runs.RunLog.Current?.Network(request.Method.Method, uri.AbsoluteUri, (int)response.StatusCode, service);
         lock (_gate)
         {
             _log.Add(new SandboxRequest(DateTimeOffset.Now, request.Method.Method, uri.AbsoluteUri, (int)response.StatusCode, service));

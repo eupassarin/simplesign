@@ -9,6 +9,7 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
 using SimpleSign.XAdES.Constants;
+using SimpleSign.XAdES.Internal;
 
 namespace SimpleSign.XAdES;
 
@@ -33,6 +34,29 @@ internal static partial class XadesSignatureBuilder
         }
 
         return xmlDoc;
+    }
+
+    private static void LogSignatureSteps(
+        ILogger logger,
+        HashAlgorithmName hashAlgorithm,
+        string signedPropertiesId,
+        XadesSigningCertificateForm signingCertificateForm,
+        SignaturePolicyReference? signaturePolicy,
+        CommitmentType? commitmentType,
+        IReadOnlyList<string>? signerRoles,
+        string documentUri,
+        byte[] documentDigest,
+        byte[] signedPropertiesDigest,
+        byte[] signedInfoCanonical,
+        byte[] signatureValue)
+    {
+        string algorithm = hashAlgorithm.Name ?? "?";
+        logger.SignedPropertiesBuilt(signedPropertiesId, signingCertificateForm.ToString(),
+            signaturePolicy is not null, commitmentType is not null, signerRoles?.Count ?? 0);
+        logger.ReferenceDigestComputed(algorithm, documentUri, documentDigest.Length);
+        logger.ReferenceDigestComputed(algorithm, "#" + signedPropertiesId, signedPropertiesDigest.Length);
+        logger.SignedInfoCanonicalized(XmlDSigUrls.ExcC14N, signedInfoCanonical.Length);
+        logger.SignatureValueGenerated(signatureValue.Length);
     }
 
     internal static byte[] BuildSignature(
@@ -121,6 +145,8 @@ internal static partial class XadesSignatureBuilder
 
         // Sign
         byte[] signatureValueBytes = SignHash(signedInfoHash, hashAlgorithm, signatureAlgorithmOid, certificate);
+        LogSignatureSteps(logger, hashAlgorithm, signedPropertiesId, signingCertificateForm, signaturePolicy, commitmentType,
+            signerRoles, string.Empty, docDigest, signedPropsDigest, signedInfoCanonical, signatureValueBytes);
 
         // --- Build final Signature element ---
         var realSig = xmlDoc.CreateElement("Signature", XmlDSigUrls.DsNamespace);

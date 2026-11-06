@@ -32,8 +32,6 @@ public sealed record EnvironmentView(
     bool Sha3Supported,
     string Version);
 
-public sealed record OptionsResponse(OptionsReport Report, DocumentFacts? Document, CredentialFacts? Credential);
-
 public sealed record IcpVersionView(
     string Oid, string Version, string NotBefore, string NotAfter, string? RevokedAt, bool InForce, bool IsAutomatic,
     string? Disabled, IReadOnlyList<string> AcceptedRoots, IReadOnlyList<string> Requirements, string Uri);
@@ -43,10 +41,6 @@ public sealed record UploadView(string Id, string FileName, long Size);
 public sealed record ValidateRequest(string FileId, ValidationSettings? Settings);
 
 public sealed record InspectRequest(string FileId);
-
-public sealed record XmlOptionsResponse(XmlOptionsReport Report, XmlFacts? Data, CredentialFacts? Credential);
-
-public sealed record CadesOptionsResponse(CadesOptionsReport Report, CadesInputs Inputs, CredentialFacts? Credential);
 
 internal static class Api
 {
@@ -137,15 +131,8 @@ internal static class Api
             return Results.NoContent();
         });
 
-        // Options, ICP versions, signing, validation
-        api.MapPost("/options", async (SigningOptions options, DocumentStore documents, CredentialStore store, CancellationToken ct) =>
-        {
-            DocumentFacts? document = options.DocumentId is { } id && documents.TryGet(id, out _) ? await documents.FactsAsync(id, ct) : null;
-            store.TryGet(options.CredentialId, out var credential);
-            return new OptionsResponse(Compatibility.Evaluate(options, document, credential?.Facts), document, credential?.Facts);
-        });
+        // ICP-Brasil policy versions and the stamp preview (options, rules and signing: RunApi)
         api.MapGet("/icp/versions", (IcpPolicyKind policy, string? credentialId, CredentialStore store) => IcpVersions(policy, credentialId, store));
-        api.MapPost("/sign", async (SigningOptions options, SigningRunner runner, CancellationToken ct) => await runner.RunAsync(options, ct));
         api.MapPost("/preview", async (SigningOptions options, PreviewService preview, CancellationToken ct) =>
         {
             try
@@ -172,13 +159,6 @@ internal static class Api
         // CAdES
         var cades = api.MapGroup("/cades");
         cades.MapGet("/samples", (CadesSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
-        cades.MapPost("/options", (CadesOptions options, CadesRunner runner, CredentialStore store) =>
-        {
-            store.TryGet(options.CredentialId, out var credential);
-            var inputs = runner.Inputs(options);
-            return new CadesOptionsResponse(CadesCompatibility.Evaluate(options, inputs, credential?.Facts), inputs, credential?.Facts);
-        });
-        cades.MapPost("/sign", async (CadesOptions options, CadesRunner runner, CancellationToken ct) => await runner.RunAsync(options, ct));
         cades.MapPost("/validate", (CadesValidateRequest body, CadesRunner runner) =>
             runner.Validate(body.SignatureId, body.DataId, body.Settings ?? new ValidationSettings()));
         cades.MapPost("/inspect", (InspectRequest body, DocumentStore documents) =>
@@ -190,13 +170,6 @@ internal static class Api
         // XML: XAdES and fiscal XML-DSig
         var xml = api.MapGroup("/xml");
         xml.MapGet("/samples", (XmlSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
-        xml.MapPost("/options", (XmlOptions options, XmlRunner runner, CredentialStore store) =>
-        {
-            store.TryGet(options.CredentialId, out var credential);
-            var facts = runner.Facts(options.DataId);
-            return new XmlOptionsResponse(XmlCompatibility.Evaluate(options, facts, credential?.Facts), facts, credential?.Facts);
-        });
-        xml.MapPost("/sign", async (XmlOptions options, XmlRunner runner, CancellationToken ct) => await runner.RunAsync(options, ct));
         xml.MapPost("/validate", (XmlValidateRequest body, XmlRunner runner) =>
             runner.Validate(body.SignatureId, body.DataId, body.Settings ?? new ValidationSettings()));
 
@@ -209,6 +182,8 @@ internal static class Api
                 "xml" => await xmlMatrix.RunAsync(body, ct),
                 _ => await matrix.RunAsync(body, ct),
             });
+
+        RunApi.Map(api);
 
         api.MapFallback(() => Results.NotFound(new { error = "Unknown API route." }));
     }

@@ -42,6 +42,23 @@ public sealed class CscSignerTests : IDisposable
     }
 
     [Fact]
+    public async Task SignAsync_WithLogger_LogsCredentialAuthorizationAndSignatureWithoutThePin()
+    {
+        var logger = new SimpleSign.TestHelpers.RecordingLogger();
+        var options = _server.CreateClient().Options with { Logger = logger };
+        var client = new CscClient(options, new HttpClient(_server, disposeHandler: false));
+        using var signer = await CscSigner.CreateAsync(client, "rsa-cred", new ExplicitCscAuthorizer(FakeCscServer.Pin));
+
+        await SigningAssert.SignPdfAsync(signer, signer.Certificate, signer.Chain, _pki.Ca);
+
+        logger.EventIds.ShouldBe([7300, 7301, 7302, 7303]);
+        // The PIN ("1234") also occurs inside the test CPF in the certificate subject of event 7300,
+        // so the secrets are checked on the other events, and the service token on all of them.
+        logger.Entries.Where(e => e.EventId != 7300).ShouldAllBe(e => !e.Message.Contains(FakeCscServer.Pin));
+        logger.Entries.ShouldAllBe(e => !e.Message.Contains(FakeCscServer.ServiceToken));
+    }
+
+    [Fact]
     public async Task SignAsync_RsaPss_SendsPssParamsAndValidates()
     {
         using var signer = await SignerAsync("rsa-cred");

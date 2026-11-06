@@ -8,6 +8,7 @@ using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
+using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Validation;
@@ -106,6 +107,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
                 CadesOperation.CounterSign => CadesSigner.CounterSign(existing!, o.SignerIndex),
                 _ => CadesSigner.Document(data!),
             };
+            builder = builder.WithLogger(RunLog.Logger);
             foreach (var step in plan.Steps)
             {
                 builder = step.Apply(builder);
@@ -146,7 +148,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         }
 
         var trust = validation.Trust(settings);
-        var validator = new CadesSignatureValidator(trust.Options);
+        var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger);
         var result = validator.ValidateAll(signature.Content, structure.IsDetached ? data : null, trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null);
         var signers = result.Signers.Select(Signer).ToList();
         string overall = result.Errors.Count > 0 || signers.Count == 0 ? "Invalid"

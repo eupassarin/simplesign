@@ -7,11 +7,11 @@ import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import type { OptionIssue, OptionState } from "@/lib/types"
 import { useT } from "@/i18n"
-import { useSigning } from "./state"
+import { useCatalog } from "./catalog"
 
 /** The "i" next to an option: summary, details, the standard and the library API. */
 export function Explain({ id, className }: { id: string; className?: string }) {
-  const { catalog } = useSigning()
+  const catalog = useCatalog()
   const t = useT()
   const info = catalog[id]
   if (!info) return null

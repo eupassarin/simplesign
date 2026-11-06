@@ -12,9 +12,15 @@ public enum EnvironmentMode
 /// <summary>Everything the sandbox simulates, created once per process.</summary>
 internal sealed class SandboxEnvironment : IDisposable
 {
-    public SandboxEnvironment()
+    /// <summary>The default place of the stored sandbox root: the user's local application data.</summary>
+    public static string DefaultRootStorePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimpleSign", "TestBench", "sandbox-root.pem");
+
+    /// <summary>Creates the sandbox.</summary>
+    /// <param name="rootStorePath">Where the sandbox root CA is kept between runs (null: a new root every time).</param>
+    public SandboxEnvironment(string? rootStorePath = null)
     {
-        Pki = new SandboxPki();
+        Pki = new SandboxPki(rootStorePath);
         Psc = new SandboxPsc(Pki);
         Csc = new SandboxCsc(Pki);
         Network = new SandboxNetwork(Pki, Psc, Csc);

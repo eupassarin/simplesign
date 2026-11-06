@@ -7,32 +7,25 @@ import type {
   IcpPolicyKind,
   IcpVersion,
   MatrixCase,
-  MatrixRunResult,
   OptionInfo,
-  OptionsResponse,
   Pkcs11Driver,
   SampleDocument,
   SandboxRequest,
   SigningOptions,
-  SigningResult,
   StoreCertificate,
   BulkReport,
   InspectionReport,
   ValidationReport,
   ValidationSample,
   ValidationSettings,
-  CadesOptions,
-  CadesOptionsResponse,
   CadesSample,
-  CadesSignResult,
   CadesValidationView,
   CmsFacts,
-  XmlOptions,
-  XmlOptionsResponse,
   XmlSample,
-  XmlSignResult,
   XmlValidationView,
 } from "./types"
+
+import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RunSummary, RunView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -75,10 +68,8 @@ export const api = {
   uploadDocument: (file: File) => request<DocumentFacts>("POST", "/api/documents", upload(file)),
   uploadFile: (file: File) => request<{ id: string; fileName: string; size: number }>("POST", "/api/uploads", upload(file)),
   fileUrl: (id: string, download = false) => `/api/files/${encodeURIComponent(id)}${download ? "?download=true" : ""}`,
-  options: (options: SigningOptions) => request<OptionsResponse>("POST", "/api/options", options),
   icpVersions: (policy: IcpPolicyKind, credentialId?: string | null) =>
     request<IcpVersion[]>("GET", `/api/icp/versions?policy=${policy}${credentialId ? `&credentialId=${credentialId}` : ""}`),
-  sign: (options: SigningOptions) => request<SigningResult>("POST", "/api/sign", options),
   preview: (options: SigningOptions) => request<{ fileId: string }>("POST", "/api/preview", options),
   validation: {
     samples: () => request<ValidationSample[]>("GET", "/api/validation/samples"),
@@ -89,16 +80,12 @@ export const api = {
   },
   cades: {
     samples: () => request<CadesSample[]>("GET", "/api/cades/samples"),
-    options: (options: CadesOptions) => request<CadesOptionsResponse>("POST", "/api/cades/options", options),
-    sign: (options: CadesOptions) => request<CadesSignResult>("POST", "/api/cades/sign", options),
     validate: (signatureId: string, dataId: string | null, settings: ValidationSettings) =>
       request<CadesValidationView>("POST", "/api/cades/validate", { signatureId, dataId, settings }),
     inspect: (fileId: string) => request<CmsFacts>("POST", "/api/cades/inspect", { fileId }),
   },
   xml: {
     samples: () => request<XmlSample[]>("GET", "/api/xml/samples"),
-    options: (options: XmlOptions) => request<XmlOptionsResponse>("POST", "/api/xml/options", options),
-    sign: (options: XmlOptions) => request<XmlSignResult>("POST", "/api/xml/sign", options),
     validate: (signatureId: string, dataId: string | null, settings: ValidationSettings) =>
       request<XmlValidationView>("POST", "/api/xml/validate", { signatureId, dataId, settings }),
   },
@@ -118,8 +105,22 @@ export const api = {
       request<CredentialFacts>("POST", `/api/credentials/csc?environment=${environment}`, body),
     close: (id: string) => request<void>("DELETE", `/api/credentials/${id}`),
   },
+  workbench: {
+    schema: () => request<WorkbenchSchema>("GET", "/api/schema"),
+    evaluate: (format: Format, options: Options) => request<Evaluation>("POST", "/api/workbench/options", { format, options }),
+    start: (format: Format, options: Options, crossValidate: boolean) => request<{ id: string }>("POST", "/api/runs", { format, options, crossValidate }),
+    run: (id: string) => request<RunView | undefined>("GET", `/api/runs/${id}`),
+    eventsUrl: (id: string) => `/api/runs/${id}/events`,
+    history: () => request<RunSummary[]>("GET", "/api/runs"),
+  },
+  dss: {
+    settings: () => request<DssSettings>("GET", "/api/dss/settings"),
+    save: (settings: DssSettings) => request<DssSettings>("PUT", "/api/dss/settings", settings),
+    status: () => request<DssStatus>("GET", "/api/dss/status"),
+    validate: (fileId: string, dataId?: string | null) => request<DssComparison>("POST", "/api/dss/validate", { fileId, dataId }),
+  },
   matrix: {
     cases: (format = "pades") => request<MatrixCase[]>("GET", `/api/matrix/cases?format=${format}`),
-    run: (body: { group?: string; limit?: number; caseId?: string; format?: string }) => request<MatrixRunResult>("POST", "/api/matrix/run", body),
+    streamUrl: (format = "pades", group = "all") => `/api/matrix/stream?format=${format}&group=${group}`,
   },
 }

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging;
 
 namespace SimpleSign.Signers.Cloud.Psc;
 
@@ -23,6 +24,9 @@ public sealed record PscClientOptions
 
     /// <summary>Paths and field names; override for providers that differ from the ITI defaults.</summary>
     public PscWireFormat WireFormat { get; init; } = PscWireFormat.Default;
+
+    /// <summary>Receives diagnostics of the signer. Secrets are never logged. Default: no logging.</summary>
+    public ILogger? Logger { get; init; }
 }
 
 /// <summary>A certificate returned by the PSC certificate discovery.</summary>

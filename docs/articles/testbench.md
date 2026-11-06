@@ -1,17 +1,17 @@
 # SimpleSign TestBench
 
-The TestBench is a local web app for trying **every PDF signing option** of the library, with
-an explanation next to each one. It never shows options that cannot be combined: the rules live
-in one place (`Signing/Compatibility.cs`), and the UI, the runner and the run matrix all use them.
+The TestBench is a local web app for signing **PAdES, CAdES and XAdES** with every option the
+library has, on one screen, and for seeing what happened: the result, the verdict of two
+validators, the log of every step and the code that does the same.
 
 ```bash
 dotnet run --project src/Apps/SimpleSign.TestBench          # http://127.0.0.1:5199, opens the browser
 dotnet run --project src/Apps/SimpleSign.TestBench -- --port 5200 --no-browser
 ```
 
-The UI is in **English (en-US), Portuguese (pt-BR) and Spanish (es)**: it follows the browser's
-language, and the selector in the top bar overrides it (saved in the browser). The server's
-explanations, compatibility messages and sample descriptions follow the same choice
+The UI is in **English (en-US) and Portuguese (pt-BR)**: it follows the browser's language, and
+the selector in the top bar overrides it (saved in the browser). The explanations, the rule
+messages and the sample descriptions come from the server in the same language
 (`Accept-Language`). Library names, OIDs, standard terms and the generated code stay as they are.
 
 The first run builds the UI (Node.js 20+ needed; `npm ci && npm run build` in
@@ -33,32 +33,108 @@ Sandbox services answer on `*.sandbox.simplesign.test` through an in-process
 `IHttpClientProvider`, so the library runs its normal code paths without the network. The
 *Sandbox* page lists the certificates, the services and every request they answered.
 
-## Signing, step by step
+## The workbench
 
-1. **Document**: samples (plain, empty signature field, already signed, certified P=1/2/3, PDF/A-2b,
-   PDF/A-1b) or your upload. Its facts (DocMDP, existing signatures, empty fields, PDF/A) decide
-   what the next steps offer.
-2. **Signer**: sandbox A1, PFX, OS store, A3 token, PSC or CSC v2. The card shows what the key can
-   produce (digests, RSA schemes).
-3. **Signature type**: PAdES baseline (B-B…B-LTA), an ICP-Brasil policy (AD-RB, AD-RT, AD-RC,
-   AD-RA, any version, with its signing period and accepted roots), or a custom policy. The TSA,
-   archive TSA and failure behavior appear only when needed.
-4. **Cryptography**: digest, RSA PKCS#1 v1.5 or PSS, sub-filter, PDF/A preservation, `/Contents` size.
-5. **Field & appearance**: new or existing field; a visible stamp with a live preview (a real B-B
-   signature of a throwaway copy, rendered with pdf.js; click the page to place it), text, date,
-   colors, Base14 font, QR code and background image.
-6. **Details**: reason, location, contact, claimed signing time, signer metadata or AEA (Lei
-   14.063), certification (DocMDP), health documents, document information, operation id.
-7. **Mode**: sign now, deferred (prepare → sign the signed attributes → complete) or batch.
+One screen for the three formats. The top bar picks the **format** (PAdES, CAdES, XAdES), has a
+shortcut for each **baseline level** (B-B, B-T, B-LT, B-LTA) and the **Sign** button. The options
+are on the left, in sections that open and close; the result is on the right.
 
-The result shows the requested and achieved level, the validation report (`PdfSignatureValidator`
-+ `IcpBrasilExtension` and `GovBrExtension`), what the output contains (DSS, document timestamp, DocMDP), and a **Code**
-tab with the exact C# builder calls and the equivalent `simplesign sign` command. Secrets are
-never printed. **Validate in Validation** opens the signed file on the Validation page.
+In the sandbox a signer and a sample document are chosen for you, so the first signature is one
+click away.
+
+### Every option names its standard
+
+The form is drawn from one description of the options (`Schema/OptionSchema.cs`, served at
+`/api/schema`). For each option it holds the explanation, the clause of the standard that defines
+it and the library call it becomes. The UI shows the clause as a small badge next to the label;
+hover it for every reference and the call.
+
+| Section | What is there |
+|---|---|
+| What to sign | The PDF; the data and the operation (sign, co-sign, countersign) and content type of CAdES; the packaging (enveloped, enveloping, detached) of XAdES |
+| Signer | Sandbox A1, PFX, OS store, A3 token (PKCS#11), PSC or CSC v2 |
+| Signature level | Baseline level, explicit signature policy, the CAdES and XAdES extended forms |
+| Timestamps | The TSA of the signature timestamp and of the archive timestamp, with their credentials |
+| Cryptography | Digest, RSA PKCS#1 v1.5 or PSS |
+| Signed attributes | Claimed signing time, commitment type, signer metadata, signer roles, MIME type |
+| PDF signature field | Sub-filter, field, certification (DocMDP), reason and location, PDF/A, document information |
+| Visible stamp | Position, text, colors, font, image and QR code, with a preview you can click to place the stamp |
+| Run and validation | Sign now, deferred or batch; whether and how the result is validated |
+
+The rules that say which options combine stay in `Signing/Compatibility.cs`,
+`Cades/CadesCompatibility.cs` and `Xml/XmlCompatibility.cs`: an option that cannot be chosen is
+hidden or locked with the reason.
+
+**Options the library does not have.** The schema also lists what the standards define and
+SimpleSign does not implement (for example CAdES signer-location and content-time-stamp, XAdES
+SignatureProductionPlace and countersignature, EdDSA). They appear at the end of each section,
+disabled, with their clause. The *Coverage* page shows the whole list for each format.
+
+### Trust frameworks
+
+The workbench opens with the generic ETSI options only. The chips in the top bar switch a
+national framework on:
+
+- **Brazil (ICP-Brasil · Gov.br)** adds the ICP-Brasil policies (AD-RB…AD-RA and their versions),
+  the PBAD.PAdES sub-filter, the advanced electronic signature of Lei 14.063, health documents,
+  the fiscal XML-DSig layouts, the ICP-Brasil roots and the Brazilian validation rules. These
+  options are in the same sections as the others, in green and tagged **BR**.
+- eIDAS and IOFE are listed as planned.
+
+With every framework off, validation uses no `ICountryExtension`.
+
+### The result
+
+| Tab | What it shows |
+|---|---|
+| Result | Requested and achieved level, size, times, the verdict of each signature, warnings, download |
+| Inspection | What is inside the file: DSS, document timestamp, DocMDP and a page preview (PDF); the CMS structure (CAdES); the Signature element (XAdES) |
+| Validation | SimpleSign's verdict with every check, and the DSS verdict next to it (see below) |
+| Logs | Every library log event and network request of the run |
+| Code | The exact C# builder calls and the equivalent `simplesign` command. Secrets are never printed |
+
+**Logs.** The run passes its own logger to every builder and validator (`WithLogger`), so the tab
+shows what the library did, live. Events are grouped by the stage of the signature they belong
+to (prepare, digest, signed attributes, signature, signature timestamp, validation data, archive
+timestamp, read-back check, validation), and each stage names the clause it implements. The
+requests to the TSA, CRL and OCSP servers and to cloud signers are on the same timeline. There is
+also a plain timeline view, a text filter, and a switch for the debug lines.
+
+**History.** Every run of the session is kept; open one again, or start from its options.
+
+### Many combinations quickly
+
+- **Presets** set the baseline level in one click.
+- **Vary** signs once for every value of one option, keeping the rest: every level, every digest,
+  every packaging. The table shows, per value, the achieved level and what SimpleSign and DSS
+  say; a row opens that run.
+- The **Run matrix** page runs the pairwise combinations of every dimension (see below).
+
+## Cross-validation with DSS
+
+The [EU DSS](https://github.com/esig/dss) is an independent implementation of the validation
+algorithm of ETSI EN 319 102-1. With **DSS** on in the top bar, every run is also sent to its REST
+validation service, and the Validation tab lines the two verdicts up: indication and
+sub-indication, detected level, and the DSS messages when they differ. The DSS report can be
+downloaded.
+
+It is off by default. To run DSS locally:
+
+```bash
+docker compose -f tools/dss/docker-compose.yml up --build
+```
+
+The first build takes about 15 minutes: the server that publishes the DSS bundle is slow.
+`tools/dss/README.md` explains how the container trusts the sandbox root (the TestBench keeps
+that root between runs so the trust survives a restart; `--ephemeral-sandbox` makes a new one each
+time) and what to expect: at B-B and B-T, DSS cannot reach the sandbox CRLs and answers
+INDETERMINATE; at B-LT and B-LTA the data is embedded and the verdicts can be compared. The
+address can also point to a DSS you already run.
 
 ## Validation
 
-The *Validation* page has three tabs, all using the settings on the left: trust anchors (sandbox
+The *Validation* page checks files that already exist, in the three formats (the selector at the
+top). For PDF it has three tabs, all using the settings on the left: trust anchors (sandbox
 root, OS roots, ICP-Brasil, uploaded roots), revocation checking,
 network timeout and the ICP-Brasil extension.
 
@@ -83,52 +159,25 @@ Samples built at startup in the sandbox show each kind of result:
 | Root outside the trust anchors | Indeterminate (chain) |
 | Untrusted TSA | Valid, with a TSA chain warning |
 
-## CAdES
+**CAdES** (`CadesSignatureValidator`): samples built at startup (valid, two signers plus a
+countersignature, data changed, signature value changed, unknown root) or your own .p7s / .p7m and
+data. Shows the tree of signers and countersignatures and the CMS structure.
 
-The *CAdES* page signs any file with `CadesSigner` and validates with `CadesSignatureValidator`.
-
-- **Operation**: sign, co-sign (`CoSign`: another signer of the same content) or countersign
-  (`CounterSign`: a signature over one signer's signature value). The result offers *Co-sign this*
-  and *Countersign this* to build multi-signer files step by step.
-- **Content**: detached (.p7s) or enveloped (.p7m). A co-signature keeps the existing content type;
-  co-signing a detached signature needs the same data (the message digest is checked first).
-- **Type**: CAdES baseline B-B…B-LTA, ICP-Brasil CAdES policies AD-RB, AD-RT, AD-RV, AD-RC and AD-RA
-  (`WithIcpBrasilPolicy`), or a policy OID. RFC 5126 extended forms (CAdES-X, X Long, A) need a
-  signature timestamp (B-T, B-LT or B-LTA).
-- **Result**: the validation tree (signers, with their countersignatures nested), the CMS structure
-  (signed and unsigned attributes of every signer) and the C# / `simplesign cades` code.
-- **Validate**: samples built at startup (valid, two signers plus a countersignature, data changed,
-  signature value changed, unknown root) or your own .p7s / .p7m and data, with the same trust
-  settings as the Validation page.
-
-The run matrix has a CAdES set as well (operation × content × type × extended form × hash ×
-padding × signer).
-
-## XML (XAdES and fiscal XML-DSig)
-
-The *XML* page has two modes.
-
-- **XAdES** (`XadesSigner`): enveloped, detached (with the data URI) or enveloping; XAdES baseline
-  B-B…B-LTA, ICP-Brasil XML policies AD-RB…AD-RA (`WithIcpBrasilPolicy`, which also sets the
-  SigningCertificate V1) or a policy OID; extended forms XAdES-X, X-L and A (on B-T: they replace the
-  B-LT / B-LTA data); signer roles, DataObjectFormat, commitment, signing time, hash and RSASSA-PSS.
-  Validation with `XadesSignatureValidator.ValidateAll`, plus the ICP-Brasil policy check.
-- **Fiscal XML-DSig** (`FiscalXmlSigner`): NF-e/NFC-e, events, voiding, CT-e, MDF-e, NFS-e DPS,
-  eSocial and EFD-Reinf, with synthetic samples. The layout fixes the algorithms (RSA-SHA1 or
-  RSA-SHA256), so only RSA certificates can sign; batches can be signed by Id or all at once.
-  Validation checks each reference digest, signature value and chain, and reads the CNPJ/CPF.
-
-The result shows the verdict of every `ds:Signature`, the Signature element (indented, base64
-shortened), the start of the document, and the C# / `simplesign xades` / `simplesign fiscal` code.
-The run matrix has an XML set (XAdES pairwise plus every fiscal layout).
+**XML** (`XadesSignatureValidator`, `FiscalXmlValidator`): samples or your own XML. Shows the
+verdict of every `ds:Signature`, the Signature element and the start of the document.
 
 ## Run matrix
 
 The *Run matrix* page (and `SimpleSign.TestBench.Tests` in CI) generates cases from the same
-rules: every value of every dimension on its own, plus pairwise combinations, so every pair of
-compatible values is signed together at least once. Each case signs in the sandbox, validates,
-and checks the output has what was asked: level, sub-filter, field, timestamps, DSS, document
-timestamp, DocMDP and mode.
+rules, for PAdES, CAdES and XML: every value of every dimension on its own, plus pairwise
+combinations, so every pair of compatible values is signed together at least once. Each case
+signs in the sandbox, validates, and checks the output has what was asked. Cases are reported as
+they finish, and the run can be stopped.
+
+## Coverage
+
+The *Coverage* page lists, for each format, every option of the schema with its clause and its
+library call, and marks the ones SimpleSign does not implement.
 
 ## Limitations
 
@@ -136,3 +185,6 @@ timestamp, DocMDP and mode.
   by root, and AD-RA embeds simulated policy artifacts.
 - Empty signature fields inside compressed object streams are not listed.
 - PKCS#11 needs a driver; with no token, try SoftHSM2.
+- DSS cannot fetch the sandbox CRLs or reach the sandbox TSA: compare verdicts at B-LT or B-LTA.
+- The clause numbers in the schema were written from the published standards; check them against
+  the version of the standard you follow before quoting them.

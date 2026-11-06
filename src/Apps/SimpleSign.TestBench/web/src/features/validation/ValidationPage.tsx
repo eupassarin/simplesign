@@ -13,8 +13,8 @@ import { useI18n, type MessageKey } from "@/i18n"
 import { api } from "@/lib/api"
 import type { BulkReport, CertificateView, DetailedSignature, EnvironmentMode, InspectionReport, TrustChoice, ValidationReport, ValidationSample, ValidationSettings } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { CodeTabs, Indication, SignatureCard } from "../pdf-signing/steps/ResultStep"
-import { ChoiceCard, Field, KeyValue, Pill, Section } from "../pdf-signing/ui"
+import { CodeTabs, Indication, SignatureCard } from "../shared/results"
+import { ChoiceCard, Field, KeyValue, Pill, Section } from "../shared/ui"
 
 const trustChoices: TrustChoice[] = ["Sandbox", "System", "IcpBrasil"]
 

@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging;
 
 namespace SimpleSign.Signers.Cloud.Csc;
 
@@ -25,6 +26,9 @@ public sealed record CscClientOptions
 
     /// <summary>The OAuth 2.0 base URL. Default: <see cref="BaseUri"/> + <c>oauth2/</c>.</summary>
     public Uri? OAuthBaseUri { get; init; }
+
+    /// <summary>Receives diagnostics of the signer. Secrets are never logged. Default: no logging.</summary>
+    public ILogger? Logger { get; init; }
 }
 
 /// <summary>Service information returned by <c>info</c>.</summary>

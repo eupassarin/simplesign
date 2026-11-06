@@ -1,8 +1,12 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.Signers.Cloud.Internal;
 
 namespace SimpleSign.Signers.Cloud.Csc;
 
@@ -76,6 +80,7 @@ public sealed class CscSigner : IExternalSigner, IDisposable
             throw new CloudSigningException($"The key of credential '{credentialId}' is disabled.");
         }
 
+        Logger(client).CscCredentialReady(credential.Id, credential.Certificate.Subject, credential.AuthMode, credential.Scal);
         return new CscSigner(client, credential, authorizer, timeProvider ?? TimeProvider.System);
     }
 
@@ -90,6 +95,8 @@ public sealed class CscSigner : IExternalSigner, IDisposable
         byte[] hash = CmsSignatureBuilder.ComputeHash(request.DataToSign.Span, request.HashAlgorithm);
         string hashOid = CmsSignatureBuilder.GetDigestOid(request.HashAlgorithm);
 
+        var logger = Logger(_client);
+        long started = Stopwatch.GetTimestamp();
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -97,13 +104,16 @@ public sealed class CscSigner : IExternalSigner, IDisposable
             if (authorization is null || authorization.IsHashBound || authorization.RemainingSignatures < 1
                 || (authorization.ExpiresAt is { } expires && _timeProvider.GetUtcNow() >= expires))
             {
+                logger.CscAuthorizing(1);
                 authorization = await _authorizer.AuthorizeAsync(
                     _client, new CscAuthorizationRequest(Credential, [hash], hashOid, 1), cancellationToken).ConfigureAwait(false);
             }
 
+            logger.CscSignRequested(signAlgo, hashOid);
             var signatures = await _client.SignHashAsync(
                 Credential.Id, authorization, [hash], hashOid, signAlgo, parameters, cancellationToken).ConfigureAwait(false);
             _authorization = authorization with { RemainingSignatures = authorization.RemainingSignatures - 1 };
+            logger.CscSignCompleted(signatures[0].Length, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             return isEcdsa ? EcdsaSignatureEncoding.ToDer(signatures[0]) : signatures[0];
         }
         finally
@@ -111,6 +121,8 @@ public sealed class CscSigner : IExternalSigner, IDisposable
             _gate.Release();
         }
     }
+
+    private static ILogger Logger(CscClient client) => client.Options.Logger ?? NullLogger.Instance;
 
     /// <summary>Disposes the credential's certificates.</summary>
     public void Dispose()

@@ -1,6 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Crypto;
+using SimpleSign.PAdES.Internal;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Enums;
 
@@ -30,13 +33,26 @@ public static class DocTimeStampWriter
     /// <param name="httpClient">HttpClient for TSA communication.</param>
     /// <param name="hashAlgorithm">Hash algorithm (default: SHA-256).</param>
     /// <param name="pdfALevel">Detected PDF/A level for annotation flag selection.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="tsaFactory">Optional TSA client factory for DI integration.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The PDF bytes with the DocTimeStamp appended.</returns>
     public static async Task<byte[]> AppendDocTimeStampAsync(
         byte[] signedPdf,
         string tsaUrl,
         HttpClient httpClient,
+        HashAlgorithmName? hashAlgorithm = null,
+        PdfALevel? pdfALevel = null,
+        ITimestampClientFactory? tsaFactory = null,
+        CancellationToken cancellationToken = default) =>
+        await AppendDocTimeStampAsync(
+            signedPdf, tsaUrl, httpClient, NullLogger.Instance, hashAlgorithm, pdfALevel, tsaFactory, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Same as the public overload, logging each step to <paramref name="logger"/>.</summary>
+    internal static async Task<byte[]> AppendDocTimeStampAsync(
+        byte[] signedPdf,
+        string tsaUrl,
+        HttpClient httpClient,
+        ILogger logger,
         HashAlgorithmName? hashAlgorithm = null,
         PdfALevel? pdfALevel = null,
         ITimestampClientFactory? tsaFactory = null,
@@ -49,6 +65,7 @@ public static class DocTimeStampWriter
         var hashAlg = hashAlgorithm ?? HashAlgorithmName.SHA256;
         int contentsReservedBytes = DefaultTimestampReservedBytes;
         int contentsHexLength = contentsReservedBytes * 2;
+        logger.DocTimeStampPrepared(signedPdf.Length, hashAlg.Name ?? "?", contentsReservedBytes);
         DateTime sigNow = DateTime.UtcNow;
 
         // Determine object numbers
@@ -315,6 +332,7 @@ public static class DocTimeStampWriter
         long contentsWriteOffset = sigObjOffset + contentsHexLocalOffset;
         Array.Copy(Encoding.Latin1.GetBytes(hexTimestamp), 0, pdfBytes, (int)contentsWriteOffset, contentsHexLength);
 
+        logger.DocTimeStampWritten(timestampToken.Length, pdfBytes.Length);
         return pdfBytes;
     }
 

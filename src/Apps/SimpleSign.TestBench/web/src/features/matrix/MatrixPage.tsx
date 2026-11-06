@@ -1,41 +1,67 @@
-import { useEffect, useMemo, useState } from "react"
-import { CheckCircle2, Loader2, Play, XCircle } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { CheckCircle2, Loader2, Play, Square, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
-import type { MatrixCase, MatrixCaseResult, MatrixRunResult } from "@/lib/types"
+import type { MatrixCase, MatrixCaseResult } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { Pill } from "../pdf-signing/ui"
+import { Pill } from "../shared/ui"
 
 export function MatrixPage() {
   const [cases, setCases] = useState<MatrixCase[] | null>(null)
-  const [result, setResult] = useState<MatrixRunResult | null>(null)
+  const [results, setResults] = useState<MatrixCaseResult[]>([])
+  const [done, setDone] = useState<{ total: number; ms: number; uncoverablePairs: number } | null>(null)
+  const stream = useRef<EventSource | null>(null)
   const [running, setRunning] = useState(false)
   const [filter, setFilter] = useState("all")
   const [format, setFormat] = useState<"pades" | "cades" | "xml">("pades")
   const { t, number } = useI18n()
   useEffect(() => {
+    stream.current?.close()
+    setRunning(false)
     setCases(null)
-    setResult(null)
+    setResults([])
+    setDone(null)
     api.matrix.cases(format).then(setCases)
   }, [format])
   const dimensions = useMemo(() => (cases?.[0] ? Object.keys(cases[0].values) : []), [cases])
-  const byId = useMemo(() => new Map(result?.cases.map((c) => [c.id, c]) ?? []), [result])
+  useEffect(() => () => stream.current?.close(), [])
+  const byId = useMemo(() => new Map(results.map((c) => [c.id, c])), [results])
+  const failed = results.filter((r) => r.status === "fail").length
+  const passed = results.filter((r) => r.status === "pass").length
   const shown = (cases ?? []).filter((c) => {
     const r = byId.get(c.id)
     return filter === "all" || (filter === "failed" ? r?.status === "fail" : c.group === filter)
   })
 
-  async function run() {
+  // Cases arrive one by one, so the table fills in as the matrix runs and it can be stopped.
+  function run() {
     setRunning(true)
-    try {
-      setResult(await api.matrix.run({ group: "all", format }))
-    } finally {
+    setResults([])
+    setDone(null)
+    const source = new EventSource(api.matrix.streamUrl(format))
+    stream.current = source
+    source.onmessage = (message) => {
+      const event = JSON.parse(message.data) as { type: string; case?: MatrixCaseResult; done?: { total: number; ms: number; uncoverablePairs: number } }
+      if (event.case) setResults((current) => [...current, event.case!])
+      if (event.done) {
+        setDone(event.done)
+        source.close()
+        setRunning(false)
+      }
+    }
+    source.onerror = () => {
+      source.close()
       setRunning(false)
     }
+  }
+
+  function stop() {
+    stream.current?.close()
+    setRunning(false)
   }
 
   return (
@@ -56,18 +82,20 @@ export function MatrixPage() {
               <TabsTrigger value="xml">XML</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button onClick={run} disabled={running || !cases}>{running ? <Loader2 className="animate-spin" /> : <Play />} {t("matrix.run", { n: cases?.length ?? 0 })}</Button>
+          {running
+            ? <Button variant="outline" onClick={stop}><Square /> {t("matrix.stop")}</Button>
+            : <Button onClick={run} disabled={!cases}><Play /> {t("matrix.run", { n: cases?.length ?? 0 })}</Button>}
           </div>
         </header>
 
-        {running && <Progress value={undefined} className="h-1 animate-pulse" />}
-        {result && (
+        {running && <Progress value={cases?.length ? (results.length / cases.length) * 100 : 0} className="h-1" />}
+        {results.length > 0 && (
           <div className="flex flex-wrap items-center gap-4 rounded-lg border p-4 text-sm">
-            {result.failed === 0 ? <CheckCircle2 className="text-success size-5" /> : <XCircle className="text-destructive size-5" />}
-            <span className="font-medium">{t("matrix.passed", { passed: result.passed, total: result.total })}</span>
-            {result.failed > 0 && <span className="text-destructive">{t("matrix.failed", { n: result.failed })}</span>}
-            <span className="text-muted-foreground">{number(result.ms / 1000, 1)} s</span>
-            <span className="text-muted-foreground">{t("matrix.impossible", { n: result.uncoverablePairs })}</span>
+            {running ? <Loader2 className="size-5 animate-spin" /> : failed === 0 ? <CheckCircle2 className="text-success size-5" /> : <XCircle className="text-destructive size-5" />}
+            <span className="font-medium">{t("matrix.passed", { passed, total: running ? cases?.length ?? results.length : results.length })}</span>
+            {failed > 0 && <span className="text-destructive">{t("matrix.failed", { n: failed })}</span>}
+            {done && <span className="text-muted-foreground">{number(done.ms / 1000, 1)} s</span>}
+            {done && <span className="text-muted-foreground">{t("matrix.impossible", { n: done.uncoverablePairs })}</span>}
           </div>
         )}
 
@@ -76,7 +104,7 @@ export function MatrixPage() {
             <TabsTrigger value="all">{t("matrix.all", { n: cases?.length ?? 0 })}</TabsTrigger>
             <TabsTrigger value="single">{t("matrix.single", { n: cases?.filter((c) => c.group === "single").length ?? 0 })}</TabsTrigger>
             <TabsTrigger value="pairwise">{t("matrix.pairwise", { n: cases?.filter((c) => c.group === "pairwise").length ?? 0 })}</TabsTrigger>
-            {result && result.failed > 0 && <TabsTrigger value="failed">{t("matrix.failedTab", { n: result.failed })}</TabsTrigger>}
+            {failed > 0 && <TabsTrigger value="failed">{t("matrix.failedTab", { n: failed })}</TabsTrigger>}
           </TabsList>
         </Tabs>
 
