@@ -26,7 +26,7 @@ public sealed partial class PdfStructureReader
             }
 
             int objNumber = FindOwningObject(data, dictStart, crossRefs);
-            var field = ParseSignatureDict(data[dictStart..(dictEnd + 2)], dictStart, objNumber, data);
+            var field = ParseSignatureDict(data[dictStart..(dictEnd + 2)], objNumber, data);
             if (field is not null)
             {
                 fields.Add(field);
@@ -149,7 +149,7 @@ public sealed partial class PdfStructureReader
     /// Parses a signature dictionary to extract ByteRange, Contents, signing time, and SubFilter.
     /// </summary>
     private static PdfSignatureField? ParseSignatureDict(
-        ReadOnlySpan<byte> dictSpan, int dictAbsoluteOffset, int objNumber, ReadOnlySpan<byte> fullData)
+        ReadOnlySpan<byte> dictSpan, int objNumber, ReadOnlySpan<byte> fullData)
     {
         var byteRange = ExtractByteRange(dictSpan);
         if (byteRange is null)

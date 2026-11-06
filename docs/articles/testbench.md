@@ -31,13 +31,20 @@ terminal, `npm run dev` in `web/` (Vite on :5173, proxying `/api` to :5199). The
 
 Sandbox services answer on `*.sandbox.simplesign.test` through an in-process
 `IHttpClientProvider`, so the library runs its normal code paths without the network. The
-*Sandbox* page lists the certificates, the services and every request they answered.
+*Environment* panel lists the certificates, the services and every request they answered.
 
-## The workbench
+## One screen, two tasks
 
-One screen for the three formats. The top bar picks the **format** (PAdES, CAdES, XAdES), has a
-shortcut for each **baseline level** (B-B, B-T, B-LT, B-LTA) and the **Sign** button. The options
-are on the left, in sections that open and close; the result is on the right.
+There is no menu. The top bar switches between the two tasks, **Sign** and **Validate**, which
+share the same screen: the input on the left, the result on the right. Two panels open over
+either task: **Reference** (what the library covers of each standard) and **Environment** (the
+sandbox, with failures you can switch on). Each task keeps its own result, and both go to the same run history.
+
+## The workbench (Sign)
+
+The task bar picks the **format** (PAdES, CAdES, XAdES), has a shortcut for each **baseline
+level** (B-B, B-T, B-LT, B-LTA) and the **Sign** button. The options are on the left, in sections
+that open and close.
 
 In the sandbox a signer and a sample document are chosen for you, so the first signature is one
 click away.
@@ -68,7 +75,7 @@ hidden or locked with the reason.
 **Options the library does not have.** The schema also lists what the standards define and
 SimpleSign does not implement (for example CAdES signer-location and content-time-stamp, XAdES
 SignatureProductionPlace and countersignature, EdDSA). They appear at the end of each section,
-disabled, with their clause. The *Coverage* page shows the whole list for each format.
+disabled, with their clause. The *Reference* panel shows the whole list for each format.
 
 ### Trust frameworks
 
@@ -105,10 +112,14 @@ also a plain timeline view, a text filter, and a switch for the debug lines.
 ### Many combinations quickly
 
 - **Presets** set the baseline level in one click.
-- **Vary** signs once for every value of one option, keeping the rest: every level, every digest,
-  every packaging. The table shows, per value, the achieved level and what SimpleSign and DSS
-  say; a row opens that run.
-- The **Run matrix** page runs the pairwise combinations of every dimension (see below).
+- **Combinations** signs once for every value of one option, or for the combinations of several,
+  keeping the rest as it is. With several options choose *all combinations* or *pairwise* (a small
+  set in which every pair of values still appears together at least once); *Everything, in
+  pairs* takes every option of the format. Combinations the rules refuse are listed with the
+  reason and not run.
+- Each line is a normal run: achieved level, the verdicts of SimpleSign and DSS, the time, and
+  the result, log and code on a click. There is a summary per value ("SHA-384 4/4") and filters
+  for the failed ones, the ones where DSS differs, and the ones not run.
 
 ## Cross-validation with DSS
 
@@ -131,53 +142,94 @@ time) and what to expect: at B-B and B-T, DSS cannot reach the sandbox CRLs and 
 INDETERMINATE; at B-LT and B-LTA the data is embedded and the verdicts can be compared. The
 address can also point to a DSS you already run.
 
-## Validation
+## Validate
 
-The *Validation* page checks files that already exist, in the three formats (the selector at the
-top). For PDF it has three tabs, all using the settings on the left: trust anchors (sandbox
-root, OS roots, ICP-Brasil, uploaded roots), revocation checking,
-network timeout and the ICP-Brasil extension.
+The Validate task checks a file that already exists. Drop a signed PDF, a CMS signature (.p7s,
+.p7m) or a signed XML: **the format is read from the file**. A detached signature also takes the
+original data.
 
-- **Validate**: `PdfSignatureValidator` (+ `IcpBrasilExtension` and `GovBrExtension`). Per signature: the checks, PAdES
-  level, Lei 14.063 level, policy, signer certificate and the certificates in the CMS, the
-  signature timestamp, which part of the file the ByteRange covers, and the signed attributes;
-  plus the DSS and the C#/CLI code.
-- **Bulk**: `BulkValidator` over many PDFs with a chosen concurrency; one row per file.
-- **Inspect**: `PdfStructureDumper` (signature dictionaries, DSS, VRI, each entry explained) and
-  the CMS of each signature for download (`PadesExtractor`).
+A validation is a run like a signature, so the result is the same panel: the verdict of each
+signature with every check, the DSS verdict next to it when cross-validation is on, what is
+inside the file (per signature for PDF, with the dump of the signature objects and the CMS for
+download; the CMS structure for CAdES; the Signature element for XML), the log and the code.
+**Open in Validate**, on the result of a signature, brings the file here.
 
-Samples built at startup in the sandbox show each kind of result:
+The trust settings are the same options the workbench uses (trusted roots, revocation, and the
+Brazilian rules when that framework is on).
 
-| Sample | Expected |
+**Samples** are built at startup in the sandbox, valid or broken in one specific way, each with
+the verdict it should get:
+
+| Format | Samples |
 |---|---|
-| Valid B-LT (control) | Valid |
-| Content changed after signing | Invalid (integrity) |
-| Signature value changed | Invalid (signature) |
-| Bytes appended after signing | Valid, with "ByteRange does not cover entire PDF" |
-| Revoked signer (B-B) | Invalid (revocation) |
-| Expired signer | Indeterminate (chain) |
-| Root outside the trust anchors | Indeterminate (chain) |
-| Untrusted TSA | Valid, with a TSA chain warning |
+| PDF | valid B-LT, content changed, signature value changed, bytes appended, revoked signer, expired signer, root outside the trust anchors, untrusted TSA |
+| CAdES | detached, enveloped, two signers plus a countersignature, data changed, signature value changed, unknown root |
+| XML | XAdES enveloped and detached, signed NF-e, NF-e changed, signature value changed, unknown root |
 
-**CAdES** (`CadesSignatureValidator`): samples built at startup (valid, two signers plus a
-countersignature, data changed, signature value changed, unknown root) or your own .p7s / .p7m and
-data. Shows the tree of signers and countersignatures and the CMS structure.
+**Validate all samples** runs every one and shows a table: expected, SimpleSign, DSS. A row opens
+that run. With DSS on, most of these samples are INDETERMINATE there: they are B-B signatures and
+DSS cannot fetch the sandbox CRLs.
 
-**XML** (`XadesSignatureValidator`, `FiscalXmlValidator`): samples or your own XML. Shows the
-verdict of every `ds:Signature`, the Signature element and the start of the document.
+## Run matrix (CI)
 
-## Run matrix
+`SimpleSign.TestBench.Tests` still runs the fixed matrix of `Matrix/*.cs` in CI: every value of
+every dimension on its own plus pairwise combinations, for PAdES, CAdES and XML, each case signed
+in the sandbox, validated and checked. In the app, **Combinations** does the same from the option
+schema, starting from the options on screen.
 
-The *Run matrix* page (and `SimpleSign.TestBench.Tests` in CI) generates cases from the same
-rules, for PAdES, CAdES and XML: every value of every dimension on its own, plus pairwise
-combinations, so every pair of compatible values is signed together at least once. Each case
-signs in the sandbox, validates, and checks the output has what was asked. Cases are reported as
-they finish, and the run can be stopped.
+## Reference
 
-## Coverage
+The **Reference** panel lists what SimpleSign implements of each standard, from the same schema:
+**by format** (every option with its clause and its library call) or **by standard** (each
+clause and the options that implement it), with a filter for what is not implemented. The same
+content is in [Standard coverage](coverage.md), which is generated from the schema; a test fails
+when that page falls behind (`SIMPLESIGN_UPDATE_DOCS=1 dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests`
+writes it again).
 
-The *Coverage* page lists, for each format, every option of the schema with its clause and its
-library call, and marks the ones SimpleSign does not implement.
+## Environment
+
+The **Environment** panel follows the Sandbox | Real switch.
+
+**In Real** nothing is simulated, so it shows what really exists: the roots a validation can
+trust (the operating system's, and the ICP-Brasil and Gov.br roots bundled with the library),
+the public TSAs the library has a preset for, the PKCS#11 drivers and tokens found, the
+certificates with a key in the OS store, what a real PSC or CSC asks for, and DSS.
+
+**In Sandbox** it is a lab: it shows the sandbox and lets you break it on purpose. Failures only
+act in Sandbox; the top bar says when one is on.
+
+- **Test PKI** as a tree (root, intermediate CA, TSA, signers), with the download of each
+  certificate, of `root.pem` and of the CRLs as they are now. *Sign with this* makes a signer the
+  one used by the three formats; *Revoke now* adds it to the CRL.
+- **Failures** to switch on, then sign or validate again:
+
+  | Service | Failure | What it shows |
+  |---|---|---|
+  | TSA | Down (HTTP 503) | B-T and above fail, or fall back to B-B when lower levels are allowed |
+  | TSA | Slow | Where the time of a signature goes |
+  | TSA | Invalid token | The library refuses a token that does not verify |
+  | TSA | Outside the chain | The signature validates with a TSA warning |
+  | CRL server | Down | B-LT and B-LTA cannot be built |
+  | CRL server | Expired CRLs | A CA that stopped publishing |
+
+  While a failure is on, the top bar says so. *Back to normal* clears failures and revocations.
+- **Services** (TSA, PSC, CSC, DSS) and the **requests** they answered, live, with a filter by
+  service: sign with a cloud certificate and see the authorization and `signHash` calls.
+
+### Cloud certificates: PSC and CSC
+
+Both keep the key at a provider; the library sends only the hash and gets the signature back.
+
+- **PSC** (DOC-ICP-17.01) is the ICP-Brasil cloud certificate (BirdID, VIDaaS, NeoID, SafeID…).
+  You authorize on the provider's page (OAuth with PKCE) or with CPF and OTP; the token's scope
+  says how many signatures it allows.
+- **CSC** (Cloud Signature Consortium API v2) is the international standard, used by European
+  providers. The service is authorized first; then each signature is authorized on the
+  credential, with PIN and OTP or OAuth. SCAL 2 binds the authorization to the exact hashes.
+
+The sandbox simulates one of each, in-process. In the signer picker, the PSC and CSC tabs explain
+the flow step by step and, in Sandbox, **Use the simulated provider** opens a credential in one
+click. The run's log then shows the provider's calls and the signer's events (73xx).
 
 ## Limitations
 

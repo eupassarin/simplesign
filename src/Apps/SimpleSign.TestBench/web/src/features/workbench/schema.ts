@@ -128,6 +128,7 @@ export interface RunVerdict {
   errors: string[]
   warnings: string[]
   children: RunVerdict[]
+  isTimestamp?: boolean
 }
 
 export interface DssSignature {
@@ -173,8 +174,11 @@ export interface DssStatus extends DssSettings {
   ms: number
 }
 
+export type RunKind = "sign" | "validate"
+
 export interface RunView {
   id: string
+  kind: RunKind
   format: Format
   status: "running" | "done" | "failed"
   startedAt: string
@@ -201,8 +205,21 @@ export interface RunView {
   logs: RunLogEntry[]
 }
 
+/** A file to try validation with, and the indication it should get. */
+export interface ValidationSampleView {
+  format: Format
+  id: string
+  fileId: string
+  fileName: string
+  dataId?: string | null
+  title: string
+  description: string
+  expectedIndication?: string | null
+}
+
 export interface RunSummary {
   id: string
+  kind: RunKind
   format: Format
   status: "running" | "done" | "failed"
   startedAt: string
@@ -219,6 +236,52 @@ export interface RunEvent {
   type: "log" | "result"
   log?: RunLogEntry | null
   run?: RunView | null
+}
+
+export interface SandboxCertificate {
+  id: string
+  role: "root" | "intermediate" | "tsa" | "signer"
+  title: string
+  description?: string | null
+  subject: string
+  issuer: string
+  serialNumber: string
+  notBefore: string
+  notAfter: string
+  key: string
+  thumbprint: string
+  problem?: string | null
+  isUsable: boolean
+  revokedNow: boolean
+}
+
+/** What the Real environment has: the roots validation can trust and the public TSAs with a preset. */
+export interface RealEnvironment {
+  systemRootCount: number
+  bundledRoots: { source: string; subject: string; notAfter: string; thumbprint: string }[]
+  publicTsas: { name: string; url: string; api: string }[]
+}
+
+export type TsaFault = "None" | "Down" | "Slow" | "InvalidToken" | "Untrusted"
+export type CrlFault = "None" | "Down" | "Expired"
+
+export interface SandboxFaults {
+  tsa: TsaFault
+  tsaDelayMs: number
+  crl: CrlFault
+}
+
+/** The sandbox as the Environment panel shows it. */
+export interface SandboxState {
+  root: SandboxCertificate
+  intermediate: SandboxCertificate
+  tsa: SandboxCertificate
+  signers: SandboxCertificate[]
+  faults: SandboxFaults
+  faultsActive: boolean
+  rootCrlUrl: string
+  intermediateCrlUrl: string
+  tsaUrl: string
 }
 
 /** Reads "appearance.visible" from the options. */

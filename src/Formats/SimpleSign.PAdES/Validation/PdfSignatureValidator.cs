@@ -75,7 +75,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _cmsParser = cmsParser ?? new CmsParserService();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
         _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? LoadDefaultTrustAnchorProviders();
+            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
         _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
     }
 
@@ -123,7 +123,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _cmsParser = new CmsParserService();
         _timestampValidator = new TimestampValidatorService();
         _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? LoadDefaultTrustAnchorProviders();
+            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
         _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
 
     }
@@ -151,7 +151,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _cmsParser = new CmsParserService();
         _timestampValidator = new TimestampValidatorService();
         _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? LoadDefaultTrustAnchorProviders();
+            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
         _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
 
     }
@@ -777,7 +777,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // Auto-load bundled Brazilian trust anchors (ICP-Brasil + Gov.br)
         // so that valid government signatures validate out of the box.
-        LoadBundledTrustAnchors(chain, signerCert);
+        LoadBundledTrustAnchors(chain);
 
         // User-provided trusted roots
         if (_options.TrustedRoots is not null)
@@ -925,7 +925,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     /// Loads trust anchor certificates from registered providers into the chain policy,
     /// placing self-signed roots in CustomTrustStore and intermediates in ExtraStore.
     /// </summary>
-    private void LoadBundledTrustAnchors(X509Chain chain, X509Certificate2 signerCert)
+    private void LoadBundledTrustAnchors(X509Chain chain)
     {
         foreach (var provider in _trustAnchorProviders)
         {
@@ -947,13 +947,6 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             }
         }
     }
-
-    /// <summary>
-    /// Returns an empty list when no explicit trust anchor providers are registered.
-    /// Install country extension packages (e.g., SimpleSign.Brazil) and register them
-    /// via DI or constructor to enable country-specific trust anchors.
-    /// </summary>
-    private static IReadOnlyList<ITrustAnchorProvider> LoadDefaultTrustAnchorProviders() => [];
 
     private static bool IsCriticalChainError(X509ChainStatusFlags flag) => flag switch
     {

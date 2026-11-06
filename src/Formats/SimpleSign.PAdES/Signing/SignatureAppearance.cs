@@ -521,12 +521,6 @@ public sealed class SignatureAppearance
     /// <summary>Font size used for rendering (static, backward compat).</summary>
     internal static float GetFontSize() => FontSize;
 
-    /// <summary>Label font size (smaller, static, backward compat).</summary>
-    internal static float GetLabelFontSize() => LabelFontSize;
-
-    /// <summary>Minimum line height for text layout.</summary>
-    internal static float GetLineHeight() => LineHeight;
-
     /// <summary>Returns true when a background image (JPEG or PNG) is configured.</summary>
     internal bool HasBackgroundImage() =>
         (BackgroundImagePng?.Length ?? 0) > 0 || (BackgroundImageJpeg?.Length ?? 0) > 0;

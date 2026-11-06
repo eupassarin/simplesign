@@ -91,7 +91,6 @@ internal static partial class XadesSignatureBuilder
         HashAlgorithmName hashAlgorithm,
         DateTimeOffset signingTime,
         string signedPropertiesId,
-        string signatureId,
         CommitmentType? commitmentType,
         SignaturePolicyReference? signaturePolicy,
         XadesSigningCertificateForm signingCertificateForm,

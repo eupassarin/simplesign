@@ -1,8 +1,11 @@
 using System.Text.Json;
 using Shouldly;
+using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.TestBench.Cades;
+using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.CrossValidation;
 using SimpleSign.TestBench.Runs;
+using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Xml;
 
@@ -116,6 +119,122 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         run.Status.ShouldBe("failed");
         run.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error);
     }
+
+    private static RunRequest Validate(string fileId, string? dataId = null) =>
+        new("", JsonSerializer.SerializeToElement(new ValidateOptions(fileId, dataId), WorkbenchJson.Options), Kind: RunKinds.Validate);
+
+    [Fact]
+    public async Task RunAsync_ValidatePdfSamples_DetectsPadesAndGivesTheExpectedVerdict()
+    {
+        fixture.ValidationSamples.ShouldNotBeEmpty();
+        foreach (var sample in fixture.ValidationSamples)
+        {
+            var run = await fixture.Runs().RunAsync(Validate(sample.FileId), default);
+
+            run.Kind.ShouldBe(RunKinds.Validate);
+            run.Format.ShouldBe(RunFormats.Pades, sample.Id);
+            run.Overall.ShouldBe(sample.ExpectedIndication, sample.Id);
+            run.OutputId.ShouldBe(sample.FileId);
+            run.Logs.ShouldContain(l => l.Stage == RunStages.Validation, sample.Id);
+            run.Code!.CSharp.ShouldNotBeNullOrWhiteSpace();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_ValidateCadesSamples_DetectsCadesAndGivesTheExpectedVerdict()
+    {
+        var samples = fixture.CadesSamples.Where(s => s.Kind != "data" && s.ExpectedIndication is not null).ToList();
+        samples.ShouldNotBeEmpty();
+        foreach (var sample in samples)
+        {
+            var run = await fixture.Runs().RunAsync(Validate(sample.FileId, sample.DataId), default);
+
+            run.Format.ShouldBe(RunFormats.Cades, sample.Id);
+            run.Overall.ShouldBe(sample.ExpectedIndication, sample.Id);
+            run.Detail.ShouldBeOfType<CadesValidationView>();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_ValidateXmlSamples_DetectsXmlAndGivesTheExpectedVerdict()
+    {
+        var samples = fixture.XmlSamples.Where(s => s.Kind == "validation" && s.ExpectedIndication is not null).ToList();
+        samples.ShouldNotBeEmpty();
+        foreach (var sample in samples)
+        {
+            var run = await fixture.Runs().RunAsync(Validate(sample.FileId, sample.DataId), default);
+
+            run.Format.ShouldBe(RunFormats.Xades, sample.Id);
+            run.Overall.ShouldBe(sample.ExpectedIndication, sample.Id);
+            run.Detail.ShouldBeOfType<XmlValidationView>();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_ValidateAFileJustSigned_IsValidAndIsInTheHistoryAsAValidation()
+    {
+        var service = fixture.Runs();
+        var signed = await service.RunAsync(Xades(BaselineLevel.BT), default);
+
+        var run = await service.RunAsync(Validate(signed.OutputId!), default);
+
+        run.Overall.ShouldBe("Valid", Problems(run));
+        run.AchievedLevel.ShouldNotBeNull();
+        service.History().ShouldContain(h => h.Id == run.Id && h.Kind == RunKinds.Validate);
+        service.History().ShouldContain(h => h.Id == signed.Id && h.Kind == RunKinds.Sign);
+    }
+
+    [Fact]
+    public async Task RunAsync_SimulatedPsc_SignsThroughTheProviderAndShowsItInTheLog()
+    {
+        var handle = fixture.Credentials.Add(await fixture.Factory.OpenPscPasswordAsync(
+            new PscCredentialRequest(null, null, null, null, SandboxPsc.Otp, PscScope.SignatureSession, "maria-rsa2048"), EnvironmentMode.Sandbox, default));
+
+        var run = await fixture.Runs().RunAsync(Request(RunFormats.Pades, fixture.Options() with { CredentialId = handle.Id, Level = BaselineLevel.BT }), default);
+
+        run.Success.ShouldBeTrue(Problems(run));
+        run.Overall.ShouldBe("Valid", Problems(run));
+        // The hash goes to the provider (network), and the cloud signer reports it (events 731x).
+        run.Logs.ShouldContain(l => l.Source == "network" && l.Message.StartsWith("PSC:", StringComparison.Ordinal));
+        run.Logs.ShouldContain(l => l.EventId == 7311 && l.Stage == RunStages.Signature);
+        run.Logs.ShouldContain(l => l.EventId == 7312);
+    }
+
+    [Fact]
+    public async Task RunAsync_SimulatedCsc_AuthorizesTheCredentialAndShowsItInTheLog()
+    {
+        var handle = fixture.Credentials.Add(await fixture.Factory.OpenCscAsync(
+            new CscCredentialRequest(null, CscServiceAuth.ClientCredentials, null, null, null, "rsa-scal2", CscAuthorizerKind.Explicit, SandboxCsc.Pin, SandboxCsc.Otp),
+            EnvironmentMode.Sandbox, default));
+
+        var run = await fixture.Runs().RunAsync(Request(RunFormats.Cades, new CadesOptions
+        {
+            DataId = fixture.CadesSamples.Single(s => s.Id == "text").FileId,
+            CredentialId = handle.Id,
+            Level = BaselineLevel.BT,
+        }), default);
+
+        run.Success.ShouldBeTrue(Problems(run));
+        run.Overall.ShouldBe("Valid", Problems(run));
+        run.Logs.ShouldContain(l => l.Source == "network" && l.Message.StartsWith("CSC:", StringComparison.Ordinal) && l.Message.Contains("signatures/signHash", StringComparison.Ordinal));
+        run.Logs.ShouldContain(l => l.EventId == 7301);
+        run.Logs.ShouldContain(l => l.EventId == 7303 && l.Stage == RunStages.Signature);
+        run.Logs.ShouldAllBe(l => !l.Message.Contains(SandboxCsc.Otp, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Real_ListsBundledRootsAndPublicTsas()
+    {
+        var real = SimpleSign.TestBench.Endpoints.EnvironmentApi.Real();
+
+        real.BundledRoots.ShouldContain(r => r.Source == "ICP-Brasil");
+        real.PublicTsas.Select(t => t.Name).ShouldBe(["DigiCert", "Sectigo", "FreeTSA"]);
+        real.PublicTsas.ShouldAllBe(t => t.Url.StartsWith("http", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Start_ValidateWithoutAFile_Throws() =>
+        Should.Throw<ArgumentException>(() => fixture.Runs().Start(Validate("no-such-file")));
 
     [Fact]
     public void Start_UnknownFormat_Throws() =>

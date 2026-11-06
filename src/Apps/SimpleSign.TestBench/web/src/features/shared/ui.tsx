@@ -1,5 +1,5 @@
-import type { ReactNode } from "react"
-import { AlertTriangle, BookOpen, CircleAlert, Code2, Info, Lock } from "lucide-react"
+import { useState, type ReactNode } from "react"
+import { AlertTriangle, BookOpen, Check, CircleAlert, Code2, Copy, Info, Lock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Label } from "@/components/ui/label"
@@ -239,11 +239,36 @@ export function IssueList({ issues }: { issues: OptionIssue[] }) {
   )
 }
 
-export function KeyValue({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
+/**
+ * A label and its value. In a row for short values; `stacked` puts the value under the label and
+ * lets it wrap (URLs, distinguished names, OIDs, hex), so nothing is cut. `copy` adds a copy button.
+ */
+export function KeyValue({ label, children, mono, stacked, copy }: { label: string; children: ReactNode; mono?: boolean; stacked?: boolean; copy?: string | null }) {
+  const [copied, setCopied] = useState(false)
+  const button = copy ? (
+    <button type="button" aria-label={`Copy ${label}`} className="text-muted-foreground hover:text-foreground shrink-0"
+      onClick={() => { void navigator.clipboard.writeText(copy); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>
+      {copied ? <Check className="text-success size-3.5" /> : <Copy className="size-3.5" />}
+    </button>
+  ) : null
+  if (stacked) {
+    return (
+      <div className="space-y-0.5 py-1.5">
+        <span className="text-muted-foreground block text-xs">{label}</span>
+        <span className="flex items-start gap-2">
+          <span className={cn("min-w-0 flex-1 text-sm break-all", mono && "font-mono text-xs leading-relaxed")}>{children}</span>
+          {button}
+        </span>
+      </div>
+    )
+  }
   return (
     <div className="flex items-baseline justify-between gap-3 py-1 text-sm">
       <span className="text-muted-foreground shrink-0 text-xs">{label}</span>
-      <span className={cn("min-w-0 truncate text-right", mono && "font-mono text-xs")}>{children}</span>
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className={cn("min-w-0 truncate text-right", mono && "font-mono text-xs")} title={typeof children === "string" ? children : undefined}>{children}</span>
+        {button}
+      </span>
     </div>
   )
 }

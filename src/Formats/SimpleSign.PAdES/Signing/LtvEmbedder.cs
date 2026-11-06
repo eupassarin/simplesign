@@ -309,16 +309,12 @@ public sealed class LtvEmbedder : ILtvEmbedder
         {
             foreach (byte[] raw in dss.GlobalCerts)
             {
-#if NET10_0_OR_GREATER
-                embeddedCertificates.Add(X509CertificateLoader.LoadCertificate(raw));
-#else
-                embeddedCertificates.Add(new X509Certificate2(raw));
-#endif
+                embeddedCertificates.Add(CertificateLoader.LoadCertificate(raw));
             }
 
             return EmbeddedRevocationEvidence.CoversAll(
                 requiredCertificates, embeddedCertificates, dss.GlobalOcsps, dss.GlobalCrls,
-                DateTimeOffset.UtcNow, new OcspClient(DefaultHttpClientProvider.Instance.GetClient()));
+                DateTimeOffset.UtcNow, RevocationEvidence.MatchingOcspClient());
         }
         catch (Exception ex) when (ex is CryptographicException or InvalidDataException)
         {

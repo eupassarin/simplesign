@@ -191,7 +191,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
 
         // Extract XAdES properties from the signature
-        var extraction = XadesPropertyExtraction(sigElement, ns, errors, warnings);
+        var extraction = XadesPropertyExtraction(sigElement, ns, warnings);
 
         // Verify XMLDSig: workaround for XmlDsigEnvelopedSignatureTransform no-op in .NET 10
         // The enveloped transform should remove Signature elements from the node set
@@ -392,7 +392,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         {
             try
             {
-                certificates.Add(X509CertificateLoader.LoadCertificate(DecodeBase64(node)));
+                certificates.Add(CertificateLoader.LoadCertificate(DecodeBase64(node)));
             }
             catch (Exception ex) when (ex is CryptographicException or FormatException)
             {
@@ -451,7 +451,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             // Canonicalize SignedInfo
             var siDoc = new XmlDocument { PreserveWhitespace = true };
             siDoc.AppendChild(siDoc.ImportNode(signedInfoEl, true));
-            byte[] signedInfoBytes = CanonicalizeDocument(siDoc);
+            byte[] signedInfoBytes = XadesSignatureBuilder.CanonicalizeXml(siDoc);
             byte[] signedInfoHash = CryptoUtility.ComputeHash(signedInfoBytes, sigHashAlg);
 
             // Get signature value
@@ -611,7 +611,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         {
             bool hasEnvelopedTransform = HasEnvelopedTransform(refEl, ns);
             return ComputeDocumentDigestWithTempSig(
-                doc, sigElement, ns, hashAlg, hasEnvelopedTransform,
+                doc, hashAlg, hasEnvelopedTransform,
                 GetReferenceCanonicalizationAlgorithm(refEl, ns));
         }
 
@@ -641,7 +641,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         {
             var dataDoc = new XmlDocument { PreserveWhitespace = true };
             dataDoc.Load(new MemoryStream(data));
-            return CryptoUtility.ComputeHash(CanonicalizeDocument(dataDoc, canonicalizationAlgorithm), hashAlg);
+            return CryptoUtility.ComputeHash(XadesSignatureBuilder.CanonicalizeXml(dataDoc, canonicalizationAlgorithm), hashAlg);
         }
 
         return CryptoUtility.ComputeHash(data, hashAlg);
@@ -691,8 +691,6 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
     private static byte[] ComputeDocumentDigestWithTempSig(
         XmlDocument doc,
-        XmlElement sigElement,
-        XmlNamespaceManager ns,
         HashAlgorithmName hashAlg,
         bool hasEnvelopedTransform,
         string? canonicalizationAlgorithm)
@@ -720,7 +718,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             }
         }
 
-        byte[] canonicalBytes = CanonicalizeDocument(clone, canonicalizationAlgorithm ?? XmlDSigUrls.ExcC14N);
+        byte[] canonicalBytes = XadesSignatureBuilder.CanonicalizeXml(clone, canonicalizationAlgorithm ?? XmlDSigUrls.ExcC14N);
         return CryptoUtility.ComputeHash(canonicalBytes, hashAlg);
     }
 
@@ -750,32 +748,14 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         var tempDoc = new XmlDocument { PreserveWhitespace = true };
         tempDoc.AppendChild(tempDoc.ImportNode(element, true));
 
-        byte[] canonicalBytes = CanonicalizeDocument(
+        byte[] canonicalBytes = XadesSignatureBuilder.CanonicalizeXml(
             tempDoc, GetReferenceCanonicalizationAlgorithm(reference, ns) ?? XmlDSigUrls.ExcC14N);
         return CryptoUtility.ComputeHash(canonicalBytes, hashAlg);
-    }
-
-    private static byte[] CanonicalizeDocument(XmlDocument doc, string algorithm = XmlDSigUrls.ExcC14N)
-    {
-        Transform transform = algorithm switch
-        {
-            XmlDSigUrls.ExcC14N => new XmlDsigExcC14NTransform(),
-            XmlDSigUrls.ExcC14NWithComments => new XmlDsigExcC14NTransform(includeComments: true),
-            XmlDSigUrls.C14N => new XmlDsigC14NTransform(),
-            XmlDSigUrls.C14NWithComments => new XmlDsigC14NTransform(includeComments: true),
-            _ => throw new NotSupportedException($"Unsupported XML canonicalization algorithm '{algorithm}'."),
-        };
-        transform.LoadInput(doc);
-        using var stream = (Stream)transform.GetOutput(typeof(Stream))!;
-        using var ms = new MemoryStream();
-        stream.CopyTo(ms);
-        return ms.ToArray();
     }
 
     private static XadesPropertyExtractionResult XadesPropertyExtraction(
         XmlElement sigElement,
         XmlNamespaceManager ns,
-        List<string> errors,
         List<string> warnings)
     {
         string signatureId = sigElement.GetAttribute("Id");
@@ -827,13 +807,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                                 {
                                     try
                                     {
-#if NET10_0_OR_GREATER
-                                        signerCert = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificate(rawCert);
-#else
-#pragma warning disable CA2000 // Ownership transferred to result record
-                                        signerCert = new X509Certificate2(rawCert);
-#pragma warning restore CA2000
-#endif
+                                        signerCert = CertificateLoader.LoadCertificate(rawCert);
                                     }
                                     // S2221: intentional -- validation pipeline converts exceptions to error messages
                                     catch (Exception ex)
@@ -900,9 +874,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             }
 
             byte[] rawCert = DecodeBase64(certEl);
-#pragma warning disable SYSLIB0057
-            return new X509Certificate2(rawCert);
-#pragma warning restore SYSLIB0057
+            return CertificateLoader.LoadCertificate(rawCert);
         }
         // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
@@ -1165,7 +1137,6 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
 
         var encTs = atsEl.SelectSingleNode("xades:EncapsulatedTimeStamp", ns) ?? atsEl.SelectSingleNode("xades141:EncapsulatedTimeStamp", ns);
-        encTs ??= atsEl.SelectSingleNode("xades:EncapsulatedTimeStamp", ns);
 
         if (encTs is null)
         {
@@ -1241,11 +1212,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                                 hasSigner = true;
                             }
                             // Validate that the DER blob is parseable
-#if NET10_0_OR_GREATER
-                            certificates.Add(X509CertificateLoader.LoadCertificate(rawData));
-#else
-                            certificates.Add(new X509Certificate2(rawData));
-#endif
+                            certificates.Add(CertificateLoader.LoadCertificate(rawData));
                         }
                         // S2221: intentional -- validation pipeline converts exceptions to error messages
                         catch (Exception ex)
@@ -1345,7 +1312,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             }
 
             if (!EmbeddedRevocationEvidence.CoversAll(
-                    certificates, ocsps, crls, signingTime ?? DateTimeOffset.UtcNow, new OcspClient(Core.Http.DefaultHttpClientProvider.Instance.GetClient())))
+                    certificates, ocsps, crls, signingTime ?? DateTimeOffset.UtcNow, RevocationEvidence.MatchingOcspClient()))
             {
                 warnings.Add("XAdES-B-LT: Embedded revocation evidence is not authenticated or does not cover the certificate paths.");
                 return false;

@@ -4,7 +4,6 @@ using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.CrossValidation;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
-using SimpleSign.TestBench.Matrix;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Schema;
@@ -32,10 +31,8 @@ public sealed record RunStarted(string Id);
 
 public sealed record DssValidateRequest(string FileId, string? DataId);
 
-public sealed record MatrixDone(int Total, long Ms, int UncoverablePairs);
-
-/// <summary>What the matrix stream sends: one finished case, then the totals.</summary>
-public sealed record MatrixEvent(string Type, MatrixCaseResult? Case, MatrixDone? Done);
+/// <summary>A file to try validation with, and the indication it should get (null: no expectation).</summary>
+public sealed record SampleView(string Format, string Id, string FileId, string FileName, string? DataId, string Title, string Description, string? ExpectedIndication);
 
 /// <summary>The workbench API: the option schema, the rules, runs with a live log, and DSS cross-validation.</summary>
 internal static class RunApi
@@ -65,7 +62,7 @@ internal static class RunApi
             {
                 return Results.Ok(new RunStarted(service.Start(body).Id));
             }
-            catch (ArgumentException ex)
+            catch (Exception ex) when (ex is ArgumentException or JsonException)
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
@@ -114,41 +111,13 @@ internal static class RunApi
             }
         });
 
-        // The run matrix, one case at a time: the page shows progress and can stop by closing the stream.
-        api.MapGet("/matrix/stream", async (string? format, string? group, MatrixRunner pades, CadesMatrix cades, XmlMatrix xml, HttpContext context) =>
-        {
-            string name = format ?? "pades";
-            var cases = (name switch { "cades" => cades.Cases(), "xml" => xml.Cases(), _ => pades.Cases() })
-                .Where(c => group is null or "all" || c.Group == group).ToList();
-            context.Response.ContentType = "text/event-stream";
-            context.Response.Headers.CacheControl = "no-store";
-            var ct = context.RequestAborted;
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-            int uncoverable = 0;
-            try
-            {
-                foreach (var matrixCase in cases)
-                {
-                    var request = new MatrixRunRequest(CaseId: matrixCase.Id, Format: name);
-                    var result = name switch
-                    {
-                        "cades" => await cades.RunAsync(request, ct),
-                        "xml" => await xml.RunAsync(request, ct),
-                        _ => await pades.RunAsync(request, ct),
-                    };
-                    uncoverable = result.UncoverablePairs;
-                    await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(new MatrixEvent("case", result.Cases.Single(), null), WorkbenchJson.Options)}\n\n", ct);
-                    await context.Response.Body.FlushAsync(ct);
-                }
-
-                var done = new MatrixEvent("done", null, new MatrixDone(cases.Count, watch.ElapsedMilliseconds, uncoverable));
-                await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(done, WorkbenchJson.Options)}\n\n", ct);
-            }
-            catch (OperationCanceledException)
-            {
-                // The page stopped the matrix.
-            }
-        });
+        // Every validation sample of the three formats, with the verdict each one should get.
+        api.MapGet("/validation/samples/all", (Validation.ValidationSampleStore pdf, CadesSampleStore cadesSamples, XmlSampleStore xmlSamples, DocumentStore documents) =>
+            pdf.Samples.Select(s => new SampleView(RunFormats.Pades, s.Id, s.FileId, documents.TryGet(s.FileId, out var f) ? f!.FileName : s.Id, null, L.T(s.Title), L.T(s.Description), s.ExpectedIndication))
+                .Concat(cadesSamples.Samples.Where(s => s.Kind != "data")
+                    .Select(s => new SampleView(RunFormats.Cades, s.Id, s.FileId, s.FileName, s.DataId, L.T(s.Title), L.T(s.Description), s.ExpectedIndication)))
+                .Concat(xmlSamples.Samples.Where(s => s.Kind == "validation")
+                    .Select(s => new SampleView(RunFormats.Xades, s.Id, s.FileId, s.FileName, s.DataId, L.T(s.Title), L.T(s.Description), s.ExpectedIndication))));
 
         var dss = api.MapGroup("/dss");
         dss.MapGet("/settings", (DssClient client) => client.Settings);

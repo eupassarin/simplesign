@@ -6,7 +6,6 @@ import type {
   EnvironmentMode,
   IcpPolicyKind,
   IcpVersion,
-  MatrixCase,
   OptionInfo,
   Pkcs11Driver,
   SampleDocument,
@@ -15,17 +14,14 @@ import type {
   StoreCertificate,
   BulkReport,
   InspectionReport,
-  ValidationReport,
   ValidationSample,
   ValidationSettings,
   CadesSample,
-  CadesValidationView,
   CmsFacts,
   XmlSample,
-  XmlValidationView,
 } from "./types"
 
-import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RunSummary, RunView, WorkbenchSchema } from "@/features/workbench/schema"
+import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, RunSummary, RunView, SandboxFaults, SandboxState, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -73,21 +69,16 @@ export const api = {
   preview: (options: SigningOptions) => request<{ fileId: string }>("POST", "/api/preview", options),
   validation: {
     samples: () => request<ValidationSample[]>("GET", "/api/validation/samples"),
-    validate: (fileId: string, settings: ValidationSettings) => request<ValidationReport>("POST", "/api/validation", { fileId, settings }),
     bulk: (fileIds: string[], settings: ValidationSettings, maxConcurrency: number) => request<BulkReport>("POST", "/api/validation/bulk", { fileIds, settings, maxConcurrency }),
     inspect: (fileId: string) => request<InspectionReport>("POST", "/api/inspect", { fileId }),
     cmsUrl: (fileId: string, field: string) => `/api/files/${encodeURIComponent(fileId)}/cms/${encodeURIComponent(field)}`,
   },
   cades: {
     samples: () => request<CadesSample[]>("GET", "/api/cades/samples"),
-    validate: (signatureId: string, dataId: string | null, settings: ValidationSettings) =>
-      request<CadesValidationView>("POST", "/api/cades/validate", { signatureId, dataId, settings }),
     inspect: (fileId: string) => request<CmsFacts>("POST", "/api/cades/inspect", { fileId }),
   },
   xml: {
     samples: () => request<XmlSample[]>("GET", "/api/xml/samples"),
-    validate: (signatureId: string, dataId: string | null, settings: ValidationSettings) =>
-      request<XmlValidationView>("POST", "/api/xml/validate", { signatureId, dataId, settings }),
   },
   credentials: {
     sandbox: (signerId: string) => request<CredentialFacts>("POST", "/api/credentials/sandbox", { signerId }),
@@ -108,19 +99,29 @@ export const api = {
   workbench: {
     schema: () => request<WorkbenchSchema>("GET", "/api/schema"),
     evaluate: (format: Format, options: Options) => request<Evaluation>("POST", "/api/workbench/options", { format, options }),
-    start: (format: Format, options: Options, crossValidate: boolean) => request<{ id: string }>("POST", "/api/runs", { format, options, crossValidate }),
+    start: (format: Format | "", options: Options, crossValidate: boolean, kind: "sign" | "validate" = "sign") =>
+      request<{ id: string }>("POST", "/api/runs", { format, options, crossValidate, kind }),
+    samples: () => request<ValidationSampleView[]>("GET", "/api/validation/samples/all"),
     run: (id: string) => request<RunView | undefined>("GET", `/api/runs/${id}`),
     eventsUrl: (id: string) => `/api/runs/${id}/events`,
     history: () => request<RunSummary[]>("GET", "/api/runs"),
+  },
+  environment: {
+    real: () => request<RealEnvironment>("GET", "/api/environment/real"),
+  },
+  sandbox: {
+    state: () => request<SandboxState>("GET", "/api/sandbox/state"),
+    faults: (faults: SandboxFaults) => request<SandboxState>("PUT", "/api/sandbox/faults", faults),
+    revoke: (signerId: string) => request<SandboxState>("POST", `/api/sandbox/signers/${signerId}/revoke`),
+    reset: () => request<SandboxState>("POST", "/api/sandbox/reset"),
+    certificateUrl: (id: string) => `/api/sandbox/certificates/${id}`,
+    crlUrl: (name: "root" | "intermediate") => `/api/sandbox/crls/${name}.crl`,
+    rootPemUrl: "/api/sandbox/root.pem",
   },
   dss: {
     settings: () => request<DssSettings>("GET", "/api/dss/settings"),
     save: (settings: DssSettings) => request<DssSettings>("PUT", "/api/dss/settings", settings),
     status: () => request<DssStatus>("GET", "/api/dss/status"),
     validate: (fileId: string, dataId?: string | null) => request<DssComparison>("POST", "/api/dss/validate", { fileId, dataId }),
-  },
-  matrix: {
-    cases: (format = "pades") => request<MatrixCase[]>("GET", `/api/matrix/cases?format=${format}`),
-    streamUrl: (format = "pades", group = "all") => `/api/matrix/stream?format=${format}&group=${group}`,
   },
 }

@@ -13,10 +13,23 @@ services:
     environment:
       # Where the TestBench is, to fetch its sandbox root at start (Docker Desktop reaches the host this way).
       TESTBENCH_URL: ${TESTBENCH_URL:-http://host.docker.internal:5199}
-      # "true" also loads the EU trusted lists (internet, slow start), to validate real EU signatures.
+      # The EU trusted lists, to validate real EU signatures: "false" (none), "true" (download at
+      # start and every hour; needs the internet) or "cached" (only what an earlier "true" run kept).
       DSS_LOAD_EU_TRUSTED_LISTS: ${DSS_LOAD_EU_TRUSTED_LISTS:-false}
+      # "true" trusts the ICP-Brasil roots that SimpleSign.Brazil.IcpBrasil embeds (v4, v7 and v13 cannot be loaded; see the README).
+      DSS_TRUST_ICP_BRASIL: ${DSS_TRUST_ICP_BRASIL:-true}
+      # "true" trusts the Gov.br root that SimpleSign.Brazil.GovBr embeds.
+      DSS_TRUST_GOVBR: ${DSS_TRUST_GOVBR:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       # Certificates (PEM or DER) in this folder are trusted too.
       - ./trust:/trust:ro
+      # The library's own copies of the ICP-Brasil and Gov.br roots, so DSS and SimpleSign trust the same ones.
+      - ../../src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/Certs:/trust-icp-brasil:ro
+      - ../../src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/Certs:/trust-govbr:ro
+      # The downloaded EU trusted lists, kept between runs.
+      - tl-cache:/var/cache/dss-tl
+
+volumes:
+  tl-cache:

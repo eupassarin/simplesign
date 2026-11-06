@@ -39,10 +39,68 @@ root (AC Raiz Sandbox SimpleSign), which the TestBench keeps between runs and se
   curl http://127.0.0.1:5199/api/sandbox/root.pem > tools/dss/trust/sandbox-root.pem
   ```
 
-Any other certificate (PEM or DER) placed in `tools/dss/trust/` is trusted too. The container
-log lists what it trusts (`[dss] trusting …`).
+Any other certificate (PEM or DER, as `.pem`, `.cer`, `.crt` or `.der`) placed in
+`tools/dss/trust/` is trusted too. The container log lists what it trusts (`[dss] trusting …`).
 
 The sandbox root is a test root. Do not add it to a validator that is used for real signatures.
+
+## ICP-Brasil and Gov.br roots
+
+The container also trusts the ICP-Brasil roots (Autoridade Certificadora Raiz Brasileira) and
+the Gov.br root (Autoridade Certificadora Raiz do Governo Federal do Brasil v1), so DSS can
+validate real Brazilian signatures. It reads them from the library's own copies
+(`src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/Certs` and
+`src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/Certs`), so DSS and SimpleSign trust
+the same roots. Only the roots are trust anchors; DSS fetches the intermediates from each
+certificate's AIA. Set `DSS_TRUST_ICP_BRASIL=false` or `DSS_TRUST_GOVBR=false` to turn them off.
+
+Three ICP-Brasil roots cannot be loaded, and the log says so:
+
+| Root | Key | Why |
+|---|---|---|
+| v4, v13 | brainpoolP512r1, curve parameters written out | A Java trust store cannot hold such a certificate. |
+| v7 | Ed521 (1.3.6.1.4.1.44588.2.1) | DSS does not know the algorithm, and one such certificate in its trust store stops it from starting. |
+
+DSS returns NO_CERTIFICATE_CHAIN_FOUND for signatures that chain to these roots.
+
+The entrypoint checks every certificate this way, including those in `trust/`, so one
+unsupported certificate is skipped instead of keeping DSS from starting.
+
+Neither ICP-Brasil nor Gov.br publishes an ETSI trusted list, so DSS treats these roots as plain
+trust anchors: it validates the chain but does not report a qualification (QES/QSCD).
+
+## EU trusted lists
+
+DSS can also load the EU trusted lists (the EU LOTL and the national lists it points to), to
+validate real EU signatures and say whether they are qualified:
+
+```bash
+DSS_LOAD_EU_TRUSTED_LISTS=true docker compose -f tools/dss/docker-compose.yml up -d
+```
+
+| Value | What DSS does |
+|---|---|
+| `false` (default) | No EU trusted lists. |
+| `true` | Loads the copy kept from earlier runs, then downloads the lists at start and every hour (internet). |
+| `cached` | Only loads the copy kept from an earlier `true` run, and never downloads. Works offline. |
+
+DSS keeps what it downloads in the `tl-cache` volume (about 30 MB), so it survives restarts and
+rebuilds. Run once with `true` to fill it; after that `cached` starts with the lists, without
+the internet. The download took under two minutes here, and loading the copy adds about 20
+seconds to the start. With `false` the copy is kept but not used. To delete it:
+`docker compose -f tools/dss/docker-compose.yml down -v`.
+
+The trusted lists stay as trusted lists: DSS keeps each service's type and status, so it can
+report a qualification. Copying their certificates into `trust/` would lose that. The cached copy
+goes stale, so run with `true` from time to time. The **Trusted Lists Summary** page
+(`http://localhost:8080/tl-info`) shows what is loaded and each list's next update.
+
+## Other trusted lists
+
+The DSS demo application only loads trusted lists through a LOTL: the EU one (above) and the
+AdES MRA one. It cannot load a single ETSI trusted
+list (a TSL XML) on its own. To trust the services of such a list, put their certificates in
+`trust/`; DSS then validates the chain but cannot say whether the signature is qualified.
 
 ## What to expect
 
@@ -51,7 +109,8 @@ The sandbox root is a test root. Do not add it to a validator that is used for r
 | B-B, B-T with sandbox certificates | INDETERMINATE / CERTIFICATE_CHAIN_GENERAL_FAILURE ("No revocation data found") | The sandbox CRL and TSA addresses only exist inside the TestBench, so DSS cannot fetch revocation data. |
 | B-LT, B-LTA with sandbox certificates | the same verdict as SimpleSign | The certificates and CRLs are embedded in the signature. |
 | Any level, sandbox root not trusted | INDETERMINATE / NO_CERTIFICATE_CHAIN_FOUND | See "Trusting the sandbox certificates". |
-| Real certificates | depends on the roots DSS trusts | Add your roots to `trust/`, or load the EU trusted lists (below). |
+| Real ICP-Brasil or Gov.br certificates | validated against their roots | See "ICP-Brasil and Gov.br roots". |
+| Other real certificates | depends on the roots DSS trusts | Add your roots to `trust/`, or load the EU trusted lists (above). |
 
 ## Options
 
@@ -59,7 +118,9 @@ The sandbox root is a test root. Do not add it to a validator that is used for r
 |---|---|---|
 | `DSS_PORT` | `8080` | The host port. |
 | `TESTBENCH_URL` | `http://host.docker.internal:5199` | Where to fetch the sandbox root from. |
-| `DSS_LOAD_EU_TRUSTED_LISTS` | `false` | `true` loads the EU trusted lists at start (needs the internet and takes a few minutes). |
+| `DSS_LOAD_EU_TRUSTED_LISTS` | `false` | `true` downloads the EU trusted lists; `cached` only uses the copy kept from an earlier run. See "EU trusted lists". |
+| `DSS_TRUST_ICP_BRASIL` | `true` | `true` trusts the ICP-Brasil roots (all but v4, v7 and v13; see above). |
+| `DSS_TRUST_GOVBR` | `true` | `true` trusts the Gov.br root. |
 
 To use another DSS version, change `DSS_VERSION` in `docker-compose.yml`.
 

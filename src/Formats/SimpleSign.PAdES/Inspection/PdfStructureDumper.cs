@@ -259,7 +259,7 @@ public static partial class PdfStructureDumper
         var entries = ParseDictEntries(dictContent, includeExplanations, label);
         var refs = ExtractObjectReferences(dictContent);
         var badges = InferBadges(label, dictContent, entries);
-        var asn1 = TryExtractAsn1Preview(dictContent, pdfBytes, objStart, text);
+        var asn1 = TryExtractAsn1Preview(dictContent);
         StreamInfo? streamInfo = streamSize.HasValue
             ? new StreamInfo(streamSize.Value, decompressedSize, dictContent.Contains("FlateDecode"))
             : null;
@@ -921,7 +921,7 @@ public static partial class PdfStructureDumper
         return badges;
     }
 
-    private static Asn1Preview? TryExtractAsn1Preview(string dictContent, byte[] pdfBytes, int objStart, string text)
+    private static Asn1Preview? TryExtractAsn1Preview(string dictContent)
     {
         // Only for signature objects (may or may not have /Type /Sig)
         if (!dictContent.Contains("/Contents") || !dictContent.Contains("/ByteRange"))

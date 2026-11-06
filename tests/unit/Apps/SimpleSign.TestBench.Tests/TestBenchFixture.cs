@@ -42,7 +42,7 @@ public sealed class TestBenchFixture : IAsyncLifetime, IDisposable
             client.Settings = dss;
         }
 
-        return new(Runner, Cades, Xml, client);
+        return new(Runner, Cades, Xml, client, Validation, Documents);
     }
 
     public async Task InitializeAsync()

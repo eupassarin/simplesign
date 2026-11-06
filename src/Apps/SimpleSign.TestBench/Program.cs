@@ -4,7 +4,6 @@ using Microsoft.Extensions.FileProviders;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Endpoints;
-using SimpleSign.TestBench.Matrix;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 
@@ -52,16 +51,13 @@ builder.Services.AddSingleton<CredentialStore>();
 builder.Services.AddSingleton<CredentialFactory>();
 builder.Services.AddSingleton<SigningRunner>();
 builder.Services.AddSingleton<PreviewService>();
-builder.Services.AddSingleton<MatrixRunner>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.InspectionService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationSampleStore>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Cades.CadesRunner>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Cades.CadesSampleStore>();
-builder.Services.AddSingleton<CadesMatrix>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Xml.XmlRunner>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Xml.XmlSampleStore>();
-builder.Services.AddSingleton<XmlMatrix>();
 builder.Services.AddSingleton<SimpleSign.TestBench.CrossValidation.DssClient>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Runs.RunService>();
 

@@ -523,7 +523,7 @@ public sealed class PadesSignerBuilder
     public async Task SignAsync(Stream outputStream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(outputStream);
-        EnsureStrictProfile();
+        BaselineSigning.EnsureStrictProfile(_options.Profile);
         EnterExecution();
         using var stagedOutput = new MemoryStream();
         await SignCoreAsync(stagedOutput, cancellationToken).ConfigureAwait(false);
@@ -544,7 +544,7 @@ public sealed class PadesSignerBuilder
     /// <exception cref="NotSupportedException">Unsupported hash algorithm or key type.</exception>
     public async Task<byte[]> SignAsync(CancellationToken cancellationToken = default)
     {
-        EnsureStrictProfile();
+        BaselineSigning.EnsureStrictProfile(_options.Profile);
         EnterExecution();
         using var output = new MemoryStream();
         await SignCoreAsync(output, cancellationToken).ConfigureAwait(false);
@@ -571,17 +571,6 @@ public sealed class PadesSignerBuilder
         };
     }
 
-    private void EnsureStrictProfile()
-    {
-        if (_options.Profile.FailureBehavior == SigningLevelFailureBehavior.ReturnLowerLevel)
-        {
-            throw new SigningException(
-                "The configured baseline profile allows best-effort level downgrades. " +
-                "Use SignWithDetailsAsync() so the achieved level and warnings are reported.",
-                SigningErrorReason.DowngradeRequiresDetailedResult);
-        }
-    }
-
     private async Task<PadesSigningResult> SignCoreAsync(
         Stream outputStream,
         CancellationToken cancellationToken)
@@ -605,7 +594,7 @@ public sealed class PadesSignerBuilder
             ?? System.Diagnostics.Activity.Current?.Id
             ?? Guid.NewGuid().ToString("N")[..8];
 
-        ValidateSigningPrerequisites(credential, useExternal, opId);
+        ValidateSigningPrerequisites(credential, useExternal);
 
         var logger = _options.Dependencies.Logger;
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -631,7 +620,7 @@ public sealed class PadesSignerBuilder
         }
 
         var (prepareResult, signedBytes, pdfALevel) =
-            await PreparePdfForSigningAsync(outputStream, effectiveHash, cancellationToken).ConfigureAwait(false);
+            await PreparePdfForSigningAsync(outputStream, opId, cancellationToken).ConfigureAwait(false);
 
         var cms = useExternal
             ? await BuildExternalCmsAsync(signedBytes, effectiveHash, sigOid, resolvedAlgorithm.RsaPssParameters, certificate, chain, (ExternalCredential)credential, cancellationToken).ConfigureAwait(false)
@@ -658,12 +647,9 @@ public sealed class PadesSignerBuilder
                         ex);
                 }
 
-                warnings.Add(new SigningWarning(
-                    SigningWarningCode.SignatureTimestampUnavailable,
-                    $"Signature timestamp could not be applied: {ex.Message}"));
-                warnings.Add(new SigningWarning(
-                    SigningWarningCode.LevelDowngraded,
-                    "The requested baseline level could not be achieved; the artifact was downgraded."));
+                BaselineSigning.AddDowngradeWarnings(
+                    warnings, SigningWarningCode.SignatureTimestampUnavailable,
+                    $"Signature timestamp could not be applied: {ex.Message}");
             }
 
             if (timestampTokenBytes is not null)
@@ -680,7 +666,7 @@ public sealed class PadesSignerBuilder
         if (timestampTokenBytes is not null && profile.Level >= AdesBaselineLevel.LongTerm)
         {
             (hasLtvMaterial, outputStream) = await ApplyLtvAsync(
-                outputStream, timestampTokenBytes, effectiveHash, opId, warnings, cancellationToken).ConfigureAwait(false);
+                outputStream, timestampTokenBytes, opId, warnings, cancellationToken).ConfigureAwait(false);
         }
 
         if (hasLtvMaterial && profile.Level == AdesBaselineLevel.LongTerm)
@@ -725,26 +711,26 @@ public sealed class PadesSignerBuilder
 
         if (timestampTokenBytes is not null && !artifactFacts.HasTimestamp)
         {
-            HandleArtifactInspectionFailure(
+            BaselineSigning.RequireOrDowngrade(
                 profile, warnings, SigningWarningCode.SignatureTimestampUnavailable,
                 "The produced PDF does not contain the requested signature timestamp token.");
         }
 
         if (hasLtvMaterial && !artifactFacts.HasLtvMaterial)
         {
-            HandleArtifactInspectionFailure(
+            BaselineSigning.RequireOrDowngrade(
                 profile, warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
                 "The produced PDF does not contain complete DSS validation material.");
         }
 
         if (hasArchiveTimestamp && !artifactFacts.HasArchiveTimestamp)
         {
-            HandleArtifactInspectionFailure(
+            BaselineSigning.RequireOrDowngrade(
                 profile, warnings, SigningWarningCode.ArchiveTimestampUnavailable,
                 "The produced PDF does not contain the requested document timestamp.");
         }
 
-        var achieved = ComputeAchievedLevel(
+        var achieved = BaselineSigning.AchievedLevel(
             artifactFacts.HasTimestamp, artifactFacts.HasLtvMaterial, artifactFacts.HasArchiveTimestamp);
 
         logger.ReadBackVerified(opId, artifactFacts.BaseSignatureValid, artifactFacts.HasTimestamp,
@@ -761,41 +747,6 @@ public sealed class PadesSignerBuilder
             HasArchiveTimestamp = artifactFacts.HasArchiveTimestamp,
             Warnings = warnings.AsReadOnly()
         };
-    }
-
-    private static AdesBaselineLevel ComputeAchievedLevel(
-        bool hasSignatureTimestamp,
-        bool hasLtvMaterial,
-        bool hasArchiveTimestamp)
-    {
-        if (!hasSignatureTimestamp)
-        {
-            return AdesBaselineLevel.Basic;
-        }
-
-        if (!hasLtvMaterial)
-        {
-            return AdesBaselineLevel.Timestamped;
-        }
-
-        return hasArchiveTimestamp ? AdesBaselineLevel.Archive : AdesBaselineLevel.LongTerm;
-    }
-
-    private static void HandleArtifactInspectionFailure(
-        AdesBaselineProfile profile,
-        List<SigningWarning> warnings,
-        SigningWarningCode code,
-        string message)
-    {
-        if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
-        {
-            throw new SigningException(message, SigningErrorReason.LevelNotAchievable);
-        }
-
-        warnings.Add(new SigningWarning(code, message));
-        warnings.Add(new SigningWarning(
-            SigningWarningCode.LevelDowngraded,
-            "The requested baseline level could not be achieved; the artifact was downgraded."));
     }
 
     private static async Task<(bool BaseSignatureValid, bool HasTimestamp, bool HasLtvMaterial, bool HasArchiveTimestamp)>
@@ -924,7 +875,7 @@ public sealed class PadesSignerBuilder
         _ => throw new InvalidOperationException($"Unknown signing credential type: {credential.GetType().Name}")
     };
 
-    private static void ValidateSigningPrerequisites(SigningCredential credential, bool useExternal, string opId)
+    private static void ValidateSigningPrerequisites(SigningCredential credential, bool useExternal)
     {
         var certificate = GetCertificate(credential);
         if (!useExternal && !certificate.HasPrivateKey)
@@ -935,21 +886,11 @@ public sealed class PadesSignerBuilder
                 SigningErrorReason.PrivateKeyMissing);
         }
 
-        var signingTime = DateTimeOffset.UtcNow;
-        if (certificate.NotBefore > signingTime || certificate.NotAfter < signingTime)
-        {
-            throw new SigningException(
-                $"Certificate '{certificate.Subject}' is not valid at {signingTime:yyyy-MM-dd HH:mm:ss} UTC.",
-                certificate.NotAfter < signingTime
-                    ? SigningErrorReason.CertificateExpired
-                    : SigningErrorReason.CertificateNotCurrentlyValid);
-        }
-
-        _ = opId;
+        BaselineSigning.EnsureCertificateValidNow(certificate);
     }
 
     private async Task<(PdfSignaturePrepareResult, byte[], PdfALevel?)> PreparePdfForSigningAsync(
-        Stream outputStream, HashAlgorithmName effectiveHash, CancellationToken cancellationToken)
+        Stream outputStream, string opId, CancellationToken cancellationToken)
     {
         _inputPdf.Seek(0, SeekOrigin.Begin);
         if (await PdfStructureReader.IsDocMdpLockedAsync(_inputPdf, logger: _options.Dependencies.Logger, cancellationToken: cancellationToken).ConfigureAwait(false))
@@ -975,7 +916,7 @@ public sealed class PadesSignerBuilder
         var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(_inputPdf, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         _options.Dependencies.Logger.PdfALevelDetected(
-            _options.OperationId ?? "-", pdfALevel.ToString(), _options.EnforcePdfA);
+            opId, pdfALevel.ToString(), _options.EnforcePdfA);
         if (_options.EnforcePdfA)
         {
             var pdfAIssues = PdfAPreservationValidator.Validate(pdfALevel, _options.Field);
@@ -1042,32 +983,8 @@ public sealed class PadesSignerBuilder
             ExternalSigningPayloadKind.CmsSignedAttributes,
             _options.OperationId,
             rsaPssParameters);
-        ReadOnlyMemory<byte> signature;
-        try
-        {
-            signature = await external.Signer.SignAsync(request, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new SigningException("External signer failed to produce a signature.",
-                SigningErrorReason.ExternalSignerFailure, ex);
-        }
-        if (signature.Length == 0)
-        {
-            throw new SigningException(
-                "External signer returned an empty signature.",
-                SigningErrorReason.ExternalSignerReturnedEmpty);
-        }
-
-        if (!CmsSignatureBuilder.VerifyExternalSignature(signedAttrs, signature.Span, certificate, effectiveHash, sigOid))
-        {
-            throw new SigningException("External signer returned a signature that does not verify with the configured certificate.",
-                SigningErrorReason.AlgorithmIncompatible);
-        }
+        ReadOnlyMemory<byte> signature = await BaselineSigning
+            .SignExternallyAsync(external.Signer, request, certificate, cancellationToken).ConfigureAwait(false);
 
         List<X509Certificate2> allCerts = [certificate, .. chain];
         return CmsSignatureBuilder.BuildSignedData(
@@ -1123,25 +1040,12 @@ public sealed class PadesSignerBuilder
     }
 
     private ITimestampClient CreateTimestampClient(TimestampOptions timestampOptions) =>
-        timestampOptions.NeedsDedicatedClient
-            ? TimestampClient.Create(timestampOptions, timestampOptions.HttpClientProvider ?? _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger)
-            : CreateTimestampClient(timestampOptions.Endpoint.ToString(), timestampOptions.HttpClientProvider);
-
-    private ITimestampClient CreateTimestampClient(string endpoint, IHttpClientProvider? scopedProvider)
-    {
-        if (_options.Dependencies.TsaFactory is not null)
-        {
-            return _options.Dependencies.TsaFactory.Create(endpoint);
-        }
-
-        var provider = scopedProvider ?? _options.Dependencies.HttpClientProvider;
-        return new TimestampClient(provider.GetClient(), endpoint, _options.Dependencies.Logger);
-    }
+        BaselineSigning.CreateTimestampClient(
+            timestampOptions, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger);
 
     private async Task<(bool HasLtvMaterial, Stream Output)> ApplyLtvAsync(
         Stream outputStream,
         byte[]? timestampTokenBytes,
-        HashAlgorithmName effectiveHash,
         string opId,
         List<SigningWarning> warnings,
         CancellationToken cancellationToken)
@@ -1191,12 +1095,9 @@ public sealed class PadesSignerBuilder
                     SigningErrorReason.LevelNotAchievable);
             }
 
-            warnings.Add(new SigningWarning(
-                SigningWarningCode.LongTermValidationMaterialUnavailable,
-                "LTV was requested but no revocation data could be collected — DSS not embedded."));
-            warnings.Add(new SigningWarning(
-                SigningWarningCode.LevelDowngraded,
-                "The requested baseline level could not be achieved; the artifact was downgraded."));
+            BaselineSigning.AddDowngradeWarnings(
+                warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
+                "LTV was requested but no revocation data could be collected — DSS not embedded.");
         }
 
         return (dssEmbedded, outputStream);
@@ -1253,12 +1154,9 @@ public sealed class PadesSignerBuilder
                     ex);
             }
 
-            warnings.Add(new SigningWarning(
-                SigningWarningCode.ArchiveTimestampUnavailable,
-                $"Archive timestamp could not be applied: {ex.Message}"));
-            warnings.Add(new SigningWarning(
-                SigningWarningCode.LevelDowngraded,
-                "The requested baseline level could not be achieved; the artifact was downgraded."));
+            BaselineSigning.AddDowngradeWarnings(
+                warnings, SigningWarningCode.ArchiveTimestampUnavailable,
+                $"Archive timestamp could not be applied: {ex.Message}");
             return false;
         }
     }

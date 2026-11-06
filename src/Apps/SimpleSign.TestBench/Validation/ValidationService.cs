@@ -125,7 +125,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         try
         {
             using var stream = new MemoryStream(file.Content, writable: false);
-            inspection = await PdfSignatureInspector.InspectAsync(stream, cancellationToken: cancellationToken);
+            inspection = await PdfSignatureInspector.InspectAsync(stream, RunLog.Logger, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

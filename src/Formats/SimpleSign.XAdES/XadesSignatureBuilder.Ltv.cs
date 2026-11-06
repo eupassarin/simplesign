@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml;
 using SimpleSign.Core.Constants;
+using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.XAdES.Constants;
@@ -56,15 +57,11 @@ internal static partial class XadesSignatureBuilder
         {
             foreach (byte[] raw in certificateBytes)
             {
-#if NET10_0_OR_GREATER
-                certificates.Add(X509CertificateLoader.LoadCertificate(raw));
-#else
-                certificates.Add(new X509Certificate2(raw));
-#endif
+                certificates.Add(CertificateLoader.LoadCertificate(raw));
             }
 
             return EmbeddedRevocationEvidence.CoversAll(
-                certificates, ocspResponses, crls, DateTimeOffset.UtcNow, new OcspClient(Core.Http.DefaultHttpClientProvider.Instance.GetClient()));
+                certificates, ocspResponses, crls, DateTimeOffset.UtcNow, RevocationEvidence.MatchingOcspClient());
         }
         finally
         {

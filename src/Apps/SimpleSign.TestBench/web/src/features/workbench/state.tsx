@@ -2,16 +2,44 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from "sonner"
 import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
+import { pairwise, product } from "./combinations"
 import type { CredentialFacts, EnvironmentInfo, EnvironmentMode, OptionState } from "@/lib/types"
 import {
   asText, getPath, hasPath, setPath,
-  type DssSettings, type DssStatus, type Evaluation, type Format, type Options, type RunEvent, type RunLogEntry, type RunSummary,
-  type RunView, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
+  type DssSettings, type DssStatus, type Evaluation, type Format, type Options, type RunEvent, type RunKind, type RunLogEntry, type RunSummary,
+  type RunView, type SandboxState, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
 } from "./schema"
 
 const shown: OptionState = { visible: true }
 
+interface Slot {
+  run: RunView | null
+  logs: RunLogEntry[]
+  running: boolean
+}
+
+const emptySlot: Slot = { run: null, logs: [], running: false }
+
+/** The file being validated and, for a detached signature, its data. */
+export interface ValidateTarget {
+  fileId: string
+  name: string
+  dataId?: string | null
+  dataName?: string | null
+}
+
 interface WorkbenchValue {
+  /** The task on screen: make a signature, or validate a file. Each keeps its own result. */
+  mode: RunKind
+  setMode: (mode: RunKind) => void
+  validateTarget: ValidateTarget | null
+  setValidateTarget: (target: ValidateTarget | null) => void
+  /** The trust and revocation settings of the Validate task, shaped like the options ({ validation: … }). */
+  validateOptions: Options
+  setValidateOption: (path: string, value: unknown) => void
+  validate: (target?: ValidateTarget) => Promise<RunView | null>
+  /** Shows a file in the Validate task and validates it. */
+  openInValidate: (target: ValidateTarget) => void
   schema: WorkbenchSchema
   env: EnvironmentInfo | null
   environment: EnvironmentMode
@@ -45,8 +73,14 @@ interface WorkbenchValue {
   // Variants: the same options with every value of one option
   variants: Variants | null
   variantsRunning: boolean
-  runVariants: (option: SchemaOption) => Promise<void>
+  variantValues: (option: SchemaOption) => SchemaValue[]
+  runVariants: (options: SchemaOption[], strategy: Strategy) => Promise<void>
   stopVariants: () => void
+  /** The sandbox PKI and the failures switched on in it (null until loaded, or in Real). */
+  sandbox: SandboxState | null
+  setSandbox: (state: SandboxState) => void
+  /** Opens a sandbox signer and makes it the signer of the three formats. */
+  signWithSandbox: (id: string) => Promise<void>
   // DSS
   dss: DssSettings
   dssStatus: DssStatus | null
@@ -55,17 +89,22 @@ interface WorkbenchValue {
 }
 
 export interface VariantRow {
-  value: string
-  title: string
+  key: string
+  /** One value per varied option, in the order of <see cref="Variants.options"/>. */
+  values: string[]
+  titles: string[]
   status: "pending" | "running" | "done" | "skipped"
-  /** Why the value was not run (the rules refuse the combination). */
+  /** Why the combination was not run (the rules refuse it). */
   reason?: string
   run?: RunView
 }
 
+export type Strategy = "all" | "pairs"
+
 export interface Variants {
-  option: SchemaOption
+  options: SchemaOption[]
   format: Format
+  strategy: Strategy
   rows: VariantRow[]
 }
 
@@ -122,15 +161,25 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   }))
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [evaluating, setEvaluating] = useState(false)
-  const [run, setRun] = useState<RunView | null>(null)
-  const [logs, setLogs] = useState<RunLogEntry[]>([])
-  const [running, setRunning] = useState(false)
+  const [mode, setModeState] = useState<RunKind>(() => load<RunKind>("wb.mode", "sign"))
+  const [slots, setSlots] = useState<Record<RunKind, Slot>>({ sign: emptySlot, validate: emptySlot })
+  const patchSlot = useCallback((kind: RunKind, change: (slot: Slot) => Slot) => setSlots((all) => ({ ...all, [kind]: change(all[kind]) })), [])
+  const { run, logs, running } = slots[mode]
+  const [validateTarget, setValidateTarget] = useState<ValidateTarget | null>(null)
+  const [validateOptions, setValidateOptions] = useState<Options>(() => ({ validate: true, validation: initial(schema, "pades", environment, frameworks).validation }))
+  const setMode = useCallback((next: RunKind) => {
+    localStorage.setItem("wb.mode", JSON.stringify(next))
+    setModeState(next)
+  }, [])
+  const setValidateOption = useCallback((path: string, value: unknown) => setValidateOptions((o) => setPath(o, path, value)), [])
   const [history, setHistory] = useState<RunSummary[]>([])
   const [dss, setDss] = useState<DssSettings>({ enabled: false, url: "http://localhost:8080" })
   const [dssStatus, setDssStatus] = useState<DssStatus | null>(null)
   const options = byFormat[format]
 
+  const [sandbox, setSandbox] = useState<SandboxState | null>(null)
   useEffect(() => {
+    api.sandbox.state().then(setSandbox).catch(() => setSandbox(null))
     api.env().then(setEnv).catch(() => setEnv(null))
     api.workbench.history().then(setHistory).catch(() => setHistory([]))
     api.dss.settings().then(setDss).catch(() => {})
@@ -160,6 +209,7 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
       cades: initial(schema, "cades", environment, frameworks),
       xades: initial(schema, "xades", environment, frameworks),
     })
+    setValidateOptions({ validate: true, validation: initial(schema, "pades", environment, frameworks).validation })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [environment])
 
@@ -197,6 +247,16 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
         }
         return { pades: adjust("pades"), cades: adjust("cades"), xades: adjust("xades") }
       })
+      if (id === "brazil") {
+        setValidateOptions((o) => {
+          let v = setPath(o, "validation.useBrasil", next.has("brazil"))
+          const trust = (getPath(v, "validation.trust") as string[] | undefined) ?? []
+          v = setPath(v, "validation.trust", next.has("brazil")
+            ? (asText(getPath(v, "validation.environment")) === "Real" && !trust.includes("IcpBrasil") ? [...trust, "IcpBrasil"] : trust)
+            : trust.filter((x) => x !== "IcpBrasil"))
+          return v
+        })
+      }
       return next
     })
   }, [schema])
@@ -236,54 +296,61 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const stream = useRef<EventSource | null>(null)
   useEffect(() => () => stream.current?.close(), [])
 
-  const sign = useCallback((overrides?: Options) => new Promise<RunView | null>((resolve) => {
+  /** Starts a run of either kind and follows its event stream into that kind's slot. */
+  const startRun = useCallback((kind: RunKind, runFormat: Format | "", runOptions: Options) => new Promise<RunView | null>((resolve) => {
     stream.current?.close()
-    setRunning(true)
-    setRun(null)
-    setLogs([])
-    api.workbench.start(format, overrides ?? options, dss.enabled)
+    patchSlot(kind, () => ({ run: null, logs: [], running: true }))
+    const finish = (result: RunView | null) => {
+      patchSlot(kind, (slot) => (result ? { run: result, logs: result.logs, running: false } : { ...slot, running: false }))
+      api.workbench.history().then(setHistory).catch(() => {})
+      resolve(result)
+    }
+    api.workbench.start(runFormat, runOptions, dss.enabled, kind)
       .then(({ id }) => {
         const source = new EventSource(api.workbench.eventsUrl(id))
         stream.current = source
         source.onmessage = (message) => {
           const event = JSON.parse(message.data) as RunEvent
-          if (event.log) setLogs((current) => [...current, event.log!])
+          if (event.log) patchSlot(kind, (slot) => ({ ...slot, logs: [...slot.logs, event.log!] }))
           if (event.run) {
             source.close()
-            setRun(event.run)
-            setLogs(event.run.logs)
-            setRunning(false)
-            api.workbench.history().then(setHistory).catch(() => {})
-            resolve(event.run)
+            finish(event.run)
           }
         }
         source.onerror = () => {
           // The stream dropped: the run keeps going on the server, so fetch its result.
           source.close()
-          const poll = () => api.workbench.run(id).then((result) => {
-            if (!result) return void setTimeout(poll, 500)
-            setRun(result)
-            setLogs(result.logs)
-            setRunning(false)
-            resolve(result)
-          }).catch(() => { setRunning(false); resolve(null) })
+          const poll = () => api.workbench.run(id).then((result) => (result ? finish(result) : void setTimeout(poll, 500))).catch(() => finish(null))
           poll()
         }
       })
       .catch((e: Error) => {
         toast.error(t("wb.run.failedToStart"), { description: e.message })
-        setRunning(false)
-        resolve(null)
+        finish(null)
       })
-  }), [format, options, dss.enabled, t])
+  }), [dss.enabled, patchSlot, t])
+
+  const sign = useCallback((overrides?: Options) => startRun("sign", format, overrides ?? options), [startRun, format, options])
+
+  const validate = useCallback((target?: ValidateTarget) => {
+    const file = target ?? validateTarget
+    if (!file) return Promise.resolve(null)
+    return startRun("validate", "", { fileId: file.fileId, dataId: file.dataId ?? null, settings: validateOptions.validation })
+  }, [startRun, validateTarget, validateOptions])
+
+  const openInValidate = useCallback((target: ValidateTarget) => {
+    setValidateTarget(target)
+    setMode("validate")
+    void startRun("validate", "", { fileId: target.fileId, dataId: target.dataId ?? null, settings: validateOptions.validation })
+  }, [setMode, startRun, validateOptions])
 
   const openRun = useCallback(async (id: string) => {
     const result = await api.workbench.run(id)
     if (result) {
-      setRun(result)
-      setLogs(result.logs)
+      patchSlot(result.kind, () => ({ run: result, logs: result.logs, running: false }))
+      setMode(result.kind)
     }
-  }, [])
+  }, [patchSlot, setMode])
 
   const reuse = useCallback((source: RunView) => {
     setFormat(source.format)
@@ -297,22 +364,35 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const stopRequested = useRef(false)
   const stopVariants = useCallback(() => { stopRequested.current = true }, [])
 
-  const runVariants = useCallback(async (option: SchemaOption) => {
-    if (!option.path) return
-    const values = visibleValues(option).filter((v) => v.support === "supported")
-    const update = (value: string, change: Partial<VariantRow>) =>
-      setVariants((current) => current && { ...current, rows: current.rows.map((r) => (r.value === value ? { ...r, ...change } : r)) })
+  /** The values of an option that can be combined now. */
+  const variantValues = useCallback((option: SchemaOption) => visibleValues(option).filter((v) =>
+    // A value the rules already lock (SHA-3 on a runtime without it) is not worth a run.
+    v.support === "supported" && !(option.valueStateKey && state(`${option.valueStateKey}.${v.value}`).disabled)), [visibleValues, state])
+
+  const runVariants = useCallback(async (varied: SchemaOption[], strategy: Strategy) => {
+    const chosen = varied.filter((o) => o.path)
+    if (chosen.length === 0) return
+    const lists = chosen.map((o) => variantValues(o))
+    const combos = (strategy === "pairs" ? pairwise : product)(lists.map((l) => l.map((v) => v.value)))
+    const rows: VariantRow[] = combos.map((values) => ({
+      key: values.join("\u0000"),
+      values,
+      titles: values.map((value, i) => lists[i].find((v) => v.value === value)?.title ?? value),
+      status: "pending",
+    }))
+    const update = (key: string, change: Partial<VariantRow>) =>
+      setVariants((current) => current && { ...current, rows: current.rows.map((r) => (r.key === key ? { ...r, ...change } : r)) })
     stopRequested.current = false
     setVariantsRunning(true)
-    setVariants({ option, format, rows: values.map((v) => ({ value: v.value, title: v.title, status: "pending" })) })
+    setVariants({ options: chosen, format, strategy, rows })
     try {
-      for (const v of values) {
+      for (const row of rows) {
         if (stopRequested.current) break
-        const candidate = setPath(options, option.path, v.value === "" ? null : v.value)
-        update(v.value, { status: "running" })
+        const candidate = chosen.reduce((acc, option, i) => setPath(acc, option.path!, row.values[i] === "" ? null : row.values[i]), options)
+        update(row.key, { status: "running" })
         const rules = await api.workbench.evaluate(format, candidate)
         if (!rules.canSign) {
-          update(v.value, { status: "skipped", reason: rules.issues.find((i) => i.severity === "Error")?.message })
+          update(row.key, { status: "skipped", reason: rules.issues.find((i) => i.severity === "Error")?.message })
           continue
         }
         const { id } = await api.workbench.start(format, candidate, dss.enabled)
@@ -321,7 +401,7 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
           await new Promise((resolve) => setTimeout(resolve, 250))
           result = await api.workbench.run(id)
         }
-        update(v.value, { status: "done", run: result })
+        update(row.key, { status: "done", run: result })
       }
     } catch (e) {
       toast.error(t("wb.run.failedToStart"), { description: (e as Error).message })
@@ -329,7 +409,21 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
       setVariantsRunning(false)
       api.workbench.history().then(setHistory).catch(() => {})
     }
-  }, [visibleValues, options, format, dss.enabled, t])
+  }, [variantValues, options, format, dss.enabled, t])
+
+  const signWithSandbox = useCallback(async (id: string) => {
+    try {
+      const facts = await api.credentials.sandbox(id)
+      setByFormat((all) => ({
+        pades: setPath(all.pades, "credentialId", facts.id),
+        cades: setPath(all.cades, "credentialId", facts.id),
+        xades: setPath(all.xades, "credentialId", facts.id),
+      }))
+      toast.success(t("signer.ready"), { description: `${facts.holder} · ${facts.source}` })
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }, [t])
 
   const saveDss = useCallback(async (settings: DssSettings) => {
     try {
@@ -342,10 +436,11 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const checkDss = useCallback(async () => setDssStatus(await api.dss.status()), [])
 
   const value = useMemo<WorkbenchValue>(() => ({
+    sandbox, setSandbox, signWithSandbox, mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, openInValidate,
     schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, credential: evaluation?.credential ?? null, isVisible, visibleValues,
-    run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, runVariants, stopVariants, dss, dssStatus, saveDss, checkDss,
-  }), [variants, variantsRunning, runVariants, stopVariants, schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
+    run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, variantValues, runVariants, stopVariants, dss, dssStatus, saveDss, checkDss,
+  }), [variantValues, sandbox, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, dss, dssStatus, saveDss, checkDss])
 
   return <Context.Provider value={value}>{children}</Context.Provider>

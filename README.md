@@ -118,6 +118,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [ICP-Brasil](docs/articles/icp-brasil.md) / [Fiscal XML](docs/articles/fiscal-xml.md) | Brazilian PKI and NF-e/eSocial signing |
 | [CLI](docs/articles/cli.md) | `simplesign sign`, `validate`, `cades`, `xades`… |
 | [Signing agent](docs/articles/agent.md) / [TestBench](docs/articles/testbench.md) | Tray app with a local signing API; local web app to try every option |
+| [Standard coverage](docs/articles/coverage.md) | Every option with the clause that defines it, and what is not implemented |
 | [Conformance](docs/conformance.md) / [ADRs](docs/adr/) | Standards coverage and design decisions |
 
 ## Extension points

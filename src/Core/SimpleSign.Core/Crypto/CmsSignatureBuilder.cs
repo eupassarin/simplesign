@@ -28,8 +28,9 @@ public sealed class CmsSignatureBuilder
     /// <param name="extraCertificates">Intermediate certificates to compose the chain.</param>
     /// <param name="extraAttributes">Optional CAdES signed attributes (e.g., commitment-type, signature-policy).</param>
     /// <param name="padesAttributes">
-    /// When <see langword="true"/> (default), adds the <c>id-aa-signingCertificateV2</c> (ESS CertV2) attribute
-    /// required by PAdES B-B.
+    /// When <see langword="true"/> (default), omits the <c>signingTime</c> attribute: PAdES records the time
+    /// in the PDF /M entry and does not allow it in the signed attributes. Pass <see langword="false"/>
+    /// for CMS and CAdES, which carry it. <c>id-aa-signingCertificateV2</c> is always included.
     /// </param>
     /// <param name="signatureAlgorithmOid">
     /// Optional override for the signature algorithm OID. When not <see langword="null"/>,
@@ -101,9 +102,9 @@ public sealed class CmsSignatureBuilder
     /// <param name="extraCertificates">Intermediate certificates to compose the chain.</param>
     /// <param name="extraAttributes">Optional CAdES signed attributes (e.g., commitment-type, signature-policy).</param>
     /// <param name="padesAttributes">
-    /// When <see langword="true"/> (default), adds the <c>id-aa-signingCertificateV2</c> (ESS CertV2) attribute
-    /// required by PAdES B-B. Set to <see langword="false"/> to produce a plain PKCS#7/CMS signature
-    /// without PAdES-specific attributes.
+    /// When <see langword="true"/> (default), omits the <c>signingTime</c> attribute: PAdES records the time
+    /// in the PDF /M entry and does not allow it in the signed attributes. Pass <see langword="false"/>
+    /// for CMS and CAdES, which carry it. <c>id-aa-signingCertificateV2</c> is always included.
     /// </param>
     /// <param name="logger">Optional logger for debug diagnostics.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -438,8 +439,8 @@ public sealed class CmsSignatureBuilder
                 }
             }
 
-            // signingTime — PKCS#7/CMS legacy only.
-            // CAdES (ETSI EN 319 122-1 §5.2) does not permit signingTime in signed attributes.
+            // signingTime: written for CMS and CAdES. PAdES does not allow it in the signed attributes
+            // (ETSI EN 319 142-1 §6.3); the time goes in the signature dictionary /M entry.
             if (!padesAttributes)
             {
                 using (writer.PushSequence())
@@ -462,12 +463,10 @@ public sealed class CmsSignatureBuilder
                 }
             }
 
-            // id-aa-signingCertificateV2 (RFC 5035 / PAdES-B-B required)
-            // Binds the signer certificate to the signature via SHA-256 hash.
-            // Without this attribute, Adobe Acrobat displays "Not PAdES compliant".
-            // Omitted for plain CMS/PKCS#7 (legacy) signatures.
-            // signing-certificate-v2: mandatory in PAdES and in CAdES baseline B-B (ETSI EN 319 122-1 §5.2.2.3),
-            // and in every ICP-Brasil signature policy.
+            // id-aa-signingCertificateV2 (RFC 5035): binds the signer certificate to the signature with a
+            // SHA-256 hash. Always written: mandatory in PAdES and in CAdES baseline B-B
+            // (ETSI EN 319 122-1 §5.2.2.3) and in every ICP-Brasil signature policy; without it Adobe
+            // Acrobat shows "Not PAdES compliant".
             BuildSigningCertificateV2Attribute(writer, signerCertificate);
 
             // Extra CAdES attributes (e.g., commitment-type-indication, signature-policy-identifier)
@@ -656,9 +655,6 @@ public sealed class CmsSignatureBuilder
         _ when alg == HashAlgorithmName.MD5 => throw new NotSupportedException("MD5 is insecure and not supported for signatures."),
         _ => throw new NotSupportedException($"Hash algorithm '{alg.Name}' is not supported.")
     };
-
-    private static string GetSignatureAlgorithmOid(X509Certificate2 cert, HashAlgorithmName hashAlg)
-        => CryptoUtility.DetectSignatureAlgorithmOid(cert, hashAlg);
 
     /// <summary>
     /// Validates that the requested signature algorithm OID is compatible with the

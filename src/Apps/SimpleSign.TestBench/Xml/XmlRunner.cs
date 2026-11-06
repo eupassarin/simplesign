@@ -59,8 +59,6 @@ public sealed record XmlSignResult(
     CodeSnippets Code,
     IReadOnlyList<OptionIssue> Issues);
 
-public sealed record XmlValidateRequest(string SignatureId, string? DataId, ValidationSettings? Settings);
-
 /// <summary>Signs with <c>XadesSigner</c> or <c>FiscalXmlSigner</c> and validates the result.</summary>
 internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, ValidationService validation)
 {

@@ -10,6 +10,44 @@ namespace SimpleSign.TestBench.Sandbox;
 /// <summary>One request the sandbox answered (shown in the UI's network log).</summary>
 internal sealed record SandboxRequest(DateTimeOffset Time, string Method, string Url, int Status, string Service);
 
+/// <summary>What the sandbox TSA does with a request.</summary>
+public enum TsaFault
+{
+    /// <summary>Answers normally.</summary>
+    None,
+
+    /// <summary>HTTP 503: the TSA is down.</summary>
+    Down,
+
+    /// <summary>Answers after <see cref="SandboxFaults.TsaDelayMs"/>.</summary>
+    Slow,
+
+    /// <summary>Answers with a token whose bytes were changed.</summary>
+    InvalidToken,
+
+    /// <summary>Answers with a token signed by a TSA outside every trust anchor.</summary>
+    Untrusted,
+}
+
+/// <summary>What the sandbox CRL server does with a request.</summary>
+public enum CrlFault
+{
+    /// <summary>Serves the current CRLs.</summary>
+    None,
+
+    /// <summary>HTTP 503: the CRL server is down.</summary>
+    Down,
+
+    /// <summary>Serves CRLs whose nextUpdate has passed.</summary>
+    Expired,
+}
+
+/// <summary>Failures switched on in the sandbox, to see how signing and validation react.</summary>
+public sealed record SandboxFaults(TsaFault Tsa = TsaFault.None, int TsaDelayMs = 3000, CrlFault Crl = CrlFault.None)
+{
+    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None;
+}
+
 /// <summary>
 /// The sandbox "internet": an in-process <see cref="HttpMessageHandler"/> that serves the TSA,
 /// CRLs, AIA certificates and the fake PSC/CSC on <c>*.sandbox.simplesign.test</c>. Signing and
@@ -38,6 +76,9 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
     }
 
     public SandboxTsa Tsa { get; }
+
+    /// <summary>The failures switched on now (none by default).</summary>
+    public SandboxFaults Faults { get; set; } = new();
 
     public SandboxPsc Psc { get; }
 
@@ -69,6 +110,12 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
             _ when host == $"csc.{SandboxPki.Host}" => ("CSC", await _csc.SendAsync(request, cancellationToken)),
             _ => ("Blocked", Text(HttpStatusCode.BadGateway, $"The sandbox is offline: {host} is not a sandbox service. Switch to Real to reach the internet.")),
         };
+        var faults = Faults;
+        if ((service == "TSA" && faults.Tsa != TsaFault.None) || (service == "CRL" && faults.Crl != CrlFault.None))
+        {
+            service += service == "TSA" ? $" (fault: {faults.Tsa})" : $" (fault: {faults.Crl})";
+        }
+
         Runs.RunLog.Current?.Network(request.Method.Method, uri.AbsoluteUri, (int)response.StatusCode, service);
         lock (_gate)
         {
@@ -100,17 +147,46 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
             return Text(HttpStatusCode.MethodNotAllowed, "POST an application/timestamp-query.");
         }
 
+        var faults = Faults;
+        if (faults.Tsa == TsaFault.Down)
+        {
+            return Text(HttpStatusCode.ServiceUnavailable, "Sandbox fault: the TSA is down.");
+        }
+
+        if (faults.Tsa == TsaFault.Slow)
+        {
+            await Task.Delay(Math.Clamp(faults.TsaDelayMs, 0, 60_000), cancellationToken);
+        }
+
         byte[] query = await request.Content.ReadAsByteArrayAsync(cancellationToken);
-        var tsa = request.RequestUri.AbsolutePath == SandboxPki.UntrustedTsaUri.AbsolutePath ? _untrustedTsa : Tsa;
-        return Bytes(tsa.Respond(query), "application/timestamp-reply");
+        var tsa = faults.Tsa == TsaFault.Untrusted || request.RequestUri.AbsolutePath == SandboxPki.UntrustedTsaUri.AbsolutePath ? _untrustedTsa : Tsa;
+        byte[] reply = tsa.Respond(query);
+        if (faults.Tsa == TsaFault.InvalidToken && reply.Length > 64)
+        {
+            // Change bytes inside the token's signature: it still parses and no longer verifies.
+            reply[^20] ^= 0xFF;
+            reply[^21] ^= 0xFF;
+        }
+
+        return Bytes(reply, "application/timestamp-reply");
     }
 
-    private HttpResponseMessage Crl(Uri uri) => uri.AbsolutePath switch
+    private HttpResponseMessage Crl(Uri uri)
     {
-        "/root.crl" => Bytes(_pki.RootCrl, "application/pkix-crl"),
-        "/intermediate.crl" => Bytes(_pki.IntermediateCrl, "application/pkix-crl"),
-        _ => Text(HttpStatusCode.NotFound, "No such CRL."),
-    };
+        var fault = Faults.Crl;
+        if (fault == CrlFault.Down)
+        {
+            return Text(HttpStatusCode.ServiceUnavailable, "Sandbox fault: the CRL server is down.");
+        }
+
+        var (root, intermediate) = fault == CrlFault.Expired ? _pki.ExpiredCrls() : (_pki.RootCrl, _pki.IntermediateCrl);
+        return uri.AbsolutePath switch
+        {
+            "/root.crl" => Bytes(root, "application/pkix-crl"),
+            "/intermediate.crl" => Bytes(intermediate, "application/pkix-crl"),
+            _ => Text(HttpStatusCode.NotFound, "No such CRL."),
+        };
+    }
 
     private HttpResponseMessage Aia(Uri uri) => uri.AbsolutePath switch
     {

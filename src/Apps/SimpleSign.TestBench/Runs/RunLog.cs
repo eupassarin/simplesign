@@ -41,6 +41,23 @@ internal static class RunLog
     }
 }
 
+/// <summary>
+/// A logger for objects that outlive a run (an opened token or cloud credential): each event goes
+/// to whichever run is in progress when it is logged, or nowhere.
+/// </summary>
+internal sealed class AmbientRunLogger : ILogger
+{
+    public static AmbientRunLogger Instance { get; } = new();
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => RunLog.Current is not null;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+        RunLog.Current?.Log(logLevel, eventId, state, exception, formatter);
+}
+
 /// <summary>Gives the run's logger to APIs that ask for an <see cref="ILogger{T}"/>.</summary>
 internal sealed class RunLogger<T>(ILogger inner) : ILogger<T>
 {

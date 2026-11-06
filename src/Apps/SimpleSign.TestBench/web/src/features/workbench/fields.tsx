@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { createContext, useContext, useEffect, useState } from "react"
 import { FileText, Lock, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -15,15 +15,24 @@ import { TsaPicker } from "../shared/TsaPicker"
 import { Pill } from "../shared/ui"
 import { UploadButton } from "../shared/UploadButton"
 import { FrameworkTag, OptionRow, StandardBadge, type Explanation } from "./parts"
-import { asText, getPath, type SchemaOption, type SchemaValue } from "./schema"
+import { asText, getPath, type Options, type SchemaOption, type SchemaValue } from "./schema"
 import { useWorkbench } from "./state"
 
 const explain = (o: SchemaOption | SchemaValue): Explanation =>
   ({ title: o.title, summary: o.summary, details: o.details, standards: o.standards, api: o.api })
 
+/**
+ * Where an option reads and writes its value. Without a scope, options edit the signing options
+ * of the current format; the Validate task gives its own (the trust settings).
+ */
+export const OptionScope = createContext<{ options: Options; set: (path: string, value: unknown) => void } | null>(null)
+
 /** One option of the schema, with the editor its kind asks for. */
 export function OptionField({ option }: { option: SchemaOption }) {
-  const { options, set, state } = useWorkbench()
+  const workbench = useWorkbench()
+  const scope = useContext(OptionScope)
+  const { options, set } = scope ?? workbench
+  const state: (key: string) => OptionState = scope ? () => ({ visible: true }) : workbench.state
   const t = useT()
   if (option.support === "notInLibrary") {
     return <OptionRow explanation={explain(option)} missing inline><Switch checked={false} disabled aria-label={option.title} /></OptionRow>

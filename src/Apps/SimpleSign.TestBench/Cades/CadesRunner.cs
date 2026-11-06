@@ -53,8 +53,6 @@ public sealed record CadesSignResult(
     CodeSnippets Code,
     IReadOnlyList<OptionIssue> Issues);
 
-public sealed record CadesValidateRequest(string SignatureId, string? DataId, ValidationSettings? Settings);
-
 /// <summary>Signs with <c>CadesSigner</c> and validates with <c>CadesSignatureValidator.ValidateAll</c>.</summary>
 internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, ValidationService validation)
 {

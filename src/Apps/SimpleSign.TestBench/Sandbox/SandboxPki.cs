@@ -56,6 +56,7 @@ internal sealed class SandboxPki : IDisposable
     private readonly RSA _rootKey = RSA.Create(2048);
     private readonly RSA _intermediateKey = RSA.Create(2048);
     private readonly List<BigInteger> _revoked = [];
+    private readonly Dictionary<string, BigInteger> _revokedNow = new(StringComparer.Ordinal);
     private readonly List<IDisposable> _owned = [];
     private long _serial = 0x1000;
 
@@ -126,7 +127,50 @@ internal sealed class SandboxPki : IDisposable
 
     public byte[] RootCrl { get; }
 
-    public byte[] IntermediateCrl { get; }
+    /// <summary>The intermediate CA's CRL: the signers revoked from the start, plus those revoked with <see cref="Revoke"/>.</summary>
+    public byte[] IntermediateCrl { get; private set; }
+
+    /// <summary>The ids of the signers revoked at run time with <see cref="Revoke"/>.</summary>
+    public IReadOnlyCollection<string> RevokedNow
+    {
+        get
+        {
+            lock (_revokedNow)
+            {
+                return [.. _revokedNow.Keys];
+            }
+        }
+    }
+
+    /// <summary>Adds a signer's certificate to the intermediate CA's CRL, as if it were revoked now.</summary>
+    public void Revoke(string signerId)
+    {
+        var signer = Signer(signerId);
+        lock (_revokedNow)
+        {
+            _revokedNow[signerId] = new BigInteger(signer.Certificate.SerialNumberBytes.Span, isUnsigned: true, isBigEndian: true);
+            IntermediateCrl = BuildCrl(Intermediate, _intermediateKey, _revoked.Concat(_revokedNow.Values));
+        }
+    }
+
+    /// <summary>Takes back every revocation made with <see cref="Revoke"/>.</summary>
+    public void RestoreRevocations()
+    {
+        lock (_revokedNow)
+        {
+            _revokedNow.Clear();
+            IntermediateCrl = BuildCrl(Intermediate, _intermediateKey, _revoked);
+        }
+    }
+
+    /// <summary>The CRLs as they would be after their nextUpdate has passed (for the "expired CRL" fault).</summary>
+    public (byte[] Root, byte[] Intermediate) ExpiredCrls()
+    {
+        lock (_revokedNow)
+        {
+            return (BuildCrl(Root, _rootKey, [], expired: true), BuildCrl(Intermediate, _intermediateKey, _revoked.Concat(_revokedNow.Values), expired: true));
+        }
+    }
 
     /// <summary>The certificates a validator needs besides the signer (intermediate and root).</summary>
     public IReadOnlyList<X509Certificate2> Chain => [Intermediate, Root];
@@ -341,7 +385,7 @@ internal sealed class SandboxPki : IDisposable
         return publicCopy;
     }
 
-    private static byte[] BuildCrl(X509Certificate2 issuer, RSA issuerKey, IEnumerable<BigInteger> revoked)
+    private static byte[] BuildCrl(X509Certificate2 issuer, RSA issuerKey, IEnumerable<BigInteger> revoked, bool expired = false)
     {
         var builder = new CertificateRevocationListBuilder();
         foreach (var serial in revoked)
@@ -351,8 +395,8 @@ internal sealed class SandboxPki : IDisposable
 
         var now = DateTimeOffset.UtcNow;
         return builder.Build(issuer.SubjectName, X509SignatureGenerator.CreateForRSA(issuerKey, RSASignaturePadding.Pkcs1),
-            BigInteger.One, now.AddDays(7), HashAlgorithmName.SHA256,
-            X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer, true, false), now.AddMinutes(-5));
+            BigInteger.One, expired ? now.AddDays(-1) : now.AddDays(7), HashAlgorithmName.SHA256,
+            X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer, true, false), expired ? now.AddDays(-8) : now.AddMinutes(-5));
     }
 
     private byte[] NextSerial()

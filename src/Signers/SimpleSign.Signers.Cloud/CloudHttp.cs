@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -213,8 +212,4 @@ internal static class CloudHttp
                 $"{operation}: the signing service returned a response that is not JSON.", response.StatusCode, null, null);
         }
     }
-
-    /// <summary>Status codes that indicate an expired or invalid token.</summary>
-    internal static bool IsUnauthorized(CloudSigningException ex) =>
-        ex.StatusCode is HttpStatusCode.Unauthorized || ex.Error is "invalid_token" or "invalid_grant";
 }
