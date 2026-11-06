@@ -42,6 +42,30 @@ public sealed class TimestampTokenTests
         TimestampToken.Verify(token, s_data).IsValid.ShouldBeTrue();
     }
 
+    [SkippableTheory]
+    [InlineData("SHA3-256")]
+    [InlineData("SHA3-384")]
+    [InlineData("SHA3-512")]
+    public void Verify_Sha3Imprint_IsRecomputedFromTheData(string algorithmName)
+    {
+        Skip.IfNot(SHA3_256.IsSupported, "SHA-3 is unavailable on this platform.");
+        var algorithm = new HashAlgorithmName(algorithmName);
+        byte[] token = TimestampTestResponseBuilder.CreateTokenForData(s_data, algorithm);
+
+        var result = TimestampToken.Verify(token, s_data);
+
+        result.IsImprintValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        result.IsIntegrityValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        byte[] hash = algorithmName switch
+        {
+            "SHA3-256" => SHA3_256.HashData(s_data),
+            "SHA3-384" => SHA3_384.HashData(s_data),
+            _ => SHA3_512.HashData(s_data),
+        };
+        TimestampToken.VerifyHash(token, hash, algorithm).IsImprintValid.ShouldBeTrue();
+        TimestampToken.Verify(token, "outro contrato"u8).IsImprintValid.ShouldBeFalse();
+    }
+
     [Fact]
     public async Task CreateForHashAsync_WrongHashLength_Throws()
     {

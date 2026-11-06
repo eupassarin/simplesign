@@ -109,6 +109,8 @@ combination matrices for CAdES and XAdES include the new options.
 - `TimestampClient.EmbedTimestampInCms` wrapped the values of every unsigned attribute already in the
   SignerInfo in a second SET. It affected a CMS that had an unsigned attribute before the signature
   timestamp was embedded; such attributes are now kept octet for octet.
+- `TimestampToken.Verify` and `VerifyHash` did not recognize SHA-3 message imprints and reported a
+  valid token as not covering the data.
 
 ### Changed (Breaking) — SimpleSign.Brasil split into SimpleSign.Brazil, .IcpBrasil and .GovBr
 

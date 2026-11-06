@@ -38,6 +38,23 @@ public sealed class CadesContentTimestampTests : IDisposable
 
     private TimestampOptions Tsa => new(new Uri("http://mock-tsa.example.com"), new SingleClientProvider(_tsaHttp));
 
+    [SkippableFact]
+    public async Task Validate_ContentTimestampWithSha3_IsValid()
+    {
+        // The token's imprint uses the signature's hash algorithm, so the validator has to recompute a SHA-3 imprint.
+        Skip.IfNot(SHA3_256.IsSupported, "SHA-3 is unavailable on this platform.");
+        byte[] cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithHashAlgorithm(HashAlgorithmName.SHA3_256)
+            .WithContentTimestamp(Tsa)
+            .SignAsync();
+
+        var result = new CadesSignatureValidator().Validate(cms, _data, [_cert]);
+
+        result.Errors.ShouldBeEmpty();
+        result.HasValidContentTimestamp.ShouldBe(true);
+    }
+
     [Theory]
     [InlineData(CadesContentType.Detached)]
     [InlineData(CadesContentType.Enveloped)]
