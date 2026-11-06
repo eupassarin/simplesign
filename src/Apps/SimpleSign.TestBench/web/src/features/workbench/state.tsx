@@ -5,13 +5,40 @@ import { api } from "@/lib/api"
 import type { CredentialFacts, EnvironmentInfo, EnvironmentMode, OptionState } from "@/lib/types"
 import {
   asText, getPath, hasPath, setPath,
-  type DssSettings, type DssStatus, type Evaluation, type Format, type Options, type RunEvent, type RunLogEntry, type RunSummary,
+  type DssSettings, type DssStatus, type Evaluation, type Format, type Options, type RunEvent, type RunKind, type RunLogEntry, type RunSummary,
   type RunView, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
 } from "./schema"
 
 const shown: OptionState = { visible: true }
 
+interface Slot {
+  run: RunView | null
+  logs: RunLogEntry[]
+  running: boolean
+}
+
+const emptySlot: Slot = { run: null, logs: [], running: false }
+
+/** The file being validated and, for a detached signature, its data. */
+export interface ValidateTarget {
+  fileId: string
+  name: string
+  dataId?: string | null
+  dataName?: string | null
+}
+
 interface WorkbenchValue {
+  /** The task on screen: make a signature, or validate a file. Each keeps its own result. */
+  mode: RunKind
+  setMode: (mode: RunKind) => void
+  validateTarget: ValidateTarget | null
+  setValidateTarget: (target: ValidateTarget | null) => void
+  /** The trust and revocation settings of the Validate task, shaped like the options ({ validation: … }). */
+  validateOptions: Options
+  setValidateOption: (path: string, value: unknown) => void
+  validate: (target?: ValidateTarget) => Promise<RunView | null>
+  /** Shows a file in the Validate task and validates it. */
+  openInValidate: (target: ValidateTarget) => void
   schema: WorkbenchSchema
   env: EnvironmentInfo | null
   environment: EnvironmentMode
@@ -122,9 +149,17 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   }))
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [evaluating, setEvaluating] = useState(false)
-  const [run, setRun] = useState<RunView | null>(null)
-  const [logs, setLogs] = useState<RunLogEntry[]>([])
-  const [running, setRunning] = useState(false)
+  const [mode, setModeState] = useState<RunKind>(() => load<RunKind>("wb.mode", "sign"))
+  const [slots, setSlots] = useState<Record<RunKind, Slot>>({ sign: emptySlot, validate: emptySlot })
+  const patchSlot = useCallback((kind: RunKind, change: (slot: Slot) => Slot) => setSlots((all) => ({ ...all, [kind]: change(all[kind]) })), [])
+  const { run, logs, running } = slots[mode]
+  const [validateTarget, setValidateTarget] = useState<ValidateTarget | null>(null)
+  const [validateOptions, setValidateOptions] = useState<Options>(() => ({ validate: true, validation: initial(schema, "pades", environment, frameworks).validation }))
+  const setMode = useCallback((next: RunKind) => {
+    localStorage.setItem("wb.mode", JSON.stringify(next))
+    setModeState(next)
+  }, [])
+  const setValidateOption = useCallback((path: string, value: unknown) => setValidateOptions((o) => setPath(o, path, value)), [])
   const [history, setHistory] = useState<RunSummary[]>([])
   const [dss, setDss] = useState<DssSettings>({ enabled: false, url: "http://localhost:8080" })
   const [dssStatus, setDssStatus] = useState<DssStatus | null>(null)
@@ -160,6 +195,7 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
       cades: initial(schema, "cades", environment, frameworks),
       xades: initial(schema, "xades", environment, frameworks),
     })
+    setValidateOptions({ validate: true, validation: initial(schema, "pades", environment, frameworks).validation })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [environment])
 
@@ -197,6 +233,16 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
         }
         return { pades: adjust("pades"), cades: adjust("cades"), xades: adjust("xades") }
       })
+      if (id === "brazil") {
+        setValidateOptions((o) => {
+          let v = setPath(o, "validation.useBrasil", next.has("brazil"))
+          const trust = (getPath(v, "validation.trust") as string[] | undefined) ?? []
+          v = setPath(v, "validation.trust", next.has("brazil")
+            ? (asText(getPath(v, "validation.environment")) === "Real" && !trust.includes("IcpBrasil") ? [...trust, "IcpBrasil"] : trust)
+            : trust.filter((x) => x !== "IcpBrasil"))
+          return v
+        })
+      }
       return next
     })
   }, [schema])
@@ -236,54 +282,61 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const stream = useRef<EventSource | null>(null)
   useEffect(() => () => stream.current?.close(), [])
 
-  const sign = useCallback((overrides?: Options) => new Promise<RunView | null>((resolve) => {
+  /** Starts a run of either kind and follows its event stream into that kind's slot. */
+  const startRun = useCallback((kind: RunKind, runFormat: Format | "", runOptions: Options) => new Promise<RunView | null>((resolve) => {
     stream.current?.close()
-    setRunning(true)
-    setRun(null)
-    setLogs([])
-    api.workbench.start(format, overrides ?? options, dss.enabled)
+    patchSlot(kind, () => ({ run: null, logs: [], running: true }))
+    const finish = (result: RunView | null) => {
+      patchSlot(kind, (slot) => (result ? { run: result, logs: result.logs, running: false } : { ...slot, running: false }))
+      api.workbench.history().then(setHistory).catch(() => {})
+      resolve(result)
+    }
+    api.workbench.start(runFormat, runOptions, dss.enabled, kind)
       .then(({ id }) => {
         const source = new EventSource(api.workbench.eventsUrl(id))
         stream.current = source
         source.onmessage = (message) => {
           const event = JSON.parse(message.data) as RunEvent
-          if (event.log) setLogs((current) => [...current, event.log!])
+          if (event.log) patchSlot(kind, (slot) => ({ ...slot, logs: [...slot.logs, event.log!] }))
           if (event.run) {
             source.close()
-            setRun(event.run)
-            setLogs(event.run.logs)
-            setRunning(false)
-            api.workbench.history().then(setHistory).catch(() => {})
-            resolve(event.run)
+            finish(event.run)
           }
         }
         source.onerror = () => {
           // The stream dropped: the run keeps going on the server, so fetch its result.
           source.close()
-          const poll = () => api.workbench.run(id).then((result) => {
-            if (!result) return void setTimeout(poll, 500)
-            setRun(result)
-            setLogs(result.logs)
-            setRunning(false)
-            resolve(result)
-          }).catch(() => { setRunning(false); resolve(null) })
+          const poll = () => api.workbench.run(id).then((result) => (result ? finish(result) : void setTimeout(poll, 500))).catch(() => finish(null))
           poll()
         }
       })
       .catch((e: Error) => {
         toast.error(t("wb.run.failedToStart"), { description: e.message })
-        setRunning(false)
-        resolve(null)
+        finish(null)
       })
-  }), [format, options, dss.enabled, t])
+  }), [dss.enabled, patchSlot, t])
+
+  const sign = useCallback((overrides?: Options) => startRun("sign", format, overrides ?? options), [startRun, format, options])
+
+  const validate = useCallback((target?: ValidateTarget) => {
+    const file = target ?? validateTarget
+    if (!file) return Promise.resolve(null)
+    return startRun("validate", "", { fileId: file.fileId, dataId: file.dataId ?? null, settings: validateOptions.validation })
+  }, [startRun, validateTarget, validateOptions])
+
+  const openInValidate = useCallback((target: ValidateTarget) => {
+    setValidateTarget(target)
+    setMode("validate")
+    void startRun("validate", "", { fileId: target.fileId, dataId: target.dataId ?? null, settings: validateOptions.validation })
+  }, [setMode, startRun, validateOptions])
 
   const openRun = useCallback(async (id: string) => {
     const result = await api.workbench.run(id)
     if (result) {
-      setRun(result)
-      setLogs(result.logs)
+      patchSlot(result.kind, () => ({ run: result, logs: result.logs, running: false }))
+      setMode(result.kind)
     }
-  }, [])
+  }, [patchSlot, setMode])
 
   const reuse = useCallback((source: RunView) => {
     setFormat(source.format)
@@ -342,10 +395,11 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const checkDss = useCallback(async () => setDssStatus(await api.dss.status()), [])
 
   const value = useMemo<WorkbenchValue>(() => ({
+    mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, openInValidate,
     schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, credential: evaluation?.credential ?? null, isVisible, visibleValues,
     run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, runVariants, stopVariants, dss, dssStatus, saveDss, checkDss,
-  }), [variants, variantsRunning, runVariants, stopVariants, schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
+  }), [mode, setMode, validateTarget, validateOptions, setValidateOption, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, dss, dssStatus, saveDss, checkDss])
 
   return <Context.Provider value={value}>{children}</Context.Provider>

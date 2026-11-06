@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useI18n, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
+import { MatrixPage } from "../matrix/MatrixPage"
 import { IssueList, Pill } from "../shared/ui"
 import { OptionForm } from "./OptionForm"
 import { frameworkTone, StandardBadge } from "./parts"
@@ -136,13 +137,20 @@ function VaryControl() {
           {variantsRunning ? <Loader2 className="animate-spin" /> : <Shuffle />}
           {chosen ? t("wb.variants.run", { n: visibleValues(chosen).filter((v) => v.support === "supported").length }) : t("wb.variants.title")}
         </Button>
+        <Sheet>
+          <SheetTrigger asChild><button type="button" className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2">{t("wb.variants.fullMatrix")}</button></SheetTrigger>
+          <SheetContent className="w-[min(96vw,1400px)] p-0 sm:max-w-none">
+            <SheetHeader className="sr-only"><SheetTitle>{t("matrix.title")}</SheetTitle><SheetDescription>{t("matrix.title")}</SheetDescription></SheetHeader>
+            <MatrixPage />
+          </SheetContent>
+        </Sheet>
       </PopoverContent>
     </Popover>
   )
 }
 
 /** Cross-validation with the EU DSS: on or off, where it is, and whether it answers. */
-function DssControl() {
+export function DssControl() {
   const { dss, dssStatus, saveDss, checkDss } = useWorkbench()
   const t = useT()
   const [url, setUrl] = useState<string | null>(null)
@@ -175,7 +183,7 @@ function DssControl() {
 }
 
 /** The runs of this session: open one again, or start from its options. */
-function HistoryDrawer() {
+export function HistoryDrawer() {
   const { history, openRun, schema } = useWorkbench()
   const { t, time } = useI18n()
   const [open, setOpen] = useState(false)
@@ -196,8 +204,9 @@ function HistoryDrawer() {
               <button className="hover:bg-accent/50 flex w-full items-center gap-2 px-4 py-2.5 text-left" onClick={() => { void openRun(h.id); setOpen(false) }}>
                 <span className={cn("size-2 shrink-0 rounded-full", h.status === "running" ? "bg-info" : h.success ? (h.overall === "Valid" || !h.overall ? "bg-success" : "bg-warning") : "bg-destructive")} />
                 <span className="w-14 shrink-0 text-xs font-semibold">{schema.formats.find((f) => f.id === h.format)?.title}</span>
+                {h.kind === "validate" && <Pill>{t("app.mode.validate")}</Pill>}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">{h.success ? `${h.achievedLevel ?? h.requestedLevel ?? ""} · ${h.fileName ?? ""}` : h.error ?? t("wb.history.running")}</span>
+                  <span className="block truncate text-sm">{h.success ? [h.achievedLevel ?? h.requestedLevel, h.fileName].filter(Boolean).join(" · ") : h.error ?? t("wb.history.running")}</span>
                   <span className="text-muted-foreground block text-xs">{time(h.startedAt)} · {h.totalMs} ms{h.overall ? ` · ${h.overall}` : ""}</span>
                 </span>
               </button>

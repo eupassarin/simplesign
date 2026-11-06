@@ -38,8 +38,6 @@ public sealed record IcpVersionView(
 
 public sealed record UploadView(string Id, string FileName, long Size);
 
-public sealed record ValidateRequest(string FileId, ValidationSettings? Settings);
-
 public sealed record InspectRequest(string FileId);
 
 internal static class Api
@@ -146,8 +144,6 @@ internal static class Api
         });
         // Validation area
         api.MapGet("/validation/samples", (ValidationSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
-        api.MapPost("/validation", async (ValidateRequest body, ValidationService validation, CancellationToken ct) =>
-            await validation.ReportAsync(body.FileId, body.Settings ?? ValidationSettings.For(EnvironmentMode.Sandbox), ct));
         api.MapPost("/validation/bulk", async (BulkRequest body, InspectionService inspection, CancellationToken ct) => await inspection.BulkAsync(body, ct));
         api.MapPost("/inspect", async (InspectRequest body, InspectionService inspection, CancellationToken ct) => await inspection.InspectAsync(body.FileId, ct));
         api.MapGet("/files/{id}/cms/{field}", async (string id, string field, InspectionService inspection, CancellationToken ct) =>
@@ -159,8 +155,6 @@ internal static class Api
         // CAdES
         var cades = api.MapGroup("/cades");
         cades.MapGet("/samples", (CadesSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
-        cades.MapPost("/validate", (CadesValidateRequest body, CadesRunner runner) =>
-            runner.Validate(body.SignatureId, body.DataId, body.Settings ?? new ValidationSettings()));
         cades.MapPost("/inspect", (InspectRequest body, DocumentStore documents) =>
         {
             var file = documents.Get(body.FileId);
@@ -170,8 +164,6 @@ internal static class Api
         // XML: XAdES and fiscal XML-DSig
         var xml = api.MapGroup("/xml");
         xml.MapGet("/samples", (XmlSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
-        xml.MapPost("/validate", (XmlValidateRequest body, XmlRunner runner) =>
-            runner.Validate(body.SignatureId, body.DataId, body.Settings ?? new ValidationSettings()));
 
         api.MapGet("/matrix/cases", (string? format, MatrixRunner matrix, CadesMatrix cadesMatrix, XmlMatrix xmlMatrix) =>
             format switch { "cades" => cadesMatrix.Cases(), "xml" => xmlMatrix.Cases(), _ => matrix.Cases() });

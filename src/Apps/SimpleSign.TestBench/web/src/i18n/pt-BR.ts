@@ -2,18 +2,12 @@ import type { Messages } from "./en"
 
 export const ptBR: Messages = {
   app: {
-    nav: {
-      coverage: "Cobertura",
-      workbench: "Bancada",
-      matrix: "Matriz de testes",
-      sandbox: "Sandbox",
-      validation: "Validação",
-      htmlToPdf: "HTML → PDF",
-    },
-    comingNext: "Em breve",
-    soon: "breve",
-    loopbackOnly: "Só 127.0.0.1",
-    memoryOnly: "Uploads, chaves e sessões de token ficam só na memória e somem quando o TestBench para.",
+    task: "Tarefa",
+    mode: { sign: "Assinar", validate: "Validar" },
+    reference: "Referência",
+    referenceHint: "O que o SimpleSign implementa de cada norma, opção por opção.",
+    environmentPanel: "Ambiente",
+    environmentHint: "O sandbox: seus certificados, seus serviços e as requisições que eles responderam.",
     environment: "Ambiente",
     env: {
       sandbox: "Sandbox",
@@ -37,11 +31,6 @@ export const ptBR: Messages = {
   },
   steps: {
     document: { title: "Documento", subtitle: "O PDF a assinar" },
-  },
-  document: {
-    facts: {
-      file: "Arquivo",
-    },
   },
   signer: {
     ready: "Signatário pronto",
@@ -163,11 +152,7 @@ export const ptBR: Messages = {
     location: "Local",
     contact: "Contato",
   },
-  mode: {
-    concurrency: "Concorrência máxima",
-  },
   result: {
-    openInValidation: "Validar em Validação",
     failed: "A biblioteca recusou ou falhou ({type})",
     warnings: "Avisos",
     tabs: { report: "Relatório de validação", output: "Saída", deferred: "Adiado", batch: "Lote", code: "Código" },
@@ -220,38 +205,6 @@ export const ptBR: Messages = {
     fail: "falha",
   },
   validation: {
-    title: "Validação",
-    intro: "Valide PDFs assinados com PdfSignatureValidator, valide vários de uma vez com BulkValidator ou veja por dentro os objetos da assinatura.",
-    tabs: { validate: "Validar", bulk: "Lote", inspect: "Inspecionar" },
-    settings: {
-      title: "Configurações da validação",
-      trust: "Âncoras de confiança",
-      customRoots: "Raízes próprias",
-      customRootsHint: "Envie raízes .cer/.pem para confiar ({n} adicionada(s)).",
-      revocation: "Verificar revogação (OCSP/LCR)",
-      brasil: "Extensão ICP-Brasil",
-      timeout: "Timeout de rede (s)",
-    },
-    trust: {
-      Sandbox: { title: "Raiz do sandbox", hint: "A PKI de teste do TestBench." },
-      System: { title: "Raízes do sistema operacional", hint: "O repositório de confiança do SO." },
-      IcpBrasil: { title: "ICP-Brasil (produção)", hint: "Raízes oficiais ICP-Brasil v5–v10." },
-    },
-    files: "Documento",
-    filesHint: "Escolha uma amostra, cada uma quebrada de um jeito específico, ou envie seu próprio PDF. O selo mostra o resultado esperado.",
-    upload: "Enviar PDF",
-    current: "Atual: {name}",
-    failed: "A validação falhou",
-    error: "O validador não conseguiu ler o arquivo",
-    revalidate: "Validar de novo",
-    summary: "{name} · {n} assinatura(s) · {ms} ms",
-    overall: {
-      Valid: "Todas as assinaturas são válidas",
-      Invalid: "Pelo menos uma assinatura é inválida",
-      Indeterminate: "Indeterminado: algumas verificações não puderam ser concluídas",
-      NoSignatures: "Nenhuma assinatura neste PDF",
-      Error: "Erro",
-    },
     lei: "Lei 14.063: {level}",
     deprecated: "Algoritmo obsoleto",
     embedded: "Certificados embutidos no CMS ({n})",
@@ -265,17 +218,6 @@ export const ptBR: Messages = {
       later: "Foram adicionados bytes depois desta assinatura (uma revisão posterior ou um acréscimo sem assinatura).",
     },
     attributes: { algorithm: "Algoritmo de assinatura", policy: "OID da política", commitment: "Tipo de compromisso" },
-    dss: { title: "Document Security Store (DSS)", hint: "Dados de validação embutidos para validação de longo prazo.", certificates: "Certificados" },
-    bulk: {
-      intro: "O BulkValidator valida vários PDFs em paralelo com as configurações ao lado.",
-      addSamples: "Adicionar todas as amostras",
-      addFiles: "Adicionar PDFs",
-      run: "Validar {n} arquivo(s)",
-      summary: "{processed} processado(s) · {failed} com falha · média de {avg} ms · {total} ms no total",
-      result: "Resultado",
-      signatures: "Assinaturas",
-      validOf: "{valid} de {total} válida(s)",
-    },
     inspect: {
       revisions: "{n} revisão(ões)",
       objects: "{n} objeto(s)",
@@ -285,12 +227,7 @@ export const ptBR: Messages = {
     },
   },
   cades: {
-    data: {
-      uploadSignature: "Enviar assinatura",
-    },
     result: {
-      structure: "Estrutura do CMS",
-      structureHint: "O que o arquivo contém, lido com o parser CMS da biblioteca.",
       signer: "Signatário {n}",
       counterSigner: "Contra-assinatura {n}",
       noSigners: "Nenhum signatário.",
@@ -308,34 +245,13 @@ export const ptBR: Messages = {
       signed: "Atributos assinados",
       unsigned: "Atributos não assinados",
     },
-    validate: {
-      title: "Validar CAdES",
-      intro: "Verifique qualquer .p7s / .p7m: cada signatário e contra-assinante, com a confiança ao lado.",
-      samples: "Assinatura",
-      samplesHint: "Amostras criadas na inicialização, cada uma com o veredito esperado, ou seu próprio arquivo. Assinaturas destacadas precisam dos dados.",
-      uploadData: "Enviar dados",
-      current: "Assinatura: {signature} · dados: {data}",
-      summary: "{n} signatário(s) · {ms} ms",
-    },
   },
   xml: {
-    mode: {
-      Xades: { title: "XAdES", hint: "ETSI EN 319 132 com XadesSigner: níveis, políticas XML da ICP-Brasil, papéis, formas estendidas." },
-      Fiscal: { title: "XML-DSig fiscal", hint: "FiscalXmlSigner: a XML-DSig simples de NF-e, CT-e, MDF-e, eventos, NFS-e, eSocial e EFD-Reinf." },
-    },
     result: {
       signature: "O elemento Signature",
       signatureHint: "O último ds:Signature, indentado; valores base64 longos são encurtados.",
       document: "Documento",
       documentHint: "O início do arquivo assinado (uma Signature envelopada aparece acima).",
-    },
-    validate: {
-      title: "Validar XML",
-      intro: "XAdES (qualquer forma) ou XML-DSig fiscal: o modo é detectado pelo arquivo.",
-      samplesHint: "Amostras criadas na inicialização, cada uma com o veredito esperado, ou o seu próprio XML. Uma assinatura destacada precisa dos dados.",
-      upload: "Enviar XML assinado",
-      uploadData: "Enviar dados (destacada)",
-      summary: "{n} assinatura(s) · {ms} ms",
     },
   },
   wb: {
@@ -379,6 +295,7 @@ export const ptBR: Messages = {
       variants: "Variações",
     },
     result: {
+      openInValidate: "Abrir em Validar",
       emptyTitle: "Nada assinado ainda",
       emptyHint: "Escolha as opções à esquerda e clique em Assinar. O resultado, os vereditos, o log de cada etapa e o código correspondente aparecem aqui.",
       failedHint: "A aba Logs mostra até onde a assinatura chegou.",
@@ -423,6 +340,7 @@ export const ptBR: Messages = {
       level: "Nível",
     },
     variants: {
+      fullMatrix: "Rodar a matriz completa em pares…",
       title: "Variar",
       about: "Assina uma vez para cada valor de uma opção, mantendo o resto como está, e lista os resultados lado a lado: todos os níveis, todos os resumos, todos os empacotamentos…",
       run: "Assinar {n} variações",
@@ -446,6 +364,28 @@ export const ptBR: Messages = {
     option: "Opção",
     standard: "Norma",
     api: "Chamada da biblioteca",
+  },
+  val: {
+    noFile: "Nenhum arquivo escolhido",
+    validate: "Validar",
+    validateAll: "Validar todas as amostras",
+    file: "Arquivo a validar",
+    fileHint: "Um PDF assinado, uma assinatura CMS ou um XML assinado. O formato é lido do próprio arquivo.",
+    drop: "Solte um arquivo aqui, ou clique para escolher",
+    data: "Dados originais",
+    dataHint: "Só para assinatura destacada: o arquivo que foi assinado.",
+    samples: "Amostras",
+    samplesHint: "Arquivos gerados na inicialização, válidos ou quebrados de um jeito específico, com o veredito que cada um deve receber.",
+    trust: "Confiança e revogação",
+    trustHint: "Em quais raízes o validador confia e se ele verifica revogação.",
+    emptyTitle: "Nada validado ainda",
+    emptyHint: "Escolha um arquivo ou uma amostra à esquerda. O veredito de cada assinatura, o que há dentro do arquivo, o log e o código correspondente aparecem aqui.",
+    summary: "{size} KB · validado em {validate} ms, {total} ms no total",
+    detectedLevel: "Nível detectado",
+    conformance: "Amostras",
+    conformanceSummary: "{ok} de {total} como esperado",
+    sample: "Amostra",
+    expected: "Esperado",
   },
   sandbox: {
     intro: "Tudo o que o sandbox simula, gerado quando o TestBench inicia e mantido em memória. Os serviços respondem em *.sandbox.simplesign.test por um IHttpClientProvider no próprio processo, então a biblioteca percorre seus caminhos normais (inclusive as checagens de SSRF) sem tocar a rede.",

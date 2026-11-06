@@ -3,18 +3,12 @@
 
 export const en = {
   app: {
-    nav: {
-      coverage: "Coverage",
-      workbench: "Workbench",
-      matrix: "Run matrix",
-      sandbox: "Sandbox",
-      validation: "Validation",
-      htmlToPdf: "HTML → PDF",
-    },
-    comingNext: "Coming next",
-    soon: "soon",
-    loopbackOnly: "127.0.0.1 only",
-    memoryOnly: "Uploads, keys and token sessions live in memory and are gone when the TestBench stops.",
+    task: "Task",
+    mode: { sign: "Sign", validate: "Validate" },
+    reference: "Reference",
+    referenceHint: "What SimpleSign implements of each standard, option by option.",
+    environmentPanel: "Environment",
+    environmentHint: "The sandbox: its certificates, its services and the requests they answered.",
     environment: "Environment",
     env: {
       sandbox: "Sandbox",
@@ -38,11 +32,6 @@ export const en = {
   },
   steps: {
     document: { title: "Document", subtitle: "The PDF to sign" },
-  },
-  document: {
-    facts: {
-      file: "File",
-    },
   },
   signer: {
     ready: "Signer ready",
@@ -164,11 +153,7 @@ export const en = {
     location: "Location",
     contact: "Contact info",
   },
-  mode: {
-    concurrency: "Max concurrency",
-  },
   result: {
-    openInValidation: "Validate in Validation",
     failed: "The library refused or failed ({type})",
     warnings: "Warnings",
     tabs: { report: "Validation report", output: "Output", deferred: "Deferred", batch: "Batch", code: "Code" },
@@ -221,38 +206,6 @@ export const en = {
     fail: "fail",
   },
   validation: {
-    title: "Validation",
-    intro: "Validate signed PDFs with PdfSignatureValidator, validate many at once with BulkValidator, or look inside the signature objects.",
-    tabs: { validate: "Validate", bulk: "Bulk", inspect: "Inspect" },
-    settings: {
-      title: "Validation settings",
-      trust: "Trust anchors",
-      customRoots: "Custom roots",
-      customRootsHint: "Upload .cer/.pem roots to trust ({n} added).",
-      revocation: "Check revocation (OCSP/CRL)",
-      brasil: "ICP-Brasil extension",
-      timeout: "Network timeout (s)",
-    },
-    trust: {
-      Sandbox: { title: "Sandbox root", hint: "The TestBench test PKI." },
-      System: { title: "Operating system roots", hint: "The OS trust store." },
-      IcpBrasil: { title: "ICP-Brasil (production)", hint: "Official ICP-Brasil roots v5–v10." },
-    },
-    files: "Document",
-    filesHint: "Pick a sample, each broken in one specific way, or upload your own PDF. The badge shows the expected result.",
-    upload: "Upload PDF",
-    current: "Current: {name}",
-    failed: "Validation failed",
-    error: "The validator could not read the file",
-    revalidate: "Validate again",
-    summary: "{name} · {n} signature(s) · {ms} ms",
-    overall: {
-      Valid: "Every signature is valid",
-      Invalid: "At least one signature is invalid",
-      Indeterminate: "Indeterminate: some checks could not be completed",
-      NoSignatures: "No signatures in this PDF",
-      Error: "Error",
-    },
     lei: "Lei 14.063: {level}",
     deprecated: "Deprecated algorithm",
     embedded: "Certificates embedded in the CMS ({n})",
@@ -266,17 +219,6 @@ export const en = {
       later: "Bytes were added after this signature (a later revision or an unsigned append).",
     },
     attributes: { algorithm: "Signature algorithm", policy: "Policy OID", commitment: "Commitment type" },
-    dss: { title: "Document Security Store (DSS)", hint: "Validation data embedded for long-term validation.", certificates: "Certificates" },
-    bulk: {
-      intro: "BulkValidator validates many PDFs in parallel with the settings on the left.",
-      addSamples: "Add all samples",
-      addFiles: "Add PDFs",
-      run: "Validate {n} file(s)",
-      summary: "{processed} processed · {failed} failed · {avg} ms average · {total} ms total",
-      result: "Result",
-      signatures: "Signatures",
-      validOf: "{valid} of {total} valid",
-    },
     inspect: {
       revisions: "{n} revision(s)",
       objects: "{n} object(s)",
@@ -286,12 +228,7 @@ export const en = {
     },
   },
   cades: {
-    data: {
-      uploadSignature: "Upload signature",
-    },
     result: {
-      structure: "CMS structure",
-      structureHint: "What the file contains, read with the library's CMS parser.",
       signer: "Signer {n}",
       counterSigner: "Countersignature {n}",
       noSigners: "No signers.",
@@ -309,34 +246,13 @@ export const en = {
       signed: "Signed attributes",
       unsigned: "Unsigned attributes",
     },
-    validate: {
-      title: "Validate CAdES",
-      intro: "Check any .p7s / .p7m: every signer and countersigner, with the trust on the left.",
-      samples: "Signature",
-      samplesHint: "Samples built at startup, each with its expected verdict, or your own file. Detached signatures need their data.",
-      uploadData: "Upload data",
-      current: "Signature: {signature} · data: {data}",
-      summary: "{n} signer(s) · {ms} ms",
-    },
   },
   xml: {
-    mode: {
-      Xades: { title: "XAdES", hint: "ETSI EN 319 132 with XadesSigner: levels, ICP-Brasil XML policies, roles, extended forms." },
-      Fiscal: { title: "Fiscal XML-DSig", hint: "FiscalXmlSigner: the plain XML-DSig of NF-e, CT-e, MDF-e, events, NFS-e, eSocial and EFD-Reinf." },
-    },
     result: {
       signature: "The Signature element",
       signatureHint: "The last ds:Signature, indented; long base64 values are shortened.",
       document: "Document",
       documentHint: "The start of the signed file (an enveloped Signature is shown above instead).",
-    },
-    validate: {
-      title: "Validate XML",
-      intro: "XAdES (any form) or fiscal XML-DSig: the mode is detected from the file.",
-      samplesHint: "Samples built at startup, each with its expected verdict, or your own XML. A detached signature needs its data.",
-      upload: "Upload signed XML",
-      uploadData: "Upload data (detached)",
-      summary: "{n} signature(s) · {ms} ms",
     },
   },
   wb: {
@@ -380,6 +296,7 @@ export const en = {
       variants: "Variants",
     },
     result: {
+      openInValidate: "Open in Validate",
       emptyTitle: "Nothing signed yet",
       emptyHint: "Choose the options on the left and press Sign. The result, the verdicts, the log of every step and the matching code appear here.",
       failedHint: "The Logs tab shows how far the signature went.",
@@ -424,6 +341,7 @@ export const en = {
       level: "Level",
     },
     variants: {
+      fullMatrix: "Run the full pairwise matrix…",
       title: "Vary",
       about: "Signs once for every value of one option, keeping the rest as it is, and lists the results side by side: every level, every digest, every packaging…",
       run: "Sign {n} variants",
@@ -447,6 +365,28 @@ export const en = {
     option: "Option",
     standard: "Standard",
     api: "Library call",
+  },
+  val: {
+    noFile: "No file chosen",
+    validate: "Validate",
+    validateAll: "Validate all samples",
+    file: "File to validate",
+    fileHint: "A signed PDF, a CMS signature or a signed XML. The format is read from the file.",
+    drop: "Drop a file here, or click to choose",
+    data: "Original data",
+    dataHint: "Only for a detached signature: the file that was signed.",
+    samples: "Samples",
+    samplesHint: "Files made at startup, valid or broken in one specific way, with the verdict each should get.",
+    trust: "Trust and revocation",
+    trustHint: "Which roots the validator trusts and whether it checks revocation.",
+    emptyTitle: "Nothing validated yet",
+    emptyHint: "Choose a file or a sample on the left. The verdict of each signature, what is inside the file, the log and the matching code appear here.",
+    summary: "{size} KB · validated in {validate} ms, {total} ms in all",
+    detectedLevel: "Detected level",
+    conformance: "Samples",
+    conformanceSummary: "{ok} of {total} as expected",
+    sample: "Sample",
+    expected: "Expected",
   },
   sandbox: {
     intro: "Everything the sandbox simulates, generated when the TestBench starts and kept in memory. Services answer on *.sandbox.simplesign.test through an in-process IHttpClientProvider, so the library runs its normal code paths (including its SSRF checks) without touching the network.",

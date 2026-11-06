@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Check, CircleSlash, Download, FileCheck2, Loader2, RefreshCw, ShieldCheck, ShieldQuestion, TriangleAlert, XCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -6,11 +6,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n, useT } from "@/i18n"
 import { api } from "@/lib/api"
-import { useNavigation } from "@/lib/navigation"
-import type { CadesSignResult, SigningResult, XmlSignResult } from "@/lib/types"
+import type { CadesSignResult, CadesValidationView, SigningResult, ValidationReport, XmlSignResult, XmlValidationView } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { CmsStructure } from "../cades/CmsViews"
 import { PdfPreview } from "../shared/PdfPreview"
+import { DetailedCard, InspectView } from "../validate/pdf"
 import { CodeTabs, Indication } from "../shared/results"
 import { IssueList, KeyValue, Pill } from "../shared/ui"
 import { XmlViews } from "../xml/XmlViews"
@@ -20,8 +20,9 @@ import type { DssComparison, RunVerdict, RunView } from "./schema"
 import { useWorkbench } from "./state"
 
 /** Everything a run produced: the result, what is inside the file, the verdicts (SimpleSign and DSS), the log and the code. */
-export function ResultPanel() {
-  const { run, logs, running, format, variants, variantsRunning } = useWorkbench()
+export function ResultPanel({ extra }: { extra?: { id: string; label: ReactNode; content: ReactNode; open?: boolean } }) {
+  const { run, logs, running, format, variants: allVariants, variantsRunning, mode } = useWorkbench()
+  const variants = mode === "sign" ? allVariants : null
   const t = useT()
   const [tab, setTab] = useState("result")
   // While signing, the log is what there is to look at.
@@ -36,12 +37,16 @@ export function ResultPanel() {
     if (variantsRunning) setTab("variants")
   }, [variantsRunning])
 
-  if (!run && !running && !variants) {
+  useEffect(() => {
+    if (extra?.open) setTab(extra.id)
+  }, [extra?.open, extra?.id])
+
+  if (!run && !running && !variants && !extra) {
     return (
       <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
         <FileCheck2 className="size-8 opacity-40" />
-        <p className="text-sm font-medium">{t("wb.result.emptyTitle")}</p>
-        <p className="max-w-sm text-xs leading-relaxed">{t("wb.result.emptyHint")}</p>
+        <p className="text-sm font-medium">{t(mode === "validate" ? "val.emptyTitle" : "wb.result.emptyTitle")}</p>
+        <p className="max-w-sm text-xs leading-relaxed">{t(mode === "validate" ? "val.emptyHint" : "wb.result.emptyHint")}</p>
       </div>
     )
   }
@@ -57,9 +62,11 @@ export function ResultPanel() {
         </TabsTrigger>
         <TabsTrigger value="logs">{t("wb.tabs.logs")}<span className="text-muted-foreground ml-1.5 text-[10px] tabular-nums">{logs.length}</span></TabsTrigger>
         <TabsTrigger value="code" disabled={!run?.code?.cSharp}>{t("wb.tabs.code")}</TabsTrigger>
+        {extra && <TabsTrigger value={extra.id}>{extra.label}</TabsTrigger>}
         {variants && <TabsTrigger value="variants">{t("wb.tabs.variants")}{variantsRunning && <Loader2 className="ml-1 size-3 animate-spin" />}</TabsTrigger>}
       </TabsList>
       <TabsContent value="result">{run ? <Summary run={run} /> : running ? <Signing /> : null}</TabsContent>
+      {extra && <TabsContent value={extra.id}>{extra.content}</TabsContent>}
       <TabsContent value="variants">{variants && <VariantsTable onOpen={() => setTab("result")} />}</TabsContent>
       <TabsContent value="inspection">{run?.success && <Inspection run={run} />}</TabsContent>
       <TabsContent value="validation">{run?.success && <Validation run={run} />}</TabsContent>
@@ -76,8 +83,8 @@ function Signing() {
 
 function Summary({ run }: { run: RunView }) {
   const { t, number } = useI18n()
-  const { reuse, schema } = useWorkbench()
-  const navigation = useNavigation()
+  const { reuse, schema, openInValidate } = useWorkbench()
+  const validating = run.kind === "validate"
   const formatTitle = schema.formats.find((f) => f.id === run.format)?.title ?? run.format
   if (!run.success) {
     return (
@@ -98,21 +105,25 @@ function Summary({ run }: { run: RunView }) {
       <div className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
         <ShieldCheck className="text-success size-6" />
         <div className="min-w-0 flex-1">
-          <p className="font-medium">{formatTitle} · {run.achievedLevel ?? run.requestedLevel}</p>
+          <p className="font-medium">{formatTitle} · {validating ? run.fileName : run.achievedLevel ?? run.requestedLevel}</p>
           <p className="text-muted-foreground text-xs">
-            {t("wb.result.summary", { name: run.fileName ?? "", size: number(run.bytes / 1024, 1), sign: run.signMs, validate: run.validateMs, total: run.totalMs })}
+            {validating
+              ? t("val.summary", { size: number(run.bytes / 1024, 1), validate: run.validateMs, total: run.totalMs })
+              : t("wb.result.summary", { name: run.fileName ?? "", size: number(run.bytes / 1024, 1), sign: run.signMs, validate: run.validateMs, total: run.totalMs })}
           </p>
         </div>
         {run.overall && <Indication value={run.overall} />}
         {run.crossValidation?.available && <Pill tone={run.crossValidation.agree ? "success" : "warning"}>{t(run.crossValidation.agree ? "wb.dss.agrees" : "wb.dss.differs")}</Pill>}
-        {run.format === "pades" && (
-          <Button variant="outline" size="sm" onClick={() => navigation.validate({ id: run.outputId!, name: run.fileName ?? "signed.pdf" })}><FileCheck2 /> {t("result.openInValidation")}</Button>
+        {!validating && (
+          <Button variant="outline" size="sm" onClick={() => openInValidate({
+            fileId: run.outputId!, name: run.fileName ?? "", dataId: run.format === "pades" ? null : (run.options.dataId as string | null | undefined) ?? null,
+          })}><FileCheck2 /> {t("wb.result.openInValidate")}</Button>
         )}
         <Button size="sm" asChild><a href={api.fileUrl(run.outputId!, true)}><Download /> {t("common.download")}</a></Button>
       </div>
       <div className="grid gap-x-8 rounded-lg border px-4 py-2 sm:grid-cols-2">
-        <KeyValue label={t("wb.result.requested")}>{run.requestedLevel ?? "—"}</KeyValue>
-        <KeyValue label={t("wb.result.achieved")}>{downgraded ? <Pill tone="warning">{run.achievedLevel}</Pill> : run.achievedLevel ?? "—"}</KeyValue>
+        {!validating && <KeyValue label={t("wb.result.requested")}>{run.requestedLevel ?? "—"}</KeyValue>}
+        <KeyValue label={t(validating ? "val.detectedLevel" : "wb.result.achieved")}>{downgraded ? <Pill tone="warning">{run.achievedLevel}</Pill> : run.achievedLevel ?? "—"}</KeyValue>
         <KeyValue label={t("wb.result.signatures")}>{run.validation.length}</KeyValue>
         <KeyValue label={t("wb.result.logLines")}>{run.logs.length}</KeyValue>
       </div>
@@ -125,7 +136,7 @@ function Summary({ run }: { run: RunView }) {
       )}
       <IssueList issues={run.issues} />
       <div className="space-y-2">{run.validation.map((v, i) => <VerdictCard key={i} verdict={v} compact />)}</div>
-      <Button variant="ghost" size="sm" onClick={() => reuse(run)}><RefreshCw /> {t("wb.result.reuse")}</Button>
+      {!validating && <Button variant="ghost" size="sm" onClick={() => reuse(run)}><RefreshCw /> {t("wb.result.reuse")}</Button>}
     </div>
   )
 }
@@ -174,6 +185,18 @@ function VerdictCard({ verdict, compact, depth = 0 }: { verdict: RunVerdict; com
 function Inspection({ run }: { run: RunView }) {
   const { t, number } = useI18n()
   const yes = (b: boolean) => t(b ? "common.yes" : "common.no")
+  if (run.kind === "validate") {
+    // The validators' own reports: the same views, without the signing facts.
+    if (run.format === "cades") return <CmsStructure facts={(run.detail as CadesValidationView).structure} />
+    if (run.format === "xades") return <div className="space-y-6"><XmlViews view={run.detail as XmlValidationView} /></div>
+    const report = run.detail as ValidationReport
+    return (
+      <div className="space-y-6">
+        {report.signatures.map((s) => <DetailedCard key={s.report.fieldName} signature={s} />)}
+        <InspectView file={{ id: run.outputId! }} />
+      </div>
+    )
+  }
   if (run.format === "cades") {
     const detail = run.detail as CadesSignResult
     return detail.validation ? <CmsStructure facts={detail.validation.structure} /> : <p className="text-muted-foreground text-sm">{t("wb.inspection.needsValidation")}</p>

@@ -117,6 +117,74 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         run.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error);
     }
 
+    private static RunRequest Validate(string fileId, string? dataId = null) =>
+        new("", JsonSerializer.SerializeToElement(new ValidateOptions(fileId, dataId), WorkbenchJson.Options), Kind: RunKinds.Validate);
+
+    [Fact]
+    public async Task RunAsync_ValidatePdfSamples_DetectsPadesAndGivesTheExpectedVerdict()
+    {
+        fixture.ValidationSamples.ShouldNotBeEmpty();
+        foreach (var sample in fixture.ValidationSamples)
+        {
+            var run = await fixture.Runs().RunAsync(Validate(sample.FileId), default);
+
+            run.Kind.ShouldBe(RunKinds.Validate);
+            run.Format.ShouldBe(RunFormats.Pades, sample.Id);
+            run.Overall.ShouldBe(sample.ExpectedIndication, sample.Id);
+            run.OutputId.ShouldBe(sample.FileId);
+            run.Logs.ShouldContain(l => l.Stage == RunStages.Validation, sample.Id);
+            run.Code!.CSharp.ShouldNotBeNullOrWhiteSpace();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_ValidateCadesSamples_DetectsCadesAndGivesTheExpectedVerdict()
+    {
+        var samples = fixture.CadesSamples.Where(s => s.Kind != "data" && s.ExpectedIndication is not null).ToList();
+        samples.ShouldNotBeEmpty();
+        foreach (var sample in samples)
+        {
+            var run = await fixture.Runs().RunAsync(Validate(sample.FileId, sample.DataId), default);
+
+            run.Format.ShouldBe(RunFormats.Cades, sample.Id);
+            run.Overall.ShouldBe(sample.ExpectedIndication, sample.Id);
+            run.Detail.ShouldBeOfType<CadesValidationView>();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_ValidateXmlSamples_DetectsXmlAndGivesTheExpectedVerdict()
+    {
+        var samples = fixture.XmlSamples.Where(s => s.Kind == "validation" && s.ExpectedIndication is not null).ToList();
+        samples.ShouldNotBeEmpty();
+        foreach (var sample in samples)
+        {
+            var run = await fixture.Runs().RunAsync(Validate(sample.FileId, sample.DataId), default);
+
+            run.Format.ShouldBe(RunFormats.Xades, sample.Id);
+            run.Overall.ShouldBe(sample.ExpectedIndication, sample.Id);
+            run.Detail.ShouldBeOfType<XmlValidationView>();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_ValidateAFileJustSigned_IsValidAndIsInTheHistoryAsAValidation()
+    {
+        var service = fixture.Runs();
+        var signed = await service.RunAsync(Xades(BaselineLevel.BT), default);
+
+        var run = await service.RunAsync(Validate(signed.OutputId!), default);
+
+        run.Overall.ShouldBe("Valid", Problems(run));
+        run.AchievedLevel.ShouldNotBeNull();
+        service.History().ShouldContain(h => h.Id == run.Id && h.Kind == RunKinds.Validate);
+        service.History().ShouldContain(h => h.Id == signed.Id && h.Kind == RunKinds.Sign);
+    }
+
+    [Fact]
+    public void Start_ValidateWithoutAFile_Throws() =>
+        Should.Throw<ArgumentException>(() => fixture.Runs().Start(Validate("no-such-file")));
+
     [Fact]
     public void Start_UnknownFormat_Throws() =>
         Should.Throw<ArgumentException>(() => fixture.Runs().Start(new RunRequest("jades", JsonSerializer.SerializeToElement(new { }))));

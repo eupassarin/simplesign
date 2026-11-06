@@ -128,6 +128,7 @@ export interface RunVerdict {
   errors: string[]
   warnings: string[]
   children: RunVerdict[]
+  isTimestamp?: boolean
 }
 
 export interface DssSignature {
@@ -173,8 +174,11 @@ export interface DssStatus extends DssSettings {
   ms: number
 }
 
+export type RunKind = "sign" | "validate"
+
 export interface RunView {
   id: string
+  kind: RunKind
   format: Format
   status: "running" | "done" | "failed"
   startedAt: string
@@ -201,8 +205,21 @@ export interface RunView {
   logs: RunLogEntry[]
 }
 
+/** A file to try validation with, and the indication it should get. */
+export interface ValidationSampleView {
+  format: Format
+  id: string
+  fileId: string
+  fileName: string
+  dataId?: string | null
+  title: string
+  description: string
+  expectedIndication?: string | null
+}
+
 export interface RunSummary {
   id: string
+  kind: RunKind
   format: Format
   status: "running" | "done" | "failed"
   startedAt: string

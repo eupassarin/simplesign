@@ -32,6 +32,9 @@ public sealed record RunStarted(string Id);
 
 public sealed record DssValidateRequest(string FileId, string? DataId);
 
+/// <summary>A file to try validation with, and the indication it should get (null: no expectation).</summary>
+public sealed record SampleView(string Format, string Id, string FileId, string FileName, string? DataId, string Title, string Description, string? ExpectedIndication);
+
 public sealed record MatrixDone(int Total, long Ms, int UncoverablePairs);
 
 /// <summary>What the matrix stream sends: one finished case, then the totals.</summary>
@@ -65,7 +68,7 @@ internal static class RunApi
             {
                 return Results.Ok(new RunStarted(service.Start(body).Id));
             }
-            catch (ArgumentException ex)
+            catch (Exception ex) when (ex is ArgumentException or JsonException)
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
@@ -149,6 +152,14 @@ internal static class RunApi
                 // The page stopped the matrix.
             }
         });
+
+        // Every validation sample of the three formats, with the verdict each one should get.
+        api.MapGet("/validation/samples/all", (Validation.ValidationSampleStore pdf, CadesSampleStore cadesSamples, XmlSampleStore xmlSamples, DocumentStore documents) =>
+            pdf.Samples.Select(s => new SampleView(RunFormats.Pades, s.Id, s.FileId, documents.TryGet(s.FileId, out var f) ? f!.FileName : s.Id, null, L.T(s.Title), L.T(s.Description), s.ExpectedIndication))
+                .Concat(cadesSamples.Samples.Where(s => s.Kind != "data")
+                    .Select(s => new SampleView(RunFormats.Cades, s.Id, s.FileId, s.FileName, s.DataId, L.T(s.Title), L.T(s.Description), s.ExpectedIndication)))
+                .Concat(xmlSamples.Samples.Where(s => s.Kind == "validation")
+                    .Select(s => new SampleView(RunFormats.Xades, s.Id, s.FileId, s.FileName, s.DataId, L.T(s.Title), L.T(s.Description), s.ExpectedIndication))));
 
         var dss = api.MapGroup("/dss");
         dss.MapGet("/settings", (DssClient client) => client.Settings);

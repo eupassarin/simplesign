@@ -19,7 +19,17 @@ public static class RunFormats
 }
 
 /// <summary>A request to sign: the format and that format's options (SigningOptions, CadesOptions or XmlOptions).</summary>
-public sealed record RunRequest(string Format, JsonElement Options, bool CrossValidate = false);
+public sealed record RunRequest(string Format, JsonElement Options, bool CrossValidate = false, string Kind = RunKinds.Sign);
+
+/// <summary>What a run does: make a signature, or validate a file that already exists.</summary>
+public static class RunKinds
+{
+    public const string Sign = "sign";
+    public const string Validate = "validate";
+}
+
+/// <summary>The options of a validation run: the file, the data of a detached signature, and the trust.</summary>
+public sealed record ValidateOptions(string FileId, string? DataId = null, Validation.ValidationSettings? Settings = null);
 
 /// <summary>One signature's verdict, in the same shape for the three formats.</summary>
 public sealed record RunVerdict(
@@ -59,17 +69,20 @@ public sealed record RunView(
     IReadOnlyList<RunVerdict> Validation,
     object? Detail,
     object? CrossValidation,
-    IReadOnlyList<RunLogEntry> Logs);
+    IReadOnlyList<RunLogEntry> Logs,
+    string Kind = RunKinds.Sign);
 
 /// <summary>A row of the run history.</summary>
-public sealed record RunSummary(string Id, string Format, string Status, DateTimeOffset StartedAt, long TotalMs, bool Success, string? RequestedLevel, string? AchievedLevel, string? Overall, string? FileName, string? Error);
+public sealed record RunSummary(string Id, string Format, string Status, DateTimeOffset StartedAt, long TotalMs, bool Success, string? RequestedLevel, string? AchievedLevel, string? Overall, string? FileName, string? Error, string Kind = RunKinds.Sign);
 
 /// <summary>What the events stream sends: a log line while the run is going, then the finished run.</summary>
 public sealed record RunEvent(string Type, RunLogEntry? Log, RunView? Run);
 
 /// <summary>One run: its log and, when finished, its result. Readers follow it with <see cref="Read"/>.</summary>
-internal sealed class Run(string id, string format, JsonElement options)
+internal sealed class Run(string id, string format, JsonElement options, string kind = RunKinds.Sign)
 {
+    public string Kind { get; } = kind;
+
     private readonly Lock _gate = new();
     private readonly List<RunEvent> _events = [];
     private TaskCompletionSource _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -122,7 +135,9 @@ internal sealed class RunService(
     SigningRunner pades,
     CadesRunner cades,
     XmlRunner xml,
-    CrossValidation.DssClient dss)
+    CrossValidation.DssClient dss,
+    Validation.ValidationService validation,
+    Documents.DocumentStore documents)
 {
     private const int MaxRuns = 100;
 
@@ -138,12 +153,24 @@ internal sealed class RunService(
     public Run Start(RunRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (!RunFormats.All.Contains(request.Format))
+        string format = request.Format;
+        if (request.Kind == RunKinds.Validate)
+        {
+            // The file says what it is: validation needs no format choice.
+            var options = request.Options.Deserialize<ValidateOptions>(WorkbenchJson.Options);
+            if (options?.FileId is null || !documents.TryGet(options.FileId, out var file))
+            {
+                throw new ArgumentException(L.T("Choose a file to validate."), nameof(request));
+            }
+
+            format = Validation.FormatDetector.Detect(file!.Content);
+        }
+        else if (!RunFormats.All.Contains(format))
         {
             throw new ArgumentException(L.T("Unknown format: {0}. Use pades, cades or xades.", request.Format), nameof(request));
         }
 
-        var run = new Run(Guid.NewGuid().ToString("N")[..12], request.Format, request.Options.Clone());
+        var run = new Run(Guid.NewGuid().ToString("N")[..12], format, request.Options.Clone(), request.Kind);
         _runs[run.Id] = run;
         _order.Enqueue(run.Id);
         while (_order.Count > MaxRuns && _order.TryDequeue(out string? old))
@@ -187,15 +214,15 @@ internal sealed class RunService(
         {
             try
             {
-                view = run.Format switch
+                view = run.Kind == RunKinds.Validate ? await ValidateAsync(run) : run.Format switch
                 {
                     RunFormats.Cades => FromCades(run, await cades.RunAsync(Options<CadesOptions>(run), CancellationToken.None)),
                     RunFormats.Xades => FromXml(run, await xml.RunAsync(Options<XmlOptions>(run), CancellationToken.None)),
                     _ => FromPades(run, await pades.RunAsync(Options<SigningOptions>(run), CancellationToken.None)),
                 };
-                if (crossValidate && view.Success && view.OutputId is not null)
+                if (crossValidate && view.Success && view.OutputId is not null && view.Validation.Count > 0)
                 {
-                    view = view with { CrossValidation = await dss.CompareAsync(run.Format, view, DetachedDataId(run), DetachedDataName(run), logger, CancellationToken.None) };
+                    view = view with { CrossValidation = await dss.CompareAsync(run.Format, view, DetachedDataId(run), DetachedDataName(run, view), logger, CancellationToken.None) };
                 }
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException or KeyNotFoundException)
@@ -226,18 +253,85 @@ internal sealed class RunService(
     /// The name a detached XAdES signature refers to its data by (the Reference URI): an external
     /// validator matches the original document to the reference by this name.
     /// </summary>
-    private static string? DetachedDataName(Run run) =>
-        run.Format == RunFormats.Xades && run.Options.TryGetProperty("dataUri", out var uri) && uri.ValueKind == JsonValueKind.String
-            ? uri.GetString()
+    private string? DetachedDataName(Run run, RunView view) =>
+        run.Format != RunFormats.Xades ? null
+            : run.Kind == RunKinds.Sign && run.Options.TryGetProperty("dataUri", out var uri) && uri.ValueKind == JsonValueKind.String ? uri.GetString()
+            : view.OutputId is { } id && documents.TryGet(id, out var file) ? Validation.FormatDetector.DetachedReferenceUri(file!.Content)
             : null;
+
+    /// <summary>Validates an existing file with the validator of its format, in the same shape as a signing run.</summary>
+    private async Task<RunView> ValidateAsync(Run run)
+    {
+        var options = Options<ValidateOptions>(run);
+        var file = documents.Get(options.FileId);
+        var settings = options.Settings ?? new Validation.ValidationSettings();
+        var view = Empty(run) with { OutputId = options.FileId, FileName = file.FileName, Bytes = file.Content.Length };
+        switch (run.Format)
+        {
+            case RunFormats.Cades:
+                {
+                    var report = cades.Validate(options.FileId, options.DataId, settings);
+                    return view with
+                    {
+                        Success = true,
+                        ValidateMs = report.Ms,
+                        Code = report.Code,
+                        Overall = report.Overall,
+                        Warnings = report.Errors,
+                        Validation = [.. report.Signers.Select(Verdict)],
+                        Detail = report,
+                    };
+                }
+
+            case RunFormats.Xades:
+                {
+                    var report = xml.Validate(options.FileId, options.DataId, settings);
+                    return view with
+                    {
+                        Success = true,
+                        ValidateMs = report.Ms,
+                        Code = report.Code,
+                        Overall = report.Overall,
+                        Warnings = report.Errors,
+                        AchievedLevel = report.Signatures.LastOrDefault()?.Level,
+                        Validation = [.. report.Signatures.Select(Verdict)],
+                        Detail = report,
+                    };
+                }
+
+            default:
+                {
+                    var report = await validation.ReportAsync(options.FileId, settings, CancellationToken.None);
+                    return view with
+                    {
+                        Success = report.Error is null,
+                        Error = report.Error,
+                        ErrorType = report.Error is null ? null : "Validation",
+                        ValidateMs = report.Ms,
+                        Code = report.Code,
+                        Overall = report.Overall is "NoSignatures" or "Error" ? null : report.Overall,
+                        Warnings = report.Overall == "NoSignatures" ? [L.T("This PDF has no signature.")] : [],
+                        AchievedLevel = report.Signatures.LastOrDefault(s => !s.Report.IsDocumentTimestamp)?.PadesLevel,
+                        Validation = [.. report.Signatures.Select(s => Verdict(s.Report))],
+                        Detail = report,
+                    };
+                }
+        }
+    }
+
+    private static RunVerdict Verdict(SignatureReport v) =>
+        new(v.FieldName, v.Signer, v.Indication, v.PolicyLevel, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp);
+
+    private static RunVerdict Verdict(XmlSignatureReport s) => new(
+        s.Reference ?? L.T("Signature {0}", s.Index + 1), s.Signer, s.Indication, s.Level, s.SigningTime, s.Checks, s.Errors, s.Warnings, []);
 
     private static RunView Empty(Run run) => new(
         run.Id, run.Format, "running", run.StartedAt, 0, run.Options, false, null, null, null, null, 0, null, null,
-        [], 0, 0, null, [], null, [], null, null, []);
+        [], 0, 0, null, [], null, [], null, null, [], run.Kind);
 
     private static RunSummary Summary(Run run) => run.Result is { } r
-        ? new RunSummary(run.Id, run.Format, r.Status, run.StartedAt, r.TotalMs, r.Success, r.RequestedLevel, r.AchievedLevel, r.Overall, r.FileName, r.Error)
-        : new RunSummary(run.Id, run.Format, "running", run.StartedAt, 0, false, null, null, null, null, null);
+        ? new RunSummary(run.Id, run.Format, r.Status, run.StartedAt, r.TotalMs, r.Success, r.RequestedLevel, r.AchievedLevel, r.Overall, r.FileName, r.Error, run.Kind)
+        : new RunSummary(run.Id, run.Format, "running", run.StartedAt, 0, false, null, null, null, null, null, run.Kind);
 
     private static RunView FromPades(Run run, SigningResult r) => Empty(run) with
     {
@@ -255,8 +349,7 @@ internal sealed class RunService(
         Code = r.Code,
         Issues = r.Issues,
         Overall = Overall(r.Validation.Select(v => v.Indication)),
-        Validation = [.. r.Validation.Select(v => new RunVerdict(
-            v.FieldName, v.Signer, v.Indication, v.PolicyLevel, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp))],
+        Validation = [.. r.Validation.Select(Verdict)],
         Detail = r,
     };
 
@@ -300,8 +393,7 @@ internal sealed class RunService(
         Code = r.Code,
         Issues = r.Issues,
         Overall = r.Validation?.Overall,
-        Validation = [.. (r.Validation?.Signatures ?? []).Select(s => new RunVerdict(
-            s.Reference ?? L.T("Signature {0}", s.Index + 1), s.Signer, s.Indication, s.Level, s.SigningTime, s.Checks, s.Errors, s.Warnings, []))],
+        Validation = [.. (r.Validation?.Signatures ?? []).Select(Verdict)],
         Detail = r,
     };
 

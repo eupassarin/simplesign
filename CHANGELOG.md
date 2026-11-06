@@ -174,6 +174,13 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
 - **Trust frameworks are off by default.** The Brazil chip shows the ICP-Brasil, Gov.br, health
   and fiscal options in their own color and turns the Brazilian validation rules on.
 - The run matrix reports cases as they finish and can be stopped.
+- **No side menu: two tasks, Sign and Validate**, on the same screen. Reference (coverage) and
+  Environment (sandbox) open as panels; the run matrix opens from Vary.
+- **Validate is one screen for the three formats.** The format is read from the file; a validation
+  is a run like a signature, with the same result panel, log, DSS comparison and history.
+  "Validate all samples" checks every sample against its expected verdict. The separate PDF, CAdES
+  and XML validation pages and `/api/validation`, `/api/cades/validate` and `/api/xml/validate`
+  are replaced by `/api/runs` with `kind: "validate"`.
 - The UI and the server texts are in English and Portuguese; Spanish was removed.
 - API: `/api/options`, `/api/sign`, `/api/cades/options|sign` and `/api/xml/options|sign` are
   replaced by `/api/workbench/options` and `/api/runs` (with a server-sent events stream).
