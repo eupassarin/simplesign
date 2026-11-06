@@ -1,5 +1,6 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
+using SimpleSign.Brasil.Internal;
 
 namespace SimpleSign.Brasil.IcpBrasil;
 
@@ -181,7 +182,7 @@ public sealed record IcpBrasilPolicyRules(
                     byte[] der = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
                     positioned = true;
                     path.Pop();
-                    using var x509 = SimpleSign.Core.Crypto.CertificateLoader.LoadCertificate(der);
+                    using var x509 = BrasilDer.LoadCertificate(der);
                     anchors.Add(KeyFingerprint(x509));
                     subjects.Add(x509.Subject);
                 }
@@ -248,7 +249,7 @@ public sealed record IcpBrasilPolicyRules(
             // CertificateTrustPoint ::= SEQUENCE { trustpoint Certificate, pathLengthConstraint [0], … }
             var point = trees.ReadSequence();
             byte[] certificate = point.ReadEncodedValue().ToArray();
-            using var x509 = SimpleSign.Core.Crypto.CertificateLoader.LoadCertificate(certificate);
+            using var x509 = BrasilDer.LoadCertificate(certificate);
             anchors.Add(KeyFingerprint(x509));
             subjects.Add(x509.Subject);
         }

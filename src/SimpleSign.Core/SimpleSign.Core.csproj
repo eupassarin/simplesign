@@ -14,13 +14,10 @@
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleSign.Pdf" />
     <InternalsVisibleTo Include="SimpleSign.PAdES" />
-    <InternalsVisibleTo Include="SimpleSign.Brasil" />
-    <InternalsVisibleTo Include="SimpleSign.Brasil.Fiscal" />
     <InternalsVisibleTo Include="SimpleSign.TestHelpers" />
     <InternalsVisibleTo Include="SimpleSign.Core.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Pdf.Tests" />
     <InternalsVisibleTo Include="SimpleSign.PAdES.Tests" />
-    <InternalsVisibleTo Include="SimpleSign.Brasil.Tests" />
     <InternalsVisibleTo Include="SimpleSign.CAdES" />
     <InternalsVisibleTo Include="SimpleSign.CAdES.Tests" />
     <InternalsVisibleTo Include="SimpleSign.XAdES" />

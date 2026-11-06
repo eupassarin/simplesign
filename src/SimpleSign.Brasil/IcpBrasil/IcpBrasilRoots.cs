@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Brasil.Internal;
 
 namespace SimpleSign.Brasil.IcpBrasil;
 
@@ -47,7 +47,7 @@ public static class IcpBrasilRoots
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedSha256);
 
         var url = new Uri(Repository, $"ICP-Brasilv{version}.crt");
-        byte[] bytes = await ResilientHttp.GetBytesAsync(httpClient, url.AbsoluteUri, ct: cancellationToken).ConfigureAwait(false)
+        byte[] bytes = await ResilientHttp.GetBytesAsync(httpClient, url, cancellationToken: cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException($"Could not download {url}.");
         return FromPinnedBytes(bytes, expectedSha256);
     }
@@ -61,7 +61,7 @@ public static class IcpBrasilRoots
         ArgumentNullException.ThrowIfNull(certificate);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedSha256);
         string expected = new([.. expectedSha256.Where(char.IsAsciiHexDigit).Select(char.ToUpperInvariant)]);
-        var cert = CertificateLoader.LoadCertificate(certificate);
+        var cert = BrasilDer.LoadCertificate(certificate);
         string actual = Convert.ToHexString(SHA256.HashData(cert.RawData));
         if (!CryptographicOperations.FixedTimeEquals(System.Text.Encoding.ASCII.GetBytes(actual), System.Text.Encoding.ASCII.GetBytes(expected)))
         {

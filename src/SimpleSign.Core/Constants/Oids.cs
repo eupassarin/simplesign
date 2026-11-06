@@ -243,14 +243,4 @@ public static class Oids
     public const string AtsHashIndexV3 = "0.4.0.19122.1.5";
 
     #endregion
-
-    #region ICP-Brasil
-
-    /// <summary>ICP-Brasil SAN: holder data containing CPF at positions 8–18.</summary>
-    public const string IcpBrasilSanHolderData = "2.16.76.1.3.1";
-
-    /// <summary>ICP-Brasil SAN: CNPJ (14 digits).</summary>
-    public const string IcpBrasilSanCnpj = "2.16.76.1.3.3";
-
-    #endregion
 }

@@ -259,7 +259,12 @@ public sealed class FiscalXmlValidator
 
         try
         {
-            return SimpleSign.Core.Crypto.CertificateLoader.LoadCertificate(Convert.FromBase64String(base64.Trim()));
+            byte[] der = Convert.FromBase64String(base64.Trim());
+#if NET9_0_OR_GREATER
+            return X509CertificateLoader.LoadCertificate(der);
+#else
+            return new X509Certificate2(der);
+#endif
         }
         catch (Exception ex) when (ex is FormatException or CryptographicException)
         {

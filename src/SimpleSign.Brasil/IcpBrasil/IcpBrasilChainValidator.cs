@@ -3,13 +3,13 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using SimpleSign.Core;
 using SimpleSign.Core.Constants;
 using SimpleSign.Brasil.Revocation;
-using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Validation;
+using SimpleSign.Brasil.Constants;
+using SimpleSign.Brasil.Internal;
 
 namespace SimpleSign.Brasil.IcpBrasil;
 
@@ -371,7 +371,7 @@ public sealed class IcpBrasilChainValidator
             return false;
         }
         // OID arc 2.16.76.1 in DER: 06 05 60 92 4C 01 (first 6 bytes of the encoded OID)
-        return certPoliciesExt.RawData.AsSpan().IndexOf(Asn1Tags.IcpBrasilArc) >= 0;
+        return certPoliciesExt.RawData.AsSpan().IndexOf(BrasilDer.IcpBrasilArc) >= 0;
     }
 
     /// <summary>
@@ -458,7 +458,7 @@ public sealed class IcpBrasilChainValidator
         foreach (var (oid, textValue) in ReadSanOtherNames(certificate, logger))
         {
             // OID 2.16.76.1.3.1 = holder data (contains CPF in positions 8-18)
-            if (oid == Oids.IcpBrasilSanHolderData && textValue.Length >= 19)
+            if (oid == BrasilOids.IcpBrasilSanHolderData && textValue.Length >= 19)
             {
                 string candidate = textValue.Substring(8, 11);
                 if (IsValidCpf(candidate))
@@ -467,7 +467,7 @@ public sealed class IcpBrasilChainValidator
                 }
             }
             // OID 2.16.76.1.3.3 = CNPJ (14 characters)
-            else if (oid == Oids.IcpBrasilSanCnpj && textValue.Length >= 14)
+            else if (oid == BrasilOids.IcpBrasilSanCnpj && textValue.Length >= 14)
             {
                 string candidate = textValue[..14].ToUpperInvariant();
                 if (IsValidCnpj(candidate))
@@ -841,7 +841,7 @@ public sealed class IcpBrasilChainValidator
             }
             var bytes = new byte[stream.Length];
             stream.ReadExactly(bytes);
-            result.Add(CertificateLoader.LoadCertificate(bytes));
+            result.Add(BrasilDer.LoadCertificate(bytes));
         }
         return result.AsReadOnly();
     }
@@ -980,7 +980,7 @@ public sealed class IcpBrasilChainValidator
     {
         try
         {
-            var oidBytes = DerEncoder.EncodeOid(oid);
+            var oidBytes = BrasilDer.EncodeOid(oid);
             return data.AsSpan().IndexOf(oidBytes) >= 0;
         }
         catch (FormatException ex)
@@ -993,8 +993,13 @@ public sealed class IcpBrasilChainValidator
             logger?.OidEncodingFailed(ex.Message);
             return false;
         }
+        catch (ArgumentException ex)
+        {
+            logger?.OidEncodingFailed(ex.Message);
+            return false;
+        }
     }
 
-    /// <summary>Encodes an OID into DER bytes. Delegates to <see cref="DerEncoder.EncodeOid"/>.</summary>
-    public static byte[] EncodeOid(string oid) => DerEncoder.EncodeOid(oid);
+    /// <summary>Encodes an OID into DER bytes. Delegates to <see cref="System.Formats.Asn1.AsnWriter.WriteObjectIdentifier(string, System.Formats.Asn1.Asn1Tag?)"/>.</summary>
+    public static byte[] EncodeOid(string oid) => BrasilDer.EncodeOid(oid);
 }

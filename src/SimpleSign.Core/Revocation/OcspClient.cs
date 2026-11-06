@@ -568,6 +568,18 @@ public sealed class OcspClient : IOcspClient
     }
 
     /// <summary>
+    /// The OCSP responder URL of the certificate's Authority Information Access extension, or
+    /// <see langword="null"/> when it has none.
+    /// </summary>
+    /// <param name="certificate">The certificate whose OCSP responder is wanted.</param>
+    /// <returns>The responder URL, or <see langword="null"/>.</returns>
+    public static Uri? GetOcspUri(X509Certificate2 certificate)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+        return GetOcspUrl(certificate) is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri : null;
+    }
+
+    /// <summary>
     /// Extracts the OCSP server URL from the AIA (Authority Information Access) extension.
     /// AIA OID = 1.3.6.1.5.5.7.1.1
     ///   id-ad-ocsp      = 1.3.6.1.5.5.7.48.1

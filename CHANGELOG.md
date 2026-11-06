@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (Breaking) — SimpleSign.Brasil no longer uses Core internals
+
+`SimpleSign.Brasil`, `.Fiscal` and `.Xades` now build against the public API of Core, PAdES,
+CAdES and XAdES only (no `InternalsVisibleTo`).
+
+- **Removed:** `Oids.IcpBrasilSanHolderData` and `Oids.IcpBrasilSanCnpj` from `SimpleSign.Core`
+  (use the literal OIDs `2.16.76.1.3.1` and `2.16.76.1.3.3`; `IcpBrasilChainValidator` reads them for you).
+- **Now public**, for country extensions:
+  - `CrlEvaluator.Evaluate` / `ReadNextUpdate` and `CrlStatus`
+  - `CrlClient.GetCrlUri` and `OcspClient.GetOcspUri`
+  - `ResilientHttp.GetBytesAsync(HttpClient, Uri, …)` and `ResilientHttp.DefaultChainRetrievalTimeout`
+  - `SignerCertificate` / `SignerChain` on `PadesSignerBuilder`, `CadesSignerBuilder` and `XadesSignerBuilder`
+- The ICP-Brasil and Gov.br log events (3110, 3113, 3210) moved from Core to `SimpleSign.Brasil`
+  with the same event IDs.
+
+### Removed (repository)
+
+- `samples/`, `bench/`, `interop/` and the interop tests, the fuzz harness, Stryker, the docfx site,
+  migration guides, `llms*.txt`, `AGENTS.md` and `.github/copilot-instructions.md`. The README now
+  links to `docs/articles/`.
+
 ### Fixed
 
 - CAdES: `WithExtendedValidationData` combined with B-LT or B-LTA. The extended form was applied

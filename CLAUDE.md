@@ -12,8 +12,8 @@ SimpleSign is a .NET library for PAdES, CAdES and XAdES signatures (ETSI EN 319 
 # Build everything
 dotnet build
 
-# Run all unit tests (~2,600 tests; ~2,800 with the CLI tests)
-dotnet test tests/unit/
+# Run every test project (what CI runs)
+dotnet test SimpleSign.sln --filter "Category!=Stress"
 
 # Run specific test project
 dotnet test tests/unit/SimpleSign.PAdES.Tests
@@ -23,10 +23,10 @@ dotnet test tests/unit/SimpleSign.Brasil.Tests
 dotnet test tests/unit/SimpleSign.HtmlToPdf.Tests
 
 # Integration tests (requires network for TSA/OCSP)
-dotnet test tests/integration/
+dotnet test tests/integration/SimpleSign.Integration.Tests
 
 # CLI tests
-dotnet test tests/cli/
+dotnet test tests/cli/SimpleSign.Cli.Tests
 
 # AOT smoke test
 dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64

@@ -14,7 +14,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleSign.Contracts.Tests" />
     <InternalsVisibleTo Include="SimpleSign.XAdES.Tests" />
-    <InternalsVisibleTo Include="SimpleSign.Brasil.Xades" />
   </ItemGroup>
 
   <ItemGroup>

@@ -107,7 +107,7 @@ internal sealed class ChainRevocationChecker
             return ChainRevocationStatus.Unknown;
         }
 
-        string? crlUrl = CrlClient.GetCrlUrl(certificate, _logger);
+        string? crlUrl = CrlClient.GetCrlUri(certificate, _logger)?.AbsoluteUri;
         if (crlUrl is not null)
         {
             byte[]? crl = await DownloadCrlAsync(crlUrl, cancellationToken).ConfigureAwait(false);
@@ -121,7 +121,7 @@ internal sealed class ChainRevocationChecker
             }
         }
 
-        string? ocspUrl = OcspClient.GetOcspUrl(certificate);
+        string? ocspUrl = OcspClient.GetOcspUri(certificate)?.AbsoluteUri;
         if (ocspUrl is not null)
         {
             try
@@ -170,7 +170,7 @@ internal sealed class ChainRevocationChecker
 
         try
         {
-            byte[]? bytes = await ResilientHttp.GetBytesAsync(_httpClient, url, logger: _logger, ct: cancellationToken).ConfigureAwait(false);
+            byte[]? bytes = await ResilientHttp.GetBytesAsync(_httpClient, new Uri(url), _logger, cancellationToken).ConfigureAwait(false);
             if (bytes is not null)
             {
                 _crlCache[url] = (bytes, DateTimeOffset.UtcNow);

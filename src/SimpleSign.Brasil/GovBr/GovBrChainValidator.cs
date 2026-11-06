@@ -2,12 +2,12 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Brasil.Revocation;
-using SimpleSign.Core;
 using SimpleSign.Core.Constants;
-using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Validation;
+using SimpleSign.Brasil.Constants;
+using SimpleSign.Brasil.Internal;
 
 namespace SimpleSign.Brasil.GovBr;
 
@@ -95,7 +95,7 @@ public sealed class GovBrChainValidator
             }
             var bytes = new byte[stream.Length];
             stream.ReadExactly(bytes);
-            result.Add(CertificateLoader.LoadCertificate(bytes));
+            result.Add(BrasilDer.LoadCertificate(bytes));
         }
         return result.AsReadOnly();
     }
@@ -121,7 +121,7 @@ public sealed class GovBrChainValidator
         }
 
         // 2.16.76.3 em DER: 60=2.16, 92 4C=76, 03=3
-        ReadOnlySpan<byte> govBrArc = Asn1Tags.GovBrArc;
+        ReadOnlySpan<byte> govBrArc = BrasilDer.GovBrArc;
         return certPoliciesExt.RawData.AsSpan().IndexOf(govBrArc) >= 0;
     }
 
@@ -139,7 +139,7 @@ public sealed class GovBrChainValidator
         }
 
         // Arco 2.16.76.3.2 em DER: 60 92 4C 03 02
-        ReadOnlySpan<byte> arc = Asn1Tags.GovBrAssuranceLevelArc;
+        ReadOnlySpan<byte> arc = BrasilDer.GovBrAssuranceLevelArc;
         var data = certPoliciesExt.RawData.AsSpan();
         int idx = data.IndexOf(arc);
         if (idx < 0 || idx + arc.Length >= data.Length)
@@ -166,7 +166,7 @@ public sealed class GovBrChainValidator
         ArgumentNullException.ThrowIfNull(certificate);
         foreach (var (oid, value) in IcpBrasil.IcpBrasilChainValidator.ReadSanOtherNames(certificate, logger: null))
         {
-            if (oid != Oids.IcpBrasilSanHolderData)
+            if (oid != BrasilOids.IcpBrasilSanHolderData)
             {
                 continue;
             }
