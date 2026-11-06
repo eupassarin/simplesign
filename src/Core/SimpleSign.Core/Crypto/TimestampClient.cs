@@ -624,21 +624,17 @@ public sealed class TimestampClient : ITimestampClient
         byte[] signatureAlg = siSeq.ReadEncodedValue().ToArray();
         byte[] signature = siSeq.ReadEncodedValue().ToArray();
 
-        // unsignedAttrs [1] IMPLICIT OPTIONAL — add or extend
-        var unsignedAttrs = new List<(string oid, byte[] val)>();
+        // unsignedAttrs [1] IMPLICIT OPTIONAL — add or extend. The attributes already there are
+        // kept octet for octet: each one is a complete Attribute (type and SET OF values).
+        var existingAttributes = new List<byte[]>();
         if (siSeq.HasData && siSeq.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 1, true))
         {
             var existingAttrs = siSeq.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 1, true));
             while (existingAttrs.HasData)
             {
-                var attrSeq = existingAttrs.ReadSequence();
-                string oid = attrSeq.ReadObjectIdentifier();
-                byte[] val = attrSeq.ReadEncodedValue().ToArray();
-                unsignedAttrs.Add((oid, val));
+                existingAttributes.Add(existingAttrs.ReadEncodedValue().ToArray());
             }
         }
-
-        unsignedAttrs.Add((attrOid, attrValue));
 
         // Rebuilds the SignerInfo
         var writer = new AsnWriter(AsnEncodingRules.DER);
@@ -659,15 +655,17 @@ public sealed class TimestampClient : ITimestampClient
             // unsignedAttrs [1] IMPLICIT
             using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 1, true)))
             {
-                foreach (var (oid, val) in unsignedAttrs)
+                foreach (byte[] existingAttribute in existingAttributes)
                 {
-                    using (writer.PushSequence())
+                    writer.WriteEncodedValue(existingAttribute);
+                }
+
+                using (writer.PushSequence())
+                {
+                    writer.WriteObjectIdentifier(attrOid);
+                    using (writer.PushSetOf())
                     {
-                        writer.WriteObjectIdentifier(oid);
-                        using (writer.PushSetOf())
-                        {
-                            writer.WriteEncodedValue(val);
-                        }
+                        writer.WriteEncodedValue(attrValue);
                     }
                 }
             }

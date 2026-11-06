@@ -93,6 +93,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Enable LTV — embed revocation data (requires --tsa)")]
         public bool Ltv { get; init; }
 
+        /// <summary>Revocation source tried first with --ltv/--archival: ocsp (default) or crl.</summary>
+        [CommandOption("--revocation-preference <SOURCE>")]
+        [Description("Revocation source tried first with --ltv/--archival: ocsp (default) or crl")]
+        public string? RevocationPreference { get; init; }
+
         /// <summary>Enable archival timestamp / B-LTA (implies --ltv).</summary>
         [CommandOption("--archival")]
         [Description("Enable archival timestamp / B-LTA (implies --ltv)")]
@@ -320,6 +325,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             if (ExternalCredentialSupport.Validate(this, hasCertPath || hasThumbprint) is { } externalError)
             {
                 return ValidationResult.Error(externalError);
+            }
+
+            if (AdesOptionSupport.ValidateRevocationPreference(RevocationPreference) is { } revocationError)
+            {
+                return ValidationResult.Error(revocationError);
             }
 
             if (!hasCertPath && !hasThumbprint && !ExternalCredentialSupport.IsRequested(this))
@@ -628,7 +638,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             return AdesBaselineProfile.Timestamped(timestampOptions);
         }
 
-        var validationOptions = new LongTermValidationOptions();
+        var validationOptions = AdesOptionSupport.LongTermOptions(settings.RevocationPreference);
         if (settings.Archival)
         {
             return AdesBaselineProfile.Archive(timestampOptions, validationOptions);

@@ -132,6 +132,12 @@ public static class CadesCompatibility
             Error(StepType, L.T("The policy URI must be an absolute URL."));
         }
 
+        if (o.Kind == CadesKind.CustomPolicy && !string.IsNullOrEmpty(o.PolicyDocumentId)
+            && (string.IsNullOrWhiteSpace(o.PolicySpecification) || !o.PolicySpecification.All(char.IsAscii)))
+        {
+            Error(StepType, L.T("The policy document specification must be an OID or a URI (ASCII only)."));
+        }
+
         foreach (var level in Enum.GetValues<BaselineLevel>())
         {
             Set($"level.{level}", OptionState.Shown);
@@ -152,7 +158,12 @@ public static class CadesCompatibility
             Error(StepType, extendedReason);
         }
 
-        bool needsTsa = icp ? o.IcpPolicy != CadesIcpPolicy.AdRb : o.Level != BaselineLevel.BB;
+        // The content timestamp is taken before signing, at any level, and a countersignature has no content.
+        Set("contentTimestamp", counterSign
+            ? OptionState.Off(L.T("A countersignature signs a signature value, not content: it cannot carry a content timestamp."))
+            : OptionState.Shown);
+        bool contentTimestamp = o.ContentTimestamp && !counterSign;
+        bool needsTsa = contentTimestamp || (icp ? o.IcpPolicy != CadesIcpPolicy.AdRb : o.Level != BaselineLevel.BB);
         Set("timestamp", needsTsa ? OptionState.Shown : OptionState.Hidden);
         SharedRules.TsaProviders(sandbox, Set);
         if (needsTsa)
@@ -180,6 +191,23 @@ public static class CadesCompatibility
             Error(StepDetails, L.T("Unknown commitment type."));
         }
 
+        Set("revocationPreference", !icp && o.Level >= BaselineLevel.BLT ? OptionState.Shown : OptionState.Hidden);
+        Set("signerLocation", OptionState.Shown);
+        Set("roles", OptionState.Shown);
+        Set("certifiedRoles", OptionState.Shown);
+        var postalAddress = Lines(o.SignerPostalAddress);
+        if (postalAddress.Count > 6)
+        {
+            Error(StepDetails, L.T("The postal address of the signer location takes at most six lines."));
+        }
+
+        // content-hints and mime-type describe the signed content, which a countersignature does not sign.
+        var describesContent = counterSign
+            ? OptionState.Off(L.T("A countersignature cannot carry content-hints or mime-type (ETSI EN 319 122-1 §5.2.4)."))
+            : OptionState.Shown;
+        Set("mimeType", describesContent);
+        Set("contentHints", describesContent);
+
         // ── 2. Signer ──────────────────────────────────────────────────
         SharedRules.Signer(credential, Error, Warn, StepSigner);
         if (credential is not null && icp && !sandbox && !credential.ChainsToIcpBrasil)
@@ -187,9 +215,24 @@ public static class CadesCompatibility
             Warn(StepType, L.T("The certificate does not chain to an ICP-Brasil root: the signature will carry the policy, but it will not be valid under it."));
         }
 
-        var effective = o with { Padding = padding, ContentType = contentType, ExtendedForm = extended };
+        var effective = o with
+        {
+            Padding = padding,
+            ContentType = contentType,
+            ExtendedForm = extended,
+            ContentTimestamp = contentTimestamp,
+            SignerCountry = SigningPlan.Blank(o.SignerCountry),
+            SignerLocality = SigningPlan.Blank(o.SignerLocality),
+            SignerPostalAddress = postalAddress,
+            SignerRoles = Lines(o.SignerRoles),
+            MimeType = counterSign ? null : SigningPlan.Blank(o.MimeType),
+            ContentDescription = counterSign ? null : SigningPlan.Blank(o.ContentDescription),
+        };
         return new CadesOptionsReport(state, issues, effective, LevelName(effective));
     }
+
+    private static List<string> Lines(IReadOnlyList<string> lines) =>
+        [.. lines.Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim())];
 
     /// <summary>The level as shown to users.</summary>
     public static string LevelName(CadesOptions options)

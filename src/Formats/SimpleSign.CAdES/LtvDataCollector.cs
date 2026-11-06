@@ -62,22 +62,44 @@ public static class LtvDataCollector
     /// <param name="ocspClient">Optional OCSP client for DI integration.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Collected certificate raw data, OCSP responses, and CRLs.</returns>
-    public static async Task<LtvCollectionResult> CollectAsync(
+    public static Task<LtvCollectionResult> CollectAsync(
         HttpClient httpClient,
         X509Certificate2 signerCert,
         IReadOnlyList<X509Certificate2>? chainCertificates,
         ILogger? logger,
         IOcspClient? ocspClient = null,
+        CancellationToken cancellationToken = default) =>
+        CollectAsync(httpClient, signerCert, chainCertificates, logger, RevocationPreference.OcspFirst, ocspClient, cancellationToken);
+
+    /// <summary>
+    /// Collects LTV data for the certificate chain, trying the preferred revocation source first.
+    /// </summary>
+    /// <param name="httpClient">HTTP client for network requests.</param>
+    /// <param name="signerCert">The signer certificate.</param>
+    /// <param name="chainCertificates">Optional intermediate certificates.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="revocationPreference">The revocation source tried first for each certificate; the other one is the fallback.</param>
+    /// <param name="ocspClient">Optional OCSP client for DI integration.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Collected certificate raw data, OCSP responses, and CRLs.</returns>
+    public static async Task<LtvCollectionResult> CollectAsync(
+        HttpClient httpClient,
+        X509Certificate2 signerCert,
+        IReadOnlyList<X509Certificate2>? chainCertificates,
+        ILogger? logger,
+        RevocationPreference revocationPreference,
+        IOcspClient? ocspClient = null,
         CancellationToken cancellationToken = default)
     {
         var evidence = await LtvEvidenceCollector.CollectAsync(
-            httpClient, signerCert, chainCertificates, logger, ocspClient, cancellationToken: cancellationToken).ConfigureAwait(false);
+            httpClient, signerCert, chainCertificates, logger, ocspClient, revocationPreference,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
         return ToResult(evidence);
     }
 
     /// <summary>
-    /// Collects LTV data for the certificate chain with <paramref name="options"/> (OCSP clock skew
-    /// tolerance) and the outbound policy of <paramref name="httpClientProvider"/>.
+    /// Collects LTV data for the certificate chain with <paramref name="options"/>: revocation
+    /// preference, OCSP clock skew tolerance, and the outbound policy of <paramref name="httpClientProvider"/>.
     /// </summary>
     /// <param name="httpClientProvider">Provider of the HTTP client and its <see cref="IHttpClientProvider.OutboundPolicy"/>.</param>
     /// <param name="signerCert">The signer certificate.</param>
@@ -99,7 +121,7 @@ public static class LtvDataCollector
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         ArgumentNullException.ThrowIfNull(options);
         var evidence = await LtvEvidenceCollector.CollectAsync(
-            httpClientProvider.GetClient(), signerCert, chainCertificates, logger, ocspClient,
+            httpClientProvider.GetClient(), signerCert, chainCertificates, logger, ocspClient, options.RevocationPreference,
             httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default, options.ClockSkewTolerance, cancellationToken).ConfigureAwait(false);
         return ToResult(evidence);
     }

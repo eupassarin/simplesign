@@ -108,7 +108,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             {
                 var plan = new XadesPlan(o, context);
                 code = plan.Code(credential.Facts);
-                var builder = XadesSigner.Document(data.Content).WithLogger(RunLog.Logger);
+                var builder = (o.CounterSign ? XadesSigner.CounterSign(data.Content, o.CounterSignatureId) : XadesSigner.Document(data.Content))
+                    .WithLogger(RunLog.Logger);
                 foreach (var (_, apply) in plan.Steps)
                 {
                     builder = apply(builder);
@@ -135,16 +136,22 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         string fileName = OutputName(o, data.FileName);
         var output = documents.Add(fileName, signed);
         var view = o.Validate
-            ? Validate(output.Id, o.Mode == XmlMode.Xades && o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? ValidationSettings.For(o.Environment))
+            ? Validate(output.Id, o.Mode == XmlMode.Xades && o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? ValidationSettings.For(o.Environment),
+                o.Mode == XmlMode.Xades ? report.Effective.ExternalObjectId : null)
             : null;
         return new XmlSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved, warnings, signMs, view, code, report.Issues);
     }
 
     /// <summary>Validates every signature of a stored XML: XAdES if any has QualifyingProperties, else fiscal XML-DSig.</summary>
-    public XmlValidationView Validate(string signatureId, string? dataId, ValidationSettings settings)
+    /// <summary>
+    /// Validates a signed XML. <paramref name="externalObjectId"/> is a file the signature references
+    /// by its file name (an additional external data object), when the caller has it.
+    /// </summary>
+    public XmlValidationView Validate(string signatureId, string? dataId, ValidationSettings settings, string? externalObjectId = null)
     {
         var file = documents.Get(signatureId);
         byte[]? data = dataId is null ? null : documents.Get(dataId).Content;
+        var externalObject = externalObjectId is null ? null : documents.Get(externalObjectId);
         var watch = Stopwatch.StartNew();
         string preview = XmlInspector.Preview(file.Content);
         string? signatureXml = XmlInspector.SignatureXml(file.Content);
@@ -161,7 +168,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
 
         var trust = validation.Trust(settings);
         var signatures = mode == XmlMode.Xades
-            ? ValidateXades(file.Content, data, trust, settings)
+            ? ValidateXades(file.Content, data, externalObject, trust, settings)
             : ValidateFiscal(file.Content, trust, settings);
         string overall = signatures.Count == 0 ? "Invalid"
             : signatures.All(s => s.Indication == "Valid") ? "Valid"
@@ -171,19 +178,32 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         return new XmlValidationView(overall, mode, signatures, errors, signatureXml, preview, watch.ElapsedMilliseconds, ValidationCode(mode, settings, data is not null));
     }
 
-    private static List<XmlSignatureReport> ValidateXades(byte[] xml, byte[]? data, ValidationTrust trust, ValidationSettings settings)
+    private static List<XmlSignatureReport> ValidateXades(byte[] xml, byte[]? data, StoredFile? externalObject, ValidationTrust trust, ValidationSettings settings)
     {
         var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger);
-        var results = validator.ValidateAll(xml, trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null, data);
+        var anchors = trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null;
+        // An external additional data object is found by the URI of its reference, which is its file name.
+        var results = externalObject is null
+            ? validator.ValidateAll(xml, anchors, data)
+            : validator.ValidateAll(xml, anchors, ExternalData(xml, data, externalObject));
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
         var reports = new List<XmlSignatureReport>();
-        foreach (var (r, i) in results.Select((r, i) => (r, i)))
+        foreach (var result in results)
         {
+            Report(result, countersigned: null);
+        }
+
+        // A countersignature is listed right after the signature it signs, and says so.
+        void Report(XadesValidationResult r, string? countersigned)
+        {
+            int i = reports.Count;
             var checks = new List<CheckRow>
             {
                 new("signature", L.T("Signature value and references"), Status(r.IsSignatureValid && r.IsIntegrityValid), null),
                 new("chain", L.T("Certificate chain"), Status(r.IsCertificateChainValid), null),
                 new("timestamp", L.T("Signature timestamp"), Status(r.HasValidSignatureTimeStamp), r.IsTsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
+                new("dataObjectsTimestamp", L.T("Data objects timestamp"), Status(r.HasValidDataObjectsTimeStamp),
+                    r.DataObjectsTimeStampTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)),
                 new("references", L.T("Complete references (XAdES-C)"), Status(r.HasValidCompleteReferences), null),
                 new("sigAndRefs", L.T("SigAndRefsTimeStamp (XAdES-X)"), Status(r.HasValidSigAndRefsTimeStamp), null),
                 new("ltv", L.T("Validation data (certificate and revocation values)"), Status(r.IsLtvDataValid), null),
@@ -203,9 +223,10 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             }
 
             bool invalid = !r.IsSignatureValid || !r.IsIntegrityValid || r.HasValidSignatureTimeStamp == false || r.HasValidArchiveTimeStamp == false
-                || r.HasValidSigAndRefsTimeStamp == false || r.HasValidCompleteReferences == false;
+                || r.HasValidSigAndRefsTimeStamp == false || r.HasValidCompleteReferences == false || r.HasValidDataObjectsTimeStamp == false;
             string indication = invalid ? "Invalid" : r.IsValid ? "Valid" : "Indeterminate";
-            reports.Add(new XmlSignatureReport(i, r.SignatureId, CadesInspector.SimpleName(r.SignerCertificate), null, null, indication,
+            string? reference = countersigned is null ? r.SignatureId : L.T("{0} (countersignature of {1})", r.SignatureId ?? "-", countersigned);
+            reports.Add(new XmlSignatureReport(i, reference, CadesInspector.SimpleName(r.SignerCertificate), null, null, indication,
                 r.DetectedLevel switch
                 {
                     AdesBaselineLevel.Basic => "B-B",
@@ -215,6 +236,10 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                 },
                 r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
                 [.. checks.Where(c => c.Status != "n/a" || c.Id is "signature" or "chain")], r.Errors, r.Warnings));
+            foreach (var counter in r.CounterSignatures)
+            {
+                Report(counter, r.SignatureId ?? "-");
+            }
         }
 
         return reports;
@@ -263,6 +288,31 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
 
         errors.AddRange(chain.ChainStatus.Select(s => $"{s.Status}: {s.StatusInformation}".TrimEnd()));
         return false;
+    }
+
+    /// <summary>
+    /// The content of every external reference by URI: the additional data object under its file
+    /// name, and the detached document under every other external URI.
+    /// </summary>
+    private static Dictionary<string, byte[]> ExternalData(byte[] xml, byte[]? data, StoredFile externalObject)
+    {
+        var byUri = new Dictionary<string, byte[]>(StringComparer.Ordinal) { [externalObject.FileName] = externalObject.Content };
+        if (data is null)
+        {
+            return byUri;
+        }
+
+        var doc = XmlInspector.Load(xml);
+        foreach (XmlElement reference in doc.GetElementsByTagName("Reference", "http://www.w3.org/2000/09/xmldsig#"))
+        {
+            string uri = reference.GetAttribute("URI");
+            if (uri.Length > 0 && uri[0] != '#')
+            {
+                byUri.TryAdd(uri, data);
+            }
+        }
+
+        return byUri;
     }
 
     private static string OutputName(XmlOptions o, string input)
@@ -452,6 +502,39 @@ internal sealed class XadesPlan
             _steps.Add(($".WithCommitmentType(CommitmentType.{commitment})", b => b.WithCommitmentType(commitment)));
         }
 
+        if (o.DataObjectsTimestamp)
+        {
+            var dataTsa = context.BuildTimestamp(o.Timestamp, "tsa");
+            _steps.Add((".WithDataObjectsTimestamp(tsa) // asked before signing: the data existed at that time", b => b.WithDataObjectsTimestamp(dataTsa)));
+        }
+
+        if (o.EmbeddedObjectId is not null)
+        {
+            var file = context.Upload(o.EmbeddedObjectId, "attachment");
+            var embedded = XadesDataObject.Embedded(file.Content);
+            _steps.Add((".WithAdditionalDataObject(XadesDataObject.Embedded(attachment)) // carried inside the signature, as base64", b => b.WithAdditionalDataObject(embedded)));
+        }
+
+        if (o.ExternalObjectId is not null)
+        {
+            var file = context.Upload(o.ExternalObjectId, "externalFile");
+            var externalObject = XadesDataObject.External(file.FileName, file.Content);
+            _steps.Add(($".WithAdditionalDataObject(XadesDataObject.External({SigningPlan.Str(file.FileName)}, externalFile)) // stays outside; the validator needs it again",
+                b => b.WithAdditionalDataObject(externalObject)));
+        }
+
+        if (o.AttributeCertificateId is not null)
+        {
+            byte[] attributeCertificate = context.Upload(o.AttributeCertificateId, "attributeCertificate").Content;
+            _steps.Add((".WithAttributeCertificates([attributeCertificate]) // embedded as given, not verified", b => b.WithAttributeCertificates([attributeCertificate])));
+        }
+
+        if (o.SignedAssertionId is not null)
+        {
+            string assertion = Encoding.UTF8.GetString(context.Upload(o.SignedAssertionId, "assertionXml").Content);
+            _steps.Add((".WithSignedAssertions([Encoding.UTF8.GetString(assertionXml)]) // embedded as given, not verified", b => b.WithSignedAssertions([assertion])));
+        }
+
         if (o.SignerRoles.Count > 0)
         {
             var roles = o.SignerRoles;
@@ -462,6 +545,31 @@ internal sealed class XadesPlan
         {
             var format = new DataObjectFormat { MimeType = o.MimeType.Trim() };
             _steps.Add(($".WithDataObjectFormat(new DataObjectFormat {{ MimeType = {SigningPlan.Str(format.MimeType)} }})", b => b.WithDataObjectFormat(format)));
+        }
+
+        if (o.PlaceCity is not null || o.PlaceStreet is not null || o.PlaceState is not null || o.PlacePostalCode is not null || o.PlaceCountry is not null)
+        {
+            var place = new SignatureProductionPlace
+            {
+                City = o.PlaceCity,
+                StreetAddress = o.PlaceStreet,
+                StateOrProvince = o.PlaceState,
+                PostalCode = o.PlacePostalCode,
+                CountryName = o.PlaceCountry,
+            };
+            var fields = new List<string>();
+            SigningPlan.AddField(fields, "City", place.City);
+            SigningPlan.AddField(fields, "StreetAddress", place.StreetAddress);
+            SigningPlan.AddField(fields, "StateOrProvince", place.StateOrProvince);
+            SigningPlan.AddField(fields, "PostalCode", place.PostalCode);
+            SigningPlan.AddField(fields, "CountryName", place.CountryName);
+            _steps.Add(($".WithSignatureProductionPlace(new SignatureProductionPlace {{ {string.Join(", ", fields)} }})", b => b.WithSignatureProductionPlace(place)));
+        }
+
+        if (o.Canonicalization != XadesCanonicalization.Exclusive)
+        {
+            var canonicalization = o.Canonicalization;
+            _steps.Add(($".WithCanonicalization(XadesCanonicalization.{canonicalization}) // SignedInfo and the references", b => b.WithCanonicalization(canonicalization)));
         }
 
         if (o.SigningCertificateV1 && o.Kind != XadesKind.IcpBrasil)
@@ -500,10 +608,21 @@ internal sealed class XadesPlan
         if (_o.Kind == XadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);
-            _steps.Add(($".WithSignaturePolicy({SigningPlan.Str(_o.PolicyOid)}{(uri is null ? "" : ", " + SigningPlan.Str(uri))})", b => b.WithSignaturePolicy(_o.PolicyOid, uri)));
+            if (string.IsNullOrEmpty(_o.PolicyDocumentId))
+            {
+                _steps.Add(($".WithSignaturePolicy({SigningPlan.Str(_o.PolicyOid)}{(uri is null ? "" : ", " + SigningPlan.Str(uri))})", b => b.WithSignaturePolicy(_o.PolicyOid, uri)));
+            }
+            else
+            {
+                // With the document at hand the policy carries its hash, which is what lets the store be added.
+                var uploaded = _context.BuildUploadedPolicy(_o.PolicyOid, uri, _o.PolicyDocumentId, _o.PolicySpecification);
+                _steps.Add((uploaded.PolicyCode, b => b.WithSignaturePolicy(uploaded.Policy)));
+                _steps.Add((uploaded.StoreCode, b => b.WithSignaturePolicyStore(uploaded.Store)));
+            }
         }
 
-        string ltv = $"new LongTermValidationOptions({(_context.IsSandbox ? "sandboxHttp" : "")})";
+        string ltv = _context.LongTermCode(_o.RevocationPreference);
+        var longTerm = _context.BuildLongTerm(_o.RevocationPreference);
         switch (_o.Level)
         {
             case BaselineLevel.BT:
@@ -512,11 +631,11 @@ internal sealed class XadesPlan
                 break;
             case BaselineLevel.BLT:
                 var ltTsa = _context.BuildTimestamp(_o.Timestamp, "tsa");
-                _steps.Add(($".WithLevel(AdesBaselineProfile.LongTerm(tsa, {ltv}))", b => b.WithLevel(AdesBaselineProfile.LongTerm(ltTsa, new LongTermValidationOptions(_context.Http)))));
+                _steps.Add(($".WithLevel(AdesBaselineProfile.LongTerm(tsa, {ltv}))", b => b.WithLevel(AdesBaselineProfile.LongTerm(ltTsa, longTerm))));
                 break;
             case BaselineLevel.BLTA:
                 var ltaTsa = _context.BuildTimestamp(_o.Timestamp, "tsa");
-                _steps.Add(($".WithLevel(AdesBaselineProfile.Archive(tsa, {ltv}))", b => b.WithLevel(AdesBaselineProfile.Archive(ltaTsa, new LongTermValidationOptions(_context.Http)))));
+                _steps.Add(($".WithLevel(AdesBaselineProfile.Archive(tsa, {ltv}))", b => b.WithLevel(AdesBaselineProfile.Archive(ltaTsa, longTerm))));
                 break;
         }
 
@@ -547,7 +666,9 @@ internal sealed class XadesPlan
             sb.Append(line).Append('\n');
         }
 
-        sb.Append("\nXadesSigningResult result = await XadesSigner.Document(xml)\n");
+        sb.Append(_o.CounterSign
+            ? $"\n// xml is the signed document: the countersignature is embedded in the signature it signs.\nXadesSigningResult result = await XadesSigner.CounterSign(xml{(_o.CounterSignatureId is null ? "" : ", " + SigningPlan.Str(_o.CounterSignatureId))})\n"
+            : "\nXadesSigningResult result = await XadesSigner.Document(xml)\n");
         foreach (var (code, _) in _steps)
         {
             sb.Append("    ").Append(code).Append('\n');
@@ -557,15 +678,21 @@ internal sealed class XadesPlan
         sb.Append("File.WriteAllBytes(\"signed.xml\", result.SignedArtifact);\n");
         sb.Append("Console.WriteLine($\"Requested {result.RequestedLevel}, achieved {result.AchievedLevel}\");\n");
 
-        var args = new List<string> { "simplesign xades sign document.xml", "--output signed.xml" };
+        var args = _o.CounterSign
+            ? new List<string> { "simplesign xades sign signed.xml", "--countersign", "--output countersigned.xml" }
+            : new List<string> { "simplesign xades sign document.xml", "--output signed.xml" };
         var notes = new List<string>();
         CodeGenerator.CliCredential(credential, args, notes);
-        if (_o.Form != XadesFormChoice.Enveloped)
+        if (_o.CounterSign)
+        {
+            CodeGenerator.AddIf(args, "--countersign-id", _o.CounterSignatureId);
+        }
+        else if (_o.Form != XadesFormChoice.Enveloped)
         {
             args.Add("--form " + _o.Form.ToString().ToLowerInvariant());
         }
 
-        if (_o.Form == XadesFormChoice.Detached)
+        if (_o.Form == XadesFormChoice.Detached && !_o.CounterSign)
         {
             args.Add($"--data-uri {_o.DataUri}");
         }
@@ -586,6 +713,16 @@ internal sealed class XadesPlan
             {
                 args.Add($"--policy-oid {_o.PolicyOid}");
                 CodeGenerator.AddIf(args, "--policy-uri", SigningPlan.Blank(_o.PolicyUri));
+                if (!string.IsNullOrEmpty(_o.PolicyDocumentId))
+                {
+                    CodeGenerator.AddIf(args, "--policy-document", _context.FileName(_o.PolicyDocumentId));
+                    CodeGenerator.AddIf(args, "--policy-specification", _o.PolicySpecification);
+                }
+            }
+
+            if (_o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
+            {
+                args.Add("--revocation-preference crl");
             }
         }
 
@@ -606,6 +743,52 @@ internal sealed class XadesPlan
             notes.Add("Extended forms, SigningCertificate V1, DataObjectFormat, RSASSA-PSS, a claimed signing time and TSA authentication have no xades flag: use the library.");
         }
 
+        AddPropertyAndDataObjectArgs(args);
         return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), notes);
+    }
+
+    /// <summary>The flags of the properties beyond the baseline: place, canonicalization, data timestamp, certified roles, more data objects.</summary>
+    private void AddPropertyAndDataObjectArgs(List<string> args)
+    {
+        CodeGenerator.AddIf(args, "--place-city", _o.PlaceCity);
+        CodeGenerator.AddIf(args, "--place-street", _o.PlaceStreet);
+        CodeGenerator.AddIf(args, "--place-state", _o.PlaceState);
+        CodeGenerator.AddIf(args, "--place-postal-code", _o.PlacePostalCode);
+        CodeGenerator.AddIf(args, "--place-country", _o.PlaceCountry);
+        if (_o.Canonicalization == XadesCanonicalization.Inclusive)
+        {
+            args.Add("--canonicalization inclusive");
+        }
+
+        if (_o.DataObjectsTimestamp)
+        {
+            if (_o.Kind == XadesKind.IcpBrasil || _o.Level == BaselineLevel.BB)
+            {
+                args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
+            }
+
+            args.Add("--data-objects-timestamp");
+        }
+
+        if (_o.AttributeCertificateId is not null)
+        {
+            CodeGenerator.AddIf(args, "--attribute-certificate", _context.FileName(_o.AttributeCertificateId));
+        }
+
+        if (_o.SignedAssertionId is not null)
+        {
+            CodeGenerator.AddIf(args, "--signed-assertion", _context.FileName(_o.SignedAssertionId));
+        }
+
+        if (_o.EmbeddedObjectId is not null)
+        {
+            CodeGenerator.AddIf(args, "--embed-object", _context.FileName(_o.EmbeddedObjectId));
+        }
+
+        if (_o.ExternalObjectId is not null)
+        {
+            string name = _context.FileName(_o.ExternalObjectId);
+            CodeGenerator.AddIf(args, "--external-object", name + "=" + name);
+        }
     }
 }

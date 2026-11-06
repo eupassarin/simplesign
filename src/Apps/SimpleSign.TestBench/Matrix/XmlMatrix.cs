@@ -20,9 +20,12 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
 
     private sealed record Dimension(string Name, IReadOnlyList<(string Value, Func<XmlOptions, XmlOptions> Apply)> Values);
 
-    private static IReadOnlyList<Dimension> Dimensions()
+    private IReadOnlyList<Dimension> Dimensions()
     {
         static (string, Func<XmlOptions, XmlOptions>) V(string value, Func<XmlOptions, XmlOptions> apply) => (value, apply);
+
+        // Any stored file serves as a policy document or as one more signed data object.
+        string File(string id) => samples.Samples.Single(s => s.Id == id).FileId;
         return
         [
             new("signer", [.. Signers.Select(s => V(s, o => o))]),
@@ -50,6 +53,24 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
                     SigningTime = DateTimeOffset.UtcNow.AddMinutes(-5),
                     SigningCertificateV1 = true,
                     OperationId = "matrix",
+                }),
+                V("place+inclusive+crl-first", o => o with
+                {
+                    PlaceCity = "Recife",
+                    PlaceStreet = "Rua da Aurora, 1",
+                    PlaceState = "PE",
+                    PlacePostalCode = "50050-000",
+                    PlaceCountry = "BR",
+                    Canonicalization = SimpleSign.XAdES.XadesCanonicalization.Inclusive,
+                    RevocationPreference = Core.Signing.RevocationPreference.CrlFirst,
+                }),
+                V("data-timestamp+objects+policy-store", o => o with
+                {
+                    DataObjectsTimestamp = true,
+                    EmbeddedObjectId = File("nfe"),
+                    ExternalObjectId = File("cte"),
+                    PolicyDocumentId = File("evento"),
+                    PlaceCity = "Recife",
                 }),
             ]),
         ];
@@ -243,6 +264,37 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
         }
 
         checks.Add(o.Form.ToString());
+        return ExpectProperties(signature, o, checks);
+    }
+
+    /// <summary>The properties and data objects beyond the baseline that were asked for must be in the signature.</summary>
+    private static string? ExpectProperties(string signature, XmlOptions o, List<string> checks)
+    {
+        bool legacyForm = o.SigningCertificateV1 || o.Kind == XadesKind.IcpBrasil;
+        bool hasPlace = o.PlaceCity is not null || o.PlaceStreet is not null || o.PlaceState is not null || o.PlacePostalCode is not null || o.PlaceCountry is not null;
+        var expectations = new (bool Asked, string Marker, string Name)[]
+        {
+            (!legacyForm, "DataObjectFormat", "data object format"),
+            (hasPlace, legacyForm ? "SignatureProductionPlace>" : "SignatureProductionPlaceV2", "production place"),
+            (o.Canonicalization == SimpleSign.XAdES.XadesCanonicalization.Inclusive, "CanonicalizationMethod Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\"", "inclusive canonicalization"),
+            (o.DataObjectsTimestamp, "AllDataObjectsTimeStamp", "data objects timestamp"),
+            (o.EmbeddedObjectId is not null, "http://www.w3.org/2000/09/xmldsig#base64", "embedded data object"),
+            (o.ExternalObjectId is not null, "URI=\"cte.xml\"", "external data object"),
+            (o.Kind == XadesKind.CustomPolicy && !string.IsNullOrEmpty(o.PolicyDocumentId), "SignaturePolicyStore", "policy store"),
+        };
+        foreach (var (asked, marker, name) in expectations)
+        {
+            if (asked && !signature.Contains(marker, StringComparison.Ordinal))
+            {
+                return $"{name} missing";
+            }
+
+            if (asked && name != "data object format")
+            {
+                checks.Add(name);
+            }
+        }
+
         return null;
     }
 

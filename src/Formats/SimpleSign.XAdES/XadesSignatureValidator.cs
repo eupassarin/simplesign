@@ -68,11 +68,49 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         byte[]? originalData = null) =>
         Logged(ValidateCore(signedXml, trustAnchors, originalData, signatureIndex: null));
 
+    /// <summary>
+    /// Validates a signed XAdES XML document whose signature references data outside the document,
+    /// given by URI: the detached document and any additional external data objects.
+    /// </summary>
+    /// <param name="signedXml">The signed XML.</param>
+    /// <param name="trustAnchors">Optional trust anchors for certificate chain validation.</param>
+    /// <param name="externalData">The content of each external ds:Reference, keyed by its URI attribute.</param>
+    public XadesValidationResult Validate(
+        byte[] signedXml,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        IReadOnlyDictionary<string, byte[]> externalData)
+    {
+        ArgumentNullException.ThrowIfNull(externalData);
+        return Logged(ValidateCore(signedXml, trustAnchors, new XadesDetachedData(null, externalData), signatureIndex: null));
+    }
+
     /// <summary>Validates every XMLDSig signature in a signed XAdES XML document.</summary>
     public IReadOnlyList<XadesValidationResult> ValidateAll(
         byte[] signedXml,
         IEnumerable<X509Certificate2>? trustAnchors = null,
-        byte[]? originalData = null)
+        byte[]? originalData = null) =>
+        ValidateAll(signedXml, trustAnchors, (XadesDetachedData?)originalData);
+
+    /// <summary>
+    /// Validates every XMLDSig signature in a signed XAdES XML document whose signatures reference
+    /// data outside the document, given by URI.
+    /// </summary>
+    /// <param name="signedXml">The signed XML.</param>
+    /// <param name="trustAnchors">Optional trust anchors for certificate chain validation.</param>
+    /// <param name="externalData">The content of each external ds:Reference, keyed by its URI attribute.</param>
+    public IReadOnlyList<XadesValidationResult> ValidateAll(
+        byte[] signedXml,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        IReadOnlyDictionary<string, byte[]> externalData)
+    {
+        ArgumentNullException.ThrowIfNull(externalData);
+        return ValidateAll(signedXml, trustAnchors, new XadesDetachedData(null, externalData));
+    }
+
+    internal IReadOnlyList<XadesValidationResult> ValidateAll(
+        byte[] signedXml,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        XadesDetachedData? originalData)
     {
         ArgumentNullException.ThrowIfNull(signedXml);
         var doc = new XmlDocument { PreserveWhitespace = true };
@@ -87,7 +125,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
         var ns = new XmlNamespaceManager(doc.NameTable);
         ns.AddNamespace("ds", XmlDSigUrls.DsNamespace);
-        XmlNodeList? signatures = doc.SelectNodes("//ds:Signature", ns);
+        ns.AddNamespace("xades", XadesUris.XadesNamespace);
+        XmlNodeList? signatures = doc.SelectNodes(TopLevelSignatures, ns);
         if (signatures is null || signatures.Count == 0)
         {
             return [Logged(ValidateCore(signedXml, trustAnchors, originalData, signatureIndex: null))];
@@ -106,7 +145,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     private XadesValidationResult ValidateCore(
         byte[] signedXml,
         IEnumerable<X509Certificate2>? trustAnchors,
-        byte[]? originalData,
+        XadesDetachedData? originalData,
         int? signatureIndex)
     {
         ArgumentNullException.ThrowIfNull(signedXml);
@@ -149,7 +188,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         ns.AddNamespace("xades", XadesUris.XadesNamespace);
         ns.AddNamespace("xades141", XadesUris.Xades141Namespace);
 
-        XmlNodeList? signatures = doc.SelectNodes("//ds:Signature", ns);
+        XmlNodeList? signatures = doc.SelectNodes(TopLevelSignatures, ns);
         if (signatures is null || signatures.Count == 0)
         {
             errors.Add("No ds:Signature element found in the XML.");
@@ -190,6 +229,33 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             };
         }
 
+        return ValidateSignatureElement(doc, ns, sigElement, trustAnchors, originalData, errors, warnings, countersigned: null, depth: 0);
+    }
+
+    // A countersignature can be countersigned in turn; bound the recursion.
+    private const int MaxCounterSignatureDepth = 8;
+
+    /// <summary>
+    /// The signatures of the document itself. A ds:Signature inside a CounterSignature property is
+    /// not one of them: it signs another signature and is validated under it.
+    /// </summary>
+    private const string TopLevelSignatures = "//ds:Signature[not(parent::xades:CounterSignature)]";
+
+    /// <summary>
+    /// Validates one ds:Signature element. <paramref name="countersigned"/> is the signature this
+    /// one is a countersignature of, or null for a signature of the document.
+    /// </summary>
+    private XadesValidationResult ValidateSignatureElement(
+        XmlDocument doc,
+        XmlNamespaceManager ns,
+        XmlElement sigElement,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        XadesDetachedData? originalData,
+        List<string> errors,
+        List<string> warnings,
+        XmlElement? countersigned,
+        int depth)
+    {
         // Extract XAdES properties from the signature
         var extraction = XadesPropertyExtraction(sigElement, ns, warnings);
 
@@ -202,6 +268,12 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         if (!sigValid)
         {
             errors.Add("XMLDSig signature is not cryptographically valid.");
+        }
+        else if (countersigned is not null && !ReferencesSignatureValueOf(sigElement, countersigned, ns))
+        {
+            // §5.2.7.2: a countersignature shall reference the ds:SignatureValue of the signature it is embedded in.
+            errors.Add("The countersignature does not sign the ds:SignatureValue of the signature it is embedded in.");
+            sigValid = false;
         }
 
         // Validate QualifyingProperties Target matches Signature Id
@@ -272,6 +344,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             tsaTrusted = timestamp.IsTsaTrusted;
         }
 
+        // AllDataObjectsTimeStamp: a signed property whose token covers the signed data objects
+        (bool? dataTsValid, DateTimeOffset? dataTsTime) = ValidateDataObjectsTimeStamp(doc, sigElement, ns, originalData, errors);
+
         // LTV data validation (CertificateValues + RevocationValues)
         bool? ltvValid = null;
         if (extraction.HasCertificateValues || extraction.HasRevocationValues)
@@ -289,6 +364,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
         // Certificate chain validation
         bool chainValid = ValidateCertificateChain(signerCert, trustAnchors, sigElement, ns, errors);
+        var (claimedRoles, attributeCertificates, signedAssertions) = ReadSignerRoles(sigElement, ns, warnings);
 
         return new XadesValidationResult
         {
@@ -297,18 +373,71 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             IsIntegrityValid = sigValid,
             IsCertificateChainValid = chainValid,
             HasValidSignatureTimeStamp = tsValid,
+            HasValidDataObjectsTimeStamp = dataTsValid,
+            DataObjectsTimeStampTime = dataTsTime,
             IsTsaTrusted = tsaTrusted,
             IsLtvDataValid = ltvValid,
             HasValidArchiveTimeStamp = archiveTsValid,
             SignerCertificate = signerCert,
             SigningTime = extraction.SigningTime,
             SignaturePolicy = ReadSignaturePolicy(sigElement, ns),
+            SignaturePolicyStore = XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns),
             HasValidCompleteReferences = ValidateCompleteReferences(sigElement, ns, warnings),
             HasValidSigAndRefsTimeStamp = ValidateSigAndRefsTimeStamp(sigElement, ns, warnings),
             DetectedLevel = detectedLevel,
+            ClaimedRoles = claimedRoles,
+            AttributeCertificates = attributeCertificates,
+            SignedAssertions = signedAssertions,
+            CounterSignatures = ValidateCounterSignatures(doc, ns, sigElement, trustAnchors, originalData, depth),
             Errors = errors,
             Warnings = warnings
         };
+    }
+
+    /// <summary>Validates the countersignatures in the CounterSignature unsigned properties of a signature.</summary>
+    private List<XadesValidationResult> ValidateCounterSignatures(
+        XmlDocument doc,
+        XmlNamespaceManager ns,
+        XmlElement sigElement,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        XadesDetachedData? originalData,
+        int depth)
+    {
+        var results = new List<XadesValidationResult>();
+        XmlNodeList? counterSignatures = sigElement.SelectNodes(
+            "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties/xades:CounterSignature/ds:Signature", ns);
+        if (counterSignatures is null || depth >= MaxCounterSignatureDepth)
+        {
+            return results;
+        }
+
+        foreach (XmlElement counterSignature in counterSignatures)
+        {
+            results.Add(Logged(ValidateSignatureElement(
+                doc, ns, counterSignature, trustAnchors, originalData, [], [], countersigned: sigElement, depth + 1)));
+        }
+
+        return results;
+    }
+
+    /// <summary>Whether a ds:Reference of <paramref name="counterSignature"/> points to the ds:SignatureValue of <paramref name="countersigned"/>.</summary>
+    private static bool ReferencesSignatureValueOf(XmlElement counterSignature, XmlElement countersigned, XmlNamespaceManager ns)
+    {
+        string valueId = (countersigned.SelectSingleNode("ds:SignatureValue", ns) as XmlElement)?.GetAttribute("Id") ?? string.Empty;
+        if (valueId.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (XmlElement reference in counterSignature.SelectNodes("ds:SignedInfo/ds:Reference", ns)!)
+        {
+            if (reference.GetAttribute("URI") == "#" + valueId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool ValidateCertificateChain(
@@ -408,7 +537,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlElement sigElement,
         XmlNamespaceManager ns,
         List<string> errors,
-        byte[]? originalData = null)
+        XadesDetachedData? originalData = null)
     {
         try
         {
@@ -448,10 +577,18 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                 return false;
             }
 
-            // Canonicalize SignedInfo
-            var siDoc = new XmlDocument { PreserveWhitespace = true };
-            siDoc.AppendChild(siDoc.ImportNode(signedInfoEl, true));
-            byte[] signedInfoBytes = XadesSignatureBuilder.CanonicalizeXml(siDoc);
+            // Canonicalize SignedInfo with the algorithm it declares (XMLDSig Core 1.1 §4.4.1).
+            // An algorithm the BCL does not implement (Canonical XML 1.1) keeps the exclusive
+            // form this validator has always applied: the signature value then decides.
+            string signedInfoCanonicalization =
+                (signedInfoEl.SelectSingleNode("ds:CanonicalizationMethod", ns) as XmlElement)?.GetAttribute("Algorithm") ?? string.Empty;
+            if (signedInfoCanonicalization is not (XmlDSigUrls.ExcC14N or XmlDSigUrls.ExcC14NWithComments
+                or XmlDSigUrls.C14N or XmlDSigUrls.C14NWithComments))
+            {
+                signedInfoCanonicalization = XmlDSigUrls.ExcC14N;
+            }
+
+            byte[] signedInfoBytes = XadesSignatureBuilder.CanonicalizeElement(signedInfoEl, signedInfoCanonicalization);
             byte[] signedInfoHash = CryptoUtility.ComputeHash(signedInfoBytes, sigHashAlg);
 
             // Get signature value
@@ -521,7 +658,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlElement signedInfoEl,
         XmlNamespaceManager ns,
         List<string> errors,
-        byte[]? originalData = null)
+        XadesDetachedData? originalData = null)
     {
         bool allValid = true;
         var refNodes = signedInfoEl.SelectNodes("ds:Reference", ns);
@@ -603,48 +740,110 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlElement refEl,
         HashAlgorithmName hashAlg,
         XmlNamespaceManager ns,
-        byte[]? originalData = null)
+        XadesDetachedData? originalData = null) =>
+        CryptoUtility.ComputeHash(ComputeReferenceOctets(doc, sigElement, refEl, ns, originalData), hashAlg);
+
+    /// <summary>
+    /// The octets a ds:Reference digests: the referenced data after its transforms
+    /// (XMLDSig Core 1.1 §4.4.3.2). Time-stamps on data objects cover the same octets.
+    /// </summary>
+    private static byte[] ComputeReferenceOctets(
+        XmlDocument doc,
+        XmlElement sigElement,
+        XmlElement refEl,
+        XmlNamespaceManager ns,
+        XadesDetachedData? originalData = null)
     {
         string uri = refEl.GetAttribute("URI") ?? string.Empty;
 
         if (string.IsNullOrEmpty(uri))
         {
             bool hasEnvelopedTransform = HasEnvelopedTransform(refEl, ns);
-            return ComputeDocumentDigestWithTempSig(
-                doc, hashAlg, hasEnvelopedTransform,
+            return ComputeDocumentOctetsWithTempSig(
+                doc, hasEnvelopedTransform,
                 GetReferenceCanonicalizationAlgorithm(refEl, ns));
         }
 
         if (uri.StartsWith('#'))
         {
             string id = uri[1..];
-            return ComputeFragmentDigest(doc, id, refEl, hashAlg, ns);
+            return ComputeFragmentOctets(doc, id, refEl, ns);
         }
 
-        if (originalData is not null && originalData.Length > 0)
+        if (originalData?.Resolve(uri) is { Length: > 0 } externalData)
         {
-            return XmlCompatibleHashData(originalData, refEl, ns, hashAlg);
+            return XmlCompatibleData(externalData, refEl, ns);
         }
 
         throw new NotSupportedException(
             $"Reference URI scheme not supported: '{uri}'. Provide original data via the originalData parameter for Detached form validation.");
     }
 
-    private static byte[] XmlCompatibleHashData(
+    private static byte[] XmlCompatibleData(
         byte[] data,
         XmlElement refEl,
-        XmlNamespaceManager ns,
-        HashAlgorithmName hashAlg)
+        XmlNamespaceManager ns)
     {
         string? canonicalizationAlgorithm = GetReferenceCanonicalizationAlgorithm(refEl, ns);
         if (canonicalizationAlgorithm is not null)
         {
             var dataDoc = new XmlDocument { PreserveWhitespace = true };
             dataDoc.Load(new MemoryStream(data));
-            return CryptoUtility.ComputeHash(XadesSignatureBuilder.CanonicalizeXml(dataDoc, canonicalizationAlgorithm), hashAlg);
+            return XadesSignatureBuilder.CanonicalizeXml(dataDoc, canonicalizationAlgorithm);
         }
 
-        return CryptoUtility.ComputeHash(data, hashAlg);
+        return data;
+    }
+
+    /// <summary>
+    /// Checks AllDataObjectsTimeStamp (ETSI EN 319 132-1 §5.2.8.1): the token must be intact and its
+    /// message imprint must be the hash of the octets of every ds:Reference of SignedInfo, in order,
+    /// except the one to SignedProperties. Returns null when the signature has no such property.
+    /// </summary>
+    private static (bool? Valid, DateTimeOffset? Time) ValidateDataObjectsTimeStamp(
+        XmlDocument doc, XmlElement sigElement, XmlNamespaceManager ns, XadesDetachedData? originalData, List<string> errors)
+    {
+        if (sigElement.SelectSingleNode(
+                "ds:Object/xades:QualifyingProperties/xades:SignedProperties/xades:SignedDataObjectProperties/xades:AllDataObjectsTimeStamp",
+                ns) is not XmlElement timestamp)
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            if (timestamp.SelectSingleNode("xades:EncapsulatedTimeStamp", ns) is not XmlElement encapsulated)
+            {
+                errors.Add("AllDataObjectsTimeStamp has no EncapsulatedTimeStamp.");
+                return (false, null);
+            }
+
+            using var input = new MemoryStream();
+            foreach (XmlElement reference in sigElement.SelectNodes("ds:SignedInfo/ds:Reference", ns)!)
+            {
+                if (reference.GetAttribute("Type") != XadesUris.SignedPropertiesType)
+                {
+                    input.Write(ComputeReferenceOctets(doc, sigElement, reference, ns, originalData));
+                }
+            }
+
+            var verification = TimestampToken.Verify(DecodeBase64(encapsulated), input.ToArray());
+            if (verification.IsImprintValid && verification.IsIntegrityValid)
+            {
+                return (true, verification.Info?.GenerationTime);
+            }
+
+            errors.Add(verification.IsImprintValid
+                ? "AllDataObjectsTimeStamp is not an intact timestamp token."
+                : "AllDataObjectsTimeStamp does not cover the signed data objects.");
+            return (false, null);
+        }
+        // S2221: intentional -- validation pipeline converts exceptions to error messages
+        catch (Exception ex)
+        {
+            errors.Add($"AllDataObjectsTimeStamp could not be validated: {ex.Message}");
+            return (false, null);
+        }
     }
 
     private static bool HasEnvelopedTransform(XmlElement refEl, XmlNamespaceManager ns)
@@ -689,9 +888,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         return null;
     }
 
-    private static byte[] ComputeDocumentDigestWithTempSig(
+    private static byte[] ComputeDocumentOctetsWithTempSig(
         XmlDocument doc,
-        HashAlgorithmName hashAlg,
         bool hasEnvelopedTransform,
         string? canonicalizationAlgorithm)
     {
@@ -718,15 +916,13 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             }
         }
 
-        byte[] canonicalBytes = XadesSignatureBuilder.CanonicalizeXml(clone, canonicalizationAlgorithm ?? XmlDSigUrls.ExcC14N);
-        return CryptoUtility.ComputeHash(canonicalBytes, hashAlg);
+        return XadesSignatureBuilder.CanonicalizeXml(clone, canonicalizationAlgorithm ?? XmlDSigUrls.ExcC14N);
     }
 
-    private static byte[] ComputeFragmentDigest(
+    private static byte[] ComputeFragmentOctets(
         XmlDocument doc,
         string id,
         XmlElement reference,
-        HashAlgorithmName hashAlg,
         XmlNamespaceManager ns)
     {
         // Find element by Id — for SignedProperties, this is inside
@@ -740,17 +936,13 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         if (reference.SelectSingleNode(
                 $"ds:Transforms/ds:Transform[@Algorithm='{XmlDSigUrls.Base64Transform}']", ns) is not null)
         {
-            return CryptoUtility.ComputeHash(DecodeBase64(element), hashAlg);
+            return DecodeBase64(element);
         }
 
-        // Wrap in a temp doc for XML canonicalization. XAdES generated by SimpleSign
-        // and the interoperable corpus use exclusive C14N here.
-        var tempDoc = new XmlDocument { PreserveWhitespace = true };
-        tempDoc.AppendChild(tempDoc.ImportNode(element, true));
-
-        byte[] canonicalBytes = XadesSignatureBuilder.CanonicalizeXml(
-            tempDoc, GetReferenceCanonicalizationAlgorithm(reference, ns) ?? XmlDSigUrls.ExcC14N);
-        return CryptoUtility.ComputeHash(canonicalBytes, hashAlg);
+        // Canonicalize the element as a document subset. A reference without a canonicalization
+        // transform keeps the exclusive default this validator has always used.
+        return XadesSignatureBuilder.CanonicalizeElement(
+            element, GetReferenceCanonicalizationAlgorithm(reference, ns) ?? XmlDSigUrls.ExcC14N);
     }
 
     private static XadesPropertyExtractionResult XadesPropertyExtraction(
@@ -937,6 +1129,45 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
     }
 
+    /// <summary>Reads SignerRoleV2 (or the SignerRole it obsoletes): claimed roles, attribute certificates and signed assertions.</summary>
+    private static (IReadOnlyList<string> Claimed, IReadOnlyList<ReadOnlyMemory<byte>> AttributeCertificates, IReadOnlyList<string> SignedAssertions)
+        ReadSignerRoles(XmlElement sigElement, XmlNamespaceManager ns, List<string> warnings)
+    {
+        const string properties = "ds:Object/xades:QualifyingProperties/xades:SignedProperties/xades:SignedSignatureProperties/";
+        var claimed = new List<string>();
+        var attributeCertificates = new List<ReadOnlyMemory<byte>>();
+        var signedAssertions = new List<string>();
+        if ((sigElement.SelectSingleNode(properties + "xades:SignerRoleV2", ns)
+                ?? sigElement.SelectSingleNode(properties + "xades:SignerRole", ns)) is not XmlElement signerRole)
+        {
+            return (claimed, attributeCertificates, signedAssertions);
+        }
+
+        foreach (XmlElement role in signerRole.SelectNodes("xades:ClaimedRoles/xades:ClaimedRole", ns)!)
+        {
+            claimed.Add(role.InnerText.Trim());
+        }
+
+        foreach (XmlElement certificate in signerRole.SelectNodes("xades:CertifiedRolesV2/xades:CertifiedRole/xades:X509AttributeCertificate", ns)!)
+        {
+            try
+            {
+                attributeCertificates.Add(DecodeBase64(certificate));
+            }
+            catch (FormatException)
+            {
+                warnings.Add("An X509AttributeCertificate of SignerRoleV2 is not valid base64.");
+            }
+        }
+
+        foreach (XmlElement assertion in signerRole.SelectNodes("xades:SignedAssertions/xades:SignedAssertion", ns)!)
+        {
+            signedAssertions.Add(assertion.InnerXml);
+        }
+
+        return (claimed, attributeCertificates, signedAssertions);
+    }
+
     /// <summary>Reads SignedSignatureProperties/SignaturePolicyIdentifier/SignaturePolicyId, if any.</summary>
     private static SignaturePolicyReference? ReadSignaturePolicy(XmlElement sigElement, XmlNamespaceManager ns)
     {
@@ -1117,7 +1348,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     private static bool? ValidateArchiveTimeStamp(
         XmlElement sigElement,
         XmlNamespaceManager ns,
-        byte[]? originalData,
+        XadesDetachedData? originalData,
         List<string> warnings)
     {
         // Try xades141 namespace first, fall back to xades; try nested then flat

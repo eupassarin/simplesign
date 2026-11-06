@@ -8,6 +8,8 @@ export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "DigiCert" | "Sec
 export type TsaAuth = "None" | "Basic" | "Bearer"
 export type HashChoice = "Sha256" | "Sha384" | "Sha512" | "Sha3_256" | "Sha3_384" | "Sha3_512"
 export type RsaPadding = "Pkcs1" | "Pss"
+export type RevocationPreference = "OcspFirst" | "CrlFirst"
+export type XadesCanonicalization = "Exclusive" | "Inclusive"
 export type SubFilterChoice = "EtsiCadesDetached" | "AdbePkcs7Detached" | "PbadPades"
 export type FieldMode = "New" | "Existing"
 export type CertificationChoice = "None" | "NoChanges" | "FormFilling" | "FormFillingAndAnnotations"
@@ -112,6 +114,7 @@ export interface SigningOptions {
   separateArchiveTsa: boolean
   archiveTimestamp: TimestampChoice
   returnLowerLevel: boolean
+  revocationPreference: RevocationPreference
   hash: HashChoice
   padding: RsaPadding
   subFilter: SubFilterChoice
@@ -508,12 +511,24 @@ export interface CadesOptions {
   icpPolicy: CadesIcpPolicy
   policyOid: string
   policyUri?: string | null
+  policyDocumentId?: string | null
+  policySpecification: string
   extendedForm: CadesExtendedChoice
   timestamp: TimestampChoice
   hash: HashChoice
   padding: RsaPadding
   signingTime?: string | null
   commitment?: string | null
+  contentTimestamp: boolean
+  revocationPreference: RevocationPreference
+  signerCountry?: string | null
+  signerLocality?: string | null
+  signerPostalAddress: string[]
+  signerRoles: string[]
+  attributeCertificateId?: string | null
+  signedAssertionId?: string | null
+  mimeType?: string | null
+  contentDescription?: string | null
   operationId?: string | null
   validate: boolean
   validation?: ValidationSettings | null
@@ -635,13 +650,29 @@ export interface XmlOptions {
   icpPolicy: XadesIcpPolicy
   policyOid: string
   policyUri?: string | null
+  policyDocumentId?: string | null
+  policySpecification: string
   extendedForm: XadesExtendedChoice
   timestamp: TimestampChoice
   hash: HashChoice
   padding: RsaPadding
+  counterSign: boolean
+  counterSignatureId?: string | null
+  dataObjectsTimestamp: boolean
+  canonicalization: XadesCanonicalization
   signingCertificateV1: boolean
   signerRoles: string[]
+  attributeCertificateId?: string | null
+  signedAssertionId?: string | null
+  embeddedObjectId?: string | null
+  externalObjectId?: string | null
   mimeType?: string | null
+  placeCity?: string | null
+  placeStreet?: string | null
+  placeState?: string | null
+  placePostalCode?: string | null
+  placeCountry?: string | null
+  revocationPreference: RevocationPreference
   commitment?: string | null
   signingTime?: string | null
   operationId?: string | null

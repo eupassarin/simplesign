@@ -171,11 +171,13 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             new("signature", L.T("Signature value"), Status(r.IsSignatureValid), null),
             new("chain", L.T("Certificate chain"), Status(r.IsCertificateChainValid), null),
             new("timestamp", L.T("Signature timestamp"), Status(r.HasValidTimestamp), r.IsTsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
+            new("contentTimestamp", L.T("Content timestamp"), Status(r.HasValidContentTimestamp),
+                r.ContentTimestampTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)),
             new("ltv", L.T("Validation data (certificate and revocation values)"), Status(r.IsLtvDataValid), null),
             new("escTimestamp", L.T("CAdES-C timestamp (escTimeStamp)"), Status(r.HasValidEscTimestamp), null),
             new("archive", L.T("Archive timestamp"), Status(r.HasValidArchiveTimestamp), null),
         };
-        string indication = !r.IsIntegrityValid || !r.IsSignatureValid || r.HasValidTimestamp == false || r.HasValidArchiveTimestamp == false || r.HasValidEscTimestamp == false ? "Invalid"
+        string indication = !r.IsIntegrityValid || !r.IsSignatureValid || r.HasValidTimestamp == false || r.HasValidArchiveTimestamp == false || r.HasValidEscTimestamp == false || r.HasValidContentTimestamp == false ? "Invalid"
             : r.IsValid ? "Valid"
             : "Indeterminate";
         return new CadesSignerReport(s.Index, CadesInspector.SimpleName(r.SignerCertificate), indication,
@@ -304,6 +306,13 @@ internal sealed class CadesPlan
             _steps.Add(($".WithCommitmentType(CommitmentType.{commitment})", b => b.WithCommitmentType(commitment)));
         }
 
+        if (o.ContentTimestamp)
+        {
+            var contentTsa = context.BuildTimestamp(o.Timestamp, "tsa");
+            _steps.Add((".WithContentTimestamp(tsa) // asked before signing: the content existed at that time", b => b.WithContentTimestamp(contentTsa)));
+        }
+
+        AddSignerAndContentAttributes();
         AddType();
         if (!string.IsNullOrWhiteSpace(o.OperationId))
         {
@@ -312,6 +321,57 @@ internal sealed class CadesPlan
     }
 
     public IEnumerable<(string Code, Func<CadesSignerBuilder, CadesSignerBuilder> Apply)> Steps => _steps;
+
+    private void AddSignerAndContentAttributes()
+    {
+        if (_o.SignerCountry is not null || _o.SignerLocality is not null || _o.SignerPostalAddress.Count > 0)
+        {
+            var location = new CadesSignerLocation
+            {
+                CountryName = _o.SignerCountry,
+                LocalityName = _o.SignerLocality,
+                PostalAddress = _o.SignerPostalAddress,
+            };
+            var fields = new List<string>();
+            SigningPlan.AddField(fields, "CountryName", location.CountryName);
+            SigningPlan.AddField(fields, "LocalityName", location.LocalityName);
+            if (location.PostalAddress.Count > 0)
+            {
+                fields.Add($"PostalAddress = [{string.Join(", ", location.PostalAddress.Select(SigningPlan.Str))}]");
+            }
+
+            _steps.Add(($".WithSignerLocation(new CadesSignerLocation {{ {string.Join(", ", fields)} }})", b => b.WithSignerLocation(location)));
+        }
+
+        if (_o.SignerRoles.Count > 0)
+        {
+            var roles = _o.SignerRoles;
+            _steps.Add(($".WithSignerRoles([{string.Join(", ", roles.Select(SigningPlan.Str))}])", b => b.WithSignerRoles(roles)));
+        }
+
+        if (!string.IsNullOrEmpty(_o.AttributeCertificateId))
+        {
+            byte[] attributeCertificate = _context.Upload(_o.AttributeCertificateId, "attributeCertificate").Content;
+            _steps.Add((".WithAttributeCertificates([attributeCertificate]) // embedded as given, not verified", b => b.WithAttributeCertificates([attributeCertificate])));
+        }
+
+        if (!string.IsNullOrEmpty(_o.SignedAssertionId))
+        {
+            var assertion = CadesSignedAssertion.Saml(_context.Upload(_o.SignedAssertionId, "samlAssertion").Content);
+            _steps.Add((".WithSignedAssertions([CadesSignedAssertion.Saml(samlAssertion)]) // embedded as given, not verified", b => b.WithSignedAssertions([assertion])));
+        }
+
+        if (_o.MimeType is { } mimeType)
+        {
+            _steps.Add(($".WithMimeType({SigningPlan.Str(mimeType)})", b => b.WithMimeType(mimeType)));
+        }
+
+        if (_o.ContentDescription is { } description)
+        {
+            var hints = new CadesContentHints { Description = description };
+            _steps.Add(($".WithContentHints(new CadesContentHints {{ Description = {SigningPlan.Str(description)} }}) // content type: id-data", b => b.WithContentHints(hints)));
+        }
+    }
 
     private void AddType()
     {
@@ -342,10 +402,21 @@ internal sealed class CadesPlan
         if (_o.Kind == CadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);
-            _steps.Add(($".WithSignaturePolicy({SigningPlan.Str(_o.PolicyOid)}{(uri is null ? "" : ", " + SigningPlan.Str(uri))})", b => b.WithSignaturePolicy(_o.PolicyOid, uri)));
+            if (string.IsNullOrEmpty(_o.PolicyDocumentId))
+            {
+                _steps.Add(($".WithSignaturePolicy({SigningPlan.Str(_o.PolicyOid)}{(uri is null ? "" : ", " + SigningPlan.Str(uri))})", b => b.WithSignaturePolicy(_o.PolicyOid, uri)));
+            }
+            else
+            {
+                // With the document at hand the policy carries its hash, which is what lets the store be added.
+                var uploaded = _context.BuildUploadedPolicy(_o.PolicyOid, uri, _o.PolicyDocumentId, _o.PolicySpecification);
+                _steps.Add((uploaded.PolicyCode, b => b.WithSignaturePolicy(uploaded.Policy)));
+                _steps.Add((uploaded.StoreCode, b => b.WithSignaturePolicyStore(uploaded.Store)));
+            }
         }
 
-        string ltv = $"new LongTermValidationOptions({(_context.IsSandbox ? "sandboxHttp" : "")})";
+        string ltv = _context.LongTermCode(_o.RevocationPreference);
+        var longTerm = _context.BuildLongTerm(_o.RevocationPreference);
         switch (_o.Level)
         {
             case BaselineLevel.BT:
@@ -354,11 +425,11 @@ internal sealed class CadesPlan
                 break;
             case BaselineLevel.BLT:
                 var ltTsa = _context.BuildTimestamp(_o.Timestamp, "tsa");
-                _steps.Add(($".WithLevel(AdesBaselineProfile.LongTerm(tsa, {ltv}))", b => b.WithLevel(AdesBaselineProfile.LongTerm(ltTsa, new LongTermValidationOptions(_context.Http)))));
+                _steps.Add(($".WithLevel(AdesBaselineProfile.LongTerm(tsa, {ltv}))", b => b.WithLevel(AdesBaselineProfile.LongTerm(ltTsa, longTerm))));
                 break;
             case BaselineLevel.BLTA:
                 var ltaTsa = _context.BuildTimestamp(_o.Timestamp, "tsa");
-                _steps.Add(($".WithLevel(AdesBaselineProfile.Archive(tsa, {ltv}))", b => b.WithLevel(AdesBaselineProfile.Archive(ltaTsa, new LongTermValidationOptions(_context.Http)))));
+                _steps.Add(($".WithLevel(AdesBaselineProfile.Archive(tsa, {ltv}))", b => b.WithLevel(AdesBaselineProfile.Archive(ltaTsa, longTerm))));
                 break;
         }
 
@@ -440,6 +511,11 @@ internal sealed class CadesPlan
             {
                 args.Add($"--policy-oid {_o.PolicyOid}");
                 CodeGenerator.AddIf(args, "--policy-uri", SigningPlan.Blank(_o.PolicyUri));
+                if (!string.IsNullOrEmpty(_o.PolicyDocumentId))
+                {
+                    CodeGenerator.AddIf(args, "--policy-document", _context.FileName(_o.PolicyDocumentId));
+                    CodeGenerator.AddIf(args, "--policy-specification", _o.PolicySpecification);
+                }
             }
 
             if (_o.ExtendedForm != CadesExtendedChoice.None)
@@ -459,7 +535,51 @@ internal sealed class CadesPlan
             notes.Add("RSASSA-PSS, a claimed signing time and TSA authentication have no cades flag: use the library.");
         }
 
+        AddSignedAttributeArgs(args);
+        if (_o.Kind != CadesKind.IcpBrasil && _o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
+        {
+            args.Add("--revocation-preference crl");
+        }
+
         return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), notes);
+    }
+
+    /// <summary>The flags of the signed attributes beyond the baseline: location, roles, content description and timestamp.</summary>
+    private void AddSignedAttributeArgs(List<string> args)
+    {
+        CodeGenerator.AddIf(args, "--signer-country", _o.SignerCountry);
+        CodeGenerator.AddIf(args, "--signer-locality", _o.SignerLocality);
+        foreach (string line in _o.SignerPostalAddress)
+        {
+            CodeGenerator.AddIf(args, "--signer-postal-address", line);
+        }
+
+        foreach (string role in _o.SignerRoles)
+        {
+            CodeGenerator.AddIf(args, "--signer-role", role);
+        }
+
+        if (!string.IsNullOrEmpty(_o.AttributeCertificateId))
+        {
+            CodeGenerator.AddIf(args, "--attribute-certificate", _context.FileName(_o.AttributeCertificateId));
+        }
+
+        if (!string.IsNullOrEmpty(_o.SignedAssertionId))
+        {
+            CodeGenerator.AddIf(args, "--signed-assertion", _context.FileName(_o.SignedAssertionId));
+        }
+
+        CodeGenerator.AddIf(args, "--mime-type", _o.MimeType);
+        CodeGenerator.AddIf(args, "--content-description", _o.ContentDescription);
+        if (_o.ContentTimestamp)
+        {
+            if (_o.Kind == CadesKind.IcpBrasil || _o.Level == BaselineLevel.BB)
+            {
+                args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
+            }
+
+            args.Add("--content-timestamp");
+        }
     }
 
     private string OutputName() => CadesRunner.OutputName(_o);

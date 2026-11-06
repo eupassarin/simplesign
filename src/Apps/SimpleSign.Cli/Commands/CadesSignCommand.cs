@@ -84,11 +84,85 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         [Description("Content type: detached (.p7s, default) or enveloped (.p7m)")]
         public string? ContentType { get; init; }
 
+        /// <summary>Signer location: country.</summary>
+        [CommandOption("--signer-country <TEXT>")]
+        [Description("Where the signer was (signer-location): country, such as BR")]
+        public string? SignerCountry { get; init; }
+
+        /// <summary>Signer location: locality.</summary>
+        [CommandOption("--signer-locality <TEXT>")]
+        [Description("Where the signer was (signer-location): locality, such as a city")]
+        public string? SignerLocality { get; init; }
+
+        /// <summary>Signer location: one line of the postal address.</summary>
+        [CommandOption("--signer-postal-address <LINE>")]
+        [Description("Where the signer was (signer-location): one line of the postal address (up to six)")]
+        public string[]? SignerPostalAddress { get; init; }
+
+        /// <summary>Claimed signer role (may be specified multiple times).</summary>
+        [CommandOption("--signer-role <ROLE>")]
+        [Description("Claimed signer role (may be specified multiple times)")]
+        public string[]? SignerRoles { get; init; }
+
+        /// <summary>X.509 attribute certificate file (DER), a certified signer role.</summary>
+        [CommandOption("--attribute-certificate <PATH>")]
+        [Description("X.509 attribute certificate (DER) certifying a signer role (may be specified multiple times)")]
+        public string[]? AttributeCertificates { get; init; }
+
+        /// <summary>Signed SAML assertion file about the signer.</summary>
+        [CommandOption("--signed-assertion <PATH>")]
+        [Description("Signed SAML assertion about the signer (may be specified multiple times)")]
+        public string[]? SignedAssertions { get; init; }
+
+        /// <summary>MIME type of the signed content.</summary>
+        [CommandOption("--mime-type <TYPE>")]
+        [Description("MIME type of the signed content (mime-type attribute)")]
+        public string? MimeType { get; init; }
+
+        /// <summary>Description of the signed content.</summary>
+        [CommandOption("--content-description <TEXT>")]
+        [Description("Description of the signed content (content-hints attribute)")]
+        public string? ContentDescription { get; init; }
+
+        /// <summary>Timestamp the content before signing (requires --tsa).</summary>
+        [CommandOption("--content-timestamp")]
+        [Description("Timestamp the content before signing (content-time-stamp, requires --tsa)")]
+        public bool ContentTimestamp { get; init; }
+
+        /// <summary>Revocation source tried first at longterm/archive: ocsp (default) or crl.</summary>
+        [CommandOption("--revocation-preference <SOURCE>")]
+        [Description("Revocation source tried first at longterm/archive: ocsp (default) or crl")]
+        public string? RevocationPreference { get; init; }
+
+        /// <summary>Policy document: hashed into the policy identifier and embedded in the signature-policy-store.</summary>
+        [CommandOption("--policy-document <PATH>")]
+        [Description("Policy document: its SHA-256 goes in the policy identifier and the file is embedded in the signature (signature-policy-store)")]
+        public string? PolicyDocumentPath { get; init; }
+
+        /// <summary>OID or URI of the specification that defines the policy document's syntax.</summary>
+        [CommandOption("--policy-specification <OID|URI>")]
+        [Description("OID or URI of the specification that defines the policy document's syntax (with --policy-document)")]
+        public string? PolicySpecification { get; init; }
+
         public override ValidationResult Validate()
         {
             if (!File.Exists(InputPath))
             {
                 return ValidationResult.Error($"File not found: {InputPath}");
+            }
+
+            if (ContentTimestamp && TsaUrl is null)
+            {
+                return ValidationResult.Error("--content-timestamp requires --tsa");
+            }
+
+            string? extrasError = AdesOptionSupport.ValidateRevocationPreference(RevocationPreference)
+                ?? AdesOptionSupport.ValidatePolicyDocument(PolicyOid, PolicyDocumentPath, PolicySpecification)
+                ?? AdesOptionSupport.ValidateFiles("--attribute-certificate", AttributeCertificates)
+                ?? AdesOptionSupport.ValidateFiles("--signed-assertion", SignedAssertions);
+            if (extrasError is not null)
+            {
+                return ValidationResult.Error(extrasError);
             }
 
             if (ExternalCredentialSupport.Validate(this, CertPath is not null) is { } externalError)
@@ -148,17 +222,25 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 
         if (settings.TsaUrl is not null && level >= AdesBaselineLevel.Timestamped)
         {
-            var profile = BuildBaselineProfile(settings.TsaUrl, level);
+            var profile = BuildBaselineProfile(settings.TsaUrl, level, settings.RevocationPreference);
             builder = builder.WithLevel(profile);
         }
         if (commitment.HasValue)
         {
             builder = builder.WithCommitmentType(commitment.Value);
         }
-        if (settings.PolicyOid is not null)
+        if (settings.PolicyOid is not null && settings.PolicyDocumentPath is not null)
+        {
+            var (policy, store) = await AdesOptionSupport.LoadPolicyAsync(
+                settings.PolicyOid, settings.PolicyUri, settings.PolicyDocumentPath, settings.PolicySpecification!, cancellationToken);
+            builder = builder.WithSignaturePolicy(policy).WithSignaturePolicyStore(store);
+        }
+        else if (settings.PolicyOid is not null)
         {
             builder = builder.WithSignaturePolicy(settings.PolicyOid, settings.PolicyUri);
         }
+
+        builder = await ApplyExtrasAsync(builder, settings, cancellationToken);
         if (settings.ChainPath is not null)
         {
             builder = token is null
@@ -175,6 +257,54 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         AnsiConsole.MarkupLine($"[green]CAdES signature saved to:[/] {outputPath}");
 
         return 0;
+    }
+
+    /// <summary>The signed attributes beyond the baseline: location, roles, content description and timestamp.</summary>
+    private static async Task<CadesSignerBuilder> ApplyExtrasAsync(
+        CadesSignerBuilder builder, Settings settings, CancellationToken cancellationToken)
+    {
+        if (settings.SignerCountry is not null || settings.SignerLocality is not null || settings.SignerPostalAddress is { Length: > 0 })
+        {
+            builder = builder.WithSignerLocation(new CadesSignerLocation
+            {
+                CountryName = settings.SignerCountry,
+                LocalityName = settings.SignerLocality,
+                PostalAddress = settings.SignerPostalAddress ?? [],
+            });
+        }
+
+        if (settings.SignerRoles is { Length: > 0 })
+        {
+            builder = builder.WithSignerRoles(settings.SignerRoles);
+        }
+
+        if (settings.AttributeCertificates is { Length: > 0 })
+        {
+            builder = builder.WithAttributeCertificates(await AdesOptionSupport.ReadFilesAsync(settings.AttributeCertificates, cancellationToken));
+        }
+
+        if (settings.SignedAssertions is { Length: > 0 })
+        {
+            var files = await AdesOptionSupport.ReadFilesAsync(settings.SignedAssertions, cancellationToken);
+            builder = builder.WithSignedAssertions([.. files.Select(file => CadesSignedAssertion.Saml(file.Span))]);
+        }
+
+        if (settings.MimeType is not null)
+        {
+            builder = builder.WithMimeType(settings.MimeType);
+        }
+
+        if (settings.ContentDescription is not null)
+        {
+            builder = builder.WithContentHints(new CadesContentHints { Description = settings.ContentDescription });
+        }
+
+        if (settings.ContentTimestamp)
+        {
+            builder = builder.WithContentTimestamp(new TimestampOptions(new Uri(settings.TsaUrl!)));
+        }
+
+        return builder;
     }
 
     private static async Task<X509Certificate2> LoadCertificateAsync(Settings settings, CancellationToken ct)
@@ -206,15 +336,15 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         return certs.ToList().AsReadOnly();
     }
 
-    private static AdesBaselineProfile BuildBaselineProfile(string tsaUrl, AdesBaselineLevel level)
+    private static AdesBaselineProfile BuildBaselineProfile(string tsaUrl, AdesBaselineLevel level, string? revocationPreference)
     {
         var timestampOptions = new TimestampOptions(new Uri(tsaUrl));
         return level switch
         {
             AdesBaselineLevel.Basic => AdesBaselineProfile.Basic(),
             AdesBaselineLevel.Timestamped => AdesBaselineProfile.Timestamped(timestampOptions),
-            AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(timestampOptions, new LongTermValidationOptions()),
-            _ => AdesBaselineProfile.Archive(timestampOptions, new LongTermValidationOptions())
+            AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(timestampOptions, AdesOptionSupport.LongTermOptions(revocationPreference)),
+            _ => AdesBaselineProfile.Archive(timestampOptions, AdesOptionSupport.LongTermOptions(revocationPreference))
         };
     }
 

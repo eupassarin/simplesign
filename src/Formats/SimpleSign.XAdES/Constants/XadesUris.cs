@@ -12,6 +12,9 @@ public static class XadesUris
     /// <summary>SignedProperties type URI for XAdES.</summary>
     public const string SignedPropertiesType = "http://uri.etsi.org/01903#SignedProperties";
 
+    /// <summary>Type of the ds:Reference by which a countersignature signs another signature's ds:SignatureValue (ETSI EN 319 132-1 §5.2.7.1).</summary>
+    public const string CountersignedSignatureType = "http://uri.etsi.org/01903#CountersignedSignature";
+
     /// <summary>ID prefix for Signature elements.</summary>
     public const string SignatureIdPrefix = "S-";
 

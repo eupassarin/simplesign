@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SimpleSign.CAdES;
+using SimpleSign.Core.Crypto;
 using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.TestHelpers;
 using SimpleSign.XAdES;
@@ -304,6 +305,73 @@ public sealed class CliCommandTests : IDisposable
         using var json = JsonDocument.Parse(output);
         json.RootElement.GetProperty("isValid").GetBoolean().ShouldBeFalse();
         json.RootElement.GetProperty("isIntegrityValid").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task CadesSign_SignedAttributeFlags_WriteTheAttributes()
+    {
+        string data = Path.Combine(_tempDir, "data.txt");
+        await File.WriteAllTextAsync(data, "contrato");
+        string policy = Path.Combine(_tempDir, "policy.der");
+        await File.WriteAllBytesAsync(policy, [0x30, 0x03, 0x02, 0x01, 0x07]);
+        string attributeCertificate = Path.Combine(_tempDir, "role.ac");
+        await File.WriteAllBytesAsync(attributeCertificate, [0x30, 0x03, 0x02, 0x01, 0x05]);
+        string assertion = Path.Combine(_tempDir, "assertion.xml");
+        await File.WriteAllTextAsync(assertion, "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"/>");
+        string signature = Path.Combine(_tempDir, "data.p7s");
+
+        var (exit, output) = await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--password", Password, "-o", signature,
+            "--signer-country", "BR", "--signer-locality", "Recife",
+            "--signer-postal-address", "Rua da Aurora, 1", "--signer-postal-address", "50050-000",
+            "--signer-role", "Diretor", "--attribute-certificate", attributeCertificate, "--signed-assertion", assertion,
+            "--mime-type", "text/plain", "--content-description", "Contrato de teste",
+            "--policy-oid", "1.2.3.4.5", "--policy-document", policy, "--policy-specification", "1.2.3.4.5.1");
+
+        exit.ShouldBe(0, output);
+        var signer = CmsParser.Parse(await File.ReadAllBytesAsync(signature));
+        var attributes = CadesSignedAttributes.Read(signer.SignedAttrs);
+        attributes.SignerLocation.ShouldNotBeNull().CountryName.ShouldBe("BR");
+        attributes.SignerLocation.LocalityName.ShouldBe("Recife");
+        attributes.SignerLocation.PostalAddress.ShouldBe(["Rua da Aurora, 1", "50050-000"]);
+        attributes.ClaimedRoles.ShouldBe(["Diretor"]);
+        attributes.AttributeCertificates.ShouldHaveSingleItem();
+        attributes.SignedAssertions.ShouldHaveSingleItem();
+        attributes.MimeType.ShouldBe("text/plain");
+        attributes.ContentHints.ShouldNotBeNull().Description.ShouldBe("Contrato de teste");
+        var store = CadesSignaturePolicyStore.Read(signer).ShouldNotBeNull();
+        store.Specification.ShouldBe("1.2.3.4.5.1");
+        store.Document.ToArray().ShouldBe([0x30, 0x03, 0x02, 0x01, 0x07]);
+    }
+
+    [Theory]
+    [InlineData("--content-timestamp requires --tsa", "--content-timestamp")]
+    [InlineData("--policy-document requires --policy-oid", "--policy-document", "{input}", "--policy-specification", "1.2.3")]
+    [InlineData("--policy-document requires --policy-specification", "--policy-oid", "1.2.3", "--policy-document", "{input}")]
+    [InlineData("--policy-specification is used with --policy-document", "--policy-specification", "1.2.3")]
+    [InlineData("Invalid revocation preference", "--revocation-preference", "both")]
+    [InlineData("File not found (--attribute-certificate)", "--attribute-certificate", "missing.ac")]
+    public async Task CadesSign_InconsistentFlags_AreRefused(string expected, params string[] flags)
+    {
+        string data = Path.Combine(_tempDir, "data.txt");
+        await File.WriteAllTextAsync(data, "contrato");
+        string[] resolved = [.. flags.Select(flag => flag == "{input}" ? data : flag)];
+
+        var (exit, output) = await RunAsync(["cades", "sign", data, "--cert", _pfxPath, "--password", Password, .. resolved]);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain(expected);
+    }
+
+    [Fact]
+    public async Task Sign_InvalidRevocationPreference_IsRefused()
+    {
+        string pdf = Path.Combine(_tempDir, "doc.pdf");
+        await File.WriteAllBytesAsync(pdf, TestPdfFactory.CreateMinimalPdf());
+
+        var (exit, output) = await RunAsync("sign", pdf, "--cert", _pfxPath, "--password", Password, "--revocation-preference", "both");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("Invalid revocation preference");
     }
 
     // ── xades ───────────────────────────────────────────────────────────
@@ -685,6 +753,79 @@ public sealed class CliCommandTests : IDisposable
         string path = Path.Combine(_tempDir, name);
         File.WriteAllBytes(path, TestPdfFactory.CreateMinimalPdf());
         return path;
+    }
+
+    [Fact]
+    public async Task XadesSign_PropertyAndDataObjectFlags_WriteThemAndTheResultValidates()
+    {
+        string xml = Path.Combine(_tempDir, "order.xml");
+        await File.WriteAllTextAsync(xml, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><order xmlns=\"urn:test\"><item>1</item></order>");
+        string policy = Path.Combine(_tempDir, "policy.xml");
+        await File.WriteAllTextAsync(policy, "<policy/>");
+        string assertion = Path.Combine(_tempDir, "assertion.xml");
+        await File.WriteAllTextAsync(assertion, "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"/>");
+        string attachment = Path.Combine(_tempDir, "attachment.bin");
+        await File.WriteAllBytesAsync(attachment, [1, 2, 3, 4]);
+        string terms = Path.Combine(_tempDir, "terms.txt");
+        await File.WriteAllTextAsync(terms, "Termos");
+        string signed = Path.Combine(_tempDir, "order.signed.xml");
+
+        var (signExit, signOutput) = await RunAsync("xades", "sign", xml, "--cert", _pfxPath, "--password", Password, "-o", signed,
+            "--place-city", "Recife", "--place-street", "Rua da Aurora, 1", "--place-state", "PE",
+            "--place-postal-code", "50050-000", "--place-country", "BR",
+            "--canonicalization", "inclusive", "--signed-assertion", assertion,
+            "--policy-oid", "1.2.3.4.5", "--policy-document", policy, "--policy-specification", "https://example.com/policy-syntax",
+            "--embed-object", attachment + ",application/pdf", "--external-object", "terms.txt=" + terms + ",text/plain");
+
+        signExit.ShouldBe(0, signOutput);
+        string text = await File.ReadAllTextAsync(signed);
+        text.ShouldContain("SignatureProductionPlaceV2");
+        text.ShouldContain(">Recife</");
+        text.ShouldContain("CanonicalizationMethod Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\"");
+        text.ShouldContain("SignaturePolicyStore");
+        text.ShouldContain("SignedAssertion");
+        text.ShouldContain("application/pdf");
+        text.ShouldContain("URI=\"terms.txt\"");
+
+        var (exit, output) = await RunAsync("xades", "validate", signed, "--trust", _cerPath, "--external-object", "terms.txt=" + terms, "--json");
+
+        exit.ShouldBe(0, output);
+        using var json = JsonDocument.Parse(output);
+        json.RootElement.GetProperty("isValid").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task XadesSign_Countersign_AddsACounterSignatureToTheSignedDocument()
+    {
+        string xml = Path.Combine(_tempDir, "doc.xml");
+        await File.WriteAllTextAsync(xml, "<doc>countersign</doc>");
+        string signed = Path.Combine(_tempDir, "doc.signed.xml");
+        string countersigned = Path.Combine(_tempDir, "doc.countersigned.xml");
+        (await RunAsync("xades", "sign", xml, "--cert", _pfxPath, "--password", Password, "-o", signed)).Exit.ShouldBe(0);
+
+        var (signExit, signOutput) = await RunAsync("xades", "sign", signed, "--countersign", "--cert", _pfxPath, "--password", Password, "-o", countersigned);
+
+        signExit.ShouldBe(0, signOutput);
+        var result = new XadesSignatureValidator().Validate(await File.ReadAllBytesAsync(countersigned), [_cert]);
+        result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        result.CounterSignatures.ShouldHaveSingleItem().IsValid.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("Invalid canonicalization", "--canonicalization", "c14n11")]
+    [InlineData("--data-objects-timestamp requires --tsa", "--data-objects-timestamp")]
+    [InlineData("--countersign-id is used with --countersign", "--countersign-id", "S-1")]
+    [InlineData("Invalid --external-object", "--external-object", "terms.txt")]
+    [InlineData("File not found (--embed-object)", "--embed-object", "missing.bin,application/pdf")]
+    public async Task XadesSign_InconsistentFlags_AreRefused(string expected, params string[] flags)
+    {
+        string xml = Path.Combine(_tempDir, "doc.xml");
+        await File.WriteAllTextAsync(xml, "<doc/>");
+
+        var (exit, output) = await RunAsync(["xades", "sign", xml, "--cert", _pfxPath, "--password", Password, .. flags]);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain(expected);
     }
 
     private static async Task<(int Exit, string Output)> RunAsync(params string[] args)

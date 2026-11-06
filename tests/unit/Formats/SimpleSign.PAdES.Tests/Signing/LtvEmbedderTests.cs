@@ -547,6 +547,72 @@ public sealed class LtvEmbedderTests
         return uncompressed.ToArray();
     }
 
+    [Theory(DisplayName = "The preferred revocation source is asked first and the other one is the fallback")]
+    [InlineData(RevocationPreference.CrlFirst, false)]
+    [InlineData(RevocationPreference.OcspFirst, true)]
+    public async Task EmbedLtvDataAsync_RevocationPreference_DecidesWhichSourceIsAsked(RevocationPreference preference, bool asksOcsp)
+    {
+        using var signer = TestCertificateFactory.CreateSelfSignedCert();
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(signer).SignAsync();
+        using var pki = new SyntheticPki(
+            crlDistributionPoint: "http://198.51.100.1/leaf.crl",
+            ocspResponder: "http://198.51.100.1/ocsp",
+            intermediateCrlDistributionPoint: "http://198.51.100.1/intermediate.crl");
+        byte[] leafCrl = pki.BuildLeafCrl();
+        byte[] intermediateCrl = pki.BuildIntermediateCrl();
+        var requestedPaths = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var httpClient = new HttpClient(new MockHttpHandler(request =>
+        {
+            // CRLs are served; OCSP gets 404, so with OCSP first the embedder falls back to the CRL.
+            string path = request.RequestUri!.AbsolutePath;
+            requestedPaths.Enqueue(path);
+            byte[]? crl = path switch { "/leaf.crl" => leafCrl, "/intermediate.crl" => intermediateCrl, _ => null };
+            return Task.FromResult(crl is null
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(crl) });
+        }));
+        var embedder = new LtvEmbedder(httpClient) { RevocationPreference = preference };
+
+        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signed, pki.Chain());
+
+        requestedPaths.ShouldContain("/leaf.crl");
+        requestedPaths.Contains("/ocsp").ShouldBe(asksOcsp);
+        Encoding.Latin1.GetString(ltvPdf).ShouldContain("/CRLs");
+    }
+
+    [Fact(DisplayName = "The signature's own options replace the embedder's revocation preference")]
+    public async Task EmbedLtvDataAsync_WithSignatureOptions_UsesTheirRevocationPreference()
+    {
+        using var signer = TestCertificateFactory.CreateSelfSignedCert();
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(signer).SignAsync();
+        using var pki = new SyntheticPki(
+            crlDistributionPoint: "http://198.51.100.1/leaf.crl",
+            ocspResponder: "http://198.51.100.1/ocsp",
+            intermediateCrlDistributionPoint: "http://198.51.100.1/intermediate.crl");
+        byte[] leafCrl = pki.BuildLeafCrl();
+        byte[] intermediateCrl = pki.BuildIntermediateCrl();
+        var requestedPaths = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var httpClient = new HttpClient(new MockHttpHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            requestedPaths.Enqueue(path);
+            byte[]? crl = path switch { "/leaf.crl" => leafCrl, "/intermediate.crl" => intermediateCrl, _ => null };
+            return Task.FromResult(crl is null
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(crl) });
+        }));
+
+        // The embedder is the one a container would hand out: OCSP first. The signature asks for the CRL.
+        ILtvEmbedder embedder = new LtvEmbedder(httpClient);
+        var options = new LongTermValidationOptions { RevocationPreference = RevocationPreference.CrlFirst };
+
+        byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signed, pki.Chain(), null, [], options);
+
+        requestedPaths.ShouldContain("/leaf.crl");
+        requestedPaths.ShouldNotContain("/ocsp");
+        Encoding.Latin1.GetString(ltvPdf).ShouldContain("/CRLs");
+    }
+
     [Fact(DisplayName = "VRI dictionary contains no /SHA256 key")]
     public async Task EmbedLtvDataAsync_VriDictionary_ContainsNoSha256Key()
     {

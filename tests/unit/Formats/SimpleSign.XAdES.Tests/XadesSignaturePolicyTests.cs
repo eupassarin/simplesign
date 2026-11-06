@@ -88,6 +88,82 @@ public sealed class XadesSignaturePolicyTests
         Should.Throw<Core.Signing.SigningException>(() => builder.SignAsync());
     }
 
+    [Fact]
+    public async Task WithSignaturePolicyStore_Document_WritesTheV141PropertyAndTheValidatorReadsIt()
+    {
+        byte[] policyDocument = "a signature policy document"u8.ToArray();
+        var policy = new SignaturePolicyReference(PolicyOid, Oids.Sha256, SHA256.HashData(policyDocument), PolicyUri);
+
+        byte[] signed = await XadesSigner.Document(s_xml).WithCertificate(s_cert)
+            .WithSignaturePolicy(policy)
+            .WithSignaturePolicyStore(SignaturePolicyStore.FromDocument("1.2.3.4.5.1", policyDocument))
+            .SignAsync();
+
+        var (doc, ns) = Load(signed);
+        ns.AddNamespace("xades141", XadesUris.Xades141Namespace);
+        var store = doc.SelectSingleNode("//xades:UnsignedSignatureProperties/xades141:SignaturePolicyStore", ns).ShouldBeOfType<XmlElement>();
+        store.ChildNodes.OfType<XmlElement>().Select(e => (e.LocalName, e.NamespaceURI)).ShouldBe(
+        [
+            ("SPDocSpecification", XadesUris.Xades141Namespace),
+            ("SignaturePolicyDocument", XadesUris.Xades141Namespace),
+        ]);
+        var identifier = store.SelectSingleNode("xades141:SPDocSpecification/xades:Identifier", ns).ShouldBeOfType<XmlElement>();
+        identifier.GetAttribute("Qualifier").ShouldBe("OIDAsURN");
+        identifier.InnerText.ShouldBe("urn:oid:1.2.3.4.5.1");
+        store.SelectSingleNode("xades141:SignaturePolicyDocument", ns)!.InnerText.ShouldBe(Convert.ToBase64String(policyDocument));
+
+        var result = new XadesSignatureValidator().Validate(signed, [s_cert]);
+        result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        var read = result.SignaturePolicyStore.ShouldNotBeNull();
+        read.Specification.ShouldBe("1.2.3.4.5.1");
+        read.Document.ToArray().ShouldBe(policyDocument);
+        read.MatchesHash(result.SignaturePolicy.ShouldNotBeNull()).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WithSignaturePolicyStore_LocalUri_WritesTheUriAndAPlainSpecification()
+    {
+        byte[] signed = await XadesSigner.Document(s_xml).WithCertificate(s_cert)
+            .WithSignaturePolicy(new SignaturePolicyReference(PolicyOid, Oids.Sha256, s_policyHash, PolicyUri))
+            .WithSignaturePolicyStore(SignaturePolicyStore.FromLocalUri("https://example.com/policy-syntax", "file:///policies/pa.xml"))
+            .SignAsync();
+
+        var (doc, ns) = Load(signed);
+        ns.AddNamespace("xades141", XadesUris.Xades141Namespace);
+        var identifier = doc.SelectSingleNode("//xades141:SignaturePolicyStore/xades141:SPDocSpecification/xades:Identifier", ns).ShouldBeOfType<XmlElement>();
+        identifier.HasAttribute("Qualifier").ShouldBeFalse();
+        identifier.InnerText.ShouldBe("https://example.com/policy-syntax");
+        doc.SelectSingleNode("//xades141:SignaturePolicyStore/xades141:SigPolDocLocalURI", ns)!.InnerText.ShouldBe("file:///policies/pa.xml");
+        doc.SelectSingleNode("//xades141:SignaturePolicyStore/xades141:SignaturePolicyDocument", ns).ShouldBeNull();
+
+        var read = new XadesSignatureValidator().Validate(signed, [s_cert]).SignaturePolicyStore.ShouldNotBeNull();
+        read.LocalUri.ShouldBe("file:///policies/pa.xml");
+        read.SpecificationIsOid.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithSignaturePolicyStore_WithoutThePolicyHash_Throws(bool policyWithoutHash)
+    {
+        // The hash in the signed SignaturePolicyIdentifier is what protects the unsigned store (§6.3).
+        var builder = XadesSigner.Document(s_xml).WithCertificate(s_cert)
+            .WithSignaturePolicyStore(SignaturePolicyStore.FromDocument("1.2.3", "policy"u8.ToArray()));
+        builder = policyWithoutHash ? builder.WithSignaturePolicy(PolicyOid, PolicyUri) : builder;
+
+        var exception = await Should.ThrowAsync<SimpleSign.Core.Signing.SigningException>(() => builder.SignAsync());
+
+        exception.Message.ShouldContain("SignaturePolicyStore");
+    }
+
+    [Fact]
+    public async Task Validate_SignatureWithoutStore_HasNoSignaturePolicyStore()
+    {
+        byte[] signed = await XadesSigner.Document(s_xml).WithCertificate(s_cert).SignAsync();
+
+        new XadesSignatureValidator().Validate(signed, [s_cert]).SignaturePolicyStore.ShouldBeNull();
+    }
+
     private static (XmlDocument Doc, XmlNamespaceManager Ns) Load(byte[] xml)
     {
         var doc = new XmlDocument { PreserveWhitespace = true, XmlResolver = null };

@@ -23,6 +23,20 @@ public sealed class SigningRunnerTests(TestBenchFixture fixture)
         result.Validation.Where(v => !v.IsDocumentTimestamp).ShouldAllBe(v => v.Indication == "Valid", string.Join("; ", result.Validation.SelectMany(v => v.Errors)));
     }
 
+    [Fact]
+    public async Task RunAsync_CrlFirstAtLongTerm_SignsValidatesAndShowsTheOption()
+    {
+        var options = fixture.Options() with { Level = BaselineLevel.BLT, RevocationPreference = SimpleSign.Core.Signing.RevocationPreference.CrlFirst };
+
+        var result = await fixture.Runner.RunAsync(options, default);
+
+        result.Error.ShouldBeNull();
+        result.AchievedLevel.ShouldBe("B-LT");
+        result.Validation.Where(v => !v.IsDocumentTimestamp).ShouldAllBe(v => v.Indication == "Valid", string.Join("; ", result.Validation.SelectMany(v => v.Errors)));
+        result.Code.CSharp.ShouldContain("{ RevocationPreference = RevocationPreference.CrlFirst }");
+        result.Code.Cli.ShouldContain("--revocation-preference crl");
+    }
+
     [Theory]
     [InlineData(IcpPolicyKind.AdRb)]
     [InlineData(IcpPolicyKind.AdRt)]

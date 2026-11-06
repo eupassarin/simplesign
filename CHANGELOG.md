@@ -22,6 +22,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ICertificateChainService.DownloadAiaCertsAsync(…, OutboundHttpPolicy, …)`,
   `LtvDataCollector.CollectAsync(IHttpClientProvider, …, LongTermValidationOptions, …)`.
 
+### Added — more of the ETSI standards in CAdES and XAdES
+
+CAdES (ETSI EN 319 122-1), on `CadesSignerBuilder`:
+
+- `WithSignerLocation(CadesSignerLocation)` (§5.2.5), `WithContentHints(CadesContentHints)` and
+  `WithMimeType(string)` (§5.2.4). A countersignature refuses the last two.
+- `WithSignerRoles` / `WithSignerRole`, `WithAttributeCertificates` and `WithSignedAssertions`
+  (§5.2.6.1, signer-attributes-v2). Attribute certificates and signed assertions are embedded as given
+  and read back, not verified. `CadesSignedAttributes.Read` reads all of these from a signature.
+- `WithContentTimestamp(TimestampOptions)` (§5.2.8): a timestamp over the content, taken before
+  signing. `CadesValidationResult.HasValidContentTimestamp` and `ContentTimestampTime` report it.
+- `WithSignaturePolicyStore(SignaturePolicyStore)` (§5.2.10), read with `CadesSignaturePolicyStore.Read`.
+  Signing fails unless the policy is declared with its hash.
+
+XAdES (ETSI EN 319 132-1), on `XadesSignerBuilder`:
+
+- `WithSignatureProductionPlace(SignatureProductionPlace)` (§5.2.5). With
+  `XadesSigningCertificateForm.V1` it is written as the XAdES 1.3.2 `SignatureProductionPlace`, which
+  has no street address: signing fails when one is set.
+- `WithAttributeCertificates` and `WithSignedAssertions` (§5.2.6, CertifiedRolesV2 and SignedAssertions),
+  embedded as given and read back, not verified.
+- `WithDataObjectsTimestamp(TimestampOptions)` (§5.2.8.1, AllDataObjectsTimeStamp).
+- `WithSignaturePolicyStore(SignaturePolicyStore)` (§5.2.10).
+- `WithCanonicalization(XadesCanonicalization)`: Exclusive C14N 1.0 (default) or Canonical XML 1.0 for
+  SignedInfo and the references.
+- `WithAdditionalDataObject(XadesDataObject)`: more files signed with the document, carried inside the
+  signature (`XadesDataObject.Embedded`) or kept outside it (`XadesDataObject.External`), each with
+  its DataObjectFormat.
+- `XadesSigner.CounterSign(signedXml, signatureId)` (§5.2.7.2): an enveloped countersignature, at B-B or B-T.
+- `XadesValidationResult` gains `CounterSignatures`, `HasValidDataObjectsTimeStamp`,
+  `DataObjectsTimeStampTime`, `SignaturePolicyStore`, `ClaimedRoles`, `AttributeCertificates` and
+  `SignedAssertions`. `XadesSignatureValidator.Validate` and `ValidateAll` have overloads that take the
+  content of each external reference by URI (`IReadOnlyDictionary<string, byte[]>`).
+
+All formats:
+
+- `LongTermValidationOptions.RevocationPreference` (`RevocationPreference.OcspFirst`, the default, or
+  `CrlFirst`): which revocation source is tried first when collecting B-LT data. Also on `LtvEmbedder`
+  and `LtvDataCollector.CollectAsync`; a deferred PAdES session carries it.
+- `ILtvEmbedder.EmbedLtvDataAsync(…, LongTermValidationOptions, …)`: the PAdES signer now calls this
+  overload, so an injected embedder receives the signature's options. It is a default interface member
+  that forwards to the overload without options; `LtvEmbedder` overrides it, and the signature's
+  revocation preference and clock skew replace the ones the embedder was created with (before, an
+  embedder injected into `PadesSignerBuilder`, such as the one `AddSimpleSign()` registers, ignored
+  them).
+- `SignaturePolicyStore` (`SimpleSign.Core.Crypto`): the policy document, or the URI of a local copy,
+  with `MatchesHash(SignaturePolicyReference)`.
+
+CLI:
+
+- `simplesign cades sign`: `--signer-country`, `--signer-locality`, `--signer-postal-address`,
+  `--signer-role`, `--attribute-certificate`, `--signed-assertion`, `--mime-type`,
+  `--content-description`, `--content-timestamp`, `--policy-document` with `--policy-specification`.
+- `simplesign xades sign`: `--place-city`, `--place-street`, `--place-state`, `--place-postal-code`,
+  `--place-country`, `--canonicalization`, `--data-objects-timestamp`, `--attribute-certificate`,
+  `--signed-assertion`, `--embed-object`, `--external-object`, `--policy-document` with
+  `--policy-specification`, and `--countersign` with `--countersign-id`.
+- `simplesign xades validate --external-object URI=PATH` for signatures with external data objects.
+- `--revocation-preference ocsp|crl` on `sign`, `cades sign` and `xades sign`.
+
+Tests: `DssCrossValidationTests` sends signatures that use these options to a local EU DSS
+(`tools/dss`) and asserts what it reads from them; it is skipped when no DSS is running. The TestBench
+combination matrices for CAdES and XAdES include the new options.
+
+### Changed — XAdES output and validation
+
+- Every signature now has a `DataObjectFormat` for the document (`text/xml`, pointing to an `Id` on the
+  document's `ds:Reference`), as ETSI EN 319 132-1 §6.3 requires for each signed data object. Not
+  written for a countersignature or with `XadesSigningCertificateForm.V1`, unless a format or an
+  additional data object is asked for. A `DataObjectFormat` given without an `ObjectReference` now
+  points to the document reference; it had no `ObjectReference` attribute before.
+- Claimed signer roles are written in `SignerRoleV2`, as ETSI EN 319 132-1 requires. The `SignerRole` it
+  obsoletes is written only with `XadesSigningCertificateForm.V1`.
+- Every new signature has an `Id` on `ds:SignatureValue`, which is what a countersignature references.
+- The validator reports a countersignature under `XadesValidationResult.CounterSignatures` of the
+  signature it signs. `ValidateAll` no longer lists it as one more signature of the document, and
+  `Validate` accepts a document with one signature and its countersignatures.
+- The validator canonicalizes SignedInfo with the algorithm it declares (it used Exclusive C14N for every
+  signature), and canonicalizes Canonical XML 1.0 subsets with the namespace context of their ancestors.
+- `validator.Validate(xml, anchors, null)` is now ambiguous between the two overloads: drop the
+  argument, name it (`originalData: null`) or cast the `null`.
+
+### Fixed
+
+- `TimestampClient.EmbedTimestampInCms` wrapped the values of every unsigned attribute already in the
+  SignerInfo in a second SET. It affected a CMS that had an unsigned attribute before the signature
+  timestamp was embedded; such attributes are now kept octet for octet.
+- `TimestampToken.Verify` and `VerifyHash` did not recognize SHA-3 message imprints and reported a
+  valid token as not covering the data.
+
 ### Changed (Breaking) — SimpleSign.Brasil split into SimpleSign.Brazil, .IcpBrasil and .GovBr
 
 `SimpleSign.Brasil` is discontinued. Each Brazilian hierarchy is now its own package, under

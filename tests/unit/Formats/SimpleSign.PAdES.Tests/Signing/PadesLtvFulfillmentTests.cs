@@ -41,6 +41,28 @@ public sealed class PadesLtvFulfillmentTests
         result.Warnings.ShouldContain(warning => warning.Code == SigningWarningCode.LevelDowngraded);
     }
 
+    [Fact(DisplayName = "An injected embedder receives the signature's long-term options")]
+    public async Task SignWithDetailsAsync_InjectedEmbedder_ReceivesTheLongTermOptions()
+    {
+        using var certificate = TestCertificateFactory.CreateSelfSignedCert();
+        var embedder = new OptionsRecordingLtvEmbedder();
+        var profile = AdesBaselineProfile.LongTerm(
+            new TimestampOptions(new Uri("http://tsa.example.test")),
+            new LongTermValidationOptions { RevocationPreference = RevocationPreference.CrlFirst },
+            SigningLevelFailureBehavior.ReturnLowerLevel);
+        var builder = new PadesSignerBuilder(
+                new MemoryStream(TestPdfFactory.CreateMinimalPdf()),
+                new DeterministicTimestampFactory(),
+                embedder)
+            .WithCertificate(certificate)
+            .WithLevel(profile);
+
+        await builder.SignWithDetailsAsync();
+
+        embedder.Options.ShouldNotBeNull();
+        embedder.Options.RevocationPreference.ShouldBe(RevocationPreference.CrlFirst);
+    }
+
     private static PadesSignerBuilder CreateBuilder(
         X509Certificate2 certificate,
         SigningLevelFailureBehavior failureBehavior)
@@ -71,6 +93,30 @@ public sealed class PadesLtvFulfillmentTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(TimestampTestResponseBuilder.CreateTokenForData(dataToTimestamp.Span, hashAlgorithm));
+        }
+    }
+
+    private sealed class OptionsRecordingLtvEmbedder : ILtvEmbedder
+    {
+        public LongTermValidationOptions? Options { get; private set; }
+
+        public Task<byte[]> EmbedLtvDataAsync(
+            byte[] signedPdf,
+            IReadOnlyList<X509Certificate2> certificateChain,
+            byte[]? timestampTokenBytes = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(signedPdf);
+
+        public Task<byte[]> EmbedLtvDataAsync(
+            byte[] signedPdf,
+            IReadOnlyList<X509Certificate2> certificateChain,
+            byte[]? timestampTokenBytes,
+            IReadOnlyList<PdfDssArtifact> artifacts,
+            LongTermValidationOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            Options = options;
+            return Task.FromResult(signedPdf);
         }
     }
 

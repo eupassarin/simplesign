@@ -84,6 +84,12 @@ public sealed record CadesOptions
 
     public string? PolicyUri { get; init; }
 
+    /// <summary>The uploaded policy document: hashed into the policy identifier and embedded in the policy store (null: none).</summary>
+    public string? PolicyDocumentId { get; init; }
+
+    /// <summary>The OID or URI of the specification that defines the policy document's syntax (SPDocSpecification).</summary>
+    public string PolicySpecification { get; init; } = "1.2.3.4.5.1";
+
     public CadesExtendedChoice ExtendedForm { get; init; } = CadesExtendedChoice.None;
 
     public TimestampChoice Timestamp { get; init; } = new();
@@ -96,6 +102,36 @@ public sealed record CadesOptions
 
     /// <summary>A <c>CommitmentType</c> name, or null for none.</summary>
     public string? Commitment { get; init; }
+
+    /// <summary>Timestamp the content before signing (content-time-stamp), with the signature TSA.</summary>
+    public bool ContentTimestamp { get; init; }
+
+    /// <summary>The revocation source tried first when collecting B-LT data.</summary>
+    public Core.Signing.RevocationPreference RevocationPreference { get; init; }
+
+    /// <summary>signer-location: the country (null: none).</summary>
+    public string? SignerCountry { get; init; }
+
+    /// <summary>signer-location: the locality (null: none).</summary>
+    public string? SignerLocality { get; init; }
+
+    /// <summary>signer-location: the postal address, up to six lines.</summary>
+    public IReadOnlyList<string> SignerPostalAddress { get; init; } = [];
+
+    /// <summary>The roles the signer claims (signer-attributes-v2).</summary>
+    public IReadOnlyList<string> SignerRoles { get; init; } = [];
+
+    /// <summary>The uploaded X.509 attribute certificate of the signer, DER (null: none).</summary>
+    public string? AttributeCertificateId { get; init; }
+
+    /// <summary>The uploaded assertion a third party signed about the signer, for example SAML (null: none).</summary>
+    public string? SignedAssertionId { get; init; }
+
+    /// <summary>The mime-type attribute (null: none).</summary>
+    public string? MimeType { get; init; }
+
+    /// <summary>The contentDescription of the content-hints attribute (null: no content-hints).</summary>
+    public string? ContentDescription { get; init; }
 
     public string? OperationId { get; init; }
 

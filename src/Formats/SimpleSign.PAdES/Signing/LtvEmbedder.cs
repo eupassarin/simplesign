@@ -9,6 +9,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Internal;
@@ -30,8 +31,14 @@ public sealed class LtvEmbedder : ILtvEmbedder
     private readonly TimeSpan _clockSkewTolerance = OcspClient.DefaultClockSkewTolerance;
 
     /// <summary>
+    /// The revocation source tried first for each certificate; the other one is the fallback.
+    /// Default: <see cref="RevocationPreference.OcspFirst"/>.
+    /// </summary>
+    public RevocationPreference RevocationPreference { get; init; }
+
+    /// <summary>
     /// Clock skew allowed for the OCSP responses this embedder fetches (see
-    /// <see cref="Core.Signing.LongTermValidationOptions.ClockSkewTolerance"/>). Ignored when an <see cref="IOcspClient"/>
+    /// <see cref="LongTermValidationOptions.ClockSkewTolerance"/>). Ignored when an <see cref="IOcspClient"/>
     /// is injected. Default: <see cref="OcspClient.DefaultClockSkewTolerance"/>.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
@@ -108,12 +115,50 @@ public sealed class LtvEmbedder : ILtvEmbedder
     /// <param name="timestampTokenBytes">The new signature's timestamp token, for VRI /TS.</param>
     /// <param name="artifacts">Extra DSS streams.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<byte[]> EmbedLtvDataAsync(
+    public Task<byte[]> EmbedLtvDataAsync(
         byte[] signedPdf,
         IReadOnlyList<X509Certificate2> certificateChain,
         byte[]? timestampTokenBytes,
         IReadOnlyList<PdfDssArtifact> artifacts,
+        CancellationToken cancellationToken = default) =>
+        EmbedCoreAsync(
+            signedPdf, certificateChain, timestampTokenBytes, artifacts,
+            RevocationPreference, _clockSkewTolerance, cancellationToken);
+
+    /// <summary>
+    /// Collects revocation data and embeds it, following the signature's own
+    /// <paramref name="options"/>: its <see cref="LongTermValidationOptions.RevocationPreference"/> and
+    /// <see cref="LongTermValidationOptions.ClockSkewTolerance"/> replace this embedder's for the call.
+    /// The HTTP client stays the one this embedder was created with.
+    /// </summary>
+    /// <param name="signedPdf">The signed PDF.</param>
+    /// <param name="certificateChain">Signer certificate and chain.</param>
+    /// <param name="timestampTokenBytes">The new signature's timestamp token, for VRI /TS.</param>
+    /// <param name="artifacts">Extra DSS streams.</param>
+    /// <param name="options">The long-term validation options of the signature being made.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public Task<byte[]> EmbedLtvDataAsync(
+        byte[] signedPdf,
+        IReadOnlyList<X509Certificate2> certificateChain,
+        byte[]? timestampTokenBytes,
+        IReadOnlyList<PdfDssArtifact> artifacts,
+        LongTermValidationOptions options,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return EmbedCoreAsync(
+            signedPdf, certificateChain, timestampTokenBytes, artifacts,
+            options.RevocationPreference, options.ClockSkewTolerance, cancellationToken);
+    }
+
+    private async Task<byte[]> EmbedCoreAsync(
+        byte[] signedPdf,
+        IReadOnlyList<X509Certificate2> certificateChain,
+        byte[]? timestampTokenBytes,
+        IReadOnlyList<PdfDssArtifact> artifacts,
+        RevocationPreference revocationPreference,
+        TimeSpan clockSkewTolerance,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(signedPdf);
         ArgumentNullException.ThrowIfNull(artifacts);
@@ -125,7 +170,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
         var allCerts = new List<X509Certificate2>(certificateChain);
         var ocspClient = _ocspClient ?? new OcspClient(_httpClient, _logger)
         {
-            ClockSkewTolerance = _clockSkewTolerance,
+            ClockSkewTolerance = clockSkewTolerance,
             OutboundPolicy = _outboundPolicy,
         };
 
@@ -195,85 +240,106 @@ public sealed class LtvEmbedder : ILtvEmbedder
 
                 _logger.LtvProcessingCert(cert.Subject);
 
-                var ocspUrl = OcspClient.GetOcspUrl(cert);
-                if (ocspUrl is not null)
+                // The preferred source is tried first; the other one only when it gives nothing.
+                bool crlFirst = revocationPreference == RevocationPreference.CrlFirst;
+                if (crlFirst ? await TryCrlAsync().ConfigureAwait(false) : await TryOcspAsync().ConfigureAwait(false))
                 {
-                    try
-                    {
-                        var issuerCert = allCertsSnapshot.FindIssuerOf(cert);
-                        var ocspResult = await ocspClient.FetchOcspResponseAsync(cert, issuerCert, ocspUrl, ct).ConfigureAwait(false);
-                        if (!ocspResult.IsValid)
-                        {
-                            foreach (var responderCertificate in ocspResult.ResponderCertificates)
-                            {
-                                responderCertificate.Dispose();
-                            }
-
-                            throw new InvalidDataException("OCSP responder did not report a good certificate status.");
-                        }
-
-                        ocspBag.Add(ocspResult.ResponseBytes);
-
-                        foreach (var respCert in ocspResult.ResponderCertificates)
-                        {
-                            if (processedThumbprints.ContainsKey(respCert.Thumbprint) ||
-                                !nextRoundCerts.TryAdd(respCert.Thumbprint, respCert))
-                            {
-                                respCert.Dispose();
-                            }
-                        }
-
-                        return;
-                    }
-                    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or InvalidDataException)
-                    {
-                        _logger.OcspFailedFallingBackToCrl(cert.Subject, ex.Message);
-                    }
+                    return;
                 }
 
-                var crlUrl = CrlClient.GetCrlUrl(cert, _logger);
-                if (crlUrl is not null)
+                _ = crlFirst ? await TryOcspAsync().ConfigureAwait(false) : await TryCrlAsync().ConfigureAwait(false);
+
+                async Task<bool> TryOcspAsync()
                 {
-                    try
+                    var ocspUrl = OcspClient.GetOcspUrl(cert);
+                    if (ocspUrl is not null)
                     {
-                        var crl = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false);
-                        if (crl is not null && IsCrlIssuedFor(crl, cert))
+                        try
                         {
-                            crlBag.Add(crl);
-
-                            var crlIssuerDn = CrlClient.ExtractCrlIssuerDn(crl, _logger);
-                            if (crlIssuerDn is not null)
+                            var issuerCert = allCertsSnapshot.FindIssuerOf(cert);
+                            var ocspResult = await ocspClient.FetchOcspResponseAsync(cert, issuerCert, ocspUrl, ct).ConfigureAwait(false);
+                            if (!ocspResult.IsValid)
                             {
-                                bool crlIssuerFound = allCertsSnapshot.Any(c =>
-                                    c.SubjectName.RawData.AsSpan().SequenceEqual(crlIssuerDn));
-
-                                if (!crlIssuerFound)
+                                foreach (var responderCertificate in ocspResult.ResponderCertificates)
                                 {
-                                    var crlIssuerCert = await TryFetchCrlIssuerCertAsync(crlIssuerDn, cert, ct).ConfigureAwait(false);
-                                    if (crlIssuerCert is not null)
+                                    responderCertificate.Dispose();
+                                }
+
+                                throw new InvalidDataException("OCSP responder did not report a good certificate status.");
+                            }
+
+                            ocspBag.Add(ocspResult.ResponseBytes);
+
+                            foreach (var respCert in ocspResult.ResponderCertificates)
+                            {
+                                if (processedThumbprints.ContainsKey(respCert.Thumbprint) ||
+                                    !nextRoundCerts.TryAdd(respCert.Thumbprint, respCert))
+                                {
+                                    respCert.Dispose();
+                                }
+                            }
+
+                            return true;
+                        }
+                        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or InvalidDataException)
+                        {
+                            _logger.OcspFailedFallingBackToCrl(cert.Subject, ex.Message);
+                        }
+                    }
+
+                    return false;
+                }
+
+                async Task<bool> TryCrlAsync()
+                {
+                    bool found = false;
+                    var crlUrl = CrlClient.GetCrlUrl(cert, _logger);
+                    if (crlUrl is not null)
+                    {
+                        try
+                        {
+                            var crl = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false);
+                            if (crl is not null && IsCrlIssuedFor(crl, cert))
+                            {
+                                crlBag.Add(crl);
+                                found = true;
+
+                                var crlIssuerDn = CrlClient.ExtractCrlIssuerDn(crl, _logger);
+                                if (crlIssuerDn is not null)
+                                {
+                                    bool crlIssuerFound = allCertsSnapshot.Any(c =>
+                                        c.SubjectName.RawData.AsSpan().SequenceEqual(crlIssuerDn));
+
+                                    if (!crlIssuerFound)
                                     {
-                                        if (processedThumbprints.ContainsKey(crlIssuerCert.Thumbprint) ||
-                                            !nextRoundCerts.TryAdd(crlIssuerCert.Thumbprint, crlIssuerCert))
+                                        var crlIssuerCert = await TryFetchCrlIssuerCertAsync(crlIssuerDn, cert, ct).ConfigureAwait(false);
+                                        if (crlIssuerCert is not null)
                                         {
-                                            crlIssuerCert.Dispose();
-                                        }
-                                        else
-                                        {
-                                            _logger.LtvProcessingCert($"CRL issuer discovered: {crlIssuerCert.Subject}");
+                                            if (processedThumbprints.ContainsKey(crlIssuerCert.Thumbprint) ||
+                                                !nextRoundCerts.TryAdd(crlIssuerCert.Thumbprint, crlIssuerCert))
+                                            {
+                                                crlIssuerCert.Dispose();
+                                            }
+                                            else
+                                            {
+                                                _logger.LtvProcessingCert($"CRL issuer discovered: {crlIssuerCert.Subject}");
+                                            }
                                         }
                                     }
                                 }
                             }
+                            else if (crl is not null)
+                            {
+                                _logger.CrlDownloadFailed("Downloaded CRL does not belong to the certificate issuer.");
+                            }
                         }
-                        else if (crl is not null)
+                        catch (HttpRequestException ex)
                         {
-                            _logger.CrlDownloadFailed("Downloaded CRL does not belong to the certificate issuer.");
+                            _logger.CrlDownloadFailed(ex.Message);
                         }
                     }
-                    catch (HttpRequestException ex)
-                    {
-                        _logger.CrlDownloadFailed(ex.Message);
-                    }
+
+                    return found;
                 }
             });
 

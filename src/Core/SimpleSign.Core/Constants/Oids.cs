@@ -133,6 +133,30 @@ public static class Oids
     /// <summary>id-aa-ets-sigPolicyId (RFC 5126 §5.8.1) — signature policy identifier.</summary>
     public const string SignaturePolicyIdentifier = "1.2.840.113549.1.9.16.2.15";
 
+    /// <summary>id-aa-contentHint (RFC 2634 §2.9, ETSI EN 319 122-1 §5.2.4.1) — describes the signed content.</summary>
+    public const string ContentHints = "1.2.840.113549.1.9.16.2.4";
+
+    /// <summary>id-aa-ets-mimeType (ETSI EN 319 122-1 §5.2.4.2) — the MIME type of the signed data.</summary>
+    public const string MimeType = "0.4.0.1733.2.1";
+
+    /// <summary>id-aa-ets-signerLocation (ETSI EN 319 122-1 §5.2.5) — where the signer was when signing.</summary>
+    public const string SignerLocation = "1.2.840.113549.1.9.16.2.17";
+
+    /// <summary>id-aa-ets-signerAttrV2 (ETSI EN 319 122-1 §5.2.6.1) — claimed and certified attributes of the signer.</summary>
+    public const string SignerAttributesV2 = "0.4.0.19122.1.1";
+
+    /// <summary>id-aa-ets-contentTimestamp (ETSI EN 319 122-1 §5.2.8) — a timestamp over the content, taken before signing.</summary>
+    public const string ContentTimestamp = "1.2.840.113549.1.9.16.2.20";
+
+    /// <summary>id-aa-ets-sigPolicyStore (ETSI EN 319 122-1 §5.2.10) — the policy document, or where it is stored (unsigned).</summary>
+    public const string SignaturePolicyStore = "0.4.0.19122.1.3";
+
+    /// <summary>id-ets-signedSAML (ETSI EN 319 122-1 §5.2.6.3) — a signed SAML assertion inside signer-attributes-v2.</summary>
+    public const string SignedSamlAssertion = "0.4.0.19122.3.0";
+
+    /// <summary>id-at-role (ITU-T X.509) — the role attribute, used for a role the signer claims.</summary>
+    public const string RoleAttribute = "2.5.4.72";
+
     /// <summary>id-cti-ets-proofOfOrigin — signer is the author.</summary>
     public const string ProofOfOrigin = "1.2.840.113549.1.9.16.6.1";
 

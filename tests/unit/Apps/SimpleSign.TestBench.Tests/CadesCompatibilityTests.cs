@@ -46,6 +46,82 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
     }
 
     [Fact]
+    public void Evaluate_SevenPostalAddressLines_IsAnError()
+    {
+        var report = Evaluate(Options() with { SignerPostalAddress = ["1", "2", "3", "4", "5", "6", "7"] });
+
+        report.CanSign.ShouldBeFalse();
+        report.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error && i.Step == CadesCompatibility.StepDetails);
+    }
+
+    [Fact]
+    public void Evaluate_CounterSign_SwitchesOffTheAttributesThatDescribeTheContent()
+    {
+        var report = Evaluate(Options() with
+        {
+            Operation = CadesOperation.CounterSign,
+            ExistingSignatureId = Sample("enveloped").FileId,
+            DataId = null,
+            MimeType = "text/plain",
+            ContentDescription = "x",
+            SignerLocality = "Recife",
+        });
+
+        report.CanSign.ShouldBeTrue();
+        report.Options["mimeType"].Disabled.ShouldNotBeNull();
+        report.Options["contentHints"].Disabled.ShouldNotBeNull();
+        report.Options["signerLocation"].Disabled.ShouldBeNull();
+        report.Effective.MimeType.ShouldBeNull();
+        report.Effective.ContentDescription.ShouldBeNull();
+        report.Effective.SignerLocality.ShouldBe("Recife");
+    }
+
+    [Theory]
+    [InlineData(BaselineLevel.BB, false)]
+    [InlineData(BaselineLevel.BT, false)]
+    [InlineData(BaselineLevel.BLT, true)]
+    [InlineData(BaselineLevel.BLTA, true)]
+    public void Evaluate_RevocationPreference_IsShownOnlyWhenValidationDataIsCollected(BaselineLevel level, bool visible) =>
+        Evaluate(Options() with { Level = level }).Options["revocationPreference"].Visible.ShouldBe(visible);
+
+    [Fact]
+    public void Evaluate_PolicyDocumentWithoutSpecification_IsAnError()
+    {
+        var report = Evaluate(Options() with { Kind = CadesKind.CustomPolicy, PolicyDocumentId = Sample("text").FileId, PolicySpecification = " " });
+
+        report.CanSign.ShouldBeFalse();
+        report.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error && i.Step == CadesCompatibility.StepType);
+    }
+
+    [Fact]
+    public void Evaluate_ContentTimestampAtBasicLevel_ShowsTheTsa()
+    {
+        Evaluate(Options()).Options["timestamp"].Visible.ShouldBeFalse();
+
+        var report = Evaluate(Options() with { ContentTimestamp = true });
+
+        report.CanSign.ShouldBeTrue();
+        report.Options["timestamp"].Visible.ShouldBeTrue();
+        report.Effective.ContentTimestamp.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_CounterSignWithContentTimestamp_SwitchesItOff()
+    {
+        var report = Evaluate(Options() with
+        {
+            Operation = CadesOperation.CounterSign,
+            ExistingSignatureId = Sample("enveloped").FileId,
+            DataId = null,
+            ContentTimestamp = true,
+        });
+
+        report.CanSign.ShouldBeTrue();
+        report.Options["contentTimestamp"].Disabled.ShouldNotBeNull();
+        report.Effective.ContentTimestamp.ShouldBeFalse();
+    }
+
+    [Fact]
     public void Evaluate_CounterSignBadIndex_IsAnError() =>
         Evaluate(Options() with { Operation = CadesOperation.CounterSign, ExistingSignatureId = Sample("enveloped").FileId, SignerIndex = 3 }).CanSign.ShouldBeFalse();
 

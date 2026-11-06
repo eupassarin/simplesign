@@ -180,6 +180,7 @@ public static class Compatibility
         bool needsArchive = effectiveLevel == BaselineLevel.BLTA;
         Set("timestamp", needsTsa ? OptionState.Shown : OptionState.Hidden);
         Set("archiveTimestamp", needsArchive ? OptionState.Shown : OptionState.Hidden);
+        Set("revocationPreference", effectiveLevel >= BaselineLevel.BLT ? OptionState.Shown : OptionState.Hidden);
         Set("returnLowerLevel", !needsTsa || icp ? OptionState.Hidden
             : o.Mode != RunMode.Sign ? OptionState.Off(L.T("Only SignWithDetailsAsync (Sign now) reports a lower achieved level; deferred and batch always throw."))
             : OptionState.Shown);

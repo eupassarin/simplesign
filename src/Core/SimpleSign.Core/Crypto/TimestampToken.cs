@@ -202,11 +202,15 @@ public static class TimestampToken
         return false;
     }
 
+    // SHA-3 only where the platform has it: without it the imprint cannot be recomputed and is reported as not matching.
     private static HashAlgorithmName? HashAlgorithm(string oid) => oid switch
     {
         Oids.Sha256 => HashAlgorithmName.SHA256,
         Oids.Sha384 => HashAlgorithmName.SHA384,
         Oids.Sha512 => HashAlgorithmName.SHA512,
+        Oids.Sha3_256 when SHA3_256.IsSupported => HashAlgorithmName.SHA3_256,
+        Oids.Sha3_384 when SHA3_384.IsSupported => HashAlgorithmName.SHA3_384,
+        Oids.Sha3_512 when SHA3_512.IsSupported => HashAlgorithmName.SHA3_512,
         Oids.Sha1 => HashAlgorithmName.SHA1,
         _ => null,
     };
@@ -216,6 +220,9 @@ public static class TimestampToken
         "SHA256" => Oids.Sha256,
         "SHA384" => Oids.Sha384,
         "SHA512" => Oids.Sha512,
+        "SHA3-256" => Oids.Sha3_256,
+        "SHA3-384" => Oids.Sha3_384,
+        "SHA3-512" => Oids.Sha3_512,
         "SHA1" => Oids.Sha1,
         _ => null,
     };

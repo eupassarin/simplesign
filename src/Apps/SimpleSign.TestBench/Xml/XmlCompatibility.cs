@@ -65,7 +65,7 @@ public static class XmlCompatibility
         }
         else
         {
-            level = EvaluateXades(o, credential, state, Error, sandbox, out effective);
+            level = EvaluateXades(o, data, credential, state, Error, sandbox, out effective);
         }
 
         // ── 2. Signer ──────────────────────────────────────────────────
@@ -88,20 +88,45 @@ public static class XmlCompatibility
         return new XmlOptionsReport(state, issues, effective, level);
     }
 
-    private static string EvaluateXades(XmlOptions o, CredentialFacts? credential, Dictionary<string, OptionState> state,
+    private static string EvaluateXades(XmlOptions o, XmlFacts? data, CredentialFacts? credential, Dictionary<string, OptionState> state,
         Action<string, string> error, bool sandbox, out XmlOptions effective)
     {
         void Set(string key, OptionState value) => state[key] = value;
         Set("profile", OptionState.Hidden);
         Set("elementId", OptionState.Hidden);
         Set("signAll", OptionState.Hidden);
-        foreach (var form in Enum.GetValues<XadesFormChoice>())
+
+        // A countersignature signs the ds:SignatureValue of a signature the document already has.
+        bool counterSign = o.CounterSign;
+        Set("counterSign", OptionState.Shown);
+        Set("counterSignatureId", counterSign ? OptionState.Shown : OptionState.Hidden);
+        string insideSignature = L.T("A countersignature lives inside the signature it countersigns and signs no data of its own.");
+        if (counterSign && data is { Error: null, Signatures: 0 })
         {
-            Set($"form.{form}", OptionState.Shown);
+            error(StepData, L.T("The document has no signature to countersign."));
         }
 
-        Set("dataUri", o.Form == XadesFormChoice.Detached ? OptionState.Shown : OptionState.Hidden);
-        if (o.Form == XadesFormChoice.Detached && !Uri.TryCreate(o.DataUri, UriKind.RelativeOrAbsolute, out _) || o.Form == XadesFormChoice.Detached && string.IsNullOrWhiteSpace(o.DataUri))
+        if (counterSign && o.Kind == XadesKind.IcpBrasil)
+        {
+            error(StepType, L.T("The TestBench builds countersignatures with the baseline levels or a custom policy, not with the ICP-Brasil policies."));
+        }
+
+        if (counterSign && (o.Level > BaselineLevel.BT || o.ExtendedForm != XadesExtendedChoice.None))
+        {
+            error(StepType, L.T("A countersignature is built at B-B or B-T, without an extended form."));
+        }
+
+        foreach (var form in Enum.GetValues<XadesFormChoice>())
+        {
+            Set($"form.{form}", counterSign ? OptionState.Off(insideSignature) : OptionState.Shown);
+        }
+
+        Set("dataUri", o.Form == XadesFormChoice.Detached && !counterSign ? OptionState.Shown : OptionState.Hidden);
+        if (counterSign)
+        {
+            // Nothing to check: the form does not apply.
+        }
+        else if (o.Form == XadesFormChoice.Detached && !Uri.TryCreate(o.DataUri, UriKind.RelativeOrAbsolute, out _) || o.Form == XadesFormChoice.Detached && string.IsNullOrWhiteSpace(o.DataUri))
         {
             error(StepData, L.T("A detached signature needs the data URI its Reference points to (e.g. document.xml)."));
         }
@@ -123,6 +148,12 @@ public static class XmlCompatibility
         if (o.Kind == XadesKind.CustomPolicy && !string.IsNullOrWhiteSpace(o.PolicyUri) && !Uri.TryCreate(o.PolicyUri, UriKind.Absolute, out _))
         {
             error(StepType, L.T("The policy URI must be an absolute URL."));
+        }
+
+        if (o.Kind == XadesKind.CustomPolicy && !string.IsNullOrEmpty(o.PolicyDocumentId)
+            && (string.IsNullOrWhiteSpace(o.PolicySpecification) || !o.PolicySpecification.All(char.IsAscii)))
+        {
+            error(StepType, L.T("The policy document specification must be an OID or a URI (ASCII only)."));
         }
 
         foreach (var l in Enum.GetValues<BaselineLevel>())
@@ -149,7 +180,10 @@ public static class XmlCompatibility
             error(StepType, reason);
         }
 
-        bool needsTsa = icp ? o.IcpPolicy != XadesIcpPolicy.AdRb : o.Level != BaselineLevel.BB;
+        // The data objects timestamp is taken before signing, at any level.
+        Set("dataObjectsTimestamp", counterSign ? OptionState.Off(insideSignature) : OptionState.Shown);
+        bool dataObjectsTimestamp = o.DataObjectsTimestamp && !counterSign;
+        bool needsTsa = dataObjectsTimestamp || (icp ? o.IcpPolicy != XadesIcpPolicy.AdRb : o.Level != BaselineLevel.BB);
         Set("timestamp", needsTsa ? OptionState.Shown : OptionState.Hidden);
         SharedRules.TsaProviders(sandbox, Set);
         if (needsTsa)
@@ -162,7 +196,20 @@ public static class XmlCompatibility
 
         Set("signingCertificate", icp ? new OptionState(true, L.T("The ICP-Brasil XML policies mandate the XAdES 1.3.2 SigningCertificate (V1).")) : OptionState.Shown);
         Set("roles", OptionState.Shown);
-        Set("mimeType", OptionState.Shown);
+        bool legacyForm = icp || o.SigningCertificateV1;
+        Set("certifiedRoles", legacyForm
+            ? OptionState.Off(L.T("Attribute certificates and signed assertions go in SignerRoleV2, which the XAdES 1.3.2 form does not have."))
+            : OptionState.Shown);
+        Set("additionalObjects", counterSign ? OptionState.Off(insideSignature) : OptionState.Shown);
+        Set("mimeType", counterSign ? OptionState.Off(insideSignature) : OptionState.Shown);
+        Set("productionPlace", OptionState.Shown);
+        if (legacyForm && !string.IsNullOrWhiteSpace(o.PlaceStreet))
+        {
+            error(StepDetails, L.T("The street address goes in SignatureProductionPlaceV2, which the XAdES 1.3.2 form does not have: leave it empty."));
+        }
+
+        Set("canonicalization", OptionState.Shown);
+        Set("revocationPreference", !icp && o.Level >= BaselineLevel.BLT ? OptionState.Shown : OptionState.Hidden);
         Set("commitment", OptionState.Shown);
         if (o.Commitment is { } commitment && !Enum.TryParse<Core.Signing.CommitmentType>(commitment, out _))
         {
@@ -175,6 +222,19 @@ public static class XmlCompatibility
             ExtendedForm = extended,
             SigningCertificateV1 = icp || o.SigningCertificateV1,
             SignerRoles = [.. o.SignerRoles.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim())],
+            Form = counterSign ? XadesFormChoice.Enveloped : o.Form,
+            AttributeCertificateId = legacyForm ? null : SigningPlan.Blank(o.AttributeCertificateId),
+            SignedAssertionId = legacyForm ? null : SigningPlan.Blank(o.SignedAssertionId),
+            EmbeddedObjectId = counterSign ? null : SigningPlan.Blank(o.EmbeddedObjectId),
+            ExternalObjectId = counterSign ? null : SigningPlan.Blank(o.ExternalObjectId),
+            MimeType = counterSign ? null : o.MimeType,
+            DataObjectsTimestamp = dataObjectsTimestamp,
+            CounterSignatureId = counterSign ? SigningPlan.Blank(o.CounterSignatureId)?.Trim() : null,
+            PlaceCity = SigningPlan.Blank(o.PlaceCity),
+            PlaceStreet = SigningPlan.Blank(o.PlaceStreet),
+            PlaceState = SigningPlan.Blank(o.PlaceState),
+            PlacePostalCode = SigningPlan.Blank(o.PlacePostalCode),
+            PlaceCountry = SigningPlan.Blank(o.PlaceCountry),
         };
         return icp
             ? o.IcpPolicy switch
@@ -200,7 +260,7 @@ public static class XmlCompatibility
     {
         void Set(string key, OptionState value) => state[key] = value;
         string fixedByLayout = L.T("Fixed by the fiscal layout: enveloped XML-DSig, C14N, only the signer certificate in KeyInfo, no XAdES properties.");
-        foreach (string key in new[] { "form", "dataUri", "kind", "icpPolicy", "level", "customPolicy", "extendedForm", "timestamp", "padding", "signingCertificate", "roles", "mimeType", "commitment" })
+        foreach (string key in new[] { "form", "dataUri", "kind", "icpPolicy", "level", "customPolicy", "extendedForm", "timestamp", "padding", "signingCertificate", "roles", "mimeType", "productionPlace", "revocationPreference", "canonicalization", "counterSign", "counterSignatureId", "dataObjectsTimestamp", "certifiedRoles", "additionalObjects", "commitment" })
         {
             Set(key, new OptionState(false, Note: fixedByLayout));
         }

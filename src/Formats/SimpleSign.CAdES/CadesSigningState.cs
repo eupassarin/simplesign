@@ -60,6 +60,30 @@ internal sealed record CadesSigningOptions(
     /// <summary>The RFC 5126 extended form to add after the signature timestamp.</summary>
     public CadesExtendedForm ExtendedForm { get; init; }
 
+    /// <summary>The signer-location attribute to add, or null.</summary>
+    public CadesSignerLocation? SignerLocation { get; init; }
+
+    /// <summary>The content-hints attribute to add, or null.</summary>
+    public CadesContentHints? ContentHints { get; init; }
+
+    /// <summary>The mime-type attribute to add, or null.</summary>
+    public string? MimeType { get; init; }
+
+    /// <summary>The roles the signer claims (signer-attributes-v2), or null.</summary>
+    public IReadOnlyList<string>? SignerRoles { get; init; }
+
+    /// <summary>The X.509 attribute certificates of the signer (signer-attributes-v2, certifiedAttributesV2), or null.</summary>
+    public IReadOnlyList<ReadOnlyMemory<byte>>? AttributeCertificates { get; init; }
+
+    /// <summary>The assertions signed by third parties (signer-attributes-v2, signedAssertions), or null.</summary>
+    public IReadOnlyList<CadesSignedAssertion>? SignedAssertions { get; init; }
+
+    /// <summary>The TSA that timestamps the content before it is signed (content-time-stamp), or null.</summary>
+    public TimestampOptions? ContentTimestamp { get; init; }
+
+    /// <summary>The signature-policy-store unsigned attribute to add, or null.</summary>
+    public SignaturePolicyStore? PolicyStore { get; init; }
+
     /// <summary>Whether this signs a countersignature (no content-type attribute, RFC 5652 §11.4).</summary>
     public bool IsCounterSignature => CounterSignTarget is not null;
 }

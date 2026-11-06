@@ -22,6 +22,16 @@ public sealed class XadesValidationResult
     /// <summary>The SignatureTimeStamp's cryptographic integrity and message imprint are valid, independent of TSA trust.</summary>
     public bool? HasValidSignatureTimeStamp { get; init; }
 
+    /// <summary>
+    /// The AllDataObjectsTimeStamp signed property (ETSI EN 319 132-1 §5.2.8.1) is an intact token
+    /// whose message imprint covers the signed data objects; null when there is none. TSA trust is
+    /// not evaluated.
+    /// </summary>
+    public bool? HasValidDataObjectsTimeStamp { get; init; }
+
+    /// <summary>The time of the data objects timestamp, when it is valid: the signed data existed at this time.</summary>
+    public DateTimeOffset? DataObjectsTimeStampTime { get; init; }
+
     /// <summary>Whether the TSA chain is trusted; null when the token is absent, invalid, or no trust policy was evaluated.</summary>
     public bool? IsTsaTrusted { get; init; }
 
@@ -56,6 +66,14 @@ public sealed class XadesValidationResult
     /// </summary>
     public SignaturePolicyReference? SignaturePolicy { get; init; }
 
+    /// <summary>
+    /// The policy document the signature carries, or the URI of the local store that holds it
+    /// (SignaturePolicyStore unsigned property); null when there is none. The store is not signed:
+    /// check it against <see cref="SignaturePolicy"/> with
+    /// <see cref="SimpleSign.Core.Crypto.SignaturePolicyStore.MatchesHash(SignaturePolicyReference)"/>.
+    /// </summary>
+    public SignaturePolicyStore? SignaturePolicyStore { get; init; }
+
     /// <summary>The baseline level inferred from observed unsigned-property elements, even when those properties fail validation.</summary>
     /// <remarks>
     /// Structural detection is not a validated or achieved level. Consult
@@ -64,6 +82,29 @@ public sealed class XadesValidationResult
     /// Certificate-chain and TSA trust are separate validation outcomes.
     /// </remarks>
     public AdesBaselineLevel DetectedLevel { get; init; }
+
+    /// <summary>The roles the signer claims (ClaimedRoles of SignerRoleV2, or of the SignerRole it obsoletes); empty when there are none.</summary>
+    public IReadOnlyList<string> ClaimedRoles { get; init; } = [];
+
+    /// <summary>
+    /// The X.509 attribute certificates in SignerRoleV2 (CertifiedRolesV2), DER-encoded; empty when
+    /// there are none. They are read, not verified.
+    /// </summary>
+    public IReadOnlyList<ReadOnlyMemory<byte>> AttributeCertificates { get; init; } = [];
+
+    /// <summary>
+    /// The assertions third parties signed about the signer (SignedAssertions of SignerRoleV2), each
+    /// as the XML of its content; empty when there are none. They are read, not verified.
+    /// </summary>
+    public IReadOnlyList<string> SignedAssertions { get; init; } = [];
+
+    /// <summary>
+    /// The countersignatures of this signature (CounterSignature unsigned properties,
+    /// ETSI EN 319 132-1 §5.2.7.2), each validated as a signature over this one's ds:SignatureValue,
+    /// with its own countersignatures under it. They are not part of <see cref="IsValid"/>:
+    /// check each one.
+    /// </summary>
+    public IReadOnlyList<XadesValidationResult> CounterSignatures { get; init; } = [];
 
     /// <summary>Errors found during validation.</summary>
     public IReadOnlyList<string> Errors { get; init; } = [];

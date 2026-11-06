@@ -49,7 +49,24 @@ internal sealed class CadesMatrix(CadesRunner runner, CadesSampleStore samples, 
             new("extended", [.. Enum.GetValues<CadesExtendedChoice>().Select(e => V(e.ToString(), (o, _) => o with { ExtendedForm = e }))]),
             new("hash", [.. HashValues().Select(h => V(h.ToString(), (o, _) => o with { Hash = h }))]),
             new("padding", [V("Pkcs1", (o, _) => o), V("Pss", (o, _) => o with { Padding = RsaPadding.Pss })]),
-            new("details", [V("none", (o, _) => o), V("commitment+time+operation", (o, _) => o with { Commitment = "ProofOfOrigin", SigningTime = DateTimeOffset.UtcNow.AddMinutes(-5), OperationId = "matrix" })]),
+            new("details",
+            [
+                V("none", (o, _) => o),
+                V("commitment+time+operation", (o, _) => o with { Commitment = "ProofOfOrigin", SigningTime = DateTimeOffset.UtcNow.AddMinutes(-5), OperationId = "matrix" }),
+                V("location+roles+content+crl-first", (o, _) => o with
+                {
+                    SignerCountry = "BR",
+                    SignerLocality = "Recife",
+                    SignerPostalAddress = ["Rua da Aurora, 1", "50050-000"],
+                    SignerRoles = ["Diretor"],
+                    MimeType = "text/plain",
+                    ContentDescription = "Matrix content",
+                    RevocationPreference = Core.Signing.RevocationPreference.CrlFirst,
+                }),
+
+                // Any stored file serves as the policy document: its hash goes in the policy identifier.
+                V("content-timestamp+policy-store", (o, f) => o with { ContentTimestamp = true, PolicyDocumentId = f("json") }),
+            ]),
         ];
     }
 
@@ -236,7 +253,31 @@ internal sealed class CadesMatrix(CadesRunner runner, CadesSampleStore samples, 
         }
 
         checks.Add(digest);
+        var expectations = new (bool Asked, bool Present, string Name)[]
+        {
+            (o.SignerCountry is not null || o.SignerLocality is not null || o.SignerPostalAddress.Count > 0, Signed("signer-location"), "signer-location"),
+            (o.SignerRoles.Count > 0, Signed("signer-attributes-v2"), "signer-attributes-v2"),
+            (o.MimeType is not null, Signed("mime-type"), "mime-type"),
+            (o.ContentDescription is not null, Signed("content-hints"), "content-hints"),
+            (o.ContentTimestamp, Signed("content-time-stamp"), "content-time-stamp"),
+            (o.Kind == CadesKind.CustomPolicy && !string.IsNullOrEmpty(o.PolicyDocumentId), mine.UnsignedAttributes.Any(a => a.Name == "signature-policy-store"), "signature-policy-store"),
+        };
+        foreach (var (asked, present, name) in expectations)
+        {
+            if (asked && !present)
+            {
+                return $"{name} missing";
+            }
+
+            if (asked)
+            {
+                checks.Add(name);
+            }
+        }
+
         return null;
+
+        bool Signed(string name) => mine.SignedAttributes.Any(a => a.Name == name);
     }
 
     private static IEnumerable<HashChoice> HashValues() =>

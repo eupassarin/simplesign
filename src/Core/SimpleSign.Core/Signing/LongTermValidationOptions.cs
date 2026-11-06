@@ -16,6 +16,12 @@ public sealed record LongTermValidationOptions
     public IHttpClientProvider? HttpClientProvider { get; }
 
     /// <summary>
+    /// The revocation source tried first for each certificate; the other one is the fallback.
+    /// Default: <see cref="RevocationPreference.OcspFirst"/>.
+    /// </summary>
+    public RevocationPreference RevocationPreference { get; init; }
+
+    /// <summary>
     /// How far an OCSP response fetched during collection may disagree with this machine's clock:
     /// its <c>thisUpdate</c> may be up to this much in the future and its <c>nextUpdate</c> up to this
     /// much in the past. Responders stamp <c>thisUpdate</c> with their own clock, so without a
