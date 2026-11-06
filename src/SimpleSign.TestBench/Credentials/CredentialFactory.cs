@@ -168,7 +168,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
     {
         var options = new PscClientOptions
         {
-            BaseUri = isSandbox ? SandboxPsc.BaseUri : new Uri(Required(request.BaseUrl, "PSC base URL")),
+            BaseUri = isSandbox ? SandboxPsc.BaseUri : HttpsUrl(request.BaseUrl, "PSC base URL"),
             ClientId = isSandbox ? SandboxPsc.ClientId : Required(request.ClientId, "client_id"),
             ClientSecret = isSandbox ? SandboxPsc.ClientSecret : request.ClientSecret,
             RedirectUri = request.RedirectUri is { Length: > 0 } redirect ? new Uri(redirect) : new Uri("http://127.0.0.1:43821/callback"),
@@ -253,7 +253,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
         bool isSandbox = mode == EnvironmentMode.Sandbox;
         var options = new CscClientOptions
         {
-            BaseUri = isSandbox ? SandboxCsc.BaseUri : new Uri(Required(baseUrl, "CSC base URL")),
+            BaseUri = isSandbox ? SandboxCsc.BaseUri : HttpsUrl(baseUrl, "CSC base URL"),
             AccessToken = auth == CscServiceAuth.Token ? (isSandbox ? SandboxCsc.ServiceToken : Required(accessToken, "access token")) : null,
             ClientId = isSandbox ? SandboxCsc.ClientId : clientId,
             ClientSecret = isSandbox ? SandboxCsc.ClientSecret : clientSecret,
@@ -283,6 +283,12 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
 
     private static X509KeyStorageFlags KeyStorage =>
         OperatingSystem.IsMacOS() ? X509KeyStorageFlags.DefaultKeySet : X509KeyStorageFlags.EphemeralKeySet;
+
+    /// <summary>A provider URL typed by the user: absolute https only.</summary>
+    private static Uri HttpsUrl(string? value, string name) =>
+        Uri.TryCreate(Required(value, name), UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+            ? uri
+            : throw new ArgumentException($"{name} must be an absolute https:// URL.");
 
     private static string Required(string? value, string name) =>
         string.IsNullOrWhiteSpace(value) ? throw new ArgumentException($"{name} is required.") : value.Trim();

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
+  schemes (e.g. `file:`), which the OS shell would hand to other programs, throw `ArgumentException`.
+
 ### Added (SimpleSign TestBench)
 
 - New `src/SimpleSign.TestBench`: a local web app (ASP.NET Core minimal API + React, Vite,
