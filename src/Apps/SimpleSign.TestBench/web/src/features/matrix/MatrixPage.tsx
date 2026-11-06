@@ -8,7 +8,7 @@ import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
 import type { MatrixCase, MatrixCaseResult, MatrixRunResult } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { Pill } from "../pdf-signing/ui"
+import { Pill } from "../shared/ui"
 
 export function MatrixPage() {
   const [cases, setCases] = useState<MatrixCase[] | null>(null)

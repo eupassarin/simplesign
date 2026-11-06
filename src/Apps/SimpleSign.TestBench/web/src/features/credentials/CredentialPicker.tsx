@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useT, type MessageKey } from "@/i18n"
 import { api } from "@/lib/api"
 import type { CredentialFacts, CscCredentialSummary, EnvironmentInfo, EnvironmentMode, Pkcs11Driver, StoreCertificate } from "@/lib/types"
-import { ChoiceCard, Explain, Field, KeyValue, Pill, Section } from "../pdf-signing/ui"
+import { ChoiceCard, Explain, Field, KeyValue, Pill, Section } from "../shared/ui"
 
 interface PickerContext {
   environment: EnvironmentMode

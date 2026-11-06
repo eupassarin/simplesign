@@ -1,18 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { setApiLocale } from "@/lib/api"
 import { en, type Messages } from "./en"
-import { es } from "./es"
 import { ptBR } from "./pt-BR"
 
-export type Locale = "en-US" | "pt-BR" | "es"
+export type Locale = "en-US" | "pt-BR"
 
 export const locales: { id: Locale; label: string; short: string }[] = [
   { id: "en-US", label: "English (US)", short: "EN" },
   { id: "pt-BR", label: "Português (Brasil)", short: "PT" },
-  { id: "es", label: "Español", short: "ES" },
 ]
 
-const dictionaries: Record<Locale, Messages> = { "en-US": en, "pt-BR": ptBR, es }
+const dictionaries: Record<Locale, Messages> = { "en-US": en, "pt-BR": ptBR }
 
 type Join<K, P> = K extends string ? (P extends string ? `${K}.${P}` : never) : never
 type Leaves<T> = T extends string ? "" : { [K in keyof T]-?: K extends string ? (T[K] extends string ? K : Join<K, Leaves<T[K]>>) : never }[keyof T]
@@ -20,14 +18,13 @@ type Leaves<T> = T extends string ? "" : { [K in keyof T]-?: K extends string ? 
 /** A dotted key of the dictionary, e.g. "steps.document.title". */
 export type MessageKey = Leaves<Messages>
 
-/** pt* → pt-BR, es* → es, anything else → en-US. */
+/** pt* → pt-BR, anything else → en-US. */
 export function detectLocale(): Locale {
   const saved = localStorage.getItem("locale") as Locale | null
   if (saved && saved in dictionaries) return saved
   for (const language of navigator.languages ?? [navigator.language]) {
     const lower = language.toLowerCase()
     if (lower.startsWith("pt")) return "pt-BR"
-    if (lower.startsWith("es")) return "es"
     if (lower.startsWith("en")) return "en-US"
   }
   return "en-US"

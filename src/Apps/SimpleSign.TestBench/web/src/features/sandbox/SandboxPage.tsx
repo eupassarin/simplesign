@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
-import type { SandboxRequest } from "@/lib/types"
-import { KeyValue, Pill, Section } from "../pdf-signing/ui"
-import { useSigning } from "../pdf-signing/state"
+import type { EnvironmentInfo, SandboxRequest } from "@/lib/types"
+import { KeyValue, Pill, Section } from "../shared/ui"
 
 export function SandboxPage() {
-  const { env } = useSigning()
+  const [env, setEnv] = useState<EnvironmentInfo | null>(null)
+  useEffect(() => {
+    api.env().then(setEnv).catch(() => setEnv(null))
+  }, [])
   const [log, setLog] = useState<SandboxRequest[]>([])
   const { t, time } = useI18n()
   const load = () => api.sandboxLog().then(setLog)

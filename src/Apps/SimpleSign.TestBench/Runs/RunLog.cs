@@ -59,6 +59,7 @@ internal sealed class RunLogger(Action<RunLogEntry> onEntry) : ILogger
     private readonly System.Diagnostics.Stopwatch _watch = System.Diagnostics.Stopwatch.StartNew();
     private readonly Lock _gate = new();
     private readonly List<RunLogEntry> _entries = [];
+    private string? _stage;
 
     public IReadOnlyList<RunLogEntry> Entries
     {
@@ -84,7 +85,14 @@ internal sealed class RunLogger(Action<RunLogEntry> onEntry) : ILogger
             message += $" ({exception.GetType().Name}: {exception.Message})";
         }
 
-        Add(logLevel.ToString(), eventId.Id, "library", RunStages.Of(eventId.Id), message);
+        // Helpers that every stage uses (the PDF reader, the CMS parser) belong to the stage that called them.
+        string stage = RunStages.IsShared(eventId.Id) && _stage is not null ? _stage : RunStages.Of(eventId.Id);
+        if (!RunStages.IsShared(eventId.Id))
+        {
+            _stage = stage;
+        }
+
+        Add(logLevel.ToString(), eventId.Id, "library", stage, message);
     }
 
     /// <summary>Adds a network request (TSA, CRL, OCSP, AIA, PSC, CSC) to the timeline.</summary>
@@ -128,15 +136,19 @@ public static class RunStages
     public static IReadOnlyList<string> All { get; } =
         [Prepare, Digest, SignedAttributes, Signature, Timestamp, ValidationData, Archive, Finish, Validation, CrossValidation, Network, Other];
 
+    /// <summary>Whether the event comes from a helper used by several stages: the PDF reader, the CMS parser, certificate loading.</summary>
+    public static bool IsShared(int eventId) =>
+        eventId is (>= 3010 and <= 3027) or (>= 2810 and <= 2817) or 3310 or 3311 or 3410;
+
     /// <summary>The stage of a library EventId (see the Log classes of each library project).</summary>
     public static string Of(int eventId) => eventId switch
     {
         // PAdES pipeline, PDF reader and writer; XAdES and CAdES start and algorithm.
-        1000 or (>= 1002 and <= 1004) or 1030 or (>= 3010 and <= 3027) or 5000 or 5001 or 5002
+        1000 or (>= 1002 and <= 1004) or 1030 or (>= 3010 and <= 3027) or (>= 5000 and <= 5004)
             or 6000 or 6001 or 7000 or 7002 or 7100 or 7102 => Prepare,
-        4000 or 4001 or 5003 or 7004 => Digest,
+        4000 or 4001 or 7004 => Digest,
         4002 or 7003 or 7103 => SignedAttributes,
-        (>= 4003 and <= 4006) or 5004 or 5005 or 6002 or (>= 6010 and <= 6012) or (>= 7005 and <= 7008)
+        (>= 4003 and <= 4006) or 5005 or 6002 or (>= 6010 and <= 6012) or (>= 7005 and <= 7008)
             or 7104 or 7105 or 7130 or 7131 or (>= 7200 and <= 7399) => Signature,
         1010 or 1011 or (>= 2710 and <= 2719) or (>= 7010 and <= 7012) or (>= 7110 and <= 7112) => Timestamp,
         1020 or 1023 or 1024 or (>= 2400 and <= 2699) or (>= 2910 and <= 2913) or 3410 or 3510 or 3600

@@ -3,8 +3,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { useI18n } from "@/i18n"
 import type { CadesSignerReport, CadesValidationView, CmsFacts, CmsSignerView } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { Indication } from "../pdf-signing/steps/ResultStep"
-import { KeyValue, Pill } from "../pdf-signing/ui"
+import { Indication } from "../shared/results"
+import { KeyValue, Pill } from "../shared/ui"
 
 /** The verdict of each signer, with countersignatures nested under their signer. */
 export function SignerTree({ view }: { view: CadesValidationView }) {
