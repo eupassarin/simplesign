@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Toaster } from "@/components/ui/sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { RealEnvironment } from "@/features/environment/RealEnvironment"
 import { SandboxPage } from "@/features/sandbox/SandboxPage"
 import { CatalogProvider } from "@/features/shared/catalog"
 import { CoveragePage } from "@/features/standards/CoveragePage"
@@ -86,8 +87,11 @@ function Shell({ environment, onEnvironment }: { environment: EnvironmentMode; o
               </Tooltip>
             ))}
           </div>
-          <Panel icon={<FlaskConical />} label={t("app.environmentPanel")} hint={t("app.environmentHint")}><SandboxPage /></Panel>
-          {sandbox?.faultsActive && <span className="border-warning/60 bg-warning/15 flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium"><TriangleAlert className="size-3.5" /> {t("lab.active")}</span>}
+          <Panel icon={environment === "Sandbox" ? <FlaskConical /> : <Globe />} label={t("app.environmentPanel")}
+            hint={t(environment === "Sandbox" ? "app.environmentHint" : "app.environmentRealHint")}>
+            {environment === "Sandbox" ? <SandboxPage /> : <RealEnvironment />}
+          </Panel>
+          {environment === "Sandbox" && sandbox?.faultsActive && <span className="border-warning/60 bg-warning/15 flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium"><TriangleAlert className="size-3.5" /> {t("lab.active")}</span>}
           <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
             <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 border-none shadow-none" aria-label={t("app.language")}>
               <Globe className="size-4" />

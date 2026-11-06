@@ -43,7 +43,7 @@ export function CredentialPicker({ environment, env, credential, onCredential }:
     <Picker.Provider value={{ environment, env, credential }}>
       <div className="space-y-8">
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 p-1">
+          <TabsList className="grid h-auto! w-full grid-cols-2 gap-1 p-1 sm:grid-cols-3">
             {environment === "Sandbox" && <Tab value="sandbox" icon={<ShieldCheck />} label="signer.tabs.sandbox" info="signer.SandboxA1" />}
             <Tab value="pfx" icon={<FileKey2 />} label="signer.tabs.pfx" info="signer.Pfx" />
             <Tab value="store" icon={<MonitorSmartphone />} label="signer.tabs.store" info="signer.OsStore" />
@@ -69,7 +69,7 @@ export function CredentialPicker({ environment, env, credential, onCredential }:
 function Tab({ value, icon, label, info }: { value: string; icon: ReactNode; label: MessageKey; info: string }) {
   const t = useT()
   return (
-    <TabsTrigger value={value} className="h-8 flex-none gap-1.5 px-3 [&_svg]:size-3.5">
+    <TabsTrigger value={value} className="h-8 justify-start gap-1.5 px-3 [&_svg]:size-3.5">
       {icon}
       {t(label)}
       <Explain id={info} />
@@ -248,6 +248,24 @@ function TokenList({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
   )
 }
 
+/** What a cloud certificate is and how a signature happens with it, step by step, with its standard. */
+function CloudExplainer({ kind }: { kind: "psc" | "csc" }) {
+  const t = useT()
+  const steps = [1, 2, 3, 4].map((n) => t(`signer.cloud.${kind}.step${n}` as MessageKey))
+  return (
+    <div className="bg-muted/40 space-y-2 rounded-lg border p-3 text-sm">
+      <p className="leading-relaxed">{t(`signer.cloud.${kind}.what` as MessageKey)}</p>
+      <ol className="text-muted-foreground list-decimal space-y-0.5 pl-5 text-xs leading-relaxed">
+        {steps.map((step) => <li key={step}>{step}</li>)}
+      </ol>
+      <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <span className="rounded border px-1.5 py-px font-mono text-[10px]">{kind === "psc" ? "DOC-ICP-17.01" : "CSC API v2.0"}</span>
+        <code className="font-mono text-[11px] break-all">{kind === "psc" ? "PscClient + PscSigner.CreateAsync → WithExternalSigner" : "CscClient + CscSigner.CreateAsync → WithExternalSigner"}</code>
+      </p>
+    </div>
+  )
+}
+
 function PscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
   const { environment, env } = usePicker()
   const sandbox = environment === "Sandbox"
@@ -257,11 +275,17 @@ function PscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
   const t = useT()
   return (
     <div className="grid max-w-2xl gap-4">
+      <CloudExplainer kind="psc" />
       {sandbox ? (
         <Alert>
           <Cloud />
           <AlertTitle>{t("signer.psc.simulated")}</AlertTitle>
-          <AlertDescription>{t("signer.psc.simulatedHint", { url: env?.pscUrl ?? "", cpf: env?.pscCpf ?? "", otp: env?.pscOtp ?? "" })}</AlertDescription>
+          <AlertDescription className="space-y-2">
+            <span className="block break-words">{t("signer.psc.simulatedHint", { url: env?.pscUrl ?? "", cpf: env?.pscCpf ?? "", otp: env?.pscOtp ?? "" })}</span>
+            <Button size="sm" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.psc(environment, "password", { ...form, otp: env?.pscOtp, alias: "maria-rsa2048" })))}>
+              {busy && <Loader2 className="animate-spin" />} {t("signer.cloud.useSimulated")}
+            </Button>
+          </AlertDescription>
         </Alert>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -316,11 +340,19 @@ function CscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
   const chosen = list?.find((c) => c.id === form.credentialId)
   return (
     <div className="grid max-w-3xl gap-5">
+      <CloudExplainer kind="csc" />
       {sandbox ? (
         <Alert>
           <Cloud />
           <AlertTitle>{t("signer.csc.simulated")}</AlertTitle>
-          <AlertDescription>{t("signer.csc.simulatedHint", { url: env?.cscUrl ?? "", pin: env?.cscPin ?? "", otp: env?.cscOtp ?? "" })}</AlertDescription>
+          <AlertDescription className="space-y-2">
+            <span className="block break-words">{t("signer.csc.simulatedHint", { url: env?.cscUrl ?? "", pin: env?.cscPin ?? "", otp: env?.cscOtp ?? "" })}</span>
+            <Button size="sm" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.csc(environment, {
+              ...form, serviceAuth: "ClientCredentials", credentialId: "rsa-scal2", authorizer: "Explicit", pin: env?.cscPin, otp: env?.cscOtp,
+            })))}>
+              {busy && <Loader2 className="animate-spin" />} {t("signer.cloud.useSimulated")}
+            </Button>
+          </AlertDescription>
         </Alert>
       ) : (
         <Field label={t("signer.csc.baseUrl")}><Input value={form.baseUrl} onChange={(e) => set({ baseUrl: e.target.value })} placeholder="https://<qtsp>/csc/v2/" /></Field>
@@ -405,8 +437,8 @@ export function CredentialCard({ facts }: { facts: CredentialFacts }) {
           <KeyValue label={t("signer.card.valid")}>{facts.notBefore} → {facts.notAfter}</KeyValue>
           {facts.cpf && <KeyValue label="CPF">{facts.cpf}</KeyValue>}
           {facts.cnpj && <KeyValue label="CNPJ">{facts.cnpj}</KeyValue>}
-          <KeyValue label={t("signer.card.issuer")}>{facts.issuer}</KeyValue>
-          <KeyValue label={t("signer.card.digests")}>{facts.hashes.map((h) => h.replace("Sha3_", "SHA3-").replace("Sha", "SHA-")).join(", ")}</KeyValue>
+          <KeyValue stacked label={t("signer.card.issuer")}>{facts.issuer}</KeyValue>
+          <KeyValue stacked label={t("signer.card.digests")}>{facts.hashes.map((h) => h.replace("Sha3_", "SHA3-").replace("Sha", "SHA-")).join(", ")}</KeyValue>
           <KeyValue label={t("signer.card.schemes")}>{facts.keyAlgorithm === "RSA" ? facts.paddings.map((p) => (p === "Pss" ? "RSASSA-PSS" : "PKCS#1 v1.5")).join(", ") : "ECDSA"}</KeyValue>
         </div>
         {facts.notes.length > 0 && (

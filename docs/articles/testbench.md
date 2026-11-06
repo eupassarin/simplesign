@@ -186,9 +186,17 @@ content is in [Standard coverage](coverage.md), which is generated from the sche
 when that page falls behind (`SIMPLESIGN_UPDATE_DOCS=1 dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests`
 writes it again).
 
-## Environment (the sandbox as a lab)
+## Environment
 
-The **Environment** panel shows the sandbox and lets you break it on purpose:
+The **Environment** panel follows the Sandbox | Real switch.
+
+**In Real** nothing is simulated, so it shows what really exists: the roots a validation can
+trust (the operating system's, and the ICP-Brasil and Gov.br roots bundled with the library),
+the public TSAs the library has a preset for, the PKCS#11 drivers and tokens found, the
+certificates with a key in the OS store, what a real PSC or CSC asks for, and DSS.
+
+**In Sandbox** it is a lab: it shows the sandbox and lets you break it on purpose. Failures only
+act in Sandbox; the top bar says when one is on.
 
 - **Test PKI** as a tree (root, intermediate CA, TSA, signers), with the download of each
   certificate, of `root.pem` and of the CRLs as they are now. *Sign with this* makes a signer the
@@ -205,7 +213,23 @@ The **Environment** panel shows the sandbox and lets you break it on purpose:
   | CRL server | Expired CRLs | A CA that stopped publishing |
 
   While a failure is on, the top bar says so. *Back to normal* clears failures and revocations.
-- **Services** (TSA, PSC, CSC, DSS) and the **requests** they answered, live.
+- **Services** (TSA, PSC, CSC, DSS) and the **requests** they answered, live, with a filter by
+  service: sign with a cloud certificate and see the authorization and `signHash` calls.
+
+### Cloud certificates: PSC and CSC
+
+Both keep the key at a provider; the library sends only the hash and gets the signature back.
+
+- **PSC** (DOC-ICP-17.01) is the ICP-Brasil cloud certificate (BirdID, VIDaaS, NeoID, SafeID…).
+  You authorize on the provider's page (OAuth with PKCE) or with CPF and OTP; the token's scope
+  says how many signatures it allows.
+- **CSC** (Cloud Signature Consortium API v2) is the international standard, used by European
+  providers. The service is authorized first; then each signature is authorized on the
+  credential, with PIN and OTP or OAuth. SCAL 2 binds the authorization to the exact hashes.
+
+The sandbox simulates one of each, in-process. In the signer picker, the PSC and CSC tabs explain
+the flow step by step and, in Sandbox, **Use the simulated provider** opens a credential in one
+click. The run's log then shows the provider's calls and the signer's events (73xx).
 
 ## Limitations
 

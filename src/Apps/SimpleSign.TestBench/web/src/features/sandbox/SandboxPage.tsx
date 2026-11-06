@@ -22,6 +22,7 @@ const crlFaults: CrlFault[] = ["None", "Down", "Expired"]
 export function SandboxPage() {
   const { env, sandbox, setSandbox, signWithSandbox, dssStatus, checkDss } = useWorkbench()
   const [log, setLog] = useState<SandboxRequest[]>([])
+  const [service, setService] = useState("")
   const { t, time } = useI18n()
   // The traffic is live while the panel is open.
   useEffect(() => {
@@ -39,7 +40,7 @@ export function SandboxPage() {
     <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
       <div className="space-y-8 p-6 lg:p-8">
         <header className="space-y-1">
-          <h2 className="text-2xl font-semibold tracking-tight">{t("app.environmentPanel")}</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">{t("lab.title")}</h2>
           <p className="text-muted-foreground max-w-3xl text-sm">{t("sandbox.intro")}</p>
         </header>
 
@@ -91,40 +92,50 @@ export function SandboxPage() {
           </ul>
         </Section>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Service icon={<Clock className="size-4" />} title={t("sandbox.tsa")}>
-            <KeyValue label="URL" mono>{env?.tsaUrl}</KeyValue>
-            <KeyValue label={t("sandbox.withBasic")} mono>{env?.authenticatedTsaUrl}</KeyValue>
-            <KeyValue label={t("sandbox.userPassword")} mono>{env?.tsaUser} / {env?.tsaPassword}</KeyValue>
-          </Service>
-          <Service icon={<Cloud className="size-4" />} title="PSC (DOC-ICP-17.01)">
-            <KeyValue label="URL" mono>{env?.pscUrl}</KeyValue>
-            <KeyValue label="CPF / OTP" mono>{env?.pscCpf} / {env?.pscOtp}</KeyValue>
-            <KeyValue label={t("sandbox.client")} mono>testbench</KeyValue>
-          </Service>
-          <Service icon={<Cloud className="size-4" />} title="CSC API v2">
-            <KeyValue label="URL" mono>{env?.cscUrl}</KeyValue>
-            <KeyValue label="PIN / OTP" mono>{env?.cscPin} / {env?.cscOtp}</KeyValue>
-            <KeyValue label={t("sandbox.credentials")}>{env?.cscCredentials.map((c) => c.id).join(", ")}</KeyValue>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Service icon={<Clock className="size-4" />} title={t("sandbox.tsa")} onTraffic={() => setService("TSA")}>
+            <KeyValue stacked mono label="URL" copy={env?.tsaUrl}>{env?.tsaUrl}</KeyValue>
+            <KeyValue stacked mono label={t("sandbox.withBasic")} copy={env?.authenticatedTsaUrl}>{env?.authenticatedTsaUrl}</KeyValue>
+            <KeyValue stacked mono label={t("sandbox.userPassword")}>{env?.tsaUser} / {env?.tsaPassword}</KeyValue>
           </Service>
           <Service icon={<ShieldCheck className="size-4" />} title="DSS">
-            <KeyValue label="URL" mono>{dssStatus?.url}</KeyValue>
+            <KeyValue stacked mono label="URL" copy={dssStatus?.url}>{dssStatus?.url}</KeyValue>
             <KeyValue label={t("sandbox.status")}>{dssStatus ? (dssStatus.reachable ? <Pill tone="success">{t("lab.dssUp", { ms: dssStatus.ms })}</Pill> : <Pill>{t("lab.dssDown")}</Pill>) : "—"}</KeyValue>
             <p className="text-muted-foreground pt-2 text-xs leading-relaxed">{t("lab.dssTrust")}</p>
+          </Service>
+          <Service icon={<Cloud className="size-4" />} title="PSC (DOC-ICP-17.01)" onTraffic={() => setService("PSC")}>
+            <p className="text-muted-foreground pb-2 text-xs leading-relaxed">{t("signer.cloud.psc.what")}</p>
+            <KeyValue stacked mono label="URL" copy={env?.pscUrl}>{env?.pscUrl}</KeyValue>
+            <KeyValue stacked mono label="CPF / OTP">{env?.pscCpf} / {env?.pscOtp}</KeyValue>
+            <KeyValue stacked mono label={t("sandbox.client")}>testbench</KeyValue>
+          </Service>
+          <Service icon={<Cloud className="size-4" />} title="CSC API v2" onTraffic={() => setService("CSC")}>
+            <p className="text-muted-foreground pb-2 text-xs leading-relaxed">{t("signer.cloud.csc.what")}</p>
+            <KeyValue stacked mono label="URL" copy={env?.cscUrl}>{env?.cscUrl}</KeyValue>
+            <KeyValue stacked mono label="PIN / OTP">{env?.cscPin} / {env?.cscOtp}</KeyValue>
+            <KeyValue stacked mono label={t("sandbox.credentials")}>{env?.cscCredentials.map((c) => c.id).join(", ")}</KeyValue>
           </Service>
         </div>
 
         <Section title={t("sandbox.log")} description={t("sandbox.logHint")} aside={<span className="text-muted-foreground flex items-center gap-1.5 text-xs"><RefreshCw className="size-3 animate-spin [animation-duration:3s]" /> {t("lab.live")}</span>}>
+          <div className="flex flex-wrap gap-1.5">
+            {["", "TSA", "CRL", "AIA", "PSC", "CSC"].map((name) => (
+              <button key={name} type="button" onClick={() => setService(name)}
+                className={cn("rounded-full border px-2.5 py-0.5 text-xs", service === name ? "bg-accent border-foreground/30 font-medium" : "text-muted-foreground hover:text-foreground")}>
+                {name || t("lab.allServices")} {log.filter((r) => !name || r.service.startsWith(name)).length}
+              </button>
+            ))}
+          </div>
           <div className="rounded-lg border">
             <Table>
               <TableHeader><TableRow><TableHead>{t("sandbox.time")}</TableHead><TableHead>{t("sandbox.service")}</TableHead><TableHead>{t("sandbox.request")}</TableHead><TableHead className="text-right">{t("sandbox.status")}</TableHead></TableRow></TableHeader>
               <TableBody>
                 {log.length === 0 && <TableRow><TableCell colSpan={4} className="text-muted-foreground text-center text-xs">{t("sandbox.noRequests")}</TableCell></TableRow>}
-                {log.map((r, i) => (
+                {log.filter((r) => !service || r.service.startsWith(service)).map((r, i) => (
                   <TableRow key={i} className={cn(r.status >= 400 && "bg-warning/5")}>
                     <TableCell className="text-xs whitespace-nowrap">{time(r.time)}</TableCell>
                     <TableCell><Pill tone={r.service === "Blocked" ? "danger" : r.service.includes("fault") ? "warning" : "default"}>{r.service}</Pill></TableCell>
-                    <TableCell className="max-w-xl truncate font-mono text-xs">{r.method} {r.url}</TableCell>
+                    <TableCell className="font-mono text-xs break-all whitespace-normal">{r.method} {r.url}</TableCell>
                     <TableCell className="text-right text-xs">{r.status}</TableCell>
                   </TableRow>
                 ))}
@@ -163,10 +174,14 @@ function CertificateRow({ certificate: c, depth, actions }: { certificate: Sandb
   )
 }
 
-function Service({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function Service({ icon, title, children, onTraffic }: { icon: React.ReactNode; title: string; children: React.ReactNode; onTraffic?: () => void }) {
+  const { t } = useI18n()
   return (
     <div className="space-y-2 rounded-lg border p-4">
-      <p className="flex items-center gap-2 text-sm font-medium">{icon} {title}</p>
+      <p className="flex items-center gap-2 text-sm font-medium">
+        {icon} {title}
+        {onTraffic && <button type="button" className="text-muted-foreground hover:text-foreground ml-auto text-xs font-normal underline underline-offset-2" onClick={onTraffic}>{t("lab.seeTraffic")}</button>}
+      </p>
       <div className="divide-y">{children}</div>
     </div>
   )

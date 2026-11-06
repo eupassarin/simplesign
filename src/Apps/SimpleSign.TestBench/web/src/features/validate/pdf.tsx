@@ -45,8 +45,8 @@ export function DetailedCard({ signature: s }: { signature: DetailedSignature })
             <AccordionTrigger>{t("validation.sections.timestamp")}</AccordionTrigger>
             <AccordionContent className="grid gap-x-8 sm:grid-cols-2">
               <KeyValue label={t("validation.timestamp.time")}>{s.timestamp.time}</KeyValue>
-              <KeyValue label="TSA">{s.timestamp.tsa ?? "—"}</KeyValue>
-              <KeyValue label={t("validation.timestamp.policy")} mono>{s.timestamp.policyOid ?? "—"}</KeyValue>
+              <KeyValue stacked label="TSA">{s.timestamp.tsa ?? "—"}</KeyValue>
+              <KeyValue stacked label={t("validation.timestamp.policy")} mono>{s.timestamp.policyOid ?? "—"}</KeyValue>
               <KeyValue label={t("validation.timestamp.hash")}>{s.timestamp.hashAlgorithm ?? "—"}</KeyValue>
             </AccordionContent>
           </AccordionItem>
@@ -65,8 +65,8 @@ export function DetailedCard({ signature: s }: { signature: DetailedSignature })
           <AccordionTrigger>{t("validation.sections.attributes")}</AccordionTrigger>
           <AccordionContent className="grid gap-x-8 sm:grid-cols-2">
             <KeyValue label={t("validation.attributes.algorithm")}>{s.signatureAlgorithm ?? "—"}</KeyValue>
-            <KeyValue label={t("validation.attributes.policy")} mono>{s.policyOid ?? "—"}</KeyValue>
-            <KeyValue label={t("validation.attributes.commitment")} mono>{s.commitmentTypeOid ?? "—"}</KeyValue>
+            <KeyValue stacked label={t("validation.attributes.policy")} mono>{s.policyOid ?? "—"}</KeyValue>
+            <KeyValue stacked label={t("validation.attributes.commitment")} mono>{s.commitmentTypeOid ?? "—"}</KeyValue>
             <KeyValue label={t("details.reason")}>{s.reason ?? "—"}</KeyValue>
             <KeyValue label={t("details.location")}>{s.location ?? "—"}</KeyValue>
             <KeyValue label={t("details.contact")}>{s.contactInfo ?? "—"}</KeyValue>
@@ -81,11 +81,11 @@ function CertificateBlock({ cert }: { cert: CertificateView }) {
   const { t } = useI18n()
   return (
     <div className="grid gap-x-8 sm:grid-cols-2">
-      <KeyValue label={t("validation.cert.subject")}>{cert.subject}</KeyValue>
-      <KeyValue label={t("signer.card.issuer")}>{cert.issuer}</KeyValue>
+      <KeyValue stacked label={t("validation.cert.subject")}>{cert.subject}</KeyValue>
+      <KeyValue stacked label={t("signer.card.issuer")}>{cert.issuer}</KeyValue>
       <KeyValue label={t("signer.card.valid")}>{cert.notBefore} → {cert.notAfter}</KeyValue>
       <KeyValue label={t("signer.card.key")}>{cert.keyAlgorithm} {cert.keySize ?? ""}</KeyValue>
-      <KeyValue label={t("validation.cert.serial")} mono>{cert.serialNumber}</KeyValue>
+      <KeyValue stacked label={t("validation.cert.serial")} mono>{cert.serialNumber}</KeyValue>
       <KeyValue label="nonRepudiation">{t(cert.hasNonRepudiation ? "common.yes" : "common.no")}</KeyValue>
     </div>
   )

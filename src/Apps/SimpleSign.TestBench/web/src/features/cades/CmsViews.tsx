@@ -98,11 +98,11 @@ function SignerStructure({ signer, prefix }: { signer: CmsSignerView; prefix: st
         </AccordionTrigger>
         <AccordionContent className="space-y-3">
           <div className="grid gap-x-8 sm:grid-cols-2">
-            <KeyValue label={t("cades.structure.issuer")}>{signer.issuer ?? "—"}</KeyValue>
-            <KeyValue label={t("validation.cert.serial")} mono>{signer.serialNumber ?? "—"}</KeyValue>
+            <KeyValue stacked label={t("cades.structure.issuer")}>{signer.issuer ?? "—"}</KeyValue>
+            <KeyValue stacked label={t("validation.cert.serial")} mono>{signer.serialNumber ?? "—"}</KeyValue>
             <KeyValue label={t("cades.structure.signingTime")}>{signer.signingTime ?? "—"}</KeyValue>
-            <KeyValue label={t("validation.attributes.policy")} mono>{signer.policyOid ?? "—"}</KeyValue>
-            <KeyValue label={t("validation.attributes.commitment")} mono>{signer.commitmentTypeOid ?? "—"}</KeyValue>
+            <KeyValue stacked label={t("validation.attributes.policy")} mono>{signer.policyOid ?? "—"}</KeyValue>
+            <KeyValue stacked label={t("validation.attributes.commitment")} mono>{signer.commitmentTypeOid ?? "—"}</KeyValue>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <AttributeList title={t("cades.structure.signed")} attributes={signer.signedAttributes} />

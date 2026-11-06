@@ -21,7 +21,7 @@ import type {
   XmlSample,
 } from "./types"
 
-import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RunSummary, RunView, SandboxFaults, SandboxState, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
+import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, RunSummary, RunView, SandboxFaults, SandboxState, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -105,6 +105,9 @@ export const api = {
     run: (id: string) => request<RunView | undefined>("GET", `/api/runs/${id}`),
     eventsUrl: (id: string) => `/api/runs/${id}/events`,
     history: () => request<RunSummary[]>("GET", "/api/runs"),
+  },
+  environment: {
+    real: () => request<RealEnvironment>("GET", "/api/environment/real"),
   },
   sandbox: {
     state: () => request<SandboxState>("GET", "/api/sandbox/state"),

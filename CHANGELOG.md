@@ -184,6 +184,14 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
   server down or serving expired CRLs), to see how signing and validation react.
 - **Reference by standard**, and a generated [coverage page](docs/articles/coverage.md) that a test
   keeps in step with the option schema.
+- **Environment follows the mode.** In Real it shows the trusted roots, the public TSAs, the
+  tokens and the OS store of this machine instead of the sandbox; sandbox failures only show and
+  act in Sandbox.
+- **PSC and CSC are explained** in the signer picker, step by step, and in Sandbox one click opens
+  a credential of the simulated provider. Cloud and token signers now log into the run (they were
+  opened without a logger, so events 72xx and 73xx never reached the Logs tab).
+- **Values are no longer cut:** URLs, names, OIDs and hex wrap, with a copy button; the signer
+  tabs no longer overlap their content.
 - **Validate is one screen for the three formats.** The format is read from the file; a validation
   is a run like a signature, with the same result panel, log, DSS comparison and history.
   "Validate all samples" checks every sample against its expected verdict. The separate PDF, CAdES

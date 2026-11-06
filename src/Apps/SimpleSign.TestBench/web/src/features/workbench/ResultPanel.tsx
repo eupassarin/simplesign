@@ -220,11 +220,11 @@ function Inspection({ run }: { run: RunView }) {
       {detail.deferred && (
         <div className="space-y-1 rounded-lg border px-4 py-2">
           <p className="py-1 text-sm font-medium">{t("result.tabs.deferred")}</p>
-          <KeyValue label={t("result.deferred.hashToSign")} mono>{detail.deferred.hashToSignHex}</KeyValue>
+          <KeyValue stacked label={t("result.deferred.hashToSign")} mono>{detail.deferred.hashToSignHex}</KeyValue>
           <KeyValue label={t("result.deferred.digest")}>{detail.deferred.digestAlgorithm}</KeyValue>
-          <KeyValue label={t("result.deferred.algorithm")} mono>{detail.deferred.signatureAlgorithmOid}</KeyValue>
+          <KeyValue stacked label={t("result.deferred.algorithm")} mono>{detail.deferred.signatureAlgorithmOid}</KeyValue>
           <KeyValue label={t("result.deferred.session")}>{t("result.deferred.bytes", { n: detail.deferred.sessionBytes })}</KeyValue>
-          <KeyValue label={t("result.deferred.raw")} mono>{detail.deferred.rawSignatureHex}</KeyValue>
+          <KeyValue stacked label={t("result.deferred.raw")} mono>{detail.deferred.rawSignatureHex}</KeyValue>
         </div>
       )}
       {detail.batch.length > 0 && (

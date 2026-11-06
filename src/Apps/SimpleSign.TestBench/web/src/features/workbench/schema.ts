@@ -255,6 +255,13 @@ export interface SandboxCertificate {
   revokedNow: boolean
 }
 
+/** What the Real environment has: the roots validation can trust and the public TSAs with a preset. */
+export interface RealEnvironment {
+  systemRootCount: number
+  bundledRoots: { source: string; subject: string; notAfter: string; thumbprint: string }[]
+  publicTsas: { name: string; url: string; api: string }[]
+}
+
 export type TsaFault = "None" | "Down" | "Slow" | "InvalidToken" | "Untrusted"
 export type CrlFault = "None" | "Down" | "Expired"
 

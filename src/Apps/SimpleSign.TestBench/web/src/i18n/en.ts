@@ -3,6 +3,7 @@
 
 export const en = {
   app: {
+    environmentRealHint: "The real environment: trusted roots, public TSAs, tokens and the OS store on this machine.",
     task: "Task",
     mode: { sign: "Sign", validate: "Validate" },
     reference: "Reference",
@@ -34,6 +35,23 @@ export const en = {
     document: { title: "Document", subtitle: "The PDF to sign" },
   },
   signer: {
+    cloud: {
+      useSimulated: "Use the simulated provider",
+      psc: {
+        what: "A PSC is an ICP-Brasil provider that keeps your certificate and its key in the cloud (BirdID, VIDaaS, NeoID, SafeID…). The key never leaves the provider: the library sends only the hash and gets the signature back.",
+        step1: "You authorize the application: on the provider's page (OAuth with PKCE), or with CPF and the OTP of the provider's app.",
+        step2: "The provider gives a token whose scope says how many signatures it allows (one, several, or a session).",
+        step3: "The library reads your certificate from the provider and builds the signed attributes.",
+        step4: "It sends their hash; the provider signs with RSA PKCS#1 v1.5 and returns the signature.",
+      },
+      csc: {
+        what: "CSC is the Cloud Signature Consortium API (v2), the international standard for remote signing, used by European trust service providers. The key stays in the provider's HSM; the library sends only the hash.",
+        step1: "The application is authorized to use the service: an access token, client credentials or a user login (OAuth).",
+        step2: "It lists the credentials (key and certificate) of the user and reads the chosen one.",
+        step3: "Each signature is authorized on the credential: PIN and OTP, or OAuth. SCAL 2 binds the authorization to the exact hashes.",
+        step4: "signatures/signHash returns the signature of the hash.",
+      },
+    },
     ready: "Signer ready",
     openFailed: "Could not open the signer",
     validUntil: "{issuer} · valid until {date}",
@@ -380,6 +398,9 @@ export const en = {
     expected: "Expected",
   },
   lab: {
+    title: "Sandbox lab",
+    allServices: "All",
+    seeTraffic: "see its requests",
     faults: "Failures",
     faultsHint: "Switch a failure on and sign or validate again to see how the library reacts: the error, the level it falls back to with “If the TSA or revocation fails”, the warnings, the verdict.",
     reset: "Back to normal",
@@ -405,6 +426,31 @@ export const en = {
       Down: { title: "Down (HTTP 503)", hint: "Revocation data cannot be fetched: B-LT and B-LTA cannot be built, and validation of B-B and B-T becomes indeterminate." },
       Expired: { title: "Expired CRLs", hint: "The CRLs are served past their nextUpdate, as a CA that stopped publishing would." },
     },
+  },
+  real: {
+    title: "Real environment",
+    intro: "Nothing is simulated here: the library uses your certificates and the internet. This is what exists on this machine and what it can reach. The sandbox PKI and its failures do not apply in Real.",
+    trust: "Trusted roots",
+    trustHint: "What a validation can trust. Choose which ones in “Trusted roots”, in the Run and validation section or in Validate.",
+    systemRoots: "Operating system roots",
+    bundledRoots: "{source} roots bundled with the library",
+    showRoots: "Show the bundled roots",
+    hideRoots: "Hide the bundled roots",
+    tsa: "Public time-stamping authorities",
+    tsaHint: "Free TSAs the library has a preset for. An ICP-Brasil ACT is a paid service: use “Custom URL” with its address and credentials.",
+    keys: "Keys on this machine",
+    keysHint: "Where a private key can come from besides a PFX file.",
+    tokens: "PKCS#11 drivers and tokens",
+    tokenCount: "{n} token(s)",
+    noDrivers: "No PKCS#11 driver was found.",
+    noTokens: "No token is connected. Plug one in, or try SoftHSM2 and set SIMPLESIGN_PKCS11_LIBRARY.",
+    store: "Certificates with a key in the OS store",
+    noStore: "No certificate with a private key in the user's store.",
+    cloud: "Cloud certificates",
+    cloudHint: "What a real provider asks for. The Sandbox has a simulated one of each to try the flow first.",
+    pscNeeds: "You need: the provider's API base URL, a client_id (and secret) registered with it, and the redirect URI it accepts (default http://127.0.0.1:43821/callback).",
+    cscNeeds: "You need: the service base URL, and a service access token or OAuth client; then the PIN/OTP or OAuth login of the credential.",
+    dssHint: "The same DSS serves both modes. In Real it validates against the roots it was given: add yours to tools/dss/trust, or load the EU trusted lists.",
   },
   sandbox: {
     intro: "Everything the sandbox simulates, generated when the TestBench starts and kept in memory. Services answer on *.sandbox.simplesign.test through an in-process IHttpClientProvider, so the library runs its normal code paths (including its SSRF checks) without touching the network.",

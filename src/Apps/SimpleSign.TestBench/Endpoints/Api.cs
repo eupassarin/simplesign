@@ -165,6 +165,7 @@ internal static class Api
 
         RunApi.Map(api);
         SandboxApi.Map(api);
+        EnvironmentApi.Map(api);
 
         api.MapFallback(() => Results.NotFound(new { error = "Unknown API route." }));
     }

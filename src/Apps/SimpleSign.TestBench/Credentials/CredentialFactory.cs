@@ -138,6 +138,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
             TokenSerial = string.IsNullOrWhiteSpace(request.TokenSerial) ? null : request.TokenSerial,
             CertificateThumbprint = string.IsNullOrWhiteSpace(request.CertificateThumbprint) ? null : request.CertificateThumbprint,
             Pin = request.UsePinPad ? null : request.Pin,
+            Logger = Runs.AmbientRunLogger.Instance,
         });
         return new CredentialHandle(CredentialKind.Pkcs11, $"PKCS#11 · {Path.GetFileName(request.LibraryPath)}", signer.Certificate, signer.Chain, signer, signer,
             hashes: Sha2,
@@ -173,6 +174,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
             ClientId = isSandbox ? SandboxPsc.ClientId : Required(request.ClientId, "client_id"),
             ClientSecret = isSandbox ? SandboxPsc.ClientSecret : request.ClientSecret,
             RedirectUri = request.RedirectUri is { Length: > 0 } redirect ? new Uri(redirect) : new Uri("http://127.0.0.1:43821/callback"),
+            Logger = Runs.AmbientRunLogger.Instance,
         };
         return new PscClient(options, isSandbox ? sandbox.Network.GetClient() : null);
     }
@@ -258,6 +260,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
             AccessToken = auth == CscServiceAuth.Token ? (isSandbox ? SandboxCsc.ServiceToken : Required(accessToken, "access token")) : null,
             ClientId = isSandbox ? SandboxCsc.ClientId : clientId,
             ClientSecret = isSandbox ? SandboxCsc.ClientSecret : clientSecret,
+            Logger = Runs.AmbientRunLogger.Instance,
         };
         var client = new CscClient(options, isSandbox ? sandbox.Network.GetClient() : null);
         switch (auth)

@@ -2,6 +2,7 @@ import type { Messages } from "./en"
 
 export const ptBR: Messages = {
   app: {
+    environmentRealHint: "O ambiente real: raízes confiáveis, ACTs públicas, tokens e o repositório do sistema nesta máquina.",
     task: "Tarefa",
     mode: { sign: "Assinar", validate: "Validar" },
     reference: "Referência",
@@ -33,6 +34,23 @@ export const ptBR: Messages = {
     document: { title: "Documento", subtitle: "O PDF a assinar" },
   },
   signer: {
+    cloud: {
+      useSimulated: "Usar o provedor simulado",
+      psc: {
+        what: "Um PSC é um provedor ICP-Brasil que guarda o seu certificado e a chave na nuvem (BirdID, VIDaaS, NeoID, SafeID…). A chave nunca sai do provedor: a biblioteca envia só o hash e recebe a assinatura.",
+        step1: "Você autoriza a aplicação: na página do provedor (OAuth com PKCE), ou com CPF e o OTP do aplicativo do provedor.",
+        step2: "O provedor entrega um token cujo escopo diz quantas assinaturas ele permite (uma, várias ou uma sessão).",
+        step3: "A biblioteca lê o seu certificado no provedor e monta os atributos assinados.",
+        step4: "Ela envia o hash deles; o provedor assina com RSA PKCS#1 v1.5 e devolve a assinatura.",
+      },
+      csc: {
+        what: "CSC é a API do Cloud Signature Consortium (v2), o padrão internacional de assinatura remota, usado por prestadores de serviço de confiança europeus. A chave fica no HSM do provedor; a biblioteca envia só o hash.",
+        step1: "A aplicação é autorizada a usar o serviço: um token de acesso, client credentials ou login do usuário (OAuth).",
+        step2: "Ela lista as credenciais (chave e certificado) do usuário e lê a escolhida.",
+        step3: "Cada assinatura é autorizada na credencial: PIN e OTP, ou OAuth. SCAL 2 prende a autorização aos hashes exatos.",
+        step4: "signatures/signHash devolve a assinatura do hash.",
+      },
+    },
     ready: "Signatário pronto",
     openFailed: "Não foi possível abrir o signatário",
     validUntil: "{issuer} · válido até {date}",
@@ -379,6 +397,9 @@ export const ptBR: Messages = {
     expected: "Esperado",
   },
   lab: {
+    title: "Laboratório do sandbox",
+    allServices: "Todos",
+    seeTraffic: "ver as requisições",
     faults: "Falhas",
     faultsHint: "Ligue uma falha e assine ou valide de novo para ver como a biblioteca reage: o erro, o nível para o qual ela recua com “Se a ACT ou a revogação falhar”, os avisos, o veredito.",
     reset: "Voltar ao normal",
@@ -404,6 +425,31 @@ export const ptBR: Messages = {
       Down: { title: "Fora do ar (HTTP 503)", hint: "Os dados de revogação não podem ser obtidos: B-LT e B-LTA não podem ser montados, e a validação de B-B e B-T fica indeterminada." },
       Expired: { title: "LCRs vencidas", hint: "As LCRs são servidas depois do nextUpdate, como faria uma AC que parou de publicar." },
     },
+  },
+  real: {
+    title: "Ambiente real",
+    intro: "Nada é simulado aqui: a biblioteca usa os seus certificados e a internet. Isto é o que existe nesta máquina e o que ela alcança. A PKI do sandbox e as falhas dele não valem em Real.",
+    trust: "Raízes confiáveis",
+    trustHint: "No que uma validação pode confiar. Escolha quais em “Raízes confiáveis”, na seção Execução e validação ou em Validar.",
+    systemRoots: "Raízes do sistema operacional",
+    bundledRoots: "Raízes {source} que acompanham a biblioteca",
+    showRoots: "Mostrar as raízes embarcadas",
+    hideRoots: "Esconder as raízes embarcadas",
+    tsa: "Autoridades de carimbo do tempo públicas",
+    tsaHint: "ACTs gratuitas para as quais a biblioteca tem atalho. Uma ACT da ICP-Brasil é um serviço pago: use “URL personalizada” com o endereço e as credenciais dela.",
+    keys: "Chaves nesta máquina",
+    keysHint: "De onde uma chave privada pode vir, além de um arquivo PFX.",
+    tokens: "Drivers PKCS#11 e tokens",
+    tokenCount: "{n} token(s)",
+    noDrivers: "Nenhum driver PKCS#11 foi encontrado.",
+    noTokens: "Nenhum token conectado. Conecte um, ou experimente o SoftHSM2 e defina SIMPLESIGN_PKCS11_LIBRARY.",
+    store: "Certificados com chave no repositório do sistema",
+    noStore: "Nenhum certificado com chave privada no repositório do usuário.",
+    cloud: "Certificados em nuvem",
+    cloudHint: "O que um provedor real pede. O Sandbox tem um simulado de cada para experimentar o fluxo antes.",
+    pscNeeds: "Você precisa de: a URL base da API do provedor, um client_id (e secret) cadastrado nele, e a redirect URI que ele aceita (padrão http://127.0.0.1:43821/callback).",
+    cscNeeds: "Você precisa de: a URL base do serviço, e um token de acesso ao serviço ou um cliente OAuth; depois o PIN/OTP ou o login OAuth da credencial.",
+    dssHint: "O mesmo DSS serve aos dois modos. Em Real ele valida contra as raízes que recebeu: acrescente as suas em tools/dss/trust, ou carregue as listas de confiança da UE.",
   },
   sandbox: {
     intro: "Tudo o que o sandbox simula, gerado quando o TestBench inicia e mantido em memória. Os serviços respondem em *.sandbox.simplesign.test por um IHttpClientProvider no próprio processo, então a biblioteca percorre seus caminhos normais (inclusive as checagens de SSRF) sem tocar a rede.",
