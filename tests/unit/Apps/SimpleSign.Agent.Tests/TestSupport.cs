@@ -27,12 +27,28 @@ internal static class Fixtures
     public static AgentServices Services(FakeDialogs? dialogs = null) =>
         new(new SettingsStore(Directory.CreateTempSubdirectory("simplesign-agent-").FullName), dialogs ?? new FakeDialogs());
 
-    public static X509Certificate2 RsaCertificate(string name = "CN=Fulano de Tal")
+    public static X509Certificate2 RsaCertificate(string name = "CN=Fulano de Tal", int validDays = 365)
     {
         using var key = RSA.Create(2048);
         var request = new CertificateRequest(name, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, true));
-        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddDays(validDays));
         return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), null, CertificateService.KeyStorage);
+    }
+
+    public static X509Certificate2 EcdsaCertificate(string name = "CN=Beltrana de Souza")
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest(name, key, HashAlgorithmName.SHA256);
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddYears(2));
+        return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), null, CertificateService.KeyStorage);
+    }
+
+    public static int FreePort()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

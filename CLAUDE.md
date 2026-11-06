@@ -60,7 +60,7 @@ src/
 │   └── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
 └── Apps/
     ├── SimpleSign.Cli/         CLI tool
-    ├── SimpleSign.Agent/       Avalonia tray app: local signing agent (HTTP on 127.0.0.1)
+    ├── SimpleSign.Agent/       Avalonia tray app + window (pt-BR/en-US, TestBench look, Native AOT): local signing agent (HTTP on 127.0.0.1)
     └── SimpleSign.TestBench/   Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option
 ```
 

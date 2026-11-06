@@ -3,34 +3,31 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Avalonia.Platform;
 using Avalonia.Threading;
-using SimpleSign.Agent.Server;
+using SimpleSign.Agent.Localization;
 using SimpleSign.Agent.Services;
 using SimpleSign.Agent.Views;
 
 namespace SimpleSign.Agent;
 
 /// <summary>
-/// The tray / menu-bar app: no main window. The menu shows the agent's state and lets the user
-/// pause it, review authorized sites, start it at login and quit.
+/// The tray / menu-bar app. The tray menu shows the agent's state and opens the window, which has
+/// everything else (certificates, sites, activity, test, documentation, settings, about).
 /// </summary>
-#pragma warning disable CA1001 // The agent and token sessions are disposed in Quit, when the app exits.
+#pragma warning disable CA1001 // The controller is disposed in Quit, when the app exits.
 internal sealed partial class App : Application
 {
-    private AgentServices? _services;
-    private AgentServer? _agent;
-    private TokenSessionCache? _sessions;
+    private AgentController? _controller;
     private IDisposable? _sigterm;
-    private OriginsWindow? _originsWindow;
+    private MainWindow? _window;
     private TrayIcon? _tray;
+    private AgentState? _trayState;
     private bool _quitting;
 
     private readonly NativeMenuItem _status = new() { IsEnabled = false };
-    private readonly NativeMenuItem _enabled = new("Agente ativo") { ToggleType = NativeMenuItemToggleType.CheckBox };
-    private readonly NativeMenuItem _origins = new("Sites autorizados…");
-    private readonly NativeMenuItem _login = new("Iniciar com o sistema") { ToggleType = NativeMenuItemToggleType.CheckBox };
-    private readonly NativeMenuItem _quit = new("Sair");
+    private readonly NativeMenuItem _open = new();
+    private readonly NativeMenuItem _toggle = new();
+    private readonly NativeMenuItem _quit = new();
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -39,24 +36,29 @@ internal sealed partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var settings = new SettingsStore();
-            _services = new AgentServices(settings, new DialogService());
-            _sessions = new TokenSessionCache();
-            _agent = new AgentServer(_services, _sessions);
-            _agent.StateChanged += (_, _) => Dispatcher.UIThread.Post(RefreshMenu);
+            Appearance.Apply(settings.Current);
+            _controller = new AgentController(new AgentServices(settings, new DialogService()));
+            _controller.Changed += (_, _) => Dispatcher.UIThread.Post(RefreshTray);
+            L.Changed += (_, _) => Dispatcher.UIThread.Post(RefreshTray);
 
-            _enabled.Click += (_, _) => _ = SetEnabledAsync(!settings.Current.AgentEnabled);
-            _origins.Click += (_, _) => ShowOrigins();
-            _login.IsVisible = LoginItem.IsSupported && Environment.ProcessPath is not null;
-            _login.Click += (_, _) => ToggleLoginItem();
+            _open.Click += (_, _) => ShowWindow();
+            _toggle.Click += (_, _) => _ = _controller.SetEnabledAsync(!_controller.Settings.AgentEnabled);
             _quit.Click += (_, _) => Quit();
             _tray = new TrayIcon
             {
-                Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://SimpleSign.Agent/Assets/icon.png"))),
                 ToolTipText = "SimpleSign Agent",
-                Menu = [_status, new NativeMenuItemSeparator(), _enabled, _origins, _login, new NativeMenuItemSeparator(), _quit],
+                Menu = [_status, new NativeMenuItemSeparator(), _open, _toggle, new NativeMenuItemSeparator(), _quit],
                 IsVisible = true,
             };
+            MacOSProperties.SetIsTemplateIcon(_tray, AgentIcons.IsTemplate);
+            // Windows and Linux: a click opens the window (on macOS a click opens the menu).
+            _tray.Clicked += (_, _) => ShowWindow();
             TrayIcon.SetIcons(this, [_tray]);
+
+            if (Program.Instance is { } instance)
+            {
+                instance.ShowRequested += (_, _) => Dispatcher.UIThread.Post(ShowWindow);
+            }
 
             desktop.ShutdownRequested += (_, _) => _quitting = true;
             // SIGTERM (e.g. logout, kill) quits cleanly: the agent stops and token sessions close.
@@ -66,104 +68,79 @@ internal sealed partial class App : Application
                 Dispatcher.UIThread.Post(Quit);
             });
 
-            RefreshMenu();
-            if (settings.Current.AgentEnabled)
+            RefreshTray();
+            _ = _controller.StartAsync();
+            if (!settings.Current.FirstRunDone)
             {
-                _ = StartAgentAsync(settings.Current.AgentPort);
+                // The first run opens the window, so the user sees what was installed.
+                _controller.Update(s => s.FirstRunDone = true);
+                ShowWindow();
             }
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private async Task StartAgentAsync(int port)
+    private void ShowWindow()
     {
-        try
+        if (_controller is null || _quitting)
         {
-            await _agent!.StartAsync(port);
-        }
-        catch (IOException)
-        {
-            // Shown in the menu (LastError).
-        }
-    }
-
-    private async Task SetEnabledAsync(bool enabled)
-    {
-        var settings = _services!.Settings;
-        settings.Current.AgentEnabled = enabled;
-        settings.Save();
-        if (enabled)
-        {
-            await StartAgentAsync(settings.Current.AgentPort);
-        }
-        else
-        {
-            await _agent!.StopAsync();
-        }
-
-        RefreshMenu();
-    }
-
-    private void ToggleLoginItem()
-    {
-        try
-        {
-            LoginItem.Set(!LoginItem.IsEnabled, Environment.ProcessPath!);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            _services!.Log.Add("Agente", $"Não foi possível alterar o início automático: {ex.Message}", isError: true);
-        }
-
-        RefreshMenu();
-    }
-
-    private void ShowOrigins()
-    {
-        if (_originsWindow is { } open)
-        {
-            open.Activate();
             return;
         }
 
-        _originsWindow = new OriginsWindow(_services!.Settings, _agent!.Origins, StatusText());
-        _originsWindow.Closed += (_, _) => _originsWindow = null;
-        _originsWindow.Show();
-        _originsWindow.Activate();
+        if (_window is null)
+        {
+            _window = new MainWindow(_controller);
+            _window.Closed += (_, _) => _window = null;
+        }
+
+        _window.Show();
+        if (_window.WindowState == WindowState.Minimized)
+        {
+            _window.WindowState = WindowState.Normal;
+        }
+
+        _window.Activate();
     }
 
-    private string StatusText() => _agent switch
+    private void RefreshTray()
     {
-        { IsRunning: true } agent => $"Ouvindo em 127.0.0.1:{agent.Port}",
-        { LastError: { } error } => error,
-        _ => "Agente pausado",
-    };
+        if (_controller is null || _tray is null)
+        {
+            return;
+        }
 
-    private void RefreshMenu()
-    {
-        _status.Header = StatusText();
-        _enabled.IsChecked = _services?.Settings.Current.AgentEnabled ?? false;
-        _login.IsChecked = LoginItem.IsSupported && LoginItem.IsEnabled;
+        var state = _controller.State;
+        if (_trayState != state)
+        {
+            _trayState = state;
+            _tray.Icon = AgentIcons.Tray(state);
+        }
+
+        _tray.ToolTipText = $"SimpleSign Agent · {_controller.StatusText}";
+        _status.Header = _controller.StatusText;
+        _open.Header = L.T("tray.open");
+        _toggle.Header = L.T(_controller.Settings.AgentEnabled ? "tray.pause" : "tray.resume");
+        _quit.Header = L.T("tray.quit");
     }
 
     private async void Quit()
     {
-        if (_quitting && _agent is null)
+        if (_quitting && _controller is null)
         {
             return;
         }
 
         _quitting = true;
-        var agent = _agent;
-        _agent = null;
-        if (agent is not null)
+        _window?.Close();
+        var controller = _controller;
+        _controller = null;
+        if (controller is not null)
         {
             // Awaited, not blocked on: the agent's shutdown continues on this (UI) thread.
-            await agent.DisposeAsync();
+            await controller.DisposeAsync();
         }
 
-        _sessions?.Dispose();
         _sigterm?.Dispose();
         _tray?.Dispose();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using SimpleSign.Agent.Localization;
 using SimpleSign.Agent.Services;
 
 namespace SimpleSign.Agent.Server;
@@ -61,7 +62,7 @@ internal sealed class AgentServer : IAsyncDisposable
         }
         catch (IOException ex)
         {
-            LastError = $"A porta {port} já está em uso ({ex.Message}).";
+            LastError = L.T("agent.portInUse", port, ex.Message);
             await app.DisposeAsync();
             StateChanged?.Invoke(this, EventArgs.Empty);
             throw;
@@ -70,7 +71,7 @@ internal sealed class AgentServer : IAsyncDisposable
         _app = app;
         Port = port;
         LastError = null;
-        _services.Log.Add("Agente", $"Ouvindo em http://127.0.0.1:{port}");
+        _services.Log.Add("Agent", L.T("log.listening", port));
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -81,7 +82,7 @@ internal sealed class AgentServer : IAsyncDisposable
             _app = null;
             await app.StopAsync();
             await app.DisposeAsync();
-            _services.Log.Add("Agente", "Parado");
+            _services.Log.Add("Agent", L.T("log.stopped"));
             StateChanged?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -97,14 +98,14 @@ internal sealed class AgentServer : IAsyncDisposable
         string path = request.Path.Value ?? "/";
         if (origin is null)
         {
-            await WriteErrorAsync(response, 403, "Origem não permitida.");
+            await WriteErrorAsync(response, 403, L.T("api.originNotAllowed"));
             return;
         }
 
         var state = Origins.Check(origin);
         if (state == OriginState.Blocked)
         {
-            await WriteErrorAsync(response, 403, "Origem bloqueada.");
+            await WriteErrorAsync(response, 403, L.T("api.originBlocked"));
             return;
         }
 
@@ -139,21 +140,21 @@ internal sealed class AgentServer : IAsyncDisposable
             || path.Equals("/api/sign", StringComparison.OrdinalIgnoreCase) && HttpMethods.IsPost(request.Method);
         if (!known)
         {
-            await WriteErrorAsync(response, 404, "Não encontrado.");
+            await WriteErrorAsync(response, 404, L.T("api.notFound"));
             return;
         }
 
         if (!_rate.TryAcquire(origin))
         {
-            await WriteErrorAsync(response, 429, "Muitas solicitações; tente novamente em instantes.");
+            await WriteErrorAsync(response, 429, L.T("api.rateLimited"));
             return;
         }
 
-        string label = origin == OriginPolicy.LocalApplication ? "Um aplicativo local" : origin;
+        string label = origin == OriginPolicy.LocalApplication ? L.T("agent.localApplication") : origin;
         if (state == OriginState.Unknown && !await AskSiteAsync(origin, label))
         {
-            _services.Log.Add("Agente", $"{label}: acesso recusado");
-            await WriteErrorAsync(response, 403, "O usuário não permitiu o acesso.");
+            _services.Log.Add("Agent", L.T("log.accessRefused", label), isError: true);
+            await WriteErrorAsync(response, 403, L.T("api.accessDenied"));
             return;
         }
 
@@ -164,7 +165,7 @@ internal sealed class AgentServer : IAsyncDisposable
                 string source = request.Query["source"].ToString() is { Length: > 0 } s ? s.ToLowerInvariant() : "all";
                 bool icp = bool.TryParse(request.Query["filterIcpBrasil"], out bool f) && f;
                 var list = await _signer.ListAsync(source, icp, context.RequestAborted);
-                _services.Log.Add("Agente", $"{label}: listou {list.Count} certificado(s)");
+                _services.Log.Add("Agent", L.T("log.listed", label, list.Count));
                 await WriteAsync(response, list, AgentJsonContext.Default.ListAgentCertificate);
                 return;
             }
@@ -172,30 +173,32 @@ internal sealed class AgentServer : IAsyncDisposable
             var body = await JsonSerializer.DeserializeAsync(request.Body, AgentJsonContext.Default.AgentSignRequest, context.RequestAborted);
             if (body is null || string.IsNullOrWhiteSpace(body.Thumbprint))
             {
-                await WriteErrorAsync(response, 400, "thumbprint é obrigatório.");
+                await WriteErrorAsync(response, 400, L.T("api.thumbprintRequired"));
                 return;
             }
 
             if ((body.SignRequests?.Count ?? 0) is 0 or > AgentSigner.MaxItems)
             {
-                await WriteErrorAsync(response, 400, $"Envie de 1 a {AgentSigner.MaxItems} itens em signRequests.");
+                await WriteErrorAsync(response, 400, L.T("api.itemsRange", AgentSigner.MaxItems));
                 return;
             }
 
             var results = await _signer.SignAsync(label, body, context.RequestAborted);
             if (results is null)
             {
-                _services.Log.Add("Agente", $"{label}: assinatura recusada pelo usuário");
-                await WriteErrorAsync(response, 403, "Assinatura recusada pelo usuário.");
+                _services.Log.Add("Agent", L.T("log.signRefused", label), isError: true);
+                await WriteErrorAsync(response, 403, L.T("api.signRefused"));
                 return;
             }
 
-            _services.Log.Add("Agente", $"{label}: {results.Count(r => r.Error is null)} assinatura(s), {results.Count(r => r.Error is not null)} erro(s)");
+            int signed = results.Count(r => r.Error is null);
+            _services.CountSignatures(signed);
+            _services.Log.Add("Agent", L.T("log.signed", label, signed, results.Count - signed), isError: signed < results.Count);
             await WriteAsync(response, results, AgentJsonContext.Default.ListAgentSignResult);
         }
         catch (JsonException)
         {
-            await WriteErrorAsync(response, 400, "JSON inválido.");
+            await WriteErrorAsync(response, 400, L.T("api.invalidJson"));
         }
         catch (KeyNotFoundException ex)
         {
@@ -205,23 +208,22 @@ internal sealed class AgentServer : IAsyncDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
-            _services.Log.Add("Agente", $"{label}: {ex.Message}", isError: true);
+            _services.Log.Add("Agent", $"{label}: {ex.Message}", isError: true);
             await WriteErrorAsync(response, 500, ex.Message);
         }
     }
 
     private async Task<bool> AskSiteAsync(string origin, string label)
     {
-        var decision = await _services.Dialogs.AskConsentAsync(new ConsentRequest(label, "Permitir acesso aos certificados?",
-            $"{label} quer usar o SimpleSign para listar seus certificados e pedir assinaturas. Cada assinatura ainda será confirmada por você.",
-            null, OfferRemember: origin != OriginPolicy.LocalApplication));
+        var decision = await _services.Dialogs.AskConsentAsync(new ConsentRequest(label, L.T("consent.site.title"),
+            L.T("consent.site.message", label), null, OfferRemember: origin != OriginPolicy.LocalApplication));
         if (decision == ConsentDecision.Deny)
         {
             return false;
         }
 
         Origins.Allow(origin, decision == ConsentDecision.AllowAlways);
-        _services.Log.Add("Agente", $"{label}: acesso permitido{(decision == ConsentDecision.AllowAlways ? " sempre" : " nesta sessão")}");
+        _services.Log.Add("Agent", L.T(decision == ConsentDecision.AllowAlways ? "log.accessAllowedAlways" : "log.accessAllowedOnce", label));
         return true;
     }
 

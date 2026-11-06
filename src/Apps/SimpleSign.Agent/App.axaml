@@ -3,21 +3,21 @@
              x:Class="SimpleSign.Agent.App"
              Name="SimpleSign Agent"
              RequestedThemeVariant="Default">
-  <Application.Styles>
-    <FluentTheme>
-      <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Light" Accent="#007AFF" RegionColor="#F5F5F7" />
-        <ColorPaletteResources x:Key="Dark" Accent="#0A84FF" RegionColor="#1C1C1E" />
-      </FluentTheme.Palettes>
-    </FluentTheme>
-    <StyleInclude Source="avares://SimpleSign.Agent/Styles/AppleTheme.axaml" />
-  </Application.Styles>
-
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
-        <ResourceInclude Source="avares://SimpleSign.Agent/Styles/Icons.axaml" />
+        <ResourceInclude Source="avares://SimpleSign.Agent/Styles/Theme.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Light" Accent="#18181B" RegionColor="#FFFFFF" />
+        <ColorPaletteResources x:Key="Dark" Accent="#E4E4E7" RegionColor="#09090B" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
+    <StyleInclude Source="avares://SimpleSign.Agent/Styles/Controls.axaml" />
+  </Application.Styles>
 </Application>

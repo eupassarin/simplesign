@@ -28,6 +28,13 @@ internal sealed class AgentServices(SettingsStore settings, IDialogService dialo
     public IDialogService Dialogs { get; } = dialogs;
 
     public ActivityLog Log { get; } = new();
+
+    /// <summary>Signatures made since the agent started.</summary>
+    public int Signatures => Volatile.Read(ref _signatures);
+
+    private int _signatures;
+
+    public void CountSignatures(int count) => Interlocked.Add(ref _signatures, count);
 }
 
 /// <summary>An in-memory log of what the agent did (also written to the debug trace).</summary>
@@ -37,6 +44,8 @@ internal sealed class ActivityLog
     private readonly List<LogEntry> _entries = [];
 
     public event EventHandler<LogEntry>? Added;
+
+    public event EventHandler? Cleared;
 
     public IReadOnlyList<LogEntry> Entries
     {
@@ -63,6 +72,16 @@ internal sealed class ActivityLog
 
         System.Diagnostics.Trace.WriteLine($"{entry.TimeText} [{source}] {message}");
         Added?.Invoke(this, entry);
+    }
+
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            _entries.Clear();
+        }
+
+        Cleared?.Invoke(this, EventArgs.Empty);
     }
 }
 

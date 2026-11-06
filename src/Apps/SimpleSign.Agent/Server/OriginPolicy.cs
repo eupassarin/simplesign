@@ -66,6 +66,34 @@ internal sealed class OriginPolicy(SettingsStore settings)
         }
     }
 
+    /// <summary>Origins allowed for this session only (not saved).</summary>
+    public IReadOnlyList<string> SessionOnly
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _session.Where(o => o != LocalApplication && !settings.Current.AllowedOrigins.Contains(o)).Order(StringComparer.Ordinal)];
+            }
+        }
+    }
+
+    /// <summary>Blocks an origin permanently: its requests are refused without asking.</summary>
+    public void Block(string origin)
+    {
+        lock (_gate)
+        {
+            _session.Remove(origin);
+            settings.Current.AllowedOrigins.Remove(origin);
+            if (!settings.Current.BlockedOrigins.Contains(origin))
+            {
+                settings.Current.BlockedOrigins.Add(origin);
+            }
+        }
+
+        settings.Save();
+    }
+
     public void Forget(string origin)
     {
         lock (_gate)

@@ -21,6 +21,29 @@ public sealed class AgentPolicyTests
         OriginPolicy.Normalize(origin).ShouldBe(expected);
 
     [Fact]
+    public void BlockAndForget_MoveAnOriginBetweenTheLists()
+    {
+        var settings = new SimpleSign.Agent.Services.SettingsStore(Directory.CreateTempSubdirectory("simplesign-agent-").FullName);
+        var policy = new OriginPolicy(settings);
+        policy.Allow("https://a.example", permanently: true);
+        policy.Allow("https://b.example", permanently: false);
+
+        policy.SessionOnly.ShouldBe(["https://b.example"]);
+        policy.Block("https://a.example");
+
+        policy.Check("https://a.example").ShouldBe(OriginState.Blocked);
+        settings.Current.AllowedOrigins.ShouldBeEmpty();
+        new SimpleSign.Agent.Services.SettingsStore(settings.Folder).Current.BlockedOrigins.ShouldBe(["https://a.example"]);
+
+        policy.Forget("https://a.example");
+        policy.Forget("https://b.example");
+
+        policy.Check("https://a.example").ShouldBe(OriginState.Unknown);
+        policy.Check("https://b.example").ShouldBe(OriginState.Unknown);
+        policy.SessionOnly.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void RateLimiter_BlocksAfterLimitUntilTheWindowEnds()
     {
         var time = new ManualTime();
