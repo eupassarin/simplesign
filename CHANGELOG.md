@@ -15,17 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   threw because the archive-time-stamp-v3 did not validate). The extended form now goes after the
   LT values and before the archive-time-stamp-v3; every form works on B-T, B-LT and B-LTA.
 
-### Security
-
-- `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
-  schemes (e.g. `file:`), which the OS shell would hand to other programs, throw `ArgumentException`.
-
-### Fixed
-
 - `CadesSignatureValidator` now builds the signer's chain with the certificates embedded in the
   CMS, as it already did for the TSA. Before, a signer under an intermediate CA was reported with
   `PartialChain` (chain not valid) unless the intermediate was itself passed as a trust anchor or
   was in the OS store.
+
+### Security
+
+- `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
+  schemes (e.g. `file:`), which the OS shell would hand to other programs, throw `ArgumentException`.
 
 ### Added (SimpleSign TestBench)
 

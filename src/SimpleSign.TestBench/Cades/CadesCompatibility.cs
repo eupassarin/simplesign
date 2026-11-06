@@ -137,19 +137,13 @@ public static class CadesCompatibility
             Set($"level.{level}", OptionState.Shown);
         }
 
-        // Extended forms build on the signature timestamp. CAdES-A (archive-time-stamp v2) only
-        // works on B-T: on B-LTA the library refuses it (its archive-time-stamp-v3 must stay last),
-        // and on B-LT the v2 archive timestamp does not cover the LT values, so validation rejects it.
+        // Extended forms build on the signature timestamp (B-T, B-LT or B-LTA).
         Set("extendedForm", icp ? new OptionState(false, Note: L.T("The ICP-Brasil policy sets the extended form (AD-RV: references, AD-RC: references and values, AD-RA: archive)."))
             : OptionState.Shown);
         string needsTimestamp = L.T("Extended forms need a signature timestamp: choose B-T or above.");
-        string archiveOnlyBt = L.T("CAdES-A (archive-time-stamp v2) needs exactly B-T: on B-LTA the library refuses it (SigningException), and on B-LT the v2 archive timestamp does not cover the LT values, so validation fails.");
         foreach (var form in Enum.GetValues<CadesExtendedChoice>())
         {
-            Set($"extendedForm.{form}", form == CadesExtendedChoice.None ? OptionState.Shown
-                : o.Level == BaselineLevel.BB ? OptionState.Off(needsTimestamp)
-                : form == CadesExtendedChoice.Archive && o.Level != BaselineLevel.BT ? OptionState.Off(archiveOnlyBt)
-                : OptionState.Shown);
+            Set($"extendedForm.{form}", form == CadesExtendedChoice.None || o.Level != BaselineLevel.BB ? OptionState.Shown : OptionState.Off(needsTimestamp));
         }
 
         var extended = icp ? CadesExtendedChoice.None : o.ExtendedForm;
