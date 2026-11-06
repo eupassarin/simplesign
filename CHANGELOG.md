@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — B-LT behind corporate proxies (#215)
+
+- `LongTermValidationOptions.ClockSkewTolerance` (default 5 minutes, `OcspClient.DefaultClockSkewTolerance`):
+  OCSP responses fetched during LTV collection are accepted when `thisUpdate` is up to this much ahead
+  of the local clock, or `nextUpdate` up to this much behind it. Previously a responder a fraction of a
+  second ahead had its fresh response rejected. Also settable on `OcspClient` and `LtvEmbedder`.
+  Embedded evidence checked against a signing time keeps no tolerance.
+- `OutboundHttpPolicy.PrivateNetworkHosts`: hosts allowed to resolve to private (RFC 1918) addresses,
+  for split-DNS networks. Exposed by `IHttpClientProvider.OutboundPolicy` (default member) and settable on
+  `SingleClientProvider`, `HttpClientFactoryProvider`, `OcspClient`, `CrlClient` and `TimestampClient`.
+  Loopback, link-local and literal IP addresses stay blocked. New overloads:
+  `ResilientHttp.GetBytesAsync(HttpClient, Uri, OutboundHttpPolicy, …)`,
+  `ICertificateChainService.DownloadAiaCertsAsync(…, OutboundHttpPolicy, …)`,
+  `LtvDataCollector.CollectAsync(IHttpClientProvider, …, LongTermValidationOptions, …)`.
+
 ### Changed (Breaking) — SimpleSign.Brasil split into SimpleSign.Brazil, .IcpBrasil and .GovBr
 
 `SimpleSign.Brasil` is discontinued. Each Brazilian hierarchy is now its own package, under

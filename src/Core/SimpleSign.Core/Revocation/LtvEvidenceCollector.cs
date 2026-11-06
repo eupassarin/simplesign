@@ -61,6 +61,8 @@ internal static class LtvEvidenceCollector
     /// <param name="chainCertificates">Optional intermediate certificates.</param>
     /// <param name="logger">Optional logger.</param>
     /// <param name="ocspClient">Optional OCSP client for DI integration.</param>
+    /// <param name="outboundPolicy">Outbound URL policy for AIA, OCSP and CRL downloads.</param>
+    /// <param name="clockSkewTolerance">Clock skew allowed for fetched OCSP responses (default 5 minutes).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Collected certificate raw data, OCSP responses, and CRLs.</returns>
     internal static async Task<LtvEvidence> CollectAsync(
@@ -69,9 +71,12 @@ internal static class LtvEvidenceCollector
         IReadOnlyList<X509Certificate2>? chainCertificates,
         ILogger? logger,
         IOcspClient? ocspClient = null,
+        OutboundHttpPolicy? outboundPolicy = null,
+        TimeSpan? clockSkewTolerance = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
+        outboundPolicy ??= OutboundHttpPolicy.Default;
         ArgumentNullException.ThrowIfNull(signerCert);
 
         var allCerts = new List<X509Certificate2> { signerCert };
@@ -94,6 +99,7 @@ internal static class LtvEvidenceCollector
             signerCert,
             configuredCertificates,
             aiaWarnings,
+            outboundPolicy,
             cancellationToken).ConfigureAwait(false);
         foreach (var aiaCertificate in aiaCertificates)
         {
@@ -118,7 +124,11 @@ internal static class LtvEvidenceCollector
         var pending = new Queue<X509Certificate2>(allCerts);
         var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ownedResponderCertificates = new List<X509Certificate2>();
-        var ocsp = ocspClient ?? new OcspClient(httpClient, logger);
+        var ocsp = ocspClient ?? new OcspClient(httpClient, logger)
+        {
+            ClockSkewTolerance = clockSkewTolerance ?? OcspClient.DefaultClockSkewTolerance,
+            OutboundPolicy = outboundPolicy,
+        };
 
         try
         {
@@ -194,7 +204,7 @@ internal static class LtvEvidenceCollector
                         try
                         {
                             byte[]? crlBytes = await ResilientHttp.GetBytesAsync(
-                                httpClient, crlUrl, logger: logger, ct: cancellationToken).ConfigureAwait(false);
+                                httpClient, crlUrl, logger: logger, policy: outboundPolicy, ct: cancellationToken).ConfigureAwait(false);
                             // Collection establishes that the embedded CRL is structurally relevant to this
                             // certificate. Trust-policy validation of the CRL signature is deliberately left
                             // to validation time, where the full issuer path and validation time are available.

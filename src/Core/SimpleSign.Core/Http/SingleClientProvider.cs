@@ -23,4 +23,11 @@ public sealed class SingleClientProvider : IHttpClientProvider
 
     /// <inheritdoc/>
     public HttpClient GetClient() => _client;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Set it to let hosts that a corporate DNS resolves to private addresses through, for example
+    /// <c>new OutboundHttpPolicy { PrivateNetworkHosts = ["crl.ca.example"] }</c>.
+    /// </remarks>
+    public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
 }

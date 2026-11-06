@@ -723,7 +723,9 @@ public sealed class CadesSignerBuilder
         var known = new List<X509Certificate2> { certificate };
         known.AddRange(chain.Where(c => known.All(k => k.Thumbprint != c.Thumbprint)));
         var provider = timestamp.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
-        var evidence = await LtvDataCollector.CollectAsync(provider.GetClient(), certificate, known, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var ltvOptions = _options.Profile.LongTermValidation ?? new LongTermValidationOptions();
+        var evidence = await LtvDataCollector.CollectAsync(
+            provider, certificate, known, logger, ltvOptions, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (!evidence.HasCompleteCoverage)
         {
             throw new SigningException(
@@ -803,7 +805,8 @@ public sealed class CadesSignerBuilder
 
         var ltvProvider = profile.LongTermValidation!.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
         var ltvData = await LtvDataCollector.CollectAsync(
-            ltvProvider.GetClient(), certificate, allKnownCerts, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+            ltvProvider, certificate, allKnownCerts, logger, profile.LongTermValidation,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         bool hasLtvMaterial = ltvData.CertificateRawData.Count > 0 && ltvData.HasCompleteCoverage;
         if (!hasLtvMaterial)

@@ -1,6 +1,8 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
+using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Signing;
 
 namespace SimpleSign.CAdES;
 
@@ -69,13 +71,45 @@ public static class LtvDataCollector
         CancellationToken cancellationToken = default)
     {
         var evidence = await LtvEvidenceCollector.CollectAsync(
-            httpClient, signerCert, chainCertificates, logger, ocspClient, cancellationToken).ConfigureAwait(false);
-        return new LtvCollectionResult(
+            httpClient, signerCert, chainCertificates, logger, ocspClient, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return ToResult(evidence);
+    }
+
+    /// <summary>
+    /// Collects LTV data for the certificate chain with <paramref name="options"/> (OCSP clock skew
+    /// tolerance) and the outbound policy of <paramref name="httpClientProvider"/>.
+    /// </summary>
+    /// <param name="httpClientProvider">Provider of the HTTP client and its <see cref="IHttpClientProvider.OutboundPolicy"/>.</param>
+    /// <param name="signerCert">The signer certificate.</param>
+    /// <param name="chainCertificates">Optional intermediate certificates.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="options">Long-term validation options.</param>
+    /// <param name="ocspClient">Optional OCSP client for DI integration; when set, it decides its own clock skew and policy.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Collected certificate raw data, OCSP responses, and CRLs.</returns>
+    public static async Task<LtvCollectionResult> CollectAsync(
+        IHttpClientProvider httpClientProvider,
+        X509Certificate2 signerCert,
+        IReadOnlyList<X509Certificate2>? chainCertificates,
+        ILogger? logger,
+        LongTermValidationOptions options,
+        IOcspClient? ocspClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(httpClientProvider);
+        ArgumentNullException.ThrowIfNull(options);
+        var evidence = await LtvEvidenceCollector.CollectAsync(
+            httpClientProvider.GetClient(), signerCert, chainCertificates, logger, ocspClient,
+            httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default, options.ClockSkewTolerance, cancellationToken).ConfigureAwait(false);
+        return ToResult(evidence);
+    }
+
+    private static LtvCollectionResult ToResult(LtvEvidence evidence) =>
+        new(
             evidence.CertificateRawData,
             evidence.OcspResponses,
             evidence.Crls,
             evidence.CertificateEvidence?.Select(ToPublic).ToList().AsReadOnly());
-    }
 
     private static LtvCertificateEvidence ToPublic(LtvEvidenceItem item) => new(item.Thumbprint, item.IsComplete)
     {

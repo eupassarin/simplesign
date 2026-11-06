@@ -13,7 +13,7 @@ internal static class UrlValidator
     /// <summary>
     /// Validates that a URL is safe for outbound HTTP requests (CRL, OCSP, AIA, TSA).
     /// Blocks localhost, private IPs, and non-HTTP(S) schemes.
-    /// Does NOT resolve hostnames — use <see cref="IsSafeUrlAsync"/> for DNS rebinding protection.
+    /// Does NOT resolve hostnames — use <see cref="IsSafeUrlAsync(string, CancellationToken)"/> for DNS rebinding protection.
     /// </summary>
     internal static bool IsSafeUrl(string url)
     {
@@ -36,7 +36,22 @@ internal static class UrlValidator
     /// Resolves hostnames and validates all resolved IP addresses.
     /// Prefer this overload for async code paths.
     /// </summary>
-    internal static async Task<bool> IsSafeUrlAsync(string url, CancellationToken ct = default)
+    internal static Task<bool> IsSafeUrlAsync(string url, CancellationToken ct = default) =>
+        IsSafeUrlAsync(url, OutboundHttpPolicy.Default, ct);
+
+    /// <summary>
+    /// Validates a URL like <see cref="IsSafeUrlAsync(string, CancellationToken)"/>, letting the hosts in
+    /// <see cref="OutboundHttpPolicy.PrivateNetworkHosts"/> resolve to private (RFC 1918) addresses.
+    /// </summary>
+    internal static Task<bool> IsSafeUrlAsync(string url, OutboundHttpPolicy? policy, CancellationToken ct = default) =>
+        IsSafeUrlAsync(url, policy, Dns.GetHostAddressesAsync, ct);
+
+    /// <summary>Overload with an injectable resolver, for tests.</summary>
+    internal static async Task<bool> IsSafeUrlAsync(
+        string url,
+        OutboundHttpPolicy? policy,
+        Func<string, CancellationToken, Task<IPAddress[]>> resolve,
+        CancellationToken ct = default)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
@@ -49,7 +64,8 @@ internal static class UrlValidator
             return false;
         }
 
-        return !await IsBlockedHostAsync(uri.Host, ct).ConfigureAwait(false);
+        return !await IsBlockedHostAsync(uri.Host, policy ?? OutboundHttpPolicy.Default, resolve, ct)
+            .ConfigureAwait(false);
     }
 
     private static bool IsBlockedHost(string host)
@@ -67,7 +83,11 @@ internal static class UrlValidator
         return false;
     }
 
-    private static async Task<bool> IsBlockedHostAsync(string host, CancellationToken ct)
+    private static async Task<bool> IsBlockedHostAsync(
+        string host,
+        OutboundHttpPolicy policy,
+        Func<string, CancellationToken, Task<IPAddress[]>> resolve,
+        CancellationToken ct)
     {
         if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
         {
@@ -82,10 +102,11 @@ internal static class UrlValidator
         // Resolve hostname and check all resolved IPs to prevent DNS rebinding
         try
         {
-            var addresses = await Dns.GetHostAddressesAsync(host, ct).ConfigureAwait(false);
+            var addresses = await resolve(host, ct).ConfigureAwait(false);
+            bool allowPrivate = policy.AllowsPrivateAddressesFor(host);
             foreach (var address in addresses)
             {
-                if (IsPrivateOrReserved(address))
+                if (allowPrivate ? IsLocalOrLinkLocal(address) : IsPrivateOrReserved(address))
                 {
                     return true;
                 }
@@ -103,6 +124,27 @@ internal static class UrlValidator
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Addresses refused even for allow-listed hosts: loopback, link-local (cloud metadata) and unspecified.
+    /// </summary>
+    private static bool IsLocalOrLinkLocal(IPAddress ip)
+    {
+        if (ip.IsIPv4MappedToIPv6)
+        {
+            ip = ip.MapToIPv4();
+        }
+
+        if (IPAddress.IsLoopback(ip) || ip.IsIPv6LinkLocal ||
+            ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any))
+        {
+            return true;
+        }
+
+        byte[] bytes = ip.GetAddressBytes();
+        return ip.AddressFamily == AddressFamily.InterNetwork && bytes.Length == 4 &&
+            (bytes[0] == 0 || bytes[0] == 127 || (bytes[0] == 169 && bytes[1] == 254));
     }
 
     private static bool IsPrivateOrReserved(IPAddress ip)

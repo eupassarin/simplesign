@@ -634,8 +634,12 @@ public sealed class XadesSignerBuilder
         logger.ExtendedFormApplying(operationId, _options.ExtendedForm.ToString());
         logger.LtvCollecting(operationId, known.Count);
         var provider = _options.Profile.LongTermValidation?.HttpClientProvider ?? timestamp.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
+        var ltvOptions = _options.Profile.LongTermValidation ?? new LongTermValidationOptions();
         var evidence = await LtvEvidenceCollector.CollectAsync(
-            provider.GetClient(), certificate, known, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+            provider.GetClient(), certificate, known, logger,
+            outboundPolicy: provider.OutboundPolicy ?? OutboundHttpPolicy.Default,
+            clockSkewTolerance: ltvOptions.ClockSkewTolerance,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
         if (!evidence.HasCompleteCoverage)
         {
             throw new SigningException(
@@ -699,7 +703,10 @@ public sealed class XadesSignerBuilder
         string operationId = _options.OperationId ?? "-";
         logger.LtvCollecting(operationId, chainCerts.Count);
         var ltvData = await LtvEvidenceCollector.CollectAsync(
-            ltvProvider.GetClient(), certificate, chainCerts, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+            ltvProvider.GetClient(), certificate, chainCerts, logger,
+            outboundPolicy: ltvProvider.OutboundPolicy ?? OutboundHttpPolicy.Default,
+            clockSkewTolerance: profile.LongTermValidation.ClockSkewTolerance,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         bool hasLtvMaterial = ltvData.CertificateRawData.Count > 0 && ltvData.HasCompleteCoverage;
         if (!hasLtvMaterial)

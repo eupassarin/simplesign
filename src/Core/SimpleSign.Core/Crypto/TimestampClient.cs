@@ -83,6 +83,11 @@ public sealed class TimestampClient : ITimestampClient
     }
 
     /// <summary>
+    /// Outbound URL policy applied to the TSA URL when the request is sent. Default: <see cref="OutboundHttpPolicy.Default"/>.
+    /// </summary>
+    public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
+
+    /// <summary>
     /// Creates a client for <paramref name="options"/>: its own <see cref="TimestampOptions.HttpClientProvider"/>,
     /// else an HTTP client that presents <see cref="TimestampOptions.ClientCertificate"/>, else
     /// <paramref name="fallback"/>; credentials and TCP transport as configured.
@@ -96,7 +101,10 @@ public sealed class TimestampClient : ITimestampClient
         ArgumentNullException.ThrowIfNull(fallback);
         HttpClient client = options.HttpClientProvider?.GetClient()
             ?? (options.ClientCertificate is { } certificate ? ClientFor(certificate) : fallback.GetClient());
-        return new TimestampClient(client, options, logger);
+        return new TimestampClient(client, options, logger)
+        {
+            OutboundPolicy = (options.HttpClientProvider ?? fallback).OutboundPolicy ?? OutboundHttpPolicy.Default,
+        };
     }
 
     private static HttpClient ClientFor(System.Security.Cryptography.X509Certificates.X509Certificate2 certificate) =>
@@ -272,8 +280,9 @@ public sealed class TimestampClient : ITimestampClient
         content.Headers.ContentType = TsqContentType;
 
         using var response = _authorization is null
-            ? await ResilientHttp.PostAsync(_httpClient, _tsaUrl, content, ct).ConfigureAwait(false)
-            : await ResilientHttp.PostAsync(_httpClient, _tsaUrl, timestampRequest, TsqContentType, _authorization, ct).ConfigureAwait(false);
+            ? await ResilientHttp.PostAsync(_httpClient, _tsaUrl, content, OutboundPolicy, ct).ConfigureAwait(false)
+            : await ResilientHttp.PostAsync(
+                _httpClient, _tsaUrl, timestampRequest, TsqContentType, _authorization, OutboundPolicy, ct).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {

@@ -18,8 +18,14 @@ namespace SimpleSign.Core.Revocation;
 /// </summary>
 public sealed class OcspClient : IOcspClient
 {
+    /// <summary>
+    /// Default tolerance between this machine's clock and the OCSP responder's clock: 5 minutes.
+    /// </summary>
+    public static readonly TimeSpan DefaultClockSkewTolerance = TimeSpan.FromMinutes(5);
+
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
+    private readonly TimeSpan _clockSkewTolerance = DefaultClockSkewTolerance;
 
     /// <summary>Creates an OCSP client with the specified HTTP client and optional logger.</summary>
     public OcspClient(HttpClient httpClient, ILogger? logger = null)
@@ -27,6 +33,29 @@ public sealed class OcspClient : IOcspClient
         _httpClient = httpClient;
         _logger = logger ?? NullLogger.Instance;
     }
+
+    /// <summary>
+    /// How far a freshly fetched response's <c>thisUpdate</c> may be ahead of this machine's clock,
+    /// and its <c>nextUpdate</c> behind it. Responders stamp <c>thisUpdate</c> with their own clock,
+    /// so a responder a fraction of a second ahead would otherwise reject its own fresh response.
+    /// Applies only to responses fetched online, not to embedded evidence checked against a signing time.
+    /// Default: <see cref="DefaultClockSkewTolerance"/>.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+    public TimeSpan ClockSkewTolerance
+    {
+        get => _clockSkewTolerance;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, TimeSpan.Zero);
+            _clockSkewTolerance = value;
+        }
+    }
+
+    /// <summary>
+    /// Outbound URL policy applied to OCSP responder URLs. Default: <see cref="OutboundHttpPolicy.Default"/>.
+    /// </summary>
+    public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
 
     #region Instance methods
 
@@ -71,7 +100,7 @@ public sealed class OcspClient : IOcspClient
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/ocsp-request");
 
         _logger.OcspRequestSending(ocspUrl);
-        using var response = await ResilientHttp.PostAsync(_httpClient, ocspUrl, content, ct).ConfigureAwait(false);
+        using var response = await ResilientHttp.PostAsync(_httpClient, ocspUrl, content, OutboundPolicy, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException($"OCSP responder returned HTTP {(int)response.StatusCode}");
@@ -79,7 +108,8 @@ public sealed class OcspClient : IOcspClient
 
         byte[] ocspResponse = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
         _logger.OcspResponseReceived(ocspResponse.Length);
-        var (isValid, responderCerts) = ParseOcspResponseWithCerts(ocspResponse, cert, _logger, issuerCert, DateTimeOffset.UtcNow);
+        var (isValid, responderCerts) = ParseOcspResponseWithCerts(
+            ocspResponse, cert, _logger, issuerCert, DateTimeOffset.UtcNow, _clockSkewTolerance);
         return new OcspFetchResult(isValid, ocspResponse, responderCerts);
     }
 
@@ -224,13 +254,14 @@ public sealed class OcspClient : IOcspClient
     /// </summary>
     internal static (bool IsValid, IReadOnlyList<X509Certificate2> ResponderCertificates) ParseOcspResponseWithCerts(
         byte[] ocspResponseBytes, X509Certificate2 cert, ILogger? logger = null,
-        X509Certificate2? issuerCert = null, DateTimeOffset? validationTime = null)
+        X509Certificate2? issuerCert = null, DateTimeOffset? validationTime = null, TimeSpan clockSkewTolerance = default)
     {
         var responderCerts = new List<X509Certificate2>();
 
         try
         {
-            return ParseOcspResponseWithCertsCore(ocspResponseBytes, cert, responderCerts, logger, issuerCert, validationTime);
+            return ParseOcspResponseWithCertsCore(
+                ocspResponseBytes, cert, responderCerts, logger, issuerCert, validationTime, clockSkewTolerance);
         }
         catch
         {
@@ -245,7 +276,7 @@ public sealed class OcspClient : IOcspClient
 
     private static (bool IsValid, IReadOnlyList<X509Certificate2> ResponderCertificates) ParseOcspResponseWithCertsCore(
         byte[] ocspResponseBytes, X509Certificate2 cert, List<X509Certificate2> responderCerts, ILogger? logger,
-        X509Certificate2? issuerCert = null, DateTimeOffset? validationTime = null)
+        X509Certificate2? issuerCert = null, DateTimeOffset? validationTime = null, TimeSpan clockSkewTolerance = default)
     {
         var reader = new AsnReader(ocspResponseBytes, AsnEncodingRules.BER);
         var ocspResponse = reader.ReadSequence();
@@ -289,7 +320,7 @@ public sealed class OcspClient : IOcspClient
         }
 
         return (FindMatchingCertStatus(tbsData, expectedIssuerNameHash, expectedIssuerKeyHash,
-            expectedSerialNumber, validationTime, issuerCert is null, logger), responderCerts);
+            expectedSerialNumber, validationTime, clockSkewTolerance, issuerCert is null, logger), responderCerts);
     }
 
     private static void ValidateOcspResponseStatus(AsnReader ocspResponse)
@@ -429,6 +460,7 @@ public sealed class OcspClient : IOcspClient
         byte[]? expectedIssuerKeyHash,
         byte[] expectedSerialNumber,
         DateTimeOffset? validationTime,
+        TimeSpan clockSkewTolerance,
         bool allowFirstStatusFallback,
         ILogger? logger)
     {
@@ -469,9 +501,11 @@ public sealed class OcspClient : IOcspClient
                 if (validationTime.HasValue)
                 {
                     var thisUpdate = single.ReadGeneralizedTime();
-                    if (thisUpdate > validationTime.Value)
+                    if (thisUpdate > validationTime.Value + clockSkewTolerance)
                     {
-                        throw new InvalidDataException("OCSP response was issued after the validation time.");
+                        throw new InvalidDataException(
+                            $"OCSP response was issued after the validation time (thisUpdate {thisUpdate:O}, " +
+                            $"validation time {validationTime.Value:O}, clock skew tolerance {clockSkewTolerance}).");
                     }
 
                     if (!single.HasData || single.PeekTag() != new Asn1Tag(TagClass.ContextSpecific, 0, true))
@@ -481,9 +515,11 @@ public sealed class OcspClient : IOcspClient
 
                     var nextUpdate = single.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true))
                         .ReadGeneralizedTime();
-                    if (nextUpdate < validationTime.Value)
+                    if (nextUpdate < validationTime.Value - clockSkewTolerance)
                     {
-                        throw new InvalidDataException("OCSP response expired before the validation time.");
+                        throw new InvalidDataException(
+                            $"OCSP response expired before the validation time (nextUpdate {nextUpdate:O}, " +
+                            $"validation time {validationTime.Value:O}, clock skew tolerance {clockSkewTolerance}).");
                     }
                 }
 

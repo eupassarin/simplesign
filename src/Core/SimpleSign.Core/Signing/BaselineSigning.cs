@@ -105,7 +105,10 @@ internal static class BaselineSigning
         ILogger logger) =>
         factory is not null
             ? factory.Create(endpoint)
-            : new TimestampClient((scopedProvider ?? httpClientProvider).GetClient(), endpoint, logger);
+            : NewTimestampClient(scopedProvider ?? httpClientProvider, endpoint, logger);
+
+    private static TimestampClient NewTimestampClient(IHttpClientProvider provider, string endpoint, ILogger logger) =>
+        new(provider.GetClient(), endpoint, logger) { OutboundPolicy = provider.OutboundPolicy ?? OutboundHttpPolicy.Default };
 
     /// <summary>
     /// Asks the external signer for the signature and checks it with the certificate's public key,

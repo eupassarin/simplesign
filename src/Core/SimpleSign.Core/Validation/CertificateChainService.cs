@@ -17,6 +17,16 @@ public sealed class CertificateChainService : ICertificateChainService
         => CertificateChainUtility.DownloadAiaCertsAsync(httpClient, cert, extraCerts, warnings, ct);
 
     /// <inheritdoc />
+    public Task<List<X509Certificate2>> DownloadAiaCertsAsync(
+        HttpClient httpClient,
+        X509Certificate2 cert,
+        IReadOnlyList<X509Certificate2>? extraCerts,
+        List<string> warnings,
+        Http.OutboundHttpPolicy policy,
+        CancellationToken ct)
+        => CertificateChainUtility.DownloadAiaCertsAsync(httpClient, cert, extraCerts, warnings, policy, ct);
+
+    /// <inheritdoc />
     public IEnumerable<X509Certificate2> LoadCertsFromBytes(byte[] bytes, ILogger? logger = null)
         => CertificateChainUtility.LoadCertsFromBytes(bytes, logger);
 

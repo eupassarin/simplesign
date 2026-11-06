@@ -40,6 +40,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     private readonly IIntegrityVerifier _integrityVerifier;
     private readonly ICmsParser _cmsParser;
     private readonly ITimestampValidator _timestampValidator;
+    private readonly OutboundHttpPolicy _outboundPolicy = OutboundHttpPolicy.Default;
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly IReadOnlyList<ITrustAnchorProvider> _trustAnchorProviders;
@@ -67,6 +68,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _options = options ?? ValidationOptions.Default;
         var client = httpClientProvider.GetClient();
         _httpClient = client;
+        _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
         _logger = logger ?? NullLogger<PdfSignatureValidator>.Instance;
         _revocationChecker = revocationChecker;
         _certChainService = certChainService ?? new CertificateChainService();
@@ -116,7 +118,10 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _logger = logger ?? NullLogger<PdfSignatureValidator>.Instance;
         var client = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _httpClient = client;
-        _revocationChecker = new RevocationChecker(new OcspClient(client, _logger), new CrlClient(client, _logger), _logger);
+        _revocationChecker = new RevocationChecker(
+            new OcspClient(client, _logger) { OutboundPolicy = _outboundPolicy },
+            new CrlClient(client, _logger) { OutboundPolicy = _outboundPolicy },
+            _logger);
         _certChainService = new CertificateChainService();
         _cryptoVerifier = new CryptoVerifierService();
         _integrityVerifier = new IntegrityVerifierService();
@@ -143,8 +148,12 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _options = options ?? ValidationOptions.Default;
         var client = httpClientProvider.GetClient();
         _httpClient = client;
+        _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
         _logger = logger ?? NullLogger<PdfSignatureValidator>.Instance;
-        _revocationChecker = new RevocationChecker(new OcspClient(client, _logger), new CrlClient(client, _logger), _logger);
+        _revocationChecker = new RevocationChecker(
+            new OcspClient(client, _logger) { OutboundPolicy = _outboundPolicy },
+            new CrlClient(client, _logger) { OutboundPolicy = _outboundPolicy },
+            _logger);
         _certChainService = new CertificateChainService();
         _cryptoVerifier = new CryptoVerifierService();
         _integrityVerifier = new IntegrityVerifierService();
@@ -601,8 +610,13 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             // intermediate certificates via AIA. We do it explicitly and add them to ExtraStore.
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(_options.NetworkTimeout);
-            var aiaCerts = await _certChainService.DownloadAiaCertsAsync(
-                _httpClient, cmsData.SignerCertificate, cmsData.Certificates, warnings, timeoutCts.Token).ConfigureAwait(false);
+            // The policy overload only when an allow-list is set, so existing services keep their behavior.
+            var aiaCerts = await (_outboundPolicy.PrivateNetworkHosts.Count == 0
+                ? _certChainService.DownloadAiaCertsAsync(
+                    _httpClient, cmsData.SignerCertificate, cmsData.Certificates, warnings, timeoutCts.Token)
+                : _certChainService.DownloadAiaCertsAsync(
+                    _httpClient, cmsData.SignerCertificate, cmsData.Certificates, warnings, _outboundPolicy, timeoutCts.Token))
+                .ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
 
             IReadOnlyList<X509Certificate2> allCerts = aiaCerts.Count > 0

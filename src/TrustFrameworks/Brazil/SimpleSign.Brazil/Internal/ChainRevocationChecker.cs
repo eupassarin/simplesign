@@ -21,13 +21,15 @@ internal sealed class ChainRevocationChecker
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly OcspClient _ocspClient;
+    private readonly OutboundHttpPolicy _outboundPolicy;
     private readonly ConcurrentDictionary<string, (byte[] Bytes, DateTimeOffset FetchedAt)> _crlCache = new(StringComparer.Ordinal);
 
-    internal ChainRevocationChecker(HttpClient httpClient, ILogger logger)
+    internal ChainRevocationChecker(HttpClient httpClient, ILogger logger, OutboundHttpPolicy? outboundPolicy = null)
     {
         _httpClient = httpClient;
         _logger = logger;
-        _ocspClient = new OcspClient(httpClient, logger);
+        _outboundPolicy = outboundPolicy ?? OutboundHttpPolicy.Default;
+        _ocspClient = new OcspClient(httpClient, logger) { OutboundPolicy = _outboundPolicy };
     }
 
     /// <summary>Checks <paramref name="chain"/> (leaf first, root last) at <paramref name="time"/>.</summary>
@@ -170,7 +172,7 @@ internal sealed class ChainRevocationChecker
 
         try
         {
-            byte[]? bytes = await ResilientHttp.GetBytesAsync(_httpClient, new Uri(url), _logger, cancellationToken).ConfigureAwait(false);
+            byte[]? bytes = await ResilientHttp.GetBytesAsync(_httpClient, new Uri(url), _outboundPolicy, _logger, cancellationToken).ConfigureAwait(false);
             if (bytes is not null)
             {
                 _crlCache[url] = (bytes, DateTimeOffset.UtcNow);

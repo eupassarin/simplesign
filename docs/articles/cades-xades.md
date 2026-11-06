@@ -58,6 +58,32 @@ var cmsEnveloped = await CadesSigner
 File.WriteAllBytes("document.pdf.p7m", cmsEnveloped);
 ```
 
+### Behind a corporate proxy
+
+Two settings help when B-LT falls back to B-T on a corporate network (PAdES, CAdES and XAdES):
+
+- **Clock skew.** OCSP responders stamp `thisUpdate` with their own clock, so a fresh response can
+  look a moment "in the future". Collection accepts responses up to `ClockSkewTolerance` ahead
+  (default 5 minutes); the same margin applies to an expired `nextUpdate`.
+- **Split DNS.** The SSRF guard refuses hosts that resolve to private addresses. If the internal DNS
+  answers a public CA host with a private address while the request goes out through the proxy, list
+  that host in the provider's `OutboundHttpPolicy`. Loopback, link-local (cloud metadata) and literal
+  IP addresses stay blocked.
+
+```csharp
+var provider = new SingleClientProvider(proxiedClient)
+{
+    OutboundPolicy = new OutboundHttpPolicy { PrivateNetworkHosts = ["crl.ca.example", "*.ocsp.ca.example"] },
+};
+
+.WithLevel(AdesBaselineProfile.LongTerm(
+    new TimestampOptions(tsa),
+    new LongTermValidationOptions(provider) { ClockSkewTolerance = TimeSpan.FromMinutes(5) }))
+```
+
+The policy applies wherever the provider is used: TSA, OCSP, CRL and AIA downloads when signing,
+and revocation and AIA downloads when validating (`PdfSignatureValidator`, ICP-Brasil and Gov.br chain validators).
+
 ## Validate CAdES Signatures
 
 ```csharp

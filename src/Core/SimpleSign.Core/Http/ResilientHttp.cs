@@ -60,7 +60,30 @@ public static class ResilientHttp
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(uri);
-        return GetBytesAsync(httpClient, uri.AbsoluteUri, logger, cancellationToken);
+        return GetBytesAsync(httpClient, uri.AbsoluteUri, logger, OutboundHttpPolicy.Default, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes an HTTP GET with retries under an <see cref="OutboundHttpPolicy"/> and returns the
+    /// response body. Returns <see langword="null"/> when every attempt fails or the policy refuses the URL.
+    /// </summary>
+    /// <param name="httpClient">The client that sends the request.</param>
+    /// <param name="uri">The absolute URL to download.</param>
+    /// <param name="policy">The outbound policy, usually <see cref="IHttpClientProvider.OutboundPolicy"/>.</param>
+    /// <param name="logger">Optional logger for failed attempts.</param>
+    /// <param name="cancellationToken">Cancels the download.</param>
+    /// <returns>The response bytes, or <see langword="null"/>.</returns>
+    public static Task<byte[]?> GetBytesAsync(
+        HttpClient httpClient,
+        Uri uri,
+        OutboundHttpPolicy policy,
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(uri);
+        ArgumentNullException.ThrowIfNull(policy);
+        return GetBytesAsync(httpClient, uri.AbsoluteUri, logger, policy, cancellationToken);
     }
 
     /// <summary>
@@ -68,11 +91,15 @@ public static class ResilientHttp
     /// Returns null if all retries fail or circuit is open.
     /// </summary>
     internal static async Task<byte[]?> GetBytesAsync(
-        HttpClient httpClient, string url, ILogger? logger = null, CancellationToken ct = default)
+        HttpClient httpClient,
+        string url,
+        ILogger? logger = null,
+        OutboundHttpPolicy? policy = null,
+        CancellationToken ct = default)
     {
-        if (!await UrlValidator.IsSafeUrlAsync(url, ct).ConfigureAwait(false))
+        if (!await UrlValidator.IsSafeUrlAsync(url, policy, ct).ConfigureAwait(false))
         {
-            (logger ?? NullLogger.Instance).HttpGetFailed(url, 0, "SSRF blocked: URL points to localhost or private network");
+            (logger ?? NullLogger.Instance).HttpGetFailed(url, 0, BlockedMessage(url));
             return null;
         }
 
@@ -96,11 +123,15 @@ public static class ResilientHttp
     /// Throws on failure after retries are exhausted.
     /// </summary>
     internal static async Task<HttpResponseMessage> PostAsync(
-        HttpClient httpClient, string url, HttpContent content, CancellationToken ct = default)
+        HttpClient httpClient,
+        string url,
+        HttpContent content,
+        OutboundHttpPolicy? policy = null,
+        CancellationToken ct = default)
     {
-        if (!await UrlValidator.IsSafeUrlAsync(url, ct).ConfigureAwait(false))
+        if (!await UrlValidator.IsSafeUrlAsync(url, policy, ct).ConfigureAwait(false))
         {
-            throw new InvalidOperationException($"SSRF blocked: URL points to localhost or private network — {new Uri(url).Host}");
+            throw new InvalidOperationException(BlockedMessage(url));
         }
 
         return await Pipeline.ExecuteAsync(async token =>
@@ -117,11 +148,12 @@ public static class ResilientHttp
         byte[] body,
         System.Net.Http.Headers.MediaTypeHeaderValue contentType,
         System.Net.Http.Headers.AuthenticationHeaderValue authorization,
+        OutboundHttpPolicy? policy = null,
         CancellationToken ct = default)
     {
-        if (!await UrlValidator.IsSafeUrlAsync(url, ct).ConfigureAwait(false))
+        if (!await UrlValidator.IsSafeUrlAsync(url, policy, ct).ConfigureAwait(false))
         {
-            throw new InvalidOperationException($"SSRF blocked: URL points to localhost or private network — {new Uri(url).Host}");
+            throw new InvalidOperationException(BlockedMessage(url));
         }
 
         return await Pipeline.ExecuteAsync(async token =>
@@ -132,5 +164,12 @@ public static class ResilientHttp
             request.Headers.Authorization = authorization;
             return await httpClient.SendAsync(request, token).ConfigureAwait(false);
         }, ct).ConfigureAwait(false);
+    }
+
+    private static string BlockedMessage(string url)
+    {
+        string host = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : url;
+        return $"SSRF blocked: {host} points to localhost or a private network. If a corporate DNS resolves this " +
+            $"public host to a private address, list it in {nameof(OutboundHttpPolicy)}.{nameof(OutboundHttpPolicy.PrivateNetworkHosts)}.";
     }
 }

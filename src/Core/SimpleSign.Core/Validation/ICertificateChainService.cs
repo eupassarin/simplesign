@@ -17,6 +17,20 @@ public interface ICertificateChainService
         List<string> warnings,
         CancellationToken ct);
 
+    /// <summary>
+    /// Downloads intermediate certificates via AIA under an <see cref="Http.OutboundHttpPolicy"/>,
+    /// usually <see cref="Http.IHttpClientProvider.OutboundPolicy"/>. The default implementation
+    /// ignores the policy and calls the overload without it.
+    /// </summary>
+    Task<List<X509Certificate2>> DownloadAiaCertsAsync(
+        HttpClient httpClient,
+        X509Certificate2 cert,
+        IReadOnlyList<X509Certificate2>? extraCerts,
+        List<string> warnings,
+        Http.OutboundHttpPolicy policy,
+        CancellationToken ct) =>
+        DownloadAiaCertsAsync(httpClient, cert, extraCerts, warnings, ct);
+
     /// <summary>Loads one or more X509 certificates from raw bytes (DER, PEM, PKCS#7, PKCS#12).</summary>
     IEnumerable<X509Certificate2> LoadCertsFromBytes(byte[] bytes, ILogger? logger = null);
 
