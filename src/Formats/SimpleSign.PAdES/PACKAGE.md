@@ -33,7 +33,7 @@ IReadOnlyList<SignatureValidationResult> results =
 - Signature and document timestamps (RFC 3161), LTV validation material (DSS/VRI)
 - DocMDP certification, batch signing, signing into existing fields, deferred
   (two-phase) signing for HSM / web scenarios
-- ICP-Brasil / eIDAS country extensions via `WithCountryExtension(...)`
+- Country extensions (e.g., ICP-Brasil) via `WithCountryExtension(...)`
 - PDF/A preservation, incremental updates that keep earlier signatures valid
 - Visible signature stamps with customizable labels and date/time zone, QR code, and
   background images (PNG transparency kept)
