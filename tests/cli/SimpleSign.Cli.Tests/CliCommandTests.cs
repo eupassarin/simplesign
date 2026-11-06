@@ -224,7 +224,7 @@ public sealed class CliCommandTests : IDisposable
         await File.WriteAllTextAsync(html, "<h1>Relatório</h1><p>Olá, mundo.</p>");
         string output = Path.Combine(_tempDir, "page.pdf");
 
-        string font = FindRepositoryFile("src", "SimpleSign.PAdES", "Signing", "LiberationSans-subset.ttf");
+        string font = FindRepositoryFile("src", "Formats", "SimpleSign.PAdES", "Signing", "LiberationSans-subset.ttf");
 
         var (exit, log) = await RunAsync(
             "html-to-pdf", html, "-o", output, "--font", $"Liberation Sans={font}", "--css", WriteCss("body { font-family: 'Liberation Sans'; }"),

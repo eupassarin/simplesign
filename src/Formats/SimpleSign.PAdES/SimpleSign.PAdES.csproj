@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.PAdES</AssemblyName>
+    <RootNamespace>SimpleSign.PAdES</RootNamespace>
+    <PackageId>SimpleSign.PAdES</PackageId>
+    <Description>Sign, validate, and inspect PDF digital signatures (PAdES ETSI EN 319 142). Supports B-B, B-T, B-LT, B-LTA conformance levels. Fluent async API. No BouncyCastle — uses only System.Security.Cryptography. Native AOT compatible.</Description>
+    <PackageTags>pdf;pades;digital-signature;electronic-signature;sign-pdf;pdf-signing;validate-signature;etsi;timestamp;native-aot</PackageTags>
+    <Version>0.10.1</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\Core\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.PAdES.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Contracts.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.8.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Signing\LiberationSans-subset.ttf" Visible="false" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Generates src/SimpleSign.Brasil/IcpBrasil/IcpBrasilPolicyRules.Catalog.cs from the ITI PA files.
+  <!-- Generates src/Brasil/SimpleSign.Brasil/IcpBrasil/IcpBrasilPolicyRules.Catalog.cs from the ITI PA files.
        Usage: see Program.cs. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -13,6 +13,6 @@
     <AnalysisMode>Default</AnalysisMode>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
+    <ProjectReference Include="..\..\src\Brasil\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
   </ItemGroup>
 </Project>

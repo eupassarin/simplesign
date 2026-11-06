@@ -5,8 +5,8 @@ an explanation next to each one. It never shows options that cannot be combined:
 in one place (`Signing/Compatibility.cs`), and the UI, the runner and the run matrix all use them.
 
 ```bash
-dotnet run --project src/SimpleSign.TestBench          # http://127.0.0.1:5199, opens the browser
-dotnet run --project src/SimpleSign.TestBench -- --port 5200 --no-browser
+dotnet run --project src/Apps/SimpleSign.TestBench          # http://127.0.0.1:5199, opens the browser
+dotnet run --project src/Apps/SimpleSign.TestBench -- --port 5200 --no-browser
 ```
 
 The UI is in **English (en-US), Portuguese (pt-BR) and Spanish (es)**: it follows the browser's
@@ -15,7 +15,7 @@ explanations, compatibility messages and sample descriptions follow the same cho
 (`Accept-Language`). Library names, OIDs, standard terms and the generated code stay as they are.
 
 The first run builds the UI (Node.js 20+ needed; `npm ci && npm run build` in
-`src/SimpleSign.TestBench/web`). To work on the UI with hot reload, run the app and, in another
+`src/Apps/SimpleSign.TestBench/web`). To work on the UI with hot reload, run the app and, in another
 terminal, `npm run dev` in `web/` (Vite on :5173, proxying `/api` to :5199). The app listens on
 127.0.0.1 only. Uploads, keys and token sessions stay in memory and are gone when it stops.
 

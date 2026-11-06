@@ -8,7 +8,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # The TestBench UI (src/SimpleSign.TestBench/web) is built by the testbench job, not by every build.
+  # The TestBench UI (src/Apps/SimpleSign.TestBench/web) is built by the testbench job, not by every build.
   SkipWeb: true
 
 jobs:
@@ -150,17 +150,17 @@ jobs:
 
       - name: Pack all libraries
         run: |
-          for proj in src/SimpleSign/SimpleSign.csproj \
-                     src/SimpleSign.Core/SimpleSign.Core.csproj \
-                     src/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
-                     src/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
-                     src/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
-                     src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
-                     src/SimpleSign.Cli/SimpleSign.Cli.csproj \
-                     src/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
-                     src/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
-                     src/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj \
-                     src/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj; do
+          for proj in src/Formats/SimpleSign/SimpleSign.csproj \
+                     src/Core/SimpleSign.Core/SimpleSign.Core.csproj \
+                     src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
+                     src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
+                     src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
+                     src/HtmlToPdf/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
+                     src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj \
+                     src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
+                     src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
+                     src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj \
+                     src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj; do
             dotnet pack "$proj" --configuration Release --no-restore --output ./nupkg
           done
 
@@ -264,7 +264,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Build the UI (type-check + bundle)
-        working-directory: src/SimpleSign.TestBench/web
+        working-directory: src/Apps/SimpleSign.TestBench/web
         run: |
           npm ci --no-audit --no-fund
           npm run build
@@ -302,5 +302,5 @@ jobs:
         run: dotnet test tests/unit/SimpleSign.Agent.Tests --configuration Release --logger "console;verbosity=normal"
 
       - name: Build agent app
-        run: dotnet build src/SimpleSign.Agent --configuration Release
+        run: dotnet build src/Apps/SimpleSign.Agent --configuration Release
 

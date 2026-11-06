@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- SimpleSign Agent: a tray app that lets web pages request signatures with the user's certificates (H1). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>SimpleSign.Agent</AssemblyName>
+    <RootNamespace>SimpleSign.Agent</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- UI code resumes on the UI thread; strings are UI text. -->
+    <NoWarn>$(NoWarn);CS1591;CA2007;CA1303;CA1515;CA1822;CA1848;CA1873</NoWarn>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationIcon Condition="Exists('Assets\icon.ico')">Assets\icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\Brasil\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
+    <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Agent.Tests" />
+  </ItemGroup>
+</Project>

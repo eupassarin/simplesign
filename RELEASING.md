@@ -19,15 +19,15 @@ Update `<Version>` in all `.csproj` files:
 | File | Notes |
 |------|-------|
 | `Directory.Build.props` | Global default for all projects |
-| `src/SimpleSign/SimpleSign.csproj` | Meta-package |
-| `src/SimpleSign.Core/SimpleSign.Core.csproj` | Core crypto |
-| `src/SimpleSign.Pdf/SimpleSign.Pdf.csproj` | PDF parser |
-| `src/SimpleSign.PAdES/SimpleSign.PAdES.csproj` | Main package |
-| `src/SimpleSign.Brasil/SimpleSign.Brasil.csproj` | ICP-Brasil |
-| `src/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
-| `src/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
-| `src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
-| `src/SimpleSign.Cli/SimpleSign.Cli.csproj` | CLI tool |
+| `src/Formats/SimpleSign/SimpleSign.csproj` | Meta-package |
+| `src/Core/SimpleSign.Core/SimpleSign.Core.csproj` | Core crypto |
+| `src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj` | PDF parser |
+| `src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj` | Main package |
+| `src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj` | ICP-Brasil |
+| `src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
+| `src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
+| `src/HtmlToPdf/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
+| `src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj` | CLI tool |
 
 ### Quick sed (macOS):
 
@@ -36,15 +36,15 @@ VERSION="X.Y.Z"
 OLD="0.10.1"
 sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   Directory.Build.props \
-  src/SimpleSign/SimpleSign.csproj \
-  src/SimpleSign.Core/SimpleSign.Core.csproj \
-  src/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
-  src/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
-  src/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
-  src/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
-  src/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
-  src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
-  src/SimpleSign.Cli/SimpleSign.Cli.csproj
+  src/Formats/SimpleSign/SimpleSign.csproj \
+  src/Core/SimpleSign.Core/SimpleSign.Core.csproj \
+  src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj \
+  src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
+  src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
+  src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
+  src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
+  src/HtmlToPdf/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
+  src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj
 ```
 
 ## Version Bump — Other Files with Hardcoded Versions

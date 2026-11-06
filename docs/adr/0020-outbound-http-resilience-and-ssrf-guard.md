@@ -15,7 +15,7 @@ Two problems follow:
 ADR 0008 decided **which** `HttpClient` is used (`IHttpClientProvider`). This ADR decides **what every outbound request must go through**.
 
 **Decision:**
-All library-initiated HTTP goes through `ResilientHttp` (`src/SimpleSign.Core/Http`), which applies two rules before and around the request.
+All library-initiated HTTP goes through `ResilientHttp` (`src/Core/SimpleSign.Core/Http`), which applies two rules before and around the request.
 
 1. **SSRF guard (`UrlValidator`).**
    - The URL must be absolute `http` or `https`.

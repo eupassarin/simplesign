@@ -66,7 +66,7 @@ right-click → *Abrir* the first time; on Windows, *Mais informações* → *Ex
 From source:
 
 ```bash
-dotnet run --project src/SimpleSign.Agent
+dotnet run --project src/Apps/SimpleSign.Agent
 scripts/package-agent.sh osx-arm64 0.11.0      # "SimpleSign Agent.app" in artifacts/agent
 ```
 

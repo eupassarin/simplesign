@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.CAdES</AssemblyName>
+    <RootNamespace>SimpleSign.CAdES</RootNamespace>
+    <PackageId>SimpleSign.CAdES</PackageId>
+    <Description>Create and validate standalone CAdES digital signatures (ETSI EN 319 122). Supports B-B, B-T, B-LT, and B-LTA conformance levels. No BouncyCastle — uses only System.Security.Cryptography. Native AOT compatible.</Description>
+    <PackageTags>cades;cms;pkcs7;detached-signature;digital-signature;electronic-signature;etsi;timestamp</PackageTags>
+    <Version>0.10.1</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Contracts.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.CAdES.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

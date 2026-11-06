@@ -58,17 +58,17 @@ jobs:
         shell: bash
         run: |
           projects=(
-            src/SimpleSign.Core/SimpleSign.Core.csproj
-            src/SimpleSign.Pdf/SimpleSign.Pdf.csproj
-            src/SimpleSign.PAdES/SimpleSign.PAdES.csproj
-            src/SimpleSign.CAdES/SimpleSign.CAdES.csproj
-            src/SimpleSign.XAdES/SimpleSign.XAdES.csproj
-            src/SimpleSign.Brasil/SimpleSign.Brasil.csproj
-            src/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj
-            src/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj
-            src/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj
-            src/SimpleSign/SimpleSign.csproj
-            src/SimpleSign.Cli/SimpleSign.Cli.csproj
+            src/Core/SimpleSign.Core/SimpleSign.Core.csproj
+            src/Core/SimpleSign.Pdf/SimpleSign.Pdf.csproj
+            src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj
+            src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj
+            src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj
+            src/Brasil/SimpleSign.Brasil/SimpleSign.Brasil.csproj
+            src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj
+            src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj
+            src/HtmlToPdf/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj
+            src/Formats/SimpleSign/SimpleSign.csproj
+            src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj
           )
 
           for project in "${projects[@]}"; do
@@ -135,7 +135,7 @@ jobs:
         shell: bash
         run: |
           for runtime in linux-x64 win-x64 osx-x64 osx-arm64; do
-            dotnet publish src/SimpleSign.Cli/SimpleSign.Cli.csproj \
+            dotnet publish src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj \
               --configuration Release \
               --framework net8.0 \
               --runtime "$runtime" \
@@ -205,7 +205,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          dotnet publish src/SimpleSign.Agent/SimpleSign.Agent.csproj -c Release -r win-x64 --self-contained true `
+          dotnet publish src/Apps/SimpleSign.Agent/SimpleSign.Agent.csproj -c Release -r win-x64 --self-contained true `
             -p:Version=${{ steps.version.outputs.version }} -o publish-agent
           New-Item -ItemType Directory -Force artifacts/agent | Out-Null
           Compress-Archive -Path publish-agent\* -DestinationPath artifacts/agent/SimpleSignAgent-${{ steps.version.outputs.version }}-win-x64.zip

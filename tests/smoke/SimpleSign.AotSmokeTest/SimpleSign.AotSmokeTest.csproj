@@ -29,9 +29,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../src/SimpleSign.PAdES/SimpleSign.PAdES.csproj" />
-    <ProjectReference Include="../../../src/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj" />
-    <ProjectReference Include="../../../src/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj" />
+    <ProjectReference Include="../../../src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="../../../src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj" />
+    <ProjectReference Include="../../../src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj" />
   </ItemGroup>
 
 </Project>

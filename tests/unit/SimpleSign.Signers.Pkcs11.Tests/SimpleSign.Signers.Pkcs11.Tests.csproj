@@ -23,9 +23,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
-    <ProjectReference Include="..\..\..\src\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
-    <ProjectReference Include="..\..\..\src\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
+    <ProjectReference Include="..\..\..\src\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
+    <ProjectReference Include="..\..\..\src\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\..\src\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
     <ProjectReference Include="..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>
 

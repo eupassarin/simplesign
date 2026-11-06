@@ -21,8 +21,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
-    <EmbeddedResource Include="..\..\..\src\SimpleSign.PAdES\Signing\LiberationSans-subset.ttf" LogicalName="SimpleSign.HtmlToPdf.Tests.LiberationSans-subset.ttf" />
+    <ProjectReference Include="..\..\..\src\HtmlToPdf\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
+    <EmbeddedResource Include="..\..\..\src\Formats\SimpleSign.PAdES\Signing\LiberationSans-subset.ttf" LogicalName="SimpleSign.HtmlToPdf.Tests.LiberationSans-subset.ttf" />
     <EmbeddedResource Include="Fonts\*.ttf" LogicalName="SimpleSign.HtmlToPdf.Tests.Fonts.%(Filename)%(Extension)" />
   </ItemGroup>
 

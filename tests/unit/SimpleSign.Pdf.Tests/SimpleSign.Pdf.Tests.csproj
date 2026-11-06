@@ -22,8 +22,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\SimpleSign.Core\SimpleSign.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
+    <ProjectReference Include="..\..\..\src\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Core\SimpleSign.Pdf\SimpleSign.Pdf.csproj" />
     <ProjectReference Include="..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>
 

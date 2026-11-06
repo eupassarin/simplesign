@@ -19,7 +19,7 @@ public sealed partial class LocalizationTests(TestBenchFixture fixture)
     {
         string root = RepositoryRoot();
         var missing = new List<string>();
-        foreach (string file in Directory.EnumerateFiles(Path.Combine(root, "src", "SimpleSign.TestBench"), "*.cs", SearchOption.AllDirectories)
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(root, "src", "Apps", "SimpleSign.TestBench"), "*.cs", SearchOption.AllDirectories)
                      .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
         {
             foreach (Match match in TCall().Matches(File.ReadAllText(file)))

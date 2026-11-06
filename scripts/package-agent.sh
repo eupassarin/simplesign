@@ -14,7 +14,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$out"
 
-dotnet publish "$repo/src/SimpleSign.Agent/SimpleSign.Agent.csproj" -c Release -r "$rid" --self-contained true \
+dotnet publish "$repo/src/Apps/SimpleSign.Agent/SimpleSign.Agent.csproj" -c Release -r "$rid" --self-contained true \
   -p:Version="$version" -p:PublishSingleFile=false -o "$tmp/publish"
 
 case "$rid" in

@@ -36,22 +36,30 @@ dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64
 
 ```
 src/
-├── SimpleSign/             Meta-package
-├── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL, hashing
-├── SimpleSign.Pdf/         PDF structure: xref, objects, incremental save, fields
-├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package)
-├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
-├── SimpleSign.XAdES/       XML signatures
-├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
-├── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2
-├── SimpleSign.Brasil/      ICP-Brasil: chain validation, policies, CPF/CNPJ, Gov.br
-├── SimpleSign.Brasil.Fiscal/   XML-DSig for NF-e, CT-e, eSocial…
-├── SimpleSign.Brasil.Xades/    ICP-Brasil XAdES policies
-├── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
-├── SimpleSign.Cli/         CLI tool
-├── SimpleSign.Agent/       Avalonia tray app: local signing agent (HTTP on 127.0.0.1)
-└── SimpleSign.TestBench/   Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option
+├── Core/
+│   ├── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL, hashing
+│   └── SimpleSign.Pdf/         PDF structure: xref, objects, incremental save, fields
+├── Formats/
+│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package)
+│   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
+│   ├── SimpleSign.XAdES/       XML signatures
+│   └── SimpleSign/             Meta-package
+├── Brasil/
+│   ├── SimpleSign.Brasil/          ICP-Brasil: chain validation, policies, CPF/CNPJ, Gov.br
+│   ├── SimpleSign.Brasil.Fiscal/   XML-DSig for NF-e, CT-e, eSocial…
+│   └── SimpleSign.Brasil.Xades/    ICP-Brasil XAdES policies
+├── Signers/
+│   ├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
+│   └── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2
+├── HtmlToPdf/
+│   └── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
+└── Apps/
+    ├── SimpleSign.Cli/         CLI tool
+    ├── SimpleSign.Agent/       Avalonia tray app: local signing agent (HTTP on 127.0.0.1)
+    └── SimpleSign.TestBench/   Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option
 ```
+
+Internal infrastructure (logs, DER helpers, revocation plumbing) lives in each project's `Internal/` folder (ADR 0018).
 
 ## Coding Conventions
 
@@ -133,6 +141,9 @@ SimpleSign.PAdES (most users install this)
 
 SimpleSign.Brasil (adds ICP-Brasil on top of PAdES/CAdES)
   └── depends on SimpleSign.PAdES + SimpleSign.CAdES — public API only, no InternalsVisibleTo
+
+SimpleSign.CAdES / SimpleSign.XAdES
+  └── each depends on SimpleSign.Core only
 
 SimpleSign.HtmlToPdf (independent, no signing)
 ```

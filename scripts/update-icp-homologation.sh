@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates src/SimpleSign.Brasil/IcpBrasil/Certs/IcpBrasilHomologation.pem: the ICP-Brasil
+# Regenerates src/Brasil/SimpleSign.Brasil/IcpBrasil/Certs/IcpBrasilHomologation.pem: the ICP-Brasil
 # homologation (test) hierarchy used by SERPRO and the ACs for test certificates, taken from
 # SERPRO's homologation repository (repositoriohom.serpro.gov.br: cadeias/*.p7b and docs/*.crt).
 #
@@ -32,7 +32,7 @@ PINNED_ROOTS=(
 base="http://repositoriohom.serpro.gov.br"
 indexes=("$base/cadeias/index.html" "$base/cadeias/CadeiasAntigas/index.html" "$base/docs/index.html")
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-certs_dir="$repo/src/SimpleSign.Brasil/IcpBrasil/Certs"
+certs_dir="$repo/src/Brasil/SimpleSign.Brasil/IcpBrasil/Certs"
 out="$certs_dir/IcpBrasilHomologation.pem"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT

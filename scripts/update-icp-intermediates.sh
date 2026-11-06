@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates src/SimpleSign.Brasil/IcpBrasil/Certs/IcpBrasilIntermediates.pem from the ITI's
+# Regenerates src/Brasil/SimpleSign.Brasil/IcpBrasil/Certs/IcpBrasilIntermediates.pem from the ITI's
 # bundle of every ICP-Brasil CA certificate. Roots (self-signed) are skipped: they are bundled
 # separately and pinned. The intermediates are only chain-building help (never trust anchors);
 # IcpBrasilIntermediatesTests checks that each one chains to a bundled AC Raiz.
@@ -7,7 +7,7 @@ set -euo pipefail
 
 url="https://acraiz.icpbrasil.gov.br/credenciadas/CertificadosAC-ICP-Brasil/ACcompactado.zip"
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-out="$repo/src/SimpleSign.Brasil/IcpBrasil/Certs/IcpBrasilIntermediates.pem"
+out="$repo/src/Brasil/SimpleSign.Brasil/IcpBrasil/Certs/IcpBrasilIntermediates.pem"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
