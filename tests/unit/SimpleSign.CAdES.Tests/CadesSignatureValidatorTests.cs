@@ -101,6 +101,22 @@ public sealed class CadesSignatureValidatorTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_OnlyRootTrusted_UsesIntermediateEmbeddedInCms()
+    {
+        using var pki = new SyntheticPki();
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .SignAsync();
+
+        var validator = new CadesSignatureValidator(
+            new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false, TrustedRoots = [pki.RootCa] });
+        var result = validator.Validate(cms, _data);
+
+        result.Errors.ShouldBeEmpty();
+        result.IsCertificateChainValid.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Validate_UntrustedChain_ReturnsInvalid()
     {
         var cms = await CadesSigner.Document(_data)

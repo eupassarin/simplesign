@@ -284,8 +284,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             _cryptoVerifier.ValidateSigningCertV2(cmsData, errors, _logger);
         }
 
-        // 5. Certificate chain validation
-        bool chainValid = ValidateChain(cmsData.SignerCertificate!, errors, warnings, trustAnchors);
+        // 5. Certificate chain validation (intermediates come from the CMS certificates field)
+        bool chainValid = ValidateChain(cmsData.SignerCertificate!, errors, warnings, trustAnchors, cmsData.Certificates);
 
         // 6. Timestamp validation
         bool? tsValid = null;
