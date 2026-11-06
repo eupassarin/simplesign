@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Pdf.Enums;
 using SimpleSign.Pdf.Exceptions;
+using SimpleSign.Pdf.Internal;
 
 namespace SimpleSign.Pdf;
 

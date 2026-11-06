@@ -14,6 +14,7 @@ using SimpleSign.PAdES.Validation;
 using SimpleSign.Pdf;
 using SimpleSign.Pdf.Enums;
 using SimpleSign.Pdf.Exceptions;
+using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES;
 

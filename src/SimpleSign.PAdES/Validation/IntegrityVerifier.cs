@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Pdf;
+using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES.Validation;
 

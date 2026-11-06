@@ -496,9 +496,6 @@ csharp_style_allow_blank_line_after_colon_in_constructor_initializer_experimenta
 csharp_style_allow_blank_line_after_token_in_arrow_expression_clause_experimental = true:error
 csharp_style_allow_blank_line_after_token_in_conditional_expression_experimental = true:error
 
-[src/SimpleSign/Signing/*.cs]
-dotnet_diagnostic.IDE0130.severity = none
-
 [tests/**/*.cs]
 # Test method names use underscore convention (Method_Scenario_Expected)
 dotnet_diagnostic.CA1707.severity = none

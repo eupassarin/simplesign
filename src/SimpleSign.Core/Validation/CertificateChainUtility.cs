@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Validation;
 

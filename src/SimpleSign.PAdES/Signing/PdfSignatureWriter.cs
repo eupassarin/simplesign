@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Pdf;
 using SimpleSign.Pdf.Constants;
 using SimpleSign.Pdf.Enums;
+using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES.Signing;
 

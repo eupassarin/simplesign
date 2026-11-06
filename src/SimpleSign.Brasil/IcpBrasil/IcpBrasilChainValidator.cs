@@ -4,11 +4,9 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
-using SimpleSign.Brasil.Revocation;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Validation;
-using SimpleSign.Brasil.Constants;
 using SimpleSign.Brasil.Internal;
 
 namespace SimpleSign.Brasil.IcpBrasil;
@@ -493,12 +491,12 @@ public sealed class IcpBrasilChainValidator
         var fields = new Dictionary<int, Dictionary<int, string>>();
         foreach (var (oid, textValue) in ReadSanOtherNames(certificate, logger))
         {
-            if (!oid.StartsWith(Constants.BrasilOids.ProfessionalCouncilArc, StringComparison.Ordinal))
+            if (!oid.StartsWith(BrasilOids.ProfessionalCouncilArc, StringComparison.Ordinal))
             {
                 continue;
             }
 
-            string[] parts = oid[Constants.BrasilOids.ProfessionalCouncilArc.Length..].Split('.');
+            string[] parts = oid[BrasilOids.ProfessionalCouncilArc.Length..].Split('.');
             if (parts.Length == 2
                 && int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int council)
                 && int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int field)

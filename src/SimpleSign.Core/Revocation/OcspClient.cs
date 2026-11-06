@@ -8,6 +8,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Validation;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Revocation;
 

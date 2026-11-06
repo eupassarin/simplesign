@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Crypto;
 

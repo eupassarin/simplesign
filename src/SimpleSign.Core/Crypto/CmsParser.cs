@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Constants;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Crypto;
 

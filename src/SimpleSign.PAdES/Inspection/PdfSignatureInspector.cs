@@ -5,6 +5,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Inspection;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.Pdf;
+using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES.Inspection;
 

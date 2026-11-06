@@ -12,7 +12,7 @@
     <IsPackable>false</IsPackable>
     <AnalysisMode>Recommended</AnalysisMode>
     <!-- App code (not a library): no ConfigureAwait, UI text, internal types, logging templates not needed. -->
-    <NoWarn>$(NoWarn);CS1591;CA2007;CA1303;CA1515;CA1848;CA1873;CA1031;CA2000;CA5394;CA1707</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;CA2007;CA1303;CA1848;CA1873;CA1031;CA2000;CA5394;CA1707</NoWarn>
     <InvariantGlobalization>false</InvariantGlobalization>
     <WebDir>$(MSBuildProjectDirectory)/web</WebDir>
   </PropertyGroup>

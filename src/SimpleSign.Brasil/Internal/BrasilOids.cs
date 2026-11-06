@@ -1,4 +1,4 @@
-namespace SimpleSign.Brasil.Constants;
+namespace SimpleSign.Brasil.Internal;
 
 /// <summary>
 /// Brazilian OID constants (arc 2.16.76.*), as assigned in the ITI's ADE-ICP-04.01

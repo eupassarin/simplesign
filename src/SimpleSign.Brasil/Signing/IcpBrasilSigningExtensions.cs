@@ -3,6 +3,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
+using SimpleSign.Brasil.Internal;
 
 namespace SimpleSign.Brasil.Signing;
 
@@ -213,11 +214,11 @@ public static class IcpBrasilSigningExtensions
             throw new ArgumentException("At least one professional registration is required.", nameof(professionals));
         }
 
-        builder = builder.WithDocumentInfo($"{Constants.BrasilOids.HealthDocumentArc}{(int)type}", DocumentTypeName(type));
+        builder = builder.WithDocumentInfo($"{BrasilOids.HealthDocumentArc}{(int)type}", DocumentTypeName(type));
         foreach (var registration in professionals)
         {
             ArgumentNullException.ThrowIfNull(registration);
-            string arc = $"{Constants.BrasilOids.ProfessionalCouncilArc}{(int)registration.Council}.";
+            string arc = $"{BrasilOids.ProfessionalCouncilArc}{(int)registration.Council}.";
             builder = builder.WithDocumentInfo(arc + "1", registration.RegistrationNumber);
             if (registration.StateCode is not null)
             {

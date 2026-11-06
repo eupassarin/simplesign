@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using SimpleSign.Pdf;
+using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES.Validation;
 
