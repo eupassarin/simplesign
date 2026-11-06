@@ -20,11 +20,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\SimpleSign.Brasil.Xades\SimpleSign.Brasil.Xades.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\SimpleSign.Brasil.Fiscal\SimpleSign.Brasil.Fiscal.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil.Xades\SimpleSign.Brazil.IcpBrasil.Xades.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.Fiscal\SimpleSign.Brazil.Fiscal.csproj" />
     <ProjectReference Include="..\..\Extras\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />

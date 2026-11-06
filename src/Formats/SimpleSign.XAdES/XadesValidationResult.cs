@@ -52,7 +52,7 @@ public sealed class XadesValidationResult
     /// <summary>
     /// The signature policy the signature declares (SignaturePolicyIdentifier), with the OID
     /// (an OID URN is reduced to the OID), the SigPolicyHash and the SPURI; null when there is none.
-    /// The hash is read, not checked: compare it with the policy (e.g. SimpleSign.Brasil).
+    /// The hash is read, not checked: compare it with the policy (e.g. SimpleSign.Brazil).
     /// </summary>
     public SignaturePolicyReference? SignaturePolicy { get; init; }
 

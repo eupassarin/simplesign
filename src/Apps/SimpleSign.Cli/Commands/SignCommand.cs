@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
-using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil.IcpBrasil;
+using SimpleSign.Brazil.Signing;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;

@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using SimpleSign.Brasil.Fiscal;
+using SimpleSign.Brazil.Fiscal;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.XAdES;

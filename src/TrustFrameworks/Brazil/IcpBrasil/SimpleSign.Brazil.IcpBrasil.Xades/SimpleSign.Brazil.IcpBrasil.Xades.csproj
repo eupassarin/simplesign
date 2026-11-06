@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Brazil.IcpBrasil.Xades</AssemblyName>
+    <RootNamespace>SimpleSign.Brazil.IcpBrasil.Xades</RootNamespace>
+    <PackageId>SimpleSign.Brazil.IcpBrasil.Xades</PackageId>
+    <Description>XAdES under the ICP-Brasil signature policies: AD-RB, AD-RT, AD-RV, AD-RC and AD-RA signing, policy validation and the verified LPA_XAdES refresh.</Description>
+    <PackageTags>xades;icp-brasil;brazil;signature-policy;ad-rb;ad-rt;ad-rc;ad-ra;xmldsig</PackageTags>
+    <Version>0.10.1</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Xades.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using SimpleSign.Brasil;
-using SimpleSign.Brasil.IcpBrasil;
+using SimpleSign.Brazil;
+using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Inspection;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
@@ -11,6 +11,8 @@ using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
+using SimpleSign.Core.Extensions;
+using SimpleSign.Brazil.GovBr;
 
 namespace SimpleSign.TestBench.Validation;
 
@@ -23,7 +25,7 @@ public enum TrustChoice
     /// <summary>The operating system's trusted roots.</summary>
     System,
 
-    /// <summary>The ICP-Brasil roots bundled with SimpleSign.Brasil.</summary>
+    /// <summary>The ICP-Brasil and Gov.br roots bundled with SimpleSign.Brazil.IcpBrasil and SimpleSign.Brazil.GovBr.</summary>
     IcpBrasil,
 }
 
@@ -41,7 +43,7 @@ public sealed record ValidationSettings
 
     public int TimeoutSeconds { get; init; } = 10;
 
-    /// <summary>Apply the ICP-Brasil / Gov.br / Lei 14.063 rules (BrasilExtension).</summary>
+    /// <summary>Apply the ICP-Brasil / Gov.br / Lei 14.063 rules (IcpBrasilExtension + GovBrExtension).</summary>
     public bool UseBrasil { get; init; } = true;
 
     /// <summary>The defaults for a mode: the sandbox root, or the OS and ICP-Brasil roots.</summary>
@@ -76,7 +78,7 @@ public sealed record DetailedSignature(
     string? ContactInfo);
 
 /// <summary>Trust settings turned into library objects.</summary>
-internal sealed record ValidationTrust(ValidationOptions Options, BrasilExtension Brasil, bool UsesIcp, IReadOnlyList<X509Certificate2> IcpAnchors);
+internal sealed record ValidationTrust(ValidationOptions Options, IReadOnlyList<ICountryExtension> Brazil, bool UsesIcp, IReadOnlyList<X509Certificate2> IcpAnchors);
 
 public sealed record DssView(int Certificates, int Crls, int Ocsps, bool HasVri, int VriEntries, IReadOnlyList<string> Warnings);
 
@@ -90,7 +92,7 @@ public sealed record ValidationReport(
     CodeSnippets Code,
     string? Error);
 
-/// <summary>Validates PDFs with PdfSignatureValidator (+ BrasilExtension) and enriches the result with the inspector's facts.</summary>
+/// <summary>Validates PDFs with PdfSignatureValidator (+ IcpBrasilExtension and GovBrExtension) and enriches the result with the inspector's facts.</summary>
 internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStore documents)
 {
     /// <summary>The per-signature verdicts (used by the signing result).</summary>
@@ -160,8 +162,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     {
         var trust = Trust(settings);
         return new PdfSignatureValidator(sandbox.HttpFor(settings.Environment), trust.Options, null,
-            trust.UsesIcp ? trust.Brasil.TrustAnchorProviders : [],
-            settings.UseBrasil ? trust.Brasil.ChainValidationProviders : []);
+            trust.UsesIcp ? [.. trust.Brazil.SelectMany(e => e.TrustAnchorProviders)] : [],
+            settings.UseBrasil ? [.. trust.Brazil.SelectMany(e => e.ChainValidationProviders)] : []);
     }
 
     /// <summary>The trust settings as library objects, shared by the PAdES, CAdES and XAdES validators.</summary>
@@ -180,10 +182,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         bool icp = settings.Trust.Contains(TrustChoice.IcpBrasil);
-        var brasil = new BrasilExtension(new BrasilExtensionOptions
-        {
-            HttpClient = http.GetClient(),
-        });
+        IReadOnlyList<ICountryExtension> brazil =
+            [new IcpBrasilExtension(http.GetClient(), null), new GovBrExtension(http.GetClient(), null)];
         var options = new ValidationOptions
         {
             TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),
@@ -191,8 +191,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             CheckRevocation = settings.CheckRevocation,
             NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 120)),
         };
-        IReadOnlyList<X509Certificate2> icpAnchors = icp ? [.. brasil.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors())] : [];
-        return new ValidationTrust(options, brasil, icp, icpAnchors);
+        IReadOnlyList<X509Certificate2> icpAnchors = icp ? [.. brazil.SelectMany(e => e.TrustAnchorProviders).SelectMany(p => p.GetTrustAnchors())] : [];
+        return new ValidationTrust(options, brazil, icp, icpAnchors);
     }
 
     internal static SignatureReport ToReport(SignatureValidationResult r)
@@ -290,7 +290,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         sb.Append("using SimpleSign.PAdES.Validation;\nusing SimpleSign.Core.Validation;\n");
         if (s.UseBrasil)
         {
-            sb.Append("using SimpleSign.Brasil;\n");
+            sb.Append("using SimpleSign.Brazil.GovBr;\nusing SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Core.Extensions;\n");
         }
 
         sb.Append('\n');
@@ -320,17 +320,17 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         if (s.UseBrasil && icp && options.Count == 0)
         {
             sb.Append("// ICP-Brasil + Gov.br roots and rules (policy, Lei 14.063 level, CPF/CNPJ):\n");
-            sb.Append("var validator = BrasilExtension.CreateValidator();\n");
+            sb.Append("var validator = new PdfSignatureValidator(ValidationOptions.Default, httpClient: null, logger: null,\n    countryExtensions: [new IcpBrasilExtension(), new GovBrExtension()]);\n");
         }
         else
         {
             sb.Append("var options = ").Append(optionsCode).Append(";\n");
             if (s.UseBrasil)
             {
-                sb.Append("var brasil = new BrasilExtension();\n");
+                sb.Append("ICountryExtension[] brazil = [new IcpBrasilExtension(), new GovBrExtension()];\n");
                 sb.Append(icp
-                    ? "var validator = new PdfSignatureValidator(options, httpClient: null, logger: null, brasil.TrustAnchorProviders, brasil.ChainValidationProviders);\n"
-                    : "var validator = new PdfSignatureValidator(options, httpClient: null, logger: null, trustAnchorProviders: [], brasil.ChainValidationProviders);\n");
+                    ? "var validator = new PdfSignatureValidator(options, httpClient: null, logger: null, countryExtensions: brazil);\n"
+                    : "var validator = new PdfSignatureValidator(options, httpClient: null, logger: null,\n    trustAnchorProviders: [], brazil.SelectMany(e => e.ChainValidationProviders));\n");
             }
             else
             {

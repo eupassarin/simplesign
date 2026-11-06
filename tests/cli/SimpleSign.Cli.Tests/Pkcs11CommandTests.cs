@@ -1,11 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
-using SimpleSign.Brasil;
 using SimpleSign.CAdES;
 using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.XAdES;
 using Shouldly;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using SimpleSign.Brazil.GovBr;
+using SimpleSign.Brazil.IcpBrasil;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -25,7 +26,8 @@ public sealed class Pkcs11CommandTests
         using var capture = new ConsoleCapture();
         var services = new ServiceCollection();
         services.AddSimpleSign();
-        services.AddSimpleSignBrasil();
+        services.AddSimpleSignIcpBrasil();
+        services.AddSimpleSignGovBr();
         services.AddSimpleSignCades();
         services.AddSimpleSignXades();
         var app = new CommandApp(new SimpleSignServiceRegistry(services));

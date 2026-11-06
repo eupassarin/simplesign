@@ -1,4 +1,4 @@
-using SimpleSign.Brasil.Fiscal;
+using SimpleSign.Brazil.Fiscal;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Sandbox;

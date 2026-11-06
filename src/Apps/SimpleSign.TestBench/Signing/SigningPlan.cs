@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil.IcpBrasil;
+using SimpleSign.Brazil.Signing;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;

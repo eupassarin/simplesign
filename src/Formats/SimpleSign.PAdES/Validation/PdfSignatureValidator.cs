@@ -950,7 +950,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
     /// <summary>
     /// Returns an empty list when no explicit trust anchor providers are registered.
-    /// Install country extension packages (e.g., SimpleSign.Brasil) and register them
+    /// Install country extension packages (e.g., SimpleSign.Brazil) and register them
     /// via DI or constructor to enable country-specific trust anchors.
     /// </summary>
     private static IReadOnlyList<ITrustAnchorProvider> LoadDefaultTrustAnchorProviders() => [];

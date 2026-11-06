@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using SimpleSign.Brasil.Fiscal;
+using SimpleSign.Brazil.Fiscal;
 using SimpleSign.Core.Validation;
 using Spectre.Console;
 using Spectre.Console.Cli;

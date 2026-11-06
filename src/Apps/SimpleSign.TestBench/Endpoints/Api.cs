@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
-using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.PAdES;
 using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Credentials;

@@ -1,6 +1,5 @@
 using Shouldly;
-using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Cli.Rendering;
 
 namespace SimpleSign.Cli.Tests;

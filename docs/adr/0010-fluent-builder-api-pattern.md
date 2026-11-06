@@ -66,7 +66,7 @@ var signed = await PadesSigner.Document(pdf)
 
 Methods are grouped by concern: credential, baseline profile (`WithLevel`), HTTP provider, signing algorithm, metadata, appearance, PDF/A conformance, SubFilter selection, and advanced options (existing field targeting, operation IDs). Level configuration is exactly one call — see ADR 0015.
 
-The only extension method in a separate assembly is `SignerBuilderBrasilExtensions.WithAdvancedSignature()` in `SimpleSign.Brasil`.
+The only extension method in a separate assembly is `SignerBuilderBrazilExtensions.WithAdvancedSignature()` in `SimpleSign.Brazil`.
 
 ### 4. Terminal methods
 

@@ -96,7 +96,7 @@ src/
   SimpleSign.XAdES/          # XAdES signing and validation
   SimpleSign.Signers.Pkcs11/ # tokens, smartcards, HSMs
   SimpleSign.Signers.Cloud/  # cloud certificates (PSC, CSC v2)
-  SimpleSign.Brasil*/        # ICP-Brasil, Gov.br, fiscal XML
+  TrustFrameworks/Brazil/   # SimpleSign.Brazil, .IcpBrasil, .GovBr, .Fiscal, .IcpBrasil.Xades
   SimpleSign.HtmlToPdf/      # HTML-to-PDF converter
   SimpleSign.Cli/            # dotnet tool
   SimpleSign.Agent/          # tray app with a local signing API

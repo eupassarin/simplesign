@@ -3,13 +3,14 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using SimpleSign.Brasil;
 using SimpleSign.CAdES;
 using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.TestHelpers;
 using SimpleSign.XAdES;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using SimpleSign.Brazil.GovBr;
+using SimpleSign.Brazil.IcpBrasil;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -689,7 +690,8 @@ public sealed class CliCommandTests : IDisposable
     {
         var services = new ServiceCollection();
         services.AddSimpleSign();
-        services.AddSimpleSignBrasil();
+        services.AddSimpleSignIcpBrasil();
+        services.AddSimpleSignGovBr();
         services.AddSimpleSignCades();
         services.AddSimpleSignXades();
         var app = new CommandApp(new SimpleSignServiceRegistry(services));

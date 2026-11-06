@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using SimpleSign.Brasil.IcpBrasil;
+using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Signing;
 

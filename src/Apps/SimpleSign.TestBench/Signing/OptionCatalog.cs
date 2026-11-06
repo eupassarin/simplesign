@@ -24,7 +24,7 @@ public static class OptionCatalog
         ["env.Sandbox"] = new("Sandbox", "Everything runs offline against simulated services.",
             "A test PKI (AC Raiz Sandbox SimpleSign), an RFC 3161 TSA, CRLs, a fake ICP-Brasil PSC and a fake CSC v2 service, all answered in-process on *.sandbox.simplesign.test. Signatures validate here, but no real validator trusts the sandbox root."),
         ["env.Real"] = new("Real", "Your certificates, real TSAs and real cloud providers.",
-            "Use a PFX, the OS certificate store, an A3 token or a real PSC/CSC account. TSAs, CRLs and OCSP are reached over the internet. Validation trusts the OS roots and the ICP-Brasil roots bundled with SimpleSign.Brasil."),
+            "Use a PFX, the OS certificate store, an A3 token or a real PSC/CSC account. TSAs, CRLs and OCSP are reached over the internet. Validation trusts the OS roots and the ICP-Brasil roots bundled with SimpleSign.Brazil.IcpBrasil and SimpleSign.Brazil.GovBr."),
 
         // Document
         ["document"] = new("Document", "The PDF to sign. Its facts decide what the next steps offer.",

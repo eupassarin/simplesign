@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil.Signing;
 using SimpleSign.Cli.Json;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Inspection;

@@ -5,19 +5,27 @@ SimpleSign provides built-in support for the **Brazilian Public Key Infrastructu
 ## Installation
 
 ```bash
-dotnet add package SimpleSign.Brasil
+dotnet add package SimpleSign.Brazil.IcpBrasil
+dotnet add package SimpleSign.Brazil.GovBr   # only to also accept Gov.br signatures
 ```
+
+Both packages pull in `SimpleSign.Brazil` (CPF/CNPJ, Lei 14.063, the advanced-signature manifest).
+Each one is an `ICountryExtension`; pass both to accept both hierarchies.
 
 ## Trust Anchors
 
-The `SimpleSign.Brasil` package bundles all AC Raiz (root CA) certificates from ICP-Brasil (v4 through v13), enabling offline chain validation:
+The `SimpleSign.Brazil.IcpBrasil` package bundles all AC Raiz (root CA) certificates from ICP-Brasil (v4 through v13), enabling offline chain validation:
 
 ```csharp
-using SimpleSign.Brasil;
+using SimpleSign.Brazil.IcpBrasil;
 
-// Trusts the bundled ICP-Brasil and Gov.br roots and applies their chain rules
-var validator = BrasilExtension.CreateValidator(
+// Trusts the bundled ICP-Brasil roots and applies their chain and policy rules
+var validator = IcpBrasilExtension.CreateValidator(
     new ValidationOptions { CheckRevocation = true });
+
+// ICP-Brasil and Gov.br together:
+var both = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = true }, httpClient,
+    countryExtensions: [new IcpBrasilExtension(), new GovBrExtension()]);   // SimpleSign.Brazil.GovBr
 
 var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 ```
@@ -37,7 +45,7 @@ ICP-Brasil LCRs reach several megabytes. On servers and CLIs, keep them on disk;
 until its `nextUpdate`:
 
 ```csharp
-var brasil = new BrasilExtension(new BrasilExtensionOptions
+var icp = new IcpBrasilExtension(new IcpBrasilExtensionOptions
 {
     HttpClient = httpClient,
     CrlCacheDirectory = Path.Combine(Path.GetTempPath(), "simplesign-lcr"),
@@ -54,7 +62,7 @@ publication and pass it to the extension (or to `IcpBrasilChainValidator.Additio
 ```csharp
 var v14 = await IcpBrasilRoots.DownloadAsync(httpClient, 14, "<SHA-256 fingerprint from the ITI>");
 var validator = new PdfSignatureValidator(options, httpClient,
-    countryExtensions: [new BrasilExtension(httpClient, logger, [v14])]);
+    countryExtensions: [new IcpBrasilExtension(new IcpBrasilExtensionOptions { HttpClient = httpClient, Logger = logger, AdditionalRoots = [v14] })]);
 ```
 
 `IcpBrasilRoots.ExpiringWithin(TimeSpan)` lists bundled roots close to expiry (v5 ends on
@@ -125,7 +133,7 @@ Cnpj.Format("12abc34501de35");     // 12.ABC.345/01DE-35
 Detect whether a certificate belongs to the ICP-Brasil chain:
 
 ```csharp
-using SimpleSign.Brasil.IcpBrasil;
+using SimpleSign.Brazil.IcpBrasil;
 
 bool isIcpBrasil = IcpBrasilChainValidator.IsIcpBrasilCertificate(cert);
 ```
@@ -218,7 +226,7 @@ await CadesSigner.Document(data).WithCertificate(cert)
     .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new TimestampOptions(new Uri(actUrl)))
     .SignAsync();
 
-// XAdES (package SimpleSign.Brasil.Xades): AD-RB … AD-RA
+// XAdES (package SimpleSign.Brazil.IcpBrasil.Xades): AD-RB … AD-RA
 await XadesSigner.Document(xml).WithCertificate(cert)
     .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new TimestampOptions(new Uri(actUrl)))
     .SignAsync();
@@ -229,10 +237,10 @@ revocation settings for the DSS (`LongTermValidation`) and a specific `Version` 
 (refused when it is not in force or does not accept the signer's root). The catalog also holds the 45 XAdES policies of
 `LPA_XAdES.xml` (version 2), with their rules.
 
-#### XAdES (SimpleSign.Brasil.Xades)
+#### XAdES (SimpleSign.Brazil.IcpBrasil.Xades)
 
 ```bash
-dotnet add package SimpleSign.Brasil.Xades
+dotnet add package SimpleSign.Brazil.IcpBrasil.Xades
 ```
 
 The XML PAs mandate the XAdES 1.3.2 `SigningCertificate` (not `SigningCertificateV2`) and, per
@@ -350,7 +358,7 @@ and unsigned attributes are present, and the signature algorithm and key size ar
 ICP-Brasil provider passes the root it found. CAdES escTimeStamp and archive-time-stamp v2 imprints
 are verified by `CadesSignatureValidator`.
 
-For XAdES, use `IcpBrasilXadesPolicyValidator` (SimpleSign.Brasil.Xades, above). Without that
+For XAdES, use `IcpBrasilXadesPolicyValidator` (SimpleSign.Brazil.IcpBrasil.Xades, above). Without that
 package, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSignatureTimestamp, IcpBrasilPolicyFormat.Xades)`
 checks the hash, signing period, timestamp and format.
 
@@ -422,7 +430,7 @@ foreach (var error in result.Errors)
 
 ### Long-term signatures (B-LT / B-LTA)
 
-When `PdfSignatureValidator` (or `BrasilExtension.CreateValidator()`) validates a PDF, the ICP-Brasil
+When `PdfSignatureValidator` (or `IcpBrasilExtension.CreateValidator()`) validates a PDF, the ICP-Brasil
 and Gov.br providers receive a `ChainValidationContext`: the chain is validated at the time of a
 trusted **signature timestamp**, and revocation is checked against the LCRs and OCSP responses
 **embedded in the document** (DSS) before going online. A B-LTA signature therefore stays valid after
@@ -466,7 +474,8 @@ the level of a validated signature:
 - **Qualificada** — a trusted ICP-Brasil signature certificate (A1–A4)
 
 ```csharp
-var validator = BrasilExtension.CreateValidator();
+var validator = new PdfSignatureValidator(ValidationOptions.Default, httpClient: null,
+    countryExtensions: [new IcpBrasilExtension(), new GovBrExtension()]);
 foreach (var r in await validator.ValidateAsync(File.OpenRead("signed.pdf")))
 {
     Console.WriteLine($"{r.FieldName}: {Lei14063.Classify(r)}");   // null when not valid
@@ -546,7 +555,7 @@ var info = new AdvancedSignatureInfo
 ## Trust Anchors for Validation
 
 ```csharp
-// Use AddSimpleSignBrasil() to register ICP-Brasil trust anchors automatically.
+// Use AddSimpleSignIcpBrasil() (and AddSimpleSignGovBr()) to register the trust anchors automatically.
 // For manual configuration, supply trusted roots via the TrustedRoots property:
 var options = new ValidationOptions
 {
@@ -557,7 +566,7 @@ var options = new ValidationOptions
 
 ## Upgrading from v0.10 to v0.11
 
-v0.11 fixes several ICP-Brasil identifiers in `SimpleSign.Brasil` that did not match the ITI's
+v0.11 fixes several ICP-Brasil identifiers in `SimpleSign.Brasil` (now `SimpleSign.Brazil.IcpBrasil`) that did not match the ITI's
 ADE-ICP-04.01 ("Esquema de OID na ICP-Brasil"). The old behavior returned wrong data, so the
 affected APIs changed instead of keeping compatibility.
 

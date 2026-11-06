@@ -1,4 +1,4 @@
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil.Signing;
 using SimpleSign.PAdES.Signing;
 
 namespace SimpleSign.Cli.Rendering;

@@ -1,6 +1,6 @@
 using System.Net;
 using Shouldly;
-using SimpleSign.Brasil.IcpBrasil;
+using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.PAdES.Inspection;
@@ -83,7 +83,7 @@ public sealed class IcpBrasilPolicyIntegrationTests
         IcpBrasilLpa lpa;
         try
         {
-            lpa = await SimpleSign.Brasil.Xades.IcpBrasilXadesPolicies.RefreshAsync(http);
+            lpa = await SimpleSign.Brazil.IcpBrasil.Xades.IcpBrasilXadesPolicies.RefreshAsync(http);
         }
         catch (HttpRequestException ex)
         {

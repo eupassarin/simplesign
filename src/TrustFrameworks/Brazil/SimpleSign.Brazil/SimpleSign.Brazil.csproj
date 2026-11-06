@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Brazil</AssemblyName>
+    <RootNamespace>SimpleSign.Brazil</RootNamespace>
+    <PackageId>SimpleSign.Brazil</PackageId>
+    <Description>Shared building blocks of the SimpleSign Brazilian trust frameworks: CPF/CNPJ, Lei 14.063/2020 levels, the advanced-signature (AEA) manifest and the ITI VALIDAR helpers. Used by SimpleSign.Brazil.IcpBrasil and SimpleSign.Brazil.GovBr.</Description>
+    <PackageTags>brazil;cpf;cnpj;lei-14063;aea;digital-signature;native-aot</PackageTags>
+    <Version>0.10.1</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil" />
+    <InternalsVisibleTo Include="SimpleSign.Brazil.GovBr" />
+    <InternalsVisibleTo Include="SimpleSign.Brazil.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Brazil.GovBr.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Cli" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

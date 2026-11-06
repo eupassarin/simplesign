@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (Breaking) — SimpleSign.Brasil split into SimpleSign.Brazil, .IcpBrasil and .GovBr
+
+`SimpleSign.Brasil` is discontinued. Each Brazilian hierarchy is now its own package, under
+`src/TrustFrameworks/Brazil/`. `SimpleSign.Brazil.IcpBrasil` and `SimpleSign.Brazil.GovBr` depend on
+the shared `SimpleSign.Brazil`, never on each other. Install the one you need, or both.
+
+| Before | After |
+|---|---|
+| package `SimpleSign.Brasil` | `SimpleSign.Brazil.IcpBrasil` and/or `SimpleSign.Brazil.GovBr` (both pull in `SimpleSign.Brazil`) |
+| package `SimpleSign.Brasil.Xades` | `SimpleSign.Brazil.IcpBrasil.Xades` |
+| package `SimpleSign.Brasil.Fiscal` | `SimpleSign.Brazil.Fiscal` |
+| `SimpleSign.Brasil` (`Cpf`, `Cnpj`, `Lei14063`) | `SimpleSign.Brazil` |
+| `SimpleSign.Brasil.Signing` (manifest, `WithAdvancedSignature`) | `SimpleSign.Brazil.Signing` (`SignerBuilderBrasilExtensions` → `SignerBuilderBrazilExtensions`) |
+| `SimpleSign.Brasil.Signing` (`IcpBrasilPadesOptions`, `WithIcpBrasilPolicy`, health documents) | `SimpleSign.Brazil.IcpBrasil` |
+| `SimpleSign.Brasil.IcpBrasil` | `SimpleSign.Brazil.IcpBrasil` |
+| `SimpleSign.Brasil.GovBr` | `SimpleSign.Brazil.GovBr` |
+| `SimpleSign.Brasil.ValidarIti` | `SimpleSign.Brazil.ValidarIti` |
+| `SimpleSign.Brasil.Xades` / `.Fiscal` | `SimpleSign.Brazil.IcpBrasil.Xades` / `SimpleSign.Brazil.Fiscal` |
+| `new BrasilExtension(...)` | `new IcpBrasilExtension(...)` and `new GovBrExtension(...)`: pass both to accept both |
+| `BrasilExtension.CreateValidator()` | `IcpBrasilExtension.CreateValidator()` / `GovBrExtension.CreateValidator()` |
+| `BrasilExtensionOptions` (`AdditionalIcpRoots`) | `IcpBrasilExtensionOptions` (`AdditionalRoots`) and `GovBrExtensionOptions` |
+| `services.AddSimpleSignBrasil()` | `services.AddSimpleSignIcpBrasil()` and/or `services.AddSimpleSignGovBr()` |
+
+Behavior is unchanged: the same roots, chain rules, metadata (`BR.*`, `BR.Lei14063`) and log event
+IDs. To validate both hierarchies:
+
+```csharp
+var validator = new PdfSignatureValidator(options, httpClient,
+    countryExtensions: [new IcpBrasilExtension(), new GovBrExtension()]);
+```
+
+`src/TrustFrameworks/Europe/Eidas/` and `src/TrustFrameworks/Peru/Iofe/` are placeholders for
+planned eIDAS and IOFE extensions.
+
 ### Changed (Breaking) — SimpleSign.Pdf merged into SimpleSign.PAdES
 
 The PDF structure parser is now part of `SimpleSign.PAdES`; the `SimpleSign.Pdf` package is

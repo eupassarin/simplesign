@@ -52,7 +52,7 @@ Sandbox services answer on `*.sandbox.simplesign.test` through an in-process
 7. **Mode**: sign now, deferred (prepare → sign the signed attributes → complete) or batch.
 
 The result shows the requested and achieved level, the validation report (`PdfSignatureValidator`
-+ `BrasilExtension`), what the output contains (DSS, document timestamp, DocMDP), and a **Code**
++ `IcpBrasilExtension` and `GovBrExtension`), what the output contains (DSS, document timestamp, DocMDP), and a **Code**
 tab with the exact C# builder calls and the equivalent `simplesign sign` command. Secrets are
 never printed. **Validate in Validation** opens the signed file on the Validation page.
 
@@ -62,7 +62,7 @@ The *Validation* page has three tabs, all using the settings on the left: trust 
 root, OS roots, ICP-Brasil, uploaded roots), revocation checking,
 network timeout and the ICP-Brasil extension.
 
-- **Validate**: `PdfSignatureValidator` (+ `BrasilExtension`). Per signature: the checks, PAdES
+- **Validate**: `PdfSignatureValidator` (+ `IcpBrasilExtension` and `GovBrExtension`). Per signature: the checks, PAdES
   level, Lei 14.063 level, policy, signer certificate and the certificates in the CMS, the
   signature timestamp, which part of the file the ByteRange covers, and the signed attributes;
   plus the DSS and the C#/CLI code.

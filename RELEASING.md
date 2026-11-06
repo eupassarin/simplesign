@@ -22,7 +22,11 @@ Update `<Version>` in all `.csproj` files:
 | `src/Formats/SimpleSign/SimpleSign.csproj` | Meta-package |
 | `src/Core/SimpleSign.Core/SimpleSign.Core.csproj` | Core crypto |
 | `src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj` | Main package |
-| `src/TrustFrameworks/SimpleSign.Brasil/SimpleSign.Brasil.csproj` | ICP-Brasil |
+| `src/TrustFrameworks/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj` | Brazil (shared) |
+| `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj` | ICP-Brasil |
+| `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj` | ICP-Brasil XAdES |
+| `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj` | Fiscal XML |
+| `src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj` | Gov.br |
 | `src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
 | `src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
 | `src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
@@ -38,7 +42,11 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/Formats/SimpleSign/SimpleSign.csproj \
   src/Core/SimpleSign.Core/SimpleSign.Core.csproj \
   src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
-  src/TrustFrameworks/SimpleSign.Brasil/SimpleSign.Brasil.csproj \
+  src/TrustFrameworks/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj \
+  src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj \
+  src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj \
+  src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj \
+  src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj \
   src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
   src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
   src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
@@ -134,7 +142,7 @@ The tag push triggers `.github/workflows/release.yml` which builds, tests, packs
 dotnet pack -c Release -o ./artifacts
 dotnet nuget push ./artifacts/SimpleSign.Core.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.PAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
-dotnet nuget push ./artifacts/SimpleSign.Brasil.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./artifacts/SimpleSign.Brazil.IcpBrasil.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.CAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.XAdES.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json
 dotnet nuget push ./artifacts/SimpleSign.HtmlToPdf.X.Y.Z.nupkg --api-key $NUGET_KEY --source https://api.nuget.org/v3/index.json

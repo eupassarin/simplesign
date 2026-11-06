@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Brazil.IcpBrasil</AssemblyName>
+    <RootNamespace>SimpleSign.Brazil.IcpBrasil</RootNamespace>
+    <PackageId>SimpleSign.Brazil.IcpBrasil</PackageId>
+    <Description>ICP-Brasil for SimpleSign: bundled AC Raiz and intermediates, chain validation (DOC-ICP-04), signature policies AD-RB to AD-RA (DOC-ICP-15), standalone ACT timestamps and the Lei 14.063 level of each signature.</Description>
+    <PackageTags>icp-brasil;brazil;digital-signature;certificate;signature-policy;native-aot</PackageTags>
+    <Version>0.10.1</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
+    <ProjectReference Include="..\..\SimpleSign.Brazil\SimpleSign.Brazil.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Tests" />
+    <InternalsVisibleTo Include="SimpleSign.Cli" />
+    <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Xades" />
+    <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Xades.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ICP-Brasil root CAs and intermediates -->
+    <EmbeddedResource Include="Certs\ICP-Brasilv4.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv4.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv5.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv5.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv6.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv6.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv7.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv7.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv8.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv8.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv9.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv9.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv10.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv10.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv11.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv11.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv12.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv12.crt" />
+    <EmbeddedResource Include="Certs\ICP-Brasilv13.crt" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.ICP-Brasilv13.crt" />
+    <EmbeddedResource Include="Certs\IcpBrasilIntermediates.pem" LogicalName="SimpleSign.Brazil.IcpBrasil.Certs.IcpBrasilIntermediates.pem" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

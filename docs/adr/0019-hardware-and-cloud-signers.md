@@ -30,7 +30,7 @@ Ship two optional packages that implement `IExternalSigner` and work unchanged w
 - Base URIs must be absolute HTTPS, with plain HTTP accepted only for loopback (`CloudHttp`).
 - Tokens, PINs and OTPs are never logged and never appear in exception messages (`OAuthToken.ToString()` hides the token).
 
-### 3. PSC stays in the Cloud package, not in `SimpleSign.Brasil`
+### 3. PSC stays in the Cloud package, not in the Brazil packages
 
 The PSC API is a remote-signing protocol and does not depend on ICP-Brasil chain or policy logic. Keeping it next to CSC means one OAuth stack, one exception type (`CloudSigningException`) and no dependency on the PAdES/CAdES-heavy Brasil package for apps that only need cloud signing.
 
@@ -47,4 +47,4 @@ The PSC API is a remote-signing protocol and does not depend on ICP-Brasil chain
 | **Pkcs11Interop / vendor SDKs** | Mature, wide coverage | Third-party dependency; reflection/marshalling not AOT-clean; heavier than the few functions needed | Rejected |
 | **OS stores only** (CNG/KeyChain) | No native code | Not all token drivers register with the OS store; no Linux path; no HSM-only keys | Rejected as the only path (still usable via `X509Certificate2`) |
 | **Own blittable interop + HTTP clients (chosen)** | No dependencies, AOT, no `unsafe`; same `IExternalSigner` everywhere | Maintenance of interop and protocol details | **Chosen** |
-| **PSC inside SimpleSign.Brasil** | Grouped with other Brazilian features | Pulls PAdES/CAdES/Brasil into cloud-only apps; duplicates OAuth code with CSC | Rejected |
+| **PSC inside SimpleSign.Brazil.IcpBrasil** | Grouped with other Brazilian features | Pulls PAdES/CAdES/Brasil into cloud-only apps; duplicates OAuth code with CSC | Rejected |

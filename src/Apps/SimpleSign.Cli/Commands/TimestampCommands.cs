@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
-using SimpleSign.Brasil.IcpBrasil;
+using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;

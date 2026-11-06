@@ -1,6 +1,6 @@
 using System.Text;
 using System.Xml;
-using SimpleSign.Brasil.Fiscal;
+using SimpleSign.Brazil.Fiscal;
 
 namespace SimpleSign.TestBench.Xml;
 

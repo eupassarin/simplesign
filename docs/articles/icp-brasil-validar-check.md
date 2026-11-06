@@ -47,7 +47,7 @@ foreach (var (name, policy) in new[] { ("ad-rc", IcpBrasilPolicy.AdRc), ("ad-ra"
         .WithIcpBrasilPolicy(policy, act).SignAsync());
 }
 
-// 6. XAdES AD-RB, AD-RT, AD-RC and AD-RA (enveloped; SimpleSign.Brasil.Xades)
+// 6. XAdES AD-RB, AD-RT, AD-RC and AD-RA (enveloped; SimpleSign.Brazil.IcpBrasil.Xades)
 var xml = await File.ReadAllBytesAsync("documento.xml");
 foreach (var (name, policy) in new[] { ("rb", IcpBrasilPolicy.AdRb), ("rt", IcpBrasilPolicy.AdRt), ("rc", IcpBrasilPolicy.AdRc), ("ra", IcpBrasilPolicy.AdRa) })
 {

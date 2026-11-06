@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using SimpleSign.Brasil;
+using SimpleSign.Brazil;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
@@ -10,6 +10,8 @@ using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using SimpleSign.Brazil.IcpBrasil;
+using SimpleSign.Brazil.GovBr;
 
 namespace SimpleSign.Cli.Commands;
 
@@ -134,7 +136,11 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
             integrityVerifier: _integrityVerifier,
             cmsParser: _cmsParser,
             timestampValidator: _timestampValidator,
-            chainValidationProviders: new SimpleSign.Brasil.BrasilExtension(_httpClientProvider.GetClient(), null).ChainValidationProviders);
+            chainValidationProviders:
+            [
+                .. new IcpBrasilExtension(_httpClientProvider.GetClient(), null).ChainValidationProviders,
+                .. new GovBrExtension(_httpClientProvider.GetClient(), null).ChainValidationProviders,
+            ]);
         var bulk = new BulkValidator(validator, maxConcurrency: settings.Concurrency,
             logger: loggerFactory?.CreateLogger("SimpleSign.BulkValidation"));
 

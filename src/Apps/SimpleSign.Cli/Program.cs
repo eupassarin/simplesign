@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using SimpleSign.Brasil;
+using SimpleSign.Brazil;
 using SimpleSign.CAdES;
 using SimpleSign.Cli;
 using SimpleSign.Cli.Commands;
@@ -7,10 +7,13 @@ using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.XAdES;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using SimpleSign.Brazil.GovBr;
+using SimpleSign.Brazil.IcpBrasil;
 
 var services = new ServiceCollection();
 services.AddSimpleSign();
-services.AddSimpleSignBrasil();
+services.AddSimpleSignIcpBrasil();
+services.AddSimpleSignGovBr();
 services.AddSimpleSignCades();
 services.AddSimpleSignXades();
 

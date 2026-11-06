@@ -3,9 +3,9 @@ using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
-using SimpleSign.Brasil.Fiscal;
-using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Brasil.Xades;
+using SimpleSign.Brazil.Fiscal;
+using SimpleSign.Brazil.IcpBrasil;
+using SimpleSign.Brazil.IcpBrasil.Xades;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Cades;
@@ -303,7 +303,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         string credentialCode = context.CredentialCode();
         string profile = $"FiscalDocumentProfile.{ProfileProperty(o.Profile)}";
         string id = o.ElementId is { } elementId ? $", elementId: {SigningPlan.Str(elementId)}" : "";
-        var sb = new StringBuilder("using SimpleSign.Brasil.Fiscal;\n\nbyte[] xml = File.ReadAllBytes(\"document.xml\");\n");
+        var sb = new StringBuilder("using SimpleSign.Brazil.Fiscal;\n\nbyte[] xml = File.ReadAllBytes(\"document.xml\");\n");
         foreach (string line in context.Setup.Distinct())
         {
             sb.Append(line).Append('\n');
@@ -348,7 +348,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         bool customRoot = settings.Trust.Contains(TrustChoice.Sandbox) || settings.CustomRootUploadIds.Count > 0;
         if (mode == XmlMode.Fiscal)
         {
-            string fiscal = "using SimpleSign.Brasil.Fiscal;\n\nbyte[] xml = File.ReadAllBytes(\"document-signed.xml\");\n"
+            string fiscal = "using SimpleSign.Brazil.Fiscal;\n\nbyte[] xml = File.ReadAllBytes(\"document-signed.xml\");\n"
                 + "// Digests and signature values only:\nFiscalValidationResult quick = FiscalXmlValidator.VerifySignatures(xml);\n"
                 + "// Plus the ICP-Brasil chain (AIA, LCR/OCSP):\nFiscalValidationResult full = await new FiscalXmlValidator().ValidateAsync(xml"
                 + (settings.CheckRevocation ? "" : ", checkRevocation: false") + ");\n";
@@ -533,7 +533,7 @@ internal sealed class XadesPlan
         var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Signing;\n");
         if (_o.Kind == XadesKind.IcpBrasil)
         {
-            sb.Append("using SimpleSign.Brasil.IcpBrasil;\nusing SimpleSign.Brasil.Xades;\n");
+            sb.Append("using SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Brazil.IcpBrasil.Xades;\n");
         }
 
         sb.Append('\n');
@@ -573,7 +573,7 @@ internal sealed class XadesPlan
 
         if (_o.Kind == XadesKind.IcpBrasil)
         {
-            notes.Add("The CLI has no ICP-Brasil XAdES policy flag: use WithIcpBrasilPolicy (SimpleSign.Brasil.Xades).");
+            notes.Add("The CLI has no ICP-Brasil XAdES policy flag: use WithIcpBrasilPolicy (SimpleSign.Brazil.IcpBrasil.Xades).");
         }
         else
         {

@@ -22,7 +22,7 @@ internal static class CodeGenerator
         sb.Append("using SimpleSign.PAdES;\nusing SimpleSign.PAdES.Signing;\nusing SimpleSign.Core.Signing;\n");
         if (o.Kind == SignatureKind.IcpBrasil || o.UseSignerDetails && o.SignerDetails == SignerDetailsKind.Aea || o.Health.Enabled)
         {
-            sb.Append("using SimpleSign.Brasil.IcpBrasil;\nusing SimpleSign.Brasil.Signing;\n");
+            sb.Append("using SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Brazil.Signing;\n");
         }
 
         sb.Append('\n');

@@ -70,7 +70,11 @@ jobs:
             src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj
             src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj
             src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj
-            src/TrustFrameworks/SimpleSign.Brasil/SimpleSign.Brasil.csproj
+            src/TrustFrameworks/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj
+            src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj
+            src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj
+            src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj
+            src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj
             src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj
             src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj
             src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj

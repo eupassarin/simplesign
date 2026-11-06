@@ -1,8 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Signing;
@@ -192,7 +191,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n");
         if (icp)
         {
-            sb.Append("using SimpleSign.Brasil;\n");
+            sb.Append("using SimpleSign.Brazil.GovBr;\nusing SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Core.Extensions;\n");
         }
 
         sb.Append("\nvar validator = new CadesSignatureValidator(new ValidationOptions\n{\n");
@@ -210,8 +209,8 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         sb.Append("});\n");
         if (icp)
         {
-            sb.Append("var icpRoots = new BrasilExtension()\n");
-            sb.Append("    .TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()).ToList();\n");
+            sb.Append("var icpRoots = new ICountryExtension[] { new IcpBrasilExtension(), new GovBrExtension() }\n");
+            sb.Append("    .SelectMany(e => e.TrustAnchorProviders).SelectMany(p => p.GetTrustAnchors()).ToList();\n");
         }
 
         sb.Append("\nCadesValidationReport report = validator.ValidateAll(\n    File.ReadAllBytes(\"signature.p7s\"),\n");
@@ -376,7 +375,7 @@ internal sealed class CadesPlan
         var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Signing;\n");
         if (_o.Kind == CadesKind.IcpBrasil)
         {
-            sb.Append("using SimpleSign.Brasil.IcpBrasil;\nusing SimpleSign.Brasil.Signing;\n");
+            sb.Append("using SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Brazil.Signing;\n");
         }
 
         sb.Append('\n');

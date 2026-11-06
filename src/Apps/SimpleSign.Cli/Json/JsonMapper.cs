@@ -1,5 +1,5 @@
-using SimpleSign.Brasil;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil;
+using SimpleSign.Brazil.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 

@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Brazil.GovBr</AssemblyName>
+    <RootNamespace>SimpleSign.Brazil.GovBr</RootNamespace>
+    <PackageId>SimpleSign.Brazil.GovBr</PackageId>
+    <Description>Gov.br for SimpleSign: bundled Gov.br AC Raiz and intermediates, Gov.br chain validation and assurance level, and the Lei 14.063 advanced level of Gov.br signatures.</Description>
+    <PackageTags>govbr;gov.br;brazil;digital-signature;lei-14063;aea;native-aot</PackageTags>
+    <Version>0.10.1</Version>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\SimpleSign.Brazil\SimpleSign.Brazil.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Brazil.GovBr.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Gov.br root CAs -->
+    <EmbeddedResource Include="Certs\GovBr-ACRaiz-v1.crt" LogicalName="SimpleSign.Brazil.GovBr.Certs.GovBr-ACRaiz-v1.crt" />
+    <EmbeddedResource Include="Certs\GovBr-ACIntermediaria-v1.crt" LogicalName="SimpleSign.Brazil.GovBr.Certs.GovBr-ACIntermediaria-v1.crt" />
+    <EmbeddedResource Include="Certs\GovBr-ACFinal-v1.crt" LogicalName="SimpleSign.Brazil.GovBr.Certs.GovBr-ACFinal-v1.crt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

@@ -28,7 +28,8 @@ SimpleSign creates and validates **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN
 
 ```bash
 dotnet add package SimpleSign                  # PAdES + CAdES + XAdES
-dotnet add package SimpleSign.Brasil           # ICP-Brasil, Gov.br, Lei 14.063
+dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil, Lei 14.063
+dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
 dotnet add package SimpleSign.Signers.Pkcs11   # A3 tokens, smartcards, HSMs
 dotnet add package SimpleSign.Signers.Cloud    # cloud certificates (PSC, CSC v2)
 dotnet tool install -g SimpleSign.Cli          # command line
@@ -41,8 +42,10 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.CAdES` | Standalone CMS/PKCS#7 signatures |
 | `SimpleSign.XAdES` | XML signatures |
 | `SimpleSign.Core` | CMS, TSA, OCSP, CRL (used by the above) |
-| `SimpleSign.Brasil` | ICP-Brasil chain and policies, Gov.br, CPF/CNPJ, Lei 14.063 |
-| `SimpleSign.Brasil.Fiscal` | XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf |
+| `SimpleSign.Brazil.IcpBrasil` | ICP-Brasil chain, roots and policies, Lei 14.063 |
+| `SimpleSign.Brazil.GovBr` | Gov.br chain and assurance level, Lei 14.063 |
+| `SimpleSign.Brazil` | Shared: CPF/CNPJ, Lei 14.063 levels, AEA manifest (pulled in by both) |
+| `SimpleSign.Brazil.Fiscal` | XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf |
 | `SimpleSign.Signers.Pkcs11` | Sign through a token's PKCS#11 driver |
 | `SimpleSign.Signers.Cloud` | Sign with cloud certificates (ICP-Brasil PSCs, CSC API v2) |
 | `SimpleSign.HtmlToPdf` | Pure .NET HTML→PDF (independent of signing) |
@@ -121,7 +124,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 
 `ITrustAnchorProvider` (trust roots), `IChainValidationProvider` (chain rules), `IExternalSigner`
 (remote keys), `IHttpClientProvider` (TSA/OCSP/CRL HTTP), `ICertificateCache`, `ICertificateStore`
-and `ICountryExtension` (country packages such as `SimpleSign.Brasil`).
+and `ICountryExtension` (country packages such as `SimpleSign.Brazil.IcpBrasil`).
 
 ## Contributing
 

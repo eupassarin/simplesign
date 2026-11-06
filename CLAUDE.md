@@ -18,7 +18,7 @@ dotnet test SimpleSign.sln --filter "Category!=Stress"
 # Run specific test project
 dotnet test tests/unit/SimpleSign.PAdES.Tests
 dotnet test tests/unit/SimpleSign.Core.Tests
-dotnet test tests/unit/SimpleSign.Brasil.Tests
+dotnet test tests/unit/SimpleSign.Brazil.IcpBrasil.Tests
 dotnet test tests/unit/SimpleSign.HtmlToPdf.Tests
 
 # Integration tests (requires network for TSA/OCSP)
@@ -43,9 +43,16 @@ src/
 │   ├── SimpleSign.XAdES/       XML signatures
 │   └── SimpleSign/             Meta-package
 ├── TrustFrameworks/
-│   ├── SimpleSign.Brasil/          ICP-Brasil: chain validation, policies, CPF/CNPJ, Gov.br
-│   ├── SimpleSign.Brasil.Fiscal/   XML-DSig for NF-e, CT-e, eSocial…
-│   └── SimpleSign.Brasil.Xades/    ICP-Brasil XAdES policies
+│   ├── Brazil/
+│   │   ├── SimpleSign.Brazil/                  shared: CPF/CNPJ, Lei 14.063, AEA manifest, VALIDAR
+│   │   ├── IcpBrasil/
+│   │   │   ├── SimpleSign.Brazil.IcpBrasil/        ICP-Brasil: chain validation, roots, policies, ACT timestamps
+│   │   │   ├── SimpleSign.Brazil.IcpBrasil.Xades/  ICP-Brasil XAdES policies
+│   │   │   └── SimpleSign.Brazil.Fiscal/           XML-DSig for NF-e, CT-e, eSocial…
+│   │   └── GovBr/
+│   │       └── SimpleSign.Brazil.GovBr/            Gov.br: chain validation, assurance level
+│   ├── Europe/Eidas/                   planned (README only)
+│   └── Peru/Iofe/                      planned (README only)
 ├── Signers/
 │   ├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
 │   └── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2
@@ -137,8 +144,11 @@ await CadesSigner.Document(data).WithCertificate(cert)
 SimpleSign.PAdES (most users install this)
   └── depends on SimpleSign.Core (the PDF parser is part of it, namespace SimpleSign.PAdES.Pdf)
 
-SimpleSign.Brasil (adds ICP-Brasil on top of PAdES/CAdES)
-  └── depends on SimpleSign.PAdES + SimpleSign.CAdES — public API only, no InternalsVisibleTo
+SimpleSign.Brazil (shared Brazilian building blocks)
+  └── depends on SimpleSign.PAdES + SimpleSign.CAdES — public API only, no InternalsVisibleTo from them
+
+SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension each)
+  └── depend on SimpleSign.Brazil only, never on each other (Fiscal and IcpBrasil.Xades build on IcpBrasil)
 
 SimpleSign.CAdES / SimpleSign.XAdES
   └── each depends on SimpleSign.Core only

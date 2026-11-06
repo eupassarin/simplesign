@@ -24,8 +24,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
-    <ProjectReference Include="..\..\..\src\TrustFrameworks\SimpleSign.Brasil\SimpleSign.Brasil.csproj" />
-    <ProjectReference Include="..\..\..\src\TrustFrameworks\SimpleSign.Brasil.Xades\SimpleSign.Brasil.Xades.csproj" />
+    <ProjectReference Include="..\..\..\src\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
+    <ProjectReference Include="..\..\..\src\TrustFrameworks\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
+    <ProjectReference Include="..\..\..\src\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil.Xades\SimpleSign.Brazil.IcpBrasil.Xades.csproj" />
     <ProjectReference Include="..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>
 

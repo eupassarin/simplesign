@@ -1,5 +1,5 @@
-using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil.IcpBrasil;
+using SimpleSign.Brazil.Signing;
 
 namespace SimpleSign.Cli.Rendering;
 

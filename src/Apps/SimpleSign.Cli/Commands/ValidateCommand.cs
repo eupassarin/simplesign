@@ -1,7 +1,7 @@
 using System.ComponentModel;
-using SimpleSign.Brasil;
-using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Brasil.Signing;
+using SimpleSign.Brazil;
+using SimpleSign.Brazil.IcpBrasil;
+using SimpleSign.Brazil.Signing;
 using SimpleSign.Cli.Json;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Crypto;
@@ -13,6 +13,7 @@ using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using SimpleSign.Brazil.GovBr;
 
 namespace SimpleSign.Cli.Commands;
 
@@ -118,11 +119,11 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             integrityVerifier: _integrityVerifier,
             cmsParser: _cmsParser,
             timestampValidator: _timestampValidator,
-            chainValidationProviders: new BrasilExtension(new BrasilExtensionOptions
-            {
-                HttpClient = _httpClientProvider.GetClient(),
-                Logger = logger,
-            }).ChainValidationProviders);
+            chainValidationProviders:
+            [
+                .. new IcpBrasilExtension(_httpClientProvider.GetClient(), logger).ChainValidationProviders,
+                .. new GovBrExtension(_httpClientProvider.GetClient(), logger).ChainValidationProviders,
+            ]);
 
         await using var stream = File.OpenRead(settings.InputPath);
         var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);

@@ -24,7 +24,7 @@ A layered approach using .NET `X509Chain` with `CustomRootTrust` mode for standa
 Two strategies, both using `X509Chain.ChainPolicy.CustomTrustStore`:
 
 **Strategy A — Bundled (offline, preferred):**
-Root CA certificates are embedded as assembly resources (`Certs/*.crt` in `SimpleSign.Brasil.dll`). Loaded at runtime via `Assembly.GetManifestResourceStream()` — no network required.
+Root CA certificates are embedded as assembly resources (`Certs/*.crt` in `SimpleSign.Brazil.IcpBrasil.dll` and `SimpleSign.Brazil.GovBr.dll`). Loaded at runtime via `Assembly.GetManifestResourceStream()` — no network required.
 
 | Validator | Certificates |
 |---|---|

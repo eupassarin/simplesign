@@ -6,7 +6,7 @@
 Signing and validation reach the network on behalf of whoever supplied the input:
 - **TSA requests** go to a URL from the caller's options.
 - **OCSP, CRL and AIA `caIssuers` downloads** go to URLs read from the certificates inside the document being signed or validated.
-- **Country packages** download trust roots, intermediates and signature policies (`SimpleSign.Brasil`).
+- **Country packages** download trust roots, intermediates and signature policies (`SimpleSign.Brazil.IcpBrasil`, `SimpleSign.Brazil.GovBr`).
 
 Two problems follow:
 1. **Untrusted URLs.** A validation service that accepts uploaded PDFs would fetch whatever URL an attacker puts in a certificate's CRL distribution point or AIA extension. This is a classic SSRF path to `localhost`, internal services or cloud metadata at `169.254.169.254`.

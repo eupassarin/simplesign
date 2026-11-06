@@ -1,15 +1,15 @@
 # Fiscal XML (NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf)
 
-`SimpleSign.Brasil.Fiscal` signs and validates the XMLDSig signatures of Brazilian fiscal XML.
+`SimpleSign.Brazil.Fiscal` signs and validates the XMLDSig signatures of Brazilian fiscal XML.
 
 ```bash
-dotnet add package SimpleSign.Brasil.Fiscal
+dotnet add package SimpleSign.Brazil.Fiscal
 ```
 
 ## Sign
 
 ```csharp
-using SimpleSign.Brasil.Fiscal;
+using SimpleSign.Brazil.Fiscal;
 
 // One NF-e: signs infNFe (by its Id) and inserts <Signature> after it
 byte[] signed = FiscalXmlSigner.Sign(nfeXml, FiscalDocumentProfile.NFe, eCnpj);

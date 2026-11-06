@@ -34,23 +34,22 @@ Two sub-interfaces (in `SimpleSign.Core.Extensions`):
 
 `ISignatureManifestProvider` was removed in v0.5.0. Manifest construction uses `SignatureMetadata` directly; Brazil-specific Lei 14.063 manifests are built via `WithAdvancedSignature()` without an interface indirection.
 
-### 2. BrasilExtension — reference implementation
+### 2. IcpBrasilExtension and GovBrExtension — reference implementations
 
-`BrasilExtension` bundles 4 internal classes: two `ITrustAnchorProvider` implementations (one per PKI hierarchy) loading bundled root certificates, and two `IChainValidationProvider` implementations for ICP-Brasil and Gov.br policy detection and identity extraction.
+Brazil ships one extension per hierarchy. `IcpBrasilExtension` (`SimpleSign.Brazil.IcpBrasil`) and `GovBrExtension` (`SimpleSign.Brazil.GovBr`) each bundle an `ITrustAnchorProvider` that loads the bundled root certificates and an `IChainValidationProvider` for policy detection and identity extraction. What both need (CPF/CNPJ, SubjectAltName parsing, Lei 14.063 levels, the revocation checker) lives in the shared `SimpleSign.Brazil` package. Validators and signers accept several extensions, so an application passes both to accept both hierarchies.
 
 ### 3. Registration
 
 **DI path:**
 ```csharp
-services.AddSingleton<ICountryExtension, BrasilExtension>();
-services.AddSingleton<ITrustAnchorProvider, IcpBrasilTrustAnchorProvider>();
-services.AddSingleton<ITrustAnchorProvider, GovBrTrustAnchorProvider>();
+services.AddSimpleSignIcpBrasil();   // IcpBrasilExtension + its trust anchor provider
+services.AddSimpleSignGovBr();       // GovBrExtension + its trust anchor provider
 ```
 
 **Non-DI path:**
 ```csharp
 PadesSigner.Document(pdf)
-    .WithCountryExtension<BrasilExtension>()
+    .WithCountryExtension<IcpBrasilExtension>()
     .WithCertificate(cert)
     .SignAsync();
 ```

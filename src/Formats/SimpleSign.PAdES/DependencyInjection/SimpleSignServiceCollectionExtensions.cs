@@ -28,7 +28,7 @@ public static class SimpleSignServiceCollectionExtensions
     /// </para>
     /// <para>
     /// For country-specific support, also call the appropriate extension method
-    /// (e.g., <c>AddSimpleSignBrasil()</c> from SimpleSign.Brasil).
+    /// (e.g., <c>AddSimpleSignIcpBrasil()</c> from SimpleSign.Brazil.IcpBrasil).
     /// </para>
     /// </summary>
     /// <param name="services">The service collection.</param>
