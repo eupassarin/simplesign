@@ -309,6 +309,19 @@ public sealed class CrlClient : ICrlClient
         catch (CryptographicException ex) { logger?.CrlSignatureVerificationFailed(ex.Message); return false; }
     }
 
+    /// <summary>
+    /// The first HTTP(S) URL of the certificate's CRL distribution points extension, or
+    /// <see langword="null"/> when it has none.
+    /// </summary>
+    /// <param name="certificate">The certificate whose CRL location is wanted.</param>
+    /// <param name="logger">Optional logger for a malformed extension.</param>
+    /// <returns>The CRL URL, or <see langword="null"/>.</returns>
+    public static Uri? GetCrlUri(X509Certificate2 certificate, ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+        return GetCrlUrl(certificate, logger) is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri : null;
+    }
+
     internal static string? GetCrlUrl(X509Certificate2 cert, ILogger? logger = null)
     {
         var cdp = cert.Extensions[Oids.CrlDistributionPoints];

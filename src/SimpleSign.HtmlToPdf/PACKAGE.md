@@ -42,4 +42,4 @@ Relative images/stylesheets are only read when you opt in with `WithBaseDirector
 
 More (CSS support matrix, fonts, PDF/A, CLI) at
 [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign) and the
-[docs](https://eupassarin.github.io/SimpleSign/). MIT licensed.
+[docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles). MIT licensed.

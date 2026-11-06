@@ -499,19 +499,6 @@ csharp_style_allow_blank_line_after_token_in_conditional_expression_experimental
 [src/SimpleSign/Signing/*.cs]
 dotnet_diagnostic.IDE0130.severity = none
 
-[samples/**/*.cs]
-# Samples are demo code — relax brace enforcement and naming rules
-csharp_prefer_braces = true:suggestion
-dotnet_diagnostic.IDE0011.severity = suggestion
-dotnet_diagnostic.CA1707.severity = none
-dotnet_diagnostic.CA1515.severity = none
-# Samples don't need XML documentation comments
-dotnet_diagnostic.CS1591.severity = none
-
-[benchmarks/**/*.cs]
-# BenchmarkDotNet instantiates classes via reflection — suppress false positive
-dotnet_diagnostic.CA1812.severity = none
-
 [tests/**/*.cs]
 # Test method names use underscore convention (Method_Scenario_Expected)
 dotnet_diagnostic.CA1707.severity = none

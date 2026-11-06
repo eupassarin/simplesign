@@ -72,7 +72,7 @@ Where each stream object (`/CRLs`, `/OCSPs`, `/Certs`) contains zlib-compressed 
 - One dictionary per signature, keyed by uppercase hex SHA-1 of the DER-encoded CMS signature value
 - `/TU` = creation timestamp per ISO 32000-2 §12.8.4.4
 - Contains indirect references to the `/CRL`, `/OCSP`, `/Cert`, `/TS` stream objects used to validate that signature
-- VRI hash excludes the zero-padding bytes added to fill the `/Contents` reservation space: `ComputeDerTotalLength()` strips trailing zeros from the hex-decoded CMS bytes to find the actual DER content length
+- The VRI key is the SHA-1 of the complete `/Contents` byte string, including the zero padding that fills the reserved space (ISO 32000-2 §12.8.4.4). Validators such as the ETSI conformance checker hash the full value, so stripping the padding would break the match (`LtvEmbedder.ExtractSignatureContentHashes`)
 
 **Merge with existing DSS:**
 `DssExtractor.ParseExistingDss()` extracts object references from any prior DSS in the PDF. `MergeRefs` deduplicates by object number. VRI entries are preserved unless a new entry with the same hash overwrites them.

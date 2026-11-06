@@ -90,8 +90,8 @@ PDF/A-1 requires all fonts to be embedded, including the standard 14. When a vis
 **Font embedding workflow in `PdfSignatureWriter.PrepareAsync`:**
 
 1. `FontResources` lazy-loads the TTF bytes, computes Widths array (1000 UPM per ISO 32000-1 §9.2.2, scaled from LiberationSans' native 2048 UPM), and provides font metrics
-2. `PdfFontWriter.BuildFontFileObj()` — creates a `/FontFile2` object containing the TTF compressed with `ZLibStream` (RFC 1950 zlib wrapper, not raw `DeflateStream`)
-3. `PdfFontWriter.BuildFontDescriptorObj()` — creates a `/FontDescriptor` referencing the FontFile2, with Ascent, Descent, CapHeight, FontBBox, Flags, StemV, ItalicAngle
+2. `PdfFontWriter.BuildFontFileObject()` — creates a `/FontFile2` object containing the TTF compressed with `ZLibStream` (RFC 1950 zlib wrapper, not raw `DeflateStream`)
+3. `PdfFontWriter.BuildFontDescriptorObject()` — creates a `/FontDescriptor` referencing the FontFile2, with Ascent, Descent, CapHeight, FontBBox, Flags, StemV, ItalicAngle
 4. `SignatureAppearanceRenderer.WrapInFormXObject*()` — references the embedded LiberationSans as `/Type /Font /Subtype /TrueType /BaseFont /LiberationSans`
 
 Font embedding only activates when:

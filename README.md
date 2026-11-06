@@ -5,7 +5,7 @@
 <h1 align="center">SimpleSign</h1>
 
 <p align="center">
-  <strong>Enterprise digital signatures for .NET</strong><br/>
+  <strong>Digital signatures for .NET</strong><br/>
   PAdES · CAdES · XAdES — sign, validate, inspect.
 </p>
 
@@ -15,114 +15,41 @@
   <img src="https://img.shields.io/github/actions/workflow/status/eupassarin/simplesign/ci.yml?style=flat-square&logo=github" alt="CI" />
   <a href="https://codecov.io/gh/eupassarin/SimpleSign"><img src="https://codecov.io/gh/eupassarin/SimpleSign/branch/main/graph/badge.svg" alt="codecov" /></a>
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />
-  <img src="https://img.shields.io/badge/AOT-Compatible-blueviolet?style=flat-square" alt="Native AOT" />
-  <img src="https://img.shields.io/badge/Tests-2%2C800%2B-brightgreen?style=flat-square" alt="2,800+ tests" />
-  <img src="https://img.shields.io/badge/No%20Crypto%20Deps-✓-blue?style=flat-square" alt="No third-party crypto dependencies" />
 </p>
 
----
+SimpleSign creates and validates **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN 319 122) and
+**XAdES** (ETSI EN 319 132) signatures.
 
-## What is SimpleSign?
-
-SimpleSign is a .NET library for creating and validating **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN 319 122), and **XAdES** (ETSI EN 319 132) digital signatures. All cryptography uses `System.Security.Cryptography` — no BouncyCastle, no third-party crypto dependencies. Native AOT compatible. 2,800+ tests. MIT licensed.
-
-This README describes the current source tree. For released-package behavior, use
-its release-tagged documentation; the [changelog](CHANGELOG.md) records delivered
-changes and work under `Unreleased`.
-
----
-
-## Why SimpleSign?
-
-- **Zero third-party crypto** — all operations via BCL `System.Security.Cryptography`
-- **Dependency Injection** — 15+ interfaces, `AddSimpleSign()` wires everything
-- **Native AOT compatible** — no reflection, no `dynamic`, no `Assembly.Load`
-- **MIT licensed** — use anywhere, for anything, with no restrictions
-- **2,800+ tests** — comprehensive coverage, 0 warnings, CI-enforced quality gates
-- **Multi-target** — .NET 8 and .NET 10 on Windows, macOS, and Linux
-
----
-
-## What's New in v0.10.1
-
-A hardening release on top of 0.10.0, driven by a new mutation fuzzer:
-
-- **Hostile PDFs no longer stall validation** — the signature-field scan was quadratic on files with thousands of unclosed dictionaries; it is now one linear pass (a 168 KB file went from 30+ s to under a second).
-- **HtmlToPdf** — long words with `hyphens: auto` no longer slow layout down quadratically.
-- **CLI** — `validate --trust` / `validate-dir --trust` accept your own root CA, and `xades validate --data` validates detached signatures.
-- **XAdES** — signing malformed XML throws `ArgumentException` instead of a raw `XmlException`.
-- **Signature stamp** — identical bytes on Windows and Unix.
-
-See the [full changelog](CHANGELOG.md).
-
----
-
-## What's New in v0.10.0
-
-**Three-state validation result (breaking)** — PAdES validation now reports one ETSI indication, `Valid`, `Invalid` or `Indeterminate`, in the API (`SignatureValidationResult.Indication`), the CLI, its JSON output, and HostSigner. The ambiguous `IsValid`/`valid` boolean is gone; see the [migration guide](docs/migration/v0.9-to-v0.10.md).
-
-**HTML to PDF, browser-grade** — `SimpleSign.HtmlToPdf` is now a full CSS layout engine: complex selectors and cascade, floats, flexbox, grid, multi-column, paginated tables, `calc()`, counters and `@page` page numbers; backgrounds, gradients, transparency, shadows and transforms; inline and file SVG as vectors; embedded subset fonts with OpenType shaping (kerning, ligatures, Arabic, Devanagari), right-to-left text and hyphenation; PDF/A-2b output.
-
-**Customizable signature stamp** — every stamp text can be changed (`SignedByLabel` replaces "Signed by"), the date can be shown in a local time zone and format, and stamps support fixed sizes with shrink-to-fit, text alignment, background colors and transparent PNG images (handwritten signatures). Signer names and reasons outside Latin-1 are now kept in the signature dictionary. The CLI and HostSigner expose the same options.
-
-**Packaging** — every NuGet package ships its own README, icon, SourceLink and symbol package.
-
-See the [full changelog](CHANGELOG.md).
-
----
+- All cryptography uses `System.Security.Cryptography`: no BouncyCastle, no third-party crypto.
+- Native AOT compatible; .NET 8 and .NET 10 on Windows, macOS and Linux.
+- MIT licensed.
 
 ## Installation
 
-Packages are split by concern — install only what you need:
-
 ```bash
-# Full PAdES stack (most common)
-dotnet add package SimpleSign
-
-# Brazilian PKI (ICP-Brasil + Gov.br)
-dotnet add package SimpleSign.Brasil
-
-# CAdES signatures (CMS/PKCS#7)
-dotnet add package SimpleSign.CAdES
-
-# XAdES signatures (XML-DSig)
-dotnet add package SimpleSign.XAdES
-
-# A3 tokens, smartcards and HSMs (PKCS#11)
-dotnet add package SimpleSign.Signers.Pkcs11
-
-# Cloud certificates: ICP-Brasil PSCs (BirdID, VIDaaS, ...) and CSC v2
-dotnet add package SimpleSign.Signers.Cloud
-
-# CLI tool
-dotnet tool install -g SimpleSign.Cli
+dotnet add package SimpleSign                  # PAdES + CAdES + XAdES
+dotnet add package SimpleSign.Brasil           # ICP-Brasil, Gov.br, Lei 14.063
+dotnet add package SimpleSign.Signers.Pkcs11   # A3 tokens, smartcards, HSMs
+dotnet add package SimpleSign.Signers.Cloud    # cloud certificates (PSC, CSC v2)
+dotnet tool install -g SimpleSign.Cli          # command line
 ```
 
-### Package Map
+| Package | What it does |
+|---|---|
+| `SimpleSign` | Meta-package: PAdES, CAdES and XAdES |
+| `SimpleSign.PAdES` | PDF signing, validation and inspection (B-B/T/LT/LTA) |
+| `SimpleSign.CAdES` | Standalone CMS/PKCS#7 signatures |
+| `SimpleSign.XAdES` | XML signatures |
+| `SimpleSign.Pdf` / `SimpleSign.Core` | PDF structure; CMS, TSA, OCSP, CRL (used by the above) |
+| `SimpleSign.Brasil` | ICP-Brasil chain and policies, Gov.br, CPF/CNPJ, Lei 14.063 |
+| `SimpleSign.Brasil.Fiscal` | XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf |
+| `SimpleSign.Signers.Pkcs11` | Sign through a token's PKCS#11 driver |
+| `SimpleSign.Signers.Cloud` | Sign with cloud certificates (ICP-Brasil PSCs, CSC API v2) |
+| `SimpleSign.HtmlToPdf` | Pure .NET HTML→PDF (independent of signing) |
 
-- **SimpleSign** (meta-package) — full PAdES + CAdES + XAdES stack
-  - **SimpleSign.PAdES** — PDF signing & validation (PAdES B-B/T/LT/LTA)
-    - **SimpleSign.Pdf** — PDF structure parser (xref, objects, fields)
-    - **SimpleSign.Core** — Crypto primitives, CMS, TSA, revocation, HTTP
-  - **SimpleSign.CAdES** — standalone CMS/PKCS#7 signing & validation (ETSI EN 319 122)
-  - **SimpleSign.XAdES** — XML signature signing & validation (ETSI EN 319 132)
-    - **SimpleSign.Core** (shared)
-- **SimpleSign.Brasil** — ICP-Brasil + Gov.br + Lei 14.063 (depends on PAdES)
-- **SimpleSign.Brasil.Fiscal** — XMLDSig for NF-e, CT-e, MDF-e, NFS-e, eSocial and EFD-Reinf (depends on Brasil)
-- **SimpleSign.Signers.Pkcs11** — sign with A3 tokens, smartcards and HSMs through their PKCS#11 driver (depends on Core)
-- **SimpleSign.Signers.Cloud** — sign with cloud certificates: ICP-Brasil PSCs (API v0) and Cloud Signature Consortium API v2 (depends on Core)
-- **SimpleSign.HtmlToPdf** — Pure-.NET HTML→PDF: CSS cascade, floats, flexbox, grid, multi-column, paginated tables, gradients, SVG, OpenType shaping and RTL text, subset Unicode fonts, PDF/A-2b (independent)
-- **SimpleSign.Cli** — CLI tool (install as dotnet tool)
-- **SimpleSign TestBench** — local web app to try every PDF signing option (A1, A3, cloud; PAdES levels and every ICP-Brasil policy) with an offline sandbox, live stamp preview, validation report and the matching C#/CLI code, see [docs/articles/testbench.md](docs/articles/testbench.md)
-- **SimpleSign Agent** — macOS/Windows/Linux tray app: the local signing agent web pages call to sign with the OS store or an A3 token, see [docs/articles/agent.md](docs/articles/agent.md)
+## Quick start
 
----
-
-## Quick Start
-
-### Sign a PDF (PAdES)
-
-In one line, with a .pfx file:
+Sign a PDF with a .pfx file:
 
 ```csharp
 using SimpleSign.PAdES;
@@ -130,775 +57,75 @@ using SimpleSign.PAdES;
 await PadesSigner.SignFileAsync("contract.pdf", "contract-signed.pdf", "me.pfx", password);
 ```
 
-With the fluent builder (here PAdES B-LT, with a timestamp and revocation data):
+With the fluent builder (PAdES B-LT, with a timestamp and revocation data):
 
 ```csharp
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 
-var pdfBytes = File.ReadAllBytes("contract.pdf");
 var signedPdf = await PadesSigner
     .Document(pdfBytes)
     .WithCertificate(certificate)
-    .WithLevel(AdesBaselineProfile.LongTerm(
-        TimestampOptions.DigiCert,
-        new LongTermValidationOptions()))
+    .WithLevel(AdesBaselineProfile.LongTerm(TimestampOptions.DigiCert, new LongTermValidationOptions()))
     .SignAsync();
-
-File.WriteAllBytes("contract-signed.pdf", signedPdf);
 ```
 
-### Validate Signatures
+Validate:
 
 ```csharp
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Validation;
 
-var validator = new PdfSignatureValidator(new ValidationOptions
-{
-    CheckRevocation = true,
-    TrustSystemRoots = true
-});
+var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = true, TrustSystemRoots = true });
 
-var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
-
-foreach (var r in results)
+foreach (var r in await validator.ValidateAsync(File.OpenRead("signed.pdf")))
 {
-    Console.WriteLine($"{r.FieldName}: {r.Indication}"); // Valid, Invalid or Indeterminate
-    Console.WriteLine($"  Integrity={r.IsIntegrityValid}");
-    Console.WriteLine($"  Chain={r.IsCertificateChainValid}");
-    Console.WriteLine($"  Timestamp={r.HasValidTimestamp}");
-    Console.WriteLine($"  Signer: {r.SignerName} at {r.SigningTime}");
+    Console.WriteLine($"{r.FieldName}: {r.Indication} — {r.SignerName} at {r.SigningTime}");
 }
 ```
 
----
-
-### Sign with an A3 token, smartcard or HSM (PKCS#11)
+CAdES and XAdES use the same builder and profiles:
 
 ```csharp
-using SimpleSign.Signers.Pkcs11;
+byte[] p7s = await CadesSigner.Document(data).WithCertificate(certificate).SignAsync();
+byte[] xml = await XadesSigner.Document(xmlBytes).WithCertificate(certificate).SignAsync();
+```
 
-using var token = Pkcs11Signer.Open(new Pkcs11SignerOptions
-{
-    LibraryPath = "/usr/lib/libeToken.so",   // the token vendor's PKCS#11 driver
-    Pin = pin,
-});
+Sign with a key that is not in memory (token, HSM, cloud, browser) through `IExternalSigner`:
 
-var signedPdf = await PadesSigner
-    .Document(pdfBytes)
+```csharp
+using var token = Pkcs11Signer.Open(new Pkcs11SignerOptions { LibraryPath = "/usr/lib/libeToken.so", Pin = pin });
+
+var signedPdf = await PadesSigner.Document(pdfBytes)
     .WithExternalSigner(token.Certificate, token, token.Chain)
     .SignAsync();
 ```
 
-The private key never leaves the device. The same signer works with CAdES and XAdES, and the CLI
-accepts `--pkcs11-lib` (`simplesign pkcs11 list` shows the tokens). See the
-[PKCS#11 guide](docs/articles/pkcs11.md).
-
----
-
-### Sign with a cloud certificate (BirdID, VIDaaS, NeoID, ... or CSC v2)
-
-```csharp
-using SimpleSign.Signers.Cloud;
-using SimpleSign.Signers.Cloud.Psc;
-
-var psc = new PscClient(new PscClientOptions { BaseUri = providerUrl, ClientId = clientId, ClientSecret = clientSecret });
-var token = await psc.AuthorizeAsync(new LoopbackAuthorizationHandler(), PscScope.SignatureSession,
-    TimeSpan.FromMinutes(10), loginHint: cpf);   // the holder approves in the browser or app
-using var signer = await PscSigner.CreateAsync(psc, token);
-
-var signedPdf = await PadesSigner
-    .Document(pdfBytes)
-    .WithExternalSigner(signer.Certificate, signer, signer.Chain)
-    .SignAsync();
-```
-
-`CscSigner` does the same for Cloud Signature Consortium API v2 services. See the
-[cloud signing guide](docs/articles/cloud-signing.md).
-
----
-
-### CAdES — Standalone CMS Signatures
-
-Create and validate CAdES signatures (CMS/PKCS#7 SignedData) for any binary data using the fluent builder API.
-Supports both **detached** (.p7s) and **enveloped** (.p7m) content types.
-B-LT/B-LTA certificates and CRLs are stored in the root CMS `SignedData` sets,
-with OCSP responses encoded as RFC 5940 revocation choices. Validation also reads
-legacy CAdES-XL certificate and revocation unsigned attributes.
-
-Choose the baseline profile and content type when signing:
-
-```csharp
-using SimpleSign.CAdES;
-using SimpleSign.Core.Validation;
-using SimpleSign.Core.Signing;
-
-var data = File.ReadAllBytes("document.pdf");
-var tsa = new Uri("http://timestamp.digicert.com");
-
-// CAdES-B-B (basic)
-var cms = await CadesSigner
-    .Document(data)
-    .WithCertificate(certificate)
-    .SignAsync();
-
-// CAdES-B-T (with timestamp)
-var cmsBt = await CadesSigner
-    .Document(data)
-    .WithCertificate(certificate)
-    .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(tsa)))
-    .SignAsync();
-
-// CAdES-B-LT (long-term with LTV data)
-var cmsBlt = await CadesSigner
-    .Document(data)
-    .WithCertificate(certificate, chain)
-    .WithLevel(AdesBaselineProfile.LongTerm(
-        new TimestampOptions(tsa), new LongTermValidationOptions()))
-    .SignAsync();
-
-// CAdES-B-LTA (archival timestamp)
-var cmsBlta = await CadesSigner
-    .Document(data)
-    .WithCertificate(certificate)
-    .WithLevel(AdesBaselineProfile.Archive(
-        new TimestampOptions(tsa), new LongTermValidationOptions()))
-    .SignAsync();
-
-File.WriteAllBytes("document.pdf.p7s", cms);
-
-// Enveloped mode — data embedded inside the CMS (.p7m)
-var cmsEnveloped = await CadesSigner
-    .Document(data)
-    .WithCertificate(certificate)
-    .WithContentType(CadesContentType.Enveloped)
-    .SignAsync();
-File.WriteAllBytes("document.pdf.p7m", cmsEnveloped);
-```
-
-### Validate CAdES Signatures
-
-```csharp
-using SimpleSign.CAdES;
-
-var validator = new CadesSignatureValidator(
-    new ValidationOptions { CheckRevocation = false });
-
-var result = validator.Validate(cmsBytes, originalData, trustAnchors);
-
-Console.WriteLine($"Signer: {result.SignerCertificate?.Subject}");
-Console.WriteLine($"Integrity: {result.IsIntegrityValid}");
-Console.WriteLine($"Signature: {result.IsSignatureValid}");
-Console.WriteLine($"Chain: {result.IsCertificateChainValid}");
-Console.WriteLine($"Timestamp: {result.HasValidTimestamp}");
-Console.WriteLine($"LTV: {result.IsLtvDataValid}");
-Console.WriteLine($"Archive TS: {result.HasValidArchiveTimestamp}");
-Console.WriteLine($"Valid: {result.IsValid}");
-```
-
-### XAdES — XML Signatures
-
-Sign and validate XML documents with XAdES (ETSI EN 319 132) using the same fluent builder API:
-
-```csharp
-using SimpleSign.Core.Signing;
-using SimpleSign.XAdES;
-
-var xml = File.ReadAllBytes("invoice.xml");
-var tsa = new Uri("http://timestamp.digicert.com");
-
-// XAdES-B-B (basic)
-var signed = await XadesSigner
-    .Document(xml)
-    .WithCertificate(certificate)
-    .SignAsync();
-
-// XAdES-B-T (with timestamp)
-var signedBt = await XadesSigner
-    .Document(xml)
-    .WithCertificate(certificate)
-    .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(tsa)))
-    .SignAsync();
-
-// XAdES-B-LT (long-term with LTV data)
-var signedBlt = await XadesSigner
-    .Document(xml)
-    .WithCertificate(certificate, chain)
-    .WithLevel(AdesBaselineProfile.LongTerm(
-        new TimestampOptions(tsa), new LongTermValidationOptions()))
-    .SignAsync();
-
-// XAdES-B-LTA (archival timestamp)
-var signedBlta = await XadesSigner
-    .Document(xml)
-    .WithCertificate(certificate)
-    .WithLevel(AdesBaselineProfile.Archive(
-        new TimestampOptions(tsa), new LongTermValidationOptions()))
-    .SignAsync();
-
-File.WriteAllBytes("invoice-signed.xml", signed);
-
-// Detached form (signature in separate file, data referenced by URI)
-var detached = await XadesSigner
-    .Document(xml)
-    .WithCertificate(certificate)
-    .WithForm(XadesForm.Detached)
-    .WithDataUri("invoice.xml")
-    .WithLevel(AdesBaselineProfile.Basic())
-    .SignAsync();
-File.WriteAllBytes("invoice-signed.xml", detached);
-
-// Enveloping form (data wrapped inside the signature)
-var enveloping = await XadesSigner
-    .Document(xml)
-    .WithCertificate(certificate)
-    .WithForm(XadesForm.Enveloping)
-    .WithLevel(AdesBaselineProfile.Basic())
-    .SignAsync();
-File.WriteAllBytes("invoice-signed.xml", enveloping);
-```
-
-### Validate XAdES Signatures
-
-```csharp
-using SimpleSign.XAdES;
-
-var validator = new XadesSignatureValidator();
-var result = validator.Validate(signedXml, trustAnchors: anchors);
-
-Console.WriteLine($"Signer: {result.SignerCertificate?.Subject}");
-Console.WriteLine($"Signature: {result.IsSignatureValid}");
-Console.WriteLine($"Integrity: {result.IsIntegrityValid}");
-Console.WriteLine($"Chain: {result.IsCertificateChainValid}");
-Console.WriteLine($"Observed level: {result.DetectedLevel}");
-Console.WriteLine($"Timestamp valid: {result.HasValidSignatureTimeStamp}");
-Console.WriteLine($"LTV evidence valid: {result.IsLtvDataValid}");
-Console.WriteLine($"Archive valid: {result.HasValidArchiveTimeStamp}");
-Console.WriteLine($"TSA trusted: {result.IsTsaTrusted}");
-Console.WriteLine($"Valid: {result.IsValid}");
-```
-
-`DetectedLevel` reports observed XML elements, including properties that fail
-validation. A malformed timestamp can report `Timestamped` while
-`HasValidSignatureTimeStamp` is false. Check the timestamp, LTV, and archive
-outcomes for the required baseline level; `IsValid` combines fundamental
-signature, integrity, and signer-chain checks. `IsTsaTrusted` reports the separate
-signature-TSA trust outcome.
-
----
-
-## Features
-
-### PAdES — PDF Signatures
-
-Sign PDFs with full European standard compliance, from basic signatures to long-term archival:
-
-```csharp
-using SimpleSign.Core.Extensions;
-using SimpleSign.Core.Signing;
-using SimpleSign.PAdES;
-
-var signed = await PadesSigner
-    .Document(pdfBytes)
-    .WithCertificate(cert)
-    .WithMetadata(new SignatureMetadata
-    {
-        SignerName = "Jane Doe",
-        Reason = "Approval",
-        Location = "New York"
-    })
-    .WithLevel(AdesBaselineProfile.Archive(      // PAdES B-LTA — valid for decades
-        new TimestampOptions(new Uri("http://timestamp.digicert.com")),
-        new LongTermValidationOptions()))         // Embeds CRL/OCSP for offline validation
-    .WithHashAlgorithm(HashAlgorithmName.SHA512)
-    .SignAsync();
-```
-
-| Capability | API |
-|---|---|
-| Basic signature (B-B) | `.WithCertificate(cert).SignAsync()` |
-| Timestamp (B-T) | `.WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(tsaUrl))))` |
-| Long-term validation (B-LT) | `.WithLevel(AdesBaselineProfile.LongTerm(new TimestampOptions(new Uri(tsaUrl)), new LongTermValidationOptions()))` |
-| Archival (B-LTA) | `.WithLevel(AdesBaselineProfile.Archive(new TimestampOptions(new Uri(tsaUrl)), new LongTermValidationOptions()))` |
-| Document certification (DocMDP) | `.AsCertification(level)` |
-| PDF/A preservation | `.WithPdfAPreservation()` |
-| Visible signature with QR code | `.WithAppearance(appearance)` |
-| External signer (HSM, KMS) | `.WithExternalSigner(cert, signer)` (`IExternalSigner`) |
-| Custom signing time | `.WithSigningTime(dateTimeOffset)` — drives the signature dictionary `/M` entry |
-| Custom HTTP client | `.WithHttpClientProvider(provider)` / scoped providers in `TimestampOptions` |
-| Existing field | `.WithExistingField("SignHere")` |
-| Deferred (2-phase) | `Document(pdf).WithCertificate(cert).WithSessionIntegrityKey(key).PrepareAsync()` → `Resume(session, key).CompleteAsync()` |
-| Batch (parallel) | `BatchSigner.Create(cert).Build()` |
-
-#### Signature Appearance
-
-```csharp
-var appearance = new SignatureAppearance
-{
-    Page = 1,
-    X = 50, Y = 50,
-    ShowDate = true,
-    ShowReason = true,
-    BackgroundImagePng = logoBytes,
-    VerificationUrl = "https://verify.example.com/abc123",  // Renders a QR code
-    ExtraLines = ["Department: Legal", "Ref: DOC-2025-001"]
-};
-
-await PadesSigner
-    .Document(pdfBytes)
-    .WithCertificate(cert)
-    .WithAppearance(appearance)
-    .SignAsync(output);
-```
-
-Every text in the stamp can be changed, and the date can be shown in a local time zone:
-
-```csharp
-var appearance = new SignatureAppearance
-{
-    ShowReason = true,
-    BackgroundImagePng = handwrittenSignaturePng,   // transparency is kept
-    BackgroundImageFit = SignatureImageFit.Contain,  // keep the aspect ratio
-    BackgroundColor = (1f, 1f, 1f),
-    BorderColor = (0.2f, 0.2f, 0.2f),
-}
-.WithLabels(signedBy: "Assinado digitalmente por", reason: "Motivo: ", location: "Local: ", date: "Data: ")
-.WithDateFormat("dd/MM/yyyy HH:mm:ss", TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"));
-```
-
-Set `SignedByLabel = ""` to hide the first line, `SignerDisplayName` to show a name other than the
-`/Name` entry, and `Width`/`Height` to give the stamp a fixed size (text shrinks to fit; use
-`TextAlignment` and `VerticalAlignment` to place it).
-
----
-
-### Validation
-
-Signing revalidates the completed base signature and content integrity before
-returning a result. `SignWithDetailsAsync` reports `RequestedLevel`, `AchievedLevel`,
-and checked timestamp/LTV/archive facts. Strict success fulfills the requested
-level; an explicit `ReturnLowerLevel` profile permits enrichment failures to return
-a lower level with structured warnings. Base-signature failures and cancellation
-still fail, and byte-only `SignAsync` accepts strict profiles only.
-
-Embedded-evidence checks authenticate OCSP/CRL signatures, certificate association,
-responder authorization, and usable validity bounds. Signer-chain trust and TSA
-trust depend on validation anchors and policy. Evaluate them with detailed results:
-
-```csharp
-var pdfResults = await new PdfSignatureValidator(options).ValidateAsync(stream);
-```
-
-Each result includes:
-
-- `IsIntegrityValid` — byte-range hash matches (no tampering)
-- `IsSignatureValid` — cryptographic signature verifies against public key
-- `IsCertificateChainValid` — chain builds to a trusted root
-- `HasValidTimestamp` — RFC 3161 token signature, signed content, and imprint verify (bool?)
-- `IsTsaTrusted` — TSA certificate passes the evaluated chain and timestamping-purpose policy (bool?; null when the token is absent, invalid, or unchecked)
-- `IsValid` — integrity, signature, configured chain trust, and revocation policy pass
-- `SignerName`, `SigningTime`, `DigestAlgorithmOid`, `SubFilter`, `Warnings`
-
----
-
-### Inspection
-
-Extract metadata without full validation (fast, non-cryptographic):
-
-```csharp
-using SimpleSign.PAdES.Inspection;
-
-var result = await PdfSignatureInspector.InspectAsync(stream);
-foreach (var s in result.Signatures)
-    Console.WriteLine($"{s.FieldName}: {s.DeclaredSignerName}, {s.SigningTime}, {s.DigestAlgorithm}");
-```
-
----
-
-### Batch Signing
-
-Sign multiple documents in parallel with shared resources:
-
-```csharp
-var batch = BatchSigner.Create(cert)
-    .WithFieldOptions(new SignatureFieldOptions
-    {
-        SignerName = "Jane Doe",
-        Reason = "Batch approval"
-    })
-    .WithLevel(AdesBaselineProfile.Basic())
-    .WithMaxConcurrency(4)
-    .Build();
-
-// Sign a single document
-byte[] signed = await batch.SignAsync(pdfBytes);
-
-// Or stream results as they complete
-await foreach (var result in batch.SignAllAsync(inputs))
-{
-    if (result.SignedPdf is not null)
-        Console.WriteLine($"{result.Id}: signed");
-}
-
-// Results are ordered by completion, not source order. Breaking the enumeration
-// cancels pending batch work and the cancellation-aware input source.
-
-// Access aggregate stats after signing
-Console.WriteLine($"Success: {batch.SuccessCount}, Fail: {batch.FailureCount}, Avg: {batch.AverageElapsedMs:F0}ms");
-```
-
-### Deferred Signing (Two-Phase)
-
-For web applications where the signing key is on a client device:
-
-```csharp
-var builder = DeferredSigner.Document(pdfBytes)
-    .WithCertificate(cert, chain)
-    .WithSessionIntegrityKey(sessionIntegrityKey)
-    .WithLevel(AdesBaselineProfile.Timestamped(
-        new TimestampOptions(new Uri("https://tsa.example"))))
-    .WithHttpClientProvider(httpClientProvider);
-
-// Server: prepare the signed attributes
-var prepared = await builder.PrepareAsync();
-byte[] hashToSign = prepared.HashToSign;
-
-// Client: sign the hash with the private key (RSA PKCS#1 v1.5, ECDSA, etc.)
-byte[] signature = SignWithClientKey(hashToSign);
-
-// Server: load the persisted session, then validate and embed the raw signature.
-byte[] signedPdf = await DeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)
-    .WithHttpClientProvider(httpClientProvider)
-    .CompleteAsync(signature);
-```
-
-### TSA Connection Pool
-
-Resilient timestamp authority connections with pooling and retry:
-
-```csharp
-using SimpleSign.Core.Crypto;
-
-var pool = new TsaPool([
-    "http://timestamp.digicert.com",
-    "http://tsa.starfieldtech.com",
-    "http://timestamp.sectigo.com"
-]);
-
-// Send timestamp request with auto-failover across servers
-byte[] tsaResponse = await pool.GetTimestampAsync(
-    hash, HashAlgorithmName.SHA256, httpClient, cancellationToken);
-```
-
-### Structured Logging
-
-105 source-generated `[LoggerMessage]` definitions with semantic fields:
-
-```csharp
-services.AddLogging(b => b.AddConsole());
-var validator = new PdfSignatureValidator(options, logger: loggerFactory.CreateLogger<PdfSignatureValidator>());
-```
-
----
-
-## 🇧🇷 Brazilian PKI (ICP-Brasil)
-
-Full support for Brazilian digital signature standards:
-
-### ICP-Brasil Chain Validation
-
-```csharp
-services.AddSimpleSignBrasil(); // registers ICP-Brasil trust anchors (v4–v13)
-
-var validator = new IcpBrasilChainValidator();
-var result = await validator.ValidateAsync(certificate);
-// result.CertificateLevel: A1, A3, S1, T3…
-```
-
-### CPF / CNPJ Extraction
-
-```csharp
-// CPF and CNPJ are automatically extracted from the certificate SAN
-Console.WriteLine(result.CpfFormatted);   // "123.456.789-09"
-Console.WriteLine(result.CnpjFormatted);  // "12.345.678/0001-90" or "12.ABC.345/01DE-35"
-```
-
-### Professional Registrations (CRM, CRF, OAB…)
-
-```csharp
-// Read from the SAN arc 2.16.76.1.4.2.{council} (ADE-ICP-04.01)
-foreach (var r in result.ProfessionalRegistrations)
-{
-    Console.WriteLine($"Council: {r.Council}");            // Cfm, Cff, Cfo, Oab…
-    Console.WriteLine($"Number:  {r.RegistrationNumber}"); // "123456"
-    Console.WriteLine($"State:   {r.StateCode}");          // "SP"
-}
-```
-
-### Sign under an ICP-Brasil Policy (AD-RB / AD-RT)
-
-```csharp
-// Policy OID + sigPolicyHash from the ITI's LPA (PAdES AD-RB v1.3), ETSI.CAdES.detached
-await PadesSigner.Document(pdf).WithCertificate(cert)
-    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt, new TimestampOptions(new Uri(actUrl)))
-    .WithHealthDocument(HealthDocumentType.Prescricao,
-        new ProfessionalRegistration(ProfessionalCouncil.Cfm, "123456", "SP", null))
-    .SignAsync(output);
-```
-
-### Lei 14.063 Level of a Validated Signature
-
-```csharp
-var validator = BrasilExtension.CreateValidator();
-foreach (var r in await validator.ValidateAsync(File.OpenRead("signed.pdf")))
-{
-    Console.WriteLine(Lei14063.Classify(r)); // Qualificada, Avancada, Simples (null if not valid)
-}
-// B-LT/B-LTA: the chain is validated at the signature timestamp time, with the embedded LCRs
-```
-
-### QR Codes for the ITI VALIDAR Portal
-
-```csharp
-// The QR code points to your URL; VALIDAR calls it with _format and _secretCode
-Uri qr = ValidarItiQrEndpoint.BuildQrCodeUrl(new Uri("https://clinic.example/rx/42"));
-var response = ValidarItiQrEndpoint.Respond(secretCodeFromRequest, document.SecretCode, [document.SignedPdfUrl]);
-// response.StatusCode: 200 (JSON with the signed files), 401 or 404
-```
-
-### Gov.br Validation
-
-```csharp
-var level = GovBrChainValidator.DetectAssuranceLevel(certificate);
-// Bronze, Silver, Gold
-
-// Or full chain validation
-var govValidator = new GovBrChainValidator();
-var result = await govValidator.ValidateAsync(certificate);
-Console.WriteLine($"Level: {result.AssuranceLevel}, Valid: {result.IsValid}");
-```
-
-### AEA — Advanced Electronic Signature (Lei 14.063/2020)
-
-```csharp
-var info = new AdvancedSignatureInfo
-{
-    SignerName = "Nome do Signatário",
-    Cpf = "12345678901",
-    AuthMethod = AuthenticationMethod.GovBr,
-    CommitmentType = CommitmentType.ProofOfApproval,
-    InstitutionName = "TCE-ES",
-    InstitutionCnpj = "12345678000190"
-};
-// Embed via PadesSignerBuilder.WithAdvancedSignature()
-```
-
-### Trust Anchors for Validation
-
-```csharp
-// Use AddSimpleSignBrasil() to register ICP-Brasil trust anchors automatically.
-// For manual configuration, supply trusted roots via the TrustedRoots property:
-var options = new ValidationOptions
-{
-    TrustSystemRoots = false, // don't use OS store
-    TrustedRoots = icpBrasilCertificates // IReadOnlyList<X509Certificate2>
-};
-```
-
----
-
-## CLI Tool
-
-### PDF Signatures
-
-```bash
-# Sign a PDF
-simplesign sign contract.pdf --cert mycert.pfx --password secret --tsa http://timestamp.digicert.com
-
-# Validate (add --trust to accept your own root CA, --json for machine-readable output)
-simplesign validate signed.pdf
-simplesign validate signed.pdf --trust my-root-ca.pem --json
-
-# Validate a directory of signed PDFs
-simplesign validate-dir ./documents/
-
-# Inspect
-simplesign inspect signed.pdf
-
-# Extract CMS from signed PDF
-simplesign extract signed.pdf --output-dir ./extracted
-
-# Convert HTML to PDF (relative images/CSS resolve against the HTML file's folder)
-simplesign html-to-pdf page.html --output page.pdf
-
-# ... with an embedded Unicode font, footer, and PDF/A-2b for archiving
-simplesign html-to-pdf page.html --font "Noto Sans=NotoSans-Regular.ttf" --footer "{page}/{pages}" --pdfa
-
-# Explain a signature term (omit the term for the full glossary)
-simplesign explain ByteRange
-
-# Show version
-simplesign version
-```
-
-### CAdES Signatures
-
-```bash
-# CAdES-B-B (basic)
-simplesign cades sign document.pdf --cert mycert.pfx
-
-# CAdES-B-T (with timestamp)
-simplesign cades sign document.pdf --cert mycert.pfx \
-    --tsa http://timestamp.digicert.com --level timestamped
-
-# CAdES-B-LT (long-term with LTV)
-simplesign cades sign document.pdf --cert mycert.pfx \
-    --tsa http://timestamp.digicert.com --level longterm --chain chain.pem
-
-# CAdES-B-LTA (with archival timestamp)
-simplesign cades sign document.pdf --cert mycert.pfx \
-    --tsa http://timestamp.digicert.com --level archive
-
-# Enveloped mode — data embedded inside the CMS (.p7m)
-simplesign cades sign document.pdf --cert mycert.pfx --content-type enveloped
-
-# Validate a CAdES signature
-simplesign cades validate document.pdf.p7s --data document.pdf
-
-# Validate with custom trust anchors
-simplesign cades validate document.pdf.p7s --data document.pdf --trust root-ca.pem
-```
-
-### XAdES Signatures
-
-```bash
-# XAdES-B-B enveloped (default form)
-simplesign xades sign invoice.xml --cert mycert.pfx
-
-# XAdES-B-T detached
-simplesign xades sign data.xml --cert mycert.pfx \
-    --tsa http://timestamp.digicert.com --level timestamped \
-    --form detached --data-uri data.xml
-
-# XAdES-B-LT enveloping
-simplesign xades sign data.xml --cert mycert.pfx \
-    --tsa http://timestamp.digicert.com --level longterm \
-    --form enveloping --chain chain.pem
-
-# Validate a XAdES signature
-simplesign xades validate signed.xml
-
-# Validate detached with original data
-simplesign xades validate signed.xml --data data.xml
-
-# Validate with custom trust anchors
-simplesign xades validate signed.xml --trust root-ca.pem
-```
-
-### Validation Output
-
-```
-contract-signed.pdf  1/1 valid
-├── Document
-│   ├── Signatures: 1 user + 0 timestamps
-│   ├── Encrypted:  No
-│   ├── DocMDP:     Not locked
-│   ├── PDF/A:      None
-│   └── ✓ DSS (embedded)
-└── Signature1  ✓ VALID
-    ├── Signer:       CN=Jane Doe, O=Acme Corp
-    ├── SubFilter:    ETSI.CAdES.detached
-    ├── PAdES:        B-T (Timestamp)
-    ├── Certificate
-    │   ├── Subject:        CN=Jane Doe, O=Acme Corp
-    │   ├── Issuer:         DigiCert SHA2 Assured ID CA
-    │   ├── Serial:         0A:1B:2C:3D
-    │   ├── Key:            RSA 2048-bit
-    │   ├── Valid:          2024-01-01 – 2026-01-01
-    │   └── NonRepudiation: ✓
-    ├── ESS CertV2:   ✓
-    ├── Validation
-    │   ├── Integrity:  ✓ Valid
-    │   ├── Signature:  ✓ Valid
-    │   ├── Chain:      ✓ Valid
-    │   ├── Revoked:    ✓ Not revoked (OCSP)
-    │   └── Timestamp:  ✓ 2025-04-28 14:30:00 UTC
-    ├── Timestamp
-    │   ├── Time:       2025-04-28 14:30:00 UTC
-    │   ├── TSA:        CN=DigiCert Timestamp 2023
-    │   └── Token Size: 4.2 KB
-    ├── Algorithm:    SHA-256
-    ├── Byte Range:   [0, 1234, 5678, 9012]  ✓
-    └── Signed at:    2025-04-28 14:30:00 UTC
-```
-
----
-
-## Extension Points
-
-| Extension | Interface / Pattern |
-|---|---|
-| Custom trust anchors | `ITrustAnchorProvider` |
-| Custom hash algorithm | `HashAlgorithmName` parameter |
-| External signer (HSM/KMS) | `IExternalSigner` implementation |
-| Custom HTTP | `IHttpClientProvider` / `SingleClientProvider` / `HttpClient` injection |
-| Custom logging | `ILogger<T>` injection |
-| Country extensions | `ICountryExtension` |
-| Chain validation | `IChainValidationProvider` |
-| Certificate caching | `ICertificateCache` |
-| Certificate store | `ICertificateStore` |
-
----
-
 ## Documentation
 
-| Document | Description |
+| Guide | |
 |---|---|
-| [API Reference](https://eupassarin.github.io/simplesign/) | Full API documentation (Docfx) |
-| [Documentation Home](docs/index.md) | Docfx documentation entry point |
-| [Getting Started](docs/articles/getting-started.md) | Installation, first signature, validation |
-| [Deferred Signing](docs/articles/deferred-signing.md) | Two-phase signing for web apps |
-| [Inspection & Validation](docs/articles/inspection-validation.md) | Metadata extraction and cryptographic verification |
-| [ICP-Brasil](docs/articles/icp-brasil.md) | Brazilian PKI integration |
-| [Interoperability](docs/interoperability.md) | PDF generators tested, cross-validation matrix, ETSI corpus |
-| [Conformance](docs/conformance.md) | ISO 32000, PAdES ETSI EN 319 142, RFC 5652 compliance |
-| [Benchmark Results](docs/benchmarks.md) | Comprehensive benchmark report — 69 benchmarks across 15 suites |
-| [TestBench](docs/articles/testbench.md) | Local web app to try every signing option |
-| [Signing agent](docs/articles/agent.md) | Cross-platform tray app with a local signing API (replaces HostSigner) |
-| [Web Signing Sample](samples/WebSigningSample/README.md) | Browser-based PDF signing demo |
-| [Web Inspect Sample](samples/WebInspectSample/README.md) | Browser-based PDF inspector & validator |
-| [Contributing](CONTRIBUTING.md) | How to contribute, coding standards, PR process |
-| [Security](SECURITY.md) | Vulnerability reporting |
-| [Changelog](CHANGELOG.md) | Release history |
+| [Getting started](docs/articles/getting-started.md) | First signature, validation, appearance |
+| [PAdES signing](docs/articles/pades.md) | Levels, appearance, batch, TSA pool, logging |
+| [CAdES and XAdES](docs/articles/cades-xades.md) | Detached/enveloped CMS, XML forms, validation |
+| [Inspection and validation](docs/articles/inspection-validation.md) | Validation results and fast inspection |
+| [Deferred signing](docs/articles/deferred-signing.md) | Two-phase signing for web apps |
+| [PKCS#11](docs/articles/pkcs11.md) / [Cloud signing](docs/articles/cloud-signing.md) | Tokens, HSMs and cloud certificates |
+| [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
+| [ICP-Brasil](docs/articles/icp-brasil.md) / [Fiscal XML](docs/articles/fiscal-xml.md) | Brazilian PKI and NF-e/eSocial signing |
+| [CLI](docs/articles/cli.md) | `simplesign sign`, `validate`, `cades`, `xades`… |
+| [Signing agent](docs/articles/agent.md) / [TestBench](docs/articles/testbench.md) | Tray app with a local signing API; local web app to try every option |
+| [Conformance](docs/conformance.md) / [ADRs](docs/adr/) | Standards coverage and design decisions |
 
----
+## Extension points
 
-## Requirements
-
-- **.NET 8** or **.NET 10** (multi-target: `net8.0` + `net10.0`)
-- No native or COM dependencies
-- **No third-party cryptography** — all crypto via `System.Security.Cryptography` (BCL)
-- Runs on Windows, macOS, and Linux
-
----
-
-## License
-
-[MIT](LICENSE) — use it anywhere, for anything, forever.
+`ITrustAnchorProvider` (trust roots), `IChainValidationProvider` (chain rules), `IExternalSigner`
+(remote keys), `IHttpClientProvider` (TSA/OCSP/CRL HTTP), `ICertificateCache`, `ICertificateStore`
+and `ICountryExtension` (country packages such as `SimpleSign.Brasil`).
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and the [changelog](CHANGELOG.md).
+If SimpleSign is useful to you, consider [sponsoring the project](https://github.com/sponsors/eupassarin).
 
----
-
-## Sponsoring
-
-If SimpleSign is useful to you or your organisation, consider [sponsoring the project on GitHub](https://github.com/sponsors/eupassarin). Your support helps keep the library maintained, secure, and free for everyone.
-
----
-
-<p align="center">
-  <em>Built for developers who believe document signing should be simple.</em>
-</p>
+[MIT](LICENSE)

@@ -19,7 +19,7 @@ What works today, and what doesn't.
 - [ ] New OID constants
 - [ ] New CMS attributes
 - [ ] New validation checks
-- [ ] New interop tests
+- [ ] New integration tests
 - [ ] Documentation updates
 
 **Priority**

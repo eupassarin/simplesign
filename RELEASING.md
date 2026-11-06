@@ -10,7 +10,6 @@ Step-by-step guide for releasing a new SimpleSign version.
 - [ ] `SimpleSign.Agent.Tests` passes (the CI runs it on Linux, Windows and macOS)
 - [ ] `dotnet test tests/cli/SimpleSign.Cli.Tests` passes
 - [ ] `dotnet test tests/integration/SimpleSign.Integration.Tests` passes when network credentials are available
-- [ ] `dotnet test tests/interop/SimpleSign.Interop.Tests` passes when Docker is available
 - [ ] No vulnerable packages: `dotnet list SimpleSign.sln package --vulnerable --no-restore`
 
 ## Version Bump — Project Files
@@ -89,39 +88,16 @@ Add a new section at the top (below the header), following [Keep a Changelog](ht
 - ... (only if applicable)
 ```
 
-### README.md
+### Breaking changes
 
-Update the `## What's New in vX.Y.Z` section with release highlights.
-
-### docs/index.md
-
-Verify package references and links are current. No version references by default, but check for outdated examples.
-
-### Migration Guides
-
-If this release has **breaking changes**:
-- [ ] Create `docs/migration/vPREVIOUS-to-vNEW.md`
-- [ ] Follow format from existing guides (`docs/migration/`)
-- [ ] Add link in `docs/index.md` and `docs/toc.yml`
-- [ ] List in CHANGELOG.md
+If this release breaks public API, describe the change and the replacement under
+`### Changed (Breaking)` in CHANGELOG.md, with a short before/after when it helps.
 
 ### Architecture Decision Records (ADRs)
 
 If this release introduced **significant architectural decisions**:
 - [ ] Create new ADR in `docs/adr/` (follow numbering: `NNNN-slug.md`)
 - [ ] Follow existing ADR format: Status, Context, Decision, Consequences, Alternatives
-
-### Benchmarks
-
-If benchmarks were re-run for this release:
-- [ ] Update `docs/benchmarks.md` with new results
-
-### llms.txt / llms-full.txt
-
-These files provide LLM/agent context following the [llmstxt.org](https://llmstxt.org) standard:
-
-- [ ] `llms.txt` — update if packages, docs links, or key constraints changed
-- [ ] `llms-full.txt` — update code examples if any public API changed (new/removed/changed methods or properties)
 
 ## Build & Test
 

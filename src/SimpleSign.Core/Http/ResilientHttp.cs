@@ -8,15 +8,16 @@ namespace SimpleSign.Core.Http;
 
 /// <summary>
 /// Provides a shared resilience pipeline for HTTP operations (OCSP, CRL, TSA, AIA downloads).
-/// Applies retry with exponential backoff to transient failures.
+/// Applies retry with exponential backoff to transient failures, and refuses URLs that point to
+/// localhost or private networks. Country extensions use it to download roots, CRLs and policies.
 /// </summary>
-internal static class ResilientHttp
+public static class ResilientHttp
 {
     /// <summary>Default HTTP timeout applied to shared HttpClient instances.</summary>
     internal static readonly TimeSpan DefaultHttpTimeout = TimeSpan.FromSeconds(30);
 
-    /// <summary>Default timeout for X509Chain URL retrieval.</summary>
-    internal static readonly TimeSpan DefaultChainRetrievalTimeout = TimeSpan.FromSeconds(15);
+    /// <summary>Default timeout for X509Chain URL retrieval (<see cref="System.Security.Cryptography.X509Certificates.X509ChainPolicy.UrlRetrievalTimeout"/>).</summary>
+    public static readonly TimeSpan DefaultChainRetrievalTimeout = TimeSpan.FromSeconds(15);
 
     private const int MaxRetryAttempts = 3;
     private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromMilliseconds(200);
@@ -43,6 +44,23 @@ internal static class ResilientHttp
                 },
             })
             .Build();
+
+    /// <summary>
+    /// Executes an HTTP GET with retries and returns the response body. Returns
+    /// <see langword="null"/> when every attempt fails or the URL points to a local or private address.
+    /// </summary>
+    /// <param name="httpClient">The client that sends the request.</param>
+    /// <param name="uri">The absolute URL to download.</param>
+    /// <param name="logger">Optional logger for failed attempts.</param>
+    /// <param name="cancellationToken">Cancels the download.</param>
+    /// <returns>The response bytes, or <see langword="null"/>.</returns>
+    public static Task<byte[]?> GetBytesAsync(
+        HttpClient httpClient, Uri uri, ILogger? logger = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(uri);
+        return GetBytesAsync(httpClient, uri.AbsoluteUri, logger, cancellationToken);
+    }
 
     /// <summary>
     /// Executes an HTTP GET with resilience, returning the response bytes.

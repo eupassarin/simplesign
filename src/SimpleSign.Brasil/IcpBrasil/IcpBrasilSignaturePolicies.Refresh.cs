@@ -306,7 +306,7 @@ public static partial class IcpBrasilSignaturePolicies
     }
 
     internal static async Task<byte[]> DownloadAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken) =>
-        await ResilientHttp.GetBytesAsync(httpClient, uri.AbsoluteUri, ct: cancellationToken).ConfigureAwait(false)
+        await ResilientHttp.GetBytesAsync(httpClient, uri, cancellationToken: cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException($"Could not download {uri}.");
 
     internal static Uri ToHttps(Uri uri) =>

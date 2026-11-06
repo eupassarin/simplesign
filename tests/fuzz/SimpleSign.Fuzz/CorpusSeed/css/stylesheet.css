@@ -1,3 +1,0 @@
-@media print { p { color: red !important } } @page { size: A4 landscape; margin: 1cm }
-:root { --c: #333 } div > p:first-child::before { content: "§ " attr(lang); color: var(--c, blue) }
-ul li:nth-child(2n+1):not(.x) ~ li { border: 1px dashed rgb(0 0 0 / 50%); font: italic bold 12px/1.5 Georgia, serif }

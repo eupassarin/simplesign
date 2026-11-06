@@ -237,30 +237,6 @@ internal static partial class Log
         Message = "PKCS12 collection loading failed: {Message}")]
     internal static partial void Pkcs12CollectionLoadingFailed(this ILogger logger, string message);
 
-    // ── ICP-Brasil Chain Validator (31xx) ─────────────────────────────
-
-    [LoggerMessage(EventId = 3110, Level = LogLevel.Warning,
-        Message = "SAN parsing failed: {Message}")]
-    internal static partial void SanParsingFailed(this ILogger logger, string message);
-
-    [LoggerMessage(EventId = 3111, Level = LogLevel.Warning,
-        Message = "Root cert download failed: {Message}")]
-    internal static partial void RootCertDownloadFailed(this ILogger logger, string message);
-
-    [LoggerMessage(EventId = 3112, Level = LogLevel.Warning,
-        Message = "Root cert loading failed: {Message}")]
-    internal static partial void RootCertLoadingFailed(this ILogger logger, string message);
-
-    [LoggerMessage(EventId = 3113, Level = LogLevel.Warning,
-        Message = "OID encoding failed: {Message}")]
-    internal static partial void OidEncodingFailed(this ILogger logger, string message);
-
-    // ── Gov.br Chain Validator (32xx) ────────────────────────────────
-
-    [LoggerMessage(EventId = 3210, Level = LogLevel.Debug,
-        Message = "Validating Gov.br certificate: {Subject}")]
-    internal static partial void GovBrValidating(this ILogger logger, string subject);
-
     // ── CMS Builder (4xxx) ─────────────────────────────────────────
 
     [LoggerMessage(EventId = 4000, Level = LogLevel.Debug,

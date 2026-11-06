@@ -565,11 +565,11 @@ public sealed class XadesSignerBuilder
         _ => throw new InvalidOperationException($"Unknown signing credential type: {credential.GetType().Name}")
     };
 
-    /// <summary>The signer certificate, once set (for extensions such as SimpleSign.Brasil.Xades).</summary>
-    internal X509Certificate2? SignerCertificate => _options.Credential is { } credential ? GetCertificate(credential) : null;
+    /// <summary>The signer certificate given to WithCertificate or WithExternalSigner, or <see langword="null"/> before either is called. Extensions read it to pick policies.</summary>
+    public X509Certificate2? SignerCertificate => _options.Credential is { } credential ? GetCertificate(credential) : null;
 
-    /// <summary>The signer chain given with the certificate (for extensions).</summary>
-    internal IReadOnlyList<X509Certificate2> SignerChain => _options.Credential is { } credential ? GetChain(credential) : [];
+    /// <summary>The certificate chain given with the signer certificate (empty when none was given).</summary>
+    public IReadOnlyList<X509Certificate2> SignerChain => _options.Credential is { } credential ? GetChain(credential) : [];
 
     private static IReadOnlyList<X509Certificate2> GetChain(XadesSigningCredential credential) => credential switch
     {

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace SimpleSign.Core.Revocation;
 
 /// <summary>The status of a certificate according to one CRL, at a given time.</summary>
-internal enum CrlStatus
+public enum CrlStatus
 {
     /// <summary>The CRL does not apply: other issuer, bad signature, malformed, or not current at the time.</summary>
     NotApplicable,
@@ -23,7 +23,7 @@ internal enum CrlStatus
 /// the CRL must be signed by the issuer and either be current at that time or have been issued
 /// after it; an entry counts only when its revocationDate is not after that time.
 /// </summary>
-internal static class CrlEvaluator
+public static class CrlEvaluator
 {
     /// <summary>Evaluates <paramref name="crlBytes"/> for <paramref name="certificate"/> at <paramref name="time"/>.</summary>
     /// <param name="certificate">The certificate whose status is wanted.</param>
@@ -31,7 +31,8 @@ internal static class CrlEvaluator
     /// <param name="issuer">The certificate's issuer; the CRL signature must verify with its key.</param>
     /// <param name="time">The time of interest (signature timestamp time, or now).</param>
     /// <param name="logger">Optional logger.</param>
-    internal static CrlStatus Evaluate(
+    /// <returns>The status of the certificate according to this CRL.</returns>
+    public static CrlStatus Evaluate(
         X509Certificate2 certificate, byte[] crlBytes, X509Certificate2 issuer, DateTimeOffset time, ILogger? logger = null)
     {
         try
@@ -91,7 +92,8 @@ internal static class CrlEvaluator
 
     /// <summary>The nextUpdate of a CRL, or null when it has none or cannot be parsed.</summary>
     /// <param name="crlBytes">The DER (or BER) encoded CRL.</param>
-    internal static DateTimeOffset? ReadNextUpdate(byte[] crlBytes)
+    /// <returns>The nextUpdate time, or <see langword="null"/>.</returns>
+    public static DateTimeOffset? ReadNextUpdate(byte[] crlBytes)
     {
         try
         {

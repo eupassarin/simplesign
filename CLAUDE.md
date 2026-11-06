@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-SimpleSign is a .NET library for PAdES (PDF Advanced Electronic Signatures). It signs, validates, and inspects digitally signed PDF documents following ETSI EN 319 142 standards.
+SimpleSign is a .NET library for PAdES, CAdES and XAdES signatures (ETSI EN 319 142 / 319 122 / 319 132): it signs, validates and inspects them.
 
 **Key principle:** All cryptography uses `System.Security.Cryptography` from the .NET BCL — no BouncyCastle, no third-party crypto.
 
@@ -12,8 +12,8 @@ SimpleSign is a .NET library for PAdES (PDF Advanced Electronic Signatures). It 
 # Build everything
 dotnet build
 
-# Run all unit tests (~2,600 tests; ~2,800 with the CLI tests)
-dotnet test tests/unit/
+# Run every test project (what CI runs)
+dotnet test SimpleSign.sln --filter "Category!=Stress"
 
 # Run specific test project
 dotnet test tests/unit/SimpleSign.PAdES.Tests
@@ -23,16 +23,13 @@ dotnet test tests/unit/SimpleSign.Brasil.Tests
 dotnet test tests/unit/SimpleSign.HtmlToPdf.Tests
 
 # Integration tests (requires network for TSA/OCSP)
-dotnet test tests/integration/
+dotnet test tests/integration/SimpleSign.Integration.Tests
 
-# Interop tests (cross-platform signature verification)
-dotnet test tests/interop/
+# CLI tests
+dotnet test tests/cli/SimpleSign.Cli.Tests
 
 # AOT smoke test
 dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64
-
-# Mutation testing
-dotnet stryker
 ```
 
 ## Architecture
@@ -44,7 +41,12 @@ src/
 ├── SimpleSign.Pdf/         PDF structure: xref, objects, incremental save, fields
 ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package)
 ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
-├── SimpleSign.Brasil/      ICP-Brasil: chain validation, CPF/CNPJ, Gov.br
+├── SimpleSign.XAdES/       XML signatures
+├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
+├── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2
+├── SimpleSign.Brasil/      ICP-Brasil: chain validation, policies, CPF/CNPJ, Gov.br
+├── SimpleSign.Brasil.Fiscal/   XML-DSig for NF-e, CT-e, eSocial…
+├── SimpleSign.Brasil.Xades/    ICP-Brasil XAdES policies
 ├── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
 ├── SimpleSign.Cli/         CLI tool
 ├── SimpleSign.Agent/       Avalonia tray app: local signing agent (HTTP on 127.0.0.1)
@@ -129,8 +131,8 @@ await CadesSigner.Document(data).WithCertificate(cert)
 SimpleSign.PAdES (most users install this)
   └── depends on SimpleSign.Pdf + SimpleSign.Core
 
-SimpleSign.Brasil (adds ICP-Brasil on top of PAdES)
-  └── depends on SimpleSign.PAdES
+SimpleSign.Brasil (adds ICP-Brasil on top of PAdES/CAdES)
+  └── depends on SimpleSign.PAdES + SimpleSign.CAdES — public API only, no InternalsVisibleTo
 
 SimpleSign.HtmlToPdf (independent, no signing)
 ```

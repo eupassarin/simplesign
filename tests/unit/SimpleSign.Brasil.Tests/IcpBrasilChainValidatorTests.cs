@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Brasil.IcpBrasil;
-using SimpleSign.Core.Crypto;
 using SimpleSign.TestHelpers;
 
 namespace SimpleSign.Brasil.Tests;
@@ -23,7 +22,17 @@ public sealed class IcpBrasilChainValidatorTests
         X509Extension item = BuildCertificatePoliciesExtension(policyOid);
         certificateRequest.CertificateExtensions.Add(item);
         X509Certificate2 x509Certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
-        return CertificateLoader.LoadPkcs12(x509Certificate.Export(X509ContentType.Pfx, "test-export"), "test-export");
+        return WithPersistedKey(x509Certificate);
+    }
+
+    private static X509Certificate2 WithPersistedKey(X509Certificate2 certificate)
+    {
+        byte[] pfx = certificate.Export(X509ContentType.Pfx, "test-export");
+#if NET9_0_OR_GREATER
+        return X509CertificateLoader.LoadPkcs12(pfx, "test-export");
+#else
+        return new X509Certificate2(pfx, "test-export");
+#endif
     }
 
     private static X509Extension BuildCertificatePoliciesExtension(string policyOid)
@@ -123,7 +132,7 @@ public sealed class IcpBrasilChainValidatorTests
         IcpBrasilChainValidator icpBrasilChainValidator = new IcpBrasilChainValidator(httpClient);
         using RSA rsa = RSA.Create(1024);
         CertificateRequest certificateRequest = new CertificateRequest("CN=SmallKey", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        using X509Certificate2 cert = CertificateLoader.LoadPkcs12(certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1)).Export(X509ContentType.Pfx, "test-export"), "test-export");
+        using X509Certificate2 cert = WithPersistedKey(certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1)));
         (await icpBrasilChainValidator.ValidateAsync(cert)).Warnings.ShouldContain(w => w.Contains("1024") && w.Contains("2048"), "");
     }
 }
