@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using SimpleSign.CAdES.Internal;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
@@ -315,6 +317,16 @@ public sealed class CadesSignerBuilder
         var hashAlg = resolvedAlgorithm.HashAlgorithm;
         string sigAlgOid = resolvedAlgorithm.SignatureAlgorithmOid;
 
+        var logger = _options.Dependencies.Logger;
+        string operationId = _options.OperationId ?? "-";
+        var stopwatch = Stopwatch.StartNew();
+        string operation = _options.IsCounterSignature ? "CounterSign" : _options.CoSignTarget is not null ? "CoSign" : "Sign";
+        logger.SigningStarted(operationId, operation, _options.ContentType.ToString(), profile.Level.ToString(),
+            _options.ExtendedForm.ToString(), certificate.Subject, credential is CadesExternalCredential);
+        logger.AlgorithmResolved(hashAlg.Name ?? "?", sigAlgOid);
+        logger.SignedAttributesSelected(_options.CommitmentType.HasValue,
+            _options.SignaturePolicy is not null || _options.SignaturePolicyOid is not null);
+
         byte[] cms;
         if (credential is CadesExternalCredential external)
         {
@@ -330,6 +342,7 @@ public sealed class CadesSignerBuilder
         {
             try
             {
+                logger.TimestampRequested(operationId, profile.Timestamp.Endpoint.ToString());
                 timestampTokenBytes = await ApplyTimestampAsync(cms, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -338,6 +351,7 @@ public sealed class CadesSignerBuilder
             }
             catch (Exception ex)
             {
+                logger.TimestampFailed(operationId, ex.Message);
                 if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
                 {
                     throw new SigningException(
@@ -353,6 +367,7 @@ public sealed class CadesSignerBuilder
             if (timestampTokenBytes is not null)
             {
                 cms = TimestampClient.EmbedTimestampInCms(cms, timestampTokenBytes);
+                logger.TimestampEmbedded(operationId, timestampTokenBytes.Length);
             }
         }
 
@@ -366,6 +381,7 @@ public sealed class CadesSignerBuilder
             }
             else
             {
+                logger.LtvIncomplete(operationId);
                 AddDowngradeWarnings(warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
                     "LTV was requested but no certificate and revocation data could be collected.");
             }
@@ -383,7 +399,9 @@ public sealed class CadesSignerBuilder
                     SigningErrorReason.LevelNotAchievable);
             }
 
+            logger.ExtendedFormApplying(operationId, _options.ExtendedForm.ToString());
             cms = await ApplyExtendedFormAsync(cms, certificate, chain, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
+            logger.ExtendedFormApplied(operationId, _options.ExtendedForm.ToString(), cms.Length);
         }
 
         bool hasArchiveTimestamp = false;
@@ -401,6 +419,7 @@ public sealed class CadesSignerBuilder
             catch (Exception ex)
             {
                 const string archiveMessage = "CAdES archiveTimestampV3 could not be applied.";
+                logger.ArchiveTimestampFailed(operationId, ex.Message);
                 if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
                 {
                     throw new SigningException(archiveMessage, SigningErrorReason.LevelNotAchievable, ex);
@@ -413,6 +432,7 @@ public sealed class CadesSignerBuilder
 
         (bool baseSignatureValid, bool artifactHasTimestamp, bool artifactHasLtvMaterial, bool artifactHasArchiveTimestamp) = InspectProducedArtifact(
             cms, _data, timestampTokenBytes, ltvEmbedding?.Evidence, hasArchiveTimestamp);
+        logger.ReadBackVerified(baseSignatureValid, artifactHasTimestamp, artifactHasLtvMaterial, artifactHasArchiveTimestamp);
         if (!baseSignatureValid)
         {
             throw new SigningException(
@@ -445,11 +465,16 @@ public sealed class CadesSignerBuilder
         if (_options.CoSignTarget is { } coSignTarget)
         {
             cms = CmsComposer.AddSigner(coSignTarget, cms);
+            logger.CoSignatureAdded(operationId);
         }
         else if (_options.CounterSignTarget is { } counterSignTarget)
         {
             cms = CmsComposer.AddCounterSignature(counterSignTarget, _options.CounterSignIndex, cms);
+            logger.CounterSignatureAdded(operationId, _options.CounterSignIndex);
         }
+
+        logger.SigningCompleted(operationId, stopwatch.ElapsedMilliseconds, cms.Length,
+            profile.Level.ToString(), achieved.ToString());
 
         return new CadesSigningResult
         {
@@ -694,6 +719,7 @@ public sealed class CadesSignerBuilder
             _options.OperationId,
             rsaPssParameters);
         ReadOnlyMemory<byte> signature;
+        _options.Dependencies.Logger.ExternalSignerInvoked(signedAttrs.Length);
         try
         {
             signature = await external.Signer.SignAsync(request, cancellationToken).ConfigureAwait(false);
@@ -720,6 +746,7 @@ public sealed class CadesSignerBuilder
                 SigningErrorReason.AlgorithmIncompatible);
         }
 
+        _options.Dependencies.Logger.ExternalSignatureReceived(signature.Length);
         List<X509Certificate2> allCerts = [certificate, .. chain];
         byte[]? eContent = _options.ContentType == CadesContentType.Enveloped ? _data : null;
 
@@ -890,6 +917,7 @@ public sealed class CadesSignerBuilder
 
         byte[] embeddedCms = CmsSignatureBuilder.AddValidationMaterial(
             cms, ltvData.CertificateRawData, ltvData.Crls, ltvData.OcspResponses);
+        logger.LtvEmbedded(_options.OperationId ?? "-", ltvData.CertificateRawData.Count, ltvData.Crls.Count, ltvData.OcspResponses.Count);
         return new CadesLtvEmbeddingResult(embeddedCms, ltvData);
     }
 
@@ -907,6 +935,8 @@ public sealed class CadesSignerBuilder
         byte[] input = CadesArchiveTimestampV3.CreateMessageImprintInput(
             cms, _data, hashAlgorithm, hashIndex);
         var tsaClient = CreateTimestampClient(endpoint.ToString(), scopedProvider);
+        string operationId = _options.OperationId ?? "-";
+        _options.Dependencies.Logger.ArchiveTimestampRequested(operationId, endpoint.ToString());
         byte[] archiveToken = await tsaClient.GetTimestampAsync(input, hashAlgorithm, cancellationToken).ConfigureAwait(false);
         TimestampClient.ValidateTimestampToken(archiveToken, input, hashAlgorithm);
         archiveToken = CadesArchiveTimestampV3.AddHashIndexToTimestampToken(archiveToken, hashIndex);
@@ -920,6 +950,7 @@ public sealed class CadesSignerBuilder
                 SigningErrorReason.LevelNotAchievable);
         }
 
+        _options.Dependencies.Logger.ArchiveTimestampEmbedded(operationId, archiveToken.Length);
         return completedCms;
     }
 

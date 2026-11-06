@@ -17,6 +17,22 @@ internal static partial class Log
         Message = "[{OperationId}] PDF signing completed in {ElapsedMs}ms ({Size} bytes)")]
     internal static partial void SigningCompleted(this ILogger logger, string operationId, long elapsedMs, long size);
 
+    [LoggerMessage(EventId = 1002, Level = LogLevel.Debug,
+        Message = "[{OperationId}] Signing algorithm resolved: digest={DigestAlgorithm}, signature={SignatureAlgorithmOid}, level={Level}, subFilter={SubFilter}")]
+    internal static partial void AlgorithmResolved(this ILogger logger, string operationId, string digestAlgorithm, string signatureAlgorithmOid, string level, string subFilter);
+
+    [LoggerMessage(EventId = 1003, Level = LogLevel.Debug,
+        Message = "[{OperationId}] PDF/A level detected: {PdfALevel} (preservation enforced={Enforced})")]
+    internal static partial void PdfALevelDetected(this ILogger logger, string operationId, string pdfALevel, bool enforced);
+
+    [LoggerMessage(EventId = 1004, Level = LogLevel.Debug,
+        Message = "[{OperationId}] Signature field: name={FieldName}, existing={ExistingField}, visible={Visible}, certification={Certification}")]
+    internal static partial void FieldConfigured(this ILogger logger, string operationId, string fieldName, bool existingField, bool visible, string certification);
+
+    [LoggerMessage(EventId = 1005, Level = LogLevel.Debug,
+        Message = "[{OperationId}] Read-back verification of the produced PDF: signature={SignatureValid}, timestamp={HasTimestamp}, ltv={HasLtv}, archive={HasArchive}; achieved level={AchievedLevel}")]
+    internal static partial void ReadBackVerified(this ILogger logger, string operationId, bool signatureValid, bool hasTimestamp, bool hasLtv, bool hasArchive, string achievedLevel);
+
     [LoggerMessage(EventId = 1010, Level = LogLevel.Information,
         Message = "[{OperationId}] Requesting timestamp from {TsaUrl}")]
     internal static partial void TimestampRequested(this ILogger logger, string operationId, string tsaUrl);
@@ -69,7 +85,7 @@ internal static partial class Log
         Message = "Field {FieldName} has no signature (empty /Contents)")]
     internal static partial void FieldHasNoSignature(this ILogger logger, string fieldName);
 
-    [LoggerMessage(EventId = 2401, Level = LogLevel.Warning,
+    [LoggerMessage(EventId = 2032, Level = LogLevel.Warning,
         Message = "Certificate revocation check failed for {FieldName}")]
     internal static partial void CertificateRevocationFailed(this ILogger logger, string fieldName);
 
@@ -136,6 +152,14 @@ internal static partial class Log
     [LoggerMessage(EventId = 5003, Level = LogLevel.Debug,
         Message = "ByteRange calculated: [{R1Start},{R1Len},{R2Start},{R2Len}]")]
     internal static partial void PdfByteRangeCalculated(this ILogger logger, long r1Start, long r1Len, long r2Start, long r2Len);
+
+    [LoggerMessage(EventId = 5010, Level = LogLevel.Debug,
+        Message = "DocTimeStamp prepared: input={InputSize} bytes, digest={DigestAlgorithm}, reserved={ReservedBytes} bytes")]
+    internal static partial void DocTimeStampPrepared(this ILogger logger, int inputSize, string digestAlgorithm, int reservedBytes);
+
+    [LoggerMessage(EventId = 5011, Level = LogLevel.Debug,
+        Message = "DocTimeStamp token written ({TokenSize} bytes); PDF is now {OutputSize} bytes")]
+    internal static partial void DocTimeStampWritten(this ILogger logger, int tokenSize, int outputSize);
 
     [LoggerMessage(EventId = 5004, Level = LogLevel.Debug,
         Message = "PDF prepare completed: output={OutputSize} bytes, {ObjectCount} new objects")]

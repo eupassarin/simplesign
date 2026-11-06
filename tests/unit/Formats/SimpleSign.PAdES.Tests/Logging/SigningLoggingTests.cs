@@ -65,6 +65,24 @@ public sealed class SigningLoggingTests : IDisposable
             e.Message.Contains("Starting PDF signature"));
     }
 
+    [Fact(DisplayName = "PAdES: SignAsync logs the resolved algorithm, the field and the read-back check")]
+    public async Task SignAsync_LogsAlgorithmFieldAndReadBack()
+    {
+        var logger = new RecordingLogger();
+
+        await PadesSigner
+            .Document(CreateMinimalPdf()).WithLogger(logger)
+            .WithCertificate(_cert)
+            .SignAsync();
+
+        logger.EventIds.ShouldContain(1002);
+        logger.EventIds.ShouldContain(1003);
+        logger.EventIds.ShouldContain(1004);
+        logger.EventIds.ShouldContain(1005);
+        var ids = logger.EventIds.ToList();
+        ids.IndexOf(1005).ShouldBeLessThan(ids.IndexOf(1001));
+    }
+
     [Fact(DisplayName = "PAdES: SignAsync logs 'completed' at Information level after success")]
     public async Task SignAsync_LogsCompletedMessage()
     {

@@ -3,12 +3,15 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography.Xml;
 using System.Xml;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.XAdES.Constants;
+using SimpleSign.XAdES.Internal;
 
 namespace SimpleSign.XAdES;
 
@@ -22,6 +25,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 {
     private readonly ValidationOptions _options;
     private readonly ITimestampValidator _timestampValidator;
+    private readonly ILogger _logger;
 
     private sealed record XadesPropertyExtractionResult(
         bool HasSignedProperties,
@@ -37,12 +41,24 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         Convert.FromBase64String(el.InnerText.Trim());
 
     /// <summary>Creates a new XAdES signature validator with optional options.</summary>
+    /// <param name="options">Validation options; defaults apply when <see langword="null"/>.</param>
+    /// <param name="timestampValidator">Timestamp validator; the built-in one is used when <see langword="null"/>.</param>
+    /// <param name="logger">Receives diagnostics of each validation; nothing is logged when <see langword="null"/>.</param>
     public XadesSignatureValidator(
         ValidationOptions? options = null,
-        ITimestampValidator? timestampValidator = null)
+        ITimestampValidator? timestampValidator = null,
+        ILogger? logger = null)
     {
         _options = options ?? new ValidationOptions();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
+        _logger = logger ?? NullLogger.Instance;
+    }
+
+    private XadesValidationResult Logged(XadesValidationResult result)
+    {
+        _logger.SignatureValidated(result.SignatureId ?? "-", result.IsValid,
+            result.DetectedLevel.ToString(), result.Errors.Count, result.Warnings.Count);
+        return result;
     }
 
     /// <summary>Validates a signed XAdES XML document against optional trust anchors.</summary>
@@ -50,7 +66,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         byte[] signedXml,
         IEnumerable<X509Certificate2>? trustAnchors = null,
         byte[]? originalData = null) =>
-        ValidateCore(signedXml, trustAnchors, originalData, signatureIndex: null);
+        Logged(ValidateCore(signedXml, trustAnchors, originalData, signatureIndex: null));
 
     /// <summary>Validates every XMLDSig signature in a signed XAdES XML document.</summary>
     public IReadOnlyList<XadesValidationResult> ValidateAll(
@@ -66,7 +82,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
         catch (XmlException)
         {
-            return [ValidateCore(signedXml, trustAnchors, originalData, signatureIndex: null)];
+            return [Logged(ValidateCore(signedXml, trustAnchors, originalData, signatureIndex: null))];
         }
 
         var ns = new XmlNamespaceManager(doc.NameTable);
@@ -74,13 +90,14 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlNodeList? signatures = doc.SelectNodes("//ds:Signature", ns);
         if (signatures is null || signatures.Count == 0)
         {
-            return [ValidateCore(signedXml, trustAnchors, originalData, signatureIndex: null)];
+            return [Logged(ValidateCore(signedXml, trustAnchors, originalData, signatureIndex: null))];
         }
 
+        _logger.ValidationStarted(signatures.Count);
         var results = new List<XadesValidationResult>(signatures.Count);
         for (int index = 0; index < signatures.Count; index++)
         {
-            results.Add(ValidateCore(signedXml, trustAnchors, originalData, index));
+            results.Add(Logged(ValidateCore(signedXml, trustAnchors, originalData, index)));
         }
 
         return results;

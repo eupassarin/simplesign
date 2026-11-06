@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging;
 
 namespace SimpleSign.Signers.Pkcs11;
 
@@ -42,4 +43,7 @@ public sealed record Pkcs11SignerOptions
     /// <see cref="Pkcs11Signer.ListTokens"/> and <see cref="X509Certificate2.Thumbprint"/>.
     /// </summary>
     public string? CertificateThumbprint { get; init; }
+
+    /// <summary>Receives diagnostics of the signer. Secrets are never logged. Default: no logging.</summary>
+    public ILogger? Logger { get; init; }
 }

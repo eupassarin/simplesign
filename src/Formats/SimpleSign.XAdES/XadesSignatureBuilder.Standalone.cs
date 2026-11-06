@@ -104,6 +104,8 @@ internal static partial class XadesSignatureBuilder
         byte[] signedInfoCanonical = CanonicalizeXml(siDoc);
         byte[] signedInfoHash = HashData(hashAlgorithm, signedInfoCanonical);
         byte[] signatureValueBytes = SignHash(signedInfoHash, hashAlgorithm, signatureAlgorithmOid, certificate);
+        LogSignatureSteps(logger, hashAlgorithm, signedPropertiesId, signingCertificateForm, signaturePolicy, commitmentType,
+            signerRoles, docRefUri, docDigest, signedPropsDigest, signedInfoCanonical, signatureValueBytes);
 
         XmlNode signedInfoNode = outDoc.ImportNode(signedInfo, true);
         sigEl.InsertBefore(signedInfoNode, sigEl.FirstChild);

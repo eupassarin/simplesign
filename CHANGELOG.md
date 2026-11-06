@@ -90,6 +90,10 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
 
 ### Fixed
 
+- Log EventId 2401 was used by two different events (Core "certificate revoked in embedded CRL"
+  and PAdES "revocation check failed"); the PAdES event is now 2032. The never-emitted event 2712
+  was removed, and 1023 ("LTV embedded, no archival timestamp") is now emitted for B-LT.
+
 - `AddSimpleSignIcpBrasil()` / `AddSimpleSignGovBr()` (before: `AddSimpleSignBrasil()`) registered
   `IcpBrasilChainValidator` and `GovBrChainValidator` so that the container could not build them
   (two ambiguous constructors): resolving either one threw. They are now created from the registered
@@ -125,6 +129,23 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
 
 - `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
   schemes (e.g. `file:`), which the OS shell would hand to other programs, throw `ArgumentException`.
+
+### Added (diagnostic logging)
+
+- **XAdES** signing now logs every step (events 7000–7028): start and completion, resolved
+  algorithm, SignedProperties, reference digests, SignedInfo canonicalization, SignatureValue,
+  external signer, timestamps, validation data, extended forms and the read-back check. The logger
+  given to `WithLogger` was accepted but ignored before.
+- `XadesSignatureValidator` accepts an `ILogger` (new optional constructor parameter) and logs the
+  verdict of each signature (7050, 7051).
+- **CAdES** signing logs its own steps (events 7100–7131): start and completion, algorithm, signed
+  attributes, timestamps, validation data, extended forms, archive-time-stamp-v3, co-signatures and
+  countersignatures.
+- **PAdES** logs the resolved algorithm, the PDF/A level, the field configuration, the read-back
+  check (1002–1005) and the DocTimeStamp writer steps (5010, 5011).
+- **Signers:** `Pkcs11SignerOptions.Logger`, `CscClientOptions.Logger` and `PscClientOptions.Logger`
+  receive diagnostics of token, CSC and PSC signatures (events 72xx, 73xx). PINs, OTPs, tokens and
+  client secrets are never logged.
 
 ### Added (SimpleSign TestBench)
 

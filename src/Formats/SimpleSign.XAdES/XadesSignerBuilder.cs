@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -7,6 +8,7 @@ using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
+using SimpleSign.XAdES.Internal;
 
 namespace SimpleSign.XAdES;
 
@@ -330,6 +332,13 @@ public sealed class XadesSignerBuilder
         var hashAlg = resolvedAlgorithm.HashAlgorithm;
         string sigAlgOid = resolvedAlgorithm.SignatureAlgorithmOid;
 
+        var logger = _options.Dependencies.Logger;
+        string operationId = _options.OperationId ?? "-";
+        var stopwatch = Stopwatch.StartNew();
+        logger.SigningStarted(operationId, _options.Form.ToString(), profile.Level.ToString(),
+            _options.ExtendedForm.ToString(), certificate.Subject, credential is XadesExternalCredential);
+        logger.AlgorithmResolved(hashAlg.Name ?? "?", sigAlgOid);
+
         byte[] signedXml;
         if (credential is XadesExternalCredential external)
         {
@@ -346,6 +355,7 @@ public sealed class XadesSignerBuilder
         {
             try
             {
+                logger.TimestampRequested(operationId, profile.Timestamp.Endpoint.ToString());
                 timestampTokenBytes = await ApplyTimestampAsync(signedXml, targetSignatureId, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -354,6 +364,7 @@ public sealed class XadesSignerBuilder
             }
             catch (Exception ex)
             {
+                logger.TimestampFailed(operationId, ex.Message);
                 if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
                 {
                     throw new SigningException(
@@ -369,6 +380,7 @@ public sealed class XadesSignerBuilder
             if (timestampTokenBytes is not null)
             {
                 signedXml = XadesSignatureBuilder.EmbedSignatureTimeStamp(signedXml, timestampTokenBytes, targetSignatureId);
+                logger.TimestampEmbedded(operationId, timestampTokenBytes.Length);
             }
         }
 
@@ -400,6 +412,7 @@ public sealed class XadesSignerBuilder
             }
             else
             {
+                logger.LtvIncomplete(operationId);
                 AddDowngradeWarnings(warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
                     "LTV was requested but no certificate and revocation data could be collected.");
             }
@@ -419,6 +432,7 @@ public sealed class XadesSignerBuilder
             catch (Exception ex)
             {
                 const string archiveMessage = "XAdES ArchiveTimeStamp could not be applied.";
+                logger.ArchiveTimestampFailed(operationId, ex.Message);
                 if (profile.FailureBehavior == SigningLevelFailureBehavior.Throw)
                 {
                     throw new SigningException(archiveMessage, SigningErrorReason.LevelNotAchievable, ex);
@@ -432,6 +446,8 @@ public sealed class XadesSignerBuilder
         XadesValidationResult? validatedSignature = new XadesSignatureValidator()
             .ValidateAll(signedXml, originalData: _xmlData)
             .LastOrDefault(result => result.SignatureId == targetSignatureId);
+        logger.ReadBackVerified(targetSignatureId, validatedSignature?.IsSignatureValid ?? false,
+            validatedSignature?.IsIntegrityValid ?? false);
         if (validatedSignature is null || !validatedSignature.IsSignatureValid ||
             !validatedSignature.IsIntegrityValid)
         {
@@ -473,6 +489,8 @@ public sealed class XadesSignerBuilder
         }
 
         var achieved = ComputeAchievedLevel(artifactHasTimestamp, artifactHasLtvMaterial, artifactHasArchiveTimestamp);
+        logger.SigningCompleted(operationId, stopwatch.ElapsedMilliseconds, signedXml.Length,
+            profile.Level.ToString(), achieved.ToString());
 
         return new XadesSigningResult
         {
@@ -620,6 +638,7 @@ public sealed class XadesSignerBuilder
             _options.OperationId,
             rsaPssParameters);
         ReadOnlyMemory<byte> signature;
+        _options.Dependencies.Logger.ExternalSignerInvoked(signedInfoBytes.Length);
         try
         {
             signature = await external.Signer.SignAsync(request, cancellationToken).ConfigureAwait(false);
@@ -645,6 +664,8 @@ public sealed class XadesSignerBuilder
             throw new SigningException("External signer returned a signature that does not verify with the configured certificate.",
                 SigningErrorReason.AlgorithmIncompatible);
         }
+
+        _options.Dependencies.Logger.ExternalSignatureReceived(signature.Length);
 
         return XadesSignatureBuilder.CompleteWithExternalSignature(
             _xmlData, certificate, hashAlg, signingTime, chain,
@@ -700,9 +721,13 @@ public sealed class XadesSignerBuilder
             known.AddRange(TsaCertificateExtractor.ExtractCertificates(signatureTimestamp).Where(c => known.All(k => k.Thumbprint != c.Thumbprint)));
         }
 
+        var logger = _options.Dependencies.Logger;
+        string operationId = _options.OperationId ?? "-";
+        logger.ExtendedFormApplying(operationId, _options.ExtendedForm.ToString());
+        logger.LtvCollecting(operationId, known.Count);
         var provider = _options.Profile.LongTermValidation?.HttpClientProvider ?? timestamp.HttpClientProvider ?? _options.Dependencies.HttpClientProvider;
         var evidence = await LtvEvidenceCollector.CollectAsync(
-            provider.GetClient(), certificate, known, _options.Dependencies.Logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+            provider.GetClient(), certificate, known, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (!evidence.HasCompleteCoverage)
         {
             throw new SigningException(
@@ -718,11 +743,13 @@ public sealed class XadesSignerBuilder
             byte[] token = await CreateTimestampClient(timestamp).GetTimestampAsync(input, hashAlg, cancellationToken).ConfigureAwait(false);
             TimestampClient.ValidateTimestampToken(token, input, hashAlg);
             signedXml = XadesSignatureBuilder.EmbedSigAndRefsTimeStamp(signedXml, token, signatureId);
+            logger.SigAndRefsTimestampEmbedded(operationId, token.Length);
         }
 
         if (_options.ExtendedForm is XadesExtendedForm.ExtendedLong or XadesExtendedForm.Archive)
         {
             signedXml = XadesSignatureBuilder.EmbedLtvData(signedXml, evidence, signatureId);
+            logger.LtvEmbedded(operationId, evidence.CertificateRawData.Count, evidence.Crls.Count, evidence.OcspResponses.Count);
             return (signedXml, new XadesLtvEmbeddingResult(signedXml, evidence));
         }
 
@@ -761,6 +788,8 @@ public sealed class XadesSignerBuilder
             }
         }
 
+        string operationId = _options.OperationId ?? "-";
+        logger.LtvCollecting(operationId, chainCerts.Count);
         var ltvData = await LtvEvidenceCollector.CollectAsync(
             ltvProvider.GetClient(), certificate, chainCerts, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -783,6 +812,7 @@ public sealed class XadesSignerBuilder
             return null;
         }
 
+        logger.LtvEmbedded(operationId, ltvData.CertificateRawData.Count, ltvData.Crls.Count, ltvData.OcspResponses.Count);
         return new XadesLtvEmbeddingResult(XadesSignatureBuilder.EmbedLtvData(signedXml, ltvData, signatureId), ltvData);
     }
 
@@ -801,6 +831,8 @@ public sealed class XadesSignerBuilder
         byte[] withPlaceholder = XadesSignatureBuilder.EmbedArchiveTimeStamp(signedXml, [], signatureId);
         byte[] input = XadesSignatureBuilder.CreateArchiveTimeStampInput(withPlaceholder, _xmlData, signatureId);
         var tsaClient = CreateTimestampClient(endpoint.ToString(), scopedProvider);
+        string operationId = _options.OperationId ?? "-";
+        _options.Dependencies.Logger.ArchiveTimestampRequested(operationId, endpoint.ToString());
         byte[] archiveToken = await tsaClient.GetTimestampAsync(input, hashAlgorithm, cancellationToken).ConfigureAwait(false);
         TimestampClient.ValidateTimestampToken(archiveToken, input, hashAlgorithm);
 
@@ -813,6 +845,7 @@ public sealed class XadesSignerBuilder
                 SigningErrorReason.LevelNotAchievable);
         }
 
+        _options.Dependencies.Logger.ArchiveTimestampEmbedded(operationId, archiveToken.Length);
         return completedXml;
     }
 
