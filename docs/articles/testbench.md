@@ -38,7 +38,7 @@ Sandbox services answer on `*.sandbox.simplesign.test` through an in-process
 There is no menu. The top bar switches between the two tasks, **Sign** and **Validate**, which
 share the same screen: the input on the left, the result on the right. Two panels open over
 either task: **Reference** (what the library covers of each standard) and **Environment** (the
-sandbox). Each task keeps its own result, and both go to the same run history.
+sandbox, with failures you can switch on). Each task keeps its own result, and both go to the same run history.
 
 ## The workbench (Sign)
 
@@ -112,10 +112,14 @@ also a plain timeline view, a text filter, and a switch for the debug lines.
 ### Many combinations quickly
 
 - **Presets** set the baseline level in one click.
-- **Vary** signs once for every value of one option, keeping the rest: every level, every digest,
-  every packaging. The table shows, per value, the achieved level and what SimpleSign and DSS
-  say; a row opens that run.
-- The full pairwise **run matrix** opens from the Vary panel (see below).
+- **Combinations** signs once for every value of one option, or for the combinations of several,
+  keeping the rest as it is. With several options choose *all combinations* or *pairwise* (a small
+  set in which every pair of values still appears together at least once); *Everything, in
+  pairs* takes every option of the format. Combinations the rules refuse are listed with the
+  reason and not run.
+- Each line is a normal run: achieved level, the verdicts of SimpleSign and DSS, the time, and
+  the result, log and code on a click. There is a summary per value ("SHA-384 4/4") and filters
+  for the failed ones, the ones where DSS differs, and the ones not run.
 
 ## Cross-validation with DSS
 
@@ -166,18 +170,42 @@ the verdict it should get:
 that run. With DSS on, most of these samples are INDETERMINATE there: they are B-B signatures and
 DSS cannot fetch the sandbox CRLs.
 
-## Run matrix
+## Run matrix (CI)
 
-The run matrix (opened from **Vary**, and run by `SimpleSign.TestBench.Tests` in CI) generates cases from the same
-rules, for PAdES, CAdES and XML: every value of every dimension on its own, plus pairwise
-combinations, so every pair of compatible values is signed together at least once. Each case
-signs in the sandbox, validates, and checks the output has what was asked. Cases are reported as
-they finish, and the run can be stopped.
+`SimpleSign.TestBench.Tests` still runs the fixed matrix of `Matrix/*.cs` in CI: every value of
+every dimension on its own plus pairwise combinations, for PAdES, CAdES and XML, each case signed
+in the sandbox, validated and checked. In the app, **Combinations** does the same from the option
+schema, starting from the options on screen.
 
 ## Reference
 
-The **Reference** panel lists, for each format, every option of the schema with its clause and its
-library call, and marks the ones SimpleSign does not implement.
+The **Reference** panel lists what SimpleSign implements of each standard, from the same schema:
+**by format** (every option with its clause and its library call) or **by standard** (each
+clause and the options that implement it), with a filter for what is not implemented. The same
+content is in [Standard coverage](coverage.md), which is generated from the schema; a test fails
+when that page falls behind (`SIMPLESIGN_UPDATE_DOCS=1 dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests`
+writes it again).
+
+## Environment (the sandbox as a lab)
+
+The **Environment** panel shows the sandbox and lets you break it on purpose:
+
+- **Test PKI** as a tree (root, intermediate CA, TSA, signers), with the download of each
+  certificate, of `root.pem` and of the CRLs as they are now. *Sign with this* makes a signer the
+  one used by the three formats; *Revoke now* adds it to the CRL.
+- **Failures** to switch on, then sign or validate again:
+
+  | Service | Failure | What it shows |
+  |---|---|---|
+  | TSA | Down (HTTP 503) | B-T and above fail, or fall back to B-B when lower levels are allowed |
+  | TSA | Slow | Where the time of a signature goes |
+  | TSA | Invalid token | The library refuses a token that does not verify |
+  | TSA | Outside the chain | The signature validates with a TSA warning |
+  | CRL server | Down | B-LT and B-LTA cannot be built |
+  | CRL server | Expired CRLs | A CA that stopped publishing |
+
+  While a failure is on, the top bar says so. *Back to normal* clears failures and revocations.
+- **Services** (TSA, PSC, CSC, DSS) and the **requests** they answered, live.
 
 ## Limitations
 

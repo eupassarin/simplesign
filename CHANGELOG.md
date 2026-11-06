@@ -176,6 +176,14 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
 - The run matrix reports cases as they finish and can be stopped.
 - **No side menu: two tasks, Sign and Validate**, on the same screen. Reference (coverage) and
   Environment (sandbox) open as panels; the run matrix opens from Vary.
+- **Combinations** replaces the run matrix page: one or several options, all combinations or
+  pairwise, each line a normal run with its log; summary per value and filters. The fixed matrix
+  stays in the CI tests only, and its endpoints are removed.
+- **Environment is a sandbox lab:** the PKI as a tree with downloads, run-time revocation of a
+  signer, and failures to switch on (TSA down, slow, invalid token or outside the chain; CRL
+  server down or serving expired CRLs), to see how signing and validation react.
+- **Reference by standard**, and a generated [coverage page](docs/articles/coverage.md) that a test
+  keeps in step with the option schema.
 - **Validate is one screen for the three formats.** The format is read from the file; a validation
   is a run like a signature, with the same result panel, log, DSS comparison and history.
   "Validate all samples" checks every sample against its expected verdict. The separate PDF, CAdES

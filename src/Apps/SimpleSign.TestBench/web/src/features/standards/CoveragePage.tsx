@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { Check, Minus } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useT } from "@/i18n"
 import { cn } from "@/lib/utils"
@@ -34,6 +35,7 @@ export function CoveragePage() {
   const t = useT()
   const [format, setFormat] = useState<Format>("pades")
   const [only, setOnly] = useState<"all" | "missing">("all")
+  const [view, setView] = useState<"format" | "standard">("format")
   const all = useMemo(() => schema.options
     .filter((o) => o.formats.includes(format) && (!o.framework || frameworks.has(o.framework)))
     .flatMap((o) => rows(o, schema.sections.find((s) => s.id === o.section)?.title ?? o.section))
@@ -50,7 +52,14 @@ export function CoveragePage() {
           <p className="text-muted-foreground text-sm">{t("coverage.intro")}</p>
         </header>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-muted flex rounded-lg p-0.5" role="radiogroup">
+          <div className="bg-muted flex rounded-lg p-0.5 text-xs">
+            {(["format", "standard"] as const).map((v) => (
+              <button key={v} onClick={() => setView(v)} className={cn("rounded-md px-3 py-1.5 font-medium", view === v ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                {t(v === "format" ? "coverage.byFormat" : "coverage.byStandard")}
+              </button>
+            ))}
+          </div>
+          <div className={cn("bg-muted flex rounded-lg p-0.5", view === "standard" && "hidden")} role="radiogroup">
             {schema.formats.map((f) => (
               <button key={f.id} role="radio" aria-checked={format === f.id} onClick={() => setFormat(f.id)}
                 className={cn("rounded-md px-4 py-1.5 text-sm font-semibold transition-all", format === f.id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>{f.title}</button>
@@ -63,8 +72,13 @@ export function CoveragePage() {
               </button>
             ))}
           </div>
-          <span className="text-sm">{t("coverage.summary", { supported, total: all.length, missing: all.length - supported })}</span>
+          {view === "format" && <span className="text-sm">{t("coverage.summary", { supported, total: all.length, missing: all.length - supported })}</span>}
+          <Button variant="outline" size="sm" className="ml-auto" asChild>
+            <a href="https://github.com/eupassarin/simplesign/blob/main/docs/articles/coverage.md" target="_blank" rel="noreferrer">{t("coverage.docs")}</a>
+          </Button>
         </div>
+        {view === "standard" && <ByStandard onlyMissing={only === "missing"} />}
+        <div className={cn("space-y-5", view === "standard" && "hidden")}>
         <ul className="text-muted-foreground space-y-0.5 text-xs">
           {current.standards.map((s) => <li key={s.document}><span className="text-foreground font-medium">{s.document}</span> · {s.clause}</li>)}
         </ul>
@@ -95,7 +109,59 @@ export function CoveragePage() {
             </TableBody>
           </Table>
         </div>
+        </div>
       </div>
+    </div>
+  )
+}
+
+/** The reverse index: each standard, its clauses, and the options (of any format) that implement each one. */
+function ByStandard({ onlyMissing }: { onlyMissing: boolean }) {
+  const { schema, frameworks } = useWorkbench()
+  const documents = useMemo(() => {
+    const entries = new Map<string, Map<string, { clause: string; title: string; framework?: string | null; supported: boolean; formats: Set<Format> }>>()
+    for (const option of schema.options) {
+      for (const format of option.formats) {
+        for (const row of rows(option, "")) {
+          if (row.framework && !frameworks.has(row.framework)) continue
+          for (const standard of row.standards) {
+            const clauses = entries.get(standard.document) ?? new Map()
+            entries.set(standard.document, clauses)
+            const key = `${standard.clause}\u0000${row.title}`
+            const entry = clauses.get(key) ?? { clause: standard.clause, title: row.title, framework: row.framework, supported: row.supported, formats: new Set<Format>() }
+            entry.formats.add(format)
+            clauses.set(key, entry)
+          }
+        }
+      }
+    }
+    return [...entries.entries()].sort(([a], [b]) => a.localeCompare(b))
+      .map(([document, clauses]) => ({ document, clauses: [...clauses.values()].sort((a, b) => a.clause.localeCompare(b.clause, undefined, { numeric: true }) || a.title.localeCompare(b.title)) }))
+  }, [schema, frameworks])
+  const t = useT()
+  return (
+    <div className="space-y-4">
+      {documents.map(({ document, clauses }) => {
+        const shown = onlyMissing ? clauses.filter((c) => !c.supported) : clauses
+        return shown.length === 0 ? null : (
+          <section key={document} className="rounded-lg border">
+            <p className="bg-muted/40 flex items-center gap-2 border-b px-3 py-2 text-sm font-semibold">
+              {document}
+              <span className="text-muted-foreground text-xs font-normal">{t("coverage.summary", { supported: clauses.filter((c) => c.supported).length, total: clauses.length, missing: clauses.filter((c) => !c.supported).length })}</span>
+            </p>
+            <ul className="divide-y">
+              {shown.map((c) => (
+                <li key={c.clause + c.title} className={cn("flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-sm", !c.supported && "bg-muted/40 text-muted-foreground")}>
+                  {c.supported ? <Check className="text-success size-4 shrink-0" /> : <Minus className="size-4 shrink-0" />}
+                  <span className="w-72 shrink-0 text-xs">{c.clause || "—"}</span>
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5">{c.title}<FrameworkTag framework={c.framework} /></span>
+                  <span className="text-muted-foreground shrink-0 text-xs">{schema.formats.filter((f) => c.formats.has(f.id)).map((f) => f.title).join(" · ")}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
     </div>
   )
 }

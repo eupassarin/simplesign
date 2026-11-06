@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BookOpen, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
+import { BookOpen, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -50,7 +50,7 @@ const modes: { id: RunKind; icon: typeof PenTool }[] = [
  * the library covers of each standard) and Environment (the sandbox) open as panels over either.
  */
 function Shell({ environment, onEnvironment }: { environment: EnvironmentMode; onEnvironment: (environment: EnvironmentMode) => void }) {
-  const { mode, setMode } = useWorkbench()
+  const { mode, setMode, sandbox } = useWorkbench()
   const { theme, setTheme } = useTheme()
   const { t, locale, setLocale } = useI18n()
   return (
@@ -87,6 +87,7 @@ function Shell({ environment, onEnvironment }: { environment: EnvironmentMode; o
             ))}
           </div>
           <Panel icon={<FlaskConical />} label={t("app.environmentPanel")} hint={t("app.environmentHint")}><SandboxPage /></Panel>
+          {sandbox?.faultsActive && <span className="border-warning/60 bg-warning/15 flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium"><TriangleAlert className="size-3.5" /> {t("lab.active")}</span>}
           <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
             <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 border-none shadow-none" aria-label={t("app.language")}>
               <Globe className="size-4" />

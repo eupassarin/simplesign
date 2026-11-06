@@ -6,7 +6,6 @@ import type {
   EnvironmentMode,
   IcpPolicyKind,
   IcpVersion,
-  MatrixCase,
   OptionInfo,
   Pkcs11Driver,
   SampleDocument,
@@ -22,7 +21,7 @@ import type {
   XmlSample,
 } from "./types"
 
-import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
+import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RunSummary, RunView, SandboxFaults, SandboxState, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -107,14 +106,19 @@ export const api = {
     eventsUrl: (id: string) => `/api/runs/${id}/events`,
     history: () => request<RunSummary[]>("GET", "/api/runs"),
   },
+  sandbox: {
+    state: () => request<SandboxState>("GET", "/api/sandbox/state"),
+    faults: (faults: SandboxFaults) => request<SandboxState>("PUT", "/api/sandbox/faults", faults),
+    revoke: (signerId: string) => request<SandboxState>("POST", `/api/sandbox/signers/${signerId}/revoke`),
+    reset: () => request<SandboxState>("POST", "/api/sandbox/reset"),
+    certificateUrl: (id: string) => `/api/sandbox/certificates/${id}`,
+    crlUrl: (name: "root" | "intermediate") => `/api/sandbox/crls/${name}.crl`,
+    rootPemUrl: "/api/sandbox/root.pem",
+  },
   dss: {
     settings: () => request<DssSettings>("GET", "/api/dss/settings"),
     save: (settings: DssSettings) => request<DssSettings>("PUT", "/api/dss/settings", settings),
     status: () => request<DssStatus>("GET", "/api/dss/status"),
     validate: (fileId: string, dataId?: string | null) => request<DssComparison>("POST", "/api/dss/validate", { fileId, dataId }),
-  },
-  matrix: {
-    cases: (format = "pades") => request<MatrixCase[]>("GET", `/api/matrix/cases?format=${format}`),
-    streamUrl: (format = "pades", group = "all") => `/api/matrix/stream?format=${format}&group=${group}`,
   },
 }

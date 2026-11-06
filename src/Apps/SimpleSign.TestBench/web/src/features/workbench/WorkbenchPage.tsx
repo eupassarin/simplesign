@@ -1,21 +1,21 @@
 import { useState } from "react"
 import { CircleAlert, History, Loader2, PenTool, RotateCcw, ShieldCheck, Shuffle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useI18n, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
-import { MatrixPage } from "../matrix/MatrixPage"
 import { IssueList, Pill } from "../shared/ui"
 import { OptionForm } from "./OptionForm"
 import { frameworkTone, StandardBadge } from "./parts"
 import { ResultPanel } from "./ResultPanel"
 import { asText } from "./schema"
-import { useWorkbench } from "./state"
+import { pairwise } from "./combinations"
+import { useWorkbench, type Strategy } from "./state"
 
 /**
  * The single screen: pick a format, set any option on the left, sign, and read the result, the
@@ -108,42 +108,73 @@ function TopBar() {
   )
 }
 
-/** Signs once per value of one option, keeping everything else: every level, every digest, every packaging… */
+const maxCombinations = 400
+
+/**
+ * Combinations: signs once for every value of one option, or for the combinations of several
+ * (all of them, or pairwise: every pair of values together at least once), keeping the rest.
+ */
 function VaryControl() {
-  const { schema, isVisible, visibleValues, runVariants, variantsRunning, running, evaluation } = useWorkbench()
+  const { schema, isVisible, variantValues, runVariants, variantsRunning, running, evaluation } = useWorkbench()
   const t = useT()
   const [open, setOpen] = useState(false)
-  const [optionId, setOptionId] = useState<string>("")
-  const candidates = schema.options.filter((o) => o.kind === "choice" && o.path && o.support === "supported" && isVisible(o)
-    && visibleValues(o).filter((v) => v.support === "supported").length > 1)
-  const chosen = candidates.find((o) => o.id === optionId) ?? candidates.find((o) => o.path === "level") ?? candidates[0]
+  const [picked, setPicked] = useState<string[] | null>(null)
+  const [strategy, setStrategy] = useState<Strategy>("all")
+  const candidates = schema.options.filter((o) => o.kind === "choice" && o.path && o.support === "supported" && isVisible(o) && variantValues(o).length > 1)
+  const ids = (picked ?? [candidates.find((o) => o.path === "level")?.id ?? candidates[0]?.id]).filter((id): id is string => !!id && candidates.some((o) => o.id === id))
+  const chosen = candidates.filter((o) => ids.includes(o.id))
+  const lists = chosen.map((o) => variantValues(o).map((v) => v.value))
+  const total = lists.reduce((n, l) => n * l.length, chosen.length > 0 ? 1 : 0)
+  const pairs = chosen.length > 2 ? pairwise(lists).length : total
+  const count = strategy === "pairs" ? pairs : total
+  const toggle = (id: string) => setPicked(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id])
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="h-8"><Shuffle /> {t("wb.variants.title")}</Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 space-y-3 text-sm">
+      <PopoverContent align="end" className="w-[26rem] space-y-3 text-sm">
         <div>
           <p className="font-medium">{t("wb.variants.title")}</p>
           <p className="text-muted-foreground text-xs leading-relaxed">{t("wb.variants.about")}</p>
         </div>
-        <Select value={chosen?.id ?? ""} onValueChange={setOptionId}>
-          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {candidates.map((o) => <SelectItem key={o.id} value={o.id}>{schema.sections.find((s) => s.id === o.section)?.title} · {o.title} ({visibleValues(o).length})</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button className="w-full" disabled={!chosen || variantsRunning || running || !evaluation} onClick={() => { setOpen(false); void runVariants(chosen!) }}>
+        <div className="max-h-72 space-y-3 overflow-y-auto rounded-md border p-2">
+          {schema.sections.map((section) => {
+            const inSection = candidates.filter((o) => o.section === section.id)
+            return inSection.length === 0 ? null : (
+              <div key={section.id} className="space-y-1">
+                <p className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">{section.title}</p>
+                {inSection.map((o) => (
+                  <label key={o.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={ids.includes(o.id)} onCheckedChange={() => toggle(o.id)} />
+                    <span className="flex-1">{o.title}</span>
+                    <span className="text-muted-foreground text-xs tabular-nums">{variantValues(o).length}</span>
+                  </label>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <button type="button" className="text-muted-foreground hover:text-foreground underline underline-offset-2" onClick={() => { setPicked(candidates.map((o) => o.id)); setStrategy("pairs") }}>{t("wb.variants.everything")}</button>
+          <button type="button" className="text-muted-foreground hover:text-foreground underline underline-offset-2" onClick={() => setPicked([])}>{t("wb.clear")}</button>
+        </div>
+        {chosen.length > 1 && (
+          <div className="bg-muted flex rounded-md p-0.5 text-xs" role="radiogroup">
+            {(["all", "pairs"] as const).map((s) => (
+              <button key={s} role="radio" aria-checked={strategy === s} onClick={() => setStrategy(s)}
+                className={cn("flex-1 rounded px-2 py-1 font-medium", strategy === s ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                {t(s === "all" ? "wb.variants.all" : "wb.variants.pairs")} · {s === "all" ? total : pairs}
+              </button>
+            ))}
+          </div>
+        )}
+        {count > maxCombinations && <p className="text-destructive text-xs">{t("wb.variants.tooMany", { n: count, max: maxCombinations })}</p>}
+        <Button className="w-full" disabled={chosen.length === 0 || count > maxCombinations || variantsRunning || running || !evaluation}
+          onClick={() => { setOpen(false); void runVariants(chosen, chosen.length > 1 ? strategy : "all") }}>
           {variantsRunning ? <Loader2 className="animate-spin" /> : <Shuffle />}
-          {chosen ? t("wb.variants.run", { n: visibleValues(chosen).filter((v) => v.support === "supported").length }) : t("wb.variants.title")}
+          {t("wb.variants.run", { n: count })}
         </Button>
-        <Sheet>
-          <SheetTrigger asChild><button type="button" className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2">{t("wb.variants.fullMatrix")}</button></SheetTrigger>
-          <SheetContent className="w-[min(96vw,1400px)] p-0 sm:max-w-none">
-            <SheetHeader className="sr-only"><SheetTitle>{t("matrix.title")}</SheetTitle><SheetDescription>{t("matrix.title")}</SheetDescription></SheetHeader>
-            <MatrixPage />
-          </SheetContent>
-        </Sheet>
       </PopoverContent>
     </Popover>
   )

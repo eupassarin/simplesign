@@ -2,11 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from "sonner"
 import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
+import { pairwise, product } from "./combinations"
 import type { CredentialFacts, EnvironmentInfo, EnvironmentMode, OptionState } from "@/lib/types"
 import {
   asText, getPath, hasPath, setPath,
   type DssSettings, type DssStatus, type Evaluation, type Format, type Options, type RunEvent, type RunKind, type RunLogEntry, type RunSummary,
-  type RunView, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
+  type RunView, type SandboxState, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
 } from "./schema"
 
 const shown: OptionState = { visible: true }
@@ -72,8 +73,14 @@ interface WorkbenchValue {
   // Variants: the same options with every value of one option
   variants: Variants | null
   variantsRunning: boolean
-  runVariants: (option: SchemaOption) => Promise<void>
+  variantValues: (option: SchemaOption) => SchemaValue[]
+  runVariants: (options: SchemaOption[], strategy: Strategy) => Promise<void>
   stopVariants: () => void
+  /** The sandbox PKI and the failures switched on in it (null until loaded, or in Real). */
+  sandbox: SandboxState | null
+  setSandbox: (state: SandboxState) => void
+  /** Opens a sandbox signer and makes it the signer of the three formats. */
+  signWithSandbox: (id: string) => Promise<void>
   // DSS
   dss: DssSettings
   dssStatus: DssStatus | null
@@ -82,17 +89,22 @@ interface WorkbenchValue {
 }
 
 export interface VariantRow {
-  value: string
-  title: string
+  key: string
+  /** One value per varied option, in the order of <see cref="Variants.options"/>. */
+  values: string[]
+  titles: string[]
   status: "pending" | "running" | "done" | "skipped"
-  /** Why the value was not run (the rules refuse the combination). */
+  /** Why the combination was not run (the rules refuse it). */
   reason?: string
   run?: RunView
 }
 
+export type Strategy = "all" | "pairs"
+
 export interface Variants {
-  option: SchemaOption
+  options: SchemaOption[]
   format: Format
+  strategy: Strategy
   rows: VariantRow[]
 }
 
@@ -165,7 +177,9 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const [dssStatus, setDssStatus] = useState<DssStatus | null>(null)
   const options = byFormat[format]
 
+  const [sandbox, setSandbox] = useState<SandboxState | null>(null)
   useEffect(() => {
+    api.sandbox.state().then(setSandbox).catch(() => setSandbox(null))
     api.env().then(setEnv).catch(() => setEnv(null))
     api.workbench.history().then(setHistory).catch(() => setHistory([]))
     api.dss.settings().then(setDss).catch(() => {})
@@ -350,22 +364,35 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const stopRequested = useRef(false)
   const stopVariants = useCallback(() => { stopRequested.current = true }, [])
 
-  const runVariants = useCallback(async (option: SchemaOption) => {
-    if (!option.path) return
-    const values = visibleValues(option).filter((v) => v.support === "supported")
-    const update = (value: string, change: Partial<VariantRow>) =>
-      setVariants((current) => current && { ...current, rows: current.rows.map((r) => (r.value === value ? { ...r, ...change } : r)) })
+  /** The values of an option that can be combined now. */
+  const variantValues = useCallback((option: SchemaOption) => visibleValues(option).filter((v) =>
+    // A value the rules already lock (SHA-3 on a runtime without it) is not worth a run.
+    v.support === "supported" && !(option.valueStateKey && state(`${option.valueStateKey}.${v.value}`).disabled)), [visibleValues, state])
+
+  const runVariants = useCallback(async (varied: SchemaOption[], strategy: Strategy) => {
+    const chosen = varied.filter((o) => o.path)
+    if (chosen.length === 0) return
+    const lists = chosen.map((o) => variantValues(o))
+    const combos = (strategy === "pairs" ? pairwise : product)(lists.map((l) => l.map((v) => v.value)))
+    const rows: VariantRow[] = combos.map((values) => ({
+      key: values.join("\u0000"),
+      values,
+      titles: values.map((value, i) => lists[i].find((v) => v.value === value)?.title ?? value),
+      status: "pending",
+    }))
+    const update = (key: string, change: Partial<VariantRow>) =>
+      setVariants((current) => current && { ...current, rows: current.rows.map((r) => (r.key === key ? { ...r, ...change } : r)) })
     stopRequested.current = false
     setVariantsRunning(true)
-    setVariants({ option, format, rows: values.map((v) => ({ value: v.value, title: v.title, status: "pending" })) })
+    setVariants({ options: chosen, format, strategy, rows })
     try {
-      for (const v of values) {
+      for (const row of rows) {
         if (stopRequested.current) break
-        const candidate = setPath(options, option.path, v.value === "" ? null : v.value)
-        update(v.value, { status: "running" })
+        const candidate = chosen.reduce((acc, option, i) => setPath(acc, option.path!, row.values[i] === "" ? null : row.values[i]), options)
+        update(row.key, { status: "running" })
         const rules = await api.workbench.evaluate(format, candidate)
         if (!rules.canSign) {
-          update(v.value, { status: "skipped", reason: rules.issues.find((i) => i.severity === "Error")?.message })
+          update(row.key, { status: "skipped", reason: rules.issues.find((i) => i.severity === "Error")?.message })
           continue
         }
         const { id } = await api.workbench.start(format, candidate, dss.enabled)
@@ -374,7 +401,7 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
           await new Promise((resolve) => setTimeout(resolve, 250))
           result = await api.workbench.run(id)
         }
-        update(v.value, { status: "done", run: result })
+        update(row.key, { status: "done", run: result })
       }
     } catch (e) {
       toast.error(t("wb.run.failedToStart"), { description: (e as Error).message })
@@ -382,7 +409,21 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
       setVariantsRunning(false)
       api.workbench.history().then(setHistory).catch(() => {})
     }
-  }, [visibleValues, options, format, dss.enabled, t])
+  }, [variantValues, options, format, dss.enabled, t])
+
+  const signWithSandbox = useCallback(async (id: string) => {
+    try {
+      const facts = await api.credentials.sandbox(id)
+      setByFormat((all) => ({
+        pades: setPath(all.pades, "credentialId", facts.id),
+        cades: setPath(all.cades, "credentialId", facts.id),
+        xades: setPath(all.xades, "credentialId", facts.id),
+      }))
+      toast.success(t("signer.ready"), { description: `${facts.holder} · ${facts.source}` })
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }, [t])
 
   const saveDss = useCallback(async (settings: DssSettings) => {
     try {
@@ -395,11 +436,11 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const checkDss = useCallback(async () => setDssStatus(await api.dss.status()), [])
 
   const value = useMemo<WorkbenchValue>(() => ({
-    mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, openInValidate,
+    sandbox, setSandbox, signWithSandbox, mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, openInValidate,
     schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, credential: evaluation?.credential ?? null, isVisible, visibleValues,
-    run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, runVariants, stopVariants, dss, dssStatus, saveDss, checkDss,
-  }), [mode, setMode, validateTarget, validateOptions, setValidateOption, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
+    run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, variantValues, runVariants, stopVariants, dss, dssStatus, saveDss, checkDss,
+  }), [variantValues, sandbox, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, dss, dssStatus, saveDss, checkDss])
 
   return <Context.Provider value={value}>{children}</Context.Provider>

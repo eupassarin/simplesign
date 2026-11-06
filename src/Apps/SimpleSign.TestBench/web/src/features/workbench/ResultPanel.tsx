@@ -4,7 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useI18n, useT } from "@/i18n"
+import { useI18n, useT, type MessageKey } from "@/i18n"
 import { api } from "@/lib/api"
 import type { CadesSignResult, CadesValidationView, SigningResult, ValidationReport, XmlSignResult, XmlValidationView } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -17,7 +17,7 @@ import { XmlViews } from "../xml/XmlViews"
 import { LogView } from "./LogView"
 import { StandardBadge } from "./parts"
 import type { DssComparison, RunVerdict, RunView } from "./schema"
-import { useWorkbench } from "./state"
+import { useWorkbench, type VariantRow } from "./state"
 
 /** Everything a run produced: the result, what is inside the file, the verdicts (SimpleSign and DSS), the log and the code. */
 export function ResultPanel({ extra }: { extra?: { id: string; label: ReactNode; content: ReactNode; open?: boolean } }) {
@@ -324,25 +324,62 @@ function DssReport({ comparison }: { comparison: DssComparison }) {
   )
 }
 
-/** The same options signed once per value of one option: which values work, at what level, and what the validators say. */
+type RowFilter = "all" | "problems" | "dss" | "skipped"
+
+/** Combinations of option values, each signed as a normal run: what works, at what level, and what the validators say. */
 function VariantsTable({ onOpen }: { onOpen: () => void }) {
   const { variants, variantsRunning, stopVariants, openRun, schema } = useWorkbench()
   const t = useT()
+  const [filter, setFilter] = useState<RowFilter>("all")
   if (!variants) return null
-  const done = variants.rows.filter((r) => r.status === "done" || r.status === "skipped").length
+  const finished = variants.rows.filter((r) => r.status === "done" || r.status === "skipped")
+  const good = (r: VariantRow) => r.status === "done" && !!r.run?.success && (!r.run.overall || r.run.overall === "Valid")
+  const differs = (r: VariantRow) => !!r.run?.crossValidation?.available && !r.run.crossValidation.agree
+  const counts: Record<RowFilter, number> = {
+    all: variants.rows.length,
+    problems: variants.rows.filter((r) => r.status === "done" && !good(r)).length,
+    dss: variants.rows.filter(differs).length,
+    skipped: variants.rows.filter((r) => r.status === "skipped").length,
+  }
+  const shown = variants.rows.filter((r) => filter === "all" || (filter === "problems" ? r.status === "done" && !good(r) : filter === "dss" ? differs(r) : r.status === "skipped"))
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium">{schema.formats.find((f) => f.id === variants.format)?.title} · {variants.option.title}</p>
-        <StandardBadge explanation={{ title: variants.option.title, summary: variants.option.summary, standards: variants.option.standards, api: variants.option.api }} />
-        <span className="text-muted-foreground ml-auto text-xs tabular-nums">{done} / {variants.rows.length}</span>
-        {variantsRunning && <Button variant="outline" size="sm" onClick={stopVariants}>{t("matrix.stop")}</Button>}
+        <p className="text-sm font-medium">{schema.formats.find((f) => f.id === variants.format)?.title} · {variants.options.map((o) => o.title).join(" × ")}</p>
+        {variants.options.length > 1 && <Pill>{t(variants.strategy === "pairs" ? "wb.variants.pairs" : "wb.variants.all")}</Pill>}
+        <span className="text-muted-foreground ml-auto text-xs tabular-nums">{finished.length} / {variants.rows.length}</span>
+        {variantsRunning && <Button variant="outline" size="sm" onClick={stopVariants}>{t("wb.variants.stop")}</Button>}
       </div>
-      <p className="text-muted-foreground text-xs">{t("wb.variants.hint")}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(["all", "problems", "dss", "skipped"] as const).filter((f) => f === "all" || counts[f] > 0).map((f) => (
+          <button key={f} type="button" onClick={() => setFilter(f)}
+            className={cn("rounded-full border px-2.5 py-0.5 text-xs", filter === f ? "bg-accent border-foreground/30 font-medium" : "text-muted-foreground hover:text-foreground")}>
+            {t(`wb.variants.filter.${f}` as MessageKey)} {counts[f]}
+          </button>
+        ))}
+        <span className="text-muted-foreground ml-2 text-xs">{t("wb.variants.hint")}</span>
+      </div>
+      {variants.options.length > 1 && finished.length > 0 && (
+        <div className="grid gap-x-6 gap-y-1 rounded-lg border px-3 py-2 text-xs sm:grid-cols-2">
+          {variants.options.map((option, i) => (
+            <div key={option.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="text-muted-foreground shrink-0">{option.title}</span>
+              {[...new Set(variants.rows.map((r) => r.values[i]))].map((value) => {
+                const withValue = variants.rows.filter((r) => r.values[i] === value && r.status === "done")
+                const ok = withValue.filter(good).length
+                const title = variants.rows.find((r) => r.values[i] === value)!.titles[i]
+                return withValue.length === 0 ? null : (
+                  <span key={value} className={cn("tabular-nums", ok < withValue.length && "text-destructive font-medium")}>{title} {ok}/{withValue.length}</span>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      )}
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{t("wb.variants.value")}</TableHead>
+            {variants.options.map((o) => <TableHead key={o.id}>{o.title}</TableHead>)}
             <TableHead>{t("wb.result.achieved")}</TableHead>
             <TableHead>SimpleSign</TableHead>
             <TableHead>DSS</TableHead>
@@ -350,10 +387,10 @@ function VariantsTable({ onOpen }: { onOpen: () => void }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {variants.rows.map((row) => (
-            <TableRow key={row.value} className={cn(row.run && "hover:bg-accent/50 cursor-pointer", row.run && !row.run.success && "bg-destructive/5")}
+          {shown.map((row) => (
+            <TableRow key={row.key} className={cn(row.run && "hover:bg-accent/50 cursor-pointer", row.run && !good(row) && "bg-destructive/5")}
               onClick={() => { if (row.run) { void openRun(row.run.id); onOpen() } }}>
-              <TableCell className="text-sm font-medium">{row.title}</TableCell>
+              {row.titles.map((title, i) => <TableCell key={i} className="text-sm">{title}</TableCell>)}
               {row.status === "pending" && <TableCell colSpan={4} className="text-muted-foreground text-xs">—</TableCell>}
               {row.status === "running" && <TableCell colSpan={4}><Loader2 className="size-4 animate-spin" /></TableCell>}
               {row.status === "skipped" && <TableCell colSpan={4} className="text-muted-foreground text-xs whitespace-normal">{t("wb.variants.incompatible")}: {row.reason}</TableCell>}

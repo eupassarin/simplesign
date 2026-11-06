@@ -5,7 +5,6 @@ using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
-using SimpleSign.TestBench.Matrix;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Validation;
@@ -151,7 +150,6 @@ internal static class Api
                 ? Results.File(cms, "application/pkcs7-signature", $"{field}.p7s")
                 : Results.NotFound());
 
-        // Run matrix
         // CAdES
         var cades = api.MapGroup("/cades");
         cades.MapGet("/samples", (CadesSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
@@ -165,17 +163,8 @@ internal static class Api
         var xml = api.MapGroup("/xml");
         xml.MapGet("/samples", (XmlSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
 
-        api.MapGet("/matrix/cases", (string? format, MatrixRunner matrix, CadesMatrix cadesMatrix, XmlMatrix xmlMatrix) =>
-            format switch { "cades" => cadesMatrix.Cases(), "xml" => xmlMatrix.Cases(), _ => matrix.Cases() });
-        api.MapPost("/matrix/run", async (MatrixRunRequest body, MatrixRunner matrix, CadesMatrix cadesMatrix, XmlMatrix xmlMatrix, CancellationToken ct) =>
-            body.Format switch
-            {
-                "cades" => await cadesMatrix.RunAsync(body, ct),
-                "xml" => await xmlMatrix.RunAsync(body, ct),
-                _ => await matrix.RunAsync(body, ct),
-            });
-
         RunApi.Map(api);
+        SandboxApi.Map(api);
 
         api.MapFallback(() => Results.NotFound(new { error = "Unknown API route." }));
     }

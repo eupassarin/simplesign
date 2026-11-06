@@ -86,7 +86,7 @@ export function ValidatePage() {
         {run && validateTarget?.fileId === run.outputId && <Pill>{schema.formats.find((f) => f.id === run.format)?.title}</Pill>}
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-8" onClick={checking ? () => { stop.current = true } : checkAll} disabled={samples.length === 0}>
-            {checking ? <Loader2 className="animate-spin" /> : <ListChecks />} {t(checking ? "matrix.stop" : "val.validateAll")}
+            {checking ? <Loader2 className="animate-spin" /> : <ListChecks />} {t(checking ? "wb.variants.stop" : "val.validateAll")}
           </Button>
           <DssControl />
           <HistoryDrawer />
