@@ -52,14 +52,23 @@ public sealed record CredentialFacts(
     IReadOnlyList<string> Notes,
     string CertificateBase64);
 
+/// <summary>A note in English with its arguments, translated each time it is shown.</summary>
+public sealed record Note(string English, params object?[] Args)
+{
+    public static implicit operator Note(string english) => new(english);
+
+    public override string ToString() => Localization.L.T(English, Args);
+}
+
 /// <summary>An opened signing credential: a local key, or an <see cref="IExternalSigner"/> (token, PSC, CSC).</summary>
 internal sealed class CredentialHandle : IDisposable
 {
     private readonly IDisposable? _owned;
+    private readonly CredentialFacts _facts;
 
     public CredentialHandle(CredentialKind kind, string source, X509Certificate2 certificate, IReadOnlyList<X509Certificate2> chain,
         IExternalSigner? external, IDisposable? owned, IReadOnlyList<HashChoice>? hashes = null, IReadOnlyList<RsaPadding>? paddings = null,
-        IReadOnlyList<string>? notes = null)
+        IReadOnlyList<Note>? notes = null)
     {
         Id = Guid.NewGuid().ToString("N")[..12];
         Kind = kind;
@@ -67,7 +76,8 @@ internal sealed class CredentialHandle : IDisposable
         Chain = chain;
         External = external;
         _owned = owned;
-        Facts = BuildFacts(Id, kind, source, certificate, external is null, hashes, paddings, notes ?? []);
+        Notes = notes ?? [];
+        _facts = BuildFacts(Id, kind, source, certificate, external is null, hashes, paddings);
     }
 
     public string Id { get; }
@@ -80,7 +90,11 @@ internal sealed class CredentialHandle : IDisposable
 
     public IExternalSigner? External { get; }
 
-    public CredentialFacts Facts { get; }
+    /// <summary>The notes in English (for the localization tests).</summary>
+    internal IReadOnlyList<Note> Notes { get; }
+
+    /// <summary>The facts, with the notes in the current UI language.</summary>
+    public CredentialFacts Facts => _facts with { Notes = [.. Notes.Select(n => n.ToString())] };
 
     public DateTimeOffset LastUsed { get; set; } = DateTimeOffset.UtcNow;
 
@@ -93,7 +107,7 @@ internal sealed class CredentialHandle : IDisposable
             : [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512];
 
     private static CredentialFacts BuildFacts(string id, CredentialKind kind, string source, X509Certificate2 certificate, bool local,
-        IReadOnlyList<HashChoice>? hashes, IReadOnlyList<RsaPadding>? paddings, IReadOnlyList<string> notes)
+        IReadOnlyList<HashChoice>? hashes, IReadOnlyList<RsaPadding>? paddings)
     {
         bool isRsa = certificate.GetRSAPublicKey() is not null;
         int keySize;
@@ -128,7 +142,7 @@ internal sealed class CredentialHandle : IDisposable
             hashes ?? LocalHashes(),
             isRsa ? paddings ?? [RsaPadding.Pkcs1, RsaPadding.Pss] : [],
             local,
-            notes,
+            [],
             Convert.ToBase64String(certificate.RawData));
     }
 }

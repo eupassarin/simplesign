@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
 import type {
   CredentialFacts,
@@ -99,11 +100,13 @@ export function SigningProvider({ environment, children }: { environment: Enviro
   const [env, setEnv] = useState<EnvironmentInfo | null>(null)
   const [evaluating, setEvaluating] = useState(false)
   const sequence = useRef(0)
+  const { locale } = useI18n()
 
+  // Explanations and sandbox descriptions come from the server in the UI language.
   useEffect(() => {
     api.catalog().then(setCatalog).catch(() => {})
     api.env().then(setEnv).catch(() => {})
-  }, [])
+  }, [locale])
 
   // Switching Sandbox / Real starts over: credentials and services differ.
   useEffect(() => {
@@ -128,7 +131,7 @@ export function SigningProvider({ environment, children }: { environment: Enviro
         .finally(() => id === sequence.current && setEvaluating(false))
     }, 120)
     return () => clearTimeout(timer)
-  }, [options])
+  }, [options, locale])
 
   const update = useCallback<SigningContextValue["update"]>((patch) => {
     setOptions((o) => ({ ...o, ...(typeof patch === "function" ? patch(o) : patch) }))

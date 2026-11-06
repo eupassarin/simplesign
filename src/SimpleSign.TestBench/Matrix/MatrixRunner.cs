@@ -249,8 +249,7 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
             return "The validator found no signature.";
         }
 
-        if (mine.Checks.Any(c => c.Name.StartsWith("Integrity", StringComparison.Ordinal) && c.Status != "pass")
-            || mine.Checks.Any(c => c.Name == "Signature value" && c.Status != "pass"))
+        if (mine.Checks.Any(c => c.Id is "integrity" or "signature" && c.Status != "pass"))
         {
             return "Integrity or signature value check failed: " + string.Join("; ", mine.Errors);
         }
@@ -281,7 +280,7 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
         }
 
         checks.Add("field " + expectedField);
-        if (effective.Level >= BaselineLevel.BT && mine.Checks.FirstOrDefault(c => c.Name == "Signature timestamp")?.Status != "pass")
+        if (effective.Level >= BaselineLevel.BT && mine.Checks.FirstOrDefault(c => c.Id == "timestamp")?.Status != "pass")
         {
             return "Missing or invalid signature timestamp.";
         }

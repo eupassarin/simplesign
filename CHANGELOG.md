@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (SimpleSign TestBench)
 
+- The TestBench is available in English (en-US), Portuguese (pt-BR) and Spanish (es): browser
+  language by default, with a selector in the top bar. Server texts (explanations, compatibility
+  messages, samples) follow `Accept-Language`; a test checks every text has its translations.
+
 - New `src/SimpleSign.TestBench`: a local web app (ASP.NET Core minimal API + React, Vite,
   Tailwind and shadcn/ui) to try every PDF signing option, explained, in a step-by-step flow that
   only offers compatible options. Signers: sandbox A1, PFX, OS store, A3 tokens (PKCS#11), ICP-Brasil

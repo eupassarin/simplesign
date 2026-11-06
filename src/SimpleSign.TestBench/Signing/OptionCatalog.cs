@@ -9,6 +9,15 @@ public sealed record OptionInfo(string Title, string Summary, string? Details = 
 /// </summary>
 public static class OptionCatalog
 {
+    /// <summary>The catalog in the current UI language (Spec and Api stay as written: they are references).</summary>
+    public static IReadOnlyDictionary<string, OptionInfo> Localized() =>
+        All.ToDictionary(e => e.Key, e => e.Value with
+        {
+            Title = Localization.L.T(e.Value.Title),
+            Summary = Localization.L.T(e.Value.Summary),
+            Details = e.Value.Details is null ? null : Localization.L.T(e.Value.Details),
+        }, StringComparer.Ordinal);
+
     public static IReadOnlyDictionary<string, OptionInfo> All { get; } = new Dictionary<string, OptionInfo>(StringComparer.Ordinal)
     {
         // Environment
@@ -27,7 +36,7 @@ public static class OptionCatalog
 
         // Signer
         ["signer.SandboxA1"] = new("Sandbox certificate", "A1 certificates from the sandbox PKI: every key type and the edge cases.",
-            "Each one carries ICP-Brasil-style data (CPF in the SAN otherName 2.16.76.1.3.1, or CNPJ in 2.16.76.1.3.3), CRL distribution points and caIssuers URLs served by the sandbox.",
+            "Each one carries ICP-Brasil-style data (CPF in the SAN otherName 2.16.76.1.3.1, or CNPJ in 2.16.76.1.3.3) and CRL distribution points served by the sandbox.",
             null, "WithCertificate(X509Certificate2, IReadOnlyList<X509Certificate2> chain)"),
         ["signer.Pfx"] = new("A1 (PFX file)", "A certificate and private key in a PKCS#12 file.",
             "The password opens the file once; it is not stored. Intermediate certificates in the file are embedded in the signature.",

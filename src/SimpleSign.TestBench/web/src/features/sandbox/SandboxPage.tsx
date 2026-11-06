@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Clock, Cloud, KeyRound, RefreshCw, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
 import type { SandboxRequest } from "@/lib/types"
 import { KeyValue, Pill, Section } from "../pdf-signing/ui"
@@ -10,6 +11,7 @@ import { useSigning } from "../pdf-signing/state"
 export function SandboxPage() {
   const { env } = useSigning()
   const [log, setLog] = useState<SandboxRequest[]>([])
+  const { t, time } = useI18n()
   const load = () => api.sandboxLog().then(setLog)
   useEffect(() => {
     load()
@@ -20,13 +22,12 @@ export function SandboxPage() {
         <header className="space-y-1">
           <h2 className="text-2xl font-semibold tracking-tight">Sandbox</h2>
           <p className="text-muted-foreground max-w-3xl text-sm">
-            Everything the sandbox simulates, generated when the TestBench starts and kept in memory. Services answer on <code className="font-mono text-xs">*.sandbox.simplesign.test</code> through an
-            in-process <code className="font-mono text-xs">IHttpClientProvider</code>, so the library runs its normal code paths (including its SSRF checks) without touching the network.
+            {t("sandbox.intro")}
           </p>
         </header>
-        <Section title="Test PKI" description="AC Raiz Sandbox SimpleSign → AC Sandbox SimpleSign v1 → signers. CRLs for both CAs; one signer is revoked.">
+        <Section title={t("sandbox.pki")} description={t("sandbox.pkiHint")}>
           <Table>
-            <TableHeader><TableRow><TableHead>Signer</TableHead><TableHead>Key</TableHead><TableHead>Valid until</TableHead><TableHead>Shows</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>{t("sandbox.signer")}</TableHead><TableHead>{t("sandbox.key")}</TableHead><TableHead>{t("sandbox.validUntil")}</TableHead><TableHead>{t("sandbox.shows")}</TableHead></TableRow></TableHeader>
             <TableBody>
               {env?.signers.map((s) => (
                 <TableRow key={s.id}>
@@ -40,31 +41,31 @@ export function SandboxPage() {
           </Table>
         </Section>
         <div className="grid gap-4 md:grid-cols-3">
-          <Service icon={<Clock className="size-4" />} title="Time-stamping authority">
+          <Service icon={<Clock className="size-4" />} title={t("sandbox.tsa")}>
             <KeyValue label="URL" mono>{env?.tsaUrl}</KeyValue>
-            <KeyValue label="With Basic auth" mono>{env?.authenticatedTsaUrl}</KeyValue>
-            <KeyValue label="User / password" mono>{env?.tsaUser} / {env?.tsaPassword}</KeyValue>
+            <KeyValue label={t("sandbox.withBasic")} mono>{env?.authenticatedTsaUrl}</KeyValue>
+            <KeyValue label={t("sandbox.userPassword")} mono>{env?.tsaUser} / {env?.tsaPassword}</KeyValue>
           </Service>
           <Service icon={<Cloud className="size-4" />} title="PSC (DOC-ICP-17.01)">
             <KeyValue label="URL" mono>{env?.pscUrl}</KeyValue>
             <KeyValue label="CPF / OTP" mono>{env?.pscCpf} / {env?.pscOtp}</KeyValue>
-            <KeyValue label="Client" mono>testbench</KeyValue>
+            <KeyValue label={t("sandbox.client")} mono>testbench</KeyValue>
           </Service>
           <Service icon={<Cloud className="size-4" />} title="CSC API v2">
             <KeyValue label="URL" mono>{env?.cscUrl}</KeyValue>
             <KeyValue label="PIN / OTP" mono>{env?.cscPin} / {env?.cscOtp}</KeyValue>
-            <KeyValue label="Credentials">{env?.cscCredentials.map((c) => c.id).join(", ")}</KeyValue>
+            <KeyValue label={t("sandbox.credentials")}>{env?.cscCredentials.map((c) => c.id).join(", ")}</KeyValue>
           </Service>
         </div>
-        <Section title="Network log" description="Requests the library made to the sandbox services (most recent first)." aside={<Button variant="outline" size="sm" onClick={load}><RefreshCw /> Refresh</Button>}>
+        <Section title={t("sandbox.log")} description={t("sandbox.logHint")} aside={<Button variant="outline" size="sm" onClick={load}><RefreshCw /> {t("common.refresh")}</Button>}>
           <div className="rounded-lg border">
             <Table>
-              <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Service</TableHead><TableHead>Request</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>{t("sandbox.time")}</TableHead><TableHead>{t("sandbox.service")}</TableHead><TableHead>{t("sandbox.request")}</TableHead><TableHead className="text-right">{t("sandbox.status")}</TableHead></TableRow></TableHeader>
               <TableBody>
-                {log.length === 0 && <TableRow><TableCell colSpan={4} className="text-muted-foreground text-center text-xs">No requests yet. Sign at B-T or above, or use a cloud signer.</TableCell></TableRow>}
+                {log.length === 0 && <TableRow><TableCell colSpan={4} className="text-muted-foreground text-center text-xs">{t("sandbox.noRequests")}</TableCell></TableRow>}
                 {log.map((r, i) => (
                   <TableRow key={i}>
-                    <TableCell className="text-xs whitespace-nowrap">{new Date(r.time).toLocaleTimeString()}</TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">{time(r.time)}</TableCell>
                     <TableCell><Pill tone={r.service === "Blocked" ? "danger" : "default"}>{r.service}</Pill></TableCell>
                     <TableCell className="max-w-xl truncate font-mono text-xs">{r.method} {r.url}</TableCell>
                     <TableCell className="text-right text-xs">{r.status}</TableCell>
@@ -74,7 +75,7 @@ export function SandboxPage() {
             </Table>
           </div>
         </Section>
-        <p className="text-muted-foreground flex items-center gap-1.5 text-xs"><ShieldCheck className="size-3.5" /> {env?.runtime} · SimpleSign {env?.version} · SHA-3 {env?.sha3Supported ? "available" : "not available"}</p>
+        <p className="text-muted-foreground flex items-center gap-1.5 text-xs"><ShieldCheck className="size-3.5" /> {env?.runtime} · SimpleSign {env?.version} · SHA-3 {t(env?.sha3Supported ? "sandbox.available" : "sandbox.notAvailable")}</p>
       </div>
     </div>
   )

@@ -6,11 +6,13 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import type { OptionIssue, OptionState } from "@/lib/types"
+import { useT } from "@/i18n"
 import { useSigning } from "./state"
 
 /** The "i" next to an option: summary, details, the standard and the library API. */
 export function Explain({ id, className }: { id: string; className?: string }) {
   const { catalog } = useSigning()
+  const t = useT()
   const info = catalog[id]
   if (!info) return null
   return (
@@ -18,7 +20,7 @@ export function Explain({ id, className }: { id: string; className?: string }) {
       <HoverCardTrigger asChild>
         <button
           type="button"
-          aria-label={`About ${info.title}`}
+          aria-label={t("common.about", { name: info.title })}
           className={cn("text-muted-foreground hover:text-foreground inline-flex size-4 items-center justify-center rounded-full transition-colors", className)}
           onClick={(e) => e.preventDefault()}
         >

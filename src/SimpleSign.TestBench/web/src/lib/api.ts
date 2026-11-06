@@ -21,13 +21,21 @@ import type {
 
 export class ApiError extends Error {}
 
+let locale = "en-US"
+
+/** The language sent as Accept-Language, so the server's explanations and errors match the UI. */
+export function setApiLocale(value: string) {
+  locale = value
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method, headers: {} }
+  const headers: Record<string, string> = { "Accept-Language": locale }
+  const init: RequestInit = { method, headers }
   if (body instanceof FormData) {
     init.body = body
   } else if (body !== undefined) {
     init.body = JSON.stringify(body)
-    init.headers = { "Content-Type": "application/json" }
+    headers["Content-Type"] = "application/json"
   }
   const response = await fetch(url, init)
   const text = await response.text()

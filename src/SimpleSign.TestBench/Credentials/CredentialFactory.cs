@@ -5,6 +5,7 @@ using SimpleSign.Signers.Cloud.Csc;
 using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.Signers.Pkcs11;
 using SimpleSign.TestBench.Documents;
+using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 
@@ -67,10 +68,10 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
     public CredentialHandle OpenSandbox(SandboxCredentialRequest request)
     {
         var signer = sandbox.Pki.Signer(request.SignerId);
-        var notes = new List<string> { "Issued by the sandbox PKI (AC Raiz Sandbox SimpleSign). Validation in the TestBench trusts this root; real validators will not." };
+        var notes = new List<Note> { "Issued by the sandbox PKI (AC Raiz Sandbox SimpleSign). Validation in the TestBench trusts this root; real validators will not." };
         if (signer.Problem is not null)
         {
-            notes.Add(signer.Description);
+            notes.Add(new Note(signer.Description));
         }
 
         return new CredentialHandle(CredentialKind.SandboxA1, "Sandbox A1 · " + signer.Title, signer.Certificate, sandbox.Pki.Chain, null, null, notes: notes);
@@ -81,7 +82,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
         var file = documents.Get(request.UploadId);
         var collection = X509CertificateLoader.LoadPkcs12Collection(file.Content, request.Password, KeyStorage);
         var leaf = collection.FirstOrDefault(c => c.HasPrivateKey)
-            ?? throw new CryptographicException("The PFX has no certificate with a private key.");
+            ?? throw new CryptographicException(L.T("The PFX has no certificate with a private key."));
         var chain = collection.Where(c => !ReferenceEquals(c, leaf)).ToList();
         return new CredentialHandle(CredentialKind.Pfx, "PFX · " + file.FileName, leaf, chain, null, new Owned(collection),
             notes: ["The password is used once to open the file and is not stored."]);
@@ -114,7 +115,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
         store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
         var found = store.Certificates.Find(X509FindType.FindByThumbprint, request.Thumbprint, validOnly: false);
         var certificate = found.FirstOrDefault(c => c.HasPrivateKey)
-            ?? throw new CryptographicException("Certificate not found in the user store, or it has no private key.");
+            ?? throw new CryptographicException(L.T("Certificate not found in the user store, or it has no private key."));
         return new CredentialHandle(CredentialKind.OsStore, OperatingSystem.IsMacOS() ? "macOS keychain" : "OS certificate store", certificate, [], null, certificate,
             notes: ["The OS may show its own prompt (keychain password, smartcard PIN) when signing."]);
     }
@@ -179,14 +180,14 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
     private async Task<CredentialHandle> PscHandleAsync(PscClient client, OAuthToken token, PscCredentialRequest request, bool isSandbox, CancellationToken cancellationToken)
     {
         var signer = await PscSigner.CreateAsync(client, token, string.IsNullOrWhiteSpace(request.Alias) ? null : request.Alias, cancellationToken: cancellationToken);
-        var notes = new List<string>
+        var notes = new List<Note>
         {
             "PSCs sign RAW hashes with RSA PKCS#1 v1.5 only: RSASSA-PSS and ECDSA are not offered.",
-            $"Scope '{request.Scope}': " + request.Scope switch
+            request.Scope switch
             {
-                PscScope.SingleSignature => "one signature, then the token is spent (batch needs a new login per document).",
-                PscScope.MultiSignature => "several hashes in one call.",
-                _ => "any number of signatures until the token expires.",
+                PscScope.SingleSignature => "Scope single_signature: one signature, then the token is spent (batch needs a new login per document).",
+                PscScope.MultiSignature => "Scope multi_signature: several hashes in one call.",
+                _ => "Scope signature_session: any number of signatures until the token expires.",
             },
         };
         if (isSandbox)
@@ -233,10 +234,10 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
             paddings.Add(RsaPadding.Pss);
         }
 
-        var notes = new List<string>
+        var notes = new List<Note>
         {
-            $"Credential '{signer.Credential.Id}': SCAL {signer.Credential.Scal}, auth mode {signer.Credential.AuthMode}, {signer.Credential.MultiSign} signature(s) per authorization.",
-            "Key algorithms: " + string.Join(", ", algorithms),
+            new("Credential '{0}': SCAL {1}, auth mode {2}, {3} signature(s) per authorization.", signer.Credential.Id, signer.Credential.Scal, signer.Credential.AuthMode, signer.Credential.MultiSign),
+            new("Key algorithms: {0}", string.Join(", ", algorithms)),
         };
         if (isSandbox)
         {
@@ -288,10 +289,10 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
     private static Uri HttpsUrl(string? value, string name) =>
         Uri.TryCreate(Required(value, name), UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
             ? uri
-            : throw new ArgumentException($"{name} must be an absolute https:// URL.");
+            : throw new ArgumentException(L.T("{0} must be an absolute https:// URL.", name));
 
     private static string Required(string? value, string name) =>
-        string.IsNullOrWhiteSpace(value) ? throw new ArgumentException($"{name} is required.") : value.Trim();
+        string.IsNullOrWhiteSpace(value) ? throw new ArgumentException(L.T("{0} is required.", name)) : value.Trim();
 
     private sealed class Owned(X509Certificate2Collection collection) : IDisposable
     {

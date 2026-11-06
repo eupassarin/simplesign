@@ -1,5 +1,6 @@
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
+using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Sandbox;
 
 namespace SimpleSign.TestBench.Signing;
@@ -71,22 +72,22 @@ public static class Compatibility
         // ── 1. Document ────────────────────────────────────────────────
         if (document is null)
         {
-            Error(StepDocument, "Choose a document to sign.");
+            Error(StepDocument, L.T("Choose a document to sign."));
         }
         else if (document.Error is not null)
         {
-            Error(StepDocument, $"The file could not be read as a PDF: {document.Error}");
+            Error(StepDocument, L.T("The file could not be read as a PDF: {0}", document.Error));
         }
         else
         {
             if (document.DocMdpLevel == 1)
             {
-                Error(StepDocument, "The document is certified with DocMDP P=1 (no changes allowed): any further signature would invalidate the certification (ISO 32000-1 §12.8.2.2.2).");
+                Error(StepDocument, L.T("The document is certified with DocMDP P=1 (no changes allowed): any further signature would invalidate the certification (ISO 32000-1 §12.8.2.2.2)."));
             }
 
             if (document.IsEncrypted)
             {
-                Error(StepDocument, "Encrypted PDFs cannot be signed: decrypt the document first.");
+                Error(StepDocument, L.T("Encrypted PDFs cannot be signed: decrypt the document first."));
             }
         }
 
@@ -104,27 +105,27 @@ public static class Compatibility
         Set("batch", batch ? OptionState.Shown : OptionState.Hidden);
         if (batch && (o.BatchCopies < 1 || o.BatchCopies > 50))
         {
-            Error(StepMode, "Batch: between 1 and 50 copies.");
+            Error(StepMode, L.T("Batch: between 1 and 50 copies."));
         }
 
         if (batch && (o.MaxConcurrency < 1 || o.MaxConcurrency > 16))
         {
-            Error(StepMode, "Batch: max concurrency between 1 and 16.");
+            Error(StepMode, L.T("Batch: max concurrency between 1 and 16."));
         }
 
         if (batch && credential?.Kind == CredentialKind.Psc)
         {
-            Info(StepMode, "PSC tokens with the single_signature scope are spent after one document; use signature_session for batches.");
+            Info(StepMode, L.T("PSC tokens with the single_signature scope are spent after one document; use signature_session for batches."));
         }
 
-        string? policyUnsupported = deferred ? "DeferredSigner has no signature policy option."
-            : batch ? "BatchSigner has no signature policy option." : null;
+        string? policyUnsupported = deferred ? L.T("DeferredSigner has no signature policy option.")
+            : batch ? L.T("BatchSigner has no signature policy option.") : null;
 
         // ── 3. Signature type ──────────────────────────────────────────
         bool pdfA1Preserved = isPdfA1 && o.PreservePdfA && !deferred && !batch;
         Set("kind.Baseline", OptionState.Shown);
         Set("kind.IcpBrasil", policyUnsupported is not null ? OptionState.Off(policyUnsupported)
-            : pdfA1Preserved ? OptionState.Off("ICP-Brasil policies require the PBAD.PAdES sub-filter, which PDF/A-1 does not allow. Turn off PDF/A preservation or use a PDF/A-2 document.")
+            : pdfA1Preserved ? OptionState.Off(L.T("ICP-Brasil policies require the PBAD.PAdES sub-filter, which PDF/A-1 does not allow. Turn off PDF/A preservation or use a PDF/A-2 document."))
             : OptionState.Shown);
         Set("kind.CustomPolicy", policyUnsupported is not null ? OptionState.Off(policyUnsupported) : OptionState.Shown);
 
@@ -135,12 +136,12 @@ public static class Compatibility
         }
 
         bool icp = kind == SignatureKind.IcpBrasil;
-        string adbeOnly = "PAdES B-T and above (ETSI EN 319 142-1) need the ETSI.CAdES.detached sub-filter; this document is PDF/A-1 with preservation on, which only allows adbe.pkcs7.detached.";
+        string adbeOnly = L.T("PAdES B-T and above (ETSI EN 319 142-1) need the ETSI.CAdES.detached sub-filter; this document is PDF/A-1 with preservation on, which only allows adbe.pkcs7.detached.");
         foreach (var level in Enum.GetValues<BaselineLevel>())
         {
             Set($"level.{level}", icp ? OptionState.Hidden
                 : level != BaselineLevel.BB && pdfA1Preserved ? OptionState.Off(adbeOnly)
-                : level != BaselineLevel.BB && o.SubFilter == SubFilterChoice.AdbePkcs7Detached ? OptionState.Off("adbe.pkcs7.detached is a legacy (pre-PAdES) format: B-T and above need ETSI.CAdES.detached. Change the sub-filter in Cryptography.")
+                : level != BaselineLevel.BB && o.SubFilter == SubFilterChoice.AdbePkcs7Detached ? OptionState.Off(L.T("adbe.pkcs7.detached is a legacy (pre-PAdES) format: B-T and above need ETSI.CAdES.detached. Change the sub-filter in Cryptography."))
                 : OptionState.Shown);
         }
 
@@ -152,12 +153,12 @@ public static class Compatibility
         {
             if (string.IsNullOrWhiteSpace(o.CustomPolicy.Oid) || !IsOid(o.CustomPolicy.Oid))
             {
-                Error(StepType, "Custom policy: enter a valid OID (e.g. 2.16.76.1.7.1.11.1.3).");
+                Error(StepType, L.T("Custom policy: enter a valid OID (e.g. 2.16.76.1.7.1.11.1.3)."));
             }
 
             if (!IsHex(o.CustomPolicy.HashHex))
             {
-                Error(StepType, "Custom policy: the policy hash must be hexadecimal (the digest of the policy document).");
+                Error(StepType, L.T("Custom policy: the policy hash must be hexadecimal (the digest of the policy document)."));
             }
         }
 
@@ -180,37 +181,37 @@ public static class Compatibility
         Set("timestamp", needsTsa ? OptionState.Shown : OptionState.Hidden);
         Set("archiveTimestamp", needsArchive ? OptionState.Shown : OptionState.Hidden);
         Set("returnLowerLevel", !needsTsa || icp ? OptionState.Hidden
-            : o.Mode != RunMode.Sign ? OptionState.Off("Only SignWithDetailsAsync (Sign now) reports a lower achieved level; deferred and batch always throw.")
+            : o.Mode != RunMode.Sign ? OptionState.Off(L.T("Only SignWithDetailsAsync (Sign now) reports a lower achieved level; deferred and batch always throw."))
             : OptionState.Shown);
         foreach (var provider in Enum.GetValues<TsaProvider>())
         {
             bool sandboxProvider = provider is TsaProvider.Sandbox or TsaProvider.SandboxAuthenticated;
             Set($"tsa.{provider}", sandbox && !sandboxProvider && provider != TsaProvider.Custom
-                    ? OptionState.Off("The sandbox is offline. Switch to Real to use public TSAs.")
-                : !sandbox && sandboxProvider ? OptionState.Off("Sandbox services exist only in Sandbox mode.")
+                    ? OptionState.Off(L.T("The sandbox is offline. Switch to Real to use public TSAs."))
+                : !sandbox && sandboxProvider ? OptionState.Off(L.T("Sandbox services exist only in Sandbox mode."))
                 : OptionState.Shown);
         }
 
         Set("tsa.clientCertificate", sandbox
-            ? new OptionState(true, Note: "The sandbox TSA does not check TLS client certificates; the option is still passed to TimestampOptions.ClientCertificate.")
+            ? new OptionState(true, Note: L.T("The sandbox TSA does not check TLS client certificates; the option is still passed to TimestampOptions.ClientCertificate."))
             : OptionState.Shown);
         if (needsTsa)
         {
-            CheckTsa(o.Timestamp, "Signature TSA", state, Error, sandbox);
+            CheckTsa(o.Timestamp, L.T("Signature TSA"), state, Error, sandbox);
             if (needsArchive && o.SeparateArchiveTsa)
             {
-                CheckTsa(o.ArchiveTimestamp, "Archive TSA", state, Error, sandbox);
+                CheckTsa(o.ArchiveTimestamp, L.T("Archive TSA"), state, Error, sandbox);
             }
         }
 
         if (icp && o.IcpPolicy == IcpPolicyKind.AdRa && sandbox)
         {
-            Info(StepType, "AD-RA in the sandbox embeds simulated policy artifacts (PA, LPA and LPA signature); in Real mode they are downloaded from the ITI and the LPA signature is checked.");
+            Info(StepType, L.T("AD-RA in the sandbox embeds simulated policy artifacts (PA, LPA and LPA signature); in Real mode they are downloaded from the ITI and the LPA signature is checked."));
         }
 
         if (icp && sandbox)
         {
-            Info(StepType, "Sandbox certificates do not chain to a real ICP-Brasil root, so the policy version is not filtered by root (Real mode picks the newest version that accepts the signer's AC Raiz).");
+            Info(StepType, L.T("Sandbox certificates do not chain to a real ICP-Brasil root, so the policy version is not filtered by root (Real mode picks the newest version that accepts the signer's AC Raiz)."));
         }
 
         // ── 4. Cryptography ────────────────────────────────────────────
@@ -220,38 +221,38 @@ public static class Compatibility
             Set($"hash.{hash}", hashes.Contains(hash) ? OptionState.Shown
                 : credential is null ? OptionState.Shown
                 : OptionState.Off(hash is HashChoice.Sha3_256 or HashChoice.Sha3_384 or HashChoice.Sha3_512 && credential.CanSignHashLocally
-                    ? "SHA-3 is not available in this runtime (needs OpenSSL 1.1.1+ or Windows 11)."
-                    : $"{credential.Kind} signers accept SHA-256, SHA-384 and SHA-512 only."));
+                    ? L.T("SHA-3 is not available in this runtime (needs OpenSSL 1.1.1+ or Windows 11).")
+                    : L.T("{0} signers accept SHA-256, SHA-384 and SHA-512 only.", credential.Kind)));
         }
 
         var effective = o;
         if (credential is not null && !hashes.Contains(o.Hash))
         {
-            Error(StepCrypto, state[$"hash.{o.Hash}"].Disabled ?? "This hash is not available.");
+            Error(StepCrypto, state[$"hash.{o.Hash}"].Disabled ?? L.T("This hash is not available."));
         }
 
         bool isRsa = credential is null || credential.KeyAlgorithm == "RSA";
-        Set("padding", isRsa ? OptionState.Shown : new OptionState(false, Note: "ECDSA keys sign with ECDSA; RSA padding does not apply."));
+        Set("padding", isRsa ? OptionState.Shown : new OptionState(false, Note: L.T("ECDSA keys sign with ECDSA; RSA padding does not apply.")));
         foreach (var padding in Enum.GetValues<RsaPadding>())
         {
             Set($"padding.{padding}", credential is null || credential.Paddings.Contains(padding) ? OptionState.Shown
                 : OptionState.Off(credential.Kind switch
                 {
-                    CredentialKind.Psc => "PSCs only produce RSA PKCS#1 v1.5 signatures.",
-                    CredentialKind.Csc => "This CSC credential does not list the algorithm in its key/algo.",
-                    _ => "Not supported by this key.",
+                    CredentialKind.Psc => L.T("PSCs only produce RSA PKCS#1 v1.5 signatures."),
+                    CredentialKind.Csc => L.T("This CSC credential does not list the algorithm in its key/algo."),
+                    _ => L.T("Not supported by this key."),
                 }));
         }
 
         bool sha3 = o.Hash is HashChoice.Sha3_256 or HashChoice.Sha3_384 or HashChoice.Sha3_512;
         if (sha3 && state["padding.Pss"].Disabled is null)
         {
-            Set("padding.Pss", OptionState.Off("The library supports RSASSA-PSS with SHA-256, SHA-384 and SHA-512 only (salt = hash length)."));
+            Set("padding.Pss", OptionState.Off(L.T("The library supports RSASSA-PSS with SHA-256, SHA-384 and SHA-512 only (salt = hash length).")));
         }
 
         if (isRsa && sha3 && o.Padding == RsaPadding.Pss && credential?.Paddings.Contains(RsaPadding.Pss) == true)
         {
-            Error(StepCrypto, "RSASSA-PSS cannot be combined with a SHA-3 digest: choose SHA-2 or PKCS#1 v1.5.");
+            Error(StepCrypto, L.T("RSASSA-PSS cannot be combined with a SHA-3 digest: choose SHA-2 or PKCS#1 v1.5."));
         }
 
         if (isRsa && credential is not null && !credential.Paddings.Contains(o.Padding))
@@ -264,14 +265,14 @@ public static class Compatibility
             effective = effective with { Padding = RsaPadding.Pkcs1 };
         }
 
-        Set("subFilter", icp ? new OptionState(true, "ICP-Brasil PAdES policies mandate /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES (DOC-ICP-15.03).") : OptionState.Shown);
-        Set("subFilter.EtsiCadesDetached", icp ? OptionState.Off("Fixed by the ICP-Brasil policy.")
-            : pdfA1Preserved ? OptionState.Off("PDF/A-1 (ISO 19005-1) only allows adbe.pkcs7.detached signatures.")
+        Set("subFilter", icp ? new OptionState(true, L.T("ICP-Brasil PAdES policies mandate /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES (DOC-ICP-15.03).")) : OptionState.Shown);
+        Set("subFilter.EtsiCadesDetached", icp ? OptionState.Off(L.T("Fixed by the ICP-Brasil policy."))
+            : pdfA1Preserved ? OptionState.Off(L.T("PDF/A-1 (ISO 19005-1) only allows adbe.pkcs7.detached signatures."))
             : OptionState.Shown);
-        Set("subFilter.AdbePkcs7Detached", icp ? OptionState.Off("Fixed by the ICP-Brasil policy.")
-            : o.Level != BaselineLevel.BB ? OptionState.Off("Legacy PKCS#7: only for B-B. B-T and above need ETSI.CAdES.detached.")
+        Set("subFilter.AdbePkcs7Detached", icp ? OptionState.Off(L.T("Fixed by the ICP-Brasil policy."))
+            : o.Level != BaselineLevel.BB ? OptionState.Off(L.T("Legacy PKCS#7: only for B-B. B-T and above need ETSI.CAdES.detached."))
             : OptionState.Shown);
-        Set("subFilter.PbadPades", OptionState.Off("Set automatically by the ICP-Brasil policies (choose ICP-Brasil in Signature type)."));
+        Set("subFilter.PbadPades", OptionState.Off(L.T("Set automatically by the ICP-Brasil policies (choose ICP-Brasil in Signature type).")));
         effective = effective with
         {
             SubFilter = icp ? SubFilterChoice.PbadPades
@@ -281,64 +282,64 @@ public static class Compatibility
             Level = effectiveLevel,
         };
 
-        Set("pdfa", !isPdfA ? new OptionState(false, Note: "The document is not PDF/A.")
-            : deferred || batch ? OptionState.Off("WithPdfAPreservation is a PadesSignerBuilder option (Sign now only).")
+        Set("pdfa", !isPdfA ? new OptionState(false, Note: L.T("The document is not PDF/A."))
+            : deferred || batch ? OptionState.Off(L.T("WithPdfAPreservation is a PadesSignerBuilder option (Sign now only)."))
             : OptionState.Shown);
         if (isPdfA && !o.PreservePdfA && !deferred && !batch)
         {
-            Info(StepCrypto, "This is a PDF/A document: turn on PDF/A preservation to have the library refuse options that would break conformance.");
+            Info(StepCrypto, L.T("This is a PDF/A document: turn on PDF/A preservation to have the library refuse options that would break conformance."));
         }
 
         Set("contents", OptionState.Shown);
         if (o.ContentsReservedBytes is { } reserved && (reserved < 4096 || reserved > 200_000))
         {
-            Error(StepCrypto, "Reserved /Contents size must be between 4096 and 200000 bytes.");
+            Error(StepCrypto, L.T("Reserved /Contents size must be between 4096 and 200000 bytes."));
         }
 
         // ── 5. Field and appearance ────────────────────────────────────
         Set("field.New", OptionState.Shown);
-        Set("field.Existing", !hasEmptyFields ? new OptionState(false, Note: "The document has no empty signature field.") : OptionState.Shown);
+        Set("field.Existing", !hasEmptyFields ? new OptionState(false, Note: L.T("The document has no empty signature field.")) : OptionState.Shown);
         bool existing = o.FieldMode == FieldMode.Existing && hasEmptyFields;
         if (o.FieldMode == FieldMode.Existing && !hasEmptyFields)
         {
-            Error(StepField, "The document has no empty signature field: choose New field.");
+            Error(StepField, L.T("The document has no empty signature field: choose New field."));
         }
 
         if (existing && (o.ExistingFieldName is null || document?.EmptyFields.Contains(o.ExistingFieldName) != true))
         {
-            Error(StepField, "Choose which empty field to sign.");
+            Error(StepField, L.T("Choose which empty field to sign."));
         }
 
         Set("fieldName", existing ? OptionState.Hidden : OptionState.Shown);
         if (!existing && (string.IsNullOrWhiteSpace(o.FieldName) || o.FieldName.Contains('.', StringComparison.Ordinal)))
         {
-            Error(StepField, "The field name is required and cannot contain '.' (it separates names in a field hierarchy).");
+            Error(StepField, L.T("The field name is required and cannot contain '.' (it separates names in a field hierarchy)."));
         }
 
         if (!existing && document?.Signatures.Any(s => s.FieldName == o.FieldName) == true)
         {
-            Error(StepField, $"The document already has a signature field named '{o.FieldName}'.");
+            Error(StepField, L.T("The document already has a signature field named '{0}'.", o.FieldName));
         }
 
         Set("appearance", OptionState.Shown);
-        Set("appearance.placement", existing ? new OptionState(false, Note: "The stamp is drawn in the existing field's rectangle.") : OptionState.Shown);
+        Set("appearance.placement", existing ? new OptionState(false, Note: L.T("The stamp is drawn in the existing field's rectangle.")) : OptionState.Shown);
         Set("appearance.image", OptionState.Shown);
         if (o.Appearance.Visible && !existing && !o.Appearance.AutoPosition && (o.Appearance.Width is <= 0 || o.Appearance.Height is <= 0))
         {
-            Error(StepField, "The stamp needs a positive width and height.");
+            Error(StepField, L.T("The stamp needs a positive width and height."));
         }
 
         // ── 6. Details ─────────────────────────────────────────────────
-        string? builderOnly = deferred ? "DeferredSigner only takes SignatureFieldOptions (reason, location, contact, signer name)."
-            : batch ? "BatchSigner only takes SignatureFieldOptions (reason, location, contact, signer name)." : null;
+        string? builderOnly = deferred ? L.T("DeferredSigner only takes SignatureFieldOptions (reason, location, contact, signer name).")
+            : batch ? L.T("BatchSigner only takes SignatureFieldOptions (reason, location, contact, signer name).") : null;
         Set("details.basic", OptionState.Shown);
         Set("details.signingTime", builderOnly is not null ? OptionState.Off(builderOnly) : OptionState.Shown);
         Set("details.signer", builderOnly is not null ? OptionState.Off(builderOnly) : OptionState.Shown);
         Set("details.Metadata", OptionState.Shown);
-        Set("details.Aea", icp ? OptionState.Off("AEA (Lei 14.063) is the non-ICP route: an ICP-Brasil signature is already a qualified signature (QES) and carries its own policy.")
-            : kind == SignatureKind.CustomPolicy ? OptionState.Off("AEA writes its own signature-policy-identifier; it cannot be combined with a custom policy.")
+        Set("details.Aea", icp ? OptionState.Off(L.T("AEA (Lei 14.063) is the non-ICP route: an ICP-Brasil signature is already a qualified signature (QES) and carries its own policy."))
+            : kind == SignatureKind.CustomPolicy ? OptionState.Off(L.T("AEA writes its own signature-policy-identifier; it cannot be combined with a custom policy."))
             : OptionState.Shown);
-        Set("metadata.policy", kind != SignatureKind.Baseline ? new OptionState(false, Note: "The signature policy comes from the Signature type step.") : OptionState.Shown);
+        Set("metadata.policy", kind != SignatureKind.Baseline ? new OptionState(false, Note: L.T("The signature policy comes from the Signature type step.")) : OptionState.Shown);
         if (o.UseSignerDetails && builderOnly is null)
         {
             if (o.SignerDetails == SignerDetailsKind.Aea)
@@ -350,47 +351,48 @@ public static class Compatibility
 
                 if (string.IsNullOrWhiteSpace(o.Aea.SignerName))
                 {
-                    Error(StepDetails, "AEA: the signer name is required.");
+                    Error(StepDetails, L.T("AEA: the signer name is required."));
                 }
 
                 if (!IsCpf(o.Aea.Cpf))
                 {
-                    Error(StepDetails, "AEA: enter a valid CPF (11 digits with check digits).");
+                    Error(StepDetails, L.T("AEA: enter a valid CPF (11 digits with check digits)."));
                 }
             }
             else if (string.IsNullOrWhiteSpace(o.Metadata.SignerName))
             {
-                Error(StepDetails, "Signer metadata: the signer name is required.");
+                Error(StepDetails, L.T("Signer metadata: the signer name is required."));
             }
         }
 
-        string? docInfoReason = builderOnly ?? (existing ? "The document information dictionary cannot be changed when signing an existing field." : null);
+        string? docInfoReason = builderOnly ?? (existing ? L.T("The document information dictionary cannot be changed when signing an existing field.") : null);
         Set("documentInfo", docInfoReason is not null ? OptionState.Off(docInfoReason) : OptionState.Shown);
-        Set("health", docInfoReason is not null ? OptionState.Off(docInfoReason.Replace("The document information dictionary", "Health-document metadata (written to the document information dictionary)", StringComparison.Ordinal)) : OptionState.Shown);
+        string? healthReason = builderOnly ?? (existing ? L.T("Health-document metadata is written to the document information dictionary, which cannot be changed when signing an existing field.") : null);
+        Set("health", healthReason is not null ? OptionState.Off(healthReason) : OptionState.Shown);
         if (o.Health.Enabled && docInfoReason is null && o.Health.Professionals.Count == 0)
         {
-            Error(StepDetails, "Health document: add at least one professional registration.");
+            Error(StepDetails, L.T("Health document: add at least one professional registration."));
         }
 
         foreach (var entry in o.DocumentInfo)
         {
             if (string.IsNullOrWhiteSpace(entry.Key) || entry.Key.Any(c => c <= ' ' || c > '~' || "()<>[]{}/%#".Contains(c, StringComparison.Ordinal)))
             {
-                Error(StepDetails, $"Document info key '{entry.Key}' must be printable ASCII without PDF delimiters.");
+                Error(StepDetails, L.T("Document info key '{0}' must be printable ASCII without PDF delimiters.", entry.Key));
             }
         }
 
         foreach (var level in Enum.GetValues<CertificationChoice>().Where(l => l != CertificationChoice.None))
         {
             Set($"certification.{level}", hasSignatures
-                ? OptionState.Off("Only the first signature of a document can certify it (ISO 32000-1 §12.8.2.2); this document is already signed.")
+                ? OptionState.Off(L.T("Only the first signature of a document can certify it (ISO 32000-1 §12.8.2.2); this document is already signed."))
                 : OptionState.Shown);
         }
 
         Set("certification", OptionState.Shown);
         if (o.Certification != CertificationChoice.None && hasSignatures)
         {
-            Error(StepDetails, "The document is already signed: certification is no longer possible.");
+            Error(StepDetails, L.T("The document is already signed: certification is no longer possible."));
         }
 
         Set("operationId", OptionState.Shown);
@@ -398,28 +400,28 @@ public static class Compatibility
         // ── 2. Signer ──────────────────────────────────────────────────
         if (credential is null)
         {
-            Error(StepSigner, "Choose a signer (certificate).");
+            Error(StepSigner, L.T("Choose a signer (certificate)."));
         }
         else
         {
             if (credential.IsExpired)
             {
-                Warn(StepSigner, "The certificate has expired: the signature is made, but validators report it as invalid at signing time.");
+                Warn(StepSigner, L.T("The certificate has expired: the signature is made, but validators report it as invalid at signing time."));
             }
 
             if (credential.IsNotYetValid)
             {
-                Warn(StepSigner, "The certificate is not valid yet: validators report it as invalid at signing time.");
+                Warn(StepSigner, L.T("The certificate is not valid yet: validators report it as invalid at signing time."));
             }
 
             if (!credential.HasNonRepudiation)
             {
-                Warn(StepSigner, "The certificate lacks the nonRepudiation key usage: ICP-Brasil validators warn about it.");
+                Warn(StepSigner, L.T("The certificate lacks the nonRepudiation key usage: ICP-Brasil validators warn about it."));
             }
 
             if (icp && !sandbox && !credential.ChainsToIcpBrasil)
             {
-                Warn(StepType, "The certificate does not chain to an ICP-Brasil root: the signature will carry the policy, but it will not be valid under it.");
+                Warn(StepType, L.T("The certificate does not chain to an ICP-Brasil root: the signature will carry the policy, but it will not be valid under it."));
             }
         }
 
@@ -458,27 +460,27 @@ public static class Compatibility
         {
             if (!Uri.TryCreate(tsa.Url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https" or "tcp"))
             {
-                error(StepType, $"{label}: enter an absolute http://, https:// or tcp:// URL.");
+                error(StepType, L.T("{0}: enter an absolute http://, https:// or tcp:// URL.", label));
             }
             else if (sandbox && !uri.Host.EndsWith(SandboxPki.Host, StringComparison.OrdinalIgnoreCase))
             {
-                error(StepType, $"{label}: the sandbox is offline; only *.{SandboxPki.Host} URLs answer.");
+                error(StepType, L.T("{0}: the sandbox is offline; only *.{1} URLs answer.", label, SandboxPki.Host));
             }
         }
 
         if (tsa.Auth == TsaAuth.Basic && (string.IsNullOrEmpty(tsa.User) || tsa.Password is null))
         {
-            error(StepType, $"{label}: Basic authentication needs a user and a password.");
+            error(StepType, L.T("{0}: Basic authentication needs a user and a password.", label));
         }
 
         if (tsa.Auth == TsaAuth.Bearer && string.IsNullOrWhiteSpace(tsa.Token))
         {
-            error(StepType, $"{label}: Bearer authentication needs a token.");
+            error(StepType, L.T("{0}: Bearer authentication needs a token.", label));
         }
 
         if (tsa.Provider == TsaProvider.SandboxAuthenticated && tsa.Auth != TsaAuth.Basic)
         {
-            error(StepType, $"{label}: the authenticated sandbox TSA needs Basic authentication ({SandboxPki.TsaUser} / {SandboxPki.TsaPassword}).");
+            error(StepType, L.T("{0}: the authenticated sandbox TSA needs Basic authentication ({1} / {2}).", label, SandboxPki.TsaUser, SandboxPki.TsaPassword));
         }
     }
 

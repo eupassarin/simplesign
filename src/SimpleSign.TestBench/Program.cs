@@ -61,6 +61,15 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// The UI sends Accept-Language with the language the user picked (en-US, pt-BR or es).
+app.UseRequestLocalization(o =>
+{
+    o.SetDefaultCulture("en-US");
+    o.AddSupportedCultures(SimpleSign.TestBench.Localization.L.Cultures);
+    o.AddSupportedUICultures(SimpleSign.TestBench.Localization.L.Cultures);
+    o.FallBackToParentUICultures = true;
+});
+
 Api.Map(app);
 
 // The UI: the project's web/dist when running from bin/ (so `npm run build` is picked up without

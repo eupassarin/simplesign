@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import * as pdfjs from "pdfjs-dist"
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/i18n"
 import { cn } from "@/lib/utils"
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
@@ -39,6 +40,7 @@ export function PdfPreview({
   const [doc, setDoc] = useState<pdfjs.PDFDocumentProxy | null>(null)
   const [size, setSize] = useState<{ width: number; height: number; scale: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const t = useT()
 
   useEffect(() => {
     let cancelled = false
@@ -86,7 +88,7 @@ export function PdfPreview({
   return (
     <div className="space-y-2">
       <div className="bg-muted/40 relative mx-auto w-fit overflow-hidden rounded-md border shadow-sm">
-        {error && <p className="text-destructive p-6 text-sm">Could not render the PDF: {error}</p>}
+        {error && <p className="text-destructive p-6 text-sm">{t("preview.error", { error })}</p>}
         <canvas
           ref={canvas}
           className={cn("block bg-white", onPlace && "cursor-crosshair")}
@@ -120,7 +122,7 @@ export function PdfPreview({
           <Button variant="ghost" size="icon" className="size-7" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
             <ChevronLeft />
           </Button>
-          Page {page} of {pageCount}
+          {t("preview.page", { page, total: pageCount })}
           <Button variant="ghost" size="icon" className="size-7" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)}>
             <ChevronRight />
           </Button>

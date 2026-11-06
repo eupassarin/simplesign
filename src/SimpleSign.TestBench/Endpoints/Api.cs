@@ -4,6 +4,7 @@ using SimpleSign.Brasil.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
+using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Matrix;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
@@ -46,19 +47,19 @@ internal static class Api
         var api = app.MapGroup("/api");
 
         api.MapGet("/env", (SandboxEnvironment sandbox) => new EnvironmentView(
-            [.. sandbox.Pki.Signers.Select(s => new SandboxSignerView(s.Id, s.Title, s.Description, s.KeyType.ToString(), s.IsUsable, s.Problem,
+            [.. sandbox.Pki.Signers.Select(s => new SandboxSignerView(s.Id, L.T(s.Title), L.T(s.Description), s.KeyType.ToString(), s.IsUsable, s.Problem is null ? null : L.T(s.Problem),
                 s.Certificate.GetNameInfo(System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false),
                 s.Certificate.NotAfter.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)))],
             SandboxPki.TsaUri.AbsoluteUri, SandboxPki.AuthenticatedTsaUri.AbsoluteUri, SandboxPki.TsaUser, SandboxPki.TsaPassword,
             SandboxPsc.BaseUri.AbsoluteUri, sandbox.Psc.Cpf, SandboxPsc.Otp,
             SandboxCsc.BaseUri.AbsoluteUri, SandboxCsc.Pin, SandboxCsc.Otp,
-            [.. sandbox.Csc.Credentials.Select(c => new CscCredentialSummary(c.Id, c.Description, c.AuthMode, c.Scal, c.MultiSign, c.Algorithms, true))],
+            [.. sandbox.Csc.Credentials.Select(c => new CscCredentialSummary(c.Id, L.T(c.Description), c.AuthMode, c.Scal, c.MultiSign, c.Algorithms, true))],
             System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + " · " + System.Runtime.InteropServices.RuntimeInformation.OSDescription,
             SHA3_256.IsSupported,
             typeof(PadesSigner).Assembly.GetName().Version?.ToString(3) ?? "?"));
 
         api.MapGet("/sandbox/log", (SandboxEnvironment sandbox) => sandbox.Network.Log.Reverse().Take(100));
-        api.MapGet("/catalog", () => OptionCatalog.All);
+        api.MapGet("/catalog", () => OptionCatalog.Localized());
 
         // Documents and uploads
         api.MapGet("/documents/samples", async (DocumentStore store, CancellationToken ct) =>
@@ -67,7 +68,7 @@ internal static class Api
             foreach (var sample in store.Samples)
             {
                 var facts = await store.FactsAsync(DocumentStore.SampleKey(sample.Id), ct);
-                result.Add(new { sample.Id, sample.Title, sample.Description, Facts = facts });
+                result.Add(new { sample.Id, Title = L.T(sample.Title), Description = L.T(sample.Description), Facts = facts with { Title = L.T(facts.Title) } });
             }
 
             return result;
@@ -75,12 +76,12 @@ internal static class Api
         api.MapPost("/documents", async (HttpRequest request, DocumentStore store, CancellationToken ct) =>
         {
             var file = await ReadUploadAsync(request, store, ct);
-            return file is null ? Results.BadRequest(new { error = "Send the PDF as multipart/form-data (field 'file')." }) : Results.Ok(await store.FactsAsync(file.Id, ct));
+            return file is null ? Results.BadRequest(new { error = L.T("Send the PDF as multipart/form-data (field 'file').") }) : Results.Ok(await store.FactsAsync(file.Id, ct));
         }).DisableAntiforgery();
         api.MapPost("/uploads", async (HttpRequest request, DocumentStore store, CancellationToken ct) =>
         {
             var file = await ReadUploadAsync(request, store, ct);
-            return file is null ? Results.BadRequest(new { error = "Send the file as multipart/form-data (field 'file')." }) : Results.Ok(new UploadView(file.Id, file.FileName, file.Content.Length));
+            return file is null ? Results.BadRequest(new { error = L.T("Send the file as multipart/form-data (field 'file').") }) : Results.Ok(new UploadView(file.Id, file.FileName, file.Content.Length));
         }).DisableAntiforgery();
         api.MapGet("/documents/{id}/facts", async (string id, DocumentStore store, CancellationToken ct) => await store.FactsAsync(id, ct));
         api.MapGet("/files/{id}", (string id, bool? download, DocumentStore store) =>
@@ -233,10 +234,10 @@ internal static class Api
         var now = DateTimeOffset.UtcNow;
         string[] requirements = policy switch
         {
-            IcpBrasilPolicy.AdRb => ["Signature dictionary /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES (2.16.76.1.8.1)", "signature-policy-identifier with the PA hash", "signing-certificate-v2"],
-            IcpBrasilPolicy.AdRt => ["Everything in AD-RB", "signature-time-stamp from an ICP-Brasil ACT"],
-            IcpBrasilPolicy.AdRc => ["Everything in AD-RT", "DSS with Certs and CRLs or OCSPs, and a VRI entry for the signature (2.16.76.1.8.2)", "A later document timestamp /ETSI.RFC3161 (2.16.76.1.8.3)"],
-            _ => ["Everything in AD-RC", "DSS arrays PBAD_PolicyArtifacts, PBAD_LpaArtifacts, PBAD_LpaSignatures and the matching VRI entries"],
+            IcpBrasilPolicy.AdRb => [L.T("Signature dictionary /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES (2.16.76.1.8.1)"), L.T("signature-policy-identifier with the PA hash"), L.T("signing-certificate-v2")],
+            IcpBrasilPolicy.AdRt => [L.T("Everything in AD-RB"), L.T("signature-time-stamp from an ICP-Brasil ACT")],
+            IcpBrasilPolicy.AdRc => [L.T("Everything in AD-RT"), L.T("DSS with Certs and CRLs or OCSPs, and a VRI entry for the signature (2.16.76.1.8.2)"), L.T("A later document timestamp /ETSI.RFC3161 (2.16.76.1.8.3)")],
+            _ => [L.T("Everything in AD-RC"), L.T("DSS arrays PBAD_PolicyArtifacts, PBAD_LpaArtifacts, PBAD_LpaSignatures and the matching VRI entries")],
         };
         return [.. IcpBrasilSignaturePolicies.All
             .Where(p => p.Info.Format == IcpBrasilPolicyFormat.Pades && p.Info.Policy == policy)
@@ -246,12 +247,12 @@ internal static class Api
                 IcpBrasilSignaturePolicies.TryGetRules(p.Oid, out var rules);
                 bool inForce = p.IsValidAt(now);
                 string? disabled = !inForce
-                    ? p.RevokedAt is { } revoked && revoked <= now ? $"Revoked by the ITI on {revoked:yyyy-MM-dd}." : $"Signing period {p.NotBefore:yyyy-MM-dd} – {p.NotAfter:yyyy-MM-dd} is over."
+                    ? p.RevokedAt is { } revoked && revoked <= now ? L.T("Revoked by the ITI on {0:yyyy-MM-dd}.", revoked) : L.T("Signing period {0:yyyy-MM-dd} – {1:yyyy-MM-dd} is over.", p.NotBefore, p.NotAfter)
                     : null;
                 if (disabled is null && credential is { Facts.ChainsToIcpBrasil: true } && automatic is not null && rules is not null
                     && credential.Chain.LastOrDefault() is { } root && !rules.AcceptsRoot(root))
                 {
-                    disabled = "This version does not accept the signer's AC Raiz.";
+                    disabled = L.T("This version does not accept the signer's AC Raiz.");
                 }
 
                 return new IcpVersionView(p.Oid, p.Info.Version ?? "?", p.NotBefore.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),

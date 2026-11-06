@@ -10,11 +10,12 @@ using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
+using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Sandbox;
 
 namespace SimpleSign.TestBench.Signing;
 
-public sealed record CheckRow(string Name, string Status, string? Detail);
+public sealed record CheckRow(string Id, string Name, string Status, string? Detail);
 
 /// <summary>One signature of the validation report.</summary>
 public sealed record SignatureReport(
@@ -83,7 +84,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         var empty = new CodeSnippets("", "", []);
         if (!report.CanSign)
         {
-            return Failure(report, "The options are not compatible; fix the errors listed for each step.", "Compatibility", empty);
+            return Failure(report, L.T("The options are not compatible; fix the errors listed for each step."), "Compatibility", empty);
         }
 
         var effective = report.Effective;
@@ -204,13 +205,13 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         items.Sort((a, b) => string.CompareOrdinal(a.Id, b.Id));
         if (first is null)
         {
-            return Failure(report, "Every document of the batch failed: " + items.FirstOrDefault()?.Error, "BatchFailure", code) with { Batch = items };
+            return Failure(report, L.T("Every document of the batch failed: {0}", items.FirstOrDefault()?.Error), "BatchFailure", code) with { Batch = items };
         }
 
         var level = plan.Profile!.Level;
         var result = await FinishAsync(o, report, code, first, LevelName(level, o), level >= AdesBaselineLevel.Timestamped,
             level >= AdesBaselineLevel.LongTerm, level >= AdesBaselineLevel.Archive,
-            [$"Batch: {batch.SuccessCount} signed, {batch.FailureCount} failed, {batch.AverageElapsedMs:0} ms average per document. The report below validates the first one."],
+            [L.T("Batch: {0} signed, {1} failed, {2:0} ms average per document. The report below validates the first one.", batch.SuccessCount, batch.FailureCount, batch.AverageElapsedMs)],
             signMs, null, items, cancellationToken);
         return result;
 
@@ -264,11 +265,11 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
         var checks = new List<CheckRow>
         {
-            new("Integrity (ByteRange digest)", Status(r.IsIntegrityValid), "The signed bytes were not changed after signing."),
-            new("Signature value", Status(r.IsSignatureValid), r.DigestAlgorithmName is { } digest ? $"Digest {digest}." : null),
-            new("Certificate chain", r.IsChainTrustWarning ? "warn" : Status(r.IsCertificateChainValid), r.ChainValidationRegion),
-            new("Revocation", Status(r.IsNotRevoked), r.RevocationSource.ToString()),
-            new("Signature timestamp", Status(r.HasValidTimestamp), r.IsTsaTrusted is { } trusted ? (trusted ? "TSA trusted." : "TSA not trusted.") : null),
+            new("integrity", L.T("Integrity (ByteRange digest)"), Status(r.IsIntegrityValid), L.T("The signed bytes were not changed after signing.")),
+            new("signature", L.T("Signature value"), Status(r.IsSignatureValid), r.DigestAlgorithmName is { } digest ? L.T("Digest {0}.", digest) : null),
+            new("chain", L.T("Certificate chain"), r.IsChainTrustWarning ? "warn" : Status(r.IsCertificateChainValid), r.ChainValidationRegion),
+            new("revocation", L.T("Revocation"), Status(r.IsNotRevoked), r.RevocationSource.ToString()),
+            new("timestamp", L.T("Signature timestamp"), Status(r.HasValidTimestamp), r.IsTsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
         };
         return new SignatureReport(
             r.FieldName, r.Indication.ToString(), r.IsDocumentTimestamp,
