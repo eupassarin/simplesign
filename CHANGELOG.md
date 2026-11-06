@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- CAdES: `WithExtendedValidationData` combined with B-LT or B-LTA. The extended form was applied
+  before the B-LT certificate and revocation values, so with `CadesExtendedForm.Archive` the
+  archive-time-stamp v2 did not cover them (B-LT: the signature failed validation; B-LTA: signing
+  threw because the archive-time-stamp-v3 did not validate). The extended form now goes after the
+  LT values and before the archive-time-stamp-v3; every form works on B-T, B-LT and B-LTA.
+
 ### Security
 
 - `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
