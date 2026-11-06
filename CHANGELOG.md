@@ -43,6 +43,11 @@ with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `Simple
 
 ### Fixed
 
+- HtmlToPdf: deeply nested HTML crashed the process with a stack overflow. Layout recurses once
+  or more per nesting level, and the 256 levels the parser allows overflowed small thread stacks
+  (512 KiB for .NET 8 secondary threads on macOS; flex, inline-block, float and list nesting
+  already at about 128 levels). Layout now checks the remaining stack and, when it runs low,
+  continues on a fresh thread-pool stack, so the document renders in full on any thread.
 - CAdES: `WithExtendedValidationData` combined with B-LT or B-LTA. The extended form was applied
   before the B-LT certificate and revocation values, so with `CadesExtendedForm.Archive` the
   archive-time-stamp v2 did not cover them (B-LT: the signature failed validation; B-LTA: signing
