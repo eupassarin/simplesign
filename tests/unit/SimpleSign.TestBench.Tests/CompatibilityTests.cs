@@ -115,6 +115,15 @@ public sealed class CompatibilityTests
     }
 
     [Fact]
+    public void Evaluate_PssWithSha3_IsRefused()
+    {
+        var report = Compatibility.Evaluate(new SigningOptions { Padding = RsaPadding.Pss, Hash = HashChoice.Sha3_256 }, Plain, Rsa);
+
+        report.Options["padding.Pss"].Disabled.ShouldNotBeNull();
+        report.CanSign.ShouldBeFalse();
+    }
+
+    [Fact]
     public void Evaluate_PssOnlyCredential_ForcesPss()
     {
         var report = Compatibility.Evaluate(new SigningOptions(), Plain, Credential("RSA", [RsaPadding.Pss], CredentialKind.Csc));

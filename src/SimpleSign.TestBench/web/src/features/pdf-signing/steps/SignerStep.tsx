@@ -274,7 +274,7 @@ function PscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
           <Input value={form.alias} onChange={(e) => set({ alias: e.target.value })} placeholder={sandbox ? "maria-rsa2048" : ""} />
         </Field>
       </div>
-      <Button className="w-fit" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.psc(environment, { ...form, otp: form.otp || undefined })))}>
+      <Button className="w-fit" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.psc(environment, form.flow === "Password" ? "password" : "browser", { ...form, otp: form.otp || undefined })))}>
         {busy && <Loader2 className="animate-spin" />} Authorize and load certificate
       </Button>
     </div>

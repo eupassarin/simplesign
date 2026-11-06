@@ -18,17 +18,8 @@ public sealed record StoreCredentialRequest(string Thumbprint);
 
 public sealed record Pkcs11CredentialRequest(string LibraryPath, string? TokenSerial, string? CertificateThumbprint, string? Pin, bool UsePinPad);
 
-public enum PscFlow
-{
-    /// <summary>OAuth authorization code + PKCE: the user logs in on the provider's page.</summary>
-    Browser,
-
-    /// <summary>CPF + OTP (password grant), for providers that offer it.</summary>
-    Password,
-}
-
 public sealed record PscCredentialRequest(
-    string? BaseUrl, string? ClientId, string? ClientSecret, PscFlow Flow, string? Cpf, string? Otp,
+    string? BaseUrl, string? ClientId, string? ClientSecret, string? Cpf, string? Otp,
     PscScope Scope = PscScope.SignatureSession, string? Alias = null, string? RedirectUri = null);
 
 public enum CscServiceAuth
@@ -153,9 +144,28 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
                 "RSASSA-PSS needs the token to support CKM_RSA_PKCS_PSS; many ICP-Brasil tokens only do PKCS#1 v1.5."]);
     }
 
-    public async Task<CredentialHandle> OpenPscAsync(PscCredentialRequest request, EnvironmentMode mode, CancellationToken cancellationToken)
+    /// <summary>PSC with OAuth authorization code + PKCE: the user logs in on the provider's page.</summary>
+    public async Task<CredentialHandle> OpenPscBrowserAsync(PscCredentialRequest request, EnvironmentMode mode, CancellationToken cancellationToken)
     {
         bool isSandbox = mode == EnvironmentMode.Sandbox;
+        var client = PscClient(request, isSandbox);
+        var token = await client.AuthorizeAsync(isSandbox ? sandbox.Psc : new LoopbackAuthorizationHandler(),
+            request.Scope, TimeSpan.FromMinutes(30), loginHint: request.Cpf, cancellationToken);
+        return await PscHandleAsync(client, token, request, isSandbox, cancellationToken);
+    }
+
+    /// <summary>PSC with CPF + OTP (password grant).</summary>
+    public async Task<CredentialHandle> OpenPscPasswordAsync(PscCredentialRequest request, EnvironmentMode mode, CancellationToken cancellationToken)
+    {
+        bool isSandbox = mode == EnvironmentMode.Sandbox;
+        var client = PscClient(request, isSandbox);
+        var token = await client.PasswordAuthorizeAsync(isSandbox ? sandbox.Psc.Cpf : Required(request.Cpf, "CPF"),
+            isSandbox ? request.Otp ?? SandboxPsc.Otp : Required(request.Otp, "OTP"), request.Scope, TimeSpan.FromMinutes(30), cancellationToken);
+        return await PscHandleAsync(client, token, request, isSandbox, cancellationToken);
+    }
+
+    private PscClient PscClient(PscCredentialRequest request, bool isSandbox)
+    {
         var options = new PscClientOptions
         {
             BaseUri = isSandbox ? SandboxPsc.BaseUri : new Uri(Required(request.BaseUrl, "PSC base URL")),
@@ -163,12 +173,11 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
             ClientSecret = isSandbox ? SandboxPsc.ClientSecret : request.ClientSecret,
             RedirectUri = request.RedirectUri is { Length: > 0 } redirect ? new Uri(redirect) : new Uri("http://127.0.0.1:43821/callback"),
         };
-        var client = new PscClient(options, isSandbox ? sandbox.Network.GetClient() : null);
-        OAuthToken token = request.Flow == PscFlow.Password
-            ? await client.PasswordAuthorizeAsync(isSandbox ? sandbox.Psc.Cpf : Required(request.Cpf, "CPF"),
-                isSandbox ? request.Otp ?? SandboxPsc.Otp : Required(request.Otp, "OTP"), request.Scope, TimeSpan.FromMinutes(30), cancellationToken)
-            : await client.AuthorizeAsync(isSandbox ? sandbox.Psc : new LoopbackAuthorizationHandler(),
-                request.Scope, TimeSpan.FromMinutes(30), loginHint: request.Cpf, cancellationToken);
+        return new PscClient(options, isSandbox ? sandbox.Network.GetClient() : null);
+    }
+
+    private async Task<CredentialHandle> PscHandleAsync(PscClient client, OAuthToken token, PscCredentialRequest request, bool isSandbox, CancellationToken cancellationToken)
+    {
         var signer = await PscSigner.CreateAsync(client, token, string.IsNullOrWhiteSpace(request.Alias) ? null : request.Alias, cancellationToken: cancellationToken);
         var notes = new List<string>
         {
@@ -185,7 +194,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
             notes.Insert(0, "Simulated PSC: the provider's login page is approved automatically (OTP 123456 for the CPF + OTP flow).");
         }
 
-        return new CredentialHandle(CredentialKind.Psc, $"PSC · {options.BaseUri.Host} · {signer.CertificateAlias}", signer.Certificate,
+        return new CredentialHandle(CredentialKind.Psc, $"PSC · {client.Options.BaseUri.Host} · {signer.CertificateAlias}", signer.Certificate,
             isSandbox ? sandbox.Pki.Chain : signer.Chain, signer, signer, hashes: Sha2, paddings: [RsaPadding.Pkcs1], notes: notes);
     }
 

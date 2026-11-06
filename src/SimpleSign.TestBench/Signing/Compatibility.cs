@@ -219,7 +219,7 @@ public static class Compatibility
         {
             Set($"hash.{hash}", hashes.Contains(hash) ? OptionState.Shown
                 : credential is null ? OptionState.Shown
-                : OptionState.Off(hash.ToString().StartsWith("Sha3", StringComparison.Ordinal) && credential.CanSignHashLocally
+                : OptionState.Off(hash is HashChoice.Sha3_256 or HashChoice.Sha3_384 or HashChoice.Sha3_512 && credential.CanSignHashLocally
                     ? "SHA-3 is not available in this runtime (needs OpenSSL 1.1.1+ or Windows 11)."
                     : $"{credential.Kind} signers accept SHA-256, SHA-384 and SHA-512 only."));
         }
@@ -241,6 +241,17 @@ public static class Compatibility
                     CredentialKind.Csc => "This CSC credential does not list the algorithm in its key/algo.",
                     _ => "Not supported by this key.",
                 }));
+        }
+
+        bool sha3 = o.Hash is HashChoice.Sha3_256 or HashChoice.Sha3_384 or HashChoice.Sha3_512;
+        if (sha3 && state["padding.Pss"].Disabled is null)
+        {
+            Set("padding.Pss", OptionState.Off("The library supports RSASSA-PSS with SHA-256, SHA-384 and SHA-512 only (salt = hash length)."));
+        }
+
+        if (isRsa && sha3 && o.Padding == RsaPadding.Pss && credential?.Paddings.Contains(RsaPadding.Pss) == true)
+        {
+            Error(StepCrypto, "RSASSA-PSS cannot be combined with a SHA-3 digest: choose SHA-2 or PKCS#1 v1.5.");
         }
 
         if (isRsa && credential is not null && !credential.Paddings.Contains(o.Padding))

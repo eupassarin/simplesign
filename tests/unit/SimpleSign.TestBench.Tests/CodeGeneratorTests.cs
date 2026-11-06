@@ -13,6 +13,7 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
     {
         var result = await fixture.Runner.RunAsync(fixture.Options() with { Level = BaselineLevel.BLT, Padding = RsaPadding.Pss, Hash = HashChoice.Sha384 }, default);
 
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
         result.Code.CSharp.ShouldContain("AdesBaselineProfile.LongTerm(tsa, new LongTermValidationOptions(sandboxHttp))");
         result.Code.CSharp.ShouldContain(".WithSignatureAlgorithm(Oids.RsaPss)");
         result.Code.CSharp.ShouldContain(".WithHashAlgorithm(HashAlgorithmName.SHA384)");

@@ -66,8 +66,8 @@ export const api = {
     pkcs11: () => request<Pkcs11Driver[]>("GET", "/api/credentials/pkcs11"),
     openPkcs11: (body: { libraryPath: string; tokenSerial?: string; certificateThumbprint?: string; pin?: string; usePinPad: boolean }) =>
       request<CredentialFacts>("POST", "/api/credentials/pkcs11", body),
-    psc: (environment: EnvironmentMode, body: Record<string, unknown>) =>
-      request<CredentialFacts>("POST", `/api/credentials/psc?environment=${environment}`, body),
+    psc: (environment: EnvironmentMode, flow: "browser" | "password", body: Record<string, unknown>) =>
+      request<CredentialFacts>("POST", `/api/credentials/psc/${flow}?environment=${environment}`, body),
     cscList: (environment: EnvironmentMode, body: Record<string, unknown>) =>
       request<CscCredentialSummary[]>("POST", `/api/credentials/csc/list?environment=${environment}`, body),
     csc: (environment: EnvironmentMode, body: Record<string, unknown>) =>

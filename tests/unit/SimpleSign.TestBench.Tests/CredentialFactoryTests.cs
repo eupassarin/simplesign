@@ -11,12 +11,14 @@ namespace SimpleSign.TestBench.Tests;
 public sealed class CredentialFactoryTests(TestBenchFixture fixture)
 {
     [Theory]
-    [InlineData(PscFlow.Browser)]
-    [InlineData(PscFlow.Password)]
-    public async Task OpenPscAsync_SandboxFlow_SignsAndValidates(PscFlow flow)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OpenPscAsync_SandboxFlow_SignsAndValidates(bool password)
     {
-        var handle = fixture.Credentials.Add(await fixture.Factory.OpenPscAsync(
-            new PscCredentialRequest(null, null, null, flow, null, SandboxPsc.Otp, PscScope.SignatureSession, "maria-rsa2048"), EnvironmentMode.Sandbox, default));
+        var request = new PscCredentialRequest(null, null, null, null, SandboxPsc.Otp, PscScope.SignatureSession, "maria-rsa2048");
+        var handle = fixture.Credentials.Add(password
+            ? await fixture.Factory.OpenPscPasswordAsync(request, EnvironmentMode.Sandbox, default)
+            : await fixture.Factory.OpenPscBrowserAsync(request, EnvironmentMode.Sandbox, default));
 
         handle.Facts.Paddings.ShouldBe([RsaPadding.Pkcs1]);
         var result = await fixture.Runner.RunAsync(fixture.Options() with { CredentialId = handle.Id, Level = BaselineLevel.BT }, default);

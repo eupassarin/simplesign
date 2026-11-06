@@ -105,8 +105,10 @@ internal static class Api
         credentials.MapPost("/store", (StoreCredentialRequest body, CredentialStore store) => Open(store, () => CredentialFactory.OpenStore(body)));
         credentials.MapGet("/pkcs11", async (CancellationToken ct) => await CredentialFactory.ListTokensAsync(ct));
         credentials.MapPost("/pkcs11", (Pkcs11CredentialRequest body, CredentialStore store) => Open(store, () => CredentialFactory.OpenPkcs11(body)));
-        credentials.MapPost("/psc", async (PscCredentialRequest body, EnvironmentMode? environment, CredentialFactory factory, CredentialStore store, CancellationToken ct) =>
-            await OpenAsync(store, () => factory.OpenPscAsync(body, environment ?? EnvironmentMode.Sandbox, ct)));
+        credentials.MapPost("/psc/browser", async (PscCredentialRequest body, EnvironmentMode? environment, CredentialFactory factory, CredentialStore store, CancellationToken ct) =>
+            await OpenAsync(store, () => factory.OpenPscBrowserAsync(body, environment ?? EnvironmentMode.Sandbox, ct)));
+        credentials.MapPost("/psc/password", async (PscCredentialRequest body, EnvironmentMode? environment, CredentialFactory factory, CredentialStore store, CancellationToken ct) =>
+            await OpenAsync(store, () => factory.OpenPscPasswordAsync(body, environment ?? EnvironmentMode.Sandbox, ct)));
         credentials.MapPost("/csc/list", async (CscCredentialListRequest body, EnvironmentMode? environment, CredentialFactory factory, CancellationToken ct) =>
         {
             try
