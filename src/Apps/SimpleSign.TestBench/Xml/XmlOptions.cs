@@ -87,6 +87,9 @@ public sealed record XmlOptions
 
     public HashChoice Hash { get; init; } = HashChoice.Sha256;
 
+    /// <summary>The checks run before signing: Default, Strict (adds chain revocation) or Minimal.</summary>
+    public SigningPolicyChoice SigningPolicy { get; init; }
+
     public RsaPadding Padding { get; init; } = RsaPadding.Pkcs1;
 
     /// <summary>Countersign a signature of the document instead of signing the document.</summary>

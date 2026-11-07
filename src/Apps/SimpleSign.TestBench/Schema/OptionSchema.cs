@@ -148,7 +148,7 @@ public static partial class OptionSchema
             "available", R("DOC-ICP-15.03|Signature policy requirements", "Lei 14.063/2020|Electronic signatures with public bodies", "MP 2.200-2/2001|ICP-Brasil")),
         new("eidas", "European Union (eIDAS)", "Qualified signatures and EU trusted lists. Planned.",
             "planned", R("Regulation (EU) 910/2014|eIDAS", "ETSI TS 119 612|Trusted lists")),
-        new("iofe", "Peru (IOFE)", "The Peruvian official electronic signature infrastructure. Planned.",
+        new("iofe", "Peru (IOFE)", "The Peruvian official electronic signature infrastructure: the library package SimpleSign.Peru.Iofe exists (INDECOPI trusted list and policies); here only its validation policy is offered.",
             "planned", R("Ley 27269|Ley de Firmas y Certificados Digitales")),
     ];
 

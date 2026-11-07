@@ -255,11 +255,11 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
     [InlineData("v-changed-data")]
     [InlineData("v-tampered")]
     [InlineData("v-untrusted")]
-    public void Validate_Sample_MatchesItsExpectedResult(string id)
+    public async Task Validate_Sample_MatchesItsExpectedResult(string id)
     {
         var sample = fixture.CadesSamples.Single(s => s.Id == id);
 
-        var view = fixture.Cades.Validate(sample.FileId, sample.DataId, new SimpleSign.TestBench.Validation.ValidationSettings());
+        var view = await fixture.Cades.ValidateAsync(sample.FileId, sample.DataId, new SimpleSign.TestBench.Validation.ValidationSettings());
 
         view.Overall.ShouldBe(sample.ExpectedIndication, string.Join("; ", view.Signers.SelectMany(s => s.Errors).Concat(view.Errors)));
         if (sample.ExpectedCheck is { } check and not "—")

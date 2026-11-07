@@ -17,7 +17,7 @@ export function SignatureList({ view }: { view: XmlValidationView }) {
             {s.cnpj && <Pill tone="info">CNPJ {s.cnpj}</Pill>}
             {s.level && <Pill>{s.level}</Pill>}
             {s.reference && <span className="text-muted-foreground font-mono text-xs">{s.reference}</span>}
-            <span className="ml-auto"><Indication value={s.indication} /></span>
+            <span className="ml-auto"><Indication value={s.indication} subIndication={s.subIndication} /></span>
           </div>
           <div className="divide-y px-4">
             {s.checks.map((c) => (

@@ -129,6 +129,7 @@ export interface RunVerdict {
   warnings: string[]
   children: RunVerdict[]
   isTimestamp?: boolean
+  subIndication?: string | null
 }
 
 export interface DssSignature {

@@ -81,6 +81,12 @@ internal sealed class SigningPlan
             steps.Add(new($".WithHashAlgorithm(HashAlgorithmName.{HashName(_o.Hash)})", b => b.WithHashAlgorithm(HashAlgorithm)));
         }
 
+        if (_o.SigningPolicy != SigningPolicyChoice.Default)
+        {
+            var policy = ToSigningPolicy(_o.SigningPolicy);
+            steps.Add(new(SigningPolicyCode(_o.SigningPolicy), b => b.WithSigningPolicy(policy)));
+        }
+
         if (SignatureAlgorithmOid is { } oid)
         {
             steps.Add(new(".WithSignatureAlgorithm(Oids.RsaPss) // RSASSA-PSS, salt = hash length", b => b.WithSignatureAlgorithm(oid)));
@@ -578,6 +584,21 @@ internal sealed class SigningPlan
     };
 
     internal static string HashName(HashChoice hash) => ToHash(hash).Name!;
+
+    /// <summary>The library policy of a choice.</summary>
+    internal static SigningPolicy ToSigningPolicy(SigningPolicyChoice choice) => choice switch
+    {
+        SigningPolicyChoice.Strict => SigningPolicy.Strict,
+        SigningPolicyChoice.Minimal => SigningPolicy.Minimal,
+        _ => SigningPolicy.Default,
+    };
+
+    /// <summary>The builder call of a policy choice other than the default.</summary>
+    internal static string SigningPolicyCode(SigningPolicyChoice choice) => choice switch
+    {
+        SigningPolicyChoice.Strict => ".WithSigningPolicy(SigningPolicy.Strict) // also checks the revocation of the chain",
+        _ => ".WithSigningPolicy(SigningPolicy.Minimal) // only the signing certificate's dates",
+    };
 
     private static string HashOid(HashChoice hash) => hash switch
     {

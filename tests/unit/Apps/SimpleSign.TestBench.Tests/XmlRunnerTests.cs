@@ -198,7 +198,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--external-object \"termos.txt=termos.txt\"");
         result.Code.Cli.ShouldContain("--data-objects-timestamp");
         // Without the external file the same signature cannot be verified.
-        fixture.Xml.Validate(result.OutputId!, form == XadesFormChoice.Detached ? options.DataId : null, new SimpleSign.TestBench.Validation.ValidationSettings())
+        (await fixture.Xml.ValidateAsync(result.OutputId!, form == XadesFormChoice.Detached ? options.DataId : null, new SimpleSign.TestBench.Validation.ValidationSettings()))
             .Overall.ShouldNotBe("Valid");
     }
 
@@ -288,11 +288,11 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
     [InlineData("v-nfe-changed")]
     [InlineData("v-tampered")]
     [InlineData("v-untrusted")]
-    public void Validate_Sample_MatchesItsExpectedResult(string id)
+    public async Task Validate_Sample_MatchesItsExpectedResult(string id)
     {
         var sample = Sample(id);
 
-        var view = fixture.Xml.Validate(sample.FileId, sample.DataId, new SimpleSign.TestBench.Validation.ValidationSettings());
+        var view = await fixture.Xml.ValidateAsync(sample.FileId, sample.DataId, new SimpleSign.TestBench.Validation.ValidationSettings());
 
         view.Mode.ShouldBe(sample.Mode);
         view.Overall.ShouldBe(sample.ExpectedIndication, string.Join("; ", view.Signatures.SelectMany(s => s.Errors).Concat(view.Errors)));

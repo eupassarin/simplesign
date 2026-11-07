@@ -24,7 +24,8 @@ public sealed record CadesSignerReport(
     IReadOnlyList<CheckRow> Checks,
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
-    IReadOnlyList<CadesSignerReport> CounterSignatures);
+    IReadOnlyList<CadesSignerReport> CounterSignatures,
+    string? SubIndication = null);
 
 /// <summary>The result of <c>CadesSignatureValidator.ValidateAll</c>, for the UI.</summary>
 public sealed record CadesValidationView(
@@ -115,7 +116,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return Failure(o, report, ex.Message, ex.GetType().Name, code);
+            return Failure(o, report, ex.Message, SigningRunner.ErrorTypeOf(ex), code);
         }
 
         long signMs = watch.ElapsedMilliseconds;
@@ -125,7 +126,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         // Detached signatures validate against the data; enveloped ones carry it.
         string? contentId = o.ContentType == CadesContentChoice.Detached && report.Options["data"].Visible ? o.DataId : null;
         var view = o.Validate
-            ? Validate(output.Id, contentId, o.Validation ?? ValidationSettings.For(o.Environment))
+            ? await ValidateAsync(output.Id, contentId, o.Validation ?? ValidationSettings.For(o.Environment), cancellationToken)
             : null;
         return new CadesSignResult(true, null, null, output.Id, fileName, signed.SignedArtifact.LongLength, report.EffectiveLevel, LevelName(signed.AchievedLevel),
             signed.HasSignatureTimestamp, signed.HasLongTermValidationMaterial, signed.HasArchiveTimestamp,
@@ -133,7 +134,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     }
 
     /// <summary>Validates every signer (and countersigner) of a stored signature.</summary>
-    public CadesValidationView Validate(string signatureId, string? dataId, ValidationSettings settings)
+    public async Task<CadesValidationView> ValidateAsync(string signatureId, string? dataId, ValidationSettings settings, CancellationToken cancellationToken = default)
     {
         var signature = documents.Get(signatureId);
         byte[]? data = dataId is null ? null : documents.Get(dataId).Content;
@@ -146,8 +147,9 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         }
 
         var trust = validation.Trust(settings);
-        var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger);
-        var result = validator.ValidateAll(signature.Content, structure.IsDetached ? data : null, trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null);
+        var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger, chainRevocationChecker: validation.RevocationChecker(settings));
+        var result = await validator.ValidateAllAsync(signature.Content, structure.IsDetached ? data : null,
+            trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null, cancellationToken);
         var signers = result.Signers.Select(Signer).ToList();
         string overall = result.Errors.Count > 0 || signers.Count == 0 ? "Invalid"
             : Flatten(signers).All(s => s.Indication == "Valid") ? "Valid"
@@ -176,14 +178,16 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             new("ltv", L.T("Validation data (certificate and revocation values)"), Status(r.IsLtvDataValid), null),
             new("escTimestamp", L.T("CAdES-C timestamp (escTimeStamp)"), Status(r.HasValidEscTimestamp), null),
             new("archive", L.T("Archive timestamp"), Status(r.HasValidArchiveTimestamp), null),
+            ValidationService.RevocationRow(r.IsNotRevoked, r.RevocationSource),
         };
-        string indication = !r.IsIntegrityValid || !r.IsSignatureValid || r.HasValidTimestamp == false || r.HasValidArchiveTimestamp == false || r.HasValidEscTimestamp == false || r.HasValidContentTimestamp == false ? "Invalid"
-            : r.IsValid ? "Valid"
-            : "Indeterminate";
+        checks.AddRange(ValidationService.PolicyRows(r.Constraints));
+        // The library's indication, made INVALID by a timestamp that does not verify (not part of the indication).
+        bool brokenTimestamp = r.HasValidTimestamp == false || r.HasValidArchiveTimestamp == false || r.HasValidEscTimestamp == false || r.HasValidContentTimestamp == false;
+        string indication = brokenTimestamp ? "Invalid" : r.Indication.ToString();
         return new CadesSignerReport(s.Index, CadesInspector.SimpleName(r.SignerCertificate), indication,
             r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
             [.. checks.Where(c => c.Status != "n/a" || c.Id is "integrity" or "signature" or "chain")], r.Errors, r.Warnings,
-            [.. s.CounterSignatures.Select(Signer)]);
+            [.. s.CounterSignatures.Select(Signer)], ValidationService.SubIndicationName(r.SubIndication));
     }
 
     private static CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
@@ -288,6 +292,12 @@ internal sealed class CadesPlan
         if (hash != System.Security.Cryptography.HashAlgorithmName.SHA256)
         {
             _steps.Add(($".WithHashAlgorithm(HashAlgorithmName.{hash.Name})", b => b.WithHashAlgorithm(hash)));
+        }
+
+        if (o.SigningPolicy != SigningPolicyChoice.Default)
+        {
+            var signingPolicy = SigningPlan.ToSigningPolicy(o.SigningPolicy);
+            _steps.Add((SigningPlan.SigningPolicyCode(o.SigningPolicy), b => b.WithSigningPolicy(signingPolicy)));
         }
 
         if (credential.Facts.KeyAlgorithm == "RSA" && o.Padding == RsaPadding.Pss)
@@ -527,6 +537,11 @@ internal sealed class CadesPlan
         if (_o.Hash != HashChoice.Sha256)
         {
             args.Add("--hash " + SigningPlan.HashName(_o.Hash));
+        }
+
+        if (_o.SigningPolicy != SigningPolicyChoice.Default)
+        {
+            args.Add("--signing-policy " + _o.SigningPolicy.ToString().ToLowerInvariant());
         }
 
         CodeGenerator.AddIf(args, "--commitment", _o.Commitment);

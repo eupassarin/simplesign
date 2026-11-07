@@ -50,7 +50,11 @@ public sealed record CredentialFacts(
     IReadOnlyList<RsaPadding> Paddings,
     bool CanSignHashLocally,
     IReadOnlyList<string> Notes,
-    string CertificateBase64);
+    string CertificateBase64)
+{
+    /// <summary>Whether the key usage allows signatures (digitalSignature or nonRepudiation); false when it has no key usage.</summary>
+    public bool HasSigningKeyUsage { get; init; } = true;
+}
 
 /// <summary>A note in English with its arguments, translated each time it is shown.</summary>
 public sealed record Note(string English, params object?[] Args)
@@ -143,7 +147,11 @@ internal sealed class CredentialHandle : IDisposable
             isRsa ? paddings ?? [RsaPadding.Pkcs1, RsaPadding.Pss] : [],
             local,
             [],
-            Convert.ToBase64String(certificate.RawData));
+            Convert.ToBase64String(certificate.RawData))
+        {
+            HasSigningKeyUsage = usage is not null
+                && (usage.KeyUsages & (X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)) != 0,
+        };
     }
 }
 

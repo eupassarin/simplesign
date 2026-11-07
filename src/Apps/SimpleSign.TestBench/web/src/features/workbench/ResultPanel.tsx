@@ -152,7 +152,7 @@ function VerdictCard({ verdict, compact, depth = 0 }: { verdict: RunVerdict; com
         <span className="text-muted-foreground truncate text-xs">{verdict.signer}</span>
         {verdict.level && <Pill>{verdict.level}</Pill>}
         {verdict.signingTime && <span className="text-muted-foreground text-xs">{verdict.signingTime}</span>}
-        <span className="ml-auto"><Indication value={verdict.indication} /></span>
+        <span className="ml-auto"><Indication value={verdict.indication} subIndication={verdict.subIndication} /></span>
       </div>
       {!compact && (
         <ul className="divide-y border-t">

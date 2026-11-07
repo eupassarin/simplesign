@@ -205,8 +205,8 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         [
             "WithLogger", "WithHttpClientProvider", "WithCountryExtension", "WithCertificateFile", "WithFieldOptions",
             "WithDssArtifacts", "WithSubFilter", "WithAppearance",
-            // The workbench signs with the default signing policy; the checks are exercised by the library tests.
-            "WithSigningPolicy", "WithChainRevocationChecker",
+            // The revocation checker of the signing policy is built from the HTTP provider the workbench sets.
+            "WithChainRevocationChecker",
         ];
         string apis = string.Join('\n', s_schema.Options.Where(o => o.Formats.Contains(format))
             .SelectMany(o => o.Values.Select(v => v.Api).Append(o.Api)).OfType<string>()

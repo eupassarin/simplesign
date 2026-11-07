@@ -230,6 +230,14 @@ public static partial class OptionSchema
 
     private static List<SchemaOption> CryptoOptions() =>
     [
+        O("common.signingPolicy", "crypto", s_all, "choice", "signingPolicy", "Signing policy", "The checks made before signing; a certificate, key or algorithm they refuse stops the signature.",
+            standards: R("ETSI TS 119 312|Cryptographic suites", "RFC 5280|§4.2.1.3 Key usage", "RFC 5280|§6.3 CRL validation"), api: "WithSigningPolicy(SigningPolicy)", stateKey: "signingPolicy",
+            values:
+            [
+                V("Default", "Default", "Validity of every certificate of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. The default.", api: "SigningPolicy.Default"),
+                V("Strict", "Strict", "The default checks plus the revocation of the whole chain (CRL and OCSP); a revoked certificate or an unknown status stops the signature.", api: "SigningPolicy.Strict"),
+                V("Minimal", "Minimal", "Only the dates of the signing certificate, as before signing policies existed. For tests and migrations.", api: "SigningPolicy.Minimal"),
+            ]),
         OC("common.hash", "crypto", s_all, "choice", "hash", "hash",
             R("ETSI TS 119 312|Hash functions", "RFC 5652|§5.4 Message digest calculation", "W3C XMLDSig Core 1.1|§6.2 Message digests"), valueStateKey: "hash", values: HashValues()),
         OC("common.padding", "crypto", s_all, "choice", "padding", "padding",
@@ -499,6 +507,13 @@ public static partial class OptionSchema
             ], when: When("validate", "true")),
         O("common.validation.checkRevocation", "run", s_all, "toggle", "validation.checkRevocation", "Check revocation", "Looks the certificates up in the embedded or online CRLs and OCSP responses.",
             standards: R("ETSI EN 319 102-1|§5.2.6 X.509 certificate validation", "RFC 5280|§6.3 CRL validation", "RFC 6960|OCSP"), api: "ValidationOptions.CheckRevocation", when: When("validate", "true")),
+        O("common.validation.policy", "run", s_all, "choice", "validation.policy", "Validation policy", "Which algorithms, key sizes and key usages the validation accepts.",
+            standards: R("ETSI EN 319 102-1|§5.2.8 Cryptographic verification", "ETSI TS 119 312|Cryptographic suites"), api: "ValidationOptions.Policy",
+            values:
+            [
+                V("Default", "Default", "Obsolete algorithms (MD5, SHA-1 without an older timestamp, RSA under 2048 bits) make the result INDETERMINATE; a missing key usage is a warning.", api: "ValidationPolicy.Default"),
+                V("Indecopi", "INDECOPI (Peru)", "The policy of INDECOPI's accreditation guide: like the default, and a signing certificate without digitalSignature or nonRepudiation fails too.", api: "IofePolicies.Validation"),
+            ], when: When("validate", "true")),
         O("common.validation.useBrasil", "run", s_all, "toggle", "validation.useBrasil", "Apply the Brazilian rules", "Validates the chain with the ICP-Brasil and Gov.br rules and classifies the signature under Lei 14.063.",
             standards: R("DOC-ICP-15.03|Signature policy requirements", "Lei 14.063/2020|Art. 4º"), api: "IcpBrasilExtension + GovBrExtension (ICountryExtension)", framework: Brazil, when: When("validate", "true")),
     ];

@@ -206,6 +206,11 @@ internal static class CodeGenerator
             args.Add("--hash " + SigningPlan.HashName(o.Hash));
         }
 
+        if (o.SigningPolicy != SigningPolicyChoice.Default)
+        {
+            args.Add("--signing-policy " + o.SigningPolicy.ToString().ToLowerInvariant());
+        }
+
         if (o.Padding == RsaPadding.Pss && credential.KeyAlgorithm == "RSA")
         {
             args.Add("--signature-algorithm rsa-pss");

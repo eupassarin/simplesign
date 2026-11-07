@@ -14,8 +14,7 @@ public sealed class CadesSignerValidationResult
 
     /// <summary>Whether this signer and all its countersigners have a valid signature, content digest and chain.</summary>
     public bool IsValid =>
-        Result.Errors.Count == 0 && Result.IsSignatureValid && Result.IsIntegrityValid && Result.IsCertificateChainValid
-        && CounterSignatures.All(c => c.IsValid);
+        Result.Errors.Count == 0 && Result.IsValid && CounterSignatures.All(c => c.IsValid);
 }
 
 /// <summary>The validation of every signer of a CAdES signature (<see cref="CadesSignatureValidator.ValidateAll"/>).</summary>

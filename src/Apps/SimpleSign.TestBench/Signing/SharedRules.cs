@@ -113,8 +113,12 @@ internal static class SharedRules
         return credential is not null && !credential.Paddings.Contains(padding) ? credential.Paddings.FirstOrDefault() : padding;
     }
 
-    /// <summary>The signer certificate: chosen, currently valid, with nonRepudiation.</summary>
-    public static void Signer(CredentialFacts? credential, Action<string, string> error, Action<string, string> warn, string step)
+    /// <summary>
+    /// The signer certificate: chosen, currently valid, with nonRepudiation; and what the signing policy refuses
+    /// (null for the fiscal layouts, which have no signing policy).
+    /// </summary>
+    public static void Signer(CredentialFacts? credential, Action<string, string> error, Action<string, string> warn, string step,
+        SigningPolicyChoice? policy = SigningPolicyChoice.Default)
     {
         if (credential is null)
         {
@@ -130,6 +134,19 @@ internal static class SharedRules
         if (credential.IsNotYetValid)
         {
             error(step, L.T("The certificate is not valid yet: the library refuses to sign with it (SigningException)."));
+        }
+
+        if (policy is SigningPolicyChoice.Default or SigningPolicyChoice.Strict)
+        {
+            if (!credential.HasSigningKeyUsage)
+            {
+                error(step, L.T("The certificate allows neither digitalSignature nor nonRepudiation: the signing policy refuses it (KeyUsageNotPermitted). Choose the Minimal policy to try it anyway."));
+            }
+
+            if (credential.KeyAlgorithm == "RSA" && credential.KeySize is > 0 and < 2048)
+            {
+                error(step, L.T("The RSA key has {0} bits: the signing policy requires at least 2048 (KeyTooWeak). Choose the Minimal policy to try it anyway.", credential.KeySize));
+            }
         }
 
         if (!credential.HasNonRepudiation)
