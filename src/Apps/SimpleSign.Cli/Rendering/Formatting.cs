@@ -128,6 +128,7 @@ internal static class Formatting
         RevocationSource.EmbeddedOcsp => " (embedded DSS OCSP — offline)",
         RevocationSource.OnlineCrl => " (online CRL)",
         RevocationSource.OnlineOcsp => " (online OCSP)",
+        RevocationSource.CertificateChain => " (certificate chain — CRL/OCSP)",
         RevocationSource.Indeterminate => " (indeterminate)",
         _ => string.Empty
     };

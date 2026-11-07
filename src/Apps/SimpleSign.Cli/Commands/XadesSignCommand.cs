@@ -25,6 +25,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
     /// <summary>XAdES sign command settings.</summary>
     internal sealed class Settings : CommonSettings
     {
+        /// <summary>Checks run before signing.</summary>
+        [CommandOption("--signing-policy <POLICY>")]
+        [Description(SigningPolicyOption.Description)]
+        public string? SigningPolicy { get; init; }
+
         /// <summary>XML file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("XML file to sign")]
@@ -177,6 +182,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            if (!SigningPolicyOption.IsValid(SigningPolicy))
+            {
+                return ValidationResult.Error($"Unknown --signing-policy '{SigningPolicy}': use default, strict or minimal.");
+            }
+
             if (!File.Exists(InputPath))
             {
                 return ValidationResult.Error($"File not found: {InputPath}");
@@ -303,6 +313,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
             builder = builder.WithCertificate(cert, LoadChainCertificates(settings.ChainPath));
         }
 
+        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
         byte[] signed = await builder.SignAsync(cancellationToken);
 
         string outputPath = settings.OutputPath ?? settings.InputPath + ".signed.xml";

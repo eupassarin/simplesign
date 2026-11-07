@@ -220,6 +220,76 @@ public sealed class CliCommandTests : IDisposable
     // ── validate-dir ────────────────────────────────────────────────────
 
     [Fact]
+    public async Task ValidateDir_Policy_ShowsTheSubIndication()
+    {
+        string dir = Path.Combine(_tempDir, "policy-dir");
+        Directory.CreateDirectory(dir);
+        File.Copy(await SignAsync("policy-dir-source.pdf"), Path.Combine(dir, "a.pdf"));
+        string policy = Path.Combine(_tempDir, "dir-policy.json");
+        await File.WriteAllTextAsync(policy, """{ "cryptographic": { "minimumRsaKeySize": 8192 } }""");
+
+        var (_, output) = await RunAsync("validate-dir", dir, "--no-revocation", "--trust", _cerPath, "--policy", policy);
+
+        output.ShouldContain("CRYPTO_CONSTRAINTS_FAILURE_NO_POE");
+    }
+
+    // ── signing policy ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Sign_WeakKeyDefaultPolicy_FailsWithTheReason()
+    {
+        string pfx = WriteWeakPfx();
+        string input = WriteMinimalPdf("weak-input.pdf");
+
+        var (exit, output) = await RunAsync("sign", input, "--cert", pfx, "--password", Password, "--output", Path.Combine(_tempDir, "weak.pdf"));
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("KeyTooWeak");
+        output.ShouldContain("--signing-policy minimal");
+    }
+
+    [Fact]
+    public async Task Sign_WeakKeyMinimalPolicy_Signs()
+    {
+        string pfx = WriteWeakPfx();
+        string input = WriteMinimalPdf("weak-minimal-input.pdf");
+
+        var (exit, output) = await RunAsync("sign", input, "--cert", pfx, "--password", Password,
+            "--output", Path.Combine(_tempDir, "weak-minimal.pdf"), "--signing-policy", "minimal");
+
+        exit.ShouldBe(0, output);
+    }
+
+    [Fact]
+    public async Task Sign_UnknownSigningPolicy_IsRefused()
+    {
+        string input = WriteMinimalPdf("unknown-policy-input.pdf");
+
+        var (exit, _) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--signing-policy", "lax");
+
+        exit.ShouldNotBe(0);
+    }
+
+    [Fact]
+    public async Task Explain_EtsiSubIndication_IsKnown()
+    {
+        var (exit, output) = await RunAsync("explain", "CRYPTO_CONSTRAINTS_FAILURE_NO_POE");
+
+        exit.ShouldBe(0);
+        output.ShouldContain("validation policy");
+    }
+
+    private string WriteWeakPfx()
+    {
+        using var certificate = SimpleSign.TestHelpers.ConstraintTestCertificates.SelfSigned(
+            X509KeyUsageFlags.NonRepudiation, rsaKeySize: 1024, subject: "CN=Weak Signer");
+        string path = Path.Combine(_tempDir, "weak.pfx");
+        File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, Password));
+        return path;
+    }
+
+
+    [Fact]
     public async Task ValidateDir_AllTrusted_ReturnsZeroAndSummarizes()
     {
         string dir = Directory.CreateDirectory(Path.Combine(_tempDir, "batch-ok")).FullName;

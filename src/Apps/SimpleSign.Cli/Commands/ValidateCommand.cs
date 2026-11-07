@@ -634,6 +634,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         RevocationSource.EmbeddedOcsp => " [dim](embedded DSS OCSP — offline)[/]",
         RevocationSource.OnlineCrl => " [dim](online CRL)[/]",
         RevocationSource.OnlineOcsp => " [dim](online OCSP)[/]",
+        RevocationSource.CertificateChain => " [dim](certificate chain — CRL/OCSP)[/]",
         RevocationSource.Indeterminate => " [yellow](indeterminate)[/]",
         _ => string.Empty
     };
