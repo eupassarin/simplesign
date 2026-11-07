@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - B-LT/B-LTA (PAdES, CAdES, XAdES): a certificate whose only CRL distribution point is `ldap://`/`ldaps://` now gets
   that CRL embedded when `OutboundHttpPolicy.AllowLdap` is set, as the Strict signing check already read it; before,
   signing passed the check and then failed with `LevelNotAchievable`. Without `AllowLdap` LDAP is still never used.
+- Validation: the online CRL step (`RevocationChecker`, used by PAdES validation) also reads an `ldap://` distribution
+  point when the `CrlClient`'s `OutboundPolicy.AllowLdap` is set; `CrlClient.CheckCrlAsync` accepts LDAP URLs then.
+- A PEM file with several certificates (`--chain`, `--trust`, `ICertificateChainService.LoadCertsFromBytes`) now
+  loads all of them; only the first was read, so Strict `cades sign`/`xades sign --chain chain.pem` lost the root.
 
 ### Added — SimpleSign Sandbox and loopback origins
 

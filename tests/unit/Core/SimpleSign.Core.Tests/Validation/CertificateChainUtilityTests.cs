@@ -183,4 +183,16 @@ public sealed class CertificateChainUtilityTests
             CertificateChainUtility.DownloadAiaCertsAsync(httpClient, cert, null, warnings, cts.Token));
         warnings.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void LoadCertsFromBytes_PemBundle_ReturnsEveryCertificate()
+    {
+        using var ca = TestCertificateFactory.CreateCaCert("CN=PEM CA Test, O=Tests, C=BR");
+        using var leaf = TestCertificateFactory.CreateLeafCert(ca, "CN=PEM Leaf Test, O=Tests, C=BR");
+        byte[] pem = Encoding.ASCII.GetBytes(leaf.ExportCertificatePem() + "\n" + ca.ExportCertificatePem() + "\n");
+
+        List<X509Certificate2> loaded = [.. CertificateChainUtility.LoadCertsFromBytes(pem)];
+
+        loaded.Select(c => c.Thumbprint).ShouldBe([leaf.Thumbprint, ca.Thumbprint]);
+    }
 }

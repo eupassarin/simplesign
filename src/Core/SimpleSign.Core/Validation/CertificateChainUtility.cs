@@ -15,6 +15,8 @@ namespace SimpleSign.Core.Validation;
 /// </summary>
 internal static class CertificateChainUtility
 {
+    private static ReadOnlySpan<byte> PemCertificateMarker => "-----BEGIN CERTIFICATE-----"u8;
+
     /// <summary>
     /// Extracts HTTP URLs from the raw data of an AIA (Authority Information Access) extension.
     /// Parses ASN.1 structure; falls back to text search on parse failure.
@@ -73,6 +75,23 @@ internal static class CertificateChainUtility
     /// </summary>
     internal static IEnumerable<X509Certificate2> LoadCertsFromBytes(byte[] bytes, ILogger? logger = null)
     {
+        // PEM first: LoadCertificate accepts a PEM file but returns only its first certificate,
+        // which would drop the rest of a chain or trust bundle.
+        if (bytes.AsSpan().IndexOf(PemCertificateMarker) >= 0)
+        {
+            X509Certificate2Collection? pem = null;
+            try
+            { pem = CertificateLoader.LoadPemCertificates(bytes); }
+            catch (CryptographicException ex) { logger?.CertificateLoadingFailed(ex.Message); }
+
+            if (pem is not null && pem.Count > 0)
+            {
+                foreach (var c in pem)
+                { yield return c; }
+                yield break;
+            }
+        }
+
         X509Certificate2? single = null;
 #pragma warning disable CA2000 // Ownership transfers to caller via yield return
         try

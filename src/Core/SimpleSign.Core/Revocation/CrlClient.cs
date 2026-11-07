@@ -29,6 +29,7 @@ public sealed class CrlClient : ICrlClient
 
     /// <summary>
     /// Outbound URL policy applied to CRL distribution point URLs. Default: <see cref="OutboundHttpPolicy.Default"/>.
+    /// With <see cref="OutboundHttpPolicy.AllowLdap"/> set, <c>ldap://</c> and <c>ldaps://</c> CRL URLs are read too.
     /// </summary>
     public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
 
@@ -46,7 +47,8 @@ public sealed class CrlClient : ICrlClient
         }
 
         _logger.CrlDownloading(crlUrl);
-        var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: OutboundPolicy, ct: ct).ConfigureAwait(false)
+        // An ldap:// URL is read only when OutboundPolicy.AllowLdap is set; otherwise it gives null here.
+        var crlBytes = await DownloadCrlAsync(_httpClient, crlUrl, OutboundPolicy, _logger, ct).ConfigureAwait(false)
             ?? throw new HttpRequestException($"CRL download failed after retries: {crlUrl}");
         _logger.CrlDownloaded(crlBytes.Length);
         Cache?.Set(crlUrl, crlBytes, CrlEvaluator.ReadNextUpdate(crlBytes) ?? DateTimeOffset.MaxValue);
