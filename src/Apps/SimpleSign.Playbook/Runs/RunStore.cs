@@ -47,7 +47,12 @@ public static class RunStore
             .Select(r => new RunListItem(r.Id, r.PlaybookName, r.StartedAt, r.FinishedAt, r.Status, r.Summary))];
     }
 
-    /// <summary>The run folder of <paramref name="id"/>; refuses ids that would leave the runs folder.</summary>
+    /// <summary>
+    /// The folder of the run <paramref name="id"/>, found among the runs folder's own subfolders: the
+    /// id is only compared, never used to build a path, so it cannot point anywhere else.
+    /// </summary>
+    /// <exception cref="ArgumentException">The id is not a run id.</exception>
+    /// <exception cref="DirectoryNotFoundException">There is no such run.</exception>
     public static string Folder(string runsFolder, string id)
     {
         if (string.IsNullOrWhiteSpace(id) || id.Contains('/', StringComparison.Ordinal) || id.Contains('\\', StringComparison.Ordinal) || id.Contains("..", StringComparison.Ordinal))
@@ -55,14 +60,23 @@ public static class RunStore
             throw new ArgumentException($"'{id}' is not a run id.", nameof(id));
         }
 
-        return Path.Combine(runsFolder, id);
+        return (Directory.Exists(runsFolder)
+                ? Directory.EnumerateDirectories(runsFolder).FirstOrDefault(d => string.Equals(Path.GetFileName(d), id, StringComparison.Ordinal))
+                : null)
+            ?? throw new DirectoryNotFoundException($"No run '{id}'.");
     }
 
-    /// <summary>A file of a run (a step's output, an attachment, a report); refuses paths that leave the run folder.</summary>
+    /// <summary>
+    /// A file of a run (a step's output, an attachment, a report), found among the run folder's own
+    /// files by its relative path: the requested path is only compared, never opened.
+    /// </summary>
     public static string? FileOf(string runFolder, string relative)
     {
-        string full = Path.GetFullPath(Path.Combine(runFolder, relative));
-        return full.StartsWith(Path.GetFullPath(runFolder) + Path.DirectorySeparatorChar, StringComparison.Ordinal) && System.IO.File.Exists(full) ? full : null;
+        string wanted = relative.Replace('\\', '/');
+        return Directory.Exists(runFolder)
+            ? Directory.EnumerateFiles(runFolder, "*", SearchOption.AllDirectories)
+                .FirstOrDefault(f => string.Equals(Path.GetRelativePath(runFolder, f).Replace('\\', '/'), wanted, StringComparison.Ordinal))
+            : null;
     }
 
     /// <summary>The whole run folder as a zip.</summary>

@@ -158,16 +158,24 @@ public sealed class Workspace
         return $"{AssetsFolder}/{name}";
     }
 
-    /// <summary>Deletes a file of assets/.</summary>
+    /// <summary>
+    /// Deletes a file of assets/, found among the folder's own files by its workspace path (such as
+    /// assets/a1.pfx): the requested path is only compared, never opened.
+    /// </summary>
     public bool DeleteAsset(string path)
     {
-        string full = Resolve(path);
-        if (!full.StartsWith(Path.Combine(Directory, AssetsFolder) + Path.DirectorySeparatorChar, StringComparison.Ordinal) || !File.Exists(full))
+        string folder = Path.Combine(Directory, AssetsFolder);
+        string wanted = path.Replace('\\', '/');
+        string? file = System.IO.Directory.Exists(folder)
+            ? System.IO.Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                .FirstOrDefault(f => string.Equals(Path.GetRelativePath(Directory, f).Replace('\\', '/'), wanted, StringComparison.Ordinal))
+            : null;
+        if (file is null)
         {
             return false;
         }
 
-        File.Delete(full);
+        File.Delete(file);
         return true;
     }
 
