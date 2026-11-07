@@ -1,6 +1,6 @@
 # ADR 0013: Certificate Chain Validation Strategy
 
-**Status:** Accepted
+**Status:** Accepted — amended by [ADR 0021](0021-signing-policy-ldap-crl-and-revocation-cache.md) and [ADR 0022](0022-validation-policy-and-etsi-report.md): a generic minimum key size and accepted algorithms now live in `SigningPolicy`/`ValidationPolicy`, and the revocation of a whole chain is the public `ChainRevocationChecker` in Core (used before signing, by the CAdES/XAdES `ValidateAsync` and by the country validators).
 
 **Context:**
 Certificate chain validation for PAdES signatures goes beyond standard X.509 path building. Each jurisdiction defines:

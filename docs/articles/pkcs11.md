@@ -76,7 +76,7 @@ few wrong attempts, so do not retry a wrong PIN automatically.
 
 | Key | Signature | PKCS#11 mechanism |
 |---|---|---|
-| RSA | PKCS#1 v1.5 (SHA-1, SHA-2, SHA-3) | `CKM_RSA_PKCS` |
+| RSA | PKCS#1 v1.5 (SHA-2, SHA-3; SHA-1 only with `SigningPolicy.Minimal` or a custom `AllowedHashAlgorithms`) | `CKM_RSA_PKCS` |
 | RSA | RSASSA-PSS (SHA-1, SHA-2) — `WithSignatureAlgorithm(Oids.RsaPss)` | `CKM_RSA_PKCS_PSS` |
 | EC | ECDSA (SHA-2, SHA-3) | `CKM_ECDSA` |
 
@@ -137,5 +137,8 @@ The package is tested against [SoftHSM2](https://github.com/softhsm/SoftHSMv2), 
 `scripts/tests/pkcs11.sh` runs the token tests and a Native AOT smoke test in Docker; on Linux with
 `softhsm2` and `opensc` installed, `scripts/tests/pkcs11-run.sh` runs them directly.
 
-The package has been tested with SoftHSM2 only. Reports of drivers that work (or do not) are welcome
-in the issue tracker.
+`Pkcs11RealDeviceTests` sign in the three formats on a real token or HSM: set `SIMPLESIGN_PKCS11_MODULE` (the
+driver), `SIMPLESIGN_PKCS11_PIN` and optionally `SIMPLESIGN_PKCS11_TOKEN`/`SIMPLESIGN_PKCS11_KEY`, then run
+`dotnet test tests/unit/Signers/SimpleSign.Signers.Pkcs11.Tests --filter FullyQualifiedName~Pkcs11RealDeviceTests`
+(see [INDECOPI evidence](indecopi-evidence.md)). Reports of drivers that work (or do not) are welcome in the issue
+tracker.

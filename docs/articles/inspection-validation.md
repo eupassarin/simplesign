@@ -144,6 +144,8 @@ foreach (var r in results)
 | Property | Type | Description |
 |----------|------|-------------|
 | `Indication` | `SignatureIndication` | The single overall outcome: `Valid`, `Invalid`, or `Indeterminate` |
+| `SubIndication` | `SignatureSubIndication?` | Why it is not valid, with the ETSI EN 319 102-1 name (`ToEtsiName()`: `HASH_FAILURE`, `TRY_LATER`, `CRYPTO_CONSTRAINTS_FAILURE_NO_POE`…) |
+| `Constraints` | `IReadOnlyList<ValidationConstraintResult>` | Every check (integrity, signature value, revocation, the validation policy's constraints, chain) with its status |
 | `IsIntegrityValid` | `bool` | Byte-range hash matches (no tampering) |
 | `IsSignatureValid` | `bool` | Cryptographic signature verifies |
 | `IsCertificateChainValid` | `bool` | Chain builds to a trusted root |
@@ -153,7 +155,7 @@ foreach (var r in results)
 | `IsDocumentTimestamp` | `bool` | True for archive/document timestamps |
 | `SignerName` | `string?` | Signer common name |
 | `SigningTime` | `DateTimeOffset?` | Claimed signing time from CMS/PDF; not necessarily trusted |
-| `RevocationSource` | `enum` | Embedded/online CRL or OCSP, `None` (unchecked), or `Indeterminate` (unknown) |
+| `RevocationSource` | `enum` | Embedded/online CRL or OCSP, `CertificateChain` (whole chain, CAdES/XAdES `ValidateAsync`), `None` (unchecked), or `Indeterminate` (unknown) |
 | `Errors` | `IReadOnlyList<string>` | Validation errors |
 | `Warnings` | `IReadOnlyList<string>` | Diagnostic warnings; unknown revocation prevents a `Valid` indication |
 
@@ -169,9 +171,20 @@ Disabling revocation keeps `RevocationSource.None`; if the other configured chec
 pass, the indication can be `Valid`. The CLI reports the high-level `indication` in
 text and JSON. Unknown and unchecked revocation states remain available separately;
 JSON uses `revoked: null` for both,
-and a boolean only for a determined status. `SignatureIndication` is the result
-classification; it does not by itself provide every ETSI sub-indication or replace
-policy-specific proof-of-existence and historical-validation checks.
+and a boolean only for a determined status. With revocation on, PAdES validation also checks the revocation of the
+signature timestamp's TSA chain at the timestamp's time and the TSA name of the token (RFC 3161 §2.4.2); a revoked or
+unknown TSA makes `IsTsaTrusted` false.
+
+### Validation Policy and Sub-Indications
+
+`ValidationOptions.Policy` holds the rules beyond the format: accepted digest algorithms with an "accepted until"
+date, the minimum RSA size, the accepted elliptic curves, and the key usage of the signing certificate, each with a
+`fail`, `warn` or `ignore` level. Read it from JSON with `ValidationPolicy.Load(path)`, or with
+`ValidationPolicy.LoadSigned(path, path + ".p7s", administrator)` to refuse a file changed by anyone else.
+
+An algorithm outside the policy is not a plain failure: a trusted signature timestamp older than the algorithm's limit
+keeps the signature valid; without one the result is `Indeterminate` with `CryptoConstraintsFailureNoPoe`, as
+EN 319 102-1 prescribes. The sub-indication is the first decisive failure; `Constraints` lists every check.
 
 `ValidationOptions.NetworkTimeout` bounds each AIA download phase and each
 revocation check (OCSP and CRL together), and sets the chain URL retrieval timeout.
@@ -188,11 +201,17 @@ var options = new ValidationOptions
 };
 ```
 
+Trust anchors can also come from a folder (`new DirectoryTrustAnchorProvider(dir, manifestSigner)`, with a signed
+manifest of the files' SHA-256) or from an ETSI trusted list (`TrustedList.Load(xml, new TrustedListOptions
+{ SignerCertificates = [schemeOperator] })`), both `ITrustAnchorProvider`.
+
 ## XAdES Validation
 
 For XML signatures, use `XadesSignatureValidator.Validate` when the document has
 one signature, or `ValidateAll` for independently identified results when it has
 multiple signatures. Supply the application's trust anchors for chain evaluation.
+`ValidateAsync` and `ValidateAllAsync` also check the revocation of the signer and TSA chains; the synchronous
+methods do not.
 
 `DetectedLevel` reports observed unsigned-property elements. A malformed
 `SignatureTimeStamp` can report `Timestamped` while its checked outcome is false;
@@ -208,6 +227,7 @@ invalid LTV or archive properties likewise retain their structural level.
 | `IsTsaTrusted` | Signature TSA chain and timestamping-purpose trust |
 
 `XadesValidationResult.IsValid` combines fundamental signature, integrity, and
-signer-chain checks. Inspect the optional timestamp/LTV/archive outcomes as well
+signer-chain checks with `Indication == Valid`, so the validation policy's constraints count too. `Indication`,
+`SubIndication` and `Constraints` are the same as on the PAdES result (and on `CadesValidationResult`). Inspect the optional timestamp/LTV/archive outcomes as well
 when the application requires B-T, B-LT, or B-LTA. Structural `DetectedLevel` is
 not the signing result's checked `AchievedLevel`.

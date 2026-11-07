@@ -4,7 +4,7 @@
 
 SimpleSign implements PAdES, CAdES, and XAdES digital signatures with conformance
 boundaries documented below. This document details compliance with ISO, ETSI, RFC, and
-Brazilian (ICP-Brasil) specifications for the current source tree. Consult the
+Brazilian (ICP-Brasil) and Peruvian (IOFE, INDECOPI accreditation guide v4.0) specifications for the current source tree. Consult the
 [release history](https://github.com/eupassarin/SimpleSign/blob/main/CHANGELOG.md) and release-tagged documentation for the
 implementation delivered in a particular package version.
 
@@ -44,7 +44,7 @@ SimpleSign is designed with PDF 2.0 alignment in mind. The digital signature sub
 | **RC4 encryption** | Removed | ✅ | Encrypted PDFs refused entirely |
 | **AES-256 encryption** | Required for encrypted PDFs | N/A | Encrypted PDFs out of scope (decrypt first) |
 | **PDF 2.0 header** | `%PDF-2.0` | ✅ | Detected, parsed, reported in inspection |
-| **SHA-1** | Deprecated for new signatures | ✅ | Rejected for signing; flagged as deprecated in inspection/validation |
+| **SHA-1** | Deprecated for new signatures | ✅ | Refused for signing (`SigningErrorReason.AlgorithmNotPermitted`); in validation, INDETERMINATE (`CryptoConstraintsFailureNoPoe`) unless a trusted timestamp proves the signature existed before 2012-08-01 (default `ValidationPolicy`) |
 
 **Design philosophy:** SimpleSign refuses unsafe operations (RC4, MD5, encrypted PDFs) rather than implementing them insecurely. Encryption is intentionally out of scope — use [qpdf](https://qpdf.sourceforge.io/) or Adobe Acrobat to decrypt before signing.
 
@@ -78,6 +78,11 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **RFC 8933** | EdDSA in CMS | ⏳ | OIDs are recognized, but signing is deferred until raw external output is verifiable on every target |
 | **RFC 8032** | EdDSA algorithm | ⏳ | Ed25519/Ed448 signing is not advertised in v0.10.1 |
 | **RFC 8410** | EdDSA X.509 identifiers | ✅ | OIDs 1.3.101.112 (Ed25519) / 1.3.101.113 (Ed448) |
+| **ETSI EN 319 102-1** | Validation report | 🟡 | Indication and sub-indication (`SignatureSubIndication`), checks (`Constraints`), `ValidationPolicy` with algorithm dates and key sizes; proof of existence from the signature timestamp only (ADR 0022) |
+| **ETSI TS 119 612 / TS 102 231 v3** | Trusted lists | ✅ | `TrustedList`: signature checked against the scheme operator, active CA/TSA services as anchors, NextUpdate enforced |
+| **RFC 3161** | TSA checks | ✅ | TSA signature and critical exclusive timeStamping EKU at signing time; `tsa` name (§2.4.2) and TSA chain revocation at validation |
+| **RFC 4511 / RFC 4516** | LDAP CRL retrieval | ✅ | Read-only, opt-in (`OutboundHttpPolicy.AllowLdap`), same address checks as HTTP |
+| **INDECOPI** (Peru) | Accreditation guide v4.0 | 🟡 | `SimpleSign.Peru.Iofe` (INDECOPI trusted list, `IofePolicies`); evidence per requirement in [indecopi-evidence.md](articles/indecopi-evidence.md) |
 
 ## SubFilter Support
 
@@ -93,8 +98,9 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 |---|---|
 | **Hash** | SHA-256, SHA-384, SHA-512, SHA3-256, SHA3-384, SHA3-512 |
 | **Signature** | RSA PKCS#1 v1.5, RSA-PSS, RSA-SHA3-256/384/512¹, ECDSA (P-256/P-384/P-521), ECDSA-SHA3-256/384/512¹ |
-| **Revocation** | CRL, OCSP, embedded DSS |
-| **Timestamps** | RFC 3161 |
+| **Revocation** | CRL (HTTP; LDAP/LDAPS opt-in), OCSP (HTTP), embedded DSS; CRLs checked against their issuer and cached until nextUpdate; whole-chain check before signing with `SigningPolicy.Strict` |
+| **Timestamps** | RFC 3161, with TSA name and TSA chain revocation checks |
+| **Signing limits** (default `SigningPolicy`) | RSA ≥ 2048 bits; curves P-256/384/521 and brainpoolP256/384/512r1; SHA-2 and SHA-3 only; key usage digitalSignature or nonRepudiation; every chain certificate within its validity |
 | **PDF/A** | 1a, 1b, 2a, 2b, 2u, 3a, 3b, 3u, 4a, 4b, 4u, 4e (detection + preservation) |
 
 ¹ SHA-3 signature and digest OIDs defined in RFC 8702; CMS encoding defined in RFC 8933.
@@ -117,5 +123,6 @@ transforms, and an archive operation without an explicit target in a multi-signa
 document fail closed rather than producing an archival-level claim.
 
 Use `XadesSignatureValidator.ValidateAll(...)` for a document that contains multiple
-XMLDSig signatures. `Validate(...)` intentionally returns an invalid structured result
+XMLDSig signatures, and the `ValidateAsync`/`ValidateAllAsync` variants of the CAdES and XAdES validators to
+also check the revocation of the signer and TSA chains (the synchronous methods do not). `Validate(...)` intentionally returns an invalid structured result
 for that ambiguous case instead of inspecting only the first signature.

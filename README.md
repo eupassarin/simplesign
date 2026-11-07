@@ -30,6 +30,7 @@ SimpleSign creates and validates **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN
 dotnet add package SimpleSign                  # PAdES + CAdES + XAdES
 dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil, Lei 14.063
 dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
+dotnet add package SimpleSign.Peru.Iofe        # IOFE (Peru), INDECOPI policies
 dotnet add package SimpleSign.Signers.Pkcs11   # A3 tokens, smartcards, HSMs
 dotnet add package SimpleSign.Signers.Cloud    # cloud certificates (PSC, CSC v2)
 dotnet tool install -g SimpleSign.Cli          # command line
@@ -40,11 +41,12 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign` | Meta-package: PAdES, CAdES and XAdES |
 | `SimpleSign.PAdES` | PDF signing, validation and inspection (B-B/T/LT/LTA) |
 | `SimpleSign.CAdES` | Standalone CMS/PKCS#7 signatures |
-| `SimpleSign.XAdES` | XML signatures |
-| `SimpleSign.Core` | CMS, TSA, OCSP, CRL (used by the above) |
+| `SimpleSign.XAdES` | XML signatures; ETSI trusted lists (`TrustedList`) |
+| `SimpleSign.Core` | CMS, TSA, OCSP, CRL (HTTP; LDAP opt-in), signing and validation policies, trust store (used by the above) |
 | `SimpleSign.Brazil.IcpBrasil` | ICP-Brasil chain, roots and policies, Lei 14.063 |
 | `SimpleSign.Brazil.GovBr` | Gov.br chain and assurance level, Lei 14.063 |
 | `SimpleSign.Brazil` | Shared: CPF/CNPJ, Lei 14.063 levels, AEA manifest (pulled in by both) |
+| `SimpleSign.Peru.Iofe` | IOFE (Ley 27269): anchors from INDECOPI's signed trusted list, INDECOPI signing and validation policies |
 | `SimpleSign.Brazil.Fiscal` | XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf |
 | `SimpleSign.Signers.Pkcs11` | Sign through a token's PKCS#11 driver |
 | `SimpleSign.Signers.Cloud` | Sign with cloud certificates (ICP-Brasil PSCs, CSC API v2) |
@@ -73,6 +75,11 @@ var signedPdf = await PadesSigner
     .SignAsync();
 ```
 
+Before anything is signed, the default `SigningPolicy` refuses a certificate without the digitalSignature or
+nonRepudiation key usage, an RSA key under 2048 bits, an expired certificate in the chain and SHA-1/MD5.
+`.WithSigningPolicy(SigningPolicy.Strict)` also checks the revocation of the whole chain; `SigningPolicy.Minimal`
+keeps only the date check of the signing certificate.
+
 Validate:
 
 ```csharp
@@ -83,9 +90,12 @@ var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocatio
 
 foreach (var r in await validator.ValidateAsync(File.OpenRead("signed.pdf")))
 {
-    Console.WriteLine($"{r.FieldName}: {r.Indication} — {r.SignerName} at {r.SigningTime}");
+    Console.WriteLine($"{r.FieldName}: {r.Indication} {r.SubIndication} — {r.SignerName} at {r.SigningTime}");
 }
 ```
+
+Each result carries the ETSI EN 319 102-1 indication and sub-indication and the list of checks (`Constraints`);
+`ValidationOptions.Policy` (`ValidationPolicy.Load("policy.json")`) sets the accepted algorithms, key sizes and key usage.
 
 CAdES and XAdES use the same builder and profiles:
 
@@ -113,6 +123,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [CAdES and XAdES](docs/articles/cades-xades.md) | Detached/enveloped CMS, XML forms, validation |
 | [Inspection and validation](docs/articles/inspection-validation.md) | Validation results and fast inspection |
 | [Deferred signing](docs/articles/deferred-signing.md) | Two-phase signing for web apps |
+| [Remote signing](docs/articles/remote-signing.md) | The generic interface for keys outside the engine |
 | [PKCS#11](docs/articles/pkcs11.md) / [Cloud signing](docs/articles/cloud-signing.md) | Tokens, HSMs and cloud certificates |
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
 | [ICP-Brasil](docs/articles/icp-brasil.md) / [Fiscal XML](docs/articles/fiscal-xml.md) | Brazilian PKI and NF-e/eSocial signing |
@@ -120,12 +131,14 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Signing agent](docs/articles/agent.md) / [TestBench](docs/articles/testbench.md) | Tray app with a local signing API; local web app to try every option |
 | [Standard coverage](docs/articles/coverage.md) | Every option with the clause that defines it, and what is not implemented |
 | [Conformance](docs/conformance.md) / [ADRs](docs/adr/) | Standards coverage and design decisions |
+| [INDECOPI evidence](docs/articles/indecopi-evidence.md) | Running the tests that back each requirement of the INDECOPI accreditation guide |
 
 ## Extension points
 
-`ITrustAnchorProvider` (trust roots), `IChainValidationProvider` (chain rules), `IExternalSigner`
-(remote keys), `IHttpClientProvider` (TSA/OCSP/CRL HTTP), `ICertificateCache`, `ICertificateStore`
-and `ICountryExtension` (country packages such as `SimpleSign.Brazil.IcpBrasil`).
+`ITrustAnchorProvider` (trust roots; `DirectoryTrustAnchorProvider` and `TrustedList` are ready-made),
+`IChainValidationProvider` (chain rules), `IExternalSigner` (remote keys), `IHttpClientProvider` (TSA/OCSP/CRL HTTP),
+`IChainRevocationChecker` and `IRevocationCache` (revocation of a chain), `ICertificateCache`, `ICertificateStore`
+and `ICountryExtension` (country packages such as `SimpleSign.Brazil.IcpBrasil` and `SimpleSign.Peru.Iofe`).
 
 ## Contributing
 

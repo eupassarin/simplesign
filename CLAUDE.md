@@ -20,6 +20,10 @@ dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests
 dotnet test tests/unit/Core/SimpleSign.Core.Tests
 dotnet test tests/unit/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Tests
 dotnet test tests/unit/Extras/SimpleSign.HtmlToPdf.Tests
+dotnet test tests/unit/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe.Tests
+
+# INDECOPI evidence, one requirement at a time (traits Indecopi=Req11, Req12, …)
+dotnet test tests/unit/Formats/SimpleSign.Contracts.Tests --filter Indecopi=Req11
 
 # Integration tests (requires network for TSA/OCSP)
 dotnet test tests/integration/SimpleSign.Integration.Tests
@@ -36,11 +40,11 @@ dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64
 ```
 src/
 ├── Core/
-│   └── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL, hashing
+│   └── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL (HTTP; LDAP opt-in), hashing, signing/validation policies, trust store
 ├── Formats/
 │   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/ = PDF parser
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
-│   ├── SimpleSign.XAdES/       XML signatures
+│   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList)
 │   └── SimpleSign/             Meta-package
 ├── TrustFrameworks/
 │   ├── Brazil/
@@ -115,9 +119,12 @@ await CadesSigner.Document(data).WithCertificate(cert)
 - `IHttpClientProvider` — custom HTTP for TSA/OCSP/CRL
 - `ICertificateCache` — cert caching
 - `IChainValidationProvider` — custom chain logic
+- `IChainRevocationChecker` / `IRevocationCache` — revocation of a whole chain, CRL cache
+- `ICountryExtension` — country packages (ICP-Brasil, Gov.br, IOFE)
+- `DirectoryTrustAnchorProvider`, `TrustedList` — ready-made `ITrustAnchorProvider`s
 
 ### Error Handling
-- `SigningException` — signing failures
+- `SigningException` — signing failures; `Reason` (`SigningErrorReason`) says which check of the `SigningPolicy` refused the certificate, key or algorithm (`KeyUsageNotPermitted`, `KeyTooWeak`, `ChainCertificateNotValid`, `CertificateRevoked`…)
 - `InvalidPdfException` — malformed PDF input
 - Validation returns result objects (never throws for invalid signatures)
 
@@ -155,6 +162,9 @@ SimpleSign.Brazil (shared Brazilian building blocks)
 
 SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension each)
   └── depend on SimpleSign.Brazil only, never on each other (Fiscal and IcpBrasil.Xades build on IcpBrasil)
+
+SimpleSign.Peru.Iofe (one ICountryExtension)
+  └── depends on SimpleSign.Core + SimpleSign.XAdES — public API only
 
 SimpleSign.CAdES / SimpleSign.XAdES
   └── each depends on SimpleSign.Core only
