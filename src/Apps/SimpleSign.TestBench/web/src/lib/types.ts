@@ -29,42 +29,6 @@ export interface TimestampChoice {
   clientCertificatePassword?: string | null
 }
 
-export interface AppearanceChoice {
-  visible: boolean
-  autoPosition: boolean
-  page: number
-  x: number
-  y: number
-  width: number | null
-  height: number | null
-  textAlignment: "Left" | "Center" | "Right"
-  verticalAlignment: "Top" | "Middle" | "Bottom"
-  shrinkToFit: boolean
-  maxTextLength: number
-  showDate: boolean
-  showReason: boolean
-  showLocation: boolean
-  signedByLabel?: string | null
-  reasonLabel?: string | null
-  locationLabel?: string | null
-  dateLabel?: string | null
-  signerDisplayName?: string | null
-  extraLines: string[]
-  dateFormat?: string | null
-  timeZoneId?: string | null
-  culture?: string | null
-  backgroundColor?: string | null
-  textColor?: string | null
-  borderColor?: string | null
-  borderWidth: number
-  baseFont: string
-  fontSize?: number | null
-  labelFontSize?: number | null
-  verificationUrl?: string | null
-  imageUploadId?: string | null
-  imageFit: "Stretch" | "Contain" | "Cover"
-}
-
 export interface MetadataChoice {
   signerName?: string | null
   signerId?: string | null
@@ -125,7 +89,6 @@ export interface SigningOptions {
   fieldMode: FieldMode
   fieldName: string
   existingFieldName?: string | null
-  appearance: AppearanceChoice
   reason?: string | null
   location?: string | null
   contactInfo?: string | null

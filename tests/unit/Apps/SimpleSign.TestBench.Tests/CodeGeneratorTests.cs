@@ -39,20 +39,18 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
     }
 
     [Fact]
-    public async Task Generate_VisibleStampInExistingField_OmitsPlacement()
+    public async Task Generate_ExistingField_NamesTheField()
     {
         var options = fixture.Options("empty-field") with
         {
             FieldMode = FieldMode.Existing,
             ExistingFieldName = "Assinatura",
-            Appearance = new AppearanceChoice { Visible = true, SignerDisplayName = "Maria" },
         };
 
         var result = await fixture.Runner.RunAsync(options, default);
 
         result.Success.ShouldBeTrue(result.Error);
         result.Code.CSharp.ShouldContain("ExistingFieldName = \"Assinatura\"", Case.Sensitive, result.Code.CSharp);
-        result.Code.CSharp.ShouldNotContain("Page = ");
         result.Code.Cli.ShouldContain("--existing-field \"Assinatura\"");
     }
 

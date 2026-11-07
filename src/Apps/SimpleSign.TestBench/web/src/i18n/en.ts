@@ -157,15 +157,6 @@ export const en = {
     clientCertificateHint: "For TSAs that require mutual TLS.",
     pfxPassword: "PFX password",
   },
-  field: {
-    preview: {
-      existing: "Drawn in the existing field's rectangle.",
-      auto: "Auto position: the library picks a free spot.",
-      click: "Click the page to place the stamp's top-left corner.",
-      rerender: "Re-render",
-      error: "Preview: {error}",
-    },
-  },
   details: {
     reason: "Reason",
     location: "Location",

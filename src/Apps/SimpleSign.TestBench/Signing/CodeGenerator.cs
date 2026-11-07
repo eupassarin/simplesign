@@ -244,41 +244,6 @@ internal static class CodeGenerator
             args.Add("--pdfa");
         }
 
-        var a = o.Appearance;
-        if (a.Visible)
-        {
-            args.Add("--visible");
-            if (o.FieldMode == FieldMode.New && !a.AutoPosition)
-            {
-                args.Add(string.Create(CultureInfo.InvariantCulture, $"--page {a.Page} --pos-x {a.X:0.##} --pos-y {a.Y:0.##} --stamp-width {a.Width:0.##} --stamp-height {a.Height:0.##}"));
-            }
-
-            if (!a.ShowDate)
-            {
-                args.Add("--no-date");
-            }
-
-            AddIf(args, "--text-align", a.TextAlignment == "Left" ? null : a.TextAlignment.ToLowerInvariant());
-            AddIf(args, "--signed-by-label", a.SignedByLabel);
-            AddIf(args, "--reason-label", a.ReasonLabel);
-            AddIf(args, "--location-label", a.LocationLabel);
-            AddIf(args, "--date-label", a.DateLabel);
-            AddIf(args, "--date-format", a.DateFormat);
-            AddIf(args, "--time-zone", a.TimeZoneId);
-            AddIf(args, "--background-color", a.BackgroundColor);
-            AddIf(args, "--text-color", a.TextColor);
-            AddIf(args, "--border-color", a.BorderColor);
-            AddIf(args, "--font", a.BaseFont == "Helvetica" ? null : a.BaseFont);
-            AddIf(args, "--font-size", a.FontSize?.ToString(CultureInfo.InvariantCulture));
-            AddIf(args, "--label-font-size", a.LabelFontSize?.ToString(CultureInfo.InvariantCulture));
-            AddIf(args, "--qr-url", a.VerificationUrl);
-            if (a.ImageUploadId is not null)
-            {
-                args.Add("--background-image stamp.png");
-                AddIf(args, "--image-fit", a.ImageFit.ToLowerInvariant());
-            }
-        }
-
         if (o.UseSignerDetails && o.SignerDetails == SignerDetailsKind.Aea)
         {
             args.Add("--brasil");

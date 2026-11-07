@@ -50,7 +50,6 @@ builder.Services.AddSingleton<DocumentStore>();
 builder.Services.AddSingleton<CredentialStore>();
 builder.Services.AddSingleton<CredentialFactory>();
 builder.Services.AddSingleton<SigningRunner>();
-builder.Services.AddSingleton<PreviewService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.InspectionService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationSampleStore>();

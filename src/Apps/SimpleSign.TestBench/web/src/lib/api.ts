@@ -10,7 +10,6 @@ import type {
   Pkcs11Driver,
   SampleDocument,
   SandboxRequest,
-  SigningOptions,
   StoreCertificate,
   BulkReport,
   InspectionReport,
@@ -66,7 +65,6 @@ export const api = {
   fileUrl: (id: string, download = false) => `/api/files/${encodeURIComponent(id)}${download ? "?download=true" : ""}`,
   icpVersions: (policy: IcpPolicyKind, credentialId?: string | null) =>
     request<IcpVersion[]>("GET", `/api/icp/versions?policy=${policy}${credentialId ? `&credentialId=${credentialId}` : ""}`),
-  preview: (options: SigningOptions) => request<{ fileId: string }>("POST", "/api/preview", options),
   validation: {
     samples: () => request<ValidationSample[]>("GET", "/api/validation/samples"),
     bulk: (fileIds: string[], settings: ValidationSettings, maxConcurrency: number) => request<BulkReport>("POST", "/api/validation/bulk", { fileIds, settings, maxConcurrency }),

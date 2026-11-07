@@ -24,7 +24,7 @@ public sealed record DocumentFacts(
     IReadOnlyList<string> EmptyFields,
     string? Error);
 
-/// <summary>A stored file: a PDF to sign, an image for the stamp, or a PFX.</summary>
+/// <summary>A stored file: a document to sign, a signature, data or a PFX.</summary>
 internal sealed record StoredFile(string Id, string FileName, byte[] Content, DateTimeOffset Created, bool Pinned = false);
 
 /// <summary>In-memory store for samples, uploads and signed outputs (never written to disk).</summary>

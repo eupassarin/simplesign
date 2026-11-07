@@ -19,7 +19,6 @@ public sealed class MatrixContext
 
     internal Dictionary<string, DocumentFacts> DocumentFacts { get; } = new(StringComparer.Ordinal);
 
-    public string? ImageUploadId { get; internal set; }
 }
 
 /// <summary>A generated case: one value per dimension.</summary>
@@ -97,22 +96,6 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
             {
                 V("field", "new", (o, _) => o with { FieldMode = FieldMode.New, FieldName = "TestBench" }),
                 V("field", "existing", (o, _) => o with { FieldMode = FieldMode.Existing, ExistingFieldName = "Assinatura" }),
-            },
-            new List<MatrixValue>
-            {
-                V("appearance", "invisible", (o, _) => o with { Appearance = new AppearanceChoice() }),
-                V("appearance", "visible", (o, _) => o with { Appearance = new AppearanceChoice { Visible = true, ShowReason = true, ShowLocation = true } }),
-                V("appearance", "styled+QR", (o, _) => o with
-                {
-                    Appearance = new AppearanceChoice
-                    {
-                        Visible = true, Page = 1, X = 300, Y = 60, Width = 240, Height = 90, TextAlignment = "Center", VerticalAlignment = "Middle",
-                        BackgroundColor = "#f4f4f5", TextColor = "#18181b", BorderColor = "#2563eb", BorderWidth = 1, BaseFont = "Times-Roman",
-                        DateFormat = "dd/MM/yyyy HH:mm", TimeZoneId = "America/Sao_Paulo", Culture = "pt-BR", SignedByLabel = "Assinado por",
-                        ExtraLines = ["Linha extra"], VerificationUrl = "https://validar.iti.gov.br/",
-                    },
-                }),
-                V("appearance", "auto+image", (o, c) => o with { Appearance = new AppearanceChoice { Visible = true, AutoPosition = true, ImageUploadId = c.ImageUploadId, ImageFit = "Contain" } }),
             },
             new List<MatrixValue>
             {
@@ -335,8 +318,6 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
             context.DocumentFacts[key] = documents.FactsAsync(key).GetAwaiter().GetResult();
         }
 
-        // Pinned: the matrix stores more signed outputs than the upload limit, which would evict an ordinary upload.
-        context.ImageUploadId = documents.AddPinned("stamp.png", StampPng()).Id;
         _cases = Generate(context, out _uncoverable);
         _context = context;
         return context;
@@ -371,8 +352,4 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
         SHA3_256.IsSupported
             ? [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512, HashChoice.Sha3_256]
             : [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512];
-
-    /// <summary>A small opaque 2×2 PNG (the stamp background of the image cases).</summary>
-    private static byte[] StampPng() => Convert.FromBase64String(
-        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDK+mmyAAAAABJRU5ErkJggg==");
 }

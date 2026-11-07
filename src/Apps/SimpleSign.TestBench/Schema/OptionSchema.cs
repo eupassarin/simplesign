@@ -76,7 +76,7 @@ public static partial class OptionSchema
         Formats(),
         Frameworks(),
         Sections(),
-        [.. InputOptions(), .. LevelOptions(), .. TimestampOptions(), .. CryptoOptions(), .. AttributeOptions(), .. PdfOptions(), .. AppearanceOptions(), .. RunOptions()],
+        [.. InputOptions(), .. LevelOptions(), .. TimestampOptions(), .. CryptoOptions(), .. AttributeOptions(), .. PdfOptions(), .. RunOptions()],
         Stages(),
         Presets(),
         new Dictionary<string, object>(StringComparer.Ordinal)
@@ -161,7 +161,6 @@ public static partial class OptionSchema
         new("crypto", "Cryptography", "The digest and signature algorithms."),
         new("attributes", "Signed attributes", "What the signer declares inside the signature."),
         new("pdf", "PDF signature field", "How the signature is written in the PDF."),
-        new("appearance", "Visible stamp", "The stamp drawn on the page (PDF only)."),
         new("run", "Run and validation", "How the library is called, and how the result is checked."),
     ];
 

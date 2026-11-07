@@ -128,19 +128,8 @@ internal static class Api
             return Results.NoContent();
         });
 
-        // ICP-Brasil policy versions and the stamp preview (options, rules and signing: RunApi)
+        // ICP-Brasil policy versions (options, rules and signing: RunApi)
         api.MapGet("/icp/versions", (IcpPolicyKind policy, string? credentialId, CredentialStore store) => IcpVersions(policy, credentialId, store));
-        api.MapPost("/preview", async (SigningOptions options, PreviewService preview, CancellationToken ct) =>
-        {
-            try
-            {
-                return Results.Ok(new { fileId = await preview.RenderAsync(options, ct) });
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                return Results.BadRequest(new { error = ex.Message });
-            }
-        });
         // Validation area
         api.MapGet("/validation/samples", (ValidationSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
         api.MapPost("/validation/bulk", async (BulkRequest body, InspectionService inspection, CancellationToken ct) => await inspection.BulkAsync(body, ct));

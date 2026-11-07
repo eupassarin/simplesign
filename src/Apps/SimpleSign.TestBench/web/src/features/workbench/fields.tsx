@@ -63,21 +63,11 @@ export function OptionField({ option }: { option: SchemaOption }) {
     case "lines":
       return <OptionRow {...row}><Textarea rows={3} value={Array.isArray(value) ? value.join("\n") : ""} disabled={locked}
         onChange={(e) => set(path, e.target.value.split("\n").map((l) => l.trimEnd()).filter((l, i, all) => l !== "" || i < all.length - 1))} /></OptionRow>
-    case "color":
-      return (
-        <OptionRow {...row}>
-          <div className="flex items-center gap-2">
-            <input type="color" className="h-9 w-10 cursor-pointer rounded-md border bg-transparent p-1" value={asText(value) || "#ffffff"} onChange={(e) => set(path, e.target.value)} />
-            <Input className="max-w-32 font-mono text-xs" value={asText(value)} placeholder="—" onChange={(e) => text(e.target.value)} />
-            {!!value && <Button variant="ghost" size="sm" onClick={() => set(path, null)}>{t("wb.clear")}</Button>}
-          </div>
-        </OptionRow>
-      )
     case "upload":
       return (
         <OptionRow {...row}>
           <div className="flex items-center gap-2">
-            <UploadButton label={t("wb.chooseFile")} accept="image/png,image/jpeg" onUploaded={(f) => set(path, f.id)} />
+            <UploadButton label={t("wb.chooseFile")} accept="*/*" onUploaded={(f) => set(path, f.id)} />
             {!!value && <><Pill tone="success">{t("wb.uploaded")}</Pill><Button variant="ghost" size="sm" onClick={() => set(path, null)}>{t("wb.clear")}</Button></>}
           </div>
         </OptionRow>

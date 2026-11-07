@@ -144,75 +144,6 @@ public sealed record CustomPolicyChoice
     public string? Uri { get; init; }
 }
 
-public sealed record AppearanceChoice
-{
-    public bool Visible { get; init; }
-
-    public bool AutoPosition { get; init; }
-
-    public int Page { get; init; } = 1;
-
-    public float X { get; init; } = 72;
-
-    public float Y { get; init; } = 72;
-
-    public float? Width { get; init; } = 220;
-
-    public float? Height { get; init; } = 70;
-
-    public string TextAlignment { get; init; } = "Left";
-
-    public string VerticalAlignment { get; init; } = "Top";
-
-    public bool ShrinkToFit { get; init; } = true;
-
-    public int MaxTextLength { get; init; } = 200;
-
-    public bool ShowDate { get; init; } = true;
-
-    public bool ShowReason { get; init; }
-
-    public bool ShowLocation { get; init; }
-
-    public string? SignedByLabel { get; init; }
-
-    public string? ReasonLabel { get; init; }
-
-    public string? LocationLabel { get; init; }
-
-    public string? DateLabel { get; init; }
-
-    public string? SignerDisplayName { get; init; }
-
-    public IReadOnlyList<string> ExtraLines { get; init; } = [];
-
-    public string? DateFormat { get; init; }
-
-    public string? TimeZoneId { get; init; }
-
-    public string? Culture { get; init; }
-
-    public string? BackgroundColor { get; init; }
-
-    public string? TextColor { get; init; }
-
-    public string? BorderColor { get; init; }
-
-    public float BorderWidth { get; init; } = 0.5f;
-
-    public string BaseFont { get; init; } = "Helvetica";
-
-    public float? FontSize { get; init; }
-
-    public float? LabelFontSize { get; init; }
-
-    public string? VerificationUrl { get; init; }
-
-    public string? ImageUploadId { get; init; }
-
-    public string ImageFit { get; init; } = "Contain";
-}
-
 public sealed record MetadataChoice
 {
     public string? SignerName { get; init; }
@@ -338,14 +269,12 @@ public sealed record SigningOptions
 
     public bool PreservePdfA { get; init; }
 
-    // 5. Field and appearance
+    // 5. Field
     public FieldMode FieldMode { get; init; } = FieldMode.New;
 
     public string FieldName { get; init; } = "Signature1";
 
     public string? ExistingFieldName { get; init; }
-
-    public AppearanceChoice Appearance { get; init; } = new();
 
     // 6. Details
     public string? Reason { get; init; }

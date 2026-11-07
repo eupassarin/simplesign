@@ -27,14 +27,12 @@ internal sealed class SigningPlan
 {
     private readonly SigningOptions _o;
     private readonly CredentialHandle _credential;
-    private readonly DocumentStore _documents;
     private readonly PlanContext _context;
 
     public SigningPlan(SigningOptions effective, CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents)
     {
         _o = effective;
         _credential = credential;
-        _documents = documents;
         _context = new PlanContext(effective.Environment, credential, sandbox, documents);
         IsSandbox = _context.IsSandbox;
         Http = _context.Http;
@@ -368,7 +366,6 @@ internal sealed class SigningPlan
                 SubFilterChoice.PbadPades => PdfSignatureSubFilter.PbadPades,
                 _ => PdfSignatureSubFilter.EtsiCadesDetached,
             },
-            Appearance = _o.Appearance.Visible ? BuildAppearance(_o.Appearance, existing) : null,
             CertificationLevel = _o.Certification switch
             {
                 CertificationChoice.NoChanges => CertificationLevel.NoChanges,
@@ -376,48 +373,6 @@ internal sealed class SigningPlan
                 CertificationChoice.FormFillingAndAnnotations => CertificationLevel.FormFillingAndAnnotations,
                 _ => null,
             },
-        };
-    }
-
-    internal SignatureAppearance BuildAppearance(AppearanceChoice a, bool existing)
-    {
-        byte[]? image = string.IsNullOrEmpty(a.ImageUploadId) ? null : _documents.Get(a.ImageUploadId).Content;
-        bool isPng = image is { Length: > 8 } && image[0] == 0x89 && image[1] == (byte)'P';
-        return new SignatureAppearance
-        {
-            Page = a.Page,
-            X = a.X,
-            Y = a.Y,
-            Width = a.Width,
-            Height = a.Height,
-            AutoPosition = a.AutoPosition && !existing,
-            TextAlignment = Enum.Parse<SignatureTextAlignment>(a.TextAlignment),
-            VerticalAlignment = Enum.Parse<SignatureVerticalAlignment>(a.VerticalAlignment),
-            ShrinkToFit = a.ShrinkToFit,
-            MaxTextLength = a.MaxTextLength,
-            ShowDate = a.ShowDate,
-            ShowReason = a.ShowReason,
-            ShowLocation = a.ShowLocation,
-            SignedByLabel = a.SignedByLabel ?? "Signed by",
-            ReasonLabel = a.ReasonLabel ?? "Reason: ",
-            LocationLabel = a.LocationLabel ?? "Location: ",
-            DateLabel = a.DateLabel ?? string.Empty,
-            SignerDisplayName = Blank(a.SignerDisplayName),
-            ExtraLines = a.ExtraLines.Count > 0 ? a.ExtraLines : null,
-            DateFormat = Blank(a.DateFormat),
-            TimeZone = string.IsNullOrWhiteSpace(a.TimeZoneId) ? null : TimeZoneInfo.FindSystemTimeZoneById(a.TimeZoneId),
-            DateCulture = string.IsNullOrWhiteSpace(a.Culture) ? null : CultureInfo.GetCultureInfo(a.Culture),
-            BackgroundColor = Color(a.BackgroundColor),
-            TextColor = Color(a.TextColor),
-            BorderColor = Color(a.BorderColor),
-            BorderWidth = a.BorderWidth,
-            BaseFontName = a.BaseFont,
-            CustomFontSize = a.FontSize,
-            CustomLabelFontSize = a.LabelFontSize,
-            VerificationUrl = Blank(a.VerificationUrl),
-            BackgroundImagePng = isPng ? image : null,
-            BackgroundImageJpeg = image is not null && !isPng ? image : null,
-            BackgroundImageFit = Enum.Parse<SignatureImageFit>(a.ImageFit),
         };
     }
 
@@ -453,124 +408,8 @@ internal sealed class SigningPlan
             sb.Append(CultureInfo.InvariantCulture, $"        CertificationLevel = CertificationLevel.{level},\n");
         }
 
-        if (f.Appearance is not null)
-        {
-            sb.Append("        Appearance = ").Append(AppearanceCode(_o.Appearance, f.ExistingFieldName is not null).Replace("\n", "\n    ", StringComparison.Ordinal)).Append(",\n");
-        }
-
         sb.Append("    }");
         return sb.ToString();
-    }
-
-    private static string AppearanceCode(AppearanceChoice a, bool existing)
-    {
-        var defaults = new AppearanceChoice();
-        var sb = new StringBuilder("new SignatureAppearance\n    {\n");
-        if (!existing)
-        {
-            if (a.AutoPosition)
-            {
-                sb.Append("        AutoPosition = true,\n");
-            }
-            else
-            {
-                sb.Append(CultureInfo.InvariantCulture, $"        Page = {a.Page}, X = {a.X:0.##}f, Y = {a.Y:0.##}f, Width = {a.Width:0.##}f, Height = {a.Height:0.##}f,\n");
-            }
-        }
-
-        void Enum(string name, string value, string def)
-        {
-            if (value != def)
-            {
-                sb.Append(CultureInfo.InvariantCulture, $"        {name} = Signature{name}.{value},\n");
-            }
-        }
-
-        Enum("TextAlignment", a.TextAlignment, "Left");
-        Enum("VerticalAlignment", a.VerticalAlignment, "Top");
-        if (!a.ShrinkToFit)
-        {
-            sb.Append("        ShrinkToFit = false,\n");
-        }
-
-        if (a.MaxTextLength != defaults.MaxTextLength)
-        {
-            sb.Append(CultureInfo.InvariantCulture, $"        MaxTextLength = {a.MaxTextLength},\n");
-        }
-
-        if (!a.ShowDate)
-        {
-            sb.Append("        ShowDate = false,\n");
-        }
-
-        if (a.ShowReason)
-        {
-            sb.Append("        ShowReason = true,\n");
-        }
-
-        if (a.ShowLocation)
-        {
-            sb.Append("        ShowLocation = true,\n");
-        }
-
-        Prop(sb, "SignedByLabel", a.SignedByLabel);
-        Prop(sb, "ReasonLabel", a.ReasonLabel);
-        Prop(sb, "LocationLabel", a.LocationLabel);
-        Prop(sb, "DateLabel", a.DateLabel);
-        Prop(sb, "SignerDisplayName", Blank(a.SignerDisplayName));
-        if (a.ExtraLines.Count > 0)
-        {
-            sb.Append("        ExtraLines = [").Append(string.Join(", ", a.ExtraLines.Select(Str))).Append("],\n");
-        }
-
-        Prop(sb, "DateFormat", Blank(a.DateFormat));
-        if (!string.IsNullOrWhiteSpace(a.TimeZoneId))
-        {
-            sb.Append(CultureInfo.InvariantCulture, $"        TimeZone = TimeZoneInfo.FindSystemTimeZoneById({Str(a.TimeZoneId)}),\n");
-        }
-
-        if (!string.IsNullOrWhiteSpace(a.Culture))
-        {
-            sb.Append(CultureInfo.InvariantCulture, $"        DateCulture = CultureInfo.GetCultureInfo({Str(a.Culture)}),\n");
-        }
-
-        foreach (var (name, value) in new[] { ("BackgroundColor", a.BackgroundColor), ("TextColor", a.TextColor), ("BorderColor", a.BorderColor) })
-        {
-            if (Color(value) is { } c)
-            {
-                sb.Append(CultureInfo.InvariantCulture, $"        {name} = ({c.R:0.###}f, {c.G:0.###}f, {c.B:0.###}f),\n");
-            }
-        }
-
-        if (Math.Abs(a.BorderWidth - 0.5f) > 0.001f)
-        {
-            sb.Append(CultureInfo.InvariantCulture, $"        BorderWidth = {a.BorderWidth:0.##}f,\n");
-        }
-
-        if (a.BaseFont != "Helvetica")
-        {
-            Prop(sb, "BaseFontName", a.BaseFont);
-        }
-
-        if (a.FontSize is { } size)
-        {
-            sb.Append(CultureInfo.InvariantCulture, $"        CustomFontSize = {size:0.##}f,\n");
-        }
-
-        if (a.LabelFontSize is { } labelSize)
-        {
-            sb.Append(CultureInfo.InvariantCulture, $"        CustomLabelFontSize = {labelSize:0.##}f,\n");
-        }
-
-        Prop(sb, "VerificationUrl", Blank(a.VerificationUrl));
-        if (!string.IsNullOrEmpty(a.ImageUploadId))
-        {
-            sb.Append("        BackgroundImagePng = File.ReadAllBytes(\"stamp.png\"), // or BackgroundImageJpeg\n");
-            Enum("ImageFit", a.ImageFit, "Stretch");
-        }
-
-        sb.Append("    }");
-        return sb.ToString().Replace("SignatureImageFit = SignatureImageFit", "BackgroundImageFit = SignatureImageFit", StringComparison.Ordinal);
     }
 
     internal static HashAlgorithmName ToHash(HashChoice hash) => hash switch
@@ -609,23 +448,6 @@ internal sealed class SigningPlan
         HashChoice.Sha3_512 => "2.16.840.1.101.3.4.2.10",
         _ => "2.16.840.1.101.3.4.2.1",
     };
-
-    internal static (float R, float G, float B)? Color(string? hex)
-    {
-        if (string.IsNullOrWhiteSpace(hex))
-        {
-            return null;
-        }
-
-        string h = hex.TrimStart('#');
-        if (h.Length != 6 || !h.All(char.IsAsciiHexDigit))
-        {
-            return null;
-        }
-
-        float Part(int i) => int.Parse(h.AsSpan(i, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture) / 255f;
-        return (Part(0), Part(2), Part(4));
-    }
 
     internal static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 

@@ -132,7 +132,7 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         var document = await fixture.Documents.FactsAsync(Documents.DocumentStore.SampleKey("contract"));
         foreach (var kind in Enum.GetValues<SignatureKind>())
         {
-            var options = new SigningOptions { Kind = kind, Level = BaselineLevel.BLTA, UseSignerDetails = true, Appearance = new AppearanceChoice { Visible = true } };
+            var options = new SigningOptions { Kind = kind, Level = BaselineLevel.BLTA, UseSignerDetails = true };
             known[RunFormats.Pades].UnionWith(Compatibility.Evaluate(options, document, null).Options.Keys);
         }
 

@@ -156,15 +156,6 @@ export const ptBR: Messages = {
     clientCertificateHint: "Para TSAs que exigem TLS mútuo.",
     pfxPassword: "Senha do PFX",
   },
-  field: {
-    preview: {
-      existing: "Desenhado no retângulo do campo existente.",
-      auto: "Posição automática: a biblioteca escolhe um espaço livre.",
-      click: "Clique na página para posicionar o canto superior esquerdo do carimbo.",
-      rerender: "Redesenhar",
-      error: "Pré-visualização: {error}",
-    },
-  },
   details: {
     reason: "Motivo",
     location: "Local",
