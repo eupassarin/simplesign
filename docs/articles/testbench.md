@@ -23,26 +23,41 @@ The first run builds the UI (Node.js 20+ needed; `npm ci && npm run build` in
 terminal, `npm run dev` in `web/` (Vite on :5173, proxying `/api` to :5199). The app listens on
 127.0.0.1 only. Uploads, keys and token sessions stay in memory and are gone when it stops.
 
-## Sandbox and Real
+## Real network, plus a Sandbox
 
-| | Sandbox | Real |
-|---|---|---|
-| Certificates | Test PKI (*AC Raiz Sandbox SimpleSign*): RSA 2048/3072/4096, ECDSA P-256/384/521, expired, not yet valid, revoked, no nonRepudiation, weak key (RSA 1024) and no signing key usage (refused by the default signing policy; sign them with the Minimal policy) | Your PFX, the OS store, A3 tokens (PKCS#11), real CSC accounts |
-| Timestamp | Offline RFC 3161 TSA, plus one that requires HTTP Basic | DigiCert, Sectigo, FreeTSA or any URL (http, https, tcp), with Basic/Bearer and mTLS |
-| Revocation | CRLs of both sandbox CAs | The certificates' real CRL/OCSP |
-| Cloud | Simulated CSC v2 service (PIN/OTP, SCAL 1/2, OAuth); login pages are approved automatically | Your provider; OAuth opens the system browser |
-| Validation | Trusts the sandbox root | Trusts the OS roots |
+The TestBench always works on the real network: your PFX, the OS store, A3 tokens (PKCS#11), real
+CSC accounts, the public TSAs (DigiCert, Sectigo, FreeTSA or any URL, with Basic/Bearer and mTLS)
+and the certificates' real CRLs and OCSP responders. Validation trusts the OS roots.
 
-Sandbox services answer on `*.sandbox.simplesign.test` through an in-process
-`IHttpClientProvider`, so the library runs its normal code paths without the network. The
-*Environment* panel lists the certificates, the services and every request they answered.
+For test certificates and services, connect a [SimpleSign Sandbox](sandbox.md), a separate app
+with a test PKI and real CRL (HTTP, HTTPS, LDAP), OCSP, TSA and CSC endpoints:
+
+```bash
+dotnet run --project src/Apps/SimpleSign.Sandbox             # http://localhost:5300
+```
+
+Then, in the TestBench, open the **Sandbox** panel (flask icon) and connect to its address, or start
+the TestBench with `--sandbox http://localhost:5300` (or `SIMPLESIGN_SANDBOX_URL`). The connection
+is remembered for the next start. While connected:
+
+| | |
+|---|---|
+| Certificates | The Sandbox's signers (every key type, revoked by CRL or OCSP, under a revoked or expired CA, expired, weak key…), picked from the signer list or with **Sign with** in the panel |
+| Timestamp | Its TSAs: normal, HTTP Basic (credentials filled in), outside the chain, revoked, wrong TSA name |
+| Cloud | Its CSC v2 service (PIN/OTP, SCAL 1/2, OAuth approved at once) |
+| Revocation | Its CRLs and OCSP, reached through an `OutboundHttpPolicy` that lists its origins (`LoopbackOrigins`, LDAP allowed) |
+| Validation | Its root is trusted next to the OS roots (and for its HTTPS endpoint) |
+
+Failures, revocations and the request log are in the Sandbox's own UI (**Open the Sandbox**).
+Without a Sandbox, the Sandbox signers and TSAs are disabled and the validation samples that need
+signed files are not built.
 
 ## One screen, two tasks
 
 There is no menu. The top bar switches between the two tasks, **Sign** and **Validate**, which
-share the same screen: the input on the left, the result on the right. Two panels open over
-either task: **Reference** (what the library covers of each standard) and **Environment** (the
-sandbox, with failures you can switch on). Each task keeps its own result, and both go to the same run history.
+share the same screen: the input on the left, the result on the right. Three panels open over
+either task: **Reference** (what the library covers of each standard), **Sandbox** (the connected
+Sandbox) and **Environment** (what this machine has). Each task keeps its own result, and both go to the same run history.
 
 ## The workbench (Sign)
 
@@ -50,8 +65,8 @@ The task bar picks the **format** (PAdES, CAdES, XAdES), has a shortcut for each
 level** (B-B, B-T, B-LT, B-LTA) and the **Sign** button. The options are on the left, in sections
 that open and close.
 
-In the sandbox a signer and a sample document are chosen for you, so the first signature is one
-click away.
+With a Sandbox connected, a signer and a sample document are chosen for you, so the first
+signature is one click away.
 
 ### Every option names its standard
 
@@ -132,10 +147,11 @@ docker compose -f tools/dss/docker-compose.yml up --build
 ```
 
 The first build takes about 15 minutes: the server that publishes the DSS bundle is slow.
-`tools/dss/README.md` explains how the container trusts the sandbox root (the TestBench keeps
-that root between runs so the trust survives a restart; `--ephemeral-sandbox` makes a new one each
-time) and what to expect: at B-B and B-T, DSS cannot reach the sandbox CRLs and answers
-INDETERMINATE; at B-LT and B-LTA the data is embedded and the verdicts can be compared. The
+`tools/dss/README.md` explains how the container trusts the Sandbox root (fetched from the
+Sandbox when the container starts) and what to expect: with the default Sandbox environment, DSS
+cannot reach its CRLs at B-B and B-T and answers INDETERMINATE (an environment created with
+`--public-base-url http://host.docker.internal:5300` fixes that); at B-LT and B-LTA the data is
+embedded and the verdicts can be compared. The
 address can also point to a DSS you already run.
 
 The same service backs an automated check: `DssCrossValidationTests` (in
@@ -158,8 +174,8 @@ download; the CMS structure for CAdES; the Signature element for XML), the log a
 
 The trust settings are the same options the workbench uses (trusted roots and revocation).
 
-**Samples** are built at startup in the sandbox, valid or broken in one specific way, each with
-the verdict it should get:
+**Samples** are built when a Sandbox is connected (and again with **Rebuild the samples**), valid
+or broken in one specific way, each with the verdict it should get:
 
 | Format | Samples |
 |---|---|
@@ -168,14 +184,14 @@ the verdict it should get:
 | XML | XAdES enveloped and detached, document changed, signature value changed, unknown root |
 
 **Validate all samples** runs every one and shows a table: expected, SimpleSign, DSS. A row opens
-that run. With DSS on, most of these samples are INDETERMINATE there: they are B-B signatures and
-DSS cannot fetch the sandbox CRLs.
+that run. With DSS on, most of these samples are INDETERMINATE there unless the Sandbox environment
+names an address DSS reaches: they are B-B signatures.
 
 ## Run matrix (CI)
 
 `SimpleSign.TestBench.Tests` still runs the fixed matrix of `Matrix/*.cs` in CI: every value of
 every dimension on its own plus pairwise combinations, for PAdES, CAdES and XML, each case signed
-in the sandbox, validated and checked. In the app, **Combinations** does the same from the option
+with the Sandbox's certificates, validated and checked. In the app, **Combinations** does the same from the option
 schema, starting from the options on screen.
 
 ## Reference
@@ -189,49 +205,40 @@ writes it again).
 
 ## Environment
 
-The **Environment** panel follows the Sandbox | Real switch.
+The **Environment** panel shows what really exists on this machine: the roots a validation can
+trust (the operating system's), the public TSAs the library has a preset for, the PKCS#11 drivers
+and tokens found, the certificates with a key in the OS store, what a real CSC service asks for,
+and DSS.
 
-**In Real** nothing is simulated, so it shows what really exists: the roots a validation can
-trust (the operating system's), the public TSAs the library has a preset for, the PKCS#11
-drivers and tokens found, the certificates with a key in the OS store, what a real CSC service
-asks for, and DSS.
+## Evidence
 
-**In Sandbox** it is a lab: it shows the sandbox and lets you break it on purpose. Failures only
-act in Sandbox; the top bar says when one is on.
+Each result has **Evidence .md** and **.json** (`GET /api/runs/{id}/evidence.md|json`): the run
+written for a certification file. It has the time, the application and runtime, the connected
+Sandbox and its root, the certificate, the signing policy, the TSA, the outcome (the
+`SigningException` reason of a refusal, or each signature's indication and sub-indication), every
+network request of the run (CRL, OCSP, TSA, AIA, CSC) and the warnings. For example, signing with
+the Sandbox's `revoked-ocsp` certificate and the Strict policy gives a refusal
+`SigningException (CertificateRevoked)` with the OCSP request that established it.
 
-- **Test PKI** as a tree (root, intermediate CA, TSA, signers), with the download of each
-  certificate, of `root.pem` and of the CRLs as they are now. *Sign with this* makes a signer the
-  one used by the three formats; *Revoke now* adds it to the CRL.
-- **Failures** to switch on, then sign or validate again:
-
-  | Service | Failure | What it shows |
-  |---|---|---|
-  | TSA | Down (HTTP 503) | B-T and above fail, or fall back to B-B when lower levels are allowed |
-  | TSA | Slow | Where the time of a signature goes |
-  | TSA | Invalid token | The library refuses a token that does not verify |
-  | TSA | Outside the chain | The signature validates with a TSA warning |
-  | CRL server | Down | B-LT and B-LTA cannot be built |
-  | CRL server | Expired CRLs | A CA that stopped publishing |
-
-  While a failure is on, the top bar says so. *Back to normal* clears failures and revocations.
-- **Services** (TSA, CSC, DSS) and the **requests** they answered, live, with a filter by
-  service: sign with a cloud certificate and see the authorization and `signHash` calls.
-
-### Cloud certificates: CSC
+## Cloud certificates: CSC
 
 A cloud certificate keeps the key at a provider; the library sends only the hash and gets the
 signature back. **CSC** (Cloud Signature Consortium API v2) is the international standard: the
 service is authorized first; then each signature is authorized on the credential, with PIN and
 OTP or OAuth. SCAL 2 binds the authorization to the exact hashes.
 
-The sandbox simulates a CSC service in-process. In the signer picker, the CSC tab explains the
-flow step by step and, in Sandbox, **Use the simulated provider** opens a credential in one click.
+The Sandbox runs a CSC service. In the signer picker, the CSC tab explains the flow step by step
+and, with a Sandbox connected, **Use the simulated provider** opens a credential in one click.
 The run's log then shows the provider's calls and the signer's events (73xx).
 
 ## Limitations
 
 - Empty signature fields inside compressed object streams are not listed.
 - PKCS#11 needs a driver; with no token, try SoftHSM2.
-- DSS cannot fetch the sandbox CRLs or reach the sandbox TSA: compare verdicts at B-LT or B-LTA.
+- DSS cannot reach a Sandbox whose certificates name `localhost`: compare verdicts at B-LT or B-LTA,
+  or create an environment with `--public-base-url` (see `tools/dss/README.md`).
+- The tests (`SimpleSign.TestBench.Tests`) need a running Sandbox at `SIMPLESIGN_SANDBOX_URL`
+  (default `http://localhost:5300`); without one they are skipped, and with
+  `SIMPLESIGN_REQUIRE_SANDBOX=true` (CI) they fail.
 - The clause numbers in the schema were written from the published standards; check them against
   the version of the standard you follow before quoting them.

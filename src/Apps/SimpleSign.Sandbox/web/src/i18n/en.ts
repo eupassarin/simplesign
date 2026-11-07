@@ -123,8 +123,8 @@ export const en = {
     requirements: {
       r11: "Requirement 11 — revocation status",
       r12: "Requirement 12 — certificate validity",
-      r13: "Requirement 13 — key strength",
-      r16: "Requirement 16 — key usage",
+      r13: "Requirement 13 — key usage",
+      r16: "Requirement 16 — key strength and algorithms",
       r30: "Requirement 30 — time-stamping authority",
     },
     items: {

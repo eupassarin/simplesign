@@ -545,9 +545,9 @@ internal sealed class SandboxPki : IDisposable
             Problem: "Issuer expired", IssuerId: ExpiredIntermediateId, Evidence: "Req12"),
         new("no-nonrepudiation", "Without non-repudiation", "Key usage has digitalSignature only (no nonRepudiation): signing works; some validation policies flag it.",
             Problem: "No non-repudiation", KeyUsage: X509KeyUsageFlags.DigitalSignature),
-        new("rsa-1024", "Weak key (RSA 1024)", "RSA 1024 key: the default signing policy refuses it (KeyTooWeak).", SandboxKeyType.Rsa1024, "Key too small", Evidence: "Req13"),
+        new("rsa-1024", "Weak key (RSA 1024)", "RSA 1024 key: the default signing policy refuses it (KeyTooWeak).", SandboxKeyType.Rsa1024, "Key too small", Evidence: "Req16"),
         new("no-signing-key-usage", "Without a signing key usage", "Key usage has keyEncipherment only: the default signing policy refuses it (KeyUsageNotPermitted).",
-            Problem: "No signing key usage", KeyUsage: X509KeyUsageFlags.KeyEncipherment, Evidence: "Req16"),
+            Problem: "No signing key usage", KeyUsage: X509KeyUsageFlags.KeyEncipherment, Evidence: "Req13"),
         new("tsa", "TSA", "The time-stamping authority of /tsa/tsr and /tsa/authenticated.", Usage: CertificateUsage.Timestamping),
         new("tsa-revoked", "Revoked TSA", "The TSA of /tsa/revoked: its certificate is revoked, so its tokens must not be trusted.",
             Problem: "Revoked", Usage: CertificateUsage.Timestamping, Revoked: true, Evidence: "Req30"),
@@ -790,7 +790,8 @@ internal sealed class SandboxPki : IDisposable
 
         _certificates = [.. _state.Certificates.Select(c => new SandboxCertificate(
             c.Id, c.Title, c.Description, c.KeyType, X509Certificate2.CreateFromPem(c.Pair.Certificate, c.Pair.Key), c.IssuerId, c.Usage, c.Pointers,
-            c.Problem, c.Evidence, c.RevokedAt, c.RevocationReason, c.Publication))];
+            // The requirement label comes from the current seed: it may have been corrected since the environment was made.
+            c.Problem, s_seeds.FirstOrDefault(seed => seed.Id == c.Id) is { } seed ? seed.Evidence : c.Evidence, c.RevokedAt, c.RevocationReason, c.Publication))];
         if (OperatingSystem.IsWindows())
         {
             // Ephemeral keys cannot sign everywhere on Windows: round-trip through PKCS#12.

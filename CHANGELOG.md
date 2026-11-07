@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TimestampClient` no longer refuses a loopback TSA URL in its constructor: it is refused when the request is
   sent, unless its origin is listed (private and link-local URLs are still refused at once).
 
+### Changed — CI, DSS and docs use the Sandbox
+
+- CI starts an ephemeral SimpleSign Sandbox on each OS before the tests (`--ephemeral`, waits for `/api/info`,
+  keeps `sandbox.log` with the test results) and sets `SIMPLESIGN_REQUIRE_SANDBOX=true`, so a missing Sandbox fails
+  the TestBench tests instead of skipping them.
+- `tools/dss`: the container trusts the Sandbox's root (`SANDBOX_URL`, default `http://host.docker.internal:5300`);
+  `TESTBENCH_URL` is optional. The README explains `--public-base-url` for DSS to reach the CRLs and OCSP.
+- Docs: new `docs/articles/sandbox.md`; the TestBench article (real network plus a connected Sandbox, evidence
+  export) and the INDECOPI evidence article (the scenarios against a running Sandbox).
+- Sandbox: the evidence labels of the weak-key and no-key-usage certificates were swapped (Req. 16 and Req. 13).
+- Sandbox: OCSP responses start an hour back (`thisUpdate`). They started five minutes back, the same instant the
+  TestBench's "time" option claims as signing time, and embedded OCSP evidence is checked with no clock-skew
+  tolerance against it, so CAdES/XAdES matrix cases failed "incomplete LTV" whenever a second boundary fell between.
+
 ### Fixed — Strict signing no longer trusts a CRL cached before a revocation
 
 - `SigningPolicy.Strict` asked a shared `ChainRevocationChecker` (DI, `WithChainRevocationChecker`) for the status

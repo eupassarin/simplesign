@@ -4,7 +4,8 @@
 #   - the ICP-Brasil roots mounted in /trust-icp-brasil, when $DSS_TRUST_ICP_BRASIL is "true",
 #   - the Gov.br root mounted in /trust-govbr, when $DSS_TRUST_GOVBR is "true",
 #   - the CAs of the Peruvian trusted list (INDECOPI), when $DSS_TRUST_PERU is "true", and
-#   - the TestBench's sandbox root, fetched from $TESTBENCH_URL when it is set and reachable,
+#   - the SimpleSign Sandbox's root, fetched from $SANDBOX_URL when it is set and reachable
+#     (or, failing that, the root of the Sandbox connected to the TestBench at $TESTBENCH_URL),
 # and tells DSS to trust it (trusted.source.keystore.* in dss-custom.properties).
 set -eu
 
@@ -123,14 +124,27 @@ if [ "${DSS_TRUST_PERU:-true}" = "true" ]; then
   trust_peru
 fi
 
-if [ -n "${TESTBENCH_URL:-}" ]; then
-  if curl -fsS -m 5 "$TESTBENCH_URL/api/sandbox/root.pem" -o /tmp/sandbox-root.pem; then
-    trust sandbox-root-from-testbench /tmp/sandbox-root.pem
+# The SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox): its root, served at /root.pem.
+sandbox_trusted=false
+if [ -n "${SANDBOX_URL:-}" ]; then
+  if curl -fsS -m 5 "${SANDBOX_URL%/}/root.pem" -o /tmp/sandbox-root.pem; then
+    trust sandbox-root /tmp/sandbox-root.pem
+    sandbox_trusted=true
   else
-    echo "[dss] the TestBench is not reachable at $TESTBENCH_URL."
-    echo "[dss] To trust its sandbox root, save it to tools/dss/trust/sandbox-root.pem and restart:"
-    echo "[dss]   curl http://127.0.0.1:5199/api/sandbox/root.pem > tools/dss/trust/sandbox-root.pem"
+    echo "[dss] the SimpleSign Sandbox is not reachable at $SANDBOX_URL."
   fi
+fi
+if [ "$sandbox_trusted" = false ] && [ -n "${TESTBENCH_URL:-}" ]; then
+  if curl -fsS -m 5 "${TESTBENCH_URL%/}/api/sandbox/root.pem" -o /tmp/sandbox-root.pem; then
+    trust sandbox-root-from-testbench /tmp/sandbox-root.pem
+    sandbox_trusted=true
+  else
+    echo "[dss] the TestBench (or its connected Sandbox) is not reachable at $TESTBENCH_URL."
+  fi
+fi
+if [ "$sandbox_trusted" = false ] && { [ -n "${SANDBOX_URL:-}" ] || [ -n "${TESTBENCH_URL:-}" ]; }; then
+  echo "[dss] To trust the Sandbox root, save it to tools/dss/trust/sandbox-root.pem and restart:"
+  echo "[dss]   curl http://127.0.0.1:5300/root.pem > tools/dss/trust/sandbox-root.pem"
 fi
 
 # The EU trusted lists. DSS keeps what it downloads in $TOMCAT_TL_CACHE and, when it starts,

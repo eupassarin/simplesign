@@ -11,8 +11,10 @@ services:
     ports:
       - "127.0.0.1:${DSS_PORT:-8080}:8080"
     environment:
-      # Where the TestBench is, to fetch its sandbox root at start (Docker Desktop reaches the host this way).
-      TESTBENCH_URL: ${TESTBENCH_URL:-http://host.docker.internal:5199}
+      # Where the SimpleSign Sandbox is, to trust its root at start (Docker Desktop reaches the host this way).
+      SANDBOX_URL: ${SANDBOX_URL:-http://host.docker.internal:5300}
+      # Optional: a TestBench, whose connected Sandbox's root is used when SANDBOX_URL does not answer.
+      TESTBENCH_URL: ${TESTBENCH_URL:-}
       # The EU trusted lists, to validate real EU signatures: "false" (none), "true" (download at
       # start and every hour; needs the internet) or "cached" (only what an earlier "true" run kept).
       DSS_LOAD_EU_TRUSTED_LISTS: ${DSS_LOAD_EU_TRUSTED_LISTS:-false}

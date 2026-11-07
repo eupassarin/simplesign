@@ -131,6 +131,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Signing agent](docs/articles/agent.md) / [TestBench](docs/articles/testbench.md) | Tray app with a local signing API; local web app to try every option |
 | [Standard coverage](docs/articles/coverage.md) | Every option with the clause that defines it, and what is not implemented |
 | [Conformance](docs/conformance.md) / [ADRs](docs/adr/) | Standards coverage and design decisions |
+| [Sandbox](docs/articles/sandbox.md) | A test PKI with real CRL (HTTP, HTTPS, LDAP), OCSP, TSA and CSC endpoints and failures to switch on, for tests and certification evidence |
 | [INDECOPI evidence](docs/articles/indecopi-evidence.md) | Running the tests that back each requirement of the INDECOPI accreditation guide |
 
 ## Extension points

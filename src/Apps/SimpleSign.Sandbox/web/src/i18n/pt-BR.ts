@@ -123,8 +123,8 @@ export const ptBR: Messages = {
     requirements: {
       r11: "Requisito 11 — situação de revogação",
       r12: "Requisito 12 — validade do certificado",
-      r13: "Requisito 13 — força da chave",
-      r16: "Requisito 16 — uso da chave",
+      r13: "Requisito 13 — uso da chave",
+      r16: "Requisito 16 — força da chave e algoritmos",
       r30: "Requisito 30 — autoridade de carimbo do tempo",
     },
     items: {

@@ -20,9 +20,25 @@ public sealed class TestBenchFixture : IAsyncLifetime, IDisposable
     /// <summary>Why the Sandbox could not be reached; null when connected.</summary>
     public string? SandboxProblem { get; private set; }
 
-    /// <summary>Skips the calling test when no Sandbox is connected.</summary>
-    public void RequireSandbox() =>
-        Skip.If(SandboxProblem is not null, $"No SimpleSign Sandbox at {SandboxUrl} ({SandboxProblem}). Start one: dotnet run --project src/Apps/SimpleSign.Sandbox");
+    /// <summary>
+    /// Skips the calling test when no Sandbox is connected; fails it instead when
+    /// <c>SIMPLESIGN_REQUIRE_SANDBOX</c> is "true" (CI starts one, so a missing Sandbox is an error there).
+    /// </summary>
+    public void RequireSandbox()
+    {
+        if (SandboxProblem is null)
+        {
+            return;
+        }
+
+        string message = $"No SimpleSign Sandbox at {SandboxUrl} ({SandboxProblem}). Start one: dotnet run --project src/Apps/SimpleSign.Sandbox";
+        if (string.Equals(Environment.GetEnvironmentVariable("SIMPLESIGN_REQUIRE_SANDBOX"), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        Skip.If(true, message);
+    }
 
     internal DocumentStore Documents { get; } = new();
 
