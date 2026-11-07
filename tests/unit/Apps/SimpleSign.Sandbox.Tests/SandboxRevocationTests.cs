@@ -57,6 +57,26 @@ public sealed class SandboxRevocationTests(SandboxFixture fixture)
     }
 
     [Fact]
+    public async Task Https_ServerSendsItsIntermediate()
+    {
+        // A client that trusts only the root builds the chain from what the server sends.
+        var https = new Uri(fixture.Info.HttpsBaseUrl);
+        using var intermediate = X509CertificateLoader.LoadCertificate(await Http.GetByteArrayAsync("aia/intermediate.cer"));
+        var sent = new List<string>();
+        using var tcp = new System.Net.Sockets.TcpClient();
+        await tcp.ConnectAsync(https.Host, https.Port);
+        await using var tls = new System.Net.Security.SslStream(tcp.GetStream(), leaveInnerStreamOpen: false, (_, _, chain, _) =>
+        {
+            sent.AddRange(chain!.ChainPolicy.ExtraStore.Select(c => c.Thumbprint));
+            return true;
+        });
+
+        await tls.AuthenticateAsClientAsync("localhost");
+
+        sent.ShouldContain(intermediate.Thumbprint);
+    }
+
+    [Fact]
     public async Task Ldap_WithoutLoopbackOrigin_IsRefusedByTheLibrary()
     {
         var policy = fixture.Policy with { LoopbackOrigins = [] };

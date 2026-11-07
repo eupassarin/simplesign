@@ -27,7 +27,13 @@ public static class SandboxApp
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args ?? [], ContentRootPath = AppContext.BaseDirectory });
         builder.WebHost.ConfigureKestrel(o =>
         {
-            void Https(Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen) => listen.UseHttps(pki.TlsCertificate());
+            // The server sends its intermediate CA with its certificate, as a real server does: a client
+            // that trusts only the Sandbox's root can then build the chain without fetching anything.
+            void Https(Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen) => listen.UseHttps(new Microsoft.AspNetCore.Server.Kestrel.Https.HttpsConnectionAdapterOptions
+            {
+                ServerCertificate = pki.TlsCertificate(),
+                ServerCertificateChain = [pki.Intermediate],
+            });
             if (options.ListenAnyAddress)
             {
                 o.ListenAnyIP(options.Port);
