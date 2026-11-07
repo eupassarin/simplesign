@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — apps, DI and packaging follow the new checks
+
+- `SimpleSign.Peru.Iofe` is packed and released (pack lists, `PACKAGE.md`); RELEASING lists it and the signer packages.
+- DI: `AddSimpleSignRevocation()` registers `IRevocationCache` and `IChainRevocationChecker` on the registered
+  `IHttpClientProvider`; `AddSimpleSignCades`/`AddSimpleSignXades` build their validators with it (they used the
+  default HTTP client); `SimpleSignOptions.ValidationPolicy`.
+- `CadesSignatureValidator.ValidateAllAsync`, `XadesSignatureValidator.ValidateAllAsync` and
+  `XadesSignatureValidator.ValidateAsync(…, externalData)`: revocation for every signer and countersignature.
+  `CadesSignerValidationResult.IsValid` follows the signer's indication.
+- `SignatureSubIndication.ToEtsiName()`.
+- CLI: `--signing-policy` on the sign commands, refusal reasons with a hint, `validate-dir` with the policy/trust
+  options and sub-indications, three-state CAdES/XAdES output, `explain` for the ETSI terms.
+- TestBench: signing policy option, validation policy choice (Default, INDECOPI), sub-indications and policy checks
+  in the reports, real revocation for CAdES/XAdES, weak-key and no-key-usage sandbox signers.
+- Agent: `/api/certificates` reports `policyIssue` (keyUsage, weakKey), shown in the Overview; `/api/sign` refuses an
+  unsupported `hashAlgorithm` with 400 instead of signing SHA-256.
+- Docs: README, conformance, PAdES/CAdES/XAdES, validation, getting started, deferred, PKCS#11, cloud and TestBench
+  articles; ADRs 0009, 0011, 0013, 0018 and 0020 point to ADRs 0021/0022; CLAUDE.md, CONTRIBUTING, SECURITY.
+
 ### Added — signing policy: checks before signing (INDECOPI Req. 11–13, 16)
 
 - `SigningPolicy` (`Default`, `Strict`, `Minimal`) with `WithSigningPolicy(...)` on the PAdES, CAdES, XAdES,

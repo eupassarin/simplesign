@@ -18,6 +18,9 @@ simplesign sign document.pdf --thumbprint <THUMBPRINT>
 # Validate all signatures (--trust adds your own root CA; --json for scripts)
 simplesign validate signed.pdf --trust root-ca.pem
 
+# Validation policy, trust folder, trusted list and a Spanish verification report
+simplesign validate signed.pdf --policy policy.json --trust-dir ./roots --tsl tsl.xml --tsl-signer operator.cer --lang es
+
 # Inspect signatures without validation
 simplesign inspect signed.pdf
 

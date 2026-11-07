@@ -158,6 +158,7 @@ jobs:
                      src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj \
                      src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj \
                      src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj \
+                     src/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
                      src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
                      src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj \
                      src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \

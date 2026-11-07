@@ -23,7 +23,7 @@ terminal, `npm run dev` in `web/` (Vite on :5173, proxying `/api` to :5199). The
 
 | | Sandbox | Real |
 |---|---|---|
-| Certificates | Test PKI (*AC Raiz Sandbox SimpleSign*): RSA 2048/3072/4096, ECDSA P-256/384/521, e-CNPJ, expired, not yet valid, revoked, no nonRepudiation | Your PFX, the OS store, A3 tokens (PKCS#11), real PSC/CSC accounts |
+| Certificates | Test PKI (*AC Raiz Sandbox SimpleSign*): RSA 2048/3072/4096, ECDSA P-256/384/521, e-CNPJ, expired, not yet valid, revoked, no nonRepudiation, weak key (RSA 1024) and no signing key usage (refused by the default signing policy; sign them with the Minimal policy) | Your PFX, the OS store, A3 tokens (PKCS#11), real PSC/CSC accounts |
 | Timestamp | Offline RFC 3161 TSA, plus one that requires HTTP Basic | DigiCert, Sectigo, FreeTSA or any URL (http, https, tcp), with Basic/Bearer and mTLS |
 | Revocation | CRLs of both sandbox CAs | The certificates' real CRL/OCSP |
 | Cloud | Simulated ICP-Brasil PSC (OAuth + PKCE, CPF + OTP) and CSC v2 service (PIN/OTP, SCAL 1/2, OAuth); login pages are approved automatically | Your provider; OAuth opens the system browser |
@@ -86,7 +86,10 @@ national framework on:
   the PBAD.PAdES sub-filter, the advanced electronic signature of Lei 14.063, health documents,
   the fiscal XML-DSig layouts, the ICP-Brasil roots and the Brazilian validation rules. These
   options are in the same sections as the others, in green and tagged **BR**.
-- eIDAS and IOFE are listed as planned.
+- eIDAS is listed as planned. IOFE exists as the `SimpleSign.Peru.Iofe` package; the workbench offers its validation
+  policy (Validation policy → INDECOPI) but not its trusted list yet.
+- Every format has a **Signing policy** choice (Default, Strict, Minimal); validation shows the ETSI sub-indication
+  next to the indication and the validation policy's checks as rows.
 
 With every framework off, validation uses no `ICountryExtension`.
 

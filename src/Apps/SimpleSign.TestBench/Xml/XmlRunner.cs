@@ -32,7 +32,8 @@ public sealed record XmlSignatureReport(
     string? SigningTime,
     IReadOnlyList<CheckRow> Checks,
     IReadOnlyList<string> Errors,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    string? SubIndication = null);
 
 public sealed record XmlValidationView(
     string Overall,
@@ -129,15 +130,15 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return Failure(report, ex.Message, ex.GetType().Name, FallbackCode(o, context, credential.Facts));
+            return Failure(report, ex.Message, SigningRunner.ErrorTypeOf(ex), FallbackCode(o, context, credential.Facts));
         }
 
         long signMs = watch.ElapsedMilliseconds;
         string fileName = OutputName(o, data.FileName);
         var output = documents.Add(fileName, signed);
         var view = o.Validate
-            ? Validate(output.Id, o.Mode == XmlMode.Xades && o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? ValidationSettings.For(o.Environment),
-                o.Mode == XmlMode.Xades ? report.Effective.ExternalObjectId : null)
+            ? await ValidateAsync(output.Id, o.Mode == XmlMode.Xades && o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? ValidationSettings.For(o.Environment),
+                o.Mode == XmlMode.Xades ? report.Effective.ExternalObjectId : null, cancellationToken)
             : null;
         return new XmlSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved, warnings, signMs, view, code, report.Issues);
     }
@@ -147,7 +148,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     /// Validates a signed XML. <paramref name="externalObjectId"/> is a file the signature references
     /// by its file name (an additional external data object), when the caller has it.
     /// </summary>
-    public XmlValidationView Validate(string signatureId, string? dataId, ValidationSettings settings, string? externalObjectId = null)
+    public async Task<XmlValidationView> ValidateAsync(string signatureId, string? dataId, ValidationSettings settings, string? externalObjectId = null,
+        CancellationToken cancellationToken = default)
     {
         var file = documents.Get(signatureId);
         byte[]? data = dataId is null ? null : documents.Get(dataId).Content;
@@ -168,7 +170,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
 
         var trust = validation.Trust(settings);
         var signatures = mode == XmlMode.Xades
-            ? ValidateXades(file.Content, data, externalObject, trust, settings)
+            ? await ValidateXadesAsync(file.Content, data, externalObject, trust, settings, cancellationToken)
             : ValidateFiscal(file.Content, trust, settings);
         string overall = signatures.Count == 0 ? "Invalid"
             : signatures.All(s => s.Indication == "Valid") ? "Valid"
@@ -178,14 +180,15 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         return new XmlValidationView(overall, mode, signatures, errors, signatureXml, preview, watch.ElapsedMilliseconds, ValidationCode(mode, settings, data is not null));
     }
 
-    private static List<XmlSignatureReport> ValidateXades(byte[] xml, byte[]? data, StoredFile? externalObject, ValidationTrust trust, ValidationSettings settings)
+    private async Task<List<XmlSignatureReport>> ValidateXadesAsync(byte[] xml, byte[]? data, StoredFile? externalObject, ValidationTrust trust,
+        ValidationSettings settings, CancellationToken cancellationToken)
     {
-        var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger);
+        var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger, chainRevocationChecker: validation.RevocationChecker(settings));
         var anchors = trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null;
         // An external additional data object is found by the URI of its reference, which is its file name.
         var results = externalObject is null
-            ? validator.ValidateAll(xml, anchors, data)
-            : validator.ValidateAll(xml, anchors, ExternalData(xml, data, externalObject));
+            ? await validator.ValidateAllAsync(xml, anchors, data, cancellationToken)
+            : await validator.ValidateAllAsync(xml, anchors, ExternalData(xml, data, externalObject), cancellationToken);
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
         var reports = new List<XmlSignatureReport>();
         foreach (var result in results)
@@ -208,7 +211,9 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                 new("sigAndRefs", L.T("SigAndRefsTimeStamp (XAdES-X)"), Status(r.HasValidSigAndRefsTimeStamp), null),
                 new("ltv", L.T("Validation data (certificate and revocation values)"), Status(r.IsLtvDataValid), null),
                 new("archive", L.T("Archive timestamp"), Status(r.HasValidArchiveTimeStamp), null),
+                ValidationService.RevocationRow(r.IsNotRevoked, r.RevocationSource),
             };
+            checks.AddRange(ValidationService.PolicyRows(r.Constraints));
             if (r.SignaturePolicy is not null && settings.UseBrasil)
             {
                 var policy = IcpBrasilXadesPolicyValidator.Validate(xml, r);
@@ -224,7 +229,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
 
             bool invalid = !r.IsSignatureValid || !r.IsIntegrityValid || r.HasValidSignatureTimeStamp == false || r.HasValidArchiveTimeStamp == false
                 || r.HasValidSigAndRefsTimeStamp == false || r.HasValidCompleteReferences == false || r.HasValidDataObjectsTimeStamp == false;
-            string indication = invalid ? "Invalid" : r.IsValid ? "Valid" : "Indeterminate";
+            string indication = invalid ? "Invalid" : r.Indication.ToString();
             string? reference = countersigned is null ? r.SignatureId : L.T("{0} (countersignature of {1})", r.SignatureId ?? "-", countersigned);
             reports.Add(new XmlSignatureReport(i, reference, CadesInspector.SimpleName(r.SignerCertificate), null, null, indication,
                 r.DetectedLevel switch
@@ -235,7 +240,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                     _ => "B-LTA",
                 },
                 r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
-                [.. checks.Where(c => c.Status != "n/a" || c.Id is "signature" or "chain")], r.Errors, r.Warnings));
+                [.. checks.Where(c => c.Status != "n/a" || c.Id is "signature" or "chain")], r.Errors, r.Warnings,
+                ValidationService.SubIndicationName(r.SubIndication)));
             foreach (var counter in r.CounterSignatures)
             {
                 Report(counter, r.SignatureId ?? "-");
@@ -486,6 +492,12 @@ internal sealed class XadesPlan
             _steps.Add(($".WithHashAlgorithm(HashAlgorithmName.{hash.Name})", b => b.WithHashAlgorithm(hash)));
         }
 
+        if (o.SigningPolicy != SigningPolicyChoice.Default)
+        {
+            var signingPolicy = SigningPlan.ToSigningPolicy(o.SigningPolicy);
+            _steps.Add((SigningPlan.SigningPolicyCode(o.SigningPolicy), b => b.WithSigningPolicy(signingPolicy)));
+        }
+
         if (credential.Facts.KeyAlgorithm == "RSA" && o.Padding == RsaPadding.Pss)
         {
             _steps.Add((".WithSignatureAlgorithm(Oids.RsaPss) // RSASSA-PSS, salt = hash length", b => b.WithSignatureAlgorithm(Oids.RsaPss)));
@@ -729,6 +741,11 @@ internal sealed class XadesPlan
         if (_o.Hash != HashChoice.Sha256)
         {
             args.Add("--hash " + SigningPlan.HashName(_o.Hash));
+        }
+
+        if (_o.SigningPolicy != SigningPolicyChoice.Default)
+        {
+            args.Add("--signing-policy " + _o.SigningPolicy.ToString().ToLowerInvariant());
         }
 
         CodeGenerator.AddIf(args, "--commitment", _o.Commitment);

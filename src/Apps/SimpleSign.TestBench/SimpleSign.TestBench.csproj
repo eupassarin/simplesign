@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\Extras\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
   </ItemGroup>
 
   <ItemGroup>

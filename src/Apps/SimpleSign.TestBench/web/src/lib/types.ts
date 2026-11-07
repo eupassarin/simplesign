@@ -9,6 +9,7 @@ export type TsaAuth = "None" | "Basic" | "Bearer"
 export type HashChoice = "Sha256" | "Sha384" | "Sha512" | "Sha3_256" | "Sha3_384" | "Sha3_512"
 export type RsaPadding = "Pkcs1" | "Pss"
 export type RevocationPreference = "OcspFirst" | "CrlFirst"
+export type SigningPolicyChoice = "Default" | "Strict" | "Minimal"
 export type XadesCanonicalization = "Exclusive" | "Inclusive"
 export type SubFilterChoice = "EtsiCadesDetached" | "AdbePkcs7Detached" | "PbadPades"
 export type FieldMode = "New" | "Existing"
@@ -115,6 +116,7 @@ export interface SigningOptions {
   archiveTimestamp: TimestampChoice
   returnLowerLevel: boolean
   revocationPreference: RevocationPreference
+  signingPolicy: SigningPolicyChoice
   hash: HashChoice
   padding: RsaPadding
   subFilter: SubFilterChoice
@@ -302,6 +304,8 @@ export interface CheckRow {
 export interface SignatureReport {
   fieldName: string
   indication: "Valid" | "Invalid" | "Indeterminate"
+  /** The ETSI EN 319 102-1 sub-indication (HASH_FAILURE, TRY_LATER…) when the result is not valid. */
+  subIndication?: string | null
   isDocumentTimestamp: boolean
   signer?: string | null
   subFilter?: string | null
@@ -405,7 +409,10 @@ export interface SandboxRequest {
 // ── Validation area ─────────────────────────────────────────────────
 export type TrustChoice = "Sandbox" | "System" | "IcpBrasil"
 
+export type ValidationPolicyChoice = "Default" | "Indecopi"
+
 export interface ValidationSettings {
+  policy: ValidationPolicyChoice
   environment: EnvironmentMode
   trust: TrustChoice[]
   customRootUploadIds: string[]
@@ -521,6 +528,7 @@ export interface CadesOptions {
   commitment?: string | null
   contentTimestamp: boolean
   revocationPreference: RevocationPreference
+  signingPolicy: SigningPolicyChoice
   signerCountry?: string | null
   signerLocality?: string | null
   signerPostalAddress: string[]
@@ -584,6 +592,8 @@ export interface CadesSignerReport {
   index: number
   signer?: string | null
   indication: "Valid" | "Invalid" | "Indeterminate"
+  /** The ETSI EN 319 102-1 sub-indication (HASH_FAILURE, TRY_LATER…) when the result is not valid. */
+  subIndication?: string | null
   signingTime?: string | null
   checks: CheckRow[]
   errors: string[]
@@ -673,6 +683,7 @@ export interface XmlOptions {
   placePostalCode?: string | null
   placeCountry?: string | null
   revocationPreference: RevocationPreference
+  signingPolicy: SigningPolicyChoice
   commitment?: string | null
   signingTime?: string | null
   operationId?: string | null
@@ -713,6 +724,8 @@ export interface XmlSignatureReport {
   cnpj?: string | null
   cpf?: string | null
   indication: "Valid" | "Invalid" | "Indeterminate"
+  /** The ETSI EN 319 102-1 sub-indication (HASH_FAILURE, TRY_LATER…) when the result is not valid. */
+  subIndication?: string | null
   level?: string | null
   signingTime?: string | null
   checks: CheckRow[]

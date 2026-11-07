@@ -42,7 +42,8 @@ public sealed record RunVerdict(
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
     IReadOnlyList<RunVerdict> Children,
-    bool IsTimestamp = false);
+    bool IsTimestamp = false,
+    string? SubIndication = null);
 
 /// <summary>Everything about one run: what was asked, what came out, the verdicts, the code and the log.</summary>
 public sealed record RunView(
@@ -227,7 +228,7 @@ internal sealed class RunService(
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException or KeyNotFoundException)
             {
-                view = Empty(run) with { Error = ex.Message, ErrorType = ex.GetType().Name };
+                view = Empty(run) with { Error = ex.Message, ErrorType = SigningRunner.ErrorTypeOf(ex) };
             }
         }
 
@@ -270,7 +271,7 @@ internal sealed class RunService(
         {
             case RunFormats.Cades:
                 {
-                    var report = cades.Validate(options.FileId, options.DataId, settings);
+                    var report = await cades.ValidateAsync(options.FileId, options.DataId, settings);
                     return view with
                     {
                         Success = true,
@@ -285,7 +286,7 @@ internal sealed class RunService(
 
             case RunFormats.Xades:
                 {
-                    var report = xml.Validate(options.FileId, options.DataId, settings);
+                    var report = await xml.ValidateAsync(options.FileId, options.DataId, settings);
                     return view with
                     {
                         Success = true,
@@ -320,10 +321,11 @@ internal sealed class RunService(
     }
 
     private static RunVerdict Verdict(SignatureReport v) =>
-        new(v.FieldName, v.Signer, v.Indication, v.PolicyLevel, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp);
+        new(v.FieldName, v.Signer, v.Indication, v.PolicyLevel, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp, v.SubIndication);
 
     private static RunVerdict Verdict(XmlSignatureReport s) => new(
-        s.Reference ?? L.T("Signature {0}", s.Index + 1), s.Signer, s.Indication, s.Level, s.SigningTime, s.Checks, s.Errors, s.Warnings, []);
+        s.Reference ?? L.T("Signature {0}", s.Index + 1), s.Signer, s.Indication, s.Level, s.SigningTime, s.Checks, s.Errors, s.Warnings, [],
+        SubIndication: s.SubIndication);
 
     private static RunView Empty(Run run) => new(
         run.Id, run.Format, "running", run.StartedAt, 0, run.Options, false, null, null, null, null, 0, null, null,
@@ -375,7 +377,7 @@ internal sealed class RunService(
 
     private static RunVerdict Verdict(CadesSignerReport s) => new(
         L.T("Signer {0}", s.Index + 1), s.Signer, s.Indication, null, s.SigningTime, s.Checks, s.Errors, s.Warnings,
-        [.. s.CounterSignatures.Select(Verdict)]);
+        [.. s.CounterSignatures.Select(Verdict)], SubIndication: s.SubIndication);
 
     private static RunView FromXml(Run run, XmlSignResult r) => Empty(run) with
     {

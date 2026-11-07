@@ -43,6 +43,8 @@ The deferred builder uses the same vocabulary as direct PAdES signing:
 | `WithLevel(profile)` | Requests B-B, B-T, B-LT, or B-LTA. |
 | `WithHttpClientProvider(provider)` | Supplies non-owned TSA/revocation clients. |
 | `WithFieldOptions(options)` | Atomically configures or clears PDF field metadata and appearance. |
+| `WithSigningPolicy(policy)` | Checks run when the hash is prepared (chain validity, key usage, key size, hash; revocation with `SigningPolicy.Strict`). |
+| `WithChainRevocationChecker(checker)` | Replaces the checker of the Strict revocation check. |
 | `WithLogger(logger)` | Enables diagnostics. |
 
 The serialized session contains operation state, public certificate material, and the requested

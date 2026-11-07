@@ -28,6 +28,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
     /// <summary>Sign command settings.</summary>
     internal sealed class Settings : ExternalCredentialSettings
     {
+        /// <summary>Checks run before signing.</summary>
+        [CommandOption("--signing-policy <POLICY>")]
+        [Description(SigningPolicyOption.Description)]
+        public string? SigningPolicy { get; init; }
+
         /// <summary>Input PDF file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input PDF file to sign")]
@@ -320,6 +325,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            if (!SigningPolicyOption.IsValid(SigningPolicy))
+            {
+                return ValidationResult.Error($"Unknown --signing-policy '{SigningPolicy}': use default, strict or minimal.");
+            }
+
             bool hasCertPath = !string.IsNullOrWhiteSpace(CertPath);
             bool hasThumbprint = !string.IsNullOrWhiteSpace(Thumbprint);
             if (ExternalCredentialSupport.Validate(this, hasCertPath || hasThumbprint) is { } externalError)
@@ -824,6 +834,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                             [.. (settings.Registrations ?? []).Select(r => IcpBrasilCliOptions.ParseRegistration(r)!)]);
                     }
 
+                    builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
                     var result = await builder.SignWithDetailsAsync();
                     signed = result.SignedArtifact;
                     dssEmbedded = result.HasLongTermValidationMaterial;

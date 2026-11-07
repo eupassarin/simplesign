@@ -24,6 +24,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
     /// <summary>CAdES sign command settings.</summary>
     internal sealed class Settings : ExternalCredentialSettings
     {
+        /// <summary>Checks run before signing.</summary>
+        [CommandOption("--signing-policy <POLICY>")]
+        [Description(SigningPolicyOption.Description)]
+        public string? SigningPolicy { get; init; }
+
         /// <summary>Input data file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input data file to sign")]
@@ -146,6 +151,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            if (!SigningPolicyOption.IsValid(SigningPolicy))
+            {
+                return ValidationResult.Error($"Unknown --signing-policy '{SigningPolicy}': use default, strict or minimal.");
+            }
+
             if (!File.Exists(InputPath))
             {
                 return ValidationResult.Error($"File not found: {InputPath}");
@@ -248,6 +258,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
                 : builder.WithExternalSigner(token.Certificate, token.Signer, [.. token.Chain, .. LoadChainCertificates(settings.ChainPath)]);
         }
 
+        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
         byte[] cms = await builder.SignAsync(cancellationToken);
 
         string outputPath = settings.OutputPath

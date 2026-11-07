@@ -55,7 +55,7 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
     }
 
     /// <summary>Validate directory command settings.</summary>
-    internal sealed class Settings : CommonSettings
+    internal sealed class Settings : TrustedValidationSettings
     {
         /// <summary>Directory containing PDF files to validate.</summary>
         [CommandArgument(0, "<directory>")]
@@ -104,7 +104,7 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
                 return ValidationResult.Error($"Trust anchor file not found: {TrustPath}");
             }
 
-            return ValidationResult.Success();
+            return ValidateTrustOptions();
         }
     }
 
@@ -120,12 +120,19 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
         }
 
         using var loggerFactory = settings.CreateLoggerFactory();
+        var (policy, extraAnchors) = await settings.LoadTrustAsync(cancellationToken);
+        List<System.Security.Cryptography.X509Certificates.X509Certificate2> roots =
+        [
+            .. settings.TrustPath is null
+                ? []
+                : _certChainService.LoadCertsFromBytes(await File.ReadAllBytesAsync(settings.TrustPath, cancellationToken)),
+            .. extraAnchors,
+        ];
         var options = new ValidationOptions
         {
             CheckRevocation = !settings.NoRevocation,
-            TrustedRoots = settings.TrustPath is null
-                ? null
-                : [.. _certChainService.LoadCertsFromBytes(await File.ReadAllBytesAsync(settings.TrustPath, cancellationToken))],
+            TrustedRoots = roots.Count == 0 ? null : roots,
+            Policy = policy,
         };
         var validator = new PdfSignatureValidator(
             _httpClientProvider, _revocationChecker, options,
@@ -226,8 +233,8 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
                 var errSuffix = r.Indication switch
                 {
                     SignatureIndication.Valid => string.Empty,
-                    SignatureIndication.Indeterminate => $"  [yellow]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "indeterminate")}[/]",
-                    _ => $"  [red]{(r.Errors.Count > 0 ? r.Errors[0].EscapeMarkup() : "invalid")}[/]"
+                    SignatureIndication.Indeterminate => $"  [yellow]{Reason(r, "indeterminate")}[/]",
+                    _ => $"  [red]{Reason(r, "invalid")}[/]"
                 };
 
                 AnsiConsole.MarkupLine($"  {icon} {r.FieldName.EscapeMarkup()}  {signer}{level}{time}{errSuffix}");
@@ -261,5 +268,12 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
         AnsiConsole.WriteLine();
 
         return (indeterminateFiles > 0 || invalidFiles > 0 || erroredFiles > 0) ? 1 : 0;
+    }
+
+    /// <summary>The ETSI sub-indication and the first error of a result that did not pass.</summary>
+    private static string Reason(SignatureValidationResult result, string fallback)
+    {
+        string sub = result.SubIndication is { } subIndication ? subIndication.ToEtsiName() : fallback;
+        return result.Errors.Count > 0 ? $"{sub}: {result.Errors[0].EscapeMarkup()}" : sub;
     }
 }

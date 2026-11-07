@@ -20,6 +20,12 @@ internal sealed class AgentCertificate
 
     /// <summary>Token label for PKCS#11 certificates (new).</summary>
     public string? TokenLabel { get; set; }
+
+    /// <summary>
+    /// Why the signing policy of a SimpleSign server refuses this certificate by default: "keyUsage" (neither
+    /// digitalSignature nor nonRepudiation) or "weakKey" (RSA under 2048 bits); null when none (new).
+    /// </summary>
+    public string? PolicyIssue { get; set; }
 }
 
 internal sealed class AgentSignRequest

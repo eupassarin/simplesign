@@ -67,7 +67,8 @@ public static class SimpleSignServiceCollectionExtensions
             CheckRevocation = options.CheckRevocation,
             TrustSystemRoots = options.TrustSystemRoots,
             TrustedRoots = options.TrustedRoots.Count > 0 ? options.TrustedRoots : null,
-            NetworkTimeout = options.NetworkTimeout
+            NetworkTimeout = options.NetworkTimeout,
+            Policy = options.ValidationPolicy,
         });
 
         // IHttpClientProvider — custom, IHttpClientFactory-backed, or default shared-static
@@ -89,7 +90,8 @@ public static class SimpleSignServiceCollectionExtensions
             });
         }
 
-        // Core revocation services
+        // Core revocation services: the chain checker and the CRL cache shared by every format
+        services.AddSimpleSignRevocation();
         services.TryAddSingleton<IOcspClient>(sp =>
         {
             var http = sp.GetRequiredService<IHttpClientProvider>().GetClient();
@@ -104,6 +106,7 @@ public static class SimpleSignServiceCollectionExtensions
             return new CrlClient(http, sp.GetService<ILogger<CrlClient>>())
             {
                 OutboundPolicy = sp.GetRequiredService<IHttpClientProvider>().OutboundPolicy ?? OutboundHttpPolicy.Default,
+                Cache = sp.GetRequiredService<IRevocationCache>(),
             };
         });
         services.TryAddSingleton<IRevocationChecker>(sp =>

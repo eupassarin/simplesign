@@ -8,6 +8,24 @@ internal static class Translations
 {
     public static readonly IReadOnlyDictionary<string, string> All = new Dictionary<string, string>(StringComparer.Ordinal)
     {
+        // ── Signing policy ─────────────────────────────────────────────
+        ["Validation policy"] = "Política de validação",
+        ["Which algorithms, key sizes and key usages the validation accepts."] = "Quais algoritmos, tamanhos de chave e key usages a validação aceita.",
+        ["Obsolete algorithms (MD5, SHA-1 without an older timestamp, RSA under 2048 bits) make the result INDETERMINATE; a missing key usage is a warning."] = "Algoritmos obsoletos (MD5, SHA-1 sem carimbo de tempo anterior, RSA abaixo de 2048 bits) deixam o resultado INDETERMINADO; a falta de key usage é um aviso.",
+        ["INDECOPI (Peru)"] = "INDECOPI (Peru)",
+        ["The policy of INDECOPI's accreditation guide: like the default, and a signing certificate without digitalSignature or nonRepudiation fails too."] = "A política do guia de acreditação do INDECOPI: como a padrão, e um certificado sem digitalSignature ou nonRepudiation também falha.",
+        ["Validation policy: {0}"] = "Política de validação: {0}",
+        ["The certificate allows neither digitalSignature nor nonRepudiation: the signing policy refuses it (KeyUsageNotPermitted). Choose the Minimal policy to try it anyway."] = "O certificado não permite digitalSignature nem nonRepudiation: a política de assinatura o recusa (KeyUsageNotPermitted). Escolha a política Mínima para tentar mesmo assim.",
+        ["The RSA key has {0} bits: the signing policy requires at least 2048 (KeyTooWeak). Choose the Minimal policy to try it anyway."] = "A chave RSA tem {0} bits: a política de assinatura exige no mínimo 2048 (KeyTooWeak). Escolha a política Mínima para tentar mesmo assim.",
+        ["Signing policy"] = "Política de assinatura",
+        ["The checks made before signing; a certificate, key or algorithm they refuse stops the signature."] = "As verificações feitas antes de assinar; um certificado, chave ou algoritmo recusado impede a assinatura.",
+        ["Default"] = "Padrão",
+        ["Validity of every certificate of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. The default."] = "Validade de todos os certificados da cadeia, key usage digitalSignature ou nonRepudiation, RSA de 2048 bits ou mais, SHA-2 ou SHA-3. O padrão.",
+        ["Strict"] = "Estrita",
+        ["The default checks plus the revocation of the whole chain (CRL and OCSP); a revoked certificate or an unknown status stops the signature."] = "As verificações padrão mais a revogação da cadeia inteira (LCR e OCSP); um certificado revogado ou um status desconhecido impede a assinatura.",
+        ["Minimal"] = "Mínima",
+        ["Only the dates of the signing certificate, as before signing policies existed. For tests and migrations."] = "Só as datas do certificado do signatário, como antes das políticas de assinatura. Para testes e migrações.",
+
         // ── Credentials ────────────────────────────────────────────────
         ["The PFX has no certificate with a private key."] = "O PFX não tem certificado com chave privada.",
         ["Certificate not found in the user store, or it has no private key."] = "Certificado não encontrado no repositório do usuário, ou sem chave privada.",
@@ -93,6 +111,12 @@ internal static class Translations
         ["Expired"] = "Expirado",
         ["Revoked"] = "Revogado",
         ["No non-repudiation"] = "Sem não-repúdio",
+        ["Weak key (RSA 1024)"] = "Chave fraca (RSA 1024)",
+        ["RSA 1024 key: the default signing policy refuses it (KeyTooWeak); the Minimal policy signs, and validation reports CRYPTO_CONSTRAINTS_FAILURE_NO_POE."] = "Chave RSA 1024: a política de assinatura padrão a recusa (KeyTooWeak); a política Mínima assina, e a validação aponta CRYPTO_CONSTRAINTS_FAILURE_NO_POE.",
+        ["Key too small"] = "Chave pequena demais",
+        ["Without a signing key usage"] = "Sem key usage de assinatura",
+        ["Key usage has keyEncipherment only: the default signing policy refuses it (KeyUsageNotPermitted)."] = "O key usage tem só keyEncipherment: a política de assinatura padrão o recusa (KeyUsageNotPermitted).",
+        ["No signing key usage"] = "Sem key usage de assinatura",
 
         // ── Compatibility ──────────────────────────────────────────────
         ["Choose a document to sign."] = "Escolha um documento para assinar.",
@@ -476,7 +500,7 @@ internal static class Translations
         ["European Union (eIDAS)"] = "União Europeia (eIDAS)",
         ["Qualified signatures and EU trusted lists. Planned."] = "Assinaturas qualificadas e listas de confiança da UE. Planejado.",
         ["Peru (IOFE)"] = "Peru (IOFE)",
-        ["The Peruvian official electronic signature infrastructure. Planned."] = "A infraestrutura oficial de assinatura eletrônica do Peru. Planejado.",
+        ["The Peruvian official electronic signature infrastructure: the library package SimpleSign.Peru.Iofe exists (INDECOPI trusted list and policies); here only its validation policy is offered."] = "A infraestrutura oficial de assinatura eletrônica do Peru: o pacote SimpleSign.Peru.Iofe existe na biblioteca (lista de confiança e políticas do INDECOPI); aqui só a política de validação é oferecida.",
         ["What to sign"] = "O que assinar",
         ["The document or data, and how the signature is attached to it."] = "O documento ou os dados, e como a assinatura se liga a eles.",
         ["Signer"] = "Signatário",

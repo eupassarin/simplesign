@@ -103,11 +103,37 @@ internal static partial class Program
 
             config.SetExceptionHandler((ex, _) =>
             {
+                if (ex is SimpleSign.Core.Signing.SigningException signing)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error ({signing.Reason}):[/] {signing.Message.EscapeMarkup()}");
+                    if (SigningHint(signing.Reason) is { } hint)
+                    {
+                        AnsiConsole.MarkupLine($"[dim]{hint.EscapeMarkup()}[/]");
+                    }
+
+                    return -1;
+                }
+
                 AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message.EscapeMarkup()}");
                 return -1;
             });
         });
     }
+
+    /// <summary>What the user can do about a refusal of the signing policy.</summary>
+    internal static string? SigningHint(SimpleSign.Core.Signing.SigningErrorReason reason) => reason switch
+    {
+        SimpleSign.Core.Signing.SigningErrorReason.KeyUsageNotPermitted or SimpleSign.Core.Signing.SigningErrorReason.KeyTooWeak
+            or SimpleSign.Core.Signing.SigningErrorReason.ChainCertificateNotValid =>
+            "The certificate does not meet the signing policy. Use a suitable certificate, or --signing-policy minimal for tests.",
+        SimpleSign.Core.Signing.SigningErrorReason.AlgorithmNotPermitted =>
+            "Choose SHA-256, SHA-384 or SHA-512 (--hash), or --signing-policy minimal for tests.",
+        SimpleSign.Core.Signing.SigningErrorReason.RevocationStatusUnknown =>
+            "Give the whole chain up to the root and check that its CRL/OCSP locations are reachable.",
+        SimpleSign.Core.Signing.SigningErrorReason.CertificateRevoked =>
+            "A certificate of the chain is revoked: it cannot sign.",
+        _ => null,
+    };
 
     internal static async Task<int> RunWithAsync(CommandApp app, string[] args) =>
         await app.RunAsync(args);

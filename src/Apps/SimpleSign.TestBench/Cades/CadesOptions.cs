@@ -96,6 +96,9 @@ public sealed record CadesOptions
 
     public HashChoice Hash { get; init; } = HashChoice.Sha256;
 
+    /// <summary>The checks run before signing: Default, Strict (adds chain revocation) or Minimal.</summary>
+    public SigningPolicyChoice SigningPolicy { get; init; }
+
     public RsaPadding Padding { get; init; } = RsaPadding.Pkcs1;
 
     public DateTimeOffset? SigningTime { get; init; }

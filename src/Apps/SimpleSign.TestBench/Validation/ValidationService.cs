@@ -30,9 +30,22 @@ public enum TrustChoice
     IcpBrasil,
 }
 
+/// <summary>The validation policy: accepted algorithms, key sizes and key usage.</summary>
+public enum ValidationPolicyChoice
+{
+    /// <summary>ValidationPolicy.Default: obsolete algorithms fail, key usage is a warning.</summary>
+    Default,
+
+    /// <summary>IofePolicies.Validation: the INDECOPI accreditation guide, key usage fails too.</summary>
+    Indecopi,
+}
+
 /// <summary>How to validate.</summary>
 public sealed record ValidationSettings
 {
+    /// <summary>The validation policy.</summary>
+    public ValidationPolicyChoice Policy { get; init; }
+
     public EnvironmentMode Environment { get; init; } = EnvironmentMode.Sandbox;
 
     public IReadOnlyList<TrustChoice> Trust { get; init; } = [TrustChoice.Sandbox];
@@ -167,6 +180,36 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             settings.UseBrasil ? [.. trust.Brazil.SelectMany(e => e.ChainValidationProviders)] : []);
     }
 
+    /// <summary>The chain revocation checker of the CAdES and XAdES validators, on the environment's network.</summary>
+    internal Core.Revocation.IChainRevocationChecker RevocationChecker(ValidationSettings settings)
+    {
+        var http = sandbox.HttpFor(settings.Environment);
+        return new Core.Revocation.ChainRevocationChecker(http.GetClient(), RunLog.Logger, http.OutboundPolicy);
+    }
+
+    /// <summary>The ETSI name of a sub-indication, or null.</summary>
+    internal static string? SubIndicationName(SignatureSubIndication? subIndication) => subIndication?.ToEtsiName();
+
+    /// <summary>
+    /// The checks of the validation policy (algorithms, key size, key usage) as report rows; the integrity,
+    /// signature, chain and revocation checks have their own rows.
+    /// </summary>
+    internal static IEnumerable<CheckRow> PolicyRows(IReadOnlyList<ValidationConstraintResult> constraints) =>
+        constraints
+            .Where(c => c.Id.StartsWith("crypto.", StringComparison.Ordinal) || c.Id.StartsWith("signingCertificate.", StringComparison.Ordinal))
+            .Select(c => new CheckRow("policy." + c.Id, L.T("Validation policy: {0}", c.Id), c.Status switch
+            {
+                ConstraintStatus.Passed => "pass",
+                ConstraintStatus.Warning => "warn",
+                ConstraintStatus.Failed => "fail",
+                _ => "n/a",
+            }, c.Message));
+
+    /// <summary>The revocation row of a CAdES or XAdES result.</summary>
+    internal static CheckRow RevocationRow(bool? notRevoked, RevocationSource source) =>
+        new("revocation", L.T("Revocation"), notRevoked switch { true => "pass", false => "fail", null => "n/a" },
+            notRevoked is null ? null : source.ToString());
+
     /// <summary>The trust settings as library objects, shared by the PAdES, CAdES and XAdES validators.</summary>
     internal ValidationTrust Trust(ValidationSettings settings)
     {
@@ -191,6 +234,9 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             TrustedRoots = roots.Count > 0 ? roots : null,
             CheckRevocation = settings.CheckRevocation,
             NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 120)),
+            Policy = settings.Policy == ValidationPolicyChoice.Indecopi
+                ? Peru.Iofe.IofePolicies.Validation
+                : Core.Validation.Policy.ValidationPolicy.Default,
         };
         IReadOnlyList<X509Certificate2> icpAnchors = icp ? [.. brazil.SelectMany(e => e.TrustAnchorProviders).SelectMany(p => p.GetTrustAnchors())] : [];
         return new ValidationTrust(options, brazil, icp, icpAnchors);
@@ -209,12 +255,13 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             new("revocation", L.T("Revocation"), Status(r.IsNotRevoked), r.RevocationSource.ToString()),
             new("timestamp", L.T("Signature timestamp"), Status(r.HasValidTimestamp), r.IsTsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
         };
+        checks.AddRange(PolicyRows(r.Constraints));
         return new SignatureReport(
             r.FieldName, r.Indication.ToString(), r.IsDocumentTimestamp,
             r.SignerName ?? r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false),
             r.SubFilter, r.DigestAlgorithmName,
             r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
-            r.PolicyLevel, r.SignerId, checks, r.Errors, r.Warnings, r.ChainValidationMetadata);
+            r.PolicyLevel, r.SignerId, checks, r.Errors, r.Warnings, r.ChainValidationMetadata, SubIndicationName(r.SubIndication));
     }
 
     private static DetailedSignature Detail(SignatureValidationResult result, SignatureFieldInfo? info, string? level, long fileSize, int revisions)
@@ -317,6 +364,11 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             options.Add($"NetworkTimeout = TimeSpan.FromSeconds({s.TimeoutSeconds})");
         }
 
+        if (s.Policy == ValidationPolicyChoice.Indecopi)
+        {
+            options.Add("Policy = IofePolicies.Validation // SimpleSign.Peru.Iofe");
+        }
+
         string optionsCode = options.Count == 0 ? "ValidationOptions.Default" : "new ValidationOptions\n{\n    " + string.Join(",\n    ", options) + ",\n}";
         if (s.UseBrasil && icp && options.Count == 0)
         {
@@ -349,7 +401,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
 
         string cli = "simplesign validate signed.pdf"
             + (s.Trust.Contains(TrustChoice.Sandbox) || s.CustomRootUploadIds.Count > 0 ? " --trust root.cer" : "")
-            + (s.CheckRevocation ? "" : " --no-revocation");
+            + (s.CheckRevocation ? "" : " --no-revocation")
+            + (s.Policy == ValidationPolicyChoice.Indecopi ? " --policy indecopi.json" : "");
         var notes = new List<string>
         {
             L.T("The CLI always applies the ICP-Brasil rules and trusts the OS and ICP-Brasil roots; --trust adds roots."),

@@ -8,9 +8,12 @@ import type { CodeSnippets, SignatureReport } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { KeyValue, Pill } from "./ui"
 
-export function Indication({ value }: { value: SignatureReport["indication"] }) {
+export function Indication({ value, subIndication }: { value: SignatureReport["indication"]; subIndication?: string | null }) {
   const t = useT()
-  return value === "Valid" ? <Pill tone="success">{t("result.indication.Valid")}</Pill> : value === "Invalid" ? <Pill tone="danger">{t("result.indication.Invalid")}</Pill> : <Pill tone="warning">{t("result.indication.Indeterminate")}</Pill>
+  const pill = value === "Valid" ? <Pill tone="success">{t("result.indication.Valid")}</Pill> : value === "Invalid" ? <Pill tone="danger">{t("result.indication.Invalid")}</Pill> : <Pill tone="warning">{t("result.indication.Indeterminate")}</Pill>
+  return subIndication && value !== "Valid"
+    ? <span className="inline-flex items-center gap-1.5">{pill}<span className="text-muted-foreground font-mono text-xs" title="ETSI EN 319 102-1">{subIndication}</span></span>
+    : pill
 }
 
 export function SignatureCard({ report }: { report: SignatureReport }) {
@@ -22,7 +25,7 @@ export function SignatureCard({ report }: { report: SignatureReport }) {
         <span className="font-medium">{report.fieldName}</span>
         {report.isDocumentTimestamp && <Pill tone="info">{t("result.report.docTimestamp")}</Pill>}
         <span className="text-muted-foreground text-xs">{report.signer}</span>
-        <span className="ml-auto"><Indication value={report.indication} /></span>
+        <span className="ml-auto"><Indication value={report.indication} subIndication={report.subIndication} /></span>
       </div>
       <div className="grid gap-x-8 px-4 py-3 sm:grid-cols-2">
         <KeyValue label="Sub-filter" mono>{report.subFilter ?? "—"}</KeyValue>

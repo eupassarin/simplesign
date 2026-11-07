@@ -148,6 +148,18 @@ public sealed class AgentServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Sign_UnsupportedHashAlgorithm_BadRequestWithoutAsking()
+    {
+        string body = $$"""{"thumbprint":"{{_certificate.Thumbprint}}","hashAlgorithm":"SHA1","signRequests":[{"id":"1","authenticatedAttributeBase64":"AA=="}]}""";
+
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", body);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // Only the site access was asked: the signature confirmation (which names the holder) never showed.
+        _dialogs.Asked.ShouldAllBe(asked => string.IsNullOrEmpty(asked.CertificateHolder));
+    }
+
+    [Fact]
     public async Task Sign_UnknownCertificate_NotFound()
     {
         string body = """{"thumbprint":"00","signRequests":[{"id":"1","authenticatedAttributeBase64":"AA=="}]}""";

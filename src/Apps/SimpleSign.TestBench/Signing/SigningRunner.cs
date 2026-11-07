@@ -30,7 +30,8 @@ public sealed record SignatureReport(
     IReadOnlyList<CheckRow> Checks,
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
-    IReadOnlyDictionary<string, string>? Metadata);
+    IReadOnlyDictionary<string, string>? Metadata,
+    string? SubIndication = null);
 
 /// <summary>What the signed PDF contains, read back with the inspector.</summary>
 public sealed record OutputFacts(
@@ -107,7 +108,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            return Failure(report, Describe(ex), ex.GetType().Name, code);
+            return Failure(report, Describe(ex), ErrorTypeOf(ex), code);
         }
     }
 
@@ -322,4 +323,10 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
 
         return string.Join(" → ", messages);
     }
+
+    /// <summary>The exception type shown in the result; a SigningException adds its reason, such as KeyTooWeak.</summary>
+    internal static string ErrorTypeOf(Exception ex) =>
+        ex is SigningException signing && signing.Reason != SigningErrorReason.Unspecified
+            ? $"{ex.GetType().Name} ({signing.Reason})"
+            : ex.GetType().Name;
 }

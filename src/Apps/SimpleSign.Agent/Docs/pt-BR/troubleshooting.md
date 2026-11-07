@@ -25,6 +25,16 @@ Outro programa, ou outra cópia do agente, está usando a porta `{port}`. Feche-
 - Ele precisa permitir assinatura (uso da chave *assinatura digital* ou *não repúdio*).
 - No macOS, o primeiro uso pode pedir permissão para usar a chave nas Chaves. Permita.
 
+## O site recusa meu certificado
+
+O servidor do site confere o certificado antes de assinar. A **Visão geral** marca os certificados que ele vai recusar:
+
+- **Não serve para assinar**: o key usage não permite *assinatura digital* nem *não repúdio*.
+- **Chave fraca**: uma chave RSA abaixo de 2048 bits.
+
+Use outro certificado, ou peça um novo à autoridade certificadora. Um certificado com a cadeia expirada também é
+recusado.
+
 ## O PIN é recusado
 
 O PIN é do token, não do agente. Depois de algumas tentativas erradas o token se bloqueia, e só a autoridade certificadora ou a ferramenta do próprio token desbloqueia. Pare de tentar e confira o PIN.

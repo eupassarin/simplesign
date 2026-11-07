@@ -187,18 +187,27 @@ var provider = new SingleClientProvider(proxiedClient)
     new LongTermValidationOptions(provider) { ClockSkewTolerance = TimeSpan.FromMinutes(5) }))
 ```
 
-The policy applies wherever the provider is used: TSA, OCSP, CRL and AIA downloads when signing,
-and revocation and AIA downloads when validating (`PdfSignatureValidator`, ICP-Brasil and Gov.br chain validators).
+The policy applies wherever the provider is used: TSA, OCSP, CRL and AIA downloads when signing (and the chain
+revocation check of `SigningPolicy.Strict`), and revocation and AIA downloads when validating (`PdfSignatureValidator`,
+the `ValidateAsync` methods of the CAdES and XAdES validators through `ChainRevocationChecker`, ICP-Brasil and Gov.br
+chain validators). CRL distribution points on `ldap://`/`ldaps://` are followed only with
+`OutboundHttpPolicy { AllowLdap = true }`, under the same host checks.
+
+## Signing Policy
+
+`CadesSigner` and `XadesSigner` check the certificate before signing like `PadesSigner`: `SigningPolicy.Default`
+(chain validity, key usage, RSA ≥ 2048, SHA-2/SHA-3), `SigningPolicy.Strict` (plus the revocation of the chain) or
+`SigningPolicy.Minimal`, set with `.WithSigningPolicy(...)`. See [PAdES signing](pades.md#signing-policy).
 
 ## Validate CAdES Signatures
 
 ```csharp
 using SimpleSign.CAdES;
 
-var validator = new CadesSignatureValidator(
-    new ValidationOptions { CheckRevocation = false });
+var validator = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = true });
 
-var result = validator.Validate(cmsBytes, originalData, trustAnchors);
+// ValidateAsync also checks the revocation of the signer and TSA chains; Validate does not.
+var result = await validator.ValidateAsync(cmsBytes, originalData, trustAnchors);
 
 Console.WriteLine($"Signer: {result.SignerCertificate?.Subject}");
 Console.WriteLine($"Integrity: {result.IsIntegrityValid}");
@@ -207,7 +216,8 @@ Console.WriteLine($"Chain: {result.IsCertificateChainValid}");
 Console.WriteLine($"Timestamp: {result.HasValidTimestamp}");
 Console.WriteLine($"LTV: {result.IsLtvDataValid}");
 Console.WriteLine($"Archive TS: {result.HasValidArchiveTimestamp}");
-Console.WriteLine($"Valid: {result.IsValid}");
+Console.WriteLine($"Not revoked: {result.IsNotRevoked} ({result.RevocationSource})");
+Console.WriteLine($"{result.Indication} {result.SubIndication}");   // IsValid follows the indication
 ```
 
 ## XAdES — XML Signatures
@@ -413,7 +423,7 @@ XAdES 1.3.2, which has no `StreetAddress`: signing fails when one is set.
 using SimpleSign.XAdES;
 
 var validator = new XadesSignatureValidator();
-var result = validator.Validate(signedXml, trustAnchors: anchors);
+var result = await validator.ValidateAsync(signedXml, anchors);   // with revocation; Validate has none
 
 Console.WriteLine($"Signer: {result.SignerCertificate?.Subject}");
 Console.WriteLine($"Signature: {result.IsSignatureValid}");
@@ -424,12 +434,12 @@ Console.WriteLine($"Timestamp valid: {result.HasValidSignatureTimeStamp}");
 Console.WriteLine($"LTV evidence valid: {result.IsLtvDataValid}");
 Console.WriteLine($"Archive valid: {result.HasValidArchiveTimeStamp}");
 Console.WriteLine($"TSA trusted: {result.IsTsaTrusted}");
-Console.WriteLine($"Valid: {result.IsValid}");
+Console.WriteLine($"{result.Indication} {result.SubIndication}");
 ```
 
 `DetectedLevel` reports observed XML elements, including properties that fail
 validation. A malformed timestamp can report `Timestamped` while
 `HasValidSignatureTimeStamp` is false. Check the timestamp, LTV, and archive
 outcomes for the required baseline level; `IsValid` combines fundamental
-signature, integrity, and signer-chain checks. `IsTsaTrusted` reports the separate
+signature, integrity, and signer-chain checks with `Indication == Valid` (so the validation policy counts). `IsTsaTrusted` reports the separate
 signature-TSA trust outcome.

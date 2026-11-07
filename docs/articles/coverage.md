@@ -12,9 +12,9 @@ from the published standards; check them against the version you follow before q
 
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
-| PAdES | 131 | 130 | 1 |
-| CAdES | 64 | 63 | 1 |
-| XAdES | 78 | 74 | 4 |
+| PAdES | 138 | 137 | 1 |
+| CAdES | 71 | 70 | 1 |
+| XAdES | 85 | 81 | 4 |
 
 ## PAdES
 
@@ -57,6 +57,10 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Timestamps | Time-stamping authority (TSA) | RFC 3161 · Time-Stamp Protocol<br>RFC 5816 · ESSCertIDv2 in timestamps<br>ETSI EN 319 422 · Time-stamping protocol and token profiles | `new TimestampOptions(Uri endpoint) { Authorization, ClientCertificate }` | yes |
 | Timestamps | Different TSA for the archive timestamp | ETSI EN 319 142-1 · §5.4.3 Document time-stamp | `new ArchiveTimestampOptions(Uri)` | yes |
 | Timestamps | Archive TSA | ETSI EN 319 142-1 · §5.4.3 Document time-stamp<br>RFC 3161 · Time-Stamp Protocol | `new ArchiveTimestampOptions(Uri)` | yes |
+| Cryptography | Signing policy | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy)` | yes |
+| Cryptography | Signing policy: Default |  | `SigningPolicy.Default` | yes |
+| Cryptography | Signing policy: Strict |  | `SigningPolicy.Strict` | yes |
+| Cryptography | Signing policy: Minimal |  | `SigningPolicy.Minimal` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
 | Cryptography | Digest algorithm: SHA-256 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
 | Cryptography | Digest algorithm: SHA-384 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
@@ -152,6 +156,9 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustSystemRoots` | yes |
 | Run and validation | Check revocation | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.3 CRL validation<br>RFC 6960 · OCSP | `ValidationOptions.CheckRevocation` | yes |
+| Run and validation | Validation policy | ETSI EN 319 102-1 · §5.2.8 Cryptographic verification<br>ETSI TS 119 312 · Cryptographic suites | `ValidationOptions.Policy` | yes |
+| Run and validation | Validation policy: Default |  | `ValidationPolicy.Default` | yes |
+| Run and validation | Validation policy: INDECOPI (Peru) |  | `IofePolicies.Validation` | yes |
 | Run and validation | Apply the Brazilian rules (**BR**) | DOC-ICP-15.03 · Signature policy requirements<br>Lei 14.063/2020 · Art. 4º | `IcpBrasilExtension + GovBrExtension (ICountryExtension)` | yes |
 
 ## CAdES
@@ -197,6 +204,10 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Prefer OCSP or CRL: CRL first |  | `RevocationPreference.CrlFirst` | yes |
 | Timestamps | Time-stamping authority (TSA) | RFC 3161 · Time-Stamp Protocol<br>RFC 5816 · ESSCertIDv2 in timestamps<br>ETSI EN 319 422 · Time-stamping protocol and token profiles | `new TimestampOptions(Uri endpoint) { Authorization, ClientCertificate }` | yes |
 | Timestamps | Content timestamp | ETSI EN 319 122-1 · §5.2.8 content-time-stamp | `WithContentTimestamp(TimestampOptions)` | yes |
+| Cryptography | Signing policy | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy)` | yes |
+| Cryptography | Signing policy: Default |  | `SigningPolicy.Default` | yes |
+| Cryptography | Signing policy: Strict |  | `SigningPolicy.Strict` | yes |
+| Cryptography | Signing policy: Minimal |  | `SigningPolicy.Minimal` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
 | Cryptography | Digest algorithm: SHA-256 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
 | Cryptography | Digest algorithm: SHA-384 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
@@ -223,6 +234,9 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustSystemRoots` | yes |
 | Run and validation | Check revocation | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.3 CRL validation<br>RFC 6960 · OCSP | `ValidationOptions.CheckRevocation` | yes |
+| Run and validation | Validation policy | ETSI EN 319 102-1 · §5.2.8 Cryptographic verification<br>ETSI TS 119 312 · Cryptographic suites | `ValidationOptions.Policy` | yes |
+| Run and validation | Validation policy: Default |  | `ValidationPolicy.Default` | yes |
+| Run and validation | Validation policy: INDECOPI (Peru) |  | `IofePolicies.Validation` | yes |
 | Run and validation | Apply the Brazilian rules (**BR**) | DOC-ICP-15.03 · Signature policy requirements<br>Lei 14.063/2020 · Art. 4º | `IcpBrasilExtension + GovBrExtension (ICountryExtension)` | yes |
 
 ## XAdES
@@ -276,6 +290,10 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Timestamps | Time-stamping authority (TSA) | RFC 3161 · Time-Stamp Protocol<br>RFC 5816 · ESSCertIDv2 in timestamps<br>ETSI EN 319 422 · Time-stamping protocol and token profiles | `new TimestampOptions(Uri endpoint) { Authorization, ClientCertificate }` | yes |
 | Timestamps | Data objects timestamp | ETSI EN 319 132-1 · §5.2.8.1 AllDataObjectsTimeStamp | `WithDataObjectsTimestamp(TimestampOptions)` | yes |
 | Timestamps | Individual data objects timestamp | ETSI EN 319 132-1 · §5.2.8.2 IndividualDataObjectsTimeStamp |  | **no** |
+| Cryptography | Signing policy | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy)` | yes |
+| Cryptography | Signing policy: Default |  | `SigningPolicy.Default` | yes |
+| Cryptography | Signing policy: Strict |  | `SigningPolicy.Strict` | yes |
+| Cryptography | Signing policy: Minimal |  | `SigningPolicy.Minimal` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
 | Cryptography | Digest algorithm: SHA-256 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
 | Cryptography | Digest algorithm: SHA-384 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
@@ -308,6 +326,9 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustSystemRoots` | yes |
 | Run and validation | Check revocation | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.3 CRL validation<br>RFC 6960 · OCSP | `ValidationOptions.CheckRevocation` | yes |
+| Run and validation | Validation policy | ETSI EN 319 102-1 · §5.2.8 Cryptographic verification<br>ETSI TS 119 312 · Cryptographic suites | `ValidationOptions.Policy` | yes |
+| Run and validation | Validation policy: Default |  | `ValidationPolicy.Default` | yes |
+| Run and validation | Validation policy: INDECOPI (Peru) |  | `IofePolicies.Validation` | yes |
 | Run and validation | Apply the Brazilian rules (**BR**) | DOC-ICP-15.03 · Signature policy requirements<br>Lei 14.063/2020 · Art. 4º | `IcpBrasilExtension + GovBrExtension (ICountryExtension)` | yes |
 
 ## By standard
@@ -341,6 +362,7 @@ Each clause and the options that implement it.
 | §5.2.5 Revocation freshness | Prefer OCSP or CRL | PAdES, CAdES, XAdES | yes |
 | §5.2.6 X.509 certificate validation | Check revocation | PAdES, CAdES, XAdES | yes |
 | §5.2.6 X.509 certificate validation | Trusted roots | PAdES, CAdES, XAdES | yes |
+| §5.2.8 Cryptographic verification | Validation policy | PAdES, CAdES, XAdES | yes |
 
 ### ETSI EN 319 122-1
 
@@ -475,6 +497,8 @@ Each clause and the options that implement it.
 
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
+| Cryptographic suites | Signing policy | PAdES, CAdES, XAdES | yes |
+| Cryptographic suites | Validation policy | PAdES, CAdES, XAdES | yes |
 | Hash functions | Digest algorithm | PAdES, CAdES, XAdES | yes |
 | Hash functions | Digest algorithm: SHA-256 | PAdES, CAdES, XAdES | yes |
 | Hash functions | Digest algorithm: SHA-384 | PAdES, CAdES, XAdES | yes |
@@ -655,9 +679,11 @@ Each clause and the options that implement it.
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
 | §4 Certificate profile | Certificate and key | PAdES, CAdES, XAdES | yes |
+| §4.2.1.3 Key usage | Signing policy | PAdES, CAdES, XAdES | yes |
 | §5 CRL | Prefer OCSP or CRL | PAdES, CAdES, XAdES | yes |
 | §6.1 Basic path validation | Trusted roots | PAdES, CAdES, XAdES | yes |
 | §6.3 CRL validation | Check revocation | PAdES, CAdES, XAdES | yes |
+| §6.3 CRL validation | Signing policy | PAdES, CAdES, XAdES | yes |
 
 ### RFC 5652
 

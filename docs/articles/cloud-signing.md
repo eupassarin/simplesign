@@ -161,3 +161,10 @@ Secret options accept `env:NAME` to keep values out of the shell history.
 3. If a call fails because of a field name or encoding, adjust `PscWireFormat` and report the
    difference in the issue tracker so the defaults can be improved.
 4. Check the signed PDF on [validar.iti.gov.br](https://validar.iti.gov.br).
+
+## Signing policy
+
+Cloud certificates go through the same checks as local ones: the builder's `SigningPolicy` (chain validity, key
+usage, key size, hash algorithm) runs before the provider is asked to sign. With `SigningPolicy.Strict` the revocation
+of the chain is checked too, so the provider's chain (`signer.Chain`) must reach the root. The provider interface is
+the generic `IExternalSigner` described in [remote signing](remote-signing.md).

@@ -90,22 +90,26 @@ Use clear, descriptive commit messages. Include a `Co-authored-by` trailer when 
 
 ```
 src/
-  SimpleSign.Core/           # CMS, TSA, OCSP, CRL, hashing, extension points
-  SimpleSign.PAdES/          # PAdES signing, validation, inspection; Pdf/ = PDF structure parser
-  SimpleSign.CAdES/          # CAdES signing and validation
-  SimpleSign.XAdES/          # XAdES signing and validation
-  SimpleSign.Signers.Pkcs11/ # tokens, smartcards, HSMs
-  SimpleSign.Signers.Cloud/  # cloud certificates (PSC, CSC v2)
-  TrustFrameworks/Brazil/   # SimpleSign.Brazil, .IcpBrasil, .GovBr, .Fiscal, .IcpBrasil.Xades
-  SimpleSign.HtmlToPdf/      # HTML-to-PDF converter
-  SimpleSign.Cli/            # dotnet tool
-  SimpleSign.Agent/          # tray app with a local signing API
-  SimpleSign.TestBench/      # local web app to try every option
-  SimpleSign/                # meta-package
+  Core/SimpleSign.Core/            # CMS, TSA, OCSP, CRL, policies, trust store, extension points
+  Formats/
+    SimpleSign.PAdES/              # PAdES signing, validation, inspection; Pdf/ = PDF structure parser
+    SimpleSign.CAdES/              # CAdES signing and validation
+    SimpleSign.XAdES/              # XAdES signing and validation; ETSI trusted lists
+    SimpleSign/                    # meta-package
+  TrustFrameworks/
+    Brazil/                        # SimpleSign.Brazil, .IcpBrasil, .GovBr, .Fiscal, .IcpBrasil.Xades
+    Peru/Iofe/                     # SimpleSign.Peru.Iofe
+  Signers/
+    SimpleSign.Signers.Pkcs11/     # tokens, smartcards, HSMs
+    SimpleSign.Signers.Cloud/      # cloud certificates (PSC, CSC v2)
+  Extras/SimpleSign.HtmlToPdf/     # HTML-to-PDF converter
+  Apps/
+    SimpleSign.Cli/                # dotnet tool
+    SimpleSign.Agent/              # tray app with a local signing API
+    SimpleSign.TestBench/          # local web app to try every option
 tests/
-  unit/        # unit tests, one project per library
+  unit/        # unit tests, one project per library and app, mirroring src/ (CLI tests in unit/Apps)
   integration/ # network-dependent tests
-  cli/         # CLI tests
   smoke/       # NativeAOT smoke app
   shared/      # test helpers and fixtures
 ```

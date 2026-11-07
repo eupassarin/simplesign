@@ -69,7 +69,12 @@ public static class XmlCompatibility
         }
 
         // ── 2. Signer ──────────────────────────────────────────────────
-        SharedRules.Signer(credential, Error, Warn, StepSigner);
+        if (!fiscal)
+        {
+            state["signingPolicy"] = OptionState.Shown;
+        }
+
+        SharedRules.Signer(credential, Error, Warn, StepSigner, fiscal ? null : o.SigningPolicy);
         if (fiscal && credential is not null && credential.KeyAlgorithm != "RSA")
         {
             Error(StepSigner, L.T("The fiscal layouts sign with RSA (rsa-sha1 / rsa-sha256): an {0} certificate cannot be used.", credential.KeyAlgorithm));
@@ -260,7 +265,7 @@ public static class XmlCompatibility
     {
         void Set(string key, OptionState value) => state[key] = value;
         string fixedByLayout = L.T("Fixed by the fiscal layout: enveloped XML-DSig, C14N, only the signer certificate in KeyInfo, no XAdES properties.");
-        foreach (string key in new[] { "form", "dataUri", "kind", "icpPolicy", "level", "customPolicy", "extendedForm", "timestamp", "padding", "signingCertificate", "roles", "mimeType", "productionPlace", "revocationPreference", "canonicalization", "counterSign", "counterSignatureId", "dataObjectsTimestamp", "certifiedRoles", "additionalObjects", "commitment" })
+        foreach (string key in new[] { "form", "dataUri", "kind", "icpPolicy", "level", "customPolicy", "extendedForm", "timestamp", "padding", "signingCertificate", "roles", "mimeType", "productionPlace", "revocationPreference", "signingPolicy", "canonicalization", "counterSign", "counterSignatureId", "dataObjectsTimestamp", "certifiedRoles", "additionalObjects", "commitment" })
         {
             Set(key, new OptionState(false, Note: fixedByLayout));
         }

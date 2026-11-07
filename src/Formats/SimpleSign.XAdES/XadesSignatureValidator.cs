@@ -46,7 +46,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     /// <param name="options">Validation options; defaults apply when <see langword="null"/>.</param>
     /// <param name="timestampValidator">Timestamp validator; the built-in one is used when <see langword="null"/>.</param>
     /// <param name="logger">Receives diagnostics of each validation; nothing is logged when <see langword="null"/>.</param>
-    /// <param name="chainRevocationChecker">The revocation checker of <see cref="ValidateAsync"/>; one on the default HTTP client when <see langword="null"/>.</param>
+    /// <param name="chainRevocationChecker">The revocation checker of <c>ValidateAsync</c>; one on the default HTTP client when <see langword="null"/>.</param>
     public XadesSignatureValidator(
         ValidationOptions? options = null,
         ITimestampValidator? timestampValidator = null,
@@ -70,14 +70,85 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     /// <param name="originalData">The signed data of a detached signature.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The validation result with its revocation outcome.</returns>
-    public async Task<XadesValidationResult> ValidateAsync(
+    public Task<XadesValidationResult> ValidateAsync(
         byte[] signedXml,
         IEnumerable<X509Certificate2>? trustAnchors = null,
         byte[]? originalData = null,
         CancellationToken cancellationToken = default)
     {
         var anchors = trustAnchors?.ToList();
-        var result = Validate(signedXml, anchors, originalData);
+        return WithRevocationAsync(Validate(signedXml, anchors, originalData), cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates like <see cref="Validate(byte[], IEnumerable{X509Certificate2}, IReadOnlyDictionary{string, byte[]})"/>,
+    /// then checks the revocation of the signer and TSA chains when <see cref="ValidationOptions.CheckRevocation"/> is on.
+    /// </summary>
+    /// <param name="signedXml">The signed XML document.</param>
+    /// <param name="trustAnchors">The trust anchors; null uses the options.</param>
+    /// <param name="externalData">The detached data objects, by reference URI.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The validation result with its revocation outcome.</returns>
+    public Task<XadesValidationResult> ValidateAsync(
+        byte[] signedXml,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        IReadOnlyDictionary<string, byte[]> externalData,
+        CancellationToken cancellationToken = default)
+    {
+        var anchors = trustAnchors?.ToList();
+        return WithRevocationAsync(Validate(signedXml, anchors, externalData), cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates every signature of the document like <c>ValidateAll</c>, then, when
+    /// <see cref="ValidationOptions.CheckRevocation"/> is on, checks the revocation of each signer chain and TSA
+    /// chain, countersignatures included.
+    /// </summary>
+    /// <param name="signedXml">The signed XML document.</param>
+    /// <param name="trustAnchors">The trust anchors; null uses the options.</param>
+    /// <param name="originalData">The signed data of a detached signature.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>One result per signature, with its revocation outcome.</returns>
+    public Task<IReadOnlyList<XadesValidationResult>> ValidateAllAsync(
+        byte[] signedXml,
+        IEnumerable<X509Certificate2>? trustAnchors = null,
+        byte[]? originalData = null,
+        CancellationToken cancellationToken = default) =>
+        WithRevocationAsync(ValidateAll(signedXml, trustAnchors?.ToList(), originalData), cancellationToken);
+
+    /// <summary>Validates every signature like <see cref="ValidateAllAsync(byte[], IEnumerable{X509Certificate2}, byte[], CancellationToken)"/>, with detached data objects by URI.</summary>
+    /// <param name="signedXml">The signed XML document.</param>
+    /// <param name="trustAnchors">The trust anchors; null uses the options.</param>
+    /// <param name="externalData">The detached data objects, by reference URI.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>One result per signature, with its revocation outcome.</returns>
+    public Task<IReadOnlyList<XadesValidationResult>> ValidateAllAsync(
+        byte[] signedXml,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        IReadOnlyDictionary<string, byte[]> externalData,
+        CancellationToken cancellationToken = default) =>
+        WithRevocationAsync(ValidateAll(signedXml, trustAnchors?.ToList(), externalData), cancellationToken);
+
+    private async Task<IReadOnlyList<XadesValidationResult>> WithRevocationAsync(
+        IReadOnlyList<XadesValidationResult> results, CancellationToken cancellationToken)
+    {
+        if (!_options.CheckRevocation)
+        {
+            return results;
+        }
+
+        var checkedResults = new List<XadesValidationResult>(results.Count);
+        foreach (var result in results)
+        {
+            var counterSignatures = await WithRevocationAsync(result.CounterSignatures, cancellationToken).ConfigureAwait(false);
+            checkedResults.Add(await WithRevocationAsync(result with { CounterSignatures = counterSignatures }, cancellationToken).ConfigureAwait(false));
+        }
+
+        return checkedResults;
+    }
+
+    private async Task<XadesValidationResult> WithRevocationAsync(XadesValidationResult result, CancellationToken cancellationToken)
+    {
         if (!_options.CheckRevocation || result.Facts is null)
         {
             return result;

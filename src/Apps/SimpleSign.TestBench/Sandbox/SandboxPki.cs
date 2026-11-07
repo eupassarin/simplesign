@@ -8,6 +8,7 @@ namespace SimpleSign.TestBench.Sandbox;
 /// <summary>Key type of a sandbox signer.</summary>
 internal enum SandboxKeyType
 {
+    Rsa1024,
     Rsa2048,
     Rsa3072,
     Rsa4096,
@@ -106,6 +107,10 @@ internal sealed class SandboxPki : IDisposable
                 revoke: true, problem: "Revoked"),
             Person("no-nonrepudiation", "Without non-repudiation", "Key usage has digitalSignature only (no nonRepudiation): signing works, ICP-Brasil validation warns.", SandboxKeyType.Rsa2048, "11144477735",
                 keyUsage: X509KeyUsageFlags.DigitalSignature, problem: "No non-repudiation"),
+            Person("rsa-1024", "Weak key (RSA 1024)", "RSA 1024 key: the default signing policy refuses it (KeyTooWeak); the Minimal policy signs, and validation reports CRYPTO_CONSTRAINTS_FAILURE_NO_POE.", SandboxKeyType.Rsa1024, "11144477735",
+                problem: "Key too small"),
+            Person("no-signing-key-usage", "Without a signing key usage", "Key usage has keyEncipherment only: the default signing policy refuses it (KeyUsageNotPermitted).", SandboxKeyType.Rsa2048, "11144477735",
+                keyUsage: X509KeyUsageFlags.KeyEncipherment, problem: "No signing key usage"),
         ];
         RootCrl = BuildCrl(Root, _rootKey, []);
         IntermediateCrl = BuildCrl(Intermediate, _intermediateKey, _revoked);
@@ -216,7 +221,7 @@ internal sealed class SandboxPki : IDisposable
         var to = notAfter ?? DateTimeOffset.UtcNow.AddYears(1);
         var certificate = keyType switch
         {
-            SandboxKeyType.Rsa2048 or SandboxKeyType.Rsa3072 or SandboxKeyType.Rsa4096 => IssueRsa(subject, keyType, from, to, keyUsage, HolderData(cpf)),
+            SandboxKeyType.Rsa1024 or SandboxKeyType.Rsa2048 or SandboxKeyType.Rsa3072 or SandboxKeyType.Rsa4096 => IssueRsa(subject, keyType, from, to, keyUsage, HolderData(cpf)),
             _ => IssueEc(subject, keyType, from, to, keyUsage, HolderData(cpf)),
         };
         if (revoke)
@@ -239,7 +244,7 @@ internal sealed class SandboxPki : IDisposable
     private X509Certificate2 IssueRsa(string subject, SandboxKeyType type, DateTimeOffset from, DateTimeOffset to,
         X509KeyUsageFlags keyUsage, List<(string, string)> san)
     {
-        using var key = RSA.Create(type switch { SandboxKeyType.Rsa3072 => 3072, SandboxKeyType.Rsa4096 => 4096, _ => 2048 });
+        using var key = RSA.Create(type switch { SandboxKeyType.Rsa1024 => 1024, SandboxKeyType.Rsa3072 => 3072, SandboxKeyType.Rsa4096 => 4096, _ => 2048 });
         return Issue(subject, key, from, to, keyUsage: keyUsage, san: san);
     }
 

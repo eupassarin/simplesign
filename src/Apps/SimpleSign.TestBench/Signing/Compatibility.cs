@@ -340,7 +340,8 @@ public static class Compatibility
         Set("operationId", OptionState.Shown);
 
         // ── 2. Signer ──────────────────────────────────────────────────
-        SharedRules.Signer(credential, Error, Warn, StepSigner);
+        Set("signingPolicy", OptionState.Shown);
+        SharedRules.Signer(credential, Error, Warn, StepSigner, o.SigningPolicy);
         if (credential is not null)
         {
             if (icp && !sandbox && !credential.ChainsToIcpBrasil)

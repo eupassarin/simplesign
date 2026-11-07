@@ -1,13 +1,11 @@
 # SimpleSign
 
-Umbrella package for the full SimpleSign stack: PAdES, CAdES, and XAdES signing
-and validation, ICP-Brasil support, PDF structure parsing, and HTML → PDF
-conversion.
+Umbrella package for the SimpleSign signature formats: PAdES (with the PDF parser),
+CAdES and XAdES signing and validation, on `SimpleSign.Core`.
 
-Install `SimpleSign` to pull in every package at once, or install the
-individual packages (`SimpleSign.PAdES`, `SimpleSign.CAdES`,
-`SimpleSign.XAdES`, `SimpleSign.Brazil.IcpBrasil`,
-`SimpleSign.HtmlToPdf`, `SimpleSign.Cli`) for only what you need.
+Country packages, signers and extras are separate: `SimpleSign.Brazil.IcpBrasil`,
+`SimpleSign.Brazil.GovBr`, `SimpleSign.Peru.Iofe`, `SimpleSign.Signers.Pkcs11`,
+`SimpleSign.Signers.Cloud`, `SimpleSign.HtmlToPdf` and the `SimpleSign.Cli` tool.
 
 ```csharp
 using SimpleSign.PAdES;

@@ -14,6 +14,7 @@ dotnet add package SimpleSign.CAdES    # standalone CMS/PKCS#7 signing & validat
 dotnet add package SimpleSign.XAdES    # XML-DSig signing & validation (XAdES)
 dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil trust anchors and rules
 dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
+dotnet add package SimpleSign.Peru.Iofe        # IOFE (Peru): INDECOPI trusted list and policies
 dotnet add package SimpleSign.HtmlToPdf # HTML-to-PDF conversion
 ```
 
@@ -30,6 +31,7 @@ SimpleSign (meta-package)
 
 SimpleSign.Brazil.IcpBrasil ICP-Brasil + Lei 14.063  → depends on SimpleSign.Brazil (→ PAdES, CAdES)
 SimpleSign.Brazil.GovBr     Gov.br + Lei 14.063      → depends on SimpleSign.Brazil
+SimpleSign.Peru.Iofe        IOFE (Peru), INDECOPI    → depends on SimpleSign.Core, SimpleSign.XAdES
 SimpleSign.HtmlToPdf        Pure-.NET HTML→PDF (independent)
 ```
 
@@ -56,6 +58,11 @@ var signedPdf2 = await builder
 ```
 
 This creates a **PAdES B-B** (basic) signature.
+
+Before signing, the default `SigningPolicy` checks the certificate: a certificate without the digitalSignature or
+nonRepudiation key usage, an RSA key under 2048 bits or an expired certificate in the chain is refused with a
+`SigningException` (`KeyUsageNotPermitted`, `KeyTooWeak`, `ChainCertificateNotValid`). For a quick test with such a
+certificate use `.WithSigningPolicy(SigningPolicy.Minimal)`; see [PAdES signing](pades.md#signing-policy).
 
 ### In one line, from a .pfx file
 

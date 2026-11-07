@@ -169,9 +169,23 @@ contract-signed.pdf  1/1 valid
     └── Signed at:    2025-04-28 14:30:00 UTC
 ```
 
+## Signing Policy
+
+`sign`, `cades sign` and `xades sign` check the certificate before signing. `--signing-policy` chooses the checks:
+
+| Value | Checks |
+|---|---|
+| `default` | Validity of every certificate of the chain, key usage digitalSignature or nonRepudiation, RSA ≥ 2048 bits, SHA-2/SHA-3 |
+| `strict` | `default` plus the revocation of the whole chain (CRL/OCSP); give the chain up to the root |
+| `minimal` | Only the dates of the signing certificate (tests and migrations) |
+
+A refusal prints the reason (`KeyTooWeak`, `KeyUsageNotPermitted`, `ChainCertificateNotValid`, `CertificateRevoked`,
+`RevocationStatusUnknown`, `AlgorithmNotPermitted`) and what to do about it. `simplesign explain <TERM>` explains the
+ETSI sub-indications of a validation report, such as `CRYPTO_CONSTRAINTS_FAILURE_NO_POE`.
+
 ## Validation Policy, Trust Store and Verification Report
 
-`validate`, `cades validate` and `xades validate` share these options:
+`validate`, `validate-dir`, `cades validate` and `xades validate` share these options:
 
 | Option | What it does |
 |---|---|

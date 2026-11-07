@@ -24,4 +24,10 @@ public sealed class SimpleSignOptions
 
     /// <summary>Named HttpClient name used by IHttpClientFactory. Default: "SimpleSign".</summary>
     public string HttpClientName { get; set; } = "SimpleSign";
+
+    /// <summary>
+    /// The validation policy of the registered validators: accepted algorithms and key sizes, key usage of the
+    /// signing certificate. Default: <see cref="Validation.Policy.ValidationPolicy.Default"/>.
+    /// </summary>
+    public Validation.Policy.ValidationPolicy ValidationPolicy { get; set; } = Validation.Policy.ValidationPolicy.Default;
 }

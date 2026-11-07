@@ -15,10 +15,12 @@ namespace SimpleSign.Cli.Commands;
 internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.Settings>
 {
     private readonly ICertificateChainService _certChainService;
+    private readonly SimpleSign.Core.Http.IHttpClientProvider _httpClientProvider;
 
-    public CadesValidateCommand(ICertificateChainService certChainService)
+    public CadesValidateCommand(ICertificateChainService certChainService, SimpleSign.Core.Http.IHttpClientProvider httpClientProvider)
     {
         _certChainService = certChainService;
+        _httpClientProvider = httpClientProvider;
     }
 
     /// <summary>CAdES validate command settings.</summary>
@@ -83,7 +85,8 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
         }
 
         var validator = new CadesSignatureValidator(
-            new ValidationOptions { CheckRevocation = settings.CheckRevocation, TrustSystemRoots = trustAnchors is null, Policy = policy });
+            new ValidationOptions { CheckRevocation = settings.CheckRevocation, TrustSystemRoots = trustAnchors is null, Policy = policy },
+            chainRevocationChecker: TrustedValidationSettings.RevocationCheckerFor(_httpClientProvider));
 
         var result = await validator.ValidateAsync(
             cmsBytes,
@@ -175,7 +178,13 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
 
         ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, settings.Spanish);
         var isValid = result.IsValid;
-        AnsiConsole.MarkupLine(isValid ? "\n[green]✓ Signature is VALID[/]" : "\n[red]✗ Signature is INVALID[/]");
+        AnsiConsole.MarkupLine(result.Indication switch
+        {
+            SignatureIndication.Valid => "\n[green]✓ Signature is VALID[/]",
+            SignatureIndication.Invalid => "\n[red]✗ Signature is INVALID[/]",
+            _ => "\n[yellow]? Signature is INDETERMINATE[/]"
+                + (result.SubIndication is { } sub ? $" ({sub.ToEtsiName()})" : string.Empty),
+        });
 
         return isValid ? 0 : 1;
     }

@@ -1,6 +1,6 @@
 # ADR 0011: Validation Pipeline Architecture
 
-**Status:** Accepted
+**Status:** Accepted — extended by [ADR 0022](0022-validation-policy-and-etsi-report.md): after the steps below, `ValidationPolicyEvaluator` applies the `ValidationPolicy` and sets the indication, the ETSI sub-indication and the `Constraints` of the result; PAdES also checks the TSA name and the TSA chain's revocation. The CAdES and XAdES results now have an `Indication` too, and their `IsValid` follows it.
 
 **Context:**
 PAdES signature validation comprises multiple independent checks: cryptographic integrity, certificate chain building, revocation status, and timestamp validity. Each check can pass, fail with specific errors, or be inconclusive. The results must be aggregated so that consumers can inspect all issues simultaneously — not just the first failure.

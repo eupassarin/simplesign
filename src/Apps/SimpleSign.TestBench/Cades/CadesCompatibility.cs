@@ -209,7 +209,8 @@ public static class CadesCompatibility
         Set("contentHints", describesContent);
 
         // ── 2. Signer ──────────────────────────────────────────────────
-        SharedRules.Signer(credential, Error, Warn, StepSigner);
+        Set("signingPolicy", OptionState.Shown);
+        SharedRules.Signer(credential, Error, Warn, StepSigner, o.SigningPolicy);
         if (credential is not null && icp && !sandbox && !credential.ChainsToIcpBrasil)
         {
             Warn(StepType, L.T("The certificate does not chain to an ICP-Brasil root: the signature will carry the policy, but it will not be valid under it."));

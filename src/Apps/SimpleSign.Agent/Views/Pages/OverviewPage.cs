@@ -128,7 +128,13 @@ internal sealed class OverviewPage : AgentPage
             Ui.Col(2,
                 Ui.Text(entry.Holder, "strong").With(t => t.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis),
                 Ui.Text(details, "muted small").With(t => t.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis)));
-        var badges = Ui.Row(6, entry.IsIcpBrasil ? Ui.Badge("ICP-Brasil", "solid", Icons.ShieldCheck) : null, validity);
+        var policy = entry.PolicyIssue switch
+        {
+            "keyUsage" => Ui.Badge(L.T("cert.policy.keyUsage"), "warn"),
+            "weakKey" => Ui.Badge(L.T("cert.policy.weakKey"), "warn"),
+            _ => null,
+        };
+        var badges = Ui.Row(6, entry.IsIcpBrasil ? Ui.Badge("ICP-Brasil", "solid", Icons.ShieldCheck) : null, policy, validity);
         return new Border { Padding = new Thickness(20, 12), Child = Ui.Split(left, badges) };
     }
 

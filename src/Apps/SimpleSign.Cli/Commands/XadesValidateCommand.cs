@@ -16,10 +16,12 @@ namespace SimpleSign.Cli.Commands;
 internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.Settings>
 {
     private readonly ICertificateChainService _certChainService;
+    private readonly SimpleSign.Core.Http.IHttpClientProvider _httpClientProvider;
 
-    public XadesValidateCommand(ICertificateChainService certChainService)
+    public XadesValidateCommand(ICertificateChainService certChainService, SimpleSign.Core.Http.IHttpClientProvider httpClientProvider)
     {
         _certChainService = certChainService;
+        _httpClientProvider = httpClientProvider;
     }
 
     /// <summary>XAdES validate command settings.</summary>
@@ -102,7 +104,9 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         }
 
         var validator = new XadesSignatureValidator(
-            new ValidationOptions { CheckRevocation = settings.CheckRevocation, Policy = policy });
+            new ValidationOptions { CheckRevocation = settings.CheckRevocation, TrustSystemRoots = trustAnchors is null, Policy = policy },
+            logger: null,
+            chainRevocationChecker: TrustedValidationSettings.RevocationCheckerFor(_httpClientProvider));
         byte[]? originalData = settings.DataPath is null
             ? null
             : await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
@@ -116,7 +120,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 externalData[uri] = await File.ReadAllBytesAsync(path, cancellationToken);
             }
 
-            result = validator.Validate(signedXml, trustAnchors, externalData);
+            result = await validator.ValidateAsync(signedXml, trustAnchors, externalData, cancellationToken);
         }
         else
         {
@@ -222,7 +226,13 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
 
         ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, settings.Spanish);
         var isValid = result.IsValid;
-        AnsiConsole.MarkupLine(isValid ? "\n[green]✓ Signature is VALID[/]" : "\n[red]✗ Signature is INVALID[/]");
+        AnsiConsole.MarkupLine(result.Indication switch
+        {
+            SignatureIndication.Valid => "\n[green]✓ Signature is VALID[/]",
+            SignatureIndication.Invalid => "\n[red]✗ Signature is INVALID[/]",
+            _ => "\n[yellow]? Signature is INDETERMINATE[/]"
+                + (result.SubIndication is { } sub ? $" ({sub.ToEtsiName()})" : string.Empty),
+        });
 
         return isValid ? 0 : 1;
     }

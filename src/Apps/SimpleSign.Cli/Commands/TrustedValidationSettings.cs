@@ -106,6 +106,10 @@ internal class TrustedValidationSettings : CommonSettings
         return (policy, anchors);
     }
 
+    /// <summary>A chain revocation checker that downloads through the CLI's HTTP provider (proxy, outbound policy).</summary>
+    internal static SimpleSign.Core.Revocation.IChainRevocationChecker RevocationCheckerFor(SimpleSign.Core.Http.IHttpClientProvider http) =>
+        new SimpleSign.Core.Revocation.ChainRevocationChecker(http.GetClient(), outboundPolicy: http.OutboundPolicy);
+
     private static X509Certificate2 LoadCertificate(string path) =>
         new SimpleSign.Core.Validation.CertificateChainService().LoadCertsFromBytes(File.ReadAllBytes(path)).FirstOrDefault()
         ?? throw new InvalidDataException($"No certificate in {path}.");

@@ -184,7 +184,57 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         CancellationToken cancellationToken = default)
     {
         var anchors = trustAnchors?.ToList();
-        var result = Validate(cmsBytes, originalData, anchors);
+        return await WithRevocationAsync(Validate(cmsBytes, originalData, anchors), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Validates every signer and countersignature like <see cref="ValidateAll"/>, then, when
+    /// <see cref="ValidationOptions.CheckRevocation"/> is on, checks the revocation of each signer chain and TSA chain.
+    /// </summary>
+    /// <param name="cmsBytes">The CMS signature.</param>
+    /// <param name="originalData">The signed data of a detached signature; null for an attached one.</param>
+    /// <param name="trustAnchors">The trust anchors; null uses the options.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The report, each signer with its revocation outcome.</returns>
+    public async Task<CadesValidationReport> ValidateAllAsync(
+        byte[] cmsBytes,
+        byte[]? originalData = null,
+        IEnumerable<X509Certificate2>? trustAnchors = null,
+        CancellationToken cancellationToken = default)
+    {
+        var report = ValidateAll(cmsBytes, originalData, trustAnchors?.ToList());
+        if (!_options.CheckRevocation)
+        {
+            return report;
+        }
+
+        var signers = new List<CadesSignerValidationResult>(report.Signers.Count);
+        foreach (var signer in report.Signers)
+        {
+            signers.Add(await WithRevocationAsync(signer, cancellationToken).ConfigureAwait(false));
+        }
+
+        return new CadesValidationReport { Signers = signers, Errors = report.Errors };
+    }
+
+    private async Task<CadesSignerValidationResult> WithRevocationAsync(CadesSignerValidationResult signer, CancellationToken cancellationToken)
+    {
+        var counterSignatures = new List<CadesSignerValidationResult>(signer.CounterSignatures.Count);
+        foreach (var counter in signer.CounterSignatures)
+        {
+            counterSignatures.Add(await WithRevocationAsync(counter, cancellationToken).ConfigureAwait(false));
+        }
+
+        return new CadesSignerValidationResult
+        {
+            Index = signer.Index,
+            Result = await WithRevocationAsync(signer.Result, cancellationToken).ConfigureAwait(false),
+            CounterSignatures = counterSignatures,
+        };
+    }
+
+    private async Task<CadesValidationResult> WithRevocationAsync(CadesValidationResult result, CancellationToken cancellationToken)
+    {
         if (!_options.CheckRevocation || result.Facts is null)
         {
             return result;

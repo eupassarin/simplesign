@@ -27,6 +27,19 @@ public sealed class SimpleSignServiceCollectionExtensionsTests
         provider.GetService<LtvEmbedder>().ShouldNotBeNull();
     }
 
+    [Fact(DisplayName = "AddSimpleSign maps the validation policy and registers the shared revocation services")]
+    public void AddSimpleSign_MapsPolicyAndRegistersRevocation()
+    {
+        var policy = SimpleSign.Core.Validation.Policy.ValidationPolicy.Default with { Name = "custom" };
+        var services = new ServiceCollection();
+        services.AddSimpleSign(o => o.ValidationPolicy = policy);
+        var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<ValidationOptions>().Policy.Name.ShouldBe("custom");
+        provider.GetService<SimpleSign.Core.Revocation.IChainRevocationChecker>().ShouldNotBeNull();
+        provider.GetService<SimpleSign.Core.Revocation.IRevocationCache>().ShouldNotBeNull();
+    }
+
     [Fact(DisplayName = "AddSimpleSign uses DefaultHttpClientProvider when no custom provider")]
     public void AddSimpleSign_UsesDefaultHttpClientProvider()
     {

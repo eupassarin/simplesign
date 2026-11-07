@@ -31,7 +31,7 @@ function SignerNode({ signer, depth }: { signer: CadesSignerReport; depth: numbe
             {depth > 0 ? t("cades.result.counterSigner", { n: signer.index + 1 }) : t("cades.result.signer", { n: signer.index + 1 })}
           </span>
           <span className="text-muted-foreground truncate text-sm">{signer.signer ?? "—"}</span>
-          <span className="ml-auto"><Indication value={signer.indication} /></span>
+          <span className="ml-auto"><Indication value={signer.indication} subIndication={signer.subIndication} /></span>
         </div>
         <div className="divide-y px-4">
           {signer.checks.map((c) => (

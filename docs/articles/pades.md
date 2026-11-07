@@ -79,6 +79,27 @@ Set `SignedByLabel = ""` to hide the first line, `SignerDisplayName` to show a n
 `/Name` entry, and `Width`/`Height` to give the stamp a fixed size (text shrinks to fit; use
 `TextAlignment` and `VerticalAlignment` to place it).
 
+## Signing Policy
+
+Before anything is signed, the builder checks the certificate, its chain and the algorithms with a `SigningPolicy`.
+A refusal is a `SigningException` with its `Reason`:
+
+| Policy | Checks | Reasons |
+|---|---|---|
+| `SigningPolicy.Default` | Validity of every certificate of the chain; key usage digitalSignature or nonRepudiation; RSA ≥ 2048 bits; P-256/384/521 or brainpool r1 curves; SHA-2/SHA-3 | `ChainCertificateNotValid`, `KeyUsageNotPermitted`, `KeyTooWeak`, `AlgorithmNotPermitted` |
+| `SigningPolicy.Strict` | Default plus the revocation of the whole chain (CRL and OCSP) | also `CertificateRevoked`, `RevocationStatusUnknown` |
+| `SigningPolicy.Minimal` | Only the dates of the signing certificate | `CertificateExpired`, `CertificateNotCurrentlyValid` |
+
+```csharp
+byte[] signed = await PadesSigner.Document(pdf)
+    .WithCertificate(certificate, chain)            // Strict needs the chain up to the root
+    .WithSigningPolicy(SigningPolicy.Strict)
+    .SignAsync();
+```
+
+`WithSigningPolicy` is on the CAdES, XAdES, deferred and batch builders too. `WithChainRevocationChecker` replaces the
+checker used for the revocation check (by default it downloads through the builder's `IHttpClientProvider`).
+
 ## Validation
 
 Signing revalidates the completed base signature and content integrity before
@@ -103,7 +124,8 @@ Each result includes:
 - `IsCertificateChainValid` — chain builds to a trusted root
 - `HasValidTimestamp` — RFC 3161 token signature, signed content, and imprint verify (bool?)
 - `IsTsaTrusted` — TSA certificate passes the evaluated chain and timestamping-purpose policy (bool?; null when the token is absent, invalid, or unchecked)
-- `IsValid` — integrity, signature, configured chain trust, and revocation policy pass
+- `Indication` / `SubIndication` — the ETSI EN 319 102-1 outcome and, when not valid, why (`HASH_FAILURE`, `TRY_LATER`, `CRYPTO_CONSTRAINTS_FAILURE_NO_POE`…)
+- `Constraints` — every check, the validation policy's (`ValidationOptions.Policy`) included
 - `SignerName`, `SigningTime`, `DigestAlgorithmOid`, `SubFilter`, `Warnings`
 
 ## Inspection

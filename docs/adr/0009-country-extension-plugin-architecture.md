@@ -1,6 +1,6 @@
 # ADR 0009: Country Extension / Plug-in Architecture
 
-**Status:** Accepted
+**Status:** Accepted — `SimpleSign.Peru.Iofe` is a second extension, built on Core and XAdES (trust anchors from INDECOPI's signed trusted list).
 
 **Context:**
 Digital signature regulations vary by country. Brazil has ICP-Brasil with 13 AC Raiz policies (AD-RB through AD-RA) and Gov.br with 4 assurance levels, plus the Lei 14.063 signature manifest. The European Union has the eIDAS Trusted List with national root stores. The United States has the FPKI trust framework. Each jurisdiction defines:
@@ -36,7 +36,7 @@ Two sub-interfaces (in `SimpleSign.Core.Extensions`):
 
 ### 2. IcpBrasilExtension and GovBrExtension — reference implementations
 
-Brazil ships one extension per hierarchy. `IcpBrasilExtension` (`SimpleSign.Brazil.IcpBrasil`) and `GovBrExtension` (`SimpleSign.Brazil.GovBr`) each bundle an `ITrustAnchorProvider` that loads the bundled root certificates and an `IChainValidationProvider` for policy detection and identity extraction. What both need (CPF/CNPJ, SubjectAltName parsing, Lei 14.063 levels, the revocation checker) lives in the shared `SimpleSign.Brazil` package. Validators and signers accept several extensions, so an application passes both to accept both hierarchies.
+Brazil ships one extension per hierarchy. `IcpBrasilExtension` (`SimpleSign.Brazil.IcpBrasil`) and `GovBrExtension` (`SimpleSign.Brazil.GovBr`) each bundle an `ITrustAnchorProvider` that loads the bundled root certificates and an `IChainValidationProvider` for policy detection and identity extraction. What both need (CPF/CNPJ, SubjectAltName parsing, Lei 14.063 levels) lives in the shared `SimpleSign.Brazil` package; the chain revocation checker moved to Core (`SimpleSign.Core.Revocation.ChainRevocationChecker`, ADR 0021). Validators and signers accept several extensions, so an application passes both to accept both hierarchies.
 
 ### 3. Registration
 
@@ -64,7 +64,7 @@ PadesSigner.Document(pdf)
 | **Inspection** | None (OID hard-coded) | `CmsParser` recognises manifest OID directly; no provider needed |
 
 **Consequences:**
-- Country packages build against the public API of Core/PAdES/CAdES/XAdES only (no `InternalsVisibleTo`). Generic building blocks they need (CRL evaluation, CRL/OCSP URLs, resilient downloads, the builder's signer certificate) are public in Core; country-specific constants and logs live in the country package.
+- Country packages build against the public API of Core/PAdES/CAdES/XAdES only (no `InternalsVisibleTo`). Generic building blocks they need (CRL evaluation, CRL/OCSP URLs, resilient downloads, the builder's signer certificate, `IChainRevocationChecker`/`ChainRevocationChecker`, `IRevocationCache`, `TrustedList` in XAdES) are public in Core; country-specific constants and logs live in the country package.
 - Adding a new country requires implementing 2 interfaces and registering the composite
 - Trust anchors can be offline (embedded resources) or online (AIA chasing or downloaded lists)
 - `IChainValidationProvider` is wired into `PdfSignatureValidator`'s built-in validation pipeline. After standard `X509Chain.Build()`, the first matching provider (via `CanValidate`) enriches the result. If the standard chain fails but a country provider trusts it, chain errors are demoted to warnings (`IsChainTrustWarning = true`).

@@ -1,6 +1,6 @@
 # ADR 0020: Outbound HTTP — Retries and SSRF Guard
 
-**Status:** Accepted
+**Status:** Accepted — amended by [ADR 0021](0021-signing-policy-ldap-crl-and-revocation-cache.md): CRLs on `ldap://`/`ldaps://` distribution points are fetched by `LdapCrlClient`, outside `ResilientHttp`, only when `OutboundHttpPolicy.AllowLdap` is set; it applies the same loopback, private and link-local address checks and connects to the address it checked. OCSP and caIssuers locations stay HTTP(S)-only.
 
 **Context:**
 Signing and validation reach the network on behalf of whoever supplied the input:
