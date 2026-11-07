@@ -13,33 +13,45 @@ public static class SandboxApp
     public static WebApplication Build(SandboxOptions options, string[]? args = null)
     {
         ArgumentNullException.ThrowIfNull(options);
+        string directory = options.Ephemeral
+            ? Path.Combine(Path.GetTempPath(), "simplesign-sandbox-" + Guid.NewGuid().ToString("N")[..12])
+            : options.ResolveDataDirectory();
+
+        // The environment is opened before the host: the HTTPS listener needs its TLS certificate.
+        SandboxPki pki;
+        using (var startupLogging = LoggerFactory.Create(b => b.AddConsole()))
+        {
+            pki = SandboxPki.Open(directory, options, startupLogging.CreateLogger("SimpleSign.Sandbox"));
+        }
+
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args ?? [], ContentRootPath = AppContext.BaseDirectory });
         builder.WebHost.ConfigureKestrel(o =>
         {
+            void Https(Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen) => listen.UseHttps(pki.TlsCertificate());
             if (options.ListenAnyAddress)
             {
                 o.ListenAnyIP(options.Port);
+                o.ListenAnyIP(options.ResolvedHttpsPort, Https);
             }
             else
             {
                 o.ListenLocalhost(options.Port);
+                o.ListenLocalhost(options.ResolvedHttpsPort, Https);
             }
         });
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Information);
         builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-        string? directory = options.Ephemeral
-            ? Path.Combine(Path.GetTempPath(), "simplesign-sandbox-" + Guid.NewGuid().ToString("N")[..12])
-            : options.ResolveDataDirectory();
         builder.Services.AddSingleton(options);
-        builder.Services.AddSingleton(services => SandboxPki.Open(directory, options.Name, options.BaseUrl,
-            services.GetRequiredService<ILoggerFactory>().CreateLogger("SimpleSign.Sandbox")));
+        builder.Services.AddSingleton(pki);
         builder.Services.AddSingleton<SandboxCsc>();
-        builder.Services.AddSingleton<TsaServices>();
+        builder.Services.AddSingleton<OcspResponder>();
         builder.Services.AddSingleton<RequestLog>();
+        builder.Services.AddHostedService<LdapResponder>();
 
         var app = builder.Build();
+        app.Lifetime.ApplicationStopped.Register(pki.Dispose);
         if (options.Ephemeral)
         {
             app.Lifetime.ApplicationStopped.Register(() =>
@@ -54,9 +66,6 @@ public static class SandboxApp
                 }
             });
         }
-
-        // Create (or open) the environment before serving, so the first request is not slow.
-        _ = app.Services.GetRequiredService<SandboxPki>();
 
         app.Use(async (context, next) =>
         {

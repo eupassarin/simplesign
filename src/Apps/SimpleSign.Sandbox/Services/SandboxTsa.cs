@@ -7,18 +7,15 @@ namespace SimpleSign.Sandbox.Services;
 
 /// <summary>
 /// An RFC 3161 time-stamping authority: reads the request (hash algorithm, imprint, nonce, certReq)
-/// and returns a granted response with the current time, signed by the given TSA certificate.
+/// and returns a granted response with the current time, signed by the given TSA certificate. The
+/// TSTInfo names the TSA (the tsa field) with <paramref name="tsaName"/>, its own subject by default.
 /// </summary>
-internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X509Certificate2> chain)
+internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X509Certificate2> chain, X500DistinguishedName? tsaName = null)
 {
     private const string TstInfoOid = "1.2.840.113549.1.9.16.1.4";
     private const string SignedDataOid = "1.2.840.113549.1.7.2";
-    private long _serial = DateTimeOffset.UtcNow.ToUnixTimeSeconds() * 1000;
+    private static long s_serial = DateTimeOffset.UtcNow.ToUnixTimeSeconds() * 1000;
 
-    /// <summary>Number of tokens issued.</summary>
-    public long Issued => Interlocked.Read(ref _issued);
-
-    private long _issued;
 
     public byte[] Respond(byte[] requestBytes)
     {
@@ -48,7 +45,6 @@ internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X5
         }
 
         byte[] token = BuildToken(hashOid, hash, nonce, certReq);
-        Interlocked.Increment(ref _issued);
         var writer = new AsnWriter(AsnEncodingRules.DER);
         using (writer.PushSequence())
         {
@@ -81,11 +77,18 @@ internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X5
                 tstInfo.WriteOctetString(hash);
             }
 
-            tstInfo.WriteInteger(Interlocked.Increment(ref _serial));
+            tstInfo.WriteInteger(Interlocked.Increment(ref s_serial));
             tstInfo.WriteGeneralizedTime(DateTimeOffset.UtcNow, omitFractionalSeconds: true);
             if (nonce is { } n)
             {
                 tstInfo.WriteInteger(n);
+            }
+
+            // tsa [0] GeneralName: directoryName [4] (a CHOICE, so both tags are explicit).
+            using (tstInfo.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
+            using (tstInfo.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 4, true)))
+            {
+                tstInfo.WriteEncodedValue((tsaName ?? tsa.SubjectName).RawData);
             }
         }
 

@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
+using SimpleSign.Core.Http;
 using SimpleSign.Sandbox.Endpoints;
 
 namespace SimpleSign.Sandbox.Tests;
@@ -21,19 +23,58 @@ public sealed class SandboxFixture : IAsyncLifetime
 
     public SandboxInfo Info { get; private set; } = null!;
 
+    /// <summary>The Sandbox root, trusted by <see cref="Client"/> for the HTTPS endpoint.</summary>
+    public X509Certificate2 Root { get; private set; } = null!;
+
+    /// <summary>A client of the library's kind: trusts the Sandbox root for TLS, nothing else.</summary>
+    public HttpClient Client { get; private set; } = null!;
+
+    /// <summary>The outbound policy a client uses to reach this Sandbox: its loopback origins, LDAP allowed.</summary>
+    public OutboundHttpPolicy Policy { get; private set; } = null!;
+
     public async Task InitializeAsync()
     {
         int port = FreePort();
-        _app = SandboxApp.Build(new SandboxOptions { Name = "tests", Port = port, Ephemeral = true, OpenBrowser = false });
+        _app = SandboxApp.Build(new SandboxOptions
+        {
+            Name = "tests",
+            Port = port,
+            HttpsPort = FreePort(),
+            LdapPort = FreePort(),
+            Ephemeral = true,
+            OpenBrowser = false,
+        });
         await _app.StartAsync();
         BaseUrl = new Uri($"http://localhost:{port}/");
         Http.BaseAddress = BaseUrl;
         Info = (await Http.GetFromJsonAsync<SandboxInfo>("api/info", Json))!;
+        Root = X509CertificateLoader.LoadCertificate(await Http.GetByteArrayAsync("aia/root.cer"));
+        var root = Root;
+        Client = new HttpClient(new HttpClientHandler
+        {
+            CheckCertificateRevocationList = false,
+            ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
+            {
+                if (certificate is null)
+                {
+                    return false;
+                }
+
+                using var chain = new X509Chain();
+                chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+                chain.ChainPolicy.CustomTrustStore.Add(root);
+                chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+                return chain.Build(certificate);
+            },
+        });
+        Policy = new OutboundHttpPolicy { AllowLdap = true, LoopbackOrigins = [.. Info.LoopbackOrigins.Select(o => new Uri(o))] };
     }
 
     public async Task DisposeAsync()
     {
         Http.Dispose();
+        Client?.Dispose();
+        Root?.Dispose();
         if (_app is not null)
         {
             await _app.StopAsync();

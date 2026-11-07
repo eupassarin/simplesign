@@ -10,17 +10,24 @@ public sealed record SandboxInfo(
     string Name,
     string Version,
     string BaseUrl,
+    string HttpsBaseUrl,
+    string LdapBaseUrl,
     DateTimeOffset CreatedAt,
     string RootThumbprint,
     string RootSubject,
     SandboxUrls Urls,
+    IReadOnlyList<AuthorityUrls> Authorities,
     TsaInfo Tsa,
     CscInfo Csc,
-    string PfxPassword);
+    string PfxPassword,
+    IReadOnlyList<string> LoopbackOrigins);
 
 public sealed record SandboxUrls(string RootCertificate, string IntermediateCertificate, string RootPem, string ChainPem, string RootCrl, string IntermediateCrl);
 
-public sealed record TsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string User, string Password);
+/// <summary>The URLs of one CA: its certificate, its CRL over HTTP, HTTPS and LDAP, and its OCSP responder.</summary>
+public sealed record AuthorityUrls(string Id, string Certificate, string Crl, string HttpsCrl, string LdapCrl, string Ocsp);
+
+public sealed record TsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string WrongName, string User, string Password);
 
 public sealed record CscInfo(string BaseUrl, string ClientId, string ClientSecret, string ServiceToken, string Pin, string Otp, IReadOnlyList<CscCredentialView> Credentials);
 
@@ -33,20 +40,26 @@ public sealed record CertificateView(
     string Description,
     string Subject,
     string Issuer,
+    string? IssuerId,
     string SerialNumber,
     string Thumbprint,
     string NotBefore,
     string NotAfter,
     string? KeyType,
+    string? Usage,
+    string? Pointers,
     string? Problem,
+    string? Evidence,
     bool IsUsable,
     DateTimeOffset? RevokedAt,
-    string? RevocationReason);
+    string? RevocationReason,
+    string? Publication);
 
-/// <summary>The PKI: the CAs, the TSAs and the issued certificates.</summary>
-public sealed record PkiView(CertificateView Root, CertificateView Intermediate, CertificateView Tsa, CertificateView UntrustedTsa, IReadOnlyList<CertificateView> Certificates);
+/// <summary>The PKI: the CAs, the TSA outside the chain and the issued certificates.</summary>
+public sealed record PkiView(IReadOnlyList<CertificateView> Authorities, CertificateView UntrustedTsa, IReadOnlyList<CertificateView> Certificates);
 
-public sealed record RevokeRequest(string? Reason);
+/// <summary>A revocation: the reason (an <see cref="X509RevocationReason"/> name) and where it is published.</summary>
+public sealed record RevokeRequest(string? Reason, RevocationPublication Publication = RevocationPublication.Both);
 
 /// <summary>The API of the UI: the PKI, revocations, failures and the request log.</summary>
 internal static class AdminEndpoints
@@ -67,9 +80,7 @@ internal static class AdminEndpoints
         }
 
         admin.MapGet("/pki", (SandboxPki pki) => new PkiView(
-            View("root", "Root CA", pki.Root),
-            View("intermediate", "Intermediate CA", pki.Intermediate),
-            View("tsa", "TSA", pki.Tsa),
+            [.. pki.Authorities.Select(View)],
             View("untrusted-tsa", "TSA outside the chain", pki.UntrustedTsa),
             [.. pki.Certificates.Select(View)]));
         admin.MapGet("/certificates/{id}/pfx", (string id, SandboxPki pki) =>
@@ -84,7 +95,7 @@ internal static class AdminEndpoints
                     return Results.BadRequest(new { error = $"Unknown revocation reason '{reason}'." });
                 }
 
-                pki.Revoke(id, body?.Reason);
+                pki.Revoke(id, body?.Reason, body?.Publication ?? RevocationPublication.Both);
                 return Results.Ok(View(pki.Certificate(id)));
             }));
         admin.MapPost("/certificates/{id}/unrevoke", (string id, SandboxPki pki) =>
@@ -115,15 +126,22 @@ internal static class AdminEndpoints
             pki.Name,
             typeof(AdminEndpoints).Assembly.GetName().Version?.ToString(3) ?? "?",
             pki.BaseUrl.AbsoluteUri,
+            pki.HttpsBaseUrl.AbsoluteUri,
+            pki.LdapBaseUrl.AbsoluteUri,
             pki.CreatedAt,
             pki.Root.Thumbprint,
             pki.Root.Subject,
-            new SandboxUrls(pki.RootCertificateUrl.AbsoluteUri, pki.IntermediateCertificateUrl.AbsoluteUri, Url("root.pem"), Url("chain.pem"),
-                pki.RootCrlUrl.AbsoluteUri, pki.IntermediateCrlUrl.AbsoluteUri),
-            new TsaInfo(Url("tsa/tsr"), Url("tsa/authenticated"), Url("tsa/untrusted"), ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword),
+            new SandboxUrls(pki.CertificateUrl(SandboxPki.RootId).AbsoluteUri, pki.CertificateUrl(SandboxPki.IntermediateId).AbsoluteUri, Url("root.pem"), Url("chain.pem"),
+                pki.CrlUrl(SandboxPki.RootId).AbsoluteUri, pki.CrlUrl(SandboxPki.IntermediateId).AbsoluteUri),
+            [.. pki.Authorities.Select(a => new AuthorityUrls(a.Id, pki.CertificateUrl(a.Id).AbsoluteUri, pki.CrlUrl(a.Id).AbsoluteUri,
+                pki.HttpsCrlUrl(a.Id).AbsoluteUri, pki.LdapCrlUrl(a.Id).OriginalString, pki.OcspUrl(a.Id).AbsoluteUri))],
+            new TsaInfo(Url("tsa/tsr"), Url("tsa/authenticated"), Url("tsa/untrusted"), Url("tsa/revoked"), Url("tsa/wrong-name"), ServiceEndpoints.WrongTsaName,
+                ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword),
             new CscInfo(csc.BaseUri.AbsoluteUri, SandboxCsc.ClientId, SandboxCsc.ClientSecret, SandboxCsc.ServiceToken, SandboxCsc.Pin, SandboxCsc.Otp,
                 [.. csc.Credentials.Select(c => new CscCredentialView(c.Id, c.Description, c.CertificateId, c.AuthMode, c.Scal, c.MultiSign))]),
-            SandboxPki.PfxPassword);
+            SandboxPki.PfxPassword,
+            // What a client puts in OutboundHttpPolicy.LoopbackOrigins to reach this Sandbox on this machine.
+            [.. new[] { pki.BaseUrl, pki.HttpsBaseUrl, pki.LdapBaseUrl }.Select(u => u.GetLeftPart(UriPartial.Authority))]);
     }
 
     private static IResult Found(SandboxPki pki, string id, Func<IResult> action) =>
@@ -133,16 +151,31 @@ internal static class AdminEndpoints
         View(c.Id, c.Title, c.Certificate) with
         {
             Description = c.Description,
+            IssuerId = c.IssuerId,
             KeyType = c.KeyType.ToString(),
+            Usage = c.Usage.ToString(),
+            Pointers = c.Pointers.ToString(),
             Problem = c.Problem,
+            Evidence = c.Evidence,
             IsUsable = c.IsUsable,
             RevokedAt = c.RevokedAt,
             RevocationReason = c.RevocationReason,
+            Publication = c.RevokedAt is null ? null : c.Publication.ToString(),
+        };
+
+    private static CertificateView View(SandboxAuthority a) =>
+        View(a.Id, a.Title, a.Certificate) with
+        {
+            IssuerId = a.IssuerId,
+            Problem = a.Problem,
+            IsUsable = a.Problem is null,
+            RevokedAt = a.RevokedAt,
+            RevocationReason = a.RevocationReason,
         };
 
     private static CertificateView View(string id, string title, X509Certificate2 certificate) => new(
-        id, title, "", certificate.Subject, certificate.Issuer, certificate.SerialNumber, certificate.Thumbprint,
+        id, title, "", certificate.Subject, certificate.Issuer, null, certificate.SerialNumber, certificate.Thumbprint,
         certificate.NotBefore.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture),
         certificate.NotAfter.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture),
-        null, null, true, null, null);
+        null, null, null, null, null, true, null, null, null);
 }

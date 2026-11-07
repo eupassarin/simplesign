@@ -176,12 +176,15 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
     {
         var pki = await Http.GetFromJsonAsync<PkiView>("api/pki", SandboxFixture.Json);
 
-        pki!.Certificates.Select(c => c.Id).ShouldBe(["rsa-2048", "rsa-3072", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "expired", "not-yet-valid",
-            "revoked", "no-nonrepudiation", "rsa-1024", "no-signing-key-usage"]);
+        pki!.Authorities.Select(a => a.Id).ShouldBe(["root", "intermediate", "intermediate-revoked", "intermediate-expired"], ignoreOrder: true);
+        pki.Certificates.Select(c => c.Id).ShouldBe(["rsa-2048", "rsa-3072", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "expired", "not-yet-valid",
+            "revoked", "revoked-ocsp", "revoked-crl-https", "revoked-crl-ldap", "good-ocsp", "good-crl-https", "good-crl-ldap", "under-revoked-ca", "under-expired-ca",
+            "no-nonrepudiation", "rsa-1024", "no-signing-key-usage", "tsa", "tsa-revoked", "ocsp-responder", "tls-server"]);
         pki.Certificates.Single(c => c.Id == "revoked").RevokedAt.ShouldNotBeNull();
         DateTime.Parse(pki.Certificates.Single(c => c.Id == "expired").NotAfter, System.Globalization.CultureInfo.InvariantCulture).ShouldBeLessThan(DateTime.Now);
         DateTime.Parse(pki.Certificates.Single(c => c.Id == "not-yet-valid").NotBefore, System.Globalization.CultureInfo.InvariantCulture).ShouldBeGreaterThan(DateTime.Now);
-        pki.Certificates.Where(c => c.IsUsable).Select(c => c.Id).ShouldBe(["rsa-2048", "rsa-3072", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "no-nonrepudiation"], ignoreOrder: true);
+        pki.Certificates.Where(c => c.IsUsable).Select(c => c.Id).ShouldBe(["rsa-2048", "rsa-3072", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521",
+            "good-ocsp", "good-crl-https", "good-crl-ldap", "no-nonrepudiation"], ignoreOrder: true);
     }
 
     [Fact]

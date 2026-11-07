@@ -9,8 +9,20 @@ public sealed record SandboxOptions
     /// <summary>The environment's name: each name has its own folder, PKI and state.</summary>
     public string Name { get; init; } = "default";
 
-    /// <summary>The port to listen on.</summary>
+    /// <summary>The port to listen on (HTTP services, admin API and UI).</summary>
     public int Port { get; init; } = DefaultPort;
+
+    /// <summary>The HTTPS port (the same services over TLS, for CRLs over HTTPS). Null: <see cref="Port"/> + 1.</summary>
+    public int? HttpsPort { get; init; }
+
+    /// <summary>The LDAP port (CRLs over LDAP). Null: <see cref="Port"/> + 2.</summary>
+    public int? LdapPort { get; init; }
+
+    /// <summary>The HTTPS port in use.</summary>
+    public int ResolvedHttpsPort => HttpsPort ?? Port + 1;
+
+    /// <summary>The LDAP port in use.</summary>
+    public int ResolvedLdapPort => LdapPort ?? Port + 2;
 
     /// <summary>
     /// The URL clients use to reach this Sandbox. It is written into the certificates (CRL
@@ -36,13 +48,19 @@ public sealed record SandboxOptions
     /// <summary>The URL written into new certificates.</summary>
     public Uri BaseUrl => PublicBaseUrl ?? new Uri($"http://localhost:{Port}/");
 
+    /// <summary>The HTTPS URL written into the certificates whose CRL is published over HTTPS.</summary>
+    public Uri HttpsBaseUrl => new UriBuilder(BaseUrl) { Scheme = Uri.UriSchemeHttps, Port = ResolvedHttpsPort }.Uri;
+
+    /// <summary>The LDAP URL written into the certificates whose CRL is published over LDAP.</summary>
+    public Uri LdapBaseUrl => new UriBuilder(BaseUrl) { Scheme = "ldap", Port = ResolvedLdapPort, Path = "/" }.Uri;
+
     /// <summary>The environment's folder.</summary>
     public string ResolveDataDirectory() => DataDirectory
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimpleSign", "Sandbox", Name);
 
     /// <summary>Reads the command line.</summary>
     /// <remarks>
-    /// --port N, --name NAME, --public-base-url URL, --data-dir DIR, --ephemeral, --listen-any,
+    /// --port N, --https-port N, --ldap-port N, --name NAME, --public-base-url URL, --data-dir DIR, --ephemeral, --listen-any,
     /// --allow-remote-admin, --no-browser.
     /// </remarks>
     public static SandboxOptions Parse(IReadOnlyList<string> args)
@@ -56,6 +74,14 @@ public sealed record SandboxOptions
             {
                 case "--port" when int.TryParse(next, out int port):
                     options = options with { Port = port };
+                    i++;
+                    break;
+                case "--https-port" when int.TryParse(next, out int https):
+                    options = options with { HttpsPort = https };
+                    i++;
+                    break;
+                case "--ldap-port" when int.TryParse(next, out int ldap):
+                    options = options with { LdapPort = ldap };
                     i++;
                     break;
                 case "--name" when next is not null:

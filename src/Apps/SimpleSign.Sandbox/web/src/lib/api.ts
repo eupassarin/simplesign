@@ -1,4 +1,4 @@
-import type { CertificateView, PkiView, SandboxFaults, SandboxInfo, SandboxRequest } from "./types"
+import type { CertificateView, PkiView, Publication, SandboxFaults, SandboxInfo, SandboxRequest } from "./types"
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, {
@@ -22,7 +22,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 export const api = {
   info: () => request<SandboxInfo>("GET", "/api/info"),
   pki: () => request<PkiView>("GET", "/api/pki"),
-  revoke: (id: string, reason?: string) => request<CertificateView>("POST", `/api/certificates/${encodeURIComponent(id)}/revoke`, { reason: reason ?? null }),
+  revoke: (id: string, reason: string, publication: Publication) => request<CertificateView>("POST", `/api/certificates/${encodeURIComponent(id)}/revoke`, { reason, publication }),
   unrevoke: (id: string) => request<CertificateView>("POST", `/api/certificates/${encodeURIComponent(id)}/unrevoke`),
   pfxUrl: (id: string) => `/api/certificates/${encodeURIComponent(id)}/pfx`,
   cerUrl: (id: string) => `/api/certificates/${encodeURIComponent(id)}/cer`,
