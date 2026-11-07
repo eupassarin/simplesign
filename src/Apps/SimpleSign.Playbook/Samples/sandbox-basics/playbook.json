@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "name": "Sandbox basics",
+  "description": "Signs and validates with the certificates of a running SimpleSign Sandbox: a good chain, B-LT through its TSA, CRLs and OCSP, and the cases a signer must refuse (revoked by OCSP, by a CRL over HTTPS or LDAP, a revoked CA, a stale CRL, a CRL server down, an expired certificate or CA).",
+  "sandbox": { "url": "http://localhost:5300/", "resetBeforeRun": true },
+  "assets": [
+    { "id": "contract", "file": "assets/contract.html", "description": "The document to sign, turned into a PDF by the first step." }
+  ],
+  "sections": [
+    {
+      "id": "prepare",
+      "title": "Prepare",
+      "steps": [
+        {
+          "id": "make-pdf",
+          "title": "Make the PDF to sign",
+          "description": "simplesign html-to-pdf turns the HTML asset into the PDF the next steps sign.",
+          "run": { "args": ["html-to-pdf", "${asset.contract}", "-o", "${run}/contract.pdf"], "network": "none" },
+          "expect": { "exitCode": 0, "files": ["${run}/contract.pdf"] }
+        }
+      ]
+    },
+    {
+      "id": "signing",
+      "title": "Signing with a good chain",
+      "steps": [
+        {
+          "id": "sign-basic",
+          "title": "B-B with the Strict policy",
+          "description": "The whole chain is checked online (OCSP first, then a fresh CRL) and the signature is made.",
+          "setup": [ { "sandbox": "certificate", "id": "rsa-2048" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--signing-policy", "strict", "--json", "-o", "${out}/signed.pdf"] },
+          "expect": {
+            "exitCode": 0,
+            "json": { "success": true, "achievedLevel": "B-B" },
+            "files": ["${out}/signed.pdf"],
+            "sandboxRequests": [ { "service": "OCSP" } ]
+          }
+        },
+        {
+          "id": "sign-lt",
+          "title": "B-LT through the Sandbox's TSA",
+          "description": "A timestamp from the Sandbox's TSA and the revocation data of the whole chain in the PDF.",
+          "setup": [ { "sandbox": "certificate", "id": "rsa-2048" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--signing-policy", "strict", "--tsa", "${sandbox.tsa}", "--ltv", "--json", "-o", "${out}/signed-lt.pdf"] },
+          "expect": {
+            "exitCode": 0,
+            "json": { "achievedLevel": "B-LT" },
+            "sandboxRequests": [ { "service": "TSA" }, { "service": "OCSP" } ]
+          }
+        },
+        {
+          "id": "validate-lt",
+          "title": "Validate the B-LT signature",
+          "description": "The validator trusts the Sandbox's root and finds the signature valid.",
+          "run": { "args": ["validate", "${run}/steps/sign-lt/signed-lt.pdf", "--trust", "${sandbox.root}", "--json"] },
+          "expect": { "exitCode": 0, "json": { "signatures.0.indication": "Valid" } }
+        }
+      ]
+    },
+    {
+      "id": "revocation",
+      "title": "Revoked chains",
+      "steps": [
+        {
+          "id": "revoked-ocsp",
+          "title": "Revoked, OCSP only",
+          "description": "The certificate points to the OCSP responder only, which answers revoked.",
+          "setup": [ { "sandbox": "certificate", "id": "revoked-ocsp" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--signing-policy", "strict", "--json", "-o", "${out}/refused.pdf"] },
+          "expect": { "json": { "success": false, "error.reason": "CertificateRevoked" }, "sandboxRequests": [ { "service": "OCSP" } ] }
+        },
+        {
+          "id": "revoked-crl-https",
+          "title": "Revoked, CRL over HTTPS",
+          "description": "The only CRL distribution point is on the Sandbox's HTTPS endpoint; the CRL lists the certificate.",
+          "setup": [ { "sandbox": "certificate", "id": "revoked-crl-https" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--signing-policy", "strict", "--json", "-o", "${out}/refused.pdf"] },
+          "expect": { "json": { "error.reason": "CertificateRevoked" }, "sandboxRequests": [ { "pathContains": "/crl/" } ] }
+        },
+        {
+          "id": "revoked-crl-ldap",
+          "title": "Revoked, CRL over LDAP",
+          "description": "The only CRL distribution point is an ldap:// URL; the CRL lists the certificate.",
+          "setup": [ { "sandbox": "certificate", "id": "revoked-crl-ldap" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--signing-policy", "strict", "--json", "-o", "${out}/refused.pdf"] },
+          "expect": { "json": { "error.reason": "CertificateRevoked" } }
+        },
+        {
+          "id": "revoked-ca",
+          "title": "Under a revoked CA",
+          "description": "The certificate is good, but its issuing CA is revoked in the root's CRL.",
+          "setup": [ { "sandbox": "certificate", "id": "under-revoked-ca" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--signing-policy", "strict", "--json", "-o", "${out}/refused.pdf"] },
+          "expect": { "json": { "error.reason": "CertificateRevoked" } }
+        },
+        {
+          "id": "stale-crl",
+          "title": "Revoked after the CRL a client may have cached",
+          "description": "The certificate is revoked and the CRL server keeps serving the CRL from before; the OCSP responder knows.",
+          "setup": [
+            { "sandbox": "revoke", "certificate": "rsa-4096" },
+            { "sandbox": "faults", "crl": "Stale" },
+            { "sandbox": "certificate", "id": "rsa-4096" }
+          ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--signing-policy", "strict", "--json", "-o", "${out}/refused.pdf"] },
+          "expect": { "json": { "error.reason": "CertificateRevoked" } },
+          "teardown": [ { "sandbox": "reset" } ]
+        },
+        {
+          "id": "crl-down",
+          "title": "CRL server down, no OCSP",
+          "description": "The certificate has only a CRL over HTTPS, and the CRL server answers 503: the status cannot be established.",
+          "setup": [ { "sandbox": "faults", "crl": "Down" }, { "sandbox": "certificate", "id": "good-crl-https" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--signing-policy", "strict", "--json", "-o", "${out}/refused.pdf"] },
+          "expect": { "json": { "error.reason": "RevocationStatusUnknown" } },
+          "teardown": [ { "sandbox": "reset" } ]
+        }
+      ]
+    },
+    {
+      "id": "validity",
+      "title": "Validity",
+      "steps": [
+        {
+          "id": "expired",
+          "title": "Expired certificate",
+          "description": "The certificate expired yesterday; the default policy refuses it.",
+          "setup": [ { "sandbox": "certificate", "id": "expired" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--json", "-o", "${out}/refused.pdf"] },
+          "expect": { "json": { "error.reason": "CertificateExpired" } }
+        },
+        {
+          "id": "expired-ca",
+          "title": "Under an expired CA",
+          "description": "The certificate is valid, its issuing CA expired yesterday.",
+          "setup": [ { "sandbox": "certificate", "id": "under-expired-ca" } ],
+          "run": { "args": ["sign", "${run}/contract.pdf", "--cert", "${cert.path}", "--password", "${cert.password}", "--json", "-o", "${out}/refused.pdf"] },
+          "expect": { "json": { "error.reason": "ChainCertificateNotValid" } }
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "title": "Review",
+      "steps": [
+        {
+          "id": "open-in-reader",
+          "title": "Open the B-LT PDF in a PDF reader",
+          "description": "Open steps/sign-lt/signed-lt.pdf of this run in a PDF reader that trusts the Sandbox's root, check the signature panel, and attach a screenshot.",
+          "manual": true
+        }
+      ]
+    }
+  ]
+}

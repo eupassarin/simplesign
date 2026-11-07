@@ -5,7 +5,6 @@ using SimpleSign.TestBench.CrossValidation;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Runs;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Schema;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Xml;
@@ -136,12 +135,6 @@ internal static class RunApi
             documents.TryGet(body.FileId, out _)
                 ? Results.Ok(await client.ValidateAsync(body.FileId, body.DataId, null, ct))
                 : Results.NotFound());
-
-        // The sandbox root, so an external validator (DSS) can be told to trust the sandbox PKI.
-        api.MapGet("/sandbox/root.pem", (SandboxEnvironment sandbox) =>
-            Results.Text(sandbox.Pki.Root.ExportCertificatePem() + "\n", "application/x-pem-file"));
-        api.MapGet("/sandbox/chain.pem", (SandboxEnvironment sandbox) =>
-            Results.Text(string.Join("\n", new[] { sandbox.Pki.Root }.Concat(sandbox.Pki.Chain).DistinctBy(c => c.Thumbprint).Select(c => c.ExportCertificatePem())) + "\n", "application/x-pem-file"));
     }
 
     internal static async Task<WorkbenchOptionsResponse> EvaluateAsync(WorkbenchOptionsRequest body, DocumentStore documents, CredentialStore credentials,
@@ -155,7 +148,7 @@ internal static class RunApi
                     var options = body.Options.Deserialize<CadesOptions>(json) ?? new CadesOptions();
                     credentials.TryGet(options.CredentialId, out var credential);
                     var inputs = cades.Inputs(options);
-                    var report = CadesCompatibility.Evaluate(options, inputs, credential?.Facts);
+                    var report = CadesCompatibility.Evaluate(options, inputs, credential?.Facts, cades.SandboxConnected);
                     return new(body.Format, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, null, credential?.Facts, inputs);
                 }
 
@@ -164,7 +157,7 @@ internal static class RunApi
                     var options = body.Options.Deserialize<XmlOptions>(json) ?? new XmlOptions();
                     credentials.TryGet(options.CredentialId, out var credential);
                     var facts = xml.Facts(options.DataId);
-                    var report = XmlCompatibility.Evaluate(options, facts, credential?.Facts);
+                    var report = XmlCompatibility.Evaluate(options, facts, credential?.Facts, xml.SandboxConnected);
                     return new(body.Format, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, null, credential?.Facts, facts);
                 }
 
@@ -173,7 +166,7 @@ internal static class RunApi
                     var options = body.Options.Deserialize<SigningOptions>(json) ?? new SigningOptions();
                     DocumentFacts? document = options.DocumentId is { } id && documents.TryGet(id, out _) ? await documents.FactsAsync(id, cancellationToken) : null;
                     credentials.TryGet(options.CredentialId, out var credential);
-                    var report = Compatibility.Evaluate(options, document, credential?.Facts);
+                    var report = Compatibility.Evaluate(options, document, credential?.Facts, xml.SandboxConnected);
                     return new(RunFormats.Pades, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, document, credential?.Facts, null);
                 }
         }

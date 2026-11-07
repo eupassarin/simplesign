@@ -13,7 +13,31 @@ namespace SimpleSign.Cli.Json;
 [JsonSerializable(typeof(InspectOutput))]
 [JsonSerializable(typeof(CadesValidateOutput))]
 [JsonSerializable(typeof(XadesValidateOutput))]
+[JsonSerializable(typeof(SignOutput))]
 internal sealed partial class CliJsonContext : JsonSerializerContext;
+
+// ─── Sign DTOs ───────────────────────────────────────────────────────
+
+/// <summary>The result of a sign command with --json.</summary>
+internal sealed class SignOutput
+{
+    public bool Success { get; init; }
+    public string? Format { get; init; }
+    public string? Output { get; init; }
+    public string? Signer { get; init; }
+    public string? RequestedLevel { get; init; }
+    public string? AchievedLevel { get; init; }
+    public List<string> Warnings { get; init; } = [];
+    public SignErrorDto? Error { get; init; }
+}
+
+/// <summary>Why a sign command failed: the exception type, the SigningErrorReason (when a signing policy refused), the message.</summary>
+internal sealed class SignErrorDto
+{
+    public string Type { get; init; } = string.Empty;
+    public string? Reason { get; init; }
+    public string Message { get; init; } = string.Empty;
+}
 
 // ─── Validate DTOs ───────────────────────────────────────────────────
 

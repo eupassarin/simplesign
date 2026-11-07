@@ -4,41 +4,25 @@ import * as pdfjs from "pdfjs-dist"
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url"
 import { Button } from "@/components/ui/button"
 import { useT } from "@/i18n"
-import { cn } from "@/lib/utils"
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
-export interface StampBox {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-/**
- * Renders one page of a PDF with pdf.js. Optionally overlays the planned stamp rectangle (PDF
- * coordinates, origin bottom-left) and reports clicks in PDF coordinates so the stamp can be placed.
- */
+/** Renders one page of a PDF with pdf.js. */
 export function PdfPreview({
   url,
   page,
   onPageCount,
   onPageChange,
-  box,
-  onPlace,
   rendering,
 }: {
   url: string
   page: number
   onPageCount?: (count: number) => void
   onPageChange?: (page: number) => void
-  box?: StampBox | null
-  onPlace?: (x: number, y: number) => void
   rendering?: boolean
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const [doc, setDoc] = useState<pdfjs.PDFDocumentProxy | null>(null)
-  const [size, setSize] = useState<{ width: number; height: number; scale: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const t = useT()
 
@@ -74,7 +58,6 @@ export function PdfPreview({
       c.height = viewport.height
       c.style.width = `${base.width * scale}px`
       c.style.height = `${base.height * scale}px`
-      setSize({ width: base.width, height: base.height, scale })
       renderTask = p.render({ canvas: c, viewport })
       renderTask.promise.catch(() => {})
     })
@@ -89,28 +72,7 @@ export function PdfPreview({
     <div className="space-y-2">
       <div className="bg-muted/40 relative mx-auto w-fit overflow-hidden rounded-md border shadow-sm">
         {error && <p className="text-destructive p-6 text-sm">{t("preview.error", { error })}</p>}
-        <canvas
-          ref={canvas}
-          className={cn("block bg-white", onPlace && "cursor-crosshair")}
-          onClick={(e) => {
-            if (!onPlace || !size) return
-            const rect = e.currentTarget.getBoundingClientRect()
-            const x = (e.clientX - rect.left) / size.scale
-            const yTop = (e.clientY - rect.top) / size.scale
-            onPlace(Math.round(x), Math.round(size.height - yTop))
-          }}
-        />
-        {box && size && (
-          <div
-            className="border-info bg-info/10 pointer-events-none absolute border-2 border-dashed"
-            style={{
-              left: box.x * size.scale,
-              top: (size.height - box.y - box.height) * size.scale,
-              width: box.width * size.scale,
-              height: box.height * size.scale,
-            }}
-          />
-        )}
+        <canvas ref={canvas} className="block bg-white" />
         {(rendering || (!doc && !error)) && (
           <div className="bg-background/40 absolute inset-0 flex items-center justify-center">
             <Loader2 className="text-muted-foreground size-5 animate-spin" />

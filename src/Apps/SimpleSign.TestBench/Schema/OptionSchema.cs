@@ -17,7 +17,6 @@ public static partial class OptionSchema
 {
     public const string Supported = "supported";
     public const string NotInLibrary = "notInLibrary";
-    public const string Brazil = "brazil";
 
     private const string P = RunFormats.Pades;
     private const string C = RunFormats.Cades;
@@ -38,7 +37,6 @@ public static partial class OptionSchema
         return s with
         {
             Formats = [.. s.Formats.Select(f => f with { Title = L.T(f.Title), Summary = L.T(f.Summary) })],
-            Frameworks = [.. s.Frameworks.Select(f => f with { Title = L.T(f.Title), Summary = L.T(f.Summary) })],
             Sections = [.. s.Sections.Select(x => x with { Title = L.T(x.Title), Summary = L.T(x.Summary) })],
             Stages = [.. s.Stages.Select(x => x with { Title = L.T(x.Title), Summary = L.T(x.Summary) })],
             Presets = [.. s.Presets.Select(x => x with { Title = L.T(x.Title), Summary = L.T(x.Summary) })],
@@ -62,7 +60,6 @@ public static partial class OptionSchema
     {
         var s = All;
         return s.Formats.SelectMany(f => new[] { f.Title, f.Summary })
-            .Concat(s.Frameworks.SelectMany(f => new[] { f.Title, f.Summary }))
             .Concat(s.Sections.SelectMany(x => new[] { x.Title, x.Summary }))
             .Concat(s.Stages.SelectMany(x => new[] { x.Title, x.Summary }))
             .Concat(s.Presets.SelectMany(x => new[] { x.Title, x.Summary }))
@@ -74,17 +71,16 @@ public static partial class OptionSchema
 
     private static WorkbenchSchema Build() => new(
         Formats(),
-        Frameworks(),
         Sections(),
-        [.. InputOptions(), .. LevelOptions(), .. TimestampOptions(), .. CryptoOptions(), .. AttributeOptions(), .. PdfOptions(), .. AppearanceOptions(), .. RunOptions()],
+        [.. InputOptions(), .. LevelOptions(), .. TimestampOptions(), .. CryptoOptions(), .. AttributeOptions(), .. PdfOptions(), .. RunOptions()],
         Stages(),
         Presets(),
         new Dictionary<string, object>(StringComparer.Ordinal)
         {
-            // The workbench opens without any national trust framework: the Brazilian rules are off.
-            [P] = new SigningOptions { Validation = new ValidationSettings { UseBrasil = false } },
-            [C] = new CadesOptions { Validation = new ValidationSettings { UseBrasil = false } },
-            [X] = new XmlOptions { Validation = new ValidationSettings { UseBrasil = false } },
+            // With the validation settings, so the form can edit them before the first run.
+            [P] = new SigningOptions { Validation = new ValidationSettings() },
+            [C] = new CadesOptions { Validation = new ValidationSettings() },
+            [X] = new XmlOptions { Validation = new ValidationSettings() },
         });
 
     // ── Helpers ─────────────────────────────────────────────────────────
@@ -96,38 +92,38 @@ public static partial class OptionSchema
     private static SchemaCondition When(string path, params string[] values) => new(path, values);
 
     private static SchemaValue V(string value, string title, string? summary = null, string? details = null,
-        StandardRef[]? standards = null, string? api = null, string? framework = null, string support = Supported) =>
-        new(value, title, summary, details, standards ?? [], api, framework, support);
+        StandardRef[]? standards = null, string? api = null, string support = Supported) =>
+        new(value, title, summary, details, standards ?? [], api, support);
 
     /// <summary>A value explained by an entry of <see cref="OptionCatalog"/>.</summary>
-    private static SchemaValue VC(string value, string catalogKey, StandardRef[]? standards = null, string? framework = null)
+    private static SchemaValue VC(string value, string catalogKey, StandardRef[]? standards = null)
     {
         var info = OptionCatalog.All[catalogKey];
-        return new(value, info.Title, info.Summary, info.Details, standards ?? [], info.Api, framework, Supported);
+        return new(value, info.Title, info.Summary, info.Details, standards ?? [], info.Api, Supported);
     }
 
     private static SchemaOption O(string id, string section, string[] formats, string kind, string? path, string title, string summary,
         string? details = null, StandardRef[]? standards = null, string? api = null, SchemaValue[]? values = null,
-        string? stateKey = null, string? valueStateKey = null, string? framework = null, string support = Supported,
+        string? stateKey = null, string? valueStateKey = null, string support = Supported,
         params SchemaCondition[] when) =>
         new(id, section, formats, kind, path, stateKey, valueStateKey, title, summary, details, values ?? [], standards ?? [], api,
-            framework, support, when);
+            support, when);
 
     /// <summary>An option explained by an entry of <see cref="OptionCatalog"/>.</summary>
     private static SchemaOption OC(string id, string section, string[] formats, string kind, string? path, string catalogKey,
         StandardRef[]? standards = null, SchemaValue[]? values = null, string? stateKey = null, string? valueStateKey = null,
-        string? framework = null, params SchemaCondition[] when)
+        params SchemaCondition[] when)
     {
         var info = OptionCatalog.All[catalogKey];
         return new(id, section, formats, kind, path, stateKey, valueStateKey, info.Title, info.Summary, info.Details, values ?? [],
-            standards ?? [], info.Api, framework, Supported, when);
+            standards ?? [], info.Api, Supported, when);
     }
 
     /// <summary>An option a standard defines and SimpleSign does not implement: listed, disabled, with the clause.</summary>
     private static SchemaOption Missing(string id, string section, string[] formats, string title, string summary, params string[] references) =>
-        new(id, section, formats, "toggle", null, null, null, title, summary, null, [], R(references), null, null, NotInLibrary, []);
+        new(id, section, formats, "toggle", null, null, null, title, summary, null, [], R(references), null, NotInLibrary, []);
 
-    // ── Formats, frameworks, sections ───────────────────────────────────
+    // ── Formats and sections ───────────────────────────────────
 
     private static List<SchemaFormat> Formats() =>
     [
@@ -142,16 +138,6 @@ public static partial class OptionSchema
             "XadesSigner.Document(xml)", "XadesSignatureValidator"),
     ];
 
-    private static List<SchemaFramework> Frameworks() =>
-    [
-        new(Brazil, "Brazil (ICP-Brasil · Gov.br)", "ICP-Brasil signature policies (AD-RB…AD-RA), Gov.br advanced signatures (Lei 14.063), health documents and fiscal XML.",
-            "available", R("DOC-ICP-15.03|Signature policy requirements", "Lei 14.063/2020|Electronic signatures with public bodies", "MP 2.200-2/2001|ICP-Brasil")),
-        new("eidas", "European Union (eIDAS)", "Qualified signatures and EU trusted lists. Planned.",
-            "planned", R("Regulation (EU) 910/2014|eIDAS", "ETSI TS 119 612|Trusted lists")),
-        new("iofe", "Peru (IOFE)", "The Peruvian official electronic signature infrastructure: the library package SimpleSign.Peru.Iofe exists (INDECOPI trusted list and policies); here only its validation policy is offered.",
-            "planned", R("Ley 27269|Ley de Firmas y Certificados Digitales")),
-    ];
-
     private static List<SchemaSection> Sections() =>
     [
         new("input", "What to sign", "The document or data, and how the signature is attached to it."),
@@ -161,7 +147,6 @@ public static partial class OptionSchema
         new("crypto", "Cryptography", "The digest and signature algorithms."),
         new("attributes", "Signed attributes", "What the signer declares inside the signature."),
         new("pdf", "PDF signature field", "How the signature is written in the PDF."),
-        new("appearance", "Visible stamp", "The stamp drawn on the page (PDF only)."),
         new("run", "Run and validation", "How the library is called, and how the result is checked."),
     ];
 

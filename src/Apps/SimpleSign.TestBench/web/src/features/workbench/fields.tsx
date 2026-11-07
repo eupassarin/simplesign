@@ -8,13 +8,13 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useT } from "@/i18n"
 import { api } from "@/lib/api"
-import type { CadesSample, IcpPolicyKind, IcpVersion, OptionState, SampleDocument, TimestampChoice, XmlSample } from "@/lib/types"
+import type { CadesSample, OptionState, SampleDocument, TimestampChoice, XmlSample } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { CredentialPicker } from "../credentials/CredentialPicker"
 import { TsaPicker } from "../shared/TsaPicker"
 import { Pill } from "../shared/ui"
 import { UploadButton } from "../shared/UploadButton"
-import { FrameworkTag, OptionRow, StandardBadge, type Explanation } from "./parts"
+import { OptionRow, StandardBadge, type Explanation } from "./parts"
 import { asText, getPath, type Options, type SchemaOption, type SchemaValue } from "./schema"
 import { useWorkbench } from "./state"
 
@@ -42,7 +42,7 @@ export function OptionField({ option }: { option: SchemaOption }) {
   const value = getPath(options, path)
   const optionState = option.stateKey ? state(option.stateKey) : undefined
   const locked = !!optionState?.disabled
-  const row = { explanation: explain(option), framework: option.framework, state: optionState }
+  const row = { explanation: explain(option), state: optionState }
   const text = (v: string) => set(path, v === "" ? null : v)
 
   switch (option.kind) {
@@ -63,21 +63,11 @@ export function OptionField({ option }: { option: SchemaOption }) {
     case "lines":
       return <OptionRow {...row}><Textarea rows={3} value={Array.isArray(value) ? value.join("\n") : ""} disabled={locked}
         onChange={(e) => set(path, e.target.value.split("\n").map((l) => l.trimEnd()).filter((l, i, all) => l !== "" || i < all.length - 1))} /></OptionRow>
-    case "color":
-      return (
-        <OptionRow {...row}>
-          <div className="flex items-center gap-2">
-            <input type="color" className="h-9 w-10 cursor-pointer rounded-md border bg-transparent p-1" value={asText(value) || "#ffffff"} onChange={(e) => set(path, e.target.value)} />
-            <Input className="max-w-32 font-mono text-xs" value={asText(value)} placeholder="—" onChange={(e) => text(e.target.value)} />
-            {!!value && <Button variant="ghost" size="sm" onClick={() => set(path, null)}>{t("wb.clear")}</Button>}
-          </div>
-        </OptionRow>
-      )
     case "upload":
       return (
         <OptionRow {...row}>
           <div className="flex items-center gap-2">
-            <UploadButton label={t("wb.chooseFile")} accept="image/png,image/jpeg" onUploaded={(f) => set(path, f.id)} />
+            <UploadButton label={t("wb.chooseFile")} accept="*/*" onUploaded={(f) => set(path, f.id)} />
             {!!value && <><Pill tone="success">{t("wb.uploaded")}</Pill><Button variant="ghost" size="sm" onClick={() => set(path, null)}>{t("wb.clear")}</Button></>}
           </div>
         </OptionRow>
@@ -88,8 +78,6 @@ export function OptionField({ option }: { option: SchemaOption }) {
       return <OptionRow {...row}><Trust option={option} value={Array.isArray(value) ? (value as string[]) : []} onChange={(v) => set(path, v)} /></OptionRow>
     case "keyValues":
       return <OptionRow {...row}><KeyValues value={Array.isArray(value) ? (value as { key: string; value: string }[]) : []} onChange={(v) => set(path, v)} /></OptionRow>
-    case "professionals":
-      return <OptionRow {...row}><Professionals value={Array.isArray(value) ? (value as Professional[]) : []} onChange={(v) => set(path, v)} /></OptionRow>
     case "document":
       return <OptionRow {...row}><DocumentPicker /></OptionRow>
     case "data":
@@ -98,8 +86,6 @@ export function OptionField({ option }: { option: SchemaOption }) {
       return <OptionRow {...row}><DataPicker path={path} kind="signature" /></OptionRow>
     case "existingField":
       return <OptionRow {...row}><ExistingField value={asText(value)} onChange={(v) => set(path, v)} /></OptionRow>
-    case "icpVersion":
-      return <OptionRow {...row}><IcpVersionPicker value={typeof value === "string" ? value : null} onChange={(v) => set(path, v)} /></OptionRow>
     case "credential":
       return <OptionRow {...row}><Credential /></OptionRow>
     default:
@@ -141,7 +127,6 @@ function Choice({ option, value, locked, onChange }: { option: SchemaOption; val
               disabled && "cursor-not-allowed opacity-55 hover:border-border hover:bg-transparent")}>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-sm leading-tight font-medium">{v.title}</span>
-              <FrameworkTag framework={v.framework} />
               <StandardBadge explanation={explain(v)} className="ml-auto" />
             </div>
             {v.summary && <p className="text-muted-foreground text-xs leading-snug">{v.summary}</p>}
@@ -167,7 +152,7 @@ function Trust({ option, value, onChange }: { option: SchemaOption; value: strin
           <Checkbox className="mt-0.5" checked={value.includes(v.value)}
             onCheckedChange={(on) => onChange(on === true ? [...value, v.value] : value.filter((x) => x !== v.value))} />
           <span>
-            <span className="flex items-center gap-1.5">{v.title}<FrameworkTag framework={v.framework} /></span>
+            <span className="flex items-center gap-1.5">{v.title}</span>
             {v.summary && <span className="text-muted-foreground block text-xs">{v.summary}</span>}
           </span>
         </label>
@@ -189,37 +174,6 @@ function KeyValues({ value, onChange }: { value: { key: string; value: string }[
         </div>
       ))}
       <Button variant="outline" size="sm" onClick={() => onChange([...value, { key: "", value: "" }])}><Plus /> {t("wb.add")}</Button>
-    </div>
-  )
-}
-
-interface Professional {
-  council: string
-  registrationNumber: string
-  stateCode?: string | null
-  specialty?: string | null
-}
-
-const councils = ["Cfm", "Cff", "Cfo", "Cofen", "Cfp", "Cfn", "Coffito", "Cffa", "Cfmv", "Cfbio", "Cfbm", "Confef", "Cfess", "Conter", "Cfq", "Oab"]
-
-function Professionals({ value, onChange }: { value: Professional[]; onChange: (value: Professional[]) => void }) {
-  const t = useT()
-  const edit = (i: number, patch: Partial<Professional>) => onChange(value.map((p, n) => (n === i ? { ...p, ...patch } : p)))
-  return (
-    <div className="space-y-2">
-      {value.map((p, i) => (
-        <div key={i} className="flex flex-wrap gap-2">
-          <Select value={p.council} onValueChange={(council) => edit(i, { council })}>
-            <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-            <SelectContent>{councils.map((c) => <SelectItem key={c} value={c}>{c.toUpperCase()}</SelectItem>)}</SelectContent>
-          </Select>
-          <Input className="w-32" placeholder="123456" value={p.registrationNumber} onChange={(e) => edit(i, { registrationNumber: e.target.value })} />
-          <Input className="w-16" placeholder="UF" maxLength={2} value={p.stateCode ?? ""} onChange={(e) => edit(i, { stateCode: e.target.value.toUpperCase() })} />
-          <Input className="min-w-32 flex-1" placeholder={t("wb.specialty")} value={p.specialty ?? ""} onChange={(e) => edit(i, { specialty: e.target.value || null })} />
-          <Button variant="ghost" size="icon" aria-label={t("wb.remove")} onClick={() => onChange(value.filter((_, n) => n !== i))}><Trash2 /></Button>
-        </div>
-      ))}
-      <Button variant="outline" size="sm" onClick={() => onChange([...value, { council: "Cfm", registrationNumber: "", stateCode: "SP" }])}><Plus /> {t("wb.add")}</Button>
     </div>
   )
 }
@@ -281,21 +235,19 @@ function DocumentPicker() {
 
 /** The file to sign (CAdES, XAdES) or the existing CMS signature to co-sign or countersign. */
 function DataPicker({ path, kind }: { path: string; kind: "data" | "signature" }) {
-  const { format, options, set, patch, frameworks } = useWorkbench()
+  const { format, options, set, patch } = useWorkbench()
   const t = useT()
   const [cades, setCades] = useState<CadesSample[]>([])
   const [xml, setXml] = useState<XmlSample[]>([])
   const [uploaded, setUploaded] = useState<{ id: string; fileName: string } | null>(null)
   const current = asText(getPath(options, path))
-  const mode = asText(options.mode)
   useEffect(() => {
     if (format === "cades") api.cades.samples().then(setCades).catch(() => setCades([]))
     else api.xml.samples().then(setXml).catch(() => setXml([]))
   }, [format])
   const list: { id: string; title: string; description: string; apply?: Record<string, unknown> }[] = format === "cades"
     ? cades.filter((s) => s.kind === kind).map((s) => ({ id: s.fileId, title: s.title, description: s.description, apply: kind === "signature" && s.dataId ? { dataId: s.dataId } : undefined }))
-    : xml.filter((s) => s.kind === "data" && (frameworks.has("brazil") || s.mode === "Xades") && s.mode === (mode || "Xades"))
-      .map((s) => ({ id: s.fileId, title: s.title, description: s.description, apply: s.profile ? { profile: s.profile } : undefined }))
+    : xml.filter((s) => s.kind === "data").map((s) => ({ id: s.fileId, title: s.title, description: s.description }))
   useEffect(() => {
     if (kind === "data" && list.length > 0 && !list.some((s) => s.id === current) && uploaded?.id !== current) {
       patch({ [path]: list[0].id, ...list[0].apply })
@@ -334,34 +286,8 @@ function ExistingField({ value, onChange }: { value: string; onChange: (value: s
   )
 }
 
-/** The version of the ICP-Brasil policy: automatic, or one pinned by its OID. */
-function IcpVersionPicker({ value, onChange }: { value: string | null; onChange: (value: string | null) => void }) {
-  const { options } = useWorkbench()
-  const t = useT()
-  const [versions, setVersions] = useState<IcpVersion[]>([])
-  const policy = asText(options.icpPolicy) as IcpPolicyKind
-  const credentialId = asText(options.credentialId)
-  useEffect(() => {
-    api.icpVersions(policy, credentialId || null).then(setVersions).catch(() => setVersions([]))
-  }, [policy, credentialId])
-  const automatic = versions.find((v) => v.isAutomatic)
-  return (
-    <Select value={value ?? "__auto"} onValueChange={(v) => onChange(v === "__auto" ? null : v)}>
-      <SelectTrigger className="w-full max-w-md"><SelectValue /></SelectTrigger>
-      <SelectContent>
-        <SelectItem value="__auto">{automatic ? t("wb.icpAutomaticUses", { version: automatic.version, oid: automatic.oid }) : t("wb.icpAutomatic")}</SelectItem>
-        {versions.map((v) => (
-          <SelectItem key={v.oid} value={v.oid} disabled={!!v.disabled}>
-            v{v.version} · {v.oid} · {v.notBefore} – {v.notAfter}{v.disabled ? ` — ${v.disabled}` : ""}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
-
 function Credential() {
-  const { environment, env, credential, set } = useWorkbench()
+  const { env, credential, set } = useWorkbench()
   const t = useT()
   const [open, setOpen] = useState(false)
   if (credential && !open) {
@@ -369,10 +295,9 @@ function Credential() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm">{t("wb.signerSummary", { holder: credential.holder, key: `${credential.keyAlgorithm} ${credential.keySize}`, source: credential.source })}</span>
         {credential.isExpired && <Pill tone="danger">{t("signer.card.expired")}</Pill>}
-        {credential.chainsToIcpBrasil && <Pill tone="success">ICP-Brasil</Pill>}
         <Button variant="outline" size="sm" onClick={() => setOpen(true)}>{t("wb.changeSigner")}</Button>
       </div>
     )
   }
-  return <CredentialPicker environment={environment} env={env} credential={credential} onCredential={(facts) => { set("credentialId", facts.id); setOpen(false) }} />
+  return <CredentialPicker env={env} credential={credential} onCredential={(facts) => { set("credentialId", facts.id); setOpen(false) }} />
 }

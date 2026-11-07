@@ -35,6 +35,6 @@ public sealed class CoverageDocumentTests
         page.ShouldContain("## By standard");
         page.ShouldContain("### ETSI EN 319 142-1");
         page.ShouldContain("| **no** |");
-        page.ShouldContain("(**BR**)");
+        page.ShouldNotContain("(**BR**)");
     }
 }

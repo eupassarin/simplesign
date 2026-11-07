@@ -1,4 +1,3 @@
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Validation;
 
@@ -31,18 +30,7 @@ public enum CadesContentChoice
 public enum CadesKind
 {
     Baseline,
-    IcpBrasil,
     CustomPolicy,
-}
-
-/// <summary>ICP-Brasil CAdES policies (DOC-ICP-15.03), including AD-RV which PAdES does not have.</summary>
-public enum CadesIcpPolicy
-{
-    AdRb,
-    AdRt,
-    AdRv,
-    AdRc,
-    AdRa,
 }
 
 /// <summary>RFC 5126 extended forms (<c>CadesExtendedForm</c>).</summary>
@@ -57,8 +45,6 @@ public enum CadesExtendedChoice
 /// <summary>Everything the CAdES page can choose. Evaluated by <see cref="CadesCompatibility"/>.</summary>
 public sealed record CadesOptions
 {
-    public EnvironmentMode Environment { get; init; } = EnvironmentMode.Sandbox;
-
     public CadesOperation Operation { get; init; } = CadesOperation.Sign;
 
     /// <summary>The data to sign (Sign; CoSign of a detached signature).</summary>
@@ -77,8 +63,6 @@ public sealed record CadesOptions
     public CadesKind Kind { get; init; } = CadesKind.Baseline;
 
     public BaselineLevel Level { get; init; } = BaselineLevel.BB;
-
-    public CadesIcpPolicy IcpPolicy { get; init; } = CadesIcpPolicy.AdRb;
 
     public string PolicyOid { get; init; } = "1.2.3.4.5";
 

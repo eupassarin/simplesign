@@ -10,11 +10,12 @@ using SimpleSign.TestBench.Signing;
 // SimpleSign TestBench: a local web app to try every PDF signing option of the library.
 //   dotnet run --project src/Apps/SimpleSign.TestBench            (http://127.0.0.1:5199, opens the browser)
 //   dotnet run --project src/Apps/SimpleSign.TestBench -- --port 5200 --no-browser
-//   --ephemeral-sandbox: a new sandbox root CA on every start (by default the root is kept in the
-//   user's local application data, so an external validator such as DSS can keep trusting it).
+//   The test PKI and its services are a separate app, the SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox):
+//   connect it in Environment; the TestBench reconnects to it on the next start.
+//   --sandbox URL: connect to this Sandbox at start (as SIMPLESIGN_SANDBOX_URL does).
 int port = 5199;
 bool openBrowser = true;
-bool keepSandboxRoot = true;
+string? sandboxUrl = Environment.GetEnvironmentVariable("SIMPLESIGN_SANDBOX_URL");
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--port" && i + 1 < args.Length && int.TryParse(args[i + 1], out int p))
@@ -25,9 +26,9 @@ for (int i = 0; i < args.Length; i++)
     {
         openBrowser = false;
     }
-    else if (args[i] == "--ephemeral-sandbox")
+    else if (args[i] == "--sandbox" && i + 1 < args.Length)
     {
-        keepSandboxRoot = false;
+        sandboxUrl = args[++i];
     }
 }
 
@@ -45,12 +46,12 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
     o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
 });
-builder.Services.AddSingleton(new SandboxEnvironment(keepSandboxRoot ? SandboxEnvironment.DefaultRootStorePath : null));
+builder.Services.AddSingleton(new SandboxEnvironment(SandboxEnvironment.DefaultStatePath));
+builder.Services.AddSingleton<SampleService>();
 builder.Services.AddSingleton<DocumentStore>();
 builder.Services.AddSingleton<CredentialStore>();
 builder.Services.AddSingleton<CredentialFactory>();
 builder.Services.AddSingleton<SigningRunner>();
-builder.Services.AddSingleton<PreviewService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.InspectionService>();
 builder.Services.AddSingleton<SimpleSign.TestBench.Validation.ValidationSampleStore>();
@@ -63,16 +64,26 @@ builder.Services.AddSingleton<SimpleSign.TestBench.Runs.RunService>();
 
 var app = builder.Build();
 
-// Generate the sandbox (keys, certificates) and the sample PDFs before serving.
+// The sample PDFs, the Sandbox connection (remembered, or the one given) and the signed samples, before serving.
 var sandbox = app.Services.GetRequiredService<SandboxEnvironment>();
-var documentStore = app.Services.GetRequiredService<DocumentStore>();
-documentStore.AddSamples(await SampleDocuments.CreateAsync(sandbox));
-app.Services.GetRequiredService<SimpleSign.TestBench.Validation.ValidationSampleStore>().Samples =
-    await SimpleSign.TestBench.Validation.InvalidSamples.CreateAsync(sandbox, documentStore);
-app.Services.GetRequiredService<SimpleSign.TestBench.Cades.CadesSampleStore>().Samples =
-    await SimpleSign.TestBench.Cades.CadesSamples.CreateAsync(sandbox, documentStore);
-app.Services.GetRequiredService<SimpleSign.TestBench.Xml.XmlSampleStore>().Samples =
-    await SimpleSign.TestBench.Xml.XmlSamples.CreateAsync(sandbox, documentStore);
+app.Services.GetRequiredService<DocumentStore>().AddSamples(await SampleDocuments.CreateAsync());
+if (sandboxUrl is not null && Uri.TryCreate(sandboxUrl, UriKind.Absolute, out var givenSandbox))
+{
+    try
+    {
+        await sandbox.ConnectAsync(givenSandbox);
+    }
+    catch (HttpRequestException ex)
+    {
+        Console.WriteLine($"No SimpleSign Sandbox at {givenSandbox}: {ex.Message}");
+    }
+}
+else
+{
+    await sandbox.ReconnectAsync();
+}
+
+await app.Services.GetRequiredService<SampleService>().RefreshAsync();
 
 app.Use(async (context, next) =>
 {

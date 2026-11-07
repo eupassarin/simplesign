@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — SimpleSign Sandbox and loopback origins
+
+- `src/Apps/SimpleSign.Sandbox`: a test PKI and its services on real HTTP endpoints (AIA, CRLs, RFC 3161 TSA,
+  CSC v2), with failures to switch on, revocation, a request log, an admin API and a UI. Environments are kept by
+  name; the URL written into the certificates is fixed when an environment is created.
+- `OutboundHttpPolicy.LoopbackOrigins`: services on this machine listed by exact origin (scheme, host, port) pass
+  the SSRF guard, for local test environments; empty by default. HTTP, LDAP and the TSA TCP transport honor it.
+- `TimestampClient` no longer refuses a loopback TSA URL in its constructor: it is refused when the request is
+  sent, unless its origin is listed (private and link-local URLs are still refused at once).
+
+### Added — SimpleSign Playbook
+
+- `src/Apps/SimpleSign.Playbook`: a web app (127.0.0.1:5400, en/pt-BR) that runs a playbook — a JSON file of
+  SimpleSign CLI commands in sections — in a workspace folder (playbook.json, assets/, secrets.json, runs/). Before a
+  step it can change a SimpleSign Sandbox (failures, revocations, certificates as PKCS#12); after it, it checks the exit
+  code, paths in the JSON on stdout, text, files and the requests the Sandbox answered. Manual steps wait for the
+  operator's result, note and attachments. Each run is recorded (machine, CLI version, Sandbox and root, playbook
+  SHA-256, each step's command, output, checks, requests and files) with report.md, report.html and a zip; runs can be
+  compared. The playbook is edited as a form or as JSON, checked by the server as you type. A neutral sample
+  (`Sandbox basics`) signs and validates with a Sandbox's certificates.
+- `docs/articles/playbook.md`; tests in `tests/unit/Apps/SimpleSign.Playbook.Tests`, including the sample run with the
+  real CLI against a running Sandbox.
+
+### Added — CLI: network options and JSON result for signing
+
+- Every command accepts `--allow-origin <URL>` (repeatable), `--allow-ldap` and `--tls-trust <PEM>` (also
+  `SIMPLESIGN_ALLOW_ORIGINS`, `SIMPLESIGN_ALLOW_LDAP`, `SIMPLESIGN_TLS_TRUST`): the HTTP provider lets the listed
+  loopback origins through the SSRF guard, reads CRLs over LDAP and accepts the given root (and intermediates) for
+  HTTPS. `sign`, `cades sign` and `xades sign` now use that provider for the TSA, LTV and the Strict revocation check.
+- `sign`, `cades sign` and `xades sign --json`: `{ success, format, output, signer, requestedLevel, achievedLevel,
+  warnings, error: { type, reason, message } }`; a refusal carries its `SigningErrorReason`.
+
+### Changed — CI, DSS and docs use the Sandbox
+
+- CI starts an ephemeral SimpleSign Sandbox on each OS before the tests (`--ephemeral`, waits for `/api/info`,
+  keeps `sandbox.log` with the test results) and sets `SIMPLESIGN_REQUIRE_SANDBOX=true`, so a missing Sandbox fails
+  the TestBench tests instead of skipping them.
+- `tools/dss`: the container trusts the Sandbox's root (`SANDBOX_URL`, default `http://host.docker.internal:5300`);
+  `TESTBENCH_URL` is optional. The README explains `--public-base-url` for DSS to reach the CRLs and OCSP.
+- Docs: new `docs/articles/sandbox.md`; the TestBench article (real network plus a connected Sandbox).
+- Sandbox: OCSP responses start an hour back (`thisUpdate`). They started five minutes back, the same instant the
+  TestBench's "time" option claims as signing time, and embedded OCSP evidence is checked with no clock-skew
+  tolerance against it, so CAdES/XAdES matrix cases failed "incomplete LTV" whenever a second boundary fell between.
+
+### Changed — opening the OAuth page on Windows
+
+- `LoopbackAuthorizationHandler.OpenInSystemBrowser` starts `explorer.exe` with the URL as its argument on Windows,
+  like `open`/`xdg-open` elsewhere, instead of shell-executing the URL itself (CodeQL `cs/command-line-injection`).
+
+### Fixed — Strict signing no longer trusts a CRL cached before a revocation
+
+- `SigningPolicy.Strict` asked a shared `ChainRevocationChecker` (DI, `WithChainRevocationChecker`) for the status
+  "now", and the checker answered from a CRL cached up to its nextUpdate: a certificate revoked after that CRL was
+  cached could still sign. New `IChainRevocationChecker.CheckCurrentAsync`
+  (a default interface method, so existing implementations still compile): `ChainRevocationChecker` asks each OCSP
+  responder first and then downloads the CRL again, refreshing the cache. Signing uses it; validation is unchanged.
+- CAdES/XAdES: "does not contain complete LTV" now says why (the certificates without revocation data and the
+  reason, or that the embedded data did not validate when the signature was read back).
+- TestBench: the "expired" validation sample no longer fails on a busy machine (its certificate lived 3 seconds).
+- TestBench: `SandboxScenarioTests` sign with Strict against a running SimpleSign Sandbox for each case
+  (CRLs over HTTP, HTTPS and LDAP, OCSP only, revoked CA, expired and wrongly signed CRLs, unusable OCSP answers,
+  a stale CRL after a revocation, expired and not-yet-valid certificates, expired CA).
+
 ### Added — apps, DI and packaging follow the new checks
 
 - `SimpleSign.Peru.Iofe` is packed and released (pack lists, `PACKAGE.md`); RELEASING lists it and the signer packages.
@@ -19,14 +82,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SignatureSubIndication.ToEtsiName()`.
 - CLI: `--signing-policy` on the sign commands, refusal reasons with a hint, `validate-dir` with the policy/trust
   options and sub-indications, three-state CAdES/XAdES output, `explain` for the ETSI terms.
-- TestBench: signing policy option, validation policy choice (Default, INDECOPI), sub-indications and policy checks
-  in the reports, real revocation for CAdES/XAdES, weak-key and no-key-usage sandbox signers.
+- TestBench: signing policy option, sub-indications and policy checks in the reports, real revocation for
+  CAdES/XAdES, weak-key and no-key-usage sandbox signers.
 - Agent: `/api/certificates` reports `policyIssue` (keyUsage, weakKey), shown in the Overview; `/api/sign` refuses an
   unsupported `hashAlgorithm` with 400 instead of signing SHA-256.
 - Docs: README, conformance, PAdES/CAdES/XAdES, validation, getting started, deferred, PKCS#11, cloud and TestBench
   articles; ADRs 0009, 0011, 0013, 0018 and 0020 point to ADRs 0021/0022; CLAUDE.md, CONTRIBUTING, SECURITY.
 
-### Added — signing policy: checks before signing (INDECOPI Req. 11–13, 16)
+### Removed (TestBench) — ETSI only
+
+The TestBench now covers the ETSI standards only; trust frameworks and the visible stamp will get apps of their own.
+The libraries are unchanged (the Brazil and Peru packages, `PadesSignerBuilder.WithAppearance`).
+
+- Visible signature stamp: the appearance options, the stamp preview (`/api/preview`) and the matrix dimension.
+- Trust frameworks: the frameworks bar and the `framework` tags of the option schema; the ICP-Brasil policies
+  (AD-RB…AD-RA, versions, `/api/icp/versions`), the PBAD.PAdES sub-filter, the AEA of Lei 14.063, health documents,
+  the fiscal XML-DSig layouts and their samples, the ICP-Brasil/Gov.br roots and rules in validation, the Lei 14.063
+  classification and the IOFE validation policy choice.
+- The simulated ICP-Brasil PSC and the PSC signer (CSC v2 stays).
+- The sandbox PKI is generic: no CPF/CNPJ (SAN otherName 2.16.76.*), no e-CNPJ signer, neutral subjects.
+
+### Added — signing policy: checks before signing
 
 - `SigningPolicy` (`Default`, `Strict`, `Minimal`) with `WithSigningPolicy(...)` on the PAdES, CAdES, XAdES,
   deferred and batch builders. Before anything is signed it checks the validity of every certificate of the
@@ -39,7 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `SigningErrorReason` values: `CertificateRevoked`, `RevocationStatusUnknown`, `ChainCertificateNotValid`,
   `KeyUsageNotPermitted`, `AlgorithmNotPermitted`, `KeyTooWeak`.
 
-### Added — revocation: LDAP CRLs, cache, verified online CRLs (INDECOPI Req. 11, 21)
+### Added — revocation: LDAP CRLs, cache, verified online CRLs
 
 - CRLs from `ldap://` and `ldaps://` distribution points (read-only LDAPv3 on the BCL), used when a certificate
   has no HTTP distribution point and `OutboundHttpPolicy.AllowLdap` is set. LDAP hosts get the same address checks
@@ -50,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   issuer (signature, issuer name, validity). `RevocationChecker` uses it whenever the issuer is in the chain.
 - ADR 0021.
 
-### Added — timestamp authority checks (INDECOPI Req. 30)
+### Added — timestamp authority checks
 
 - `TimestampTsaChecks.TsaNameMatches`: the `tsa` name of TSTInfo must name the TSA certificate (RFC 3161 §2.4.2);
   `TimestampValidator.ValidateWithTrust` makes a mismatching TSA untrusted.
@@ -60,17 +136,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - At signing time a token received from the TSA (or from an injected client) must be validly signed by a
   certificate with the critical, exclusive timeStamping EKU; otherwise `TimestampException`.
 
-### Added — INDECOPI evidence tests
+### Added — policy enforcement tests
 
-- `IndecopiEvidenceContractTests` (tagged `Indecopi=ReqNN`): refusals at signing time (revoked chain, CRL with a bad
+- `PolicyEnforcementContractTests`: refusals at signing time (revoked chain, CRL with a bad
   signature, expired CRL, expired intermediate, missing key usage, SHA-1, MD5, RSA-1024, tampered TSA token), an
   altered document is INVALID, signatures by PFX and by a remote signer are VALID, a revoked TSA is untrusted.
 - `Pkcs11RealDeviceTests`: the three formats on a real token or HSM, set with `SIMPLESIGN_PKCS11_MODULE`.
 - Test helpers: `SyntheticPki.IssueTimestampingCertificate`, `BuildCrlRevoking`, `BuildLeafCrl(thisUpdate, nextUpdate)`,
   `ConstraintTestCertificates`, `TimestampTokenOptions` (TSA certificate, tsa name, genTime, tampered signature).
-- Articles: `remote-signing.md`, `indecopi-evidence.md`.
+- Article: `remote-signing.md`.
 
-### Added — CLI verification report (INDECOPI Req. 18/28)
+### Added — CLI verification report
 
 - `validate`, `cades validate` and `xades validate`: `--policy`, `--policy-signer`, `--trust-dir`,
   `--trust-dir-signer`, `--tsl`, `--tsl-signer`, `--lang es`; `cades validate --check-revocation`.
@@ -79,7 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `timestamp verify` shows whether the TSA name in the token matches its certificate
   (`TimestampTsaChecks.TsaNameMatches(byte[])`).
 
-### Added — trust store, trusted lists and the Peru extension (INDECOPI "trust list", Req. 14/24)
+### Added — trust store, trusted lists and the Peru extension
 
 - `DirectoryTrustAnchorProvider` (Core): trust anchors from a folder of certificates, changeable without a rebuild,
   optionally protected by a signed manifest (`manifest.json` + `manifest.json.p7s`) with the SHA-256 of every file.
@@ -87,9 +163,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after their XML signature is checked against the scheme operator's certificate; active CA and TSA services become
   trust anchors; an expired list is refused; `DownloadAsync` keeps the last good copy.
 - New package `SimpleSign.Peru.Iofe`: `IofeExtension` (anchors from INDECOPI's trusted list), `IofePolicies.Signing`
-  and `IofePolicies.Validation` (INDECOPI accreditation guide v4.0), `AddSimpleSignIofe`.
+  and `IofePolicies.Validation`, `AddSimpleSignIofe`.
 
-### Added — validation policy and ETSI sub-indications (INDECOPI Req. 14, 16, 21–29)
+### Added — validation policy and ETSI sub-indications
 
 - `ValidationPolicy` on `ValidationOptions.Policy`: accepted digest algorithms with dates, minimum RSA size,
   accepted curves, key usage of the signing certificate, each with a `fail`/`warn`/`ignore` level. Loaded from JSON

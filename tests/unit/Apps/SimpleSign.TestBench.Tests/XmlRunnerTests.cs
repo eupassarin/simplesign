@@ -4,7 +4,7 @@ using SimpleSign.TestBench.Xml;
 
 namespace SimpleSign.TestBench.Tests;
 
-/// <summary>XAdES and fiscal XML-DSig through the TestBench, against the real library.</summary>
+/// <summary>XAdES through the TestBench, against the real library.</summary>
 [Collection(TestBenchCollection.Name)]
 [Trait("Category", "Unit")]
 public sealed class XmlRunnerTests(TestBenchFixture fixture)
@@ -13,18 +13,10 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
 
     private XmlOptions Xades(string signer = "rsa-2048") => new() { DataId = Sample("order").FileId, CredentialId = fixture.Sandboxed(signer) };
 
-    private XmlOptions Fiscal(string sample, string signer = "company") => new()
-    {
-        Mode = XmlMode.Fiscal,
-        Profile = Sample(sample).Profile!,
-        DataId = Sample(sample).FileId,
-        CredentialId = fixture.Sandboxed(signer),
-    };
-
     private static string Errors(XmlSignResult r) =>
         string.Join("; ", r.Issues.Select(i => i.Message).Concat(r.Validation?.Signatures.SelectMany(s => s.Errors) ?? []).Concat(r.Validation?.Errors ?? []).Append(r.Error ?? ""));
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(XadesFormChoice.Detached, BaselineLevel.BT)]
     [InlineData(XadesFormChoice.Enveloping, BaselineLevel.BLT)]
@@ -35,29 +27,10 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
 
         result.Success.ShouldBeTrue(Errors(result));
         result.Validation!.Overall.ShouldBe("Valid", Errors(result));
-        result.Validation.Mode.ShouldBe(XmlMode.Xades);
         result.Validation.SignatureXml.ShouldNotBeNull();
     }
 
-    [Theory]
-    [InlineData(XadesIcpPolicy.AdRb, "B-B")]
-    [InlineData(XadesIcpPolicy.AdRt, "B-T")]
-    [InlineData(XadesIcpPolicy.AdRv, "B-T")]
-    [InlineData(XadesIcpPolicy.AdRc, "B-LT")]
-    [InlineData(XadesIcpPolicy.AdRa, "B-LTA")]
-    public async Task RunAsync_IcpBrasilXades_SignsWithV1AndPolicy(XadesIcpPolicy policy, string achieved)
-    {
-        var result = await fixture.Xml.RunAsync(Xades() with { Kind = XadesKind.IcpBrasil, IcpPolicy = policy }, default);
-
-        result.Success.ShouldBeTrue(Errors(result));
-        result.AchievedLevel.ShouldBe(achieved);
-        result.Validation!.Overall.ShouldBe("Valid", Errors(result));
-        result.Validation.SignatureXml!.ShouldNotContain("SigningCertificateV2");
-        result.Validation.SignatureXml!.ShouldContain("SigPolicyId");
-        result.Code.CSharp.ShouldContain($"IcpBrasilPolicy.{policy}");
-    }
-
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_ProductionPlace_IsInTheSignatureAndTheCode()
     {
         var options = Xades() with { PlaceCity = "Recife", PlaceState = "PE", PlaceCountry = "BR", PlaceStreet = " " };
@@ -76,7 +49,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldNotContain("--place-street");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CrlFirstAtLongTerm_IsValidAndInTheCode()
     {
         var options = Xades() with { Level = BaselineLevel.BLT, RevocationPreference = SimpleSign.Core.Signing.RevocationPreference.CrlFirst };
@@ -89,7 +62,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--revocation-preference crl");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(XadesFormChoice.Enveloping, BaselineLevel.BT)]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BLTA)]
@@ -107,7 +80,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--canonicalization inclusive");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB)]
     [InlineData(BaselineLevel.BLTA)]
     public async Task RunAsync_CustomPolicyWithDocument_EmbedsThePolicyStore(BaselineLevel level)
@@ -127,7 +100,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--policy-specification \"https://example.com/policy-syntax\"");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(XadesFormChoice.Enveloping, BaselineLevel.BT)]
     [InlineData(XadesFormChoice.Detached, BaselineLevel.BLTA)]
@@ -144,7 +117,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithDataObjectsTimestamp(tsa)");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB)]
     [InlineData(BaselineLevel.BT)]
     public async Task RunAsync_CounterSign_AddsACounterSignatureUnderTheSignature(BaselineLevel level)
@@ -167,7 +140,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--countersign");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CounterSignDocumentWithoutSignature_IsRefused()
     {
         var result = await fixture.Xml.RunAsync(Xades() with { CounterSign = true }, default);
@@ -176,7 +149,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(XadesFormChoice.Detached, BaselineLevel.BLTA)]
     public async Task RunAsync_AdditionalDataObjects_AreSignedAndValidated(XadesFormChoice form, BaselineLevel level)
@@ -202,7 +175,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
             .Overall.ShouldNotBe("Valid");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CertifiedRoleAndSignedAssertion_AreInSignerRoleV2()
     {
         // Any single DER SEQUENCE stands for the attribute certificate: the library embeds it as given.
@@ -221,7 +194,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithAttributeCertificates([attributeCertificate])");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_Xades132FormWithAttributeCertificate_LeavesItOut()
     {
         var attributeCertificate = fixture.Documents.Add("role.ac", [0x30, 0x03, 0x04, 0x01, 0xAA]);
@@ -236,7 +209,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         signatureXml.ShouldNotContain("X509AttributeCertificate");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_XadesDetails_AreInTheSignatureAndTheCode()
     {
         var options = Xades() with { SignerRoles = ["Gerente"], MimeType = "text/xml", Commitment = "ProofOfOrigin", Hash = HashChoice.Sha512, Padding = RsaPadding.Pss, Form = XadesFormChoice.Detached, DataUri = "pedido.xml" };
@@ -251,41 +224,10 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--data-uri pedido.xml");
     }
 
-    [Theory]
-    [InlineData("nfe")]
-    [InlineData("evento")]
-    [InlineData("inutilizacao")]
-    [InlineData("cte")]
-    [InlineData("mdfe")]
-    [InlineData("nfse")]
-    [InlineData("esocial")]
-    [InlineData("reinf")]
-    public async Task RunAsync_FiscalProfile_SignsAndReadsTheCnpj(string sample)
-    {
-        var result = await fixture.Xml.RunAsync(Fiscal(sample), default);
-
-        result.Success.ShouldBeTrue(Errors(result));
-        result.Validation!.Mode.ShouldBe(XmlMode.Fiscal);
-        result.Validation.Overall.ShouldBe("Valid", Errors(result));
-        result.Validation.Signatures.ShouldHaveSingleItem().Cnpj.ShouldBe("11222333000181");
-        result.Code.Cli.ShouldContain($"--profile {Sample(sample).Profile}");
-    }
-
-    [Fact]
-    public async Task RunAsync_FiscalBatch_SignAllSignsEveryNfe()
-    {
-        var result = await fixture.Xml.RunAsync(Fiscal("nfe-batch") with { SignAll = true }, default);
-
-        result.Success.ShouldBeTrue(Errors(result));
-        result.Validation!.Signatures.Count.ShouldBe(2);
-        result.Code.CSharp.ShouldContain("FiscalXmlSigner.SignAll");
-    }
-
-    [Theory]
+    [SkippableTheory]
     [InlineData("v-xades")]
     [InlineData("v-detached")]
-    [InlineData("v-nfe")]
-    [InlineData("v-nfe-changed")]
+    [InlineData("v-changed")]
     [InlineData("v-tampered")]
     [InlineData("v-untrusted")]
     public async Task Validate_Sample_MatchesItsExpectedResult(string id)
@@ -294,7 +236,6 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
 
         var view = await fixture.Xml.ValidateAsync(sample.FileId, sample.DataId, new SimpleSign.TestBench.Validation.ValidationSettings());
 
-        view.Mode.ShouldBe(sample.Mode);
         view.Overall.ShouldBe(sample.ExpectedIndication, string.Join("; ", view.Signatures.SelectMany(s => s.Errors).Concat(view.Errors)));
         if (sample.ExpectedCheck is { } check and not "—")
         {

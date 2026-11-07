@@ -1,11 +1,9 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Shouldly;
-using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 
 namespace SimpleSign.TestBench.Tests;
@@ -15,7 +13,7 @@ namespace SimpleSign.TestBench.Tests;
 [Trait("Category", "Unit")]
 public sealed partial class LocalizationTests(TestBenchFixture fixture)
 {
-    [Fact]
+    [SkippableFact]
     public void Translations_EveryLiteralPassedToT_IsTranslated()
     {
         string root = RepositoryRoot();
@@ -36,35 +34,35 @@ public sealed partial class LocalizationTests(TestBenchFixture fixture)
         missing.ShouldBeEmpty();
     }
 
-    [Fact]
-    public void Translations_CatalogSamplesAndSandbox_AreTranslated()
+    [SkippableFact]
+    public void Translations_CatalogAndSamples_AreTranslated()
     {
+        // The Sandbox's own texts (signers, CSC credentials) come from the Sandbox app, in English.
         var texts = OptionCatalog.All.Values.SelectMany(i => new[] { i.Title, i.Summary, i.Details })
             .Concat(fixture.Documents.Samples.SelectMany(s => new[] { s.Title, s.Description }))
-            .Concat(fixture.Sandbox.Pki.Signers.SelectMany(s => new[] { s.Title, s.Description, s.Problem }))
-            .Concat(fixture.Sandbox.Csc.Credentials.Select(c => c.Description))
-            .Concat(fixture.ValidationSamples.SelectMany(s => new[] { s.Title, s.Description }))
-            .Concat(fixture.CadesSamples.SelectMany(s => new[] { s.Title, s.Description }))
-            .Concat(fixture.XmlSamples.SelectMany(s => new[] { s.Title, s.Description }))
+            .Concat((fixture.SandboxProblem is null ? fixture.ValidationSamples : []).SelectMany(s => new[] { s.Title, s.Description }))
+            .Concat((fixture.SandboxProblem is null ? fixture.CadesSamples : []).SelectMany(s => new[] { s.Title, s.Description }))
+            .Concat((fixture.SandboxProblem is null ? fixture.XmlSamples : []).SelectMany(s => new[] { s.Title, s.Description }))
             .OfType<string>();
 
         texts.Where(t => !Translations.All.ContainsKey(t)).ShouldBeEmpty();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Translations_CredentialNotes_AreTranslated()
     {
+        fixture.RequireSandbox();
         var handles = new List<CredentialHandle>
         {
             fixture.Factory.OpenSandbox(new SandboxCredentialRequest("expired")),
-            await fixture.Factory.OpenPscPasswordAsync(new PscCredentialRequest(null, null, null, null, SandboxPsc.Otp, PscScope.SingleSignature, "maria-rsa2048"), EnvironmentMode.Sandbox, default),
-            await fixture.Factory.OpenCscAsync(new CscCredentialRequest(null, CscServiceAuth.Token, null, null, null, "rsa-scal1", CscAuthorizerKind.Explicit, SandboxCsc.Pin, null), EnvironmentMode.Sandbox, default),
+            await fixture.Factory.OpenCscAsync(new CscCredentialRequest(null, CscServiceAuth.Token, null, null, null, "rsa-scal1", CscAuthorizerKind.Explicit, fixture.Sandbox.Connection.Info.Csc.Pin, null), default),
         };
 
-        handles.SelectMany(h => h.Notes).Select(n => n.English).Where(t => !Translations.All.ContainsKey(t)).ShouldBeEmpty();
+        // "{0}": a text of the Sandbox app, shown as it comes.
+        handles.SelectMany(h => h.Notes).Select(n => n.English).Where(t => t != "{0}" && !Translations.All.ContainsKey(t)).ShouldBeEmpty();
     }
 
-    [Fact]
+    [SkippableFact]
     public void Translations_Placeholders_MatchTheEnglishText()
     {
         foreach (var (english, pt) in Translations.All)
@@ -74,7 +72,7 @@ public sealed partial class LocalizationTests(TestBenchFixture fixture)
         }
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("pt-BR", "O documento está certificado com DocMDP P=1")]
     [InlineData("es", "The document is certified with DocMDP P=1")]
     [InlineData("en-US", "The document is certified with DocMDP P=1")]
@@ -96,7 +94,7 @@ public sealed partial class LocalizationTests(TestBenchFixture fixture)
         }
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("pt-PT", "pt-BR")]
     [InlineData("es-AR", "en-US")]
     [InlineData("de-DE", "en-US")]

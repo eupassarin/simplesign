@@ -2,8 +2,6 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Shouldly;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.Brazil.Signing;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
@@ -32,28 +30,23 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
 
     private static Type OptionsType(string format) => s_schema.Defaults[format].GetType();
 
-    [Fact]
+    [SkippableFact]
     public void Options_Ids_AreUnique() =>
         s_schema.Options.GroupBy(o => o.Id).Where(g => g.Count() > 1).Select(g => g.Key).ShouldBeEmpty();
 
-    [Fact]
-    public void Options_SectionsFormatsAndFrameworks_Exist()
+    [SkippableFact]
+    public void Options_SectionsAndFormats_Exist()
     {
         var sections = s_schema.Sections.Select(s => s.Id).ToHashSet();
-        var frameworks = s_schema.Frameworks.Select(f => f.Id).ToHashSet();
         foreach (var option in s_schema.Options)
         {
             sections.ShouldContain(option.Section, option.Id);
             option.Formats.ShouldNotBeEmpty(option.Id);
             option.Formats.ShouldAllBe(f => RunFormats.All.Contains(f), option.Id);
-            if (option.Framework is not null)
-            {
-                frameworks.ShouldContain(option.Framework, option.Id);
-            }
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public void Options_EveryPath_ExistsInTheOptionsOfEachFormat()
     {
         var missing = new List<string>();
@@ -71,7 +64,7 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         missing.ShouldBeEmpty();
     }
 
-    [Fact]
+    [SkippableFact]
     public void Options_ConditionPaths_ExistInTheOptionsOfEachFormat()
     {
         var missing = s_schema.Options
@@ -81,7 +74,7 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         missing.ShouldBeEmpty();
     }
 
-    [Fact]
+    [SkippableFact]
     public void Options_ChoiceValues_AreAcceptedByTheOptionsType()
     {
         var rejected = new List<string>();
@@ -108,19 +101,16 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         rejected.ShouldBeEmpty();
     }
 
-    [Fact]
+    [SkippableFact]
     public void Options_ValuesHeldAsText_AreNamesTheLibraryKnows()
     {
         Values("cx.commitment").Where(v => v.Length > 0).ShouldAllBe(v => Enum.IsDefined(typeof(CommitmentType), v));
         Values("pades.metadata.commitmentType").ShouldAllBe(v => Enum.IsDefined(typeof(CommitmentType), v));
-        Values("pades.health.type").ShouldAllBe(v => Enum.IsDefined(typeof(HealthDocumentType), v));
-        Values("pades.aea.authMethod").ShouldAllBe(v => Enum.IsDefined(typeof(AuthenticationMethod), v));
-        Values("xades.fiscalProfile").ShouldAllBe(v => SimpleSign.Brazil.Fiscal.FiscalDocumentProfile.ByName.ContainsKey(v));
 
         static IEnumerable<string> Values(string id) => s_schema.Options.Single(o => o.Id == id).Values.Select(v => v.Value);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Options_StateKeys_AreKeysTheRulesSet()
     {
         var known = new Dictionary<string, HashSet<string>>
@@ -132,7 +122,7 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         var document = await fixture.Documents.FactsAsync(Documents.DocumentStore.SampleKey("contract"));
         foreach (var kind in Enum.GetValues<SignatureKind>())
         {
-            var options = new SigningOptions { Kind = kind, Level = BaselineLevel.BLTA, UseSignerDetails = true, Appearance = new AppearanceChoice { Visible = true } };
+            var options = new SigningOptions { Kind = kind, Level = BaselineLevel.BLTA, UseSignerDetails = true };
             known[RunFormats.Pades].UnionWith(Compatibility.Evaluate(options, document, null).Options.Keys);
         }
 
@@ -145,15 +135,12 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
             }
         }
 
-        foreach (var mode in Enum.GetValues<XmlMode>())
+        foreach (var kind in Enum.GetValues<XadesKind>())
         {
-            foreach (var kind in Enum.GetValues<XadesKind>())
+            foreach (var form in Enum.GetValues<XadesFormChoice>())
             {
-                foreach (var form in Enum.GetValues<XadesFormChoice>())
-                {
-                    var options = new XmlOptions { Mode = mode, Kind = kind, Form = form, Level = BaselineLevel.BLTA };
-                    known[RunFormats.Xades].UnionWith(XmlCompatibility.Evaluate(options, null, null).Options.Keys);
-                }
+                var options = new XmlOptions { Kind = kind, Form = form, Level = BaselineLevel.BLTA };
+                known[RunFormats.Xades].UnionWith(XmlCompatibility.Evaluate(options, null, null).Options.Keys);
             }
         }
 
@@ -177,7 +164,7 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         unknown.ShouldBeEmpty();
     }
 
-    [Fact]
+    [SkippableFact]
     public void Options_NotInTheLibrary_HaveNoPathAndNameTheirClause()
     {
         var missing = s_schema.Options.Where(o => o.Support == OptionSchema.NotInLibrary).ToList();
@@ -187,14 +174,14 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         missing.ShouldAllBe(o => o.Standards.Count > 0 && o.Standards.All(s => s.Clause.Length > 0));
     }
 
-    [Fact]
+    [SkippableFact]
     public void Options_ThatTheLibraryImplements_NameAStandardOrAnApi() =>
         s_schema.Options
             .Where(o => o.Support == OptionSchema.Supported && o.Standards.Count == 0 && o.Api is null && o.Values.All(v => v.Api is null && v.Standards.Count == 0))
             .Select(o => o.Id)
             .ShouldBeEmpty();
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(RunFormats.Pades, typeof(PadesSignerBuilder))]
     [InlineData(RunFormats.Cades, typeof(CadesSignerBuilder))]
     [InlineData(RunFormats.Xades, typeof(XadesSignerBuilder))]
@@ -218,18 +205,18 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         methods.Where(m => !apis.Contains(m, StringComparison.Ordinal)).ShouldBeEmpty();
     }
 
-    [Fact]
+    [SkippableFact]
     public void Schema_EveryText_IsTranslated() =>
         OptionSchema.Texts().Where(t => !Translations.All.ContainsKey(t)).ShouldBeEmpty();
 
-    [Fact]
+    [SkippableFact]
     public void Schema_Stages_CoverEveryStageOfTheLog()
     {
         s_schema.Stages.Select(s => s.Id).ShouldBe(RunStages.All);
         s_schema.Stages.ShouldAllBe(s => RunFormats.All.All(s.Standards.ContainsKey));
     }
 
-    [Fact]
+    [SkippableFact]
     public void Schema_Presets_SetPathsThatExistInAtLeastOneOfTheirFormats() =>
         // A preset may set a path only some formats have (extendedForm); the UI skips it elsewhere.
         s_schema.Presets

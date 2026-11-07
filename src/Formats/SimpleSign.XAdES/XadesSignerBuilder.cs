@@ -716,7 +716,7 @@ public sealed class XadesSignerBuilder
         {
             BaselineSigning.RequireOrDowngrade(
                 profile, warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
-                "The produced XML does not contain complete LTV properties.");
+                "The produced XML does not contain complete LTV properties. " + LtvGap(ltvEmbedding.Evidence));
         }
 
         if (hasArchiveTimestamp && !artifactHasArchiveTimestamp)
@@ -1132,6 +1132,14 @@ public sealed class XadesSignerBuilder
         With(_options with { Credential = credential });
 
     private sealed record XadesLtvEmbeddingResult(byte[] SignedXml, LtvEvidence Evidence);
+
+    /// <summary>Why the LTV data is incomplete: the certificates without revocation data, or a read-back failure.</summary>
+    private static string LtvGap(LtvEvidence evidence) =>
+        evidence.CertificateEvidence?.Where(e => !e.IsComplete).ToList() is { Count: > 0 } missing
+            ? "No revocation data for " + string.Join("; ", missing.Select(e => $"certificate {e.Thumbprint}: {e.AbsenceReason}")) + "."
+            : evidence.OcspResponses.Count == 0 && evidence.Crls.Count == 0
+                ? "No revocation data was collected."
+                : "The embedded certificates and revocation data did not validate when the signature was read back.";
 
     private XadesSignerBuilder With(XadesSigningOptions options) =>
         new(_xmlData, options);

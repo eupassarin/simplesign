@@ -24,7 +24,7 @@ internal static class AdesOptionSupport
 
     /// <summary>The long-term validation options for a <c>--revocation-preference</c> value.</summary>
     internal static LongTermValidationOptions LongTermOptions(string? revocationPreference) =>
-        new() { RevocationPreference = ParseRevocationPreference(revocationPreference) ?? RevocationPreference.OcspFirst };
+        new(CliNetwork.Provider) { RevocationPreference = ParseRevocationPreference(revocationPreference) ?? RevocationPreference.OcspFirst };
 
     /// <summary>The error for a missing file among the values of <paramref name="option"/>, or null.</summary>
     internal static string? ValidateFiles(string option, IEnumerable<string>? paths)

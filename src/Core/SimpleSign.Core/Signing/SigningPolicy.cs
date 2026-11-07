@@ -9,8 +9,9 @@ namespace SimpleSign.Core.Signing;
 /// <remarks>
 /// <see cref="Default"/> runs the checks that need no network: validity of every certificate of the
 /// chain, the key usage of the signing certificate, the key size and the hash algorithm.
-/// <see cref="Strict"/> adds the revocation of the whole chain, through the CRL distribution points
-/// and OCSP responders of the certificates.
+/// <see cref="Strict"/> adds the revocation of the whole chain as it stands now
+/// (<see cref="Revocation.IChainRevocationChecker.CheckCurrentAsync"/>): the OCSP responders first,
+/// then the CRLs downloaded again, so a CRL cached before a revocation does not decide.
 /// </remarks>
 public sealed record SigningPolicy
 {

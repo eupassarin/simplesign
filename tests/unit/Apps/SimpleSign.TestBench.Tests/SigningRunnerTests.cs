@@ -7,7 +7,7 @@ namespace SimpleSign.TestBench.Tests;
 [Trait("Category", "Unit")]
 public sealed class SigningRunnerTests(TestBenchFixture fixture)
 {
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB, "B-B")]
     [InlineData(BaselineLevel.BT, "B-T")]
     [InlineData(BaselineLevel.BLT, "B-LT")]
@@ -23,7 +23,7 @@ public sealed class SigningRunnerTests(TestBenchFixture fixture)
         result.Validation.Where(v => !v.IsDocumentTimestamp).ShouldAllBe(v => v.Indication == "Valid", string.Join("; ", result.Validation.SelectMany(v => v.Errors)));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CrlFirstAtLongTerm_SignsValidatesAndShowsTheOption()
     {
         var options = fixture.Options() with { Level = BaselineLevel.BLT, RevocationPreference = SimpleSign.Core.Signing.RevocationPreference.CrlFirst };
@@ -35,19 +35,5 @@ public sealed class SigningRunnerTests(TestBenchFixture fixture)
         result.Validation.Where(v => !v.IsDocumentTimestamp).ShouldAllBe(v => v.Indication == "Valid", string.Join("; ", result.Validation.SelectMany(v => v.Errors)));
         result.Code.CSharp.ShouldContain("{ RevocationPreference = RevocationPreference.CrlFirst }");
         result.Code.Cli.ShouldContain("--revocation-preference crl");
-    }
-
-    [Theory]
-    [InlineData(IcpPolicyKind.AdRb)]
-    [InlineData(IcpPolicyKind.AdRt)]
-    [InlineData(IcpPolicyKind.AdRc)]
-    [InlineData(IcpPolicyKind.AdRa)]
-    public async Task RunAsync_IcpPolicy_Signs(IcpPolicyKind policy)
-    {
-        var result = await fixture.Runner.RunAsync(fixture.Options() with { Kind = SignatureKind.IcpBrasil, IcpPolicy = policy }, default);
-
-        result.Error.ShouldBeNull();
-        result.Success.ShouldBeTrue();
-        result.Code.CSharp.ShouldContain("WithIcpBrasilPolicy");
     }
 }

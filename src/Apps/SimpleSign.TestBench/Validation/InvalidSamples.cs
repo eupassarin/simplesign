@@ -26,21 +26,27 @@ internal static class InvalidSamples
     public static async Task<IReadOnlyList<ValidationSample>> CreateAsync(SandboxEnvironment sandbox, DocumentStore documents, CancellationToken cancellationToken = default)
     {
         byte[] contract = documents.Get(DocumentStore.SampleKey("contract")).Content;
-        var pki = sandbox.Pki;
-        var maria = pki.Signer("rsa-2048").Certificate;
+        // Every sample is signed: they come from the connected Sandbox.
+        if (sandbox.Current is not { } connection)
+        {
+            return [];
+        }
+
+        var maria = connection.Signer("rsa-2048").Certificate;
+        var chain = connection.Chain;
 
         async Task<byte[]> Sign(X509Certificate2 certificate, IReadOnlyList<X509Certificate2> chain, AdesBaselineProfile profile) =>
             await PadesSigner.Document(contract)
                 .WithCertificate(certificate, chain)
-                .WithHttpClientProvider(sandbox.Network)
+                .WithHttpClientProvider(sandbox)
                 .WithFieldName("Assinatura")
                 .WithLevel(profile)
                 .SignAsync(cancellationToken);
 
-        var tsa = new TimestampOptions(SandboxPki.TsaUri, sandbox.Network);
-        var ltv = new LongTermValidationOptions(sandbox.Network);
-        byte[] valid = await Sign(maria, pki.Chain, AdesBaselineProfile.LongTerm(tsa, ltv));
-        byte[] basic = await Sign(maria, pki.Chain, AdesBaselineProfile.Basic());
+        var tsa = new TimestampOptions(connection.TsaUri, sandbox);
+        var ltv = new LongTermValidationOptions(sandbox);
+        byte[] valid = await Sign(maria, chain, AdesBaselineProfile.LongTerm(tsa, ltv));
+        byte[] basic = await Sign(maria, chain, AdesBaselineProfile.Basic());
 
         byte[] tamperedContent = (byte[])basic.Clone();
         Patch(tamperedContent, "SimpleSign TestBench", "SimpleSign TestBanch");
@@ -50,12 +56,17 @@ internal static class InvalidSamples
 
         byte[] appended = [.. basic, .. Encoding.ASCII.GetBytes("\n% An unsigned change appended after the signature.\n")];
 
-        byte[] revoked = await Sign(pki.Signer("revoked").Certificate, pki.Chain, AdesBaselineProfile.Basic());
+        byte[] revoked = await Sign(connection.Signer("revoked").Certificate, chain, AdesBaselineProfile.Basic());
         // The library refuses to sign with a certificate that is not valid now, so the "expired"
         // sample is signed with a certificate that lives a few seconds and has expired by validation time.
-        var shortLived = pki.IssueShortLived("CN=Certificado de Vida Curta:11144477735, OU=Sandbox e-CPF A1, O=ICP-Brasil Sandbox, C=BR", "11144477735", TimeSpan.FromSeconds(3));
-        byte[] expired = await Sign(shortLived, pki.Chain, AdesBaselineProfile.Basic());
-        await Task.Delay(TimeSpan.FromSeconds(3.5), cancellationToken);
+        // Long enough to sign on a busy machine; then wait until it has really expired.
+        using var shortLived = await sandbox.IssueShortLivedAsync(TimeSpan.FromSeconds(10), cancellationToken);
+        byte[] expired = await Sign(shortLived, chain, AdesBaselineProfile.Basic());
+        var remaining = new DateTimeOffset(shortLived.NotAfter.ToUniversalTime(), TimeSpan.Zero) - DateTimeOffset.UtcNow;
+        if (remaining > TimeSpan.Zero)
+        {
+            await Task.Delay(remaining + TimeSpan.FromSeconds(1), cancellationToken);
+        }
 
         using var outsiderKey = RSA.Create(2048);
         var outsiderRequest = new CertificateRequest("CN=Assinante Fora da Cadeia, O=Outside, C=BR", outsiderKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -63,7 +74,7 @@ internal static class InvalidSamples
         using var outsider = outsiderRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
         byte[] untrustedRoot = await Sign(outsider, [], AdesBaselineProfile.Basic());
 
-        byte[] untrustedTsa = await Sign(maria, pki.Chain, AdesBaselineProfile.Timestamped(new TimestampOptions(SandboxPki.UntrustedTsaUri, sandbox.Network)));
+        byte[] untrustedTsa = await Sign(maria, chain, AdesBaselineProfile.Timestamped(new TimestampOptions(connection.UntrustedTsaUri, sandbox)));
 
         ValidationSample Add(string id, string fileName, byte[] content, string title, string description, string indication, string check) =>
             new(id, documents.AddPinned(fileName, content).Id, title, description, indication, check);
@@ -92,7 +103,10 @@ internal static class InvalidSamples
         Encoding.ASCII.GetBytes(to).CopyTo(pdf, index);
     }
 
-    /// <summary>Changes one hex digit about a third into the signature's /Contents (inside the CMS, not the zero padding).</summary>
+    /// <summary>
+    /// Changes one hex digit near the end of the CMS in /Contents: in a B-B signature the SignerInfo's
+    /// signature value is last, so the digit is in it (not in a certificate, whose size varies).
+    /// </summary>
     private static void FlipInsideContents(byte[] pdf)
     {
         int contents = pdf.AsSpan().LastIndexOf("/Contents <"u8);
@@ -104,7 +118,8 @@ internal static class InvalidSamples
             used--;
         }
 
-        int index = start + ((used - start) * 2 / 3);
+        // 40 hex digits = 20 bytes before the end: well inside an RSA or ECDSA signature value.
+        int index = used - 40;
         pdf[index] = pdf[index] == (byte)'A' ? (byte)'B' : (byte)'A';
     }
 }

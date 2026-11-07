@@ -1,11 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
-using SimpleSign.Brazil.Fiscal;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.Brazil.IcpBrasil.Xades;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Cades;
@@ -25,8 +21,6 @@ public sealed record XmlSignatureReport(
     int Index,
     string? Reference,
     string? Signer,
-    string? Cnpj,
-    string? Cpf,
     string Indication,
     string? Level,
     string? SigningTime,
@@ -37,7 +31,6 @@ public sealed record XmlSignatureReport(
 
 public sealed record XmlValidationView(
     string Overall,
-    XmlMode Mode,
     IReadOnlyList<XmlSignatureReport> Signatures,
     IReadOnlyList<string> Errors,
     string? SignatureXml,
@@ -60,10 +53,11 @@ public sealed record XmlSignResult(
     CodeSnippets Code,
     IReadOnlyList<OptionIssue> Issues);
 
-/// <summary>Signs with <c>XadesSigner</c> or <c>FiscalXmlSigner</c> and validates the result.</summary>
+/// <summary>Signs with <c>XadesSigner</c> and validates the result.</summary>
 internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, ValidationService validation)
 {
-    private const string XadesNamespace = "http://uri.etsi.org/01903/v1.3.2#";
+    /// <summary>Whether a Sandbox is connected (its TSAs and signers can be chosen).</summary>
+    public bool SandboxConnected => sandbox.IsConnected;
 
     public XmlFacts? Facts(string? dataId) =>
         dataId is not null && documents.TryGet(dataId, out var file) ? XmlInspector.Inspect(dataId, file!.FileName, file.Content) : null;
@@ -71,7 +65,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     public XmlOptionsReport Evaluate(XmlOptions o)
     {
         credentials.TryGet(o.CredentialId, out var credential);
-        return XmlCompatibility.Evaluate(o, Facts(o.DataId), credential?.Facts);
+        return XmlCompatibility.Evaluate(o, Facts(o.DataId), credential?.Facts, sandbox.IsConnected);
     }
 
     public async Task<XmlSignResult> RunAsync(XmlOptions options, CancellationToken cancellationToken)
@@ -86,7 +80,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         var credential = credentials.Get(o.CredentialId!);
         credential.LastUsed = DateTimeOffset.UtcNow;
         var data = documents.Get(o.DataId!);
-        var context = new PlanContext(o.Environment, credential, sandbox, documents);
+        var context = new PlanContext(credential, sandbox, documents);
         var watch = Stopwatch.StartNew();
         byte[] signed;
         string? achieved;
@@ -94,39 +88,25 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         CodeSnippets code;
         try
         {
-            if (o.Mode == XmlMode.Fiscal)
+            var plan = new XadesPlan(o, context);
+            code = plan.Code(credential.Facts);
+            var builder = (o.CounterSign ? XadesSigner.CounterSign(data.Content, o.CounterSignatureId) : XadesSigner.Document(data.Content))
+                .WithLogger(RunLog.Logger);
+            foreach (var (_, apply) in plan.Steps)
             {
-                var profile = FiscalDocumentProfile.ByName[o.Profile];
-                code = FiscalCode(o, context, credential.Facts);
-                signed = credential.External is { } external
-                    ? await FiscalXmlSigner.SignAsync(data.Content, profile, credential.Certificate, external, o.ElementId, cancellationToken)
-                    : o.SignAll
-                        ? FiscalXmlSigner.SignAll(data.Content, profile, credential.Certificate)
-                        : FiscalXmlSigner.Sign(data.Content, profile, credential.Certificate, o.ElementId);
-                achieved = "XML-DSig";
+                builder = apply(builder);
             }
-            else
-            {
-                var plan = new XadesPlan(o, context);
-                code = plan.Code(credential.Facts);
-                var builder = (o.CounterSign ? XadesSigner.CounterSign(data.Content, o.CounterSignatureId) : XadesSigner.Document(data.Content))
-                    .WithLogger(RunLog.Logger);
-                foreach (var (_, apply) in plan.Steps)
-                {
-                    builder = apply(builder);
-                }
 
-                var result = await builder.SignWithDetailsAsync(cancellationToken);
-                signed = result.SignedArtifact;
-                achieved = result.AchievedLevel switch
-                {
-                    AdesBaselineLevel.Basic => "B-B",
-                    AdesBaselineLevel.Timestamped => "B-T",
-                    AdesBaselineLevel.LongTerm => "B-LT",
-                    _ => "B-LTA",
-                };
-                warnings.AddRange(result.Warnings.Select(w => w.Message));
-            }
+            var result = await builder.SignWithDetailsAsync(cancellationToken);
+            signed = result.SignedArtifact;
+            achieved = result.AchievedLevel switch
+            {
+                AdesBaselineLevel.Basic => "B-B",
+                AdesBaselineLevel.Timestamped => "B-T",
+                AdesBaselineLevel.LongTerm => "B-LT",
+                _ => "B-LTA",
+            };
+            warnings.AddRange(result.Warnings.Select(w => w.Message));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -137,13 +117,12 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         string fileName = OutputName(o, data.FileName);
         var output = documents.Add(fileName, signed);
         var view = o.Validate
-            ? await ValidateAsync(output.Id, o.Mode == XmlMode.Xades && o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? ValidationSettings.For(o.Environment),
-                o.Mode == XmlMode.Xades ? report.Effective.ExternalObjectId : null, cancellationToken)
+            ? await ValidateAsync(output.Id, o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? new ValidationSettings(),
+                report.Effective.ExternalObjectId, cancellationToken)
             : null;
         return new XmlSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved, warnings, signMs, view, code, report.Issues);
     }
 
-    /// <summary>Validates every signature of a stored XML: XAdES if any has QualifyingProperties, else fiscal XML-DSig.</summary>
     /// <summary>
     /// Validates a signed XML. <paramref name="externalObjectId"/> is a file the signature references
     /// by its file name (an additional external data object), when the caller has it.
@@ -157,38 +136,33 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         var watch = Stopwatch.StartNew();
         string preview = XmlInspector.Preview(file.Content);
         string? signatureXml = XmlInspector.SignatureXml(file.Content);
-        XmlMode mode;
         try
         {
-            var doc = XmlInspector.Load(file.Content);
-            mode = doc.GetElementsByTagName("QualifyingProperties", XadesNamespace).Count > 0 ? XmlMode.Xades : XmlMode.Fiscal;
+            XmlInspector.Load(file.Content);
         }
         catch (XmlException ex)
         {
-            return new XmlValidationView("Invalid", XmlMode.Xades, [], [L.T("The file is not well-formed XML: {0}", ex.Message)], null, preview, 0, new CodeSnippets("", "", []));
+            return new XmlValidationView("Invalid", [], [L.T("The file is not well-formed XML: {0}", ex.Message)], null, preview, 0, new CodeSnippets("", "", []));
         }
 
         var trust = validation.Trust(settings);
-        var signatures = mode == XmlMode.Xades
-            ? await ValidateXadesAsync(file.Content, data, externalObject, trust, settings, cancellationToken)
-            : ValidateFiscal(file.Content, trust, settings);
+        var signatures = await ValidateXadesAsync(file.Content, data, externalObject, trust, settings, cancellationToken);
         string overall = signatures.Count == 0 ? "Invalid"
             : signatures.All(s => s.Indication == "Valid") ? "Valid"
             : signatures.Any(s => s.Indication == "Invalid") ? "Invalid"
             : "Indeterminate";
         var errors = signatures.Count == 0 ? new List<string> { L.T("No ds:Signature in this XML.") } : [];
-        return new XmlValidationView(overall, mode, signatures, errors, signatureXml, preview, watch.ElapsedMilliseconds, ValidationCode(mode, settings, data is not null));
+        return new XmlValidationView(overall, signatures, errors, signatureXml, preview, watch.ElapsedMilliseconds, ValidationCode(settings, data is not null));
     }
 
     private async Task<List<XmlSignatureReport>> ValidateXadesAsync(byte[] xml, byte[]? data, StoredFile? externalObject, ValidationTrust trust,
         ValidationSettings settings, CancellationToken cancellationToken)
     {
-        var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger, chainRevocationChecker: validation.RevocationChecker(settings));
-        var anchors = trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null;
+        var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger, chainRevocationChecker: validation.RevocationChecker());
         // An external additional data object is found by the URI of its reference, which is its file name.
         var results = externalObject is null
-            ? await validator.ValidateAllAsync(xml, anchors, data, cancellationToken)
-            : await validator.ValidateAllAsync(xml, anchors, ExternalData(xml, data, externalObject), cancellationToken);
+            ? await validator.ValidateAllAsync(xml, null, data, cancellationToken)
+            : await validator.ValidateAllAsync(xml, null, ExternalData(xml, data, externalObject), cancellationToken);
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
         var reports = new List<XmlSignatureReport>();
         foreach (var result in results)
@@ -214,24 +188,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                 ValidationService.RevocationRow(r.IsNotRevoked, r.RevocationSource),
             };
             checks.AddRange(ValidationService.PolicyRows(r.Constraints));
-            if (r.SignaturePolicy is not null && settings.UseBrasil)
-            {
-                var policy = IcpBrasilXadesPolicyValidator.Validate(xml, r);
-                checks.Add(new("policy", L.T("ICP-Brasil policy"), policy.Status switch
-                {
-                    IcpBrasilPolicyStatus.Valid => "pass",
-                    IcpBrasilPolicyStatus.Invalid => "warn",
-                    _ => "n/a",
-                }, policy.Status == IcpBrasilPolicyStatus.Valid
-                    ? policy.Policy?.Oid
-                    : string.Join(" ", policy.Errors.DefaultIfEmpty(policy.Status.ToString()))));
-            }
-
             bool invalid = !r.IsSignatureValid || !r.IsIntegrityValid || r.HasValidSignatureTimeStamp == false || r.HasValidArchiveTimeStamp == false
                 || r.HasValidSigAndRefsTimeStamp == false || r.HasValidCompleteReferences == false || r.HasValidDataObjectsTimeStamp == false;
             string indication = invalid ? "Invalid" : r.Indication.ToString();
             string? reference = countersigned is null ? r.SignatureId : L.T("{0} (countersignature of {1})", r.SignatureId ?? "-", countersigned);
-            reports.Add(new XmlSignatureReport(i, reference, CadesInspector.SimpleName(r.SignerCertificate), null, null, indication,
+            reports.Add(new XmlSignatureReport(i, reference, CadesInspector.SimpleName(r.SignerCertificate), indication,
                 r.DetectedLevel switch
                 {
                     AdesBaselineLevel.Basic => "B-B",
@@ -249,51 +210,6 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         }
 
         return reports;
-    }
-
-    private List<XmlSignatureReport> ValidateFiscal(byte[] xml, ValidationTrust trust, ValidationSettings settings)
-    {
-        var result = FiscalXmlValidator.VerifySignatures(xml);
-        var reports = new List<XmlSignatureReport>();
-        foreach (var (s, i) in result.Signatures.Select((s, i) => (s, i)))
-        {
-            var errors = new List<string>(s.Errors);
-            bool chain = s.Certificate is not null && ChainIsValid(s.Certificate, trust, settings, errors);
-            var checks = new List<CheckRow>
-            {
-                new("digest", L.T("Reference digest ({0})", s.HashAlgorithm ?? "?"), s.IsDigestValid ? "pass" : "fail",
-                    s.IsDigestValid ? L.T("The signed element was not changed.") : L.T("The signed element changed after signing.")),
-                new("signature", L.T("Signature value"), s.IsSignatureValid ? "pass" : "fail", null),
-                new("chain", L.T("Certificate chain"), chain ? "pass" : "fail", null),
-            };
-            string indication = !s.IsDigestValid || !s.IsSignatureValid ? "Invalid" : chain ? "Valid" : "Indeterminate";
-            reports.Add(new XmlSignatureReport(i, s.ReferenceUri, CadesInspector.SimpleName(s.Certificate), s.Cnpj, s.Cpf, indication,
-                s.SignedElement is null ? null : "<" + s.SignedElement + ">", null, checks, errors, []));
-        }
-
-        return reports;
-    }
-
-    /// <summary>The fiscal layouts carry only the signer certificate; the sandbox intermediate is supplied (real validators fetch it by AIA).</summary>
-    private bool ChainIsValid(X509Certificate2 certificate, ValidationTrust trust, ValidationSettings settings, List<string> errors)
-    {
-        using var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-        chain.ChainPolicy.ExtraStore.Add(sandbox.Pki.Intermediate);
-        var roots = (trust.Options.TrustedRoots ?? []).Concat(trust.IcpAnchors).ToList();
-        if (roots.Count > 0 || !settings.Trust.Contains(TrustChoice.System))
-        {
-            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-            chain.ChainPolicy.CustomTrustStore.AddRange(roots.ToArray());
-        }
-
-        if (chain.Build(certificate))
-        {
-            return true;
-        }
-
-        errors.AddRange(chain.ChainStatus.Select(s => $"{s.Status}: {s.StatusInformation}".TrimEnd()));
-        return false;
     }
 
     /// <summary>
@@ -324,8 +240,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     private static string OutputName(XmlOptions o, string input)
     {
         string name = Path.GetFileNameWithoutExtension(input);
-        return o.Mode == XmlMode.Xades && o.Form == XadesFormChoice.Detached ? name + "-signature.xml"
-            : o.Mode == XmlMode.Xades && o.Form == XadesFormChoice.Enveloping ? name + "-enveloping.xml"
+        return o.Form == XadesFormChoice.Detached ? name + "-signature.xml"
+            : o.Form == XadesFormChoice.Enveloping ? name + "-enveloping.xml"
             : name + "-signed.xml";
     }
 
@@ -333,7 +249,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     {
         try
         {
-            return o.Mode == XmlMode.Fiscal ? FiscalCode(o, context, credential) : new XadesPlan(o, context).Code(credential);
+            return new XadesPlan(o, context).Code(credential);
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
@@ -341,81 +257,9 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         }
     }
 
-    internal static string ProfileProperty(string key) => key switch
-    {
-        "nfe" => "NFe",
-        "evento" => "Evento",
-        "inutilizacao" => "Inutilizacao",
-        "cte" => "CTe",
-        "mdfe" => "MDFe",
-        "nfse" => "NFSeDps",
-        "esocial" => "ESocial",
-        _ => "Reinf",
-    };
-
-    private static CodeSnippets FiscalCode(XmlOptions o, PlanContext context, CredentialFacts credential)
-    {
-        string credentialCode = context.CredentialCode();
-        string profile = $"FiscalDocumentProfile.{ProfileProperty(o.Profile)}";
-        string id = o.ElementId is { } elementId ? $", elementId: {SigningPlan.Str(elementId)}" : "";
-        var sb = new StringBuilder("using SimpleSign.Brazil.Fiscal;\n\nbyte[] xml = File.ReadAllBytes(\"document.xml\");\n");
-        foreach (string line in context.Setup.Distinct())
-        {
-            sb.Append(line).Append('\n');
-        }
-
-        sb.Append('\n');
-        if (context.Credential.External is not null)
-        {
-            string variable = credentialCode[(credentialCode.IndexOf('(', StringComparison.Ordinal) + 1)..credentialCode.IndexOf('.', StringComparison.Ordinal)];
-            sb.Append(CultureInfo.InvariantCulture, $"byte[] signed = await FiscalXmlSigner.SignAsync(xml, {profile}, {variable}.Certificate, {variable}{id});\n");
-        }
-        else
-        {
-            sb.Append(o.SignAll
-                ? $"byte[] signed = FiscalXmlSigner.SignAll(xml, {profile}, certificate); // every unsigned element of the layout\n"
-                : $"byte[] signed = FiscalXmlSigner.Sign(xml, {profile}, certificate{id});\n");
-        }
-
-        sb.Append("File.WriteAllBytes(\"document-signed.xml\", signed);\n\n");
-        sb.Append("// Digests and signature values only (no network); FiscalXmlValidator.ValidateAsync also checks the ICP-Brasil chain.\n");
-        sb.Append("var check = FiscalXmlValidator.VerifySignatures(signed);\n");
-        sb.Append("foreach (var s in check.Signatures) Console.WriteLine($\"{s.ReferenceUri}: {(s.IsValid ? \"ok\" : string.Join(\"; \", s.Errors))} CNPJ {s.Cnpj}\");\n");
-
-        var args = new List<string> { "simplesign fiscal sign document.xml", $"--profile {o.Profile}" };
-        var notes = new List<string>();
-        CodeGenerator.CliCredential(credential, args, notes);
-        if (o.SignAll)
-        {
-            args.Add("--all");
-        }
-        else if (o.ElementId is not null)
-        {
-            args.Add($"--id {o.ElementId}");
-        }
-
-        args.Add("--output document-signed.xml");
-        return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), notes);
-    }
-
-    private static CodeSnippets ValidationCode(XmlMode mode, ValidationSettings settings, bool detached)
+    private static CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool customRoot = settings.Trust.Contains(TrustChoice.Sandbox) || settings.CustomRootUploadIds.Count > 0;
-        if (mode == XmlMode.Fiscal)
-        {
-            string fiscal = "using SimpleSign.Brazil.Fiscal;\n\nbyte[] xml = File.ReadAllBytes(\"document-signed.xml\");\n"
-                + "// Digests and signature values only:\nFiscalValidationResult quick = FiscalXmlValidator.VerifySignatures(xml);\n"
-                + "// Plus the ICP-Brasil chain (AIA, LCR/OCSP):\nFiscalValidationResult full = await new FiscalXmlValidator().ValidateAsync(xml"
-                + (settings.CheckRevocation ? "" : ", checkRevocation: false") + ");\n";
-            var notes = new List<string>();
-            if (customRoot)
-            {
-                notes.Add("FiscalXmlValidator trusts the ICP-Brasil roots only; the TestBench checks sandbox chains itself.");
-            }
-
-            return new CodeSnippets(fiscal, "simplesign fiscal validate document-signed.xml" + (settings.CheckRevocation ? "" : " --no-revocation"), notes);
-        }
-
         var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Validation;\n\nvar validator = new XadesSignatureValidator(new ValidationOptions\n{\n");
         sb.Append(CultureInfo.InvariantCulture, $"    TrustSystemRoots = {(settings.Trust.Contains(TrustChoice.System) ? "true" : "false")},\n");
         if (customRoot)
@@ -584,7 +428,7 @@ internal sealed class XadesPlan
             _steps.Add(($".WithCanonicalization(XadesCanonicalization.{canonicalization}) // SignedInfo and the references", b => b.WithCanonicalization(canonicalization)));
         }
 
-        if (o.SigningCertificateV1 && o.Kind != XadesKind.IcpBrasil)
+        if (o.SigningCertificateV1)
         {
             _steps.Add((".WithSigningCertificateForm(XadesSigningCertificateForm.V1) // XAdES 1.3.2 SigningCertificate", b => b.WithSigningCertificateForm(XadesSigningCertificateForm.V1)));
         }
@@ -600,23 +444,6 @@ internal sealed class XadesPlan
 
     private void AddType()
     {
-        if (_o.Kind == XadesKind.IcpBrasil)
-        {
-            var policy = Enum.Parse<IcpBrasilPolicy>(_o.IcpPolicy.ToString());
-            if (policy == IcpBrasilPolicy.AdRb)
-            {
-                _steps.Add((".WithIcpBrasilPolicy(IcpBrasilPolicy.AdRb) // SigningCertificate V1 + the policy version for the signer's root", b => b.WithIcpBrasilPolicy(policy)));
-            }
-            else
-            {
-                var tsa = _context.BuildTimestamp(_o.Timestamp, "tsa");
-                _steps.Add(($".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}, tsa) // V1, policy, B-T{(policy == IcpBrasilPolicy.AdRt ? "" : " + extended form")}",
-                    b => b.WithIcpBrasilPolicy(policy, tsa)));
-            }
-
-            return;
-        }
-
         if (_o.Kind == XadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);
@@ -660,16 +487,10 @@ internal sealed class XadesPlan
 
     public CodeSnippets Code(CredentialFacts credential)
     {
-        var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Signing;\n");
-        if (_o.Kind == XadesKind.IcpBrasil)
-        {
-            sb.Append("using SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Brazil.IcpBrasil.Xades;\n");
-        }
-
-        sb.Append('\n');
+        var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Signing;\n\n");
         if (_context.IsSandbox)
         {
-            sb.Append("// Sandbox: sandboxHttp is an IHttpClientProvider that answers *.sandbox.simplesign.test (TSA and CRLs).\n");
+            sb.Append("// The SimpleSign Sandbox runs on this machine: sandboxHttp (below) lets the library reach it.\n");
         }
 
         sb.Append("byte[] xml = File.ReadAllBytes(\"document.xml\");\n");
@@ -709,33 +530,26 @@ internal sealed class XadesPlan
             args.Add($"--data-uri {_o.DataUri}");
         }
 
-        if (_o.Kind == XadesKind.IcpBrasil)
+        if (_o.Level != BaselineLevel.BB)
         {
-            notes.Add("The CLI has no ICP-Brasil XAdES policy flag: use WithIcpBrasilPolicy (SimpleSign.Brazil.IcpBrasil.Xades).");
+            args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
+            args.Add("--level " + _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
         }
-        else
+
+        if (_o.Kind == XadesKind.CustomPolicy)
         {
-            if (_o.Level != BaselineLevel.BB)
+            args.Add($"--policy-oid {_o.PolicyOid}");
+            CodeGenerator.AddIf(args, "--policy-uri", SigningPlan.Blank(_o.PolicyUri));
+            if (!string.IsNullOrEmpty(_o.PolicyDocumentId))
             {
-                args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
-                args.Add("--level " + _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
+                CodeGenerator.AddIf(args, "--policy-document", _context.FileName(_o.PolicyDocumentId));
+                CodeGenerator.AddIf(args, "--policy-specification", _o.PolicySpecification);
             }
+        }
 
-            if (_o.Kind == XadesKind.CustomPolicy)
-            {
-                args.Add($"--policy-oid {_o.PolicyOid}");
-                CodeGenerator.AddIf(args, "--policy-uri", SigningPlan.Blank(_o.PolicyUri));
-                if (!string.IsNullOrEmpty(_o.PolicyDocumentId))
-                {
-                    CodeGenerator.AddIf(args, "--policy-document", _context.FileName(_o.PolicyDocumentId));
-                    CodeGenerator.AddIf(args, "--policy-specification", _o.PolicySpecification);
-                }
-            }
-
-            if (_o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
-            {
-                args.Add("--revocation-preference crl");
-            }
+        if (_o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
+        {
+            args.Add("--revocation-preference crl");
         }
 
         if (_o.Hash != HashChoice.Sha256)
@@ -754,7 +568,7 @@ internal sealed class XadesPlan
             CodeGenerator.AddIf(args, "--signer-role", role);
         }
 
-        if (_o.ExtendedForm != XadesExtendedChoice.None || _o.SigningCertificateV1 && _o.Kind != XadesKind.IcpBrasil || !string.IsNullOrWhiteSpace(_o.MimeType)
+        if (_o.ExtendedForm != XadesExtendedChoice.None || _o.SigningCertificateV1 || !string.IsNullOrWhiteSpace(_o.MimeType)
             || _o.Padding == RsaPadding.Pss && credential.KeyAlgorithm == "RSA" || _o.SigningTime is not null || _o.Timestamp.Auth != TsaAuth.None)
         {
             notes.Add("Extended forms, SigningCertificate V1, DataObjectFormat, RSASSA-PSS, a claimed signing time and TSA authentication have no xades flag: use the library.");
@@ -779,9 +593,9 @@ internal sealed class XadesPlan
 
         if (_o.DataObjectsTimestamp)
         {
-            if (_o.Kind == XadesKind.IcpBrasil || _o.Level == BaselineLevel.BB)
+            if (_o.Level == BaselineLevel.BB)
             {
-                args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
+                args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
             }
 
             args.Add("--data-objects-timestamp");

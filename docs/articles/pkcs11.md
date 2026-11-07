@@ -139,6 +139,6 @@ The package is tested against [SoftHSM2](https://github.com/softhsm/SoftHSMv2), 
 
 `Pkcs11RealDeviceTests` sign in the three formats on a real token or HSM: set `SIMPLESIGN_PKCS11_MODULE` (the
 driver), `SIMPLESIGN_PKCS11_PIN` and optionally `SIMPLESIGN_PKCS11_TOKEN`/`SIMPLESIGN_PKCS11_KEY`, then run
-`dotnet test tests/unit/Signers/SimpleSign.Signers.Pkcs11.Tests --filter FullyQualifiedName~Pkcs11RealDeviceTests`
-(see [INDECOPI evidence](indecopi-evidence.md)). Reports of drivers that work (or do not) are welcome in the issue
+`dotnet test tests/unit/Signers/SimpleSign.Signers.Pkcs11.Tests --filter FullyQualifiedName~Pkcs11RealDeviceTests`.
+Reports of drivers that work (or do not) are welcome in the issue
 tracker.

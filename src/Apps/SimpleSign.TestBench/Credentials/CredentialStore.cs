@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Signing;
 
@@ -21,9 +20,6 @@ public enum CredentialKind
     /// <summary>An A3 token or smartcard through its PKCS#11 driver.</summary>
     Pkcs11,
 
-    /// <summary>An ICP-Brasil cloud certificate (PSC, DOC-ICP-17.01).</summary>
-    Psc,
-
     /// <summary>A Cloud Signature Consortium API v2 credential.</summary>
     Csc,
 }
@@ -36,8 +32,6 @@ public sealed record CredentialFacts(
     string Holder,
     string Subject,
     string Issuer,
-    string? Cpf,
-    string? Cnpj,
     string KeyAlgorithm,
     int KeySize,
     string NotBefore,
@@ -45,7 +39,6 @@ public sealed record CredentialFacts(
     bool IsExpired,
     bool IsNotYetValid,
     bool HasNonRepudiation,
-    bool ChainsToIcpBrasil,
     IReadOnlyList<HashChoice> Hashes,
     IReadOnlyList<RsaPadding> Paddings,
     bool CanSignHashLocally,
@@ -64,7 +57,7 @@ public sealed record Note(string English, params object?[] Args)
     public override string ToString() => Localization.L.T(English, Args);
 }
 
-/// <summary>An opened signing credential: a local key, or an <see cref="IExternalSigner"/> (token, PSC, CSC).</summary>
+/// <summary>An opened signing credential: a local key, or an <see cref="IExternalSigner"/> (token, CSC).</summary>
 internal sealed class CredentialHandle : IDisposable
 {
     private readonly IDisposable? _owned;
@@ -127,14 +120,12 @@ internal sealed class CredentialHandle : IDisposable
         }
 
         var usage = certificate.Extensions.OfType<X509KeyUsageExtension>().FirstOrDefault();
-        var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(certificate);
         var now = DateTime.Now;
         return new CredentialFacts(
             id, kind, source,
             certificate.GetNameInfo(X509NameType.SimpleName, false),
             certificate.Subject,
             certificate.Issuer,
-            cpf, cnpj,
             isRsa ? "RSA" : certificate.GetECDsaPublicKey() is not null ? "ECDSA" : certificate.PublicKey.Oid.FriendlyName ?? "?",
             keySize,
             certificate.NotBefore.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture),
@@ -142,7 +133,6 @@ internal sealed class CredentialHandle : IDisposable
             certificate.NotAfter < now,
             certificate.NotBefore > now,
             usage is null || usage.KeyUsages.HasFlag(X509KeyUsageFlags.NonRepudiation),
-            IcpBrasilChainValidator.IsIcpBrasilCertificate(certificate),
             hashes ?? LocalHashes(),
             isRsa ? paddings ?? [RsaPadding.Pkcs1, RsaPadding.Pss] : [],
             local,

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    SimpleSign Sandbox: a test PKI and its network services (AIA, CRL, RFC 3161 TSA, CSC v2) on
+    real HTTP endpoints, with a web UI (ASP.NET Core + React/shadcn in web/). Any client can use it:
+    the TestBench, the CLI, the Agent, a DSS container. Not packaged; listens on localhost by default.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SimpleSign.Sandbox</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- App code (not a library): no ConfigureAwait, UI text, logging templates not needed. -->
+    <NoWarn>$(NoWarn);CS1591;CA2007;CA1303;CA1848;CA1873;CA1031;CA2000;CA5394;CA1707</NoWarn>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <WebDir>$(MSBuildProjectDirectory)/web</WebDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Sandbox.Tests" />
+    <Content Remove="web/**" />
+    <None Remove="web/**" />
+    <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Condition="Exists('web/dist')" />
+  </ItemGroup>
+
+  <!-- Builds the UI when its sources are newer than web/dist (Node.js required). Skip with -p:SkipWeb=true. -->
+  <Target Name="BuildWeb" BeforeTargets="AssignTargetPaths" Condition="'$(SkipWeb)' != 'true' And Exists('$(WebDir)/package.json')"
+          Inputs="@(WebSources);$(WebDir)/package.json;$(WebDir)/index.html" Outputs="$(WebDir)/dist/index.html">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(WebDir)" Condition="!Exists('$(WebDir)/node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(WebDir)" />
+    <ItemGroup>
+      <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Exclude="@(Content)" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <WebSources Include="web/src/**/*" />
+  </ItemGroup>
+</Project>

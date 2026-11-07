@@ -1,13 +1,9 @@
 using System.Text;
 using System.Xml;
-using SimpleSign.Brazil.Fiscal;
 
 namespace SimpleSign.TestBench.Xml;
 
-/// <summary>
-/// What the rules and the page need to know about an XML file. <c>FiscalTargets</c> holds, for each
-/// fiscal profile key, the Ids of the elements it would sign ("" = the whole document).
-/// </summary>
+/// <summary>What the rules and the page need to know about an XML file.</summary>
 public sealed record XmlFacts(
     string FileId,
     string FileName,
@@ -15,7 +11,6 @@ public sealed record XmlFacts(
     string? Root,
     string? Namespace,
     int Signatures,
-    IReadOnlyDictionary<string, IReadOnlyList<string>> FiscalTargets,
     string? Error);
 
 /// <summary>Reads XML safely (no DTD, no external resolution) for the XML page.</summary>
@@ -41,39 +36,12 @@ internal static class XmlInspector
         }
         catch (XmlException ex)
         {
-            return new XmlFacts(fileId, fileName, xml.LongLength, null, null, 0, new Dictionary<string, IReadOnlyList<string>>(), ex.Message);
+            return new XmlFacts(fileId, fileName, xml.LongLength, null, null, 0, ex.Message);
         }
 
         var root = doc.DocumentElement!;
-        var targets = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
-        foreach (var (key, profile) in FiscalDocumentProfile.ByName)
-        {
-            targets[key] = Targets(doc, profile);
-        }
-
         return new XmlFacts(fileId, fileName, xml.LongLength, root.LocalName, string.IsNullOrEmpty(root.NamespaceURI) ? null : root.NamespaceURI,
-            doc.GetElementsByTagName("Signature", DsNamespace).Count, targets, null);
-    }
-
-    /// <summary>The Ids of the elements a fiscal profile signs; "" for a whole-document profile (eSocial).</summary>
-    internal static IReadOnlyList<string> Targets(XmlDocument doc, FiscalDocumentProfile profile)
-    {
-        if (profile.SignedElement is null)
-        {
-            return [""];
-        }
-
-        var ids = new List<string>();
-        foreach (XmlElement element in doc.GetElementsByTagName("*"))
-        {
-            if ((profile.SignedElement == "*" ? element.ParentNode == doc.DocumentElement : element.LocalName == profile.SignedElement)
-                && element.GetAttribute(profile.IdAttribute!) is { Length: > 0 } id)
-            {
-                ids.Add(id);
-            }
-        }
-
-        return ids;
+            doc.GetElementsByTagName("Signature", DsNamespace).Count, null);
     }
 
     /// <summary>The last ds:Signature, indented, with long base64 values shortened (for display).</summary>

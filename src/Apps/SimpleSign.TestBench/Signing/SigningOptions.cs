@@ -1,4 +1,3 @@
-using SimpleSign.TestBench.Sandbox;
 
 namespace SimpleSign.TestBench.Signing;
 
@@ -10,9 +9,6 @@ public enum SignatureKind
 {
     /// <summary>A PAdES baseline signature (ETSI EN 319 142-1): B-B, B-T, B-LT or B-LTA.</summary>
     Baseline,
-
-    /// <summary>An ICP-Brasil signature policy (DOC-ICP-15.03): AD-RB, AD-RT, AD-RC or AD-RA.</summary>
-    IcpBrasil,
 
     /// <summary>Baseline plus an explicit signature-policy-identifier (any OID and hash).</summary>
     CustomPolicy,
@@ -26,18 +22,23 @@ public enum BaselineLevel
     BLTA,
 }
 
-public enum IcpPolicyKind
-{
-    AdRb,
-    AdRt,
-    AdRc,
-    AdRa,
-}
-
 public enum TsaProvider
 {
+    /// <summary>The connected Sandbox's TSA.</summary>
     Sandbox,
+
+    /// <summary>The connected Sandbox's TSA that requires HTTP Basic (the credentials are filled in).</summary>
     SandboxAuthenticated,
+
+    /// <summary>The connected Sandbox's TSA outside every trust anchor.</summary>
+    SandboxUntrusted,
+
+    /// <summary>The connected Sandbox's TSA whose certificate is revoked.</summary>
+    SandboxRevoked,
+
+    /// <summary>The connected Sandbox's TSA whose tokens name another TSA.</summary>
+    SandboxWrongName,
+
     DigiCert,
     Sectigo,
     FreeTsa,
@@ -79,7 +80,6 @@ public enum SubFilterChoice
 {
     EtsiCadesDetached,
     AdbePkcs7Detached,
-    PbadPades,
 }
 
 public enum FieldMode
@@ -94,15 +94,6 @@ public enum CertificationChoice
     NoChanges,
     FormFilling,
     FormFillingAndAnnotations,
-}
-
-public enum SignerDetailsKind
-{
-    /// <summary>Generic <c>SignatureMetadata</c> (signer, reason, location, contact, commitment).</summary>
-    Metadata,
-
-    /// <summary>Brazilian advanced electronic signature (AEA, Lei 14.063/2020) with a signer manifest.</summary>
-    Aea,
 }
 
 public enum RunMode
@@ -144,75 +135,6 @@ public sealed record CustomPolicyChoice
     public string? Uri { get; init; }
 }
 
-public sealed record AppearanceChoice
-{
-    public bool Visible { get; init; }
-
-    public bool AutoPosition { get; init; }
-
-    public int Page { get; init; } = 1;
-
-    public float X { get; init; } = 72;
-
-    public float Y { get; init; } = 72;
-
-    public float? Width { get; init; } = 220;
-
-    public float? Height { get; init; } = 70;
-
-    public string TextAlignment { get; init; } = "Left";
-
-    public string VerticalAlignment { get; init; } = "Top";
-
-    public bool ShrinkToFit { get; init; } = true;
-
-    public int MaxTextLength { get; init; } = 200;
-
-    public bool ShowDate { get; init; } = true;
-
-    public bool ShowReason { get; init; }
-
-    public bool ShowLocation { get; init; }
-
-    public string? SignedByLabel { get; init; }
-
-    public string? ReasonLabel { get; init; }
-
-    public string? LocationLabel { get; init; }
-
-    public string? DateLabel { get; init; }
-
-    public string? SignerDisplayName { get; init; }
-
-    public IReadOnlyList<string> ExtraLines { get; init; } = [];
-
-    public string? DateFormat { get; init; }
-
-    public string? TimeZoneId { get; init; }
-
-    public string? Culture { get; init; }
-
-    public string? BackgroundColor { get; init; }
-
-    public string? TextColor { get; init; }
-
-    public string? BorderColor { get; init; }
-
-    public float BorderWidth { get; init; } = 0.5f;
-
-    public string BaseFont { get; init; } = "Helvetica";
-
-    public float? FontSize { get; init; }
-
-    public float? LabelFontSize { get; init; }
-
-    public string? VerificationUrl { get; init; }
-
-    public string? ImageUploadId { get; init; }
-
-    public string ImageFit { get; init; } = "Contain";
-}
-
 public sealed record MetadataChoice
 {
     public string? SignerName { get; init; }
@@ -242,56 +164,11 @@ public sealed record MetadataChoice
     public string? PolicyUri { get; init; }
 }
 
-public sealed record AeaChoice
-{
-    public string SignerName { get; init; } = "";
-
-    public string Cpf { get; init; } = "";
-
-    public string AuthMethod { get; init; } = "GovBr";
-
-    public string? Email { get; init; }
-
-    public string? IpAddress { get; init; }
-
-    public string CommitmentType { get; init; } = "ProofOfApproval";
-
-    public string? InstitutionName { get; init; }
-
-    public string? InstitutionCnpj { get; init; }
-
-    public string? PolicyOid { get; init; }
-
-    public string? PolicyUri { get; init; }
-}
-
-public sealed record ProfessionalChoice
-{
-    public string Council { get; init; } = "Cfm";
-
-    public string RegistrationNumber { get; init; } = "";
-
-    public string? StateCode { get; init; }
-
-    public string? Specialty { get; init; }
-}
-
-public sealed record HealthChoice
-{
-    public bool Enabled { get; init; }
-
-    public string Type { get; init; } = "Prescricao";
-
-    public IReadOnlyList<ProfessionalChoice> Professionals { get; init; } = [];
-}
-
 public sealed record DocumentInfoEntry(string Key, string Value);
 
 /// <summary>Everything a PDF signature can be configured with.</summary>
 public sealed record SigningOptions
 {
-    public EnvironmentMode Environment { get; init; } = EnvironmentMode.Sandbox;
-
     // 1. Document
     public string? DocumentId { get; init; }
 
@@ -302,14 +179,6 @@ public sealed record SigningOptions
     public SignatureKind Kind { get; init; } = SignatureKind.Baseline;
 
     public BaselineLevel Level { get; init; } = BaselineLevel.BB;
-
-    public IcpPolicyKind IcpPolicy { get; init; } = IcpPolicyKind.AdRb;
-
-    /// <summary>A specific PA OID; null picks the newest version that accepts the signer's root.</summary>
-    public string? IcpVersionOid { get; init; }
-
-    /// <summary>AD-RB only: add a signature timestamp (the PA allows it).</summary>
-    public bool IcpAdRbTimestamp { get; init; }
 
     public CustomPolicyChoice CustomPolicy { get; init; } = new();
 
@@ -338,14 +207,12 @@ public sealed record SigningOptions
 
     public bool PreservePdfA { get; init; }
 
-    // 5. Field and appearance
+    // 5. Field
     public FieldMode FieldMode { get; init; } = FieldMode.New;
 
     public string FieldName { get; init; } = "Signature1";
 
     public string? ExistingFieldName { get; init; }
-
-    public AppearanceChoice Appearance { get; init; } = new();
 
     // 6. Details
     public string? Reason { get; init; }
@@ -360,13 +227,7 @@ public sealed record SigningOptions
 
     public bool UseSignerDetails { get; init; }
 
-    public SignerDetailsKind SignerDetails { get; init; } = SignerDetailsKind.Metadata;
-
     public MetadataChoice Metadata { get; init; } = new();
-
-    public AeaChoice Aea { get; init; } = new();
-
-    public HealthChoice Health { get; init; } = new();
 
     public CertificationChoice Certification { get; init; } = CertificationChoice.None;
 

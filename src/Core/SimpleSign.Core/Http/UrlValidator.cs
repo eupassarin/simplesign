@@ -15,7 +15,14 @@ internal static class UrlValidator
     /// Blocks localhost, private IPs, and non-HTTP(S) schemes.
     /// Does NOT resolve hostnames — use <see cref="IsSafeUrlAsync(string, CancellationToken)"/> for DNS rebinding protection.
     /// </summary>
-    internal static bool IsSafeUrl(string url)
+    internal static bool IsSafeUrl(string url) => IsSafeUrl(url, deferLoopback: false);
+
+    /// <summary>
+    /// Like <see cref="IsSafeUrl(string)"/>; with <paramref name="deferLoopback"/> a loopback host
+    /// passes, because the request is checked again when it is sent, against the policy in force then
+    /// (<see cref="OutboundHttpPolicy.LoopbackOrigins"/>).
+    /// </summary>
+    internal static bool IsSafeUrl(string url, bool deferLoopback)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
@@ -28,8 +35,13 @@ internal static class UrlValidator
             return false;
         }
 
-        return !IsBlockedHost(uri.Host);
+        return (deferLoopback && IsLoopbackHost(uri)) || !IsBlockedHost(uri.Host);
     }
+
+    /// <summary>Whether the URI names this machine: <c>localhost</c> or a loopback address.</summary>
+    internal static bool IsLoopbackHost(Uri uri) =>
+        string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+        || (IPAddress.TryParse(uri.IdnHost.Trim('[', ']'), out var address) && IPAddress.IsLoopback(address));
 
     /// <summary>
     /// Validates that a URL is safe for outbound HTTP requests with DNS rebinding protection.
@@ -64,19 +76,37 @@ internal static class UrlValidator
             return false;
         }
 
+        policy ??= OutboundHttpPolicy.Default;
+        if (IsLoopbackHost(uri) && policy.AllowsLoopback(uri))
+        {
+            return true;
+        }
+
         return !await IsBlockedHostAsync(uri.Host, policy ?? OutboundHttpPolicy.Default, resolve, ct)
             .ConfigureAwait(false);
     }
 
     /// <summary>
     /// Whether a connection to <paramref name="address"/>, resolved from <paramref name="host"/>, is refused
-    /// by <paramref name="policy"/>. Used by transports that connect to an address themselves (LDAP).
+    /// by <paramref name="policy"/>. Used by transports that connect to an address themselves (LDAP, TSA over TCP).
     /// </summary>
-    internal static bool IsBlockedAddress(string host, IPAddress address, OutboundHttpPolicy policy) =>
-        string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
-        || (!IPAddress.TryParse(host, out _) && policy.AllowsPrivateAddressesFor(host)
-            ? IsLocalOrLinkLocal(address)
-            : IsPrivateOrReserved(address));
+    /// <param name="host">The host name from the URL.</param>
+    /// <param name="address">The address about to be connected to.</param>
+    /// <param name="policy">The outbound policy.</param>
+    /// <param name="origin">The scheme, host and port of the target, to match <see cref="OutboundHttpPolicy.LoopbackOrigins"/>.</param>
+    internal static bool IsBlockedAddress(string host, IPAddress address, OutboundHttpPolicy policy, Uri? origin = null)
+    {
+        if (origin is not null && IPAddress.IsLoopback(address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address)
+            && IsLoopbackHost(origin) && policy.AllowsLoopback(origin))
+        {
+            return false;
+        }
+
+        return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || (!IPAddress.TryParse(host, out _) && policy.AllowsPrivateAddressesFor(host)
+                ? IsLocalOrLinkLocal(address)
+                : IsPrivateOrReserved(address));
+    }
 
     private static bool IsBlockedHost(string host)
     {

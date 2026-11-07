@@ -22,22 +22,6 @@ export function shortRef(ref: StandardRef) {
   return clause ? `${document} ${clause}` : document
 }
 
-/** The colors of each trust framework, so national options stand out from the generic ETSI ones. */
-export const frameworkTone: Record<string, { chip: string; border: string; tag: string; label: string }> = {
-  brazil: {
-    chip: "border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-    border: "border-l-emerald-500 bg-emerald-500/[0.04]",
-    tag: "border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-    label: "BR",
-  },
-}
-
-export function FrameworkTag({ framework }: { framework?: string | null }) {
-  const tone = framework ? frameworkTone[framework] : undefined
-  if (!tone) return null
-  return <span className={cn("rounded border px-1 py-px text-[10px] leading-none font-semibold tracking-wide", tone.tag)}>{tone.label}</span>
-}
-
 /** The clause of the standard that defines an option, as a small badge; hover for every reference and the library call. */
 export function StandardBadge({ explanation, className }: { explanation: Explanation; className?: string }) {
   const t = useT()
@@ -77,10 +61,9 @@ export function StandardBadge({ explanation, className }: { explanation: Explana
   )
 }
 
-/** The frame of one option: label, clause, framework tag, summary, the editor, and why it is locked. */
-export function OptionRow({ explanation, framework, state, missing, inline, children }: {
+/** The frame of one option: label, clause, summary, the editor, and why it is locked. */
+export function OptionRow({ explanation, state, missing, inline, children }: {
   explanation: Explanation
-  framework?: string | null
   state?: OptionState
   /** The standard defines it and SimpleSign does not implement it. */
   missing?: boolean
@@ -89,12 +72,10 @@ export function OptionRow({ explanation, framework, state, missing, inline, chil
   children?: ReactNode
 }) {
   const t = useT()
-  const tone = framework ? frameworkTone[framework] : undefined
   const head = (
     <div className="min-w-0 space-y-0.5">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={cn("text-sm font-medium", missing && "text-muted-foreground")}>{explanation.title}</span>
-        <FrameworkTag framework={framework} />
         <StandardBadge explanation={explanation} />
         {missing && <span className="rounded border border-dashed px-1.5 py-px text-[10px] leading-4">{t("wb.notInLibrary")}</span>}
       </div>
@@ -102,7 +83,7 @@ export function OptionRow({ explanation, framework, state, missing, inline, chil
     </div>
   )
   return (
-    <div className={cn("space-y-2 py-3", tone && "-mx-3 border-l-2 px-3", tone?.border, missing && "opacity-70")}>
+    <div className={cn("space-y-2 py-3", missing && "opacity-70")}>
       {inline ? <div className="flex items-start justify-between gap-4">{head}<div className="shrink-0 pt-0.5">{children}</div></div> : <>{head}{children}</>}
       {state?.disabled && <p className="text-muted-foreground flex items-start gap-1.5 text-xs"><Lock className="mt-0.5 size-3 shrink-0" />{state.disabled}</p>}
       {state?.note && <p className="text-muted-foreground text-xs italic">{state.note}</p>}

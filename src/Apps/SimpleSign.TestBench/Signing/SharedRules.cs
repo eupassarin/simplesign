@@ -1,6 +1,5 @@
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Localization;
-using SimpleSign.TestBench.Sandbox;
 
 namespace SimpleSign.TestBench.Signing;
 
@@ -10,25 +9,25 @@ namespace SimpleSign.TestBench.Signing;
 /// </summary>
 internal static class SharedRules
 {
-    /// <summary>Which TSA providers can be chosen in the current environment.</summary>
-    public static void TsaProviders(bool sandbox, Action<string, OptionState> set)
+    /// <summary>Which TSA providers can be chosen: the Sandbox's TSAs only while a Sandbox is connected.</summary>
+    public static void TsaProviders(bool sandboxConnected, Action<string, OptionState> set)
     {
         foreach (var provider in Enum.GetValues<TsaProvider>())
         {
-            bool sandboxProvider = provider is TsaProvider.Sandbox or TsaProvider.SandboxAuthenticated;
-            set($"tsa.{provider}", sandbox && !sandboxProvider && provider != TsaProvider.Custom
-                    ? OptionState.Off(L.T("The sandbox is offline. Switch to Real to use public TSAs."))
-                : !sandbox && sandboxProvider ? OptionState.Off(L.T("Sandbox services exist only in Sandbox mode."))
+            set($"tsa.{provider}", !sandboxConnected && IsSandboxTsa(provider)
+                ? OptionState.Off(L.T("Connect a SimpleSign Sandbox in Environment to use its TSAs."))
                 : OptionState.Shown);
         }
 
-        set("tsa.clientCertificate", sandbox
-            ? new OptionState(true, Note: L.T("The sandbox TSA does not check TLS client certificates; the option is still passed to TimestampOptions.ClientCertificate."))
-            : OptionState.Shown);
+        set("tsa.clientCertificate", OptionState.Shown);
     }
 
+    /// <summary>Whether a provider is one of the connected Sandbox's TSAs.</summary>
+    public static bool IsSandboxTsa(TsaProvider provider) =>
+        provider is TsaProvider.Sandbox or TsaProvider.SandboxAuthenticated or TsaProvider.SandboxUntrusted or TsaProvider.SandboxRevoked or TsaProvider.SandboxWrongName;
+
     /// <summary>Checks one TSA choice (provider allowed, URL, authentication).</summary>
-    public static void CheckTsa(TimestampChoice tsa, string label, IReadOnlyDictionary<string, OptionState> state, Action<string, string> error, bool sandbox, string step)
+    public static void CheckTsa(TimestampChoice tsa, string label, IReadOnlyDictionary<string, OptionState> state, Action<string, string> error, string step)
     {
         if (state[$"tsa.{tsa.Provider}"].Disabled is { } reason)
         {
@@ -41,10 +40,6 @@ internal static class SharedRules
             {
                 error(step, L.T("{0}: enter an absolute http://, https:// or tcp:// URL.", label));
             }
-            else if (sandbox && !uri.Host.EndsWith(SandboxPki.Host, StringComparison.OrdinalIgnoreCase))
-            {
-                error(step, L.T("{0}: the sandbox is offline; only *.{1} URLs answer.", label, SandboxPki.Host));
-            }
         }
 
         if (tsa.Auth == TsaAuth.Basic && (string.IsNullOrEmpty(tsa.User) || tsa.Password is null))
@@ -55,11 +50,6 @@ internal static class SharedRules
         if (tsa.Auth == TsaAuth.Bearer && string.IsNullOrWhiteSpace(tsa.Token))
         {
             error(step, L.T("{0}: Bearer authentication needs a token.", label));
-        }
-
-        if (tsa.Provider == TsaProvider.SandboxAuthenticated && tsa.Auth != TsaAuth.Basic)
-        {
-            error(step, L.T("{0}: the authenticated sandbox TSA needs Basic authentication ({1} / {2}).", label, SandboxPki.TsaUser, SandboxPki.TsaPassword));
         }
     }
 
@@ -88,7 +78,6 @@ internal static class SharedRules
             state[$"padding.{p}"] = credential is null || credential.Paddings.Contains(p) ? OptionState.Shown
                 : OptionState.Off(credential.Kind switch
                 {
-                    CredentialKind.Psc => L.T("PSCs only produce RSA PKCS#1 v1.5 signatures."),
                     CredentialKind.Csc => L.T("This CSC credential does not list the algorithm in its key/algo."),
                     _ => L.T("Not supported by this key."),
                 });
@@ -115,7 +104,7 @@ internal static class SharedRules
 
     /// <summary>
     /// The signer certificate: chosen, currently valid, with nonRepudiation; and what the signing policy refuses
-    /// (null for the fiscal layouts, which have no signing policy).
+    /// (null: no signing policy applies).
     /// </summary>
     public static void Signer(CredentialFacts? credential, Action<string, string> error, Action<string, string> warn, string step,
         SigningPolicyChoice? policy = SigningPolicyChoice.Default)
@@ -151,7 +140,7 @@ internal static class SharedRules
 
         if (!credential.HasNonRepudiation)
         {
-            warn(step, L.T("The certificate lacks the nonRepudiation key usage: ICP-Brasil validators warn about it."));
+            warn(step, L.T("The certificate lacks the nonRepudiation key usage: some validation policies warn about it."));
         }
     }
 }

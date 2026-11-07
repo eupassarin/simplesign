@@ -7,7 +7,7 @@ using Spectre.Console;
 namespace SimpleSign.Cli.Rendering;
 
 /// <summary>
-/// The verification report shared by the validate commands (INDECOPI Req. 18/28): the indication and its reason,
+/// The verification report shared by the validate commands: the indication and its reason,
 /// the public key of the signer, and every check of the validation, in English or Spanish.
 /// </summary>
 internal static class ValidationReportRenderer

@@ -18,7 +18,6 @@ export function RealEnvironment() {
   const [real, setReal] = useState<RealEnvironmentView | null>(null)
   const [drivers, setDrivers] = useState<Pkcs11Driver[] | null>(null)
   const [store, setStore] = useState<StoreCertificate[] | null>(null)
-  const [showRoots, setShowRoots] = useState(false)
   useEffect(() => {
     api.environment.real().then(setReal).catch(() => setReal(null))
     api.credentials.pkcs11().then(setDrivers).catch(() => setDrivers([]))
@@ -27,7 +26,6 @@ export function RealEnvironment() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const tokens = drivers?.flatMap((d) => d.tokens) ?? []
-  const sources = [...new Set(real?.bundledRoots.map((r) => r.source) ?? [])]
   return (
     <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
       <div className="space-y-8 p-6 lg:p-8">
@@ -39,23 +37,6 @@ export function RealEnvironment() {
         <Section title={t("real.trust")} description={t("real.trustHint")}>
           <div className="rounded-lg border px-4 py-2">
             <KeyValue label={t("real.systemRoots")}>{real?.systemRootCount ?? "—"}</KeyValue>
-            {sources.map((source) => (
-              <KeyValue key={source} label={t("real.bundledRoots", { source })}>{real!.bundledRoots.filter((r) => r.source === source).length}</KeyValue>
-            ))}
-            <button type="button" className="text-muted-foreground hover:text-foreground py-1.5 text-xs underline underline-offset-2" onClick={() => setShowRoots(!showRoots)}>
-              {t(showRoots ? "real.hideRoots" : "real.showRoots")}
-            </button>
-            {showRoots && (
-              <ul className="divide-y border-t">
-                {real?.bundledRoots.map((r) => (
-                  <li key={r.thumbprint} className="flex flex-wrap items-baseline gap-x-3 py-1.5 text-xs">
-                    <Pill>{r.source}</Pill>
-                    <span className="min-w-0 flex-1 break-words">{r.subject}</span>
-                    <span className="text-muted-foreground shrink-0 tabular-nums">→ {r.notAfter}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         </Section>
 
@@ -107,11 +88,6 @@ export function RealEnvironment() {
 
         <Section title={t("real.cloud")} description={t("real.cloudHint")}>
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 rounded-lg border p-4">
-              <p className="flex items-center gap-2 text-sm font-medium"><Cloud className="size-4" /> PSC (DOC-ICP-17.01)</p>
-              <p className="text-muted-foreground text-xs leading-relaxed">{t("signer.cloud.psc.what")}</p>
-              <p className="text-xs leading-relaxed">{t("real.pscNeeds")}</p>
-            </div>
             <div className="space-y-2 rounded-lg border p-4">
               <p className="flex items-center gap-2 text-sm font-medium"><Cloud className="size-4" /> CSC API v2</p>
               <p className="text-muted-foreground text-xs leading-relaxed">{t("signer.cloud.csc.what")}</p>

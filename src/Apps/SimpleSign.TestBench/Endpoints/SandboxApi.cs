@@ -1,109 +1,84 @@
-using System.Globalization;
-using System.Security.Cryptography.X509Certificates;
-using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Sandbox;
 
 namespace SimpleSign.TestBench.Endpoints;
 
-/// <summary>A certificate of the sandbox PKI.</summary>
-public sealed record SandboxCertificate(
-    string Id,
-    string Role,
-    string Title,
-    string? Description,
-    string Subject,
-    string Issuer,
-    string SerialNumber,
-    string NotBefore,
-    string NotAfter,
-    string Key,
-    string Thumbprint,
-    string? Problem,
-    bool IsUsable,
-    bool RevokedNow);
+/// <summary>Where a SimpleSign Sandbox answers.</summary>
+public sealed record SandboxConnectRequest(string Url);
 
-/// <summary>The sandbox as the Environment panel shows it: the PKI, the faults switched on, and where the root is kept.</summary>
-public sealed record SandboxState(
-    SandboxCertificate Root,
-    SandboxCertificate Intermediate,
-    SandboxCertificate Tsa,
-    IReadOnlyList<SandboxCertificate> Signers,
-    SandboxFaults Faults,
-    bool FaultsActive,
-    string RootCrlUrl,
-    string IntermediateCrlUrl,
-    string TsaUrl);
-
-/// <summary>The sandbox as a lab: look at its PKI, download its certificates and CRLs, and switch failures on.</summary>
+/// <summary>
+/// The link to a SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox): connect, disconnect, build the
+/// signed samples again, and hand its root to an external validator (DSS).
+/// </summary>
 internal static class SandboxApi
 {
     public static void Map(RouteGroupBuilder api)
     {
-        var sandbox = api.MapGroup("/sandbox");
-        sandbox.MapGet("/state", (SandboxEnvironment env) => State(env));
-        sandbox.MapPut("/faults", (SandboxFaults faults, SandboxEnvironment env) =>
+        var group = api.MapGroup("/sandbox");
+        group.MapPost("/connect", async (SandboxConnectRequest body, SandboxEnvironment sandbox, SampleService samples, CancellationToken ct) =>
         {
-            env.Network.Faults = faults;
-            return State(env);
-        });
-        sandbox.MapPost("/signers/{id}/revoke", (string id, SandboxEnvironment env) =>
-        {
-            if (env.Pki.Signers.All(s => s.Id != id))
+            if (!Uri.TryCreate(body.Url, UriKind.Absolute, out var url) || url.Scheme is not ("http" or "https"))
             {
-                return Results.NotFound();
+                return Results.BadRequest(new { error = Localization.L.T("Enter the Sandbox's address, such as http://localhost:5300.") });
             }
 
-            env.Pki.Revoke(id);
-            return Results.Ok(State(env));
+            try
+            {
+                await sandbox.ConnectAsync(url, ct);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or TaskCanceledException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = Localization.L.T("No SimpleSign Sandbox answered at {0}: {1}", url.AbsoluteUri, ex.Message) });
+            }
+
+            await samples.RefreshAsync(ct);
+            return Results.Ok(Api.Environment(sandbox));
         });
-        sandbox.MapPost("/reset", (SandboxEnvironment env) =>
+        group.MapPost("/disconnect", async (SandboxEnvironment sandbox, SampleService samples, CancellationToken ct) =>
         {
-            env.Network.Faults = new SandboxFaults();
-            env.Pki.RestoreRevocations();
-            return State(env);
+            sandbox.Disconnect();
+            await samples.RefreshAsync(ct);
+            return Api.Environment(sandbox);
         });
-        sandbox.MapGet("/certificates/{id}", (string id, SandboxEnvironment env) =>
-            Find(env, id) is { } certificate
-                ? Results.File(certificate.RawData, "application/pkix-cert", $"sandbox-{id}.cer")
-                : Results.NotFound());
-        sandbox.MapGet("/crls/{name}", (string name, SandboxEnvironment env) => name switch
+        group.MapPost("/samples", async (SampleService samples, SandboxEnvironment sandbox, CancellationToken ct) =>
         {
-            "root.crl" => Results.File(env.Pki.RootCrl, "application/pkix-crl", "sandbox-root.crl"),
-            "intermediate.crl" => Results.File(env.Pki.IntermediateCrl, "application/pkix-crl", "sandbox-intermediate.crl"),
-            _ => Results.NotFound(),
+            await samples.RefreshAsync(ct);
+            return Api.Environment(sandbox);
         });
+
+        // The connected Sandbox's root and chain, so an external validator (DSS) can be told to trust it.
+        group.MapGet("/root.pem", (SandboxEnvironment sandbox) => sandbox.Current is { } c
+            ? Results.Text(c.Root.ExportCertificatePem() + "\n", "application/x-pem-file")
+            : Results.NotFound());
+        group.MapGet("/chain.pem", (SandboxEnvironment sandbox) => sandbox.Current is { } c
+            ? Results.Text(c.Root.ExportCertificatePem() + "\n" + c.Intermediate.ExportCertificatePem() + "\n", "application/x-pem-file")
+            : Results.NotFound());
     }
+}
 
-    internal static SandboxState State(SandboxEnvironment env)
-    {
-        var pki = env.Pki;
-        var revoked = pki.RevokedNow;
-        var faults = env.Network.Faults;
-        return new SandboxState(
-            View("root", "root", L.T("Root CA"), null, pki.Root, null, true, false),
-            View("intermediate", "intermediate", L.T("Intermediate CA"), null, pki.Intermediate, null, true, false),
-            View("tsa", "tsa", L.T("Time-stamping authority"), null, pki.Tsa, null, true, false),
-            [.. pki.Signers.Select(s => View(s.Id, "signer", L.T(s.Title), L.T(s.Description), s.Certificate, s.Problem is null ? null : L.T(s.Problem), s.IsUsable, revoked.Contains(s.Id)))],
-            faults,
-            faults.Any || revoked.Count > 0,
-            SandboxPki.RootCrlUri.AbsoluteUri,
-            SandboxPki.IntermediateCrlUri.AbsoluteUri,
-            SandboxPki.TsaUri.AbsoluteUri);
-    }
+/// <summary>Builds the signed samples (validation, CAdES, XML) again from the connected Sandbox, or drops them without one.</summary>
+internal sealed class SampleService(
+    SandboxEnvironment sandbox,
+    Documents.DocumentStore documents,
+    Validation.ValidationSampleStore validation,
+    Cades.CadesSampleStore cades,
+    Xml.XmlSampleStore xml) : IDisposable
+{
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
-    private static X509Certificate2? Find(SandboxEnvironment env, string id) => id switch
-    {
-        "root" => env.Pki.Root,
-        "intermediate" => env.Pki.Intermediate,
-        "tsa" => env.Pki.Tsa,
-        _ => env.Pki.Signers.FirstOrDefault(s => s.Id == id)?.Certificate,
-    };
+    public void Dispose() => _gate.Dispose();
 
-    private static SandboxCertificate View(string id, string role, string title, string? description, X509Certificate2 c, string? problem, bool usable, bool revokedNow)
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        string key = c.GetRSAPublicKey() is { } rsa ? $"RSA {rsa.KeySize}" : c.GetECDsaPublicKey() is { } ec ? $"ECDSA {ec.KeySize}" : c.PublicKey.Oid.FriendlyName ?? "?";
-        return new SandboxCertificate(id, role, title, description, c.Subject, c.Issuer, c.SerialNumber,
-            c.NotBefore.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), c.NotAfter.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            key, c.Thumbprint, problem, usable, revokedNow);
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            validation.Samples = await Validation.InvalidSamples.CreateAsync(sandbox, documents, cancellationToken);
+            cades.Samples = await Cades.CadesSamples.CreateAsync(sandbox, documents, cancellationToken);
+            xml.Samples = await Xml.XmlSamples.CreateAsync(sandbox, documents, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 }

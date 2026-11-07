@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BookOpen, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon, TriangleAlert } from "lucide-react"
+import { BookOpen, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -16,12 +16,16 @@ import { WorkbenchPage } from "@/features/workbench/WorkbenchPage"
 import { useTheme } from "@/hooks/use-theme"
 import { locales, useI18n, type Locale } from "@/i18n"
 import { api } from "@/lib/api"
-import type { EnvironmentMode } from "@/lib/types"
+import type { EnvironmentInfo } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 export default function App() {
-  const [environment, setEnvironment] = useState<EnvironmentMode>("Sandbox")
   const [schema, setSchema] = useState<WorkbenchSchema | null>(null)
+  // The environment (the connected Sandbox) is read first: the defaults depend on it.
+  const [env, setEnv] = useState<EnvironmentInfo | null | undefined>(undefined)
+  useEffect(() => {
+    api.env().then(setEnv).catch(() => setEnv(null))
+  }, [])
   const { locale } = useI18n()
   // The schema carries the explanations, so it is fetched again in the new language.
   useEffect(() => {
@@ -30,9 +34,9 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={200}>
       <CatalogProvider>
-        {!schema ? <div className="text-muted-foreground flex h-screen items-center justify-center"><Loader2 className="size-5 animate-spin" /></div> : (
-          <WorkbenchProvider schema={schema} environment={environment}>
-            <Shell environment={environment} onEnvironment={setEnvironment} />
+        {!schema || env === undefined ? <div className="text-muted-foreground flex h-screen items-center justify-center"><Loader2 className="size-5 animate-spin" /></div> : (
+          <WorkbenchProvider schema={schema} initialEnv={env}>
+            <Shell />
           </WorkbenchProvider>
         )}
       </CatalogProvider>
@@ -48,10 +52,12 @@ const modes: { id: RunKind; icon: typeof PenTool }[] = [
 
 /**
  * One top bar and one task on screen. There are two tasks, Sign and Validate; Reference (what
- * the library covers of each standard) and Environment (the sandbox) open as panels over either.
+ * the library covers of each standard), Sandbox (the connected SimpleSign Sandbox) and Environment
+ * (what this machine has) open as panels over either.
  */
-function Shell({ environment, onEnvironment }: { environment: EnvironmentMode; onEnvironment: (environment: EnvironmentMode) => void }) {
-  const { mode, setMode, sandbox } = useWorkbench()
+function Shell() {
+  const { mode, setMode, env } = useWorkbench()
+  const sandbox = env?.sandbox ?? null
   const { theme, setTheme } = useTheme()
   const { t, locale, setLocale } = useI18n()
   return (
@@ -74,24 +80,12 @@ function Shell({ environment, onEnvironment }: { environment: EnvironmentMode; o
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Panel icon={<BookOpen />} label={t("app.reference")} hint={t("app.referenceHint")}><CoveragePage /></Panel>
-          <div className="bg-muted flex rounded-lg p-0.5" role="radiogroup" aria-label={t("app.environment")}>
-            {(["Sandbox", "Real"] as const).map((e) => (
-              <Tooltip key={e}>
-                <TooltipTrigger asChild>
-                  <button role="radio" aria-checked={environment === e} onClick={() => onEnvironment(e)}
-                    className={cn("rounded-md px-3 py-1 text-xs font-medium transition-all", environment === e ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>
-                    {t(e === "Sandbox" ? "app.env.sandbox" : "app.env.real")}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-64">{t(e === "Sandbox" ? "app.env.sandboxHint" : "app.env.realHint")}</TooltipContent>
-              </Tooltip>
-            ))}
-          </div>
-          <Panel icon={environment === "Sandbox" ? <FlaskConical /> : <Globe />} label={t("app.environmentPanel")}
-            hint={t(environment === "Sandbox" ? "app.environmentHint" : "app.environmentRealHint")}>
-            {environment === "Sandbox" ? <SandboxPage /> : <RealEnvironment />}
+          <Panel icon={<FlaskConical />} label={sandbox ? t("app.sandboxConnected", { name: sandbox.name }) : t("app.sandboxNone")} hint={t("app.sandboxHint")}>
+            <SandboxPage />
           </Panel>
-          {environment === "Sandbox" && sandbox?.faultsActive && <span className="border-warning/60 bg-warning/15 flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium"><TriangleAlert className="size-3.5" /> {t("lab.active")}</span>}
+          <Panel icon={<Globe />} label={t("app.environmentPanel")} hint={t("app.environmentRealHint")}>
+            <RealEnvironment />
+          </Panel>
           <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
             <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 border-none shadow-none" aria-label={t("app.language")}>
               <Globe className="size-4" />

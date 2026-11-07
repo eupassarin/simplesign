@@ -29,6 +29,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         [Description(SigningPolicyOption.Description)]
         public string? SigningPolicy { get; init; }
 
+        /// <summary>Print the result (or the refusal) as one JSON object instead of text.</summary>
+        [CommandOption("--json")]
+        [Description("Print the result, or the refusal with its reason, as JSON")]
+        public bool Json { get; init; }
+
         /// <summary>Input data file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input data file to sign")]
@@ -207,6 +212,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
     public override async Task<int> ExecuteAsync(
         CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        SignJson.Enabled = settings.Json;
         byte[] data = await CommonSettings.ReadInputBytesAsync(settings.InputPath, cancellationToken);
 
         using ExternalCredential? token = await ExternalCredentialSupport.OpenAsync(settings, cancellationToken);
@@ -259,11 +265,22 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         }
 
         builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
-        byte[] cms = await builder.SignAsync(cancellationToken);
+        if (CliNetwork.IsConfigured)
+        {
+            builder = builder.WithHttpClientProvider(CliNetwork.Provider);
+        }
+
+        var result = await builder.SignWithDetailsAsync(cancellationToken);
+        byte[] cms = result.SignedArtifact;
 
         string outputPath = settings.OutputPath
             ?? settings.InputPath + (contentType == CadesContentType.Enveloped ? ".p7m" : ".p7s");
         await File.WriteAllBytesAsync(outputPath, cms, cancellationToken);
+        if (settings.Json)
+        {
+            SignJson.WriteSuccess("cades", outputPath, cert.Subject, result);
+            return 0;
+        }
 
         AnsiConsole.MarkupLine($"[green]CAdES signature saved to:[/] {outputPath}");
 
@@ -312,7 +329,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 
         if (settings.ContentTimestamp)
         {
-            builder = builder.WithContentTimestamp(new TimestampOptions(new Uri(settings.TsaUrl!)));
+            builder = builder.WithContentTimestamp(new TimestampOptions(new Uri(settings.TsaUrl!), CliNetwork.Provider));
         }
 
         return builder;
@@ -349,7 +366,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 
     private static AdesBaselineProfile BuildBaselineProfile(string tsaUrl, AdesBaselineLevel level, string? revocationPreference)
     {
-        var timestampOptions = new TimestampOptions(new Uri(tsaUrl));
+        var timestampOptions = new TimestampOptions(new Uri(tsaUrl), CliNetwork.Provider);
         return level switch
         {
             AdesBaselineLevel.Basic => AdesBaselineProfile.Basic(),

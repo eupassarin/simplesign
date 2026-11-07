@@ -19,7 +19,6 @@ public sealed class MatrixContext
 
     internal Dictionary<string, DocumentFacts> DocumentFacts { get; } = new(StringComparer.Ordinal);
 
-    public string? ImageUploadId { get; internal set; }
 }
 
 /// <summary>A generated case: one value per dimension.</summary>
@@ -46,7 +45,7 @@ public sealed record MatrixRunResult(int Total, int Passed, int Failed, int Skip
 /// </summary>
 internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, CredentialFactory factory) : IDisposable
 {
-    private static readonly string[] Signers = ["rsa-2048", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "company"];
+    private static readonly string[] Signers = ["rsa-2048", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521"];
     private static readonly string[] Documents = ["contract", "empty-field", "signed", "certified-p2", "certified-p3", "pdfa-2b", "pdfa-1b"];
     private readonly SemaphoreSlim _gate = new(1, 1);
     private MatrixContext? _context;
@@ -66,11 +65,6 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
                 V("type", "B-T", (o, _) => o with { Kind = SignatureKind.Baseline, Level = BaselineLevel.BT }),
                 V("type", "B-LT", (o, _) => o with { Kind = SignatureKind.Baseline, Level = BaselineLevel.BLT }),
                 V("type", "B-LTA", (o, _) => o with { Kind = SignatureKind.Baseline, Level = BaselineLevel.BLTA }),
-                V("type", "AD-RB", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRb }),
-                V("type", "AD-RB+TS", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRb, IcpAdRbTimestamp = true }),
-                V("type", "AD-RT", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRt }),
-                V("type", "AD-RC", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRc }),
-                V("type", "AD-RA", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRa }),
                 V("type", "Custom policy B-T", (o, _) => o with
                 {
                     Kind = SignatureKind.CustomPolicy, Level = BaselineLevel.BT,
@@ -100,37 +94,15 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
             },
             new List<MatrixValue>
             {
-                V("appearance", "invisible", (o, _) => o with { Appearance = new AppearanceChoice() }),
-                V("appearance", "visible", (o, _) => o with { Appearance = new AppearanceChoice { Visible = true, ShowReason = true, ShowLocation = true } }),
-                V("appearance", "styled+QR", (o, _) => o with
-                {
-                    Appearance = new AppearanceChoice
-                    {
-                        Visible = true, Page = 1, X = 300, Y = 60, Width = 240, Height = 90, TextAlignment = "Center", VerticalAlignment = "Middle",
-                        BackgroundColor = "#f4f4f5", TextColor = "#18181b", BorderColor = "#2563eb", BorderWidth = 1, BaseFont = "Times-Roman",
-                        DateFormat = "dd/MM/yyyy HH:mm", TimeZoneId = "America/Sao_Paulo", Culture = "pt-BR", SignedByLabel = "Assinado por",
-                        ExtraLines = ["Linha extra"], VerificationUrl = "https://validar.iti.gov.br/",
-                    },
-                }),
-                V("appearance", "auto+image", (o, c) => o with { Appearance = new AppearanceChoice { Visible = true, AutoPosition = true, ImageUploadId = c.ImageUploadId, ImageFit = "Contain" } }),
-            },
-            new List<MatrixValue>
-            {
                 V("details", "none", (o, _) => o with { UseSignerDetails = false }),
                 V("details", "basic", (o, _) => o with { Reason = "Approval", Location = "São Paulo", ContactInfo = "test@example.com", SignerName = "Matrix" }),
                 V("details", "metadata", (o, _) => o with
                 {
-                    UseSignerDetails = true, SignerDetails = SignerDetailsKind.Metadata, Reason = "Approval",
-                    Metadata = new MetadataChoice { SignerName = "Matrix Signer", SignerId = "11144477735", SignerIdType = "CPF", Email = "m@example.com", CommitmentType = "ProofOfOrigin" },
+                    UseSignerDetails = true, Reason = "Approval",
+                    Metadata = new MetadataChoice { SignerName = "Matrix Signer", SignerId = "A-1001", SignerIdType = "Employee", Email = "m@example.com", CommitmentType = "ProofOfOrigin" },
                 }),
-                V("details", "AEA", (o, _) => o with
+                V("details", "info", (o, _) => o with
                 {
-                    UseSignerDetails = true, SignerDetails = SignerDetailsKind.Aea,
-                    Aea = new AeaChoice { SignerName = "Maria da Silva", Cpf = "111.444.777-35", AuthMethod = "GovBr", Email = "maria@example.com", IpAddress = "203.0.113.7" },
-                }),
-                V("details", "health+info", (o, _) => o with
-                {
-                    Health = new HealthChoice { Enabled = true, Type = "Prescricao", Professionals = [new ProfessionalChoice { Council = "Cfm", RegistrationNumber = "123456", StateCode = "SP" }] },
                     DocumentInfo = [new DocumentInfoEntry("Title", "Matrix"), new DocumentInfoEntry("Subject", "Pairwise")],
                     SigningTime = DateTimeOffset.UtcNow.AddMinutes(-5),
                     OperationId = "matrix",
@@ -148,9 +120,9 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
                 V("tsa", "sandbox", (o, _) => o with { Timestamp = new TimestampChoice() }),
                 V("tsa", "basic auth + separate archive", (o, _) => o with
                 {
-                    Timestamp = new TimestampChoice { Provider = TsaProvider.SandboxAuthenticated, Auth = TsaAuth.Basic, User = SandboxPki.TsaUser, Password = SandboxPki.TsaPassword },
+                    Timestamp = new TimestampChoice { Provider = TsaProvider.SandboxAuthenticated },
                     SeparateArchiveTsa = true,
-                    ArchiveTimestamp = new TimestampChoice { Provider = TsaProvider.Custom, Url = SandboxPki.ArchiveTsaUri.AbsoluteUri },
+                    ArchiveTimestamp = new TimestampChoice { Provider = TsaProvider.Sandbox },
                 }),
                 V("tsa", "lower level on failure", (o, _) => o with { ReturnLowerLevel = true, ContentsReservedBytes = 32768 }),
             },
@@ -199,7 +171,7 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
 
     internal static SigningOptions Build(MatrixCase matrixCase, MatrixContext context)
     {
-        var options = new SigningOptions { Environment = EnvironmentMode.Sandbox, Validate = true };
+        var options = new SigningOptions { Validate = true };
         foreach (var dimension in Dimensions())
         {
             var value = dimension.First(v => v.Value == matrixCase.Values[v.Dimension]);
@@ -255,7 +227,7 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
         }
 
         checks.Add("integrity + signature value");
-        if (effective.Kind != SignatureKind.IcpBrasil && mine.Indication != "Valid")
+        if (mine.Indication != "Valid")
         {
             return $"Indication {mine.Indication}: " + string.Join("; ", mine.Errors.Concat(mine.Warnings));
         }
@@ -264,7 +236,6 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
         string expectedSubFilter = effective.SubFilter switch
         {
             SubFilterChoice.AdbePkcs7Detached => "adbe.pkcs7.detached",
-            SubFilterChoice.PbadPades => "PBAD.PAdES",
             _ => "ETSI.CAdES.detached",
         };
         if (mine.SubFilter != expectedSubFilter)
@@ -335,8 +306,6 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
             context.DocumentFacts[key] = documents.FactsAsync(key).GetAwaiter().GetResult();
         }
 
-        // Pinned: the matrix stores more signed outputs than the upload limit, which would evict an ordinary upload.
-        context.ImageUploadId = documents.AddPinned("stamp.png", StampPng()).Id;
         _cases = Generate(context, out _uncoverable);
         _context = context;
         return context;
@@ -371,8 +340,4 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
         SHA3_256.IsSupported
             ? [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512, HashChoice.Sha3_256]
             : [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512];
-
-    /// <summary>A small opaque 2×2 PNG (the stamp background of the image cases).</summary>
-    private static byte[] StampPng() => Convert.FromBase64String(
-        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDK+mmyAAAAABJRU5ErkJggg==");
 }

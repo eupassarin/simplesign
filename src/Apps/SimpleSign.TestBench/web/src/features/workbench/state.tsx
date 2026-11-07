@@ -3,11 +3,11 @@ import { toast } from "sonner"
 import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
 import { pairwise, product } from "./combinations"
-import type { CredentialFacts, EnvironmentInfo, EnvironmentMode, OptionState } from "@/lib/types"
+import type { CredentialFacts, EnvironmentInfo, OptionState } from "@/lib/types"
 import {
   asText, getPath, hasPath, setPath,
   type DssSettings, type DssStatus, type Evaluation, type Format, type Options, type RunEvent, type RunKind, type RunLogEntry, type RunSummary,
-  type RunView, type SandboxState, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
+  type RunView, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
 } from "./schema"
 
 const shown: OptionState = { visible: true }
@@ -41,13 +41,11 @@ interface WorkbenchValue {
   /** Shows a file in the Validate task and validates it. */
   openInValidate: (target: ValidateTarget) => void
   schema: WorkbenchSchema
+  /** The connected Sandbox (env.sandbox) and the runtime. */
   env: EnvironmentInfo | null
-  environment: EnvironmentMode
+  setEnv: (env: EnvironmentInfo) => void
   format: Format
   setFormat: (format: Format) => void
-  /** The trust frameworks switched on (none by default). */
-  frameworks: ReadonlySet<string>
-  toggleFramework: (id: string) => void
   /** The options of the current format. */
   options: Options
   set: (path: string, value: unknown) => void
@@ -58,7 +56,7 @@ interface WorkbenchValue {
   evaluating: boolean
   state: (key: string) => OptionState
   credential: CredentialFacts | null
-  /** Whether the option is shown for the current format, frameworks, conditions and rules. */
+  /** Whether the option is shown for the current format, conditions and rules. */
   isVisible: (option: SchemaOption) => boolean
   /** The values of a choice that can be offered now. */
   visibleValues: (option: SchemaOption) => SchemaValue[]
@@ -76,9 +74,6 @@ interface WorkbenchValue {
   variantValues: (option: SchemaOption) => SchemaValue[]
   runVariants: (options: SchemaOption[], strategy: Strategy) => Promise<void>
   stopVariants: () => void
-  /** The sandbox PKI and the failures switched on in it (null until loaded, or in Real). */
-  sandbox: SandboxState | null
-  setSandbox: (state: SandboxState) => void
   /** Opens a sandbox signer and makes it the signer of the three formats. */
   signWithSandbox: (id: string) => Promise<void>
   // DSS
@@ -119,45 +114,26 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
-/** The defaults of a format for an environment: the server's defaults, with the environment and its trusted roots. */
-function initial(schema: WorkbenchSchema, format: Format, environment: EnvironmentMode, frameworks: ReadonlySet<string>): Options {
+/** The defaults of a format: the server's, with a public TSA when no Sandbox is connected. */
+function initial(schema: WorkbenchSchema, format: Format, sandboxConnected: boolean): Options {
   let options: Options = structuredClone(schema.defaults[format])
-  options = setPath(options, "environment", environment)
-  options = setPath(options, "validation.environment", environment)
-  options = setPath(options, "validation.trust", environment === "Sandbox" ? ["Sandbox"] : frameworks.has("brazil") ? ["System", "IcpBrasil"] : ["System"])
-  options = setPath(options, "validation.useBrasil", frameworks.has("brazil"))
+  if (!sandboxConnected) {
+    for (const path of ["timestamp.provider", "archiveTimestamp.provider"]) {
+      if (hasPath(options, path)) options = setPath(options, path, "DigiCert")
+    }
+  }
   return options
 }
 
-/** Puts back the default of every option (or value) that belongs to a framework that is switched off. */
-function withoutFrameworks(schema: WorkbenchSchema, format: Format, options: Options, frameworks: ReadonlySet<string>): Options {
-  const off = (framework?: string | null) => !!framework && !frameworks.has(framework)
-  let next = options
-  for (const option of schema.options) {
-    if (!option.path || !option.formats.includes(format) || !hasPath(next, option.path)) continue
-    const fallback = getPath(schema.defaults[format], option.path)
-    const current = getPath(next, option.path)
-    if (off(option.framework)) {
-      next = setPath(next, option.path, fallback)
-    } else if (Array.isArray(current)) {
-      const banned = option.values.filter((v) => off(v.framework)).map((v) => v.value)
-      if (current.some((v) => banned.includes(asText(v)))) next = setPath(next, option.path, current.filter((v) => !banned.includes(asText(v))))
-    } else if (option.values.some((v) => off(v.framework) && v.value === asText(current))) {
-      next = setPath(next, option.path, fallback)
-    }
-  }
-  return next
-}
-
-export function WorkbenchProvider({ schema, environment, children }: { schema: WorkbenchSchema; environment: EnvironmentMode; children: ReactNode }) {
+export function WorkbenchProvider({ schema, initialEnv, children }: { schema: WorkbenchSchema; initialEnv: EnvironmentInfo | null; children: ReactNode }) {
   const { t } = useI18n()
-  const [env, setEnv] = useState<EnvironmentInfo | null>(null)
+  const [env, setEnv] = useState<EnvironmentInfo | null>(initialEnv)
+  const connected = !!initialEnv?.sandbox
   const [format, setFormatState] = useState<Format>(() => load<Format>("wb.format", "pades"))
-  const [frameworks, setFrameworks] = useState<ReadonlySet<string>>(() => new Set(load<string[]>("wb.frameworks", [])))
   const [byFormat, setByFormat] = useState<Record<Format, Options>>(() => ({
-    pades: initial(schema, "pades", environment, frameworks),
-    cades: initial(schema, "cades", environment, frameworks),
-    xades: initial(schema, "xades", environment, frameworks),
+    pades: initial(schema, "pades", connected),
+    cades: initial(schema, "cades", connected),
+    xades: initial(schema, "xades", connected),
   }))
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [evaluating, setEvaluating] = useState(false)
@@ -166,7 +142,7 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const patchSlot = useCallback((kind: RunKind, change: (slot: Slot) => Slot) => setSlots((all) => ({ ...all, [kind]: change(all[kind]) })), [])
   const { run, logs, running } = slots[mode]
   const [validateTarget, setValidateTarget] = useState<ValidateTarget | null>(null)
-  const [validateOptions, setValidateOptions] = useState<Options>(() => ({ validate: true, validation: initial(schema, "pades", environment, frameworks).validation }))
+  const [validateOptions, setValidateOptions] = useState<Options>(() => ({ validate: true, validation: initial(schema, "pades", connected).validation }))
   const setMode = useCallback((next: RunKind) => {
     localStorage.setItem("wb.mode", JSON.stringify(next))
     setModeState(next)
@@ -177,19 +153,17 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const [dssStatus, setDssStatus] = useState<DssStatus | null>(null)
   const options = byFormat[format]
 
-  const [sandbox, setSandbox] = useState<SandboxState | null>(null)
   useEffect(() => {
-    api.sandbox.state().then(setSandbox).catch(() => setSandbox(null))
-    api.env().then(setEnv).catch(() => setEnv(null))
     api.workbench.history().then(setHistory).catch(() => setHistory([]))
     api.dss.settings().then(setDss).catch(() => {})
   }, [])
 
-  // In the sandbox a signer is opened right away, so signing is one click from the start.
+  // With a Sandbox connected a signer is opened right away, so signing is one click from the start.
   useEffect(() => {
-    if (environment !== "Sandbox" || !env) return
+    const signers = env?.sandbox?.signers
+    if (!signers) return
     if (asText(byFormat.pades.credentialId) || asText(byFormat.cades.credentialId) || asText(byFormat.xades.credentialId)) return
-    const signer = env.signers.find((s) => s.id === "rsa-2048" && s.isUsable) ?? env.signers.find((s) => s.isUsable)
+    const signer = signers.find((s) => s.id === "rsa-2048" && s.isUsable) ?? signers.find((s) => s.isUsable)
     if (!signer) return
     api.credentials.sandbox(signer.id).then((facts) => setByFormat((all) => ({
       pades: asText(all.pades.credentialId) ? all.pades : setPath(all.pades, "credentialId", facts.id),
@@ -197,21 +171,7 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
       xades: asText(all.xades.credentialId) ? all.xades : setPath(all.xades, "credentialId", facts.id),
     }))).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [env, environment, byFormat.pades.credentialId, byFormat.cades.credentialId, byFormat.xades.credentialId])
-
-  // A new environment starts from that environment's defaults: credentials and TSAs differ.
-  const firstEnvironment = useRef(environment)
-  useEffect(() => {
-    if (firstEnvironment.current === environment) return
-    firstEnvironment.current = environment
-    setByFormat({
-      pades: initial(schema, "pades", environment, frameworks),
-      cades: initial(schema, "cades", environment, frameworks),
-      xades: initial(schema, "xades", environment, frameworks),
-    })
-    setValidateOptions({ validate: true, validation: initial(schema, "pades", environment, frameworks).validation })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [environment])
+  }, [env, byFormat.pades.credentialId, byFormat.cades.credentialId, byFormat.xades.credentialId])
 
   const update = useCallback((change: (current: Options) => Options) => {
     setByFormat((all) => ({ ...all, [format]: change(all[format]) }))
@@ -222,44 +182,13 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
     update((o) => Object.entries(values).reduce((acc, [path, value]) => setPath(acc, path, value), o)), [update])
   const applyPreset = useCallback((preset: SchemaPreset) =>
     update((o) => Object.entries(preset.set).reduce((acc, [path, value]) => (hasPath(acc, path) ? setPath(acc, path, value) : acc), o)), [update])
-  const reset = useCallback(() => update(() => initial(schema, format, environment, frameworks)), [update, schema, format, environment, frameworks])
+  const reset = useCallback(() => update(() => initial(schema, format, !!env?.sandbox)), [update, schema, format, env])
 
   const setFormat = useCallback((next: Format) => {
     localStorage.setItem("wb.format", JSON.stringify(next))
     setFormatState(next)
     setEvaluation(null)
   }, [])
-
-  const toggleFramework = useCallback((id: string) => {
-    setFrameworks((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      localStorage.setItem("wb.frameworks", JSON.stringify([...next]))
-      setByFormat((all) => {
-        const adjust = (f: Format) => {
-          let o = withoutFrameworks(schema, f, all[f], next)
-          if (id === "brazil") {
-            o = setPath(o, "validation.useBrasil", next.has("brazil"))
-            if (asText(getPath(o, "environment")) === "Real") o = setPath(o, "validation.trust", next.has("brazil") ? ["System", "IcpBrasil"] : ["System"])
-          }
-          return o
-        }
-        return { pades: adjust("pades"), cades: adjust("cades"), xades: adjust("xades") }
-      })
-      if (id === "brazil") {
-        setValidateOptions((o) => {
-          let v = setPath(o, "validation.useBrasil", next.has("brazil"))
-          const trust = (getPath(v, "validation.trust") as string[] | undefined) ?? []
-          v = setPath(v, "validation.trust", next.has("brazil")
-            ? (asText(getPath(v, "validation.environment")) === "Real" && !trust.includes("IcpBrasil") ? [...trust, "IcpBrasil"] : trust)
-            : trust.filter((x) => x !== "IcpBrasil"))
-          return v
-        })
-      }
-      return next
-    })
-  }, [schema])
 
   // Apply the rules whenever the options change (debounced: typing should not flood the server).
   const sequence = useRef(0)
@@ -278,18 +207,16 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const state = useCallback((key: string): OptionState => evaluation?.states[key] ?? shown, [evaluation])
 
   const visibleValues = useCallback((option: SchemaOption) => option.values.filter((v) => {
-    if (v.framework && !frameworks.has(v.framework)) return false
     return !option.valueStateKey || state(`${option.valueStateKey}.${v.value}`).visible
-  }), [frameworks, state])
+  }), [state])
 
   const isVisible = useCallback((option: SchemaOption) => {
     if (!option.formats.includes(format)) return false
-    if (option.framework && !frameworks.has(option.framework)) return false
     if (option.support === "notInLibrary") return true
     if (!option.when.every((w) => w.in.includes(asText(getPath(options, w.path))))) return false
     if (option.stateKey && !state(option.stateKey).visible) return false
     return option.kind !== "choice" || visibleValues(option).length > 0
-  }, [format, frameworks, options, state, visibleValues])
+  }, [format, options, state, visibleValues])
 
   // ── Runs ──────────────────────────────────────────────────────────
 
@@ -354,8 +281,8 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
 
   const reuse = useCallback((source: RunView) => {
     setFormat(source.format)
-    setByFormat((all) => ({ ...all, [source.format]: withoutFrameworks(schema, source.format, structuredClone(source.options), frameworks) }))
-  }, [schema, frameworks, setFormat])
+    setByFormat((all) => ({ ...all, [source.format]: structuredClone(source.options) }))
+  }, [setFormat])
 
   // ── Variants ──────────────────────────────────────────────────────
 
@@ -436,11 +363,11 @@ export function WorkbenchProvider({ schema, environment, children }: { schema: W
   const checkDss = useCallback(async () => setDssStatus(await api.dss.status()), [])
 
   const value = useMemo<WorkbenchValue>(() => ({
-    sandbox, setSandbox, signWithSandbox, mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, openInValidate,
-    schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
+    signWithSandbox, mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, openInValidate,
+    schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, credential: evaluation?.credential ?? null, isVisible, visibleValues,
     run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, variantValues, runVariants, stopVariants, dss, dssStatus, saveDss, checkDss,
-  }), [variantValues, sandbox, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, environment, format, setFormat, frameworks, toggleFramework, options, set, patch, applyPreset, reset,
+  }), [variantValues, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, dss, dssStatus, saveDss, checkDss])
 
   return <Context.Provider value={value}>{children}</Context.Provider>

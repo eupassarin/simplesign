@@ -7,7 +7,8 @@ import { api } from "@/lib/api"
 import type { EnvironmentInfo, OptionState, TimestampChoice, TsaProvider } from "@/lib/types"
 import { ChoiceCard, Field } from "./ui"
 
-const providers: TsaProvider[] = ["Sandbox", "SandboxAuthenticated", "DigiCert", "Sectigo", "FreeTsa", "Custom"]
+const sandboxProviders: TsaProvider[] = ["Sandbox", "SandboxAuthenticated", "SandboxUntrusted", "SandboxRevoked", "SandboxWrongName"]
+const publicProviders: TsaProvider[] = ["DigiCert", "Sectigo", "FreeTsa", "Custom"]
 
 export function TsaPicker({ value, onChange, state, env }: {
   value: TimestampChoice
@@ -21,14 +22,14 @@ export function TsaPicker({ value, onChange, state, env }: {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
-        {providers.map((p) => (
+        {[...(env?.sandbox ? sandboxProviders : []), ...publicProviders].map((p) => (
           <ChoiceCard key={p} selected={value.provider === p} title={t(`type.tsa.${p}` as MessageKey)} infoId={`tsa.${p}`} icon={<Clock className="size-4" />} state={state(`tsa.${p}`)}
-            onSelect={() => set(p === "SandboxAuthenticated" ? { provider: p, auth: "Basic", user: env?.tsaUser, password: env?.tsaPassword } : { provider: p })} />
+            onSelect={() => set({ provider: p, auth: p === "SandboxAuthenticated" ? "None" : value.auth })} />
         ))}
       </div>
       {value.provider === "Custom" && (
         <Field label={t("type.tsaUrl")} description={t("type.tsaUrlHint")}>
-          <Input value={value.url ?? ""} onChange={(e) => set({ url: e.target.value })} placeholder="https://act.example.com.br/tsa" className="font-mono" />
+          <Input value={value.url ?? ""} onChange={(e) => set({ url: e.target.value })} placeholder="https://tsa.example.com/tsr" className="font-mono" />
         </Field>
       )}
       <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-3">

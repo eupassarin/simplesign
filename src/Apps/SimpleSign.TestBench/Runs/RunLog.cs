@@ -112,7 +112,7 @@ internal sealed class RunLogger(Action<RunLogEntry> onEntry) : ILogger
         Add(logLevel.ToString(), eventId.Id, "library", stage, message);
     }
 
-    /// <summary>Adds a network request (TSA, CRL, OCSP, AIA, PSC, CSC) to the timeline.</summary>
+    /// <summary>Adds a network request (TSA, CRL, OCSP, AIA, CSC) to the timeline.</summary>
     public void Network(string method, string url, int status, string service) =>
         Add(status >= 400 ? "Warning" : "Information", 0, "network", RunStages.Network, $"{service}: {method} {url} → {status}");
 

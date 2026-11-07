@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useT } from "@/i18n"
 import { cn } from "@/lib/utils"
-import { FrameworkTag } from "../workbench/parts"
 import type { Format, SchemaOption, StandardRef } from "../workbench/schema"
 import { useWorkbench } from "../workbench/state"
 
@@ -12,7 +11,6 @@ interface Row {
   key: string
   section: string
   title: string
-  framework?: string | null
   standards: StandardRef[]
   api?: string | null
   supported: boolean
@@ -20,9 +18,9 @@ interface Row {
 
 /** One row per option, and one per value of the choices that name their own clause. */
 function rows(option: SchemaOption, section: string): Row[] {
-  const own: Row = { key: option.id, section, title: option.title, framework: option.framework, standards: option.standards, api: option.api, supported: option.support === "supported" }
+  const own: Row = { key: option.id, section, title: option.title, standards: option.standards, api: option.api, supported: option.support === "supported" }
   const values = option.values.filter((v) => v.standards.length > 0 || v.api)
-    .map((v) => ({ key: `${option.id}=${v.value}`, section, title: `${option.title}: ${v.title}`, framework: v.framework ?? option.framework, standards: v.standards, api: v.api, supported: v.support === "supported" }))
+    .map((v) => ({ key: `${option.id}=${v.value}`, section, title: `${option.title}: ${v.title}`, standards: v.standards, api: v.api, supported: v.support === "supported" }))
   return [own, ...values]
 }
 
@@ -31,16 +29,15 @@ function rows(option: SchemaOption, section: string): Row[] {
  * from: every option with its clause and library call, and the ones the library does not have.
  */
 export function CoveragePage() {
-  const { schema, frameworks } = useWorkbench()
+  const { schema } = useWorkbench()
   const t = useT()
   const [format, setFormat] = useState<Format>("pades")
   const [only, setOnly] = useState<"all" | "missing">("all")
   const [view, setView] = useState<"format" | "standard">("format")
   const all = useMemo(() => schema.options
-    .filter((o) => o.formats.includes(format) && (!o.framework || frameworks.has(o.framework)))
-    .flatMap((o) => rows(o, schema.sections.find((s) => s.id === o.section)?.title ?? o.section))
-    .filter((r) => !r.framework || frameworks.has(r.framework)),
-  [schema, format, frameworks])
+    .filter((o) => o.formats.includes(format))
+    .flatMap((o) => rows(o, schema.sections.find((s) => s.id === o.section)?.title ?? o.section)),
+  [schema, format])
   const shown = only === "missing" ? all.filter((r) => !r.supported) : all
   const supported = all.filter((r) => r.supported).length
   const current = schema.formats.find((f) => f.id === format)!
@@ -98,7 +95,7 @@ export function CoveragePage() {
                   <TableCell>{r.supported ? <Check className="text-success size-4" /> : <Minus className="text-muted-foreground size-4" />}</TableCell>
                   <TableCell className="whitespace-normal">
                     {(i === 0 || shown[i - 1].section !== r.section) && <span className="text-muted-foreground block text-[10px] font-semibold tracking-wide uppercase">{r.section}</span>}
-                    <span className={cn("flex items-center gap-1.5 text-sm", !r.supported && "text-muted-foreground")}>{r.title}<FrameworkTag framework={r.framework} /></span>
+                    <span className={cn("flex items-center gap-1.5 text-sm", !r.supported && "text-muted-foreground")}>{r.title}</span>
                   </TableCell>
                   <TableCell className="text-xs whitespace-normal">
                     {r.standards.map((s) => <span key={s.document + s.clause} className="block"><span className="font-medium">{s.document}</span>{s.clause && <span className="text-muted-foreground"> · {s.clause}</span>}</span>)}
@@ -117,18 +114,17 @@ export function CoveragePage() {
 
 /** The reverse index: each standard, its clauses, and the options (of any format) that implement each one. */
 function ByStandard({ onlyMissing }: { onlyMissing: boolean }) {
-  const { schema, frameworks } = useWorkbench()
+  const { schema } = useWorkbench()
   const documents = useMemo(() => {
-    const entries = new Map<string, Map<string, { clause: string; title: string; framework?: string | null; supported: boolean; formats: Set<Format> }>>()
+    const entries = new Map<string, Map<string, { clause: string; title: string; supported: boolean; formats: Set<Format> }>>()
     for (const option of schema.options) {
       for (const format of option.formats) {
         for (const row of rows(option, "")) {
-          if (row.framework && !frameworks.has(row.framework)) continue
           for (const standard of row.standards) {
             const clauses = entries.get(standard.document) ?? new Map()
             entries.set(standard.document, clauses)
             const key = `${standard.clause}\u0000${row.title}`
-            const entry = clauses.get(key) ?? { clause: standard.clause, title: row.title, framework: row.framework, supported: row.supported, formats: new Set<Format>() }
+            const entry = clauses.get(key) ?? { clause: standard.clause, title: row.title, supported: row.supported, formats: new Set<Format>() }
             entry.formats.add(format)
             clauses.set(key, entry)
           }
@@ -137,7 +133,7 @@ function ByStandard({ onlyMissing }: { onlyMissing: boolean }) {
     }
     return [...entries.entries()].sort(([a], [b]) => a.localeCompare(b))
       .map(([document, clauses]) => ({ document, clauses: [...clauses.values()].sort((a, b) => a.clause.localeCompare(b.clause, undefined, { numeric: true }) || a.title.localeCompare(b.title)) }))
-  }, [schema, frameworks])
+  }, [schema])
   const t = useT()
   return (
     <div className="space-y-4">
@@ -154,7 +150,7 @@ function ByStandard({ onlyMissing }: { onlyMissing: boolean }) {
                 <li key={c.clause + c.title} className={cn("flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-sm", !c.supported && "bg-muted/40 text-muted-foreground")}>
                   {c.supported ? <Check className="text-success size-4 shrink-0" /> : <Minus className="size-4 shrink-0" />}
                   <span className="w-72 shrink-0 text-xs">{c.clause || "—"}</span>
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5">{c.title}<FrameworkTag framework={c.framework} /></span>
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5">{c.title}</span>
                   <span className="text-muted-foreground shrink-0 text-xs">{schema.formats.filter((f) => c.formats.has(f.id)).map((f) => f.title).join(" · ")}</span>
                 </li>
               ))}

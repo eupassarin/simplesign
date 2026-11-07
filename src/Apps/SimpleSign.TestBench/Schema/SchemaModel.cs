@@ -6,7 +6,6 @@ public sealed record StandardRef(string Document, string Clause);
 /// <summary>One value of a choice.</summary>
 /// <remarks>
 /// <para><c>Value</c>: The value written to the options (an enum name).</para>
-/// <para><c>Framework</c>: Null for a generic ETSI value; a trust framework id ("brazil") for a national one.</para>
 /// <para><c>Support</c>: "supported", or "notInLibrary" for a value the standard defines and SimpleSign does not implement.</para>
 /// </remarks>
 public sealed record SchemaValue(
@@ -16,7 +15,6 @@ public sealed record SchemaValue(
     string? Details,
     IReadOnlyList<StandardRef> Standards,
     string? Api,
-    string? Framework,
     string Support);
 
 /// <summary>The option is shown only while the option at <paramref name="Path"/> has one of the values in <paramref name="In"/>.</summary>
@@ -30,11 +28,10 @@ public sealed record SchemaCondition(string Path, IReadOnlyList<string> In);
 /// <para><c>Id</c>: Unique id.</para>
 /// <para><c>Section</c>: The section it is shown in (a <see cref="SchemaSection"/> id).</para>
 /// <para><c>Formats</c>: The formats it applies to: pades, cades, xades.</para>
-/// <para><c>Kind</c>: The editor: choice, toggle, text, number, datetime, lines, color, upload, tsa, document, data, existingSignature, credential, icpVersion, keyValues, professionals, trust.</para>
+/// <para><c>Kind</c>: The editor: choice, toggle, text, number, datetime, lines, color, upload, tsa, document, data, existingSignature, credential, keyValues, trust.</para>
 /// <para><c>Path</c>: The JSON path in the format's options (null for options the library does not implement).</para>
 /// <para><c>StateKey</c>: The rules' key for the whole option (see Compatibility); null when no rule governs it.</para>
 /// <para><c>ValueStateKey</c>: The rules' key prefix of each value: the state of value V is at "prefix.V".</para>
-/// <para><c>Framework</c>: Null for generic ETSI options; a trust framework id for national ones.</para>
 /// <para><c>Support</c>: "supported" or "notInLibrary".</para>
 /// <para><c>When</c>: Conditions on other options; all must hold for the option to be shown.</para>
 /// </remarks>
@@ -52,7 +49,6 @@ public sealed record SchemaOption(
     IReadOnlyList<SchemaValue> Values,
     IReadOnlyList<StandardRef> Standards,
     string? Api,
-    string? Framework,
     string Support,
     IReadOnlyList<SchemaCondition> When);
 
@@ -62,22 +58,15 @@ public sealed record SchemaSection(string Id, string Title, string Summary);
 /// <summary>A signature format.</summary>
 public sealed record SchemaFormat(string Id, string Title, string Summary, IReadOnlyList<StandardRef> Standards, string SignerApi, string ValidatorApi);
 
-/// <summary>A national or regional trust framework whose options can be switched on.</summary>
-/// <remarks>
-/// <para><c>Status</c>: "available" or "planned".</para>
-/// </remarks>
-public sealed record SchemaFramework(string Id, string Title, string Summary, string Status, IReadOnlyList<StandardRef> Standards);
-
 /// <summary>A stage of the signing process, as the log groups its events.</summary>
 public sealed record SchemaStage(string Id, string Title, string Summary, IReadOnlyDictionary<string, IReadOnlyList<StandardRef>> Standards);
 
 /// <summary>A one-click combination: the values it sets, by option path, for each format it applies to.</summary>
 public sealed record SchemaPreset(string Id, string Title, string Summary, IReadOnlyList<string> Formats, IReadOnlyDictionary<string, string> Set);
 
-/// <summary>Everything the workbench needs to draw itself: formats, frameworks, sections, options, stages, presets and the default options of each format.</summary>
+/// <summary>Everything the workbench needs to draw itself: formats, sections, options, stages, presets and the default options of each format.</summary>
 public sealed record WorkbenchSchema(
     IReadOnlyList<SchemaFormat> Formats,
-    IReadOnlyList<SchemaFramework> Frameworks,
     IReadOnlyList<SchemaSection> Sections,
     IReadOnlyList<SchemaOption> Options,
     IReadOnlyList<SchemaStage> Stages,

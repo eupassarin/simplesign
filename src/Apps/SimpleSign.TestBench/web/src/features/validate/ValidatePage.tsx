@@ -26,7 +26,7 @@ interface ConformanceRow {
  * what is inside the file, the log and the code.
  */
 export function ValidatePage() {
-  const { schema, frameworks, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, running, run, dss, openRun } = useWorkbench()
+  const { schema, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, running, run, dss, openRun } = useWorkbench()
   const t = useT()
   const [samples, setSamples] = useState<ValidationSampleView[]>([])
   const [rows, setRows] = useState<ConformanceRow[] | null>(null)
@@ -73,7 +73,7 @@ export function ValidatePage() {
     }
   }
 
-  const trust = schema.options.filter((o) => o.id.startsWith("common.validation.") && (!o.framework || frameworks.has(o.framework)))
+  const trust = schema.options.filter((o) => o.id.startsWith("common.validation."))
   const groups = schema.formats.map((f) => ({ format: f, samples: samples.filter((s) => s.format === f.id) })).filter((g) => g.samples.length > 0)
   return (
     <div className="flex h-full min-h-0 flex-col">

@@ -279,6 +279,58 @@ public sealed class CliCommandTests : IDisposable
         output.ShouldContain("validation policy");
     }
 
+    [Fact]
+    public async Task Sign_Json_PrintsTheResult()
+    {
+        string input = WriteMinimalPdf("json-input.pdf");
+        string output = Path.Combine(_tempDir, "json.pdf");
+
+        var (exit, text) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", output, "--json");
+
+        exit.ShouldBe(0, text);
+        using var json = JsonDocument.Parse(text);
+        json.RootElement.GetProperty("success").GetBoolean().ShouldBeTrue();
+        json.RootElement.GetProperty("format").GetString().ShouldBe("pades");
+        json.RootElement.GetProperty("output").GetString().ShouldBe(output);
+        json.RootElement.GetProperty("achievedLevel").GetString().ShouldBe("B-B");
+        json.RootElement.GetProperty("error").ValueKind.ShouldBe(JsonValueKind.Null);
+        File.Exists(output).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Sign_JsonRefused_PrintsTheReason()
+    {
+        string pfx = WriteWeakPfx();
+        string input = WriteMinimalPdf("json-weak-input.pdf");
+
+        var (exit, text) = await RunAsync("sign", input, "--cert", pfx, "--password", Password, "--output", Path.Combine(_tempDir, "json-weak.pdf"), "--json");
+
+        exit.ShouldNotBe(0);
+        using var json = JsonDocument.Parse(text);
+        json.RootElement.GetProperty("success").GetBoolean().ShouldBeFalse();
+        var error = json.RootElement.GetProperty("error");
+        error.GetProperty("type").GetString().ShouldBe("SigningException");
+        error.GetProperty("reason").GetString().ShouldBe("KeyTooWeak");
+    }
+
+    [Theory]
+    [InlineData("cades", "data.txt", "contrato")]
+    [InlineData("xades", "data.xml", "<?xml version=\"1.0\"?><doc>json</doc>")]
+    public async Task AdesSign_Json_PrintsTheResult(string format, string fileName, string content)
+    {
+        string data = Path.Combine(_tempDir, format + "-" + fileName);
+        await File.WriteAllTextAsync(data, content);
+        string output = Path.Combine(_tempDir, format + "-json.out");
+
+        var (exit, text) = await RunAsync(format, "sign", data, "--cert", _pfxPath, "--password", Password, "-o", output, "--json");
+
+        exit.ShouldBe(0, text);
+        using var json = JsonDocument.Parse(text);
+        json.RootElement.GetProperty("success").GetBoolean().ShouldBeTrue();
+        json.RootElement.GetProperty("format").GetString().ShouldBe(format);
+        json.RootElement.GetProperty("output").GetString().ShouldBe(output);
+    }
+
     private string WriteWeakPfx()
     {
         using var certificate = SimpleSign.TestHelpers.ConstraintTestCertificates.SelfSigned(

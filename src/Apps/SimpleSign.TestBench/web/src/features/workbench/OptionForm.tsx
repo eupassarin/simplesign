@@ -1,12 +1,8 @@
 import { useState } from "react"
-import { ChevronRight, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ChevronRight } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useT } from "@/i18n"
-import { api } from "@/lib/api"
-import type { AppearanceChoice, SigningOptions } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { PdfPreview } from "../shared/PdfPreview"
 import { OptionField } from "./fields"
 import type { SchemaSection } from "./schema"
 import { useWorkbench } from "./state"
@@ -60,7 +56,6 @@ function SectionBlock({ section, open, onOpenChange }: { section: SchemaSection;
       <CollapsibleContent>
         <div className="divide-y border-t px-3">
           {supported.map((o) => <OptionField key={o.id} option={o} />)}
-          {section.id === "appearance" && <StampPreview />}
           {missing.length > 0 && (
             <div className="py-2">
               <button type="button" className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs" onClick={() => setShowMissing(!showMissing)}>
@@ -73,38 +68,5 @@ function SectionBlock({ section, open, onOpenChange }: { section: SchemaSection;
         </div>
       </CollapsibleContent>
     </Collapsible>
-  )
-}
-
-/** Shows where the stamp goes: click the page to place it, or render it exactly as it will be signed. */
-function StampPreview() {
-  const { format, options, patch } = useWorkbench()
-  const t = useT()
-  const appearance = options.appearance as AppearanceChoice | undefined
-  const [fileId, setFileId] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(appearance?.page ?? 1)
-  if (format !== "pades" || !appearance?.visible || !options.documentId) return null
-  const existing = options.fieldMode === "Existing"
-  const render = () => {
-    setBusy(true)
-    // The preview signs a throwaway copy (B-B, sandbox key) with exactly these appearance options.
-    api.preview(options as unknown as SigningOptions)
-      .then((r) => { setFileId(r.fileId); setError(null) })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setBusy(false))
-  }
-  return (
-    <div className="space-y-2 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-muted-foreground text-xs">{t(existing ? "field.preview.existing" : appearance.autoPosition ? "field.preview.auto" : "field.preview.click")}</p>
-        <Button variant="outline" size="sm" onClick={render} disabled={busy}><RefreshCw className={busy ? "animate-spin" : ""} /> {t("field.preview.rerender")}</Button>
-      </div>
-      <PdfPreview url={api.fileUrl(fileId ?? String(options.documentId))} page={page} onPageChange={setPage} rendering={busy}
-        box={!existing && !appearance.autoPosition && page === appearance.page && !fileId ? { x: appearance.x, y: appearance.y, width: appearance.width ?? 200, height: appearance.height ?? 60 } : null}
-        onPlace={existing || appearance.autoPosition ? undefined : (x, y) => { setFileId(null); patch({ "appearance.x": Math.round(x), "appearance.y": Math.round(y), "appearance.page": page }) }} />
-      {error && <p className="text-destructive text-xs">{t("field.preview.error", { error })}</p>}
-    </div>
   )
 }
