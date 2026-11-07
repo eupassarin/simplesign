@@ -293,12 +293,12 @@ public sealed class LtvEmbedder : ILtvEmbedder
                 async Task<bool> TryCrlAsync()
                 {
                     bool found = false;
-                    var crlUrl = CrlClient.GetCrlUrl(cert, _logger);
+                    var crlUrl = CrlClient.GetCrlUrl(cert, _outboundPolicy, _logger);
                     if (crlUrl is not null)
                     {
                         try
                         {
-                            var crl = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false);
+                            var crl = await CrlClient.DownloadCrlAsync(_httpClient, crlUrl, _outboundPolicy, _logger, ct).ConfigureAwait(false);
                             if (crl is not null && IsCrlIssuedFor(crl, cert))
                             {
                                 crlBag.Add(crl);
@@ -333,7 +333,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
                                 _logger.CrlDownloadFailed("Downloaded CRL does not belong to the certificate issuer.");
                             }
                         }
-                        catch (HttpRequestException ex)
+                        catch (Exception ex) when (ex is HttpRequestException or IOException)
                         {
                             _logger.CrlDownloadFailed(ex.Message);
                         }

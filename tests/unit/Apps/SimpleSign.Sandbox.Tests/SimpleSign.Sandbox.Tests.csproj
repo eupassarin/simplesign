@@ -28,6 +28,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Apps\SimpleSign.Sandbox\SimpleSign.Sandbox.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
+    <ProjectReference Include="..\..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>
 
 </Project>

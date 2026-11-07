@@ -1,8 +1,11 @@
 using System.Formats.Asn1;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Constants;
+using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
@@ -613,5 +616,91 @@ public sealed class CrlClientTests
         // and the SHA-384 signature does not match.
         CrlClient.VerifyCrlSignature(ca, tbsData, signature, sigAlgOid, sigAlgParams)
             .ShouldBeFalse("PSS verification must honour the hash declared in the params");
+    }
+
+    // ── LDAP distribution points (LTV collection) ────────────────────────────
+
+    [Fact]
+    public void GetCrlUrl_LdapOnlyCertificate_LdapNotAllowed_ReturnsNull()
+    {
+        using var cert = CertificateWithDistributionPoints("ldap://ldap.ca.example/cn=CA,c=PE");
+
+        CrlClient.GetCrlUrl(cert, OutboundHttpPolicy.Default).ShouldBeNull();
+    }
+
+    [Fact]
+    public void GetCrlUrl_LdapOnlyCertificate_LdapAllowed_ReturnsTheLdapUrl()
+    {
+        using var cert = CertificateWithDistributionPoints("ldap://ldap.ca.example/cn=CA,c=PE");
+
+        CrlClient.GetCrlUrl(cert, new OutboundHttpPolicy { AllowLdap = true }).ShouldBe("ldap://ldap.ca.example/cn=CA,c=PE");
+    }
+
+    [Fact]
+    public void GetCrlUrl_LdapAndHttp_LdapAllowed_PrefersHttp()
+    {
+        using var cert = CertificateWithDistributionPoints("ldap://ldap.ca.example/cn=CA,c=PE", "http://crl.ca.example/ca.crl");
+
+        CrlClient.GetCrlUrl(cert, new OutboundHttpPolicy { AllowLdap = true }).ShouldBe("http://crl.ca.example/ca.crl");
+    }
+
+    [Fact]
+    public async Task DownloadCrlAsync_LdapUrl_LdapAllowed_ReadsTheCrl()
+    {
+        using var pki = new SyntheticPki();
+        byte[] crl = pki.BuildLeafCrl();
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var server = LdapCrlClientTests.ServeOnceAsync(listener, "certificateRevocationList;binary", crl, resultCode: 0);
+        var policy = new OutboundHttpPolicy { AllowLdap = true, LoopbackOrigins = [new Uri($"ldap://127.0.0.1:{port}")] };
+        using var http = new HttpClient();
+
+        byte[]? value = await CrlClient.DownloadCrlAsync(http, $"ldap://127.0.0.1:{port}/cn=CA,c=PE", policy, null, CancellationToken.None);
+
+        value.ShouldBe(crl);
+        (await server).ShouldBe("cn=CA,c=PE");
+    }
+
+    [Fact]
+    public async Task DownloadCrlAsync_LdapUrl_LdapNotAllowed_ReturnsNullWithoutConnecting()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var policy = new OutboundHttpPolicy { LoopbackOrigins = [new Uri($"ldap://127.0.0.1:{port}")] };
+        using var http = new HttpClient();
+
+        byte[]? value = await CrlClient.DownloadCrlAsync(http, $"ldap://127.0.0.1:{port}/cn=CA", policy, null, CancellationToken.None);
+
+        value.ShouldBeNull();
+        listener.Pending().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task DownloadCrlAsync_LdapServerDown_ThrowsIOException()
+    {
+        int port;
+        using (var probe = new TcpListener(IPAddress.Loopback, 0))
+        {
+            probe.Start();
+            port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        }
+
+        var policy = new OutboundHttpPolicy { AllowLdap = true, LoopbackOrigins = [new Uri($"ldap://127.0.0.1:{port}")] };
+        using var http = new HttpClient();
+
+        var ex = await Should.ThrowAsync<IOException>(
+            () => CrlClient.DownloadCrlAsync(http, $"ldap://127.0.0.1:{port}/cn=CA", policy, null, CancellationToken.None));
+
+        ex.Message.ShouldContain("LDAP");
+    }
+
+    private static X509Certificate2 CertificateWithDistributionPoints(params string[] urls)
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=CDP Test", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension(urls));
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
     }
 }

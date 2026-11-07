@@ -16,6 +16,9 @@ internal static class LdapCrlClient
     /// <summary>The largest LDAP message accepted: CRLs of large CAs reach tens of megabytes.</summary>
     internal const int MaxMessageBytes = 64 * 1024 * 1024;
 
+    /// <summary>The time allowed for one LDAP download when the caller sets none.</summary>
+    internal static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+
     private const string DefaultAttribute = "certificateRevocationList;binary";
     private static readonly Asn1Tag BindRequestTag = new(TagClass.Application, 0, isConstructed: true);
     private static readonly Asn1Tag BindResponseTag = new(TagClass.Application, 1, isConstructed: true);

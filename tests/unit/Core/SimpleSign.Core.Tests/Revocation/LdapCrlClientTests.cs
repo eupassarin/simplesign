@@ -120,7 +120,7 @@ public sealed class LdapCrlClientTests
     }
 
     /// <summary>A one-connection LDAP server: answers the bind, then the search with one entry.</summary>
-    private static async Task<string?> ServeOnceAsync(TcpListener listener, string attribute, byte[] value, int resultCode)
+    internal static async Task<string?> ServeOnceAsync(TcpListener listener, string attribute, byte[] value, int resultCode)
     {
         using var connection = await listener.AcceptTcpClientAsync();
         var stream = connection.GetStream();

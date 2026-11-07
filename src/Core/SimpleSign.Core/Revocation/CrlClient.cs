@@ -374,6 +374,47 @@ public sealed class CrlClient : ICrlClient
     internal static string? GetCrlUrl(X509Certificate2 cert, ILogger? logger = null) =>
         GetCrlUrls(cert, logger).FirstOrDefault(u => u.StartsWith("http", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// The CRL URL to download for <paramref name="cert"/>: its first HTTP(S) distribution point, else
+    /// its first <c>ldap://</c> or <c>ldaps://</c> one when <paramref name="policy"/> allows LDAP.
+    /// </summary>
+    internal static string? GetCrlUrl(X509Certificate2 cert, OutboundHttpPolicy policy, ILogger? logger = null)
+    {
+        var urls = GetCrlUrls(cert, logger);
+        return urls.FirstOrDefault(u => u.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            ?? (policy.AllowLdap ? urls.FirstOrDefault(LdapCrlClient.IsLdapUrl) : null);
+    }
+
+    /// <summary>
+    /// Downloads a CRL from an HTTP(S) or LDAP URL under <paramref name="policy"/>. An LDAP URL gives
+    /// <see langword="null"/> when the policy does not allow LDAP.
+    /// </summary>
+    /// <exception cref="HttpRequestException">The HTTP download failed.</exception>
+    /// <exception cref="IOException">The LDAP download failed or timed out.</exception>
+    internal static async Task<byte[]?> DownloadCrlAsync(
+        HttpClient httpClient, string url, OutboundHttpPolicy policy, ILogger? logger, CancellationToken ct)
+    {
+        if (!LdapCrlClient.IsLdapUrl(url))
+        {
+            return await ResilientHttp.GetBytesAsync(httpClient, url, logger: logger, policy: policy, ct: ct).ConfigureAwait(false);
+        }
+
+        try
+        {
+            return await LdapCrlClient.GetCrlAsync(url, policy, LdapCrlClient.DefaultTimeout, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or System.Net.Sockets.SocketException
+            or IOException or AsnContentException or System.Security.Authentication.AuthenticationException)
+        {
+            // IOException covers InvalidDataException; a timeout surfaces as OperationCanceledException.
+            throw new IOException($"LDAP CRL download from {url} failed: {ex.Message}", ex);
+        }
+    }
+
     /// <summary>Every URI of the certificate's CRL distribution points, in the order they appear (any scheme).</summary>
     internal static IReadOnlyList<string> GetCrlUrls(X509Certificate2 cert, ILogger? logger = null)
     {
