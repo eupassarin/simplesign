@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Extensions;
+using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Internal;
 
@@ -125,8 +126,10 @@ internal sealed class RevocationChecker : IRevocationChecker
         }
 
         // 3. Try online CRL
+        // The built-in CrlClient also reads ldap:// distribution points when its policy allows LDAP.
+        var crlPolicy = _crlClient is CrlClient builtIn ? builtIn.OutboundPolicy : OutboundHttpPolicy.Default;
 #pragma warning disable CA1508 // GetCrlUrl can return non-null; analyzer false positive
-        var crlUrl = CrlClient.GetCrlUrl(cert);
+        var crlUrl = CrlClient.GetCrlUrl(cert, crlPolicy, _logger);
 #pragma warning restore CA1508
         if (crlUrl is not null)
         {

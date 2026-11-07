@@ -29,6 +29,7 @@ public sealed class CrlClient : ICrlClient
 
     /// <summary>
     /// Outbound URL policy applied to CRL distribution point URLs. Default: <see cref="OutboundHttpPolicy.Default"/>.
+    /// With <see cref="OutboundHttpPolicy.AllowLdap"/> set, <c>ldap://</c> and <c>ldaps://</c> CRL URLs are read too.
     /// </summary>
     public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
 
@@ -46,7 +47,8 @@ public sealed class CrlClient : ICrlClient
         }
 
         _logger.CrlDownloading(crlUrl);
-        var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: OutboundPolicy, ct: ct).ConfigureAwait(false)
+        // An ldap:// URL is read only when OutboundPolicy.AllowLdap is set; otherwise it gives null here.
+        var crlBytes = await DownloadCrlAsync(_httpClient, crlUrl, OutboundPolicy, _logger, ct).ConfigureAwait(false)
             ?? throw new HttpRequestException($"CRL download failed after retries: {crlUrl}");
         _logger.CrlDownloaded(crlBytes.Length);
         Cache?.Set(crlUrl, crlBytes, CrlEvaluator.ReadNextUpdate(crlBytes) ?? DateTimeOffset.MaxValue);
@@ -373,6 +375,47 @@ public sealed class CrlClient : ICrlClient
 
     internal static string? GetCrlUrl(X509Certificate2 cert, ILogger? logger = null) =>
         GetCrlUrls(cert, logger).FirstOrDefault(u => u.StartsWith("http", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The CRL URL to download for <paramref name="cert"/>: its first HTTP(S) distribution point, else
+    /// its first <c>ldap://</c> or <c>ldaps://</c> one when <paramref name="policy"/> allows LDAP.
+    /// </summary>
+    internal static string? GetCrlUrl(X509Certificate2 cert, OutboundHttpPolicy policy, ILogger? logger = null)
+    {
+        var urls = GetCrlUrls(cert, logger);
+        return urls.FirstOrDefault(u => u.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            ?? (policy.AllowLdap ? urls.FirstOrDefault(LdapCrlClient.IsLdapUrl) : null);
+    }
+
+    /// <summary>
+    /// Downloads a CRL from an HTTP(S) or LDAP URL under <paramref name="policy"/>. An LDAP URL gives
+    /// <see langword="null"/> when the policy does not allow LDAP.
+    /// </summary>
+    /// <exception cref="HttpRequestException">The HTTP download failed.</exception>
+    /// <exception cref="IOException">The LDAP download failed or timed out.</exception>
+    internal static async Task<byte[]?> DownloadCrlAsync(
+        HttpClient httpClient, string url, OutboundHttpPolicy policy, ILogger? logger, CancellationToken ct)
+    {
+        if (!LdapCrlClient.IsLdapUrl(url))
+        {
+            return await ResilientHttp.GetBytesAsync(httpClient, url, logger: logger, policy: policy, ct: ct).ConfigureAwait(false);
+        }
+
+        try
+        {
+            return await LdapCrlClient.GetCrlAsync(url, policy, LdapCrlClient.DefaultTimeout, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or System.Net.Sockets.SocketException
+            or IOException or AsnContentException or System.Security.Authentication.AuthenticationException)
+        {
+            // IOException covers InvalidDataException; a timeout surfaces as OperationCanceledException.
+            throw new IOException($"LDAP CRL download from {url} failed: {ex.Message}", ex);
+        }
+    }
 
     /// <summary>Every URI of the certificate's CRL distribution points, in the order they appear (any scheme).</summary>
     internal static IReadOnlyList<string> GetCrlUrls(X509Certificate2 cert, ILogger? logger = null)

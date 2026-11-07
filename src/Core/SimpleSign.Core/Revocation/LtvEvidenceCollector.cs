@@ -179,7 +179,7 @@ internal static class LtvEvidenceCollector
 
         async Task<(bool Found, string? AbsenceReason)> TryCrlAsync(X509Certificate2 target)
         {
-            string? crlUrl = CrlClient.GetCrlUrl(target, logger);
+            string? crlUrl = CrlClient.GetCrlUrl(target, outboundPolicy, logger);
             if (crlUrl is null)
             {
                 return (false, null);
@@ -187,8 +187,8 @@ internal static class LtvEvidenceCollector
 
             try
             {
-                byte[]? crlBytes = await ResilientHttp.GetBytesAsync(
-                    httpClient, crlUrl, logger: logger, policy: outboundPolicy, ct: cancellationToken).ConfigureAwait(false);
+                byte[]? crlBytes = await CrlClient.DownloadCrlAsync(
+                    httpClient, crlUrl, outboundPolicy, logger, cancellationToken).ConfigureAwait(false);
                 // Collection establishes that the embedded CRL is structurally relevant to this
                 // certificate. Trust-policy validation of the CRL signature is deliberately left
                 // to validation time, where the full issuer path and validation time are available.
