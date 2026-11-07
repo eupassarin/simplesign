@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TimestampClient` no longer refuses a loopback TSA URL in its constructor: it is refused when the request is
   sent, unless its origin is listed (private and link-local URLs are still refused at once).
 
+### Added — SimpleSign Playbook
+
+- `src/Apps/SimpleSign.Playbook`: a web app (127.0.0.1:5400, en/pt-BR) that runs a playbook — a JSON file of
+  SimpleSign CLI commands in sections — in a workspace folder (playbook.json, assets/, secrets.json, runs/). Before a
+  step it can change a SimpleSign Sandbox (failures, revocations, certificates as PKCS#12); after it, it checks the exit
+  code, paths in the JSON on stdout, text, files and the requests the Sandbox answered. Manual steps wait for the
+  operator's result, note and attachments. Each run is recorded (machine, CLI version, Sandbox and root, playbook
+  SHA-256, each step's command, output, checks, requests and files) with report.md, report.html and a zip; runs can be
+  compared. The playbook is edited as a form or as JSON, checked by the server as you type. A neutral sample
+  (`Sandbox basics`) signs and validates with a Sandbox's certificates.
+- `docs/articles/playbook.md`; tests in `tests/unit/Apps/SimpleSign.Playbook.Tests`, including the sample run with the
+  real CLI against a running Sandbox.
+
 ### Added — CLI: network options and JSON result for signing
 
 - Every command accepts `--allow-origin <URL>` (repeatable), `--allow-ldap` and `--tls-trust <PEM>` (also

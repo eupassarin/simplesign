@@ -132,6 +132,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Standard coverage](docs/articles/coverage.md) | Every option with the clause that defines it, and what is not implemented |
 | [Conformance](docs/conformance.md) / [ADRs](docs/adr/) | Standards coverage and design decisions |
 | [Sandbox](docs/articles/sandbox.md) | A test PKI with real CRL (HTTP, HTTPS, LDAP), OCSP, TSA and CSC endpoints and failures to switch on |
+| [Playbook](docs/articles/playbook.md) | Runs a playbook of CLI commands against a Sandbox, checks each result and records the runs |
 
 ## Extension points
 

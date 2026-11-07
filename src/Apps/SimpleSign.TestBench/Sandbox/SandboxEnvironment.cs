@@ -88,7 +88,9 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
             SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = ValidateServer },
         };
         _client = new HttpClient(new NetworkLog(handler)) { Timeout = TimeSpan.FromSeconds(30) };
-        _admin = new HttpClient(new SocketsHttpHandler()) { Timeout = TimeSpan.FromSeconds(30) };
+        // Admin calls export private keys and issue certificates: on a busy machine (the macOS keychain
+        // shared by many processes) they can take well over the 30 s of a network request.
+        _admin = new HttpClient(new SocketsHttpHandler()) { Timeout = TimeSpan.FromMinutes(2) };
     }
 
     /// <summary>The default place of the remembered connection: the user's local application data.</summary>
