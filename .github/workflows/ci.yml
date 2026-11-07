@@ -295,8 +295,27 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
+      - name: Build
+        run: dotnet build tests/unit/Apps/SimpleSign.TestBench.Tests --configuration Release && dotnet build src/Apps/SimpleSign.Sandbox --configuration Release -p:SkipWeb=true
+
+      # The TestBench tests sign and validate against a running SimpleSign Sandbox.
+      - name: Start the SimpleSign Sandbox
+        shell: bash
+        run: |
+          dotnet run --project src/Apps/SimpleSign.Sandbox --no-build --configuration Release -- --ephemeral --no-browser > sandbox.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:5300/api/info > /dev/null 2>&1; then
+              echo "Sandbox is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "The Sandbox did not answer on http://localhost:5300"; cat sandbox.log; exit 1
+
       - name: Test the TestBench (compatibility rules, every credential kind, full run matrix)
-        run: dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --configuration Release --logger "console;verbosity=normal"
+        env:
+          SIMPLESIGN_SANDBOX_URL: http://localhost:5300/
+          SIMPLESIGN_REQUIRE_SANDBOX: "true"
+        run: dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --configuration Release --no-build --logger "console;verbosity=normal"
 
   agent:
     name: Agent (${{ matrix.os }})

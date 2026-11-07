@@ -108,6 +108,7 @@ public sealed class SandboxScenarioTests(TestBenchFixture fixture) : IDisposable
     public async Task Default_ExpiredCertificate_IsRefused()
     {
         // The TestBench's own option check already refuses it; the library must too.
+        fixture.RequireSandbox();
         var ex = await Should.ThrowAsync<SigningException>(() => LibrarySignAsync("expired"));
 
         ex.Reason.ShouldBe(SigningErrorReason.CertificateExpired);
@@ -117,6 +118,7 @@ public sealed class SandboxScenarioTests(TestBenchFixture fixture) : IDisposable
     public async Task Default_NotYetValidCertificate_IsRefused()
     {
         // The TestBench's own option check already refuses it; the library must too.
+        fixture.RequireSandbox();
         var ex = await Should.ThrowAsync<SigningException>(() => LibrarySignAsync("not-yet-valid"));
 
         ex.Reason.ShouldBe(SigningErrorReason.CertificateNotCurrentlyValid);
