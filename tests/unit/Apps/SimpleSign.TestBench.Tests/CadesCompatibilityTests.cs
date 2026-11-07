@@ -15,18 +15,18 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
 
     private CadesOptions Options() => new() { DataId = Sample("text").FileId, CredentialId = fixture.Sandboxed() };
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_Defaults_CanSign() => Evaluate(Options()).CanSign.ShouldBeTrue();
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_NoData_IsAnError() =>
         Evaluate(Options() with { DataId = null }).Issues.ShouldContain(i => i.Severity == IssueSeverity.Error && i.Step == CadesCompatibility.StepData);
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_CoSignWithoutSignature_IsAnError() =>
         Evaluate(Options() with { Operation = CadesOperation.CoSign }).CanSign.ShouldBeFalse();
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_CoSignDetachedWithOtherData_IsRefused()
     {
         var report = Evaluate(Options() with { Operation = CadesOperation.CoSign, ExistingSignatureId = Sample("detached").FileId, DataId = Sample("json").FileId });
@@ -35,7 +35,7 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
         report.Issues.ShouldContain(i => i.Message.Contains("message digest", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_CoSignEnveloped_HidesDataAndKeepsContentType()
     {
         var report = Evaluate(Options() with { Operation = CadesOperation.CoSign, ExistingSignatureId = Sample("enveloped").FileId, DataId = null });
@@ -45,7 +45,7 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
         report.Effective.ContentType.ShouldBe(CadesContentChoice.Enveloped);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_SevenPostalAddressLines_IsAnError()
     {
         var report = Evaluate(Options() with { SignerPostalAddress = ["1", "2", "3", "4", "5", "6", "7"] });
@@ -54,7 +54,7 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
         report.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error && i.Step == CadesCompatibility.StepDetails);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_CounterSign_SwitchesOffTheAttributesThatDescribeTheContent()
     {
         var report = Evaluate(Options() with
@@ -76,7 +76,7 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
         report.Effective.SignerLocality.ShouldBe("Recife");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB, false)]
     [InlineData(BaselineLevel.BT, false)]
     [InlineData(BaselineLevel.BLT, true)]
@@ -84,7 +84,7 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
     public void Evaluate_RevocationPreference_IsShownOnlyWhenValidationDataIsCollected(BaselineLevel level, bool visible) =>
         Evaluate(Options() with { Level = level }).Options["revocationPreference"].Visible.ShouldBe(visible);
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_PolicyDocumentWithoutSpecification_IsAnError()
     {
         var report = Evaluate(Options() with { Kind = CadesKind.CustomPolicy, PolicyDocumentId = Sample("text").FileId, PolicySpecification = " " });
@@ -93,7 +93,7 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
         report.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error && i.Step == CadesCompatibility.StepType);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_ContentTimestampAtBasicLevel_ShowsTheTsa()
     {
         Evaluate(Options()).Options["timestamp"].Visible.ShouldBeFalse();
@@ -105,7 +105,7 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
         report.Effective.ContentTimestamp.ShouldBeTrue();
     }
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_CounterSignWithContentTimestamp_SwitchesItOff()
     {
         var report = Evaluate(Options() with
@@ -121,11 +121,11 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
         report.Effective.ContentTimestamp.ShouldBeFalse();
     }
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_CounterSignBadIndex_IsAnError() =>
         Evaluate(Options() with { Operation = CadesOperation.CounterSign, ExistingSignatureId = Sample("enveloped").FileId, SignerIndex = 3 }).CanSign.ShouldBeFalse();
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB, CadesExtendedChoice.CompleteReferences, false)]
     [InlineData(BaselineLevel.BT, CadesExtendedChoice.Archive, true)]
     [InlineData(BaselineLevel.BLT, CadesExtendedChoice.ExtendedLong, true)]
@@ -135,11 +135,11 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
     public void Evaluate_ExtendedForm_FollowsTheLevel(BaselineLevel level, CadesExtendedChoice form, bool allowed) =>
         Evaluate(Options() with { Level = level, ExtendedForm = form }).CanSign.ShouldBe(allowed);
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_BadCustomPolicyOid_IsAnError() =>
         Evaluate(Options() with { Kind = CadesKind.CustomPolicy, PolicyOid = "not-an-oid" }).CanSign.ShouldBeFalse();
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_EcdsaSigner_ForcesPkcs1Padding()
     {
         var report = Evaluate(Options() with { CredentialId = fixture.Sandboxed("ecdsa-p256"), Padding = RsaPadding.Pss });

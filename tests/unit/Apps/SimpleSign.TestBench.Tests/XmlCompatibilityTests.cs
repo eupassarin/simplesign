@@ -15,10 +15,10 @@ public sealed class XmlCompatibilityTests(TestBenchFixture fixture)
 
     private XmlOptions Xades() => new() { DataId = Sample("order").FileId, CredentialId = fixture.Sandboxed() };
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_Defaults_CanSign() => Evaluate(Xades()).CanSign.ShouldBeTrue();
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_NotXml_IsAnError()
     {
         string pdf = SimpleSign.TestBench.Documents.DocumentStore.SampleKey("contract");
@@ -26,11 +26,11 @@ public sealed class XmlCompatibilityTests(TestBenchFixture fixture)
         Evaluate(Xades() with { DataId = pdf }).Issues.ShouldContain(i => i.Severity == IssueSeverity.Error && i.Step == XmlCompatibility.StepData);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Evaluate_DetachedWithoutUri_IsAnError() =>
         Evaluate(Xades() with { Form = XadesFormChoice.Detached, DataUri = " " }).CanSign.ShouldBeFalse();
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB, XadesExtendedChoice.CompleteReferences, false)]
     [InlineData(BaselineLevel.BT, XadesExtendedChoice.Archive, true)]
     [InlineData(BaselineLevel.BLT, XadesExtendedChoice.ExtendedLong, false)]

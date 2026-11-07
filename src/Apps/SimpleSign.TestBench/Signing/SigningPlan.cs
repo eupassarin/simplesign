@@ -31,7 +31,7 @@ internal sealed class SigningPlan
     {
         _o = effective;
         _credential = credential;
-        _context = new PlanContext(effective.Environment, credential, sandbox, documents);
+        _context = new PlanContext(credential, sandbox, documents);
         IsSandbox = _context.IsSandbox;
         Http = _context.Http;
         HashAlgorithm = ToHash(effective.Hash);
@@ -65,9 +65,9 @@ internal sealed class SigningPlan
     {
         var steps = new List<PlanStep>();
         steps.Add(CredentialStep());
-        if (!IsSandbox || _o.Environment == EnvironmentMode.Sandbox)
+        if (IsSandbox)
         {
-            steps.Add(new(IsSandbox ? ".WithHttpClientProvider(sandboxHttp) // TSA and CRLs on *.sandbox.simplesign.test" : "// default HttpClient provider (real network)",
+            steps.Add(new(_context.HttpCode,
                 b => b.WithHttpClientProvider(Http)));
         }
 

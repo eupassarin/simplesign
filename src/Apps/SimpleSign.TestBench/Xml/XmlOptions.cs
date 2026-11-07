@@ -1,4 +1,3 @@
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Validation;
 
@@ -30,8 +29,6 @@ public enum XadesExtendedChoice
 /// <summary>Everything the XML page can choose. Evaluated by <see cref="XmlCompatibility"/>.</summary>
 public sealed record XmlOptions
 {
-    public EnvironmentMode Environment { get; init; } = EnvironmentMode.Sandbox;
-
     public string? DataId { get; init; }
 
     public string? CredentialId { get; init; }

@@ -1,7 +1,6 @@
 using Shouldly;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 
 namespace SimpleSign.TestBench.Tests;
@@ -134,29 +133,31 @@ public sealed class CompatibilityTests
     }
 
     [Fact]
-    public void Evaluate_SandboxWithPublicTsa_IsRefused()
+    public void Evaluate_SandboxConnectedWithPublicTsa_CanSign()
     {
+        // The TestBench is on the real network, with or without a Sandbox: a public TSA is always there.
         var report = Compatibility.Evaluate(new SigningOptions { Level = BaselineLevel.BT, Timestamp = new TimestampChoice { Provider = TsaProvider.DigiCert } }, Plain, Rsa);
 
-        report.Options["tsa.DigiCert"].Disabled.ShouldNotBeNull();
-        report.CanSign.ShouldBeFalse();
+        report.Options["tsa.DigiCert"].Disabled.ShouldBeNull();
+        report.CanSign.ShouldBeTrue();
     }
 
     [Fact]
-    public void Evaluate_RealWithSandboxTsa_IsRefused()
+    public void Evaluate_SandboxTsaWithoutSandbox_IsRefused()
     {
-        var report = Compatibility.Evaluate(new SigningOptions { Environment = EnvironmentMode.Real, Level = BaselineLevel.BT }, Plain, Rsa);
+        var report = Compatibility.Evaluate(new SigningOptions { Level = BaselineLevel.BT, Timestamp = new TimestampChoice { Provider = TsaProvider.Sandbox } }, Plain, Rsa, sandboxConnected: false);
 
         report.Options["tsa.Sandbox"].Disabled.ShouldNotBeNull();
         report.CanSign.ShouldBeFalse();
     }
 
     [Fact]
-    public void Evaluate_AuthenticatedSandboxTsaWithoutBasic_IsRefused()
+    public void Evaluate_AuthenticatedSandboxTsaWithoutCredentials_CanSign()
     {
+        // The Sandbox's own test credentials are filled in by the TestBench.
         var report = Compatibility.Evaluate(new SigningOptions { Level = BaselineLevel.BT, Timestamp = new TimestampChoice { Provider = TsaProvider.SandboxAuthenticated } }, Plain, Rsa);
 
-        report.CanSign.ShouldBeFalse();
+        report.CanSign.ShouldBeTrue();
     }
 
     [Fact]

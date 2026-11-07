@@ -3,11 +3,9 @@ import type {
   CscCredentialSummary,
   DocumentFacts,
   EnvironmentInfo,
-  EnvironmentMode,
   OptionInfo,
   Pkcs11Driver,
   SampleDocument,
-  SandboxRequest,
   StoreCertificate,
   BulkReport,
   InspectionReport,
@@ -18,7 +16,7 @@ import type {
   XmlSample,
 } from "./types"
 
-import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, RunSummary, RunView, SandboxFaults, SandboxState, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
+import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -56,7 +54,6 @@ function upload(file: File) {
 export const api = {
   env: () => request<EnvironmentInfo>("GET", "/api/env"),
   catalog: () => request<Record<string, OptionInfo>>("GET", "/api/catalog"),
-  sandboxLog: () => request<SandboxRequest[]>("GET", "/api/sandbox/log"),
   samples: () => request<SampleDocument[]>("GET", "/api/documents/samples"),
   uploadDocument: (file: File) => request<DocumentFacts>("POST", "/api/documents", upload(file)),
   uploadFile: (file: File) => request<{ id: string; fileName: string; size: number }>("POST", "/api/uploads", upload(file)),
@@ -82,10 +79,9 @@ export const api = {
     pkcs11: () => request<Pkcs11Driver[]>("GET", "/api/credentials/pkcs11"),
     openPkcs11: (body: { libraryPath: string; tokenSerial?: string; certificateThumbprint?: string; pin?: string; usePinPad: boolean }) =>
       request<CredentialFacts>("POST", "/api/credentials/pkcs11", body),
-    cscList: (environment: EnvironmentMode, body: Record<string, unknown>) =>
-      request<CscCredentialSummary[]>("POST", `/api/credentials/csc/list?environment=${environment}`, body),
-    csc: (environment: EnvironmentMode, body: Record<string, unknown>) =>
-      request<CredentialFacts>("POST", `/api/credentials/csc?environment=${environment}`, body),
+    cscList: (body: Record<string, unknown>) => request<CscCredentialSummary[]>("POST", "/api/credentials/csc/list", body),
+    /** Without baseUrl: the connected Sandbox's CSC service. */
+    csc: (body: Record<string, unknown>) => request<CredentialFacts>("POST", "/api/credentials/csc", body),
     close: (id: string) => request<void>("DELETE", `/api/credentials/${id}`),
   },
   workbench: {
@@ -96,18 +92,16 @@ export const api = {
     samples: () => request<ValidationSampleView[]>("GET", "/api/validation/samples/all"),
     run: (id: string) => request<RunView | undefined>("GET", `/api/runs/${id}`),
     eventsUrl: (id: string) => `/api/runs/${id}/events`,
+    evidenceUrl: (id: string, format: "md" | "json") => `/api/runs/${id}/evidence.${format}`,
     history: () => request<RunSummary[]>("GET", "/api/runs"),
   },
   environment: {
     real: () => request<RealEnvironment>("GET", "/api/environment/real"),
   },
   sandbox: {
-    state: () => request<SandboxState>("GET", "/api/sandbox/state"),
-    faults: (faults: SandboxFaults) => request<SandboxState>("PUT", "/api/sandbox/faults", faults),
-    revoke: (signerId: string) => request<SandboxState>("POST", `/api/sandbox/signers/${signerId}/revoke`),
-    reset: () => request<SandboxState>("POST", "/api/sandbox/reset"),
-    certificateUrl: (id: string) => `/api/sandbox/certificates/${id}`,
-    crlUrl: (name: "root" | "intermediate") => `/api/sandbox/crls/${name}.crl`,
+    connect: (url: string) => request<EnvironmentInfo>("POST", "/api/sandbox/connect", { url }),
+    disconnect: () => request<EnvironmentInfo>("POST", "/api/sandbox/disconnect"),
+    samples: () => request<EnvironmentInfo>("POST", "/api/sandbox/samples"),
     rootPemUrl: "/api/sandbox/root.pem",
   },
   dss: {

@@ -7,11 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useT, type MessageKey } from "@/i18n"
 import { api } from "@/lib/api"
-import type { CredentialFacts, CscCredentialSummary, EnvironmentInfo, EnvironmentMode, Pkcs11Driver, StoreCertificate } from "@/lib/types"
+import type { CredentialFacts, CscCredentialSummary, EnvironmentInfo, Pkcs11Driver, StoreCertificate } from "@/lib/types"
 import { ChoiceCard, Explain, Field, KeyValue, Pill, Section } from "../shared/ui"
 
 interface PickerContext {
-  environment: EnvironmentMode
   env: EnvironmentInfo | null
   credential: CredentialFacts | null
 }
@@ -28,10 +27,11 @@ function usePicker() {
  * Every way to open a signer (sandbox A1, PFX, OS store, PKCS#11, CSC), shared by the PDF,
  * CAdES and XML pages. Credentials live on the server; the page keeps the id it gets back.
  */
-export function CredentialPicker({ environment, env, credential, onCredential }: PickerContext & { onCredential: (facts: CredentialFacts) => void }) {
+export function CredentialPicker({ env, credential, onCredential }: PickerContext & { onCredential: (facts: CredentialFacts) => void }) {
   const t = useT()
-  const [tab, setTab] = useState(environment === "Sandbox" ? "sandbox" : "pfx")
-  useEffect(() => setTab(environment === "Sandbox" ? "sandbox" : "pfx"), [environment])
+  const connected = !!env?.sandbox
+  const [tab, setTab] = useState(connected ? "sandbox" : "pfx")
+  useEffect(() => setTab(connected ? "sandbox" : "pfx"), [connected])
 
   const opened = (facts: CredentialFacts) => {
     onCredential(facts)
@@ -39,11 +39,11 @@ export function CredentialPicker({ environment, env, credential, onCredential }:
   }
 
   return (
-    <Picker.Provider value={{ environment, env, credential }}>
+    <Picker.Provider value={{ env, credential }}>
       <div className="space-y-8">
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="grid h-auto! w-full grid-cols-2 gap-1 p-1 sm:grid-cols-3">
-            {environment === "Sandbox" && <Tab value="sandbox" icon={<ShieldCheck />} label="signer.tabs.sandbox" info="signer.SandboxA1" />}
+            {connected && <Tab value="sandbox" icon={<ShieldCheck />} label="signer.tabs.sandbox" info="signer.SandboxA1" />}
             <Tab value="pfx" icon={<FileKey2 />} label="signer.tabs.pfx" info="signer.Pfx" />
             <Tab value="store" icon={<MonitorSmartphone />} label="signer.tabs.store" info="signer.OsStore" />
             <Tab value="pkcs11" icon={<Usb />} label="signer.tabs.pkcs11" info="signer.Pkcs11" />
@@ -78,10 +78,10 @@ function SandboxSigners({ onOpened }: { onOpened: (f: CredentialFacts) => void }
   const { env, credential } = usePicker()
   const [busy, setBusy] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
-  if (!env) return <Loader2 className="size-4 animate-spin" />
+  if (!env?.sandbox) return <Loader2 className="size-4 animate-spin" />
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      {env.signers.map((s) => (
+      {env.sandbox.signers.map((s) => (
         <ChoiceCard
           key={s.id}
           selected={selected === s.id && credential?.kind === "SandboxA1"}
@@ -92,6 +92,7 @@ function SandboxSigners({ onOpened }: { onOpened: (f: CredentialFacts) => void }
             <span className="ml-auto flex gap-1">
               <Pill>{s.keyType.replace("Rsa", "RSA ").replace("EcdsaP", "P-")}</Pill>
               {s.problem && <Pill tone="warning">{s.problem}</Pill>}
+              {s.evidence && <Pill tone="info">{s.evidence}</Pill>}
             </span>
           }
           onSelect={async () => {
@@ -264,16 +265,17 @@ function CloudExplainer() {
 }
 
 function CscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
-  const { environment, env } = usePicker()
-  const sandbox = environment === "Sandbox"
+  const { env } = usePicker()
+  const csc = env?.sandbox ?? null
+  const sandbox = !!csc
   const [form, setForm] = useState({ baseUrl: "", serviceAuth: "Token", accessToken: "", clientId: "", clientSecret: "", credentialId: "", authorizer: "Explicit", pin: "", otp: "", signaturesPerAuthorization: 1 })
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }))
   const [list, setList] = useState<CscCredentialSummary[] | null>(null)
   const { busy, run } = useAction()
   const t = useT()
   useEffect(() => {
-    if (sandbox && env) setList(env.cscCredentials)
-  }, [sandbox, env])
+    if (csc) setList(csc.cscCredentials)
+  }, [csc])
   const chosen = list?.find((c) => c.id === form.credentialId)
   return (
     <div className="grid max-w-3xl gap-5">
@@ -283,9 +285,9 @@ function CscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
           <Cloud />
           <AlertTitle>{t("signer.csc.simulated")}</AlertTitle>
           <AlertDescription className="space-y-2">
-            <span className="block break-words">{t("signer.csc.simulatedHint", { url: env?.cscUrl ?? "", pin: env?.cscPin ?? "", otp: env?.cscOtp ?? "" })}</span>
-            <Button size="sm" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.csc(environment, {
-              ...form, serviceAuth: "ClientCredentials", credentialId: "rsa-scal2", authorizer: "Explicit", pin: env?.cscPin, otp: env?.cscOtp,
+            <span className="block break-words">{t("signer.csc.simulatedHint", { url: csc?.cscUrl ?? "", pin: csc?.cscPin ?? "", otp: csc?.cscOtp ?? "" })}</span>
+            <Button size="sm" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.csc({
+              ...form, baseUrl: null, serviceAuth: "ClientCredentials", credentialId: "rsa-scal2", authorizer: "Explicit", pin: csc?.cscPin, otp: csc?.cscOtp,
             })))}>
               {busy && <Loader2 className="animate-spin" />} {t("signer.cloud.useSimulated")}
             </Button>
@@ -313,7 +315,7 @@ function CscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
           </div>
         )}
         {!sandbox && (
-          <Button variant="outline" className="w-fit" disabled={busy} onClick={() => run(async () => setList(await api.credentials.cscList(environment, form)))}>
+          <Button variant="outline" className="w-fit" disabled={busy} onClick={() => run(async () => setList(await api.credentials.cscList(form)))}>
             {t("signer.csc.list")}
           </Button>
         )}
@@ -344,7 +346,7 @@ function CscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
               </Field>
             </div>
           )}
-          <Button className="w-fit" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.csc(environment, form)))}>
+          <Button className="w-fit" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.csc(sandbox ? { ...form, baseUrl: null } : form)))}>
             {busy && <Loader2 className="animate-spin" />} {t("signer.csc.load")}
           </Button>
         </Section>

@@ -32,18 +32,23 @@ internal static class XmlSamples
 {
     public static async Task<IReadOnlyList<XmlSample>> CreateAsync(SandboxEnvironment sandbox, DocumentStore documents, CancellationToken cancellationToken = default)
     {
-        var pki = sandbox.Pki;
-        var maria = pki.Signer("rsa-2048").Certificate;
         var orderFile = documents.AddPinned("pedido.xml", Encoding.UTF8.GetBytes(Order()));
         var samples = new List<XmlSample>
         {
             new("order", "data", orderFile.Id, "pedido.xml", null, "Purchase order", "A generic XML document: sign it enveloped, detached or enveloping.", null, null),
         };
 
-        // Validation cases.
+        // The validation cases need a signer: they come from the connected Sandbox.
+        if (sandbox.Current is not { } connection)
+        {
+            return samples;
+        }
+
+        var chain = connection.Chain;
+        var maria = connection.Signer("rsa-2048").Certificate;
         byte[] order = Encoding.UTF8.GetBytes(Order());
-        byte[] enveloped = await XadesSigner.Document(order).WithCertificate(maria, pki.Chain).WithHttpClientProvider(sandbox.Network).SignAsync(cancellationToken);
-        byte[] detached = await XadesSigner.Document(order).WithCertificate(maria, pki.Chain).WithHttpClientProvider(sandbox.Network)
+        byte[] enveloped = await XadesSigner.Document(order).WithCertificate(maria, chain).WithHttpClientProvider(sandbox).SignAsync(cancellationToken);
+        byte[] detached = await XadesSigner.Document(order).WithCertificate(maria, chain).WithHttpClientProvider(sandbox)
             .WithForm(XadesForm.Detached).WithDataUri("pedido.xml").SignAsync(cancellationToken);
         byte[] changed = Replace(enveloped, "<total moeda=\"BRL\">1530.75</total>", "<total moeda=\"BRL\">9530.75</total>");
         byte[] tampered = TamperSignatureValue(enveloped);

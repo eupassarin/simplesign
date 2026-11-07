@@ -83,6 +83,8 @@ internal static class AdminEndpoints
             [.. pki.Authorities.Select(View)],
             View("untrusted-tsa", "TSA outside the chain", pki.UntrustedTsa),
             [.. pki.Certificates.Select(View)]));
+        admin.MapPost("/certificates/short-lived", (int? seconds, SandboxPki pki) =>
+            Results.File(pki.IssueShortLived(TimeSpan.FromSeconds(Math.Clamp(seconds ?? 3, 1, 3600))), "application/x-pkcs12", "short-lived.pfx"));
         admin.MapGet("/certificates/{id}/pfx", (string id, SandboxPki pki) =>
             Found(pki, id, () => Results.File(pki.Pfx(id), "application/x-pkcs12", $"{id}.pfx")));
         admin.MapGet("/certificates/{id}/cer", (string id, SandboxPki pki) =>

@@ -80,7 +80,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         ArgumentNullException.ThrowIfNull(options);
         DocumentFacts? document = options.DocumentId is { } id ? await documents.FactsAsync(id, cancellationToken) : null;
         credentials.TryGet(options.CredentialId, out var credential);
-        var report = Compatibility.Evaluate(options, document, credential?.Facts);
+        var report = Compatibility.Evaluate(options, document, credential?.Facts, sandbox.IsConnected);
         var empty = new CodeSnippets("", "", []);
         if (!report.CanSign)
         {
@@ -235,7 +235,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         string fileName = Path.GetFileNameWithoutExtension(source.FileName) + "-signed.pdf";
         var stored = documents.Add(fileName, signed);
         var watch = Stopwatch.StartNew();
-        IReadOnlyList<SignatureReport> validation = o.Validate ? await _validation.ValidateAsync(signed, o.Validation ?? ValidationSettings.For(o.Environment), cancellationToken) : [];
+        IReadOnlyList<SignatureReport> validation = o.Validate ? await _validation.ValidateAsync(signed, o.Validation ?? new ValidationSettings(), cancellationToken) : [];
         long validateMs = watch.ElapsedMilliseconds;
         var output = await InspectAsync(signed, cancellationToken);
         return new SigningResult(true, null, null, stored.Id, fileName, signed.Length, Compatibility.LevelName(o), achieved,

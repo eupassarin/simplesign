@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { Check, CircleSlash, Download, FileCheck2, Loader2, RefreshCw, ShieldCheck, ShieldQuestion, TriangleAlert, XCircle } from "lucide-react"
+import { Check, CircleSlash, Download, FileCheck2, FileText, Loader2, RefreshCw, ShieldCheck, ShieldQuestion, TriangleAlert, XCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -81,6 +81,19 @@ function Signing() {
   return <div className="text-muted-foreground flex items-center gap-2 py-10 text-sm"><Loader2 className="size-4 animate-spin" /> {t("result.signing")}</div>
 }
 
+/** Downloads the run as certification evidence (environment, certificate, outcome, network requests). */
+function Evidence({ run }: { run: RunView }) {
+  const t = useT()
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <FileText className="text-muted-foreground size-4" />
+      <span className="text-muted-foreground min-w-0 flex-1">{t("wb.result.evidenceHint")}</span>
+      <Button variant="outline" size="sm" asChild><a href={api.workbench.evidenceUrl(run.id, "md")} download><Download /> {t("wb.result.evidence")} .md</a></Button>
+      <Button variant="outline" size="sm" asChild><a href={api.workbench.evidenceUrl(run.id, "json")} download><Download /> .json</a></Button>
+    </div>
+  )
+}
+
 function Summary({ run }: { run: RunView }) {
   const { t, number } = useI18n()
   const { reuse, schema, openInValidate } = useWorkbench()
@@ -96,6 +109,7 @@ function Summary({ run }: { run: RunView }) {
         </Alert>
         <IssueList issues={run.issues} />
         <p className="text-muted-foreground text-xs">{t("wb.result.failedHint")}</p>
+        <Evidence run={run} />
       </div>
     )
   }
@@ -121,6 +135,7 @@ function Summary({ run }: { run: RunView }) {
         )}
         <Button size="sm" asChild><a href={api.fileUrl(run.outputId!, true)}><Download /> {t("common.download")}</a></Button>
       </div>
+      <Evidence run={run} />
       <div className="grid gap-x-8 rounded-lg border px-4 py-2 sm:grid-cols-2">
         {!validating && <KeyValue label={t("wb.result.requested")}>{run.requestedLevel ?? "—"}</KeyValue>}
         <KeyValue label={t(validating ? "val.detectedLevel" : "wb.result.achieved")}>{downgraded ? <Pill tone="warning">{run.achievedLevel}</Pill> : run.achievedLevel ?? "—"}</KeyValue>

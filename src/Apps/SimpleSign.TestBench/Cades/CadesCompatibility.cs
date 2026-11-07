@@ -1,6 +1,5 @@
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Localization;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 
 namespace SimpleSign.TestBench.Cades;
@@ -33,14 +32,13 @@ public static class CadesCompatibility
     public const string StepCrypto = "crypto";
     public const string StepDetails = "details";
 
-    public static CadesOptionsReport Evaluate(CadesOptions options, CadesInputs inputs, CredentialFacts? credential)
+    public static CadesOptionsReport Evaluate(CadesOptions options, CadesInputs inputs, CredentialFacts? credential, bool sandboxConnected = true)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(inputs);
         var state = new Dictionary<string, OptionState>(StringComparer.Ordinal);
         var issues = new List<OptionIssue>();
         var o = options;
-        bool sandbox = o.Environment == EnvironmentMode.Sandbox;
 
         void Set(string key, OptionState value) => state[key] = value;
         void Error(string step, string message) => issues.Add(new(IssueSeverity.Error, step, message));
@@ -162,10 +160,10 @@ public static class CadesCompatibility
         bool contentTimestamp = o.ContentTimestamp && !counterSign;
         bool needsTsa = contentTimestamp || o.Level != BaselineLevel.BB;
         Set("timestamp", needsTsa ? OptionState.Shown : OptionState.Hidden);
-        SharedRules.TsaProviders(sandbox, Set);
+        SharedRules.TsaProviders(sandboxConnected, Set);
         if (needsTsa)
         {
-            SharedRules.CheckTsa(o.Timestamp, L.T("Signature TSA"), state, Error, sandbox, StepType);
+            SharedRules.CheckTsa(o.Timestamp, L.T("Signature TSA"), state, Error, StepType);
         }
 
         if (counterSign && (o.Level >= BaselineLevel.BLT || extended != CadesExtendedChoice.None))

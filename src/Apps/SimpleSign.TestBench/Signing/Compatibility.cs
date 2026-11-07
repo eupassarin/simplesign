@@ -1,7 +1,6 @@
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
-using SimpleSign.TestBench.Sandbox;
 
 namespace SimpleSign.TestBench.Signing;
 
@@ -56,13 +55,13 @@ public static class Compatibility
     /// <param name="options">The user's selection.</param>
     /// <param name="document">Facts of the chosen document (null: none chosen yet).</param>
     /// <param name="credential">Facts of the chosen credential (null: none chosen yet).</param>
-    public static OptionsReport Evaluate(SigningOptions options, DocumentFacts? document, CredentialFacts? credential)
+    /// <param name="sandboxConnected">Whether a Sandbox is connected (its TSAs can be chosen).</param>
+    public static OptionsReport Evaluate(SigningOptions options, DocumentFacts? document, CredentialFacts? credential, bool sandboxConnected = true)
     {
         ArgumentNullException.ThrowIfNull(options);
         var state = new Dictionary<string, OptionState>(StringComparer.Ordinal);
         var issues = new List<OptionIssue>();
         var o = options;
-        bool sandbox = o.Environment == EnvironmentMode.Sandbox;
 
         void Set(string key, OptionState value) => state[key] = value;
         void Error(string step, string message) => issues.Add(new(IssueSeverity.Error, step, message));
@@ -164,13 +163,13 @@ public static class Compatibility
         Set("returnLowerLevel", !needsTsa ? OptionState.Hidden
             : o.Mode != RunMode.Sign ? OptionState.Off(L.T("Only SignWithDetailsAsync (Sign now) reports a lower achieved level; deferred and batch always throw."))
             : OptionState.Shown);
-        SharedRules.TsaProviders(sandbox, Set);
+        SharedRules.TsaProviders(sandboxConnected, Set);
         if (needsTsa)
         {
-            SharedRules.CheckTsa(o.Timestamp, L.T("Signature TSA"), state, Error, sandbox, StepType);
+            SharedRules.CheckTsa(o.Timestamp, L.T("Signature TSA"), state, Error, StepType);
             if (needsArchive && o.SeparateArchiveTsa)
             {
-                SharedRules.CheckTsa(o.ArchiveTimestamp, L.T("Archive TSA"), state, Error, sandbox, StepType);
+                SharedRules.CheckTsa(o.ArchiveTimestamp, L.T("Archive TSA"), state, Error, StepType);
             }
         }
 

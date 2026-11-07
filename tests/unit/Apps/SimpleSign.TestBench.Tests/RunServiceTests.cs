@@ -4,7 +4,6 @@ using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.CrossValidation;
 using SimpleSign.TestBench.Runs;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Xml;
 
@@ -37,7 +36,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
     private static string Problems(RunView run) =>
         string.Join("; ", run.Issues.Select(i => i.Message).Concat(run.Validation.SelectMany(v => v.Errors)).Append(run.Error ?? ""));
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(RunFormats.Pades)]
     [InlineData(RunFormats.Cades)]
     [InlineData(RunFormats.Xades)]
@@ -74,7 +73,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         run.Logs.ShouldContain(l => l.Source == "network" && l.Message.StartsWith("TSA:", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_Basic_LogsNoTimestampStage()
     {
         var run = await fixture.Runs().RunAsync(Cades(BaselineLevel.BB), default);
@@ -84,7 +83,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         run.Logs.ShouldNotContain(l => l.Stage == RunStages.Archive);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_TwoRunsAtOnce_KeepTheirLogsApart()
     {
         var service = fixture.Runs();
@@ -109,7 +108,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         runs[1].Logs.ShouldNotContain(l => l.Message.Contains("[first-run]", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_IncompatibleOptions_FailsWithTheIssues()
     {
         var run = await fixture.Runs().RunAsync(Request(RunFormats.Pades, new SigningOptions()), default);
@@ -122,7 +121,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
     private static RunRequest Validate(string fileId, string? dataId = null) =>
         new("", JsonSerializer.SerializeToElement(new ValidateOptions(fileId, dataId), WorkbenchJson.Options), Kind: RunKinds.Validate);
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_ValidatePdfSamples_DetectsPadesAndGivesTheExpectedVerdict()
     {
         fixture.ValidationSamples.ShouldNotBeEmpty();
@@ -139,7 +138,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_ValidateCadesSamples_DetectsCadesAndGivesTheExpectedVerdict()
     {
         var samples = fixture.CadesSamples.Where(s => s.Kind != "data" && s.ExpectedIndication is not null).ToList();
@@ -154,7 +153,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_ValidateXmlSamples_DetectsXmlAndGivesTheExpectedVerdict()
     {
         var samples = fixture.XmlSamples.Where(s => s.Kind == "validation" && s.ExpectedIndication is not null).ToList();
@@ -169,7 +168,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_ValidateAFileJustSigned_IsValidAndIsInTheHistoryAsAValidation()
     {
         var service = fixture.Runs();
@@ -183,12 +182,13 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         service.History().ShouldContain(h => h.Id == signed.Id && h.Kind == RunKinds.Sign);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_SimulatedCsc_AuthorizesTheCredentialAndShowsItInTheLog()
     {
+        fixture.RequireSandbox();
+        var csc = fixture.Sandbox.Connection.Info.Csc;
         var handle = fixture.Credentials.Add(await fixture.Factory.OpenCscAsync(
-            new CscCredentialRequest(null, CscServiceAuth.ClientCredentials, null, null, null, "rsa-scal2", CscAuthorizerKind.Explicit, SandboxCsc.Pin, SandboxCsc.Otp),
-            EnvironmentMode.Sandbox, default));
+            new CscCredentialRequest(null, CscServiceAuth.ClientCredentials, null, null, null, "rsa-scal2", CscAuthorizerKind.Explicit, csc.Pin, csc.Otp), default));
 
         var run = await fixture.Runs().RunAsync(Request(RunFormats.Cades, new CadesOptions
         {
@@ -202,10 +202,10 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         run.Logs.ShouldContain(l => l.Source == "network" && l.Message.StartsWith("CSC:", StringComparison.Ordinal) && l.Message.Contains("signatures/signHash", StringComparison.Ordinal));
         run.Logs.ShouldContain(l => l.EventId == 7301);
         run.Logs.ShouldContain(l => l.EventId == 7303 && l.Stage == RunStages.Signature);
-        run.Logs.ShouldAllBe(l => !l.Message.Contains(SandboxCsc.Otp, StringComparison.Ordinal));
+        run.Logs.ShouldAllBe(l => !l.Message.Contains(csc.Otp, StringComparison.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public void Real_ListsPublicTsas()
     {
         var real = SimpleSign.TestBench.Endpoints.EnvironmentApi.Real();
@@ -214,15 +214,15 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         real.PublicTsas.ShouldAllBe(t => t.Url.StartsWith("http", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public void Start_ValidateWithoutAFile_Throws() =>
         Should.Throw<ArgumentException>(() => fixture.Runs().Start(Validate("no-such-file")));
 
-    [Fact]
+    [SkippableFact]
     public void Start_UnknownFormat_Throws() =>
         Should.Throw<ArgumentException>(() => fixture.Runs().Start(new RunRequest("jades", JsonSerializer.SerializeToElement(new { }))));
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_Finished_IsInTheHistoryAndCanBeReplayed()
     {
         var service = fixture.Runs();
@@ -235,7 +235,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         events[^1].Run!.Id.ShouldBe(view.Id);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CrossValidateWithDssDown_StillSucceedsAndSaysWhy()
     {
         var service = fixture.Runs(new DssSettings(true, "http://127.0.0.1:9"));

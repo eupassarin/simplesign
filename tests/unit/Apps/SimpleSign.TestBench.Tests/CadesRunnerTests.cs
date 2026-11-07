@@ -17,7 +17,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         CredentialId = fixture.Sandboxed(signer),
     };
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(CadesContentChoice.Detached, BaselineLevel.BB)]
     [InlineData(CadesContentChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(CadesContentChoice.Detached, BaselineLevel.BT)]
@@ -35,7 +35,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.HasSignatureTimestamp.ShouldBe(level != BaselineLevel.BB);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("detached")]
     [InlineData("enveloped")]
     public async Task RunAsync_CoSign_AddsASecondSigner(string existing)
@@ -50,7 +50,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Validation.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CounterSign_NestsUnderTheSigner()
     {
         var options = Options("rsa-4096") with { Operation = CadesOperation.CounterSign, ExistingSignatureId = Sample("enveloped"), DataId = null };
@@ -63,7 +63,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.FileName.ShouldBe("countersigned.p7m");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(CadesExtendedChoice.CompleteReferences, "esc-time-stamp (CAdES-C timestamp)")]
     [InlineData(CadesExtendedChoice.ExtendedLong, "certificate-values")]
     [InlineData(CadesExtendedChoice.Archive, "archive-time-stamp-v2")]
@@ -76,7 +76,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Validation.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BLT)]
     [InlineData(BaselineLevel.BLTA)]
     public async Task RunAsync_ArchiveFormOnLongTermLevels_IsValid(BaselineLevel level)
@@ -89,7 +89,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Validation.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_SignerAndContentAttributes_AreInTheSignatureAndTheCode()
     {
         var options = Options() with
@@ -123,7 +123,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.CliNotes.ShouldNotContain(n => n.Contains("no cades flag", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CounterSignWithMimeType_LeavesTheAttributeOut()
     {
         var options = Options("rsa-4096") with
@@ -143,7 +143,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldNotContain("WithContentHints");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CrlFirstAtLongTerm_IsValidAndInTheCode()
     {
         var options = Options() with { Level = BaselineLevel.BLT, RevocationPreference = SimpleSign.Core.Signing.RevocationPreference.CrlFirst };
@@ -157,7 +157,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--revocation-preference crl");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB)]
     [InlineData(BaselineLevel.BLTA)]
     public async Task RunAsync_CustomPolicyWithDocument_EmbedsThePolicyStore(BaselineLevel level)
@@ -177,7 +177,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithSignaturePolicyStore(SignaturePolicyStore.FromDocument(\"1.2.3.4.5.1\", policyDocument))");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CustomPolicyWithoutDocument_HasNoPolicyStore()
     {
         var result = await fixture.Cades.RunAsync(Options() with { Kind = CadesKind.CustomPolicy }, default);
@@ -187,7 +187,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldNotContain("WithSignaturePolicyStore");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB)]
     [InlineData(BaselineLevel.BLTA)]
     public async Task RunAsync_ContentTimestamp_IsSignedValidatedAndInTheCode(BaselineLevel level)
@@ -203,7 +203,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithContentTimestamp(tsa)");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CertifiedAttributeAndSignedAssertion_AreInTheSignerAttributes()
     {
         // Any single DER SEQUENCE stands for the attribute certificate: the library embeds it as given.
@@ -220,7 +220,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithSignedAssertions([CadesSignedAssertion.Saml(samlAssertion)])");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_PssAndSha512_AreInTheCode()
     {
         var result = await fixture.Cades.RunAsync(Options() with { Hash = HashChoice.Sha512, Padding = RsaPadding.Pss, Commitment = "ProofOfOrigin" }, default);
@@ -233,7 +233,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--commitment \"ProofOfOrigin\"");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("v-valid")]
     [InlineData("v-tree")]
     [InlineData("v-changed-data")]

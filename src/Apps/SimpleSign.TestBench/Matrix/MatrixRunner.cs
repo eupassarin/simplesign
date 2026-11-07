@@ -120,9 +120,9 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
                 V("tsa", "sandbox", (o, _) => o with { Timestamp = new TimestampChoice() }),
                 V("tsa", "basic auth + separate archive", (o, _) => o with
                 {
-                    Timestamp = new TimestampChoice { Provider = TsaProvider.SandboxAuthenticated, Auth = TsaAuth.Basic, User = SandboxPki.TsaUser, Password = SandboxPki.TsaPassword },
+                    Timestamp = new TimestampChoice { Provider = TsaProvider.SandboxAuthenticated },
                     SeparateArchiveTsa = true,
-                    ArchiveTimestamp = new TimestampChoice { Provider = TsaProvider.Custom, Url = SandboxPki.ArchiveTsaUri.AbsoluteUri },
+                    ArchiveTimestamp = new TimestampChoice { Provider = TsaProvider.Sandbox },
                 }),
                 V("tsa", "lower level on failure", (o, _) => o with { ReturnLowerLevel = true, ContentsReservedBytes = 32768 }),
             },
@@ -171,7 +171,7 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
 
     internal static SigningOptions Build(MatrixCase matrixCase, MatrixContext context)
     {
-        var options = new SigningOptions { Environment = EnvironmentMode.Sandbox, Validate = true };
+        var options = new SigningOptions { Validate = true };
         foreach (var dimension in Dimensions())
         {
             var value = dimension.First(v => v.Value == matrixCase.Values[v.Dimension]);

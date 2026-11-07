@@ -1,4 +1,3 @@
-using SimpleSign.TestBench.Sandbox;
 
 namespace SimpleSign.TestBench.Signing;
 
@@ -25,8 +24,21 @@ public enum BaselineLevel
 
 public enum TsaProvider
 {
+    /// <summary>The connected Sandbox's TSA.</summary>
     Sandbox,
+
+    /// <summary>The connected Sandbox's TSA that requires HTTP Basic (the credentials are filled in).</summary>
     SandboxAuthenticated,
+
+    /// <summary>The connected Sandbox's TSA outside every trust anchor.</summary>
+    SandboxUntrusted,
+
+    /// <summary>The connected Sandbox's TSA whose certificate is revoked.</summary>
+    SandboxRevoked,
+
+    /// <summary>The connected Sandbox's TSA whose tokens name another TSA.</summary>
+    SandboxWrongName,
+
     DigiCert,
     Sectigo,
     FreeTsa,
@@ -157,8 +169,6 @@ public sealed record DocumentInfoEntry(string Key, string Value);
 /// <summary>Everything a PDF signature can be configured with.</summary>
 public sealed record SigningOptions
 {
-    public EnvironmentMode Environment { get; init; } = EnvironmentMode.Sandbox;
-
     // 1. Document
     public string? DocumentId { get; init; }
 

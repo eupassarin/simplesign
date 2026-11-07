@@ -56,13 +56,16 @@ public sealed record XmlSignResult(
 /// <summary>Signs with <c>XadesSigner</c> and validates the result.</summary>
 internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, ValidationService validation)
 {
+    /// <summary>Whether a Sandbox is connected (its TSAs and signers can be chosen).</summary>
+    public bool SandboxConnected => sandbox.IsConnected;
+
     public XmlFacts? Facts(string? dataId) =>
         dataId is not null && documents.TryGet(dataId, out var file) ? XmlInspector.Inspect(dataId, file!.FileName, file.Content) : null;
 
     public XmlOptionsReport Evaluate(XmlOptions o)
     {
         credentials.TryGet(o.CredentialId, out var credential);
-        return XmlCompatibility.Evaluate(o, Facts(o.DataId), credential?.Facts);
+        return XmlCompatibility.Evaluate(o, Facts(o.DataId), credential?.Facts, sandbox.IsConnected);
     }
 
     public async Task<XmlSignResult> RunAsync(XmlOptions options, CancellationToken cancellationToken)
@@ -77,7 +80,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         var credential = credentials.Get(o.CredentialId!);
         credential.LastUsed = DateTimeOffset.UtcNow;
         var data = documents.Get(o.DataId!);
-        var context = new PlanContext(o.Environment, credential, sandbox, documents);
+        var context = new PlanContext(credential, sandbox, documents);
         var watch = Stopwatch.StartNew();
         byte[] signed;
         string? achieved;
@@ -114,7 +117,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         string fileName = OutputName(o, data.FileName);
         var output = documents.Add(fileName, signed);
         var view = o.Validate
-            ? await ValidateAsync(output.Id, o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? ValidationSettings.For(o.Environment),
+            ? await ValidateAsync(output.Id, o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? new ValidationSettings(),
                 report.Effective.ExternalObjectId, cancellationToken)
             : null;
         return new XmlSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved, warnings, signMs, view, code, report.Issues);
@@ -155,7 +158,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     private async Task<List<XmlSignatureReport>> ValidateXadesAsync(byte[] xml, byte[]? data, StoredFile? externalObject, ValidationTrust trust,
         ValidationSettings settings, CancellationToken cancellationToken)
     {
-        var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger, chainRevocationChecker: validation.RevocationChecker(settings));
+        var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger, chainRevocationChecker: validation.RevocationChecker());
         // An external additional data object is found by the URI of its reference, which is its file name.
         var results = externalObject is null
             ? await validator.ValidateAllAsync(xml, null, data, cancellationToken)
@@ -487,7 +490,7 @@ internal sealed class XadesPlan
         var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Signing;\n\n");
         if (_context.IsSandbox)
         {
-            sb.Append("// Sandbox: sandboxHttp is an IHttpClientProvider that answers *.sandbox.simplesign.test (TSA and CRLs).\n");
+            sb.Append("// The SimpleSign Sandbox runs on this machine: sandboxHttp (below) lets the library reach it.\n");
         }
 
         sb.Append("byte[] xml = File.ReadAllBytes(\"document.xml\");\n");
@@ -529,7 +532,7 @@ internal sealed class XadesPlan
 
         if (_o.Level != BaselineLevel.BB)
         {
-            args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
+            args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
             args.Add("--level " + _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
         }
 
@@ -592,7 +595,7 @@ internal sealed class XadesPlan
         {
             if (_o.Level == BaselineLevel.BB)
             {
-                args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
+                args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
             }
 
             args.Add("--data-objects-timestamp");

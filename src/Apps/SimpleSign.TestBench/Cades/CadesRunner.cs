@@ -56,6 +56,9 @@ public sealed record CadesSignResult(
 /// <summary>Signs with <c>CadesSigner</c> and validates with <c>CadesSignatureValidator.ValidateAll</c>.</summary>
 internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, ValidationService validation)
 {
+    /// <summary>Whether a Sandbox is connected (its TSAs and signers can be chosen).</summary>
+    public bool SandboxConnected => sandbox.IsConnected;
+
     public CadesInputs Inputs(CadesOptions o)
     {
         string? dataName = o.DataId is { } dataId && documents.TryGet(dataId, out var data) ? data!.FileName : null;
@@ -76,7 +79,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     public CadesOptionsReport Evaluate(CadesOptions o)
     {
         credentials.TryGet(o.CredentialId, out var credential);
-        return CadesCompatibility.Evaluate(o, Inputs(o), credential?.Facts);
+        return CadesCompatibility.Evaluate(o, Inputs(o), credential?.Facts, sandbox.IsConnected);
     }
 
     public async Task<CadesSignResult> RunAsync(CadesOptions options, CancellationToken cancellationToken)
@@ -91,7 +94,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
 
         var credential = credentials.Get(o.CredentialId!);
         credential.LastUsed = DateTimeOffset.UtcNow;
-        var plan = new CadesPlan(o, new PlanContext(o.Environment, credential, sandbox, documents));
+        var plan = new CadesPlan(o, new PlanContext(credential, sandbox, documents));
         byte[]? data = o.DataId is { } id && o.Operation != CadesOperation.CounterSign && report.Options["data"].Visible ? documents.Get(id).Content : null;
         byte[]? existing = o.ExistingSignatureId is { } existingId && report.Options["existing"].Visible ? documents.Get(existingId).Content : null;
         var code = plan.Code(credential.Facts);
@@ -125,7 +128,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         // Detached signatures validate against the data; enveloped ones carry it.
         string? contentId = o.ContentType == CadesContentChoice.Detached && report.Options["data"].Visible ? o.DataId : null;
         var view = o.Validate
-            ? await ValidateAsync(output.Id, contentId, o.Validation ?? ValidationSettings.For(o.Environment), cancellationToken)
+            ? await ValidateAsync(output.Id, contentId, o.Validation ?? new ValidationSettings(), cancellationToken)
             : null;
         return new CadesSignResult(true, null, null, output.Id, fileName, signed.SignedArtifact.LongLength, report.EffectiveLevel, LevelName(signed.AchievedLevel),
             signed.HasSignatureTimestamp, signed.HasLongTermValidationMaterial, signed.HasArchiveTimestamp,
@@ -146,7 +149,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         }
 
         var trust = validation.Trust(settings);
-        var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger, chainRevocationChecker: validation.RevocationChecker(settings));
+        var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger, chainRevocationChecker: validation.RevocationChecker());
         var result = await validator.ValidateAllAsync(signature.Content, structure.IsDetached ? data : null, null, cancellationToken);
         var signers = result.Signers.Select(Signer).ToList();
         string overall = result.Errors.Count > 0 || signers.Count == 0 ? "Invalid"
@@ -419,7 +422,7 @@ internal sealed class CadesPlan
         var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Signing;\n\n");
         if (_context.IsSandbox)
         {
-            sb.Append("// Sandbox: sandboxHttp is an IHttpClientProvider that answers *.sandbox.simplesign.test (TSA and CRLs).\n");
+            sb.Append("// The SimpleSign Sandbox runs on this machine: sandboxHttp (below) lets the library reach it.\n");
         }
 
         sb.Append(_o.Operation switch
@@ -464,7 +467,7 @@ internal sealed class CadesPlan
 
         if (_o.Level != BaselineLevel.BB)
         {
-            args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
+            args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
             args.Add("--level " + _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
         }
 
@@ -540,7 +543,7 @@ internal sealed class CadesPlan
         {
             if (_o.Level == BaselineLevel.BB)
             {
-                args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
+                args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
             }
 
             args.Add("--content-timestamp");

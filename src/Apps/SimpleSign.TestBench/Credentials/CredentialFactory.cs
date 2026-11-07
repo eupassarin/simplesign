@@ -60,16 +60,20 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
     private const string RsaPssOid = "1.2.840.113549.1.1.10";
     private static readonly IReadOnlyList<HashChoice> Sha2 = [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512];
 
+    /// <summary>A signer of the connected Sandbox (its PKCS#12 was read when the Sandbox was connected).</summary>
+    /// <exception cref="SandboxNotConnectedException">No Sandbox is connected.</exception>
     public CredentialHandle OpenSandbox(SandboxCredentialRequest request)
     {
-        var signer = sandbox.Pki.Signer(request.SignerId);
-        var notes = new List<Note> { "Issued by the sandbox PKI (AC Raiz Sandbox SimpleSign). Validation in the TestBench trusts this root; real validators will not." };
+        var connection = sandbox.Connection;
+        var signer = connection.Signer(request.SignerId);
+        var notes = new List<Note> { new("Issued by the Sandbox '{0}' ({1}). Validation in the TestBench trusts its root while it is connected; real validators will not.", connection.Info.Name, connection.Url.AbsoluteUri) };
         if (signer.Problem is not null)
         {
-            notes.Add(new Note(signer.Description));
+            // The Sandbox's own text (it has no translation here).
+            notes.Add(new Note("{0}", signer.Description));
         }
 
-        return new CredentialHandle(CredentialKind.SandboxA1, "Sandbox A1 · " + signer.Title, signer.Certificate, sandbox.Pki.Chain, null, null, notes: notes);
+        return new CredentialHandle(CredentialKind.SandboxA1, "Sandbox · " + signer.Title, signer.Certificate, signer.Chain, null, null, notes: notes);
     }
 
     public CredentialHandle OpenPfx(PfxCredentialRequest request)
@@ -141,9 +145,9 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
                 "RSASSA-PSS needs the token to support CKM_RSA_PKCS_PSS; many tokens only do PKCS#1 v1.5."]);
     }
 
-    public async Task<IReadOnlyList<CscCredentialSummary>> ListCscAsync(CscCredentialListRequest request, EnvironmentMode mode, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<CscCredentialSummary>> ListCscAsync(CscCredentialListRequest request, CancellationToken cancellationToken)
     {
-        var client = await CscClientAsync(request.BaseUrl, request.ServiceAuth, request.AccessToken, request.ClientId, request.ClientSecret, mode, cancellationToken);
+        var client = await CscClientAsync(request.BaseUrl, request.ServiceAuth, request.AccessToken, request.ClientId, request.ClientSecret, cancellationToken);
         var credentials = await client.ListCredentialsAsync(cancellationToken);
         var result = credentials.Select(c => new CscCredentialSummary(c.Id, c.Certificate.GetNameInfo(X509NameType.SimpleName, false),
             c.AuthMode, c.Scal, c.MultiSign, c.KeyAlgorithms, c.IsKeyEnabled)).ToList();
@@ -155,12 +159,13 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
         return result;
     }
 
-    public async Task<CredentialHandle> OpenCscAsync(CscCredentialRequest request, EnvironmentMode mode, CancellationToken cancellationToken)
+    /// <summary>A CSC v2 credential: of the connected Sandbox when no base URL is given, else of the provider at that URL.</summary>
+    public async Task<CredentialHandle> OpenCscAsync(CscCredentialRequest request, CancellationToken cancellationToken)
     {
-        bool isSandbox = mode == EnvironmentMode.Sandbox;
-        var client = await CscClientAsync(request.BaseUrl, request.ServiceAuth, request.AccessToken, request.ClientId, request.ClientSecret, mode, cancellationToken);
+        bool isSandbox = IsSandboxCsc(request.BaseUrl);
+        var client = await CscClientAsync(request.BaseUrl, request.ServiceAuth, request.AccessToken, request.ClientId, request.ClientSecret, cancellationToken);
         ICscCredentialAuthorizer authorizer = request.Authorizer == CscAuthorizerKind.OAuth
-            ? new OAuthCscAuthorizer(isSandbox ? sandbox.Csc : new LoopbackAuthorizationHandler())
+            ? new OAuthCscAuthorizer(isSandbox ? SandboxEnvironment.CscAuthorization : new LoopbackAuthorizationHandler())
             : new ExplicitCscAuthorizer(request.Pin, string.IsNullOrWhiteSpace(request.Otp) ? null : request.Otp, Math.Max(1, request.SignaturesPerAuthorization));
         var signer = await CscSigner.CreateAsync(client, request.CredentialId, authorizer, cancellationToken: cancellationToken);
         var algorithms = signer.Credential.KeyAlgorithms;
@@ -183,33 +188,38 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
         };
         if (isSandbox)
         {
-            notes.Insert(0, "Simulated CSC v2 service (PIN 1234, OTP 123456; the OAuth page is approved automatically).");
+            var csc = sandbox.Connection.Info.Csc;
+            notes.Insert(0, new Note("The connected Sandbox's CSC v2 service (PIN {0}, OTP {1}; its OAuth page approves at once).", csc.Pin, csc.Otp));
         }
 
         return new CredentialHandle(CredentialKind.Csc, $"CSC · {client.Options.BaseUri.Host} · {signer.Credential.Id}", signer.Certificate, signer.Chain,
             signer, signer, hashes: Sha2, paddings: paddings, notes: notes);
     }
 
+    /// <summary>No base URL means the connected Sandbox's CSC service.</summary>
+    private bool IsSandboxCsc(string? baseUrl) => string.IsNullOrWhiteSpace(baseUrl) && sandbox.IsConnected;
+
     private async Task<CscClient> CscClientAsync(string? baseUrl, CscServiceAuth auth, string? accessToken, string? clientId, string? clientSecret,
-        EnvironmentMode mode, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
-        bool isSandbox = mode == EnvironmentMode.Sandbox;
+        bool isSandbox = IsSandboxCsc(baseUrl);
+        var csc = isSandbox ? sandbox.Connection.Info.Csc : null;
         var options = new CscClientOptions
         {
-            BaseUri = isSandbox ? SandboxCsc.BaseUri : HttpsUrl(baseUrl, "CSC base URL"),
-            AccessToken = auth == CscServiceAuth.Token ? (isSandbox ? SandboxCsc.ServiceToken : Required(accessToken, "access token")) : null,
-            ClientId = isSandbox ? SandboxCsc.ClientId : clientId,
-            ClientSecret = isSandbox ? SandboxCsc.ClientSecret : clientSecret,
+            BaseUri = csc is not null ? new Uri(csc.BaseUrl) : HttpsUrl(baseUrl, "CSC base URL"),
+            AccessToken = auth == CscServiceAuth.Token ? (csc?.ServiceToken ?? Required(accessToken, "access token")) : null,
+            ClientId = csc?.ClientId ?? clientId,
+            ClientSecret = csc?.ClientSecret ?? clientSecret,
             Logger = Runs.AmbientRunLogger.Instance,
         };
-        var client = new CscClient(options, isSandbox ? sandbox.Network.GetClient() : null);
+        var client = new CscClient(options, isSandbox ? sandbox.GetClient() : null);
         switch (auth)
         {
             case CscServiceAuth.ClientCredentials:
                 await client.AuthorizeServiceWithClientCredentialsAsync(cancellationToken);
                 break;
             case CscServiceAuth.OAuth:
-                await client.AuthorizeServiceAsync(isSandbox ? sandbox.Csc : new LoopbackAuthorizationHandler(), cancellationToken);
+                await client.AuthorizeServiceAsync(isSandbox ? SandboxEnvironment.CscAuthorization : new LoopbackAuthorizationHandler(), cancellationToken);
                 break;
             default:
                 break;

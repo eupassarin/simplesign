@@ -12,11 +12,19 @@ namespace SimpleSign.TestBench.Tests;
 [Trait("Category", "Unit")]
 public sealed class SandboxFaultTests(TestBenchFixture fixture) : IDisposable
 {
-    // The sandbox is shared by the collection: every test leaves it as it found it.
+    // The Sandbox is shared by the collection: every test puts its revocations and failures back.
     public void Dispose()
     {
-        fixture.Sandbox.Network.Faults = new SandboxFaults();
-        fixture.Sandbox.Pki.RestoreRevocations();
+        if (fixture.SandboxProblem is null)
+        {
+            fixture.Sandbox.ResetAsync().GetAwaiter().GetResult();
+        }
+    }
+
+    private Task FaultsAsync(SandboxFaults faults)
+    {
+        fixture.RequireSandbox();
+        return fixture.Sandbox.SetFaultsAsync(faults);
     }
 
     private Task<RunView> SignAsync(BaselineLevel level, bool returnLowerLevel = false, string signer = "rsa-2048") =>
@@ -26,21 +34,21 @@ public sealed class SandboxFaultTests(TestBenchFixture fixture) : IDisposable
     private Task<RunView> ValidateAsync(string fileId) =>
         fixture.Runs().RunAsync(new RunRequest("", JsonSerializer.SerializeToElement(new ValidateOptions(fileId), WorkbenchJson.Options), Kind: RunKinds.Validate), default);
 
-    [Fact]
+    [SkippableFact]
     public async Task TsaDown_TimestampedSignature_Fails()
     {
-        fixture.Sandbox.Network.Faults = new SandboxFaults(Tsa: TsaFault.Down);
+        await FaultsAsync(new SandboxFaults(Tsa: TsaFault.Down));
 
         var run = await SignAsync(BaselineLevel.BT);
 
         run.Success.ShouldBeFalse();
-        run.Logs.ShouldContain(l => l.Source == "network" && l.Message.Contains("fault: Down", StringComparison.Ordinal) && l.Message.EndsWith("503", StringComparison.Ordinal));
+        run.Logs.ShouldContain(l => l.Source == "network" && l.Message.Contains("/tsa/", StringComparison.Ordinal) && l.Message.EndsWith("503", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task TsaDown_WithReturnLowerLevel_SignsAtBasicAndWarns()
     {
-        fixture.Sandbox.Network.Faults = new SandboxFaults(Tsa: TsaFault.Down);
+        await FaultsAsync(new SandboxFaults(Tsa: TsaFault.Down));
 
         var run = await SignAsync(BaselineLevel.BT, returnLowerLevel: true);
 
@@ -50,20 +58,20 @@ public sealed class SandboxFaultTests(TestBenchFixture fixture) : IDisposable
         run.Warnings.ShouldNotBeEmpty();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task TsaInvalidToken_TimestampedSignature_Fails()
     {
-        fixture.Sandbox.Network.Faults = new SandboxFaults(Tsa: TsaFault.InvalidToken);
+        await FaultsAsync(new SandboxFaults(Tsa: TsaFault.InvalidToken));
 
         var run = await SignAsync(BaselineLevel.BT);
 
         run.Success.ShouldBeFalse();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task TsaSlow_TimestampedSignature_TakesAtLeastTheDelay()
     {
-        fixture.Sandbox.Network.Faults = new SandboxFaults(Tsa: TsaFault.Slow, TsaDelayMs: 400);
+        await FaultsAsync(new SandboxFaults(Tsa: TsaFault.Slow, TsaDelayMs: 400));
 
         var run = await SignAsync(BaselineLevel.BT);
 
@@ -71,38 +79,37 @@ public sealed class SandboxFaultTests(TestBenchFixture fixture) : IDisposable
         run.SignMs.ShouldBeGreaterThanOrEqualTo(380);
     }
 
-    [Fact]
-    public async Task CrlDown_LongTermSignature_Fails()
+    [SkippableFact]
+    public async Task RevocationDown_LongTermSignature_Fails()
     {
-        fixture.Sandbox.Network.Faults = new SandboxFaults(Crl: CrlFault.Down);
+        // CRLs and OCSP both down: no revocation data for B-LT.
+        await FaultsAsync(new SandboxFaults(Crl: CrlFault.Down, Ocsp: OcspFault.Down));
 
         var run = await SignAsync(BaselineLevel.BLT);
 
         run.Success.ShouldBeFalse();
-        run.Logs.ShouldContain(l => l.Source == "network" && l.Message.Contains("fault: Down", StringComparison.Ordinal));
+        run.Logs.ShouldContain(l => l.Source == "network" && l.Message.Contains("/crl/", StringComparison.Ordinal) && l.Message.EndsWith("503", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RevokeSigner_SignatureMadeBefore_IsNoLongerValid()
     {
-        var signed = await SignAsync(BaselineLevel.BB, signer: "rsa-3072");
+        // A signer no other test uses: a CRL that lists it, cached somewhere, cannot break them.
+        var signed = await SignAsync(BaselineLevel.BB, signer: "no-nonrepudiation");
         (await ValidateAsync(signed.OutputId!)).Overall.ShouldBe("Valid");
 
-        fixture.Sandbox.Pki.Revoke("rsa-3072");
+        await fixture.Sandbox.RevokeAsync("no-nonrepudiation");
         var revoked = await ValidateAsync(signed.OutputId!);
 
         revoked.Overall.ShouldBe("Invalid");
-        fixture.Sandbox.Pki.RevokedNow.ShouldBe(["rsa-3072"]);
 
-        fixture.Sandbox.Pki.RestoreRevocations();
+        await fixture.Sandbox.ResetAsync();
         (await ValidateAsync(signed.OutputId!)).Overall.ShouldBe("Valid");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task NoFaults_CadesLongTerm_StillSigns()
     {
-        fixture.Sandbox.Network.Faults.Any.ShouldBeFalse();
-
         var run = await fixture.Runs().RunAsync(new RunRequest(RunFormats.Cades, JsonSerializer.SerializeToElement(new CadesOptions
         {
             DataId = fixture.CadesSamples.Single(s => s.Id == "text").FileId,

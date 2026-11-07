@@ -1,4 +1,3 @@
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Validation;
 
@@ -46,8 +45,6 @@ public enum CadesExtendedChoice
 /// <summary>Everything the CAdES page can choose. Evaluated by <see cref="CadesCompatibility"/>.</summary>
 public sealed record CadesOptions
 {
-    public EnvironmentMode Environment { get; init; } = EnvironmentMode.Sandbox;
-
     public CadesOperation Operation { get; init; } = CadesOperation.Sign;
 
     /// <summary>The data to sign (Sign; CoSign of a detached signature).</summary>

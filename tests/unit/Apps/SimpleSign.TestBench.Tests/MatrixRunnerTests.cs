@@ -8,9 +8,10 @@ namespace SimpleSign.TestBench.Tests;
 [Trait("Category", "Unit")]
 public sealed class MatrixRunnerTests(TestBenchFixture fixture, ITestOutputHelper output)
 {
-    [Fact]
+    [SkippableFact]
     public void Cases_GeneratedFromCompatibility_CoverEverySingleValueAndPairs()
     {
+        fixture.RequireSandbox();
         using var matrix = new MatrixRunner(fixture.Sandbox, fixture.Documents, fixture.Credentials, fixture.Factory);
 
         var cases = matrix.Cases();
@@ -26,9 +27,10 @@ public sealed class MatrixRunnerTests(TestBenchFixture fixture, ITestOutputHelpe
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_AllCases_EveryCasePasses()
     {
+        fixture.RequireSandbox();
         using var matrix = new MatrixRunner(fixture.Sandbox, fixture.Documents, fixture.Credentials, fixture.Factory);
 
         var result = await matrix.RunAsync(new MatrixRunRequest(), default);
@@ -39,7 +41,7 @@ public sealed class MatrixRunnerTests(TestBenchFixture fixture, ITestOutputHelpe
         }
 
         output.WriteLine($"{result.Passed}/{result.Total} passed in {result.Ms} ms; {result.UncoverablePairs} pairs can never be combined.");
-        result.Failed.ShouldBe(0);
+        result.Failed.ShouldBe(0, string.Join("\n", result.Cases.Where(c => c.Status != "pass").Select(c => $"{c.Id} {string.Join(" ", c.Values.Select(v => $"{v.Key}={v.Value}"))} → {c.Detail}")));
     }
 }
 
@@ -49,9 +51,10 @@ public sealed class CadesMatrixTests(TestBenchFixture fixture, ITestOutputHelper
 {
     private CadesMatrix Matrix() => new(fixture.Cades, new SimpleSign.TestBench.Cades.CadesSampleStore { Samples = fixture.CadesSamples }, fixture.Credentials, fixture.Factory);
 
-    [Fact]
+    [SkippableFact]
     public void Cases_CoverEveryOperationTypeAndExtendedForm()
     {
+        fixture.RequireSandbox();
         using var matrix = Matrix();
 
         var cases = matrix.Cases();
@@ -72,9 +75,10 @@ public sealed class CadesMatrixTests(TestBenchFixture fixture, ITestOutputHelper
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_AllCases_EveryCasePasses()
     {
+        fixture.RequireSandbox();
         using var matrix = Matrix();
 
         var result = await matrix.RunAsync(new MatrixRunRequest(Format: "cades"), default);
@@ -85,7 +89,7 @@ public sealed class CadesMatrixTests(TestBenchFixture fixture, ITestOutputHelper
         }
 
         output.WriteLine($"{result.Passed}/{result.Total} passed in {result.Ms} ms; {result.UncoverablePairs} pairs can never be combined.");
-        result.Failed.ShouldBe(0);
+        result.Failed.ShouldBe(0, string.Join("\n", result.Cases.Where(c => c.Status != "pass").Select(c => $"{c.Id} {string.Join(" ", c.Values.Select(v => $"{v.Key}={v.Value}"))} → {c.Detail}")));
     }
 }
 
@@ -93,9 +97,10 @@ public sealed class CadesMatrixTests(TestBenchFixture fixture, ITestOutputHelper
 [Trait("Category", "Unit")]
 public sealed class XmlMatrixTests(TestBenchFixture fixture, ITestOutputHelper output)
 {
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_AllCases_EveryCasePasses()
     {
+        fixture.RequireSandbox();
         using var matrix = new XmlMatrix(fixture.Xml, new SimpleSign.TestBench.Xml.XmlSampleStore { Samples = fixture.XmlSamples }, fixture.Credentials, fixture.Factory);
 
         var cases = matrix.Cases();
@@ -108,6 +113,6 @@ public sealed class XmlMatrixTests(TestBenchFixture fixture, ITestOutputHelper o
         }
 
         output.WriteLine($"{result.Passed}/{result.Total} passed in {result.Ms} ms; {result.UncoverablePairs} pairs can never be combined.");
-        result.Failed.ShouldBe(0);
+        result.Failed.ShouldBe(0, string.Join("\n", result.Cases.Where(c => c.Status != "pass").Select(c => $"{c.Id} {string.Join(" ", c.Values.Select(v => $"{v.Key}={v.Value}"))} → {c.Detail}")));
     }
 }

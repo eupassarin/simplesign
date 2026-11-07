@@ -1,5 +1,4 @@
 using Shouldly;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Validation;
 
 namespace SimpleSign.TestBench.Tests;
@@ -9,7 +8,7 @@ namespace SimpleSign.TestBench.Tests;
 [Trait("Category", "Unit")]
 public sealed class ValidationServiceTests(TestBenchFixture fixture)
 {
-    [Theory]
+    [SkippableTheory]
     [InlineData("valid")]
     [InlineData("tampered-content")]
     [InlineData("tampered-cms")]
@@ -46,7 +45,7 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ReportAsync_ValidControl_HasLevelsCertificatesAndDss()
     {
         var sample = fixture.ValidationSamples.Single(s => s.Id == "valid");
@@ -59,11 +58,12 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
         signature.Signer!.Subject.ShouldContain("Maria da Silva");
         signature.Timestamp.ShouldNotBeNull();
         signature.Coverage!.Revisions.ShouldBeGreaterThan(1);
-        report.Dss!.Crls.ShouldBeGreaterThan(0);
+        // The Sandbox answers OCSP too, which the library asks first: the DSS has CRLs or OCSP responses.
+        (report.Dss!.Crls + report.Dss.Ocsps).ShouldBeGreaterThan(0);
         report.Code.CSharp.ShouldContain("PdfSignatureValidator");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ReportAsync_SandboxRootNotTrusted_IsIndeterminate()
     {
         var sample = fixture.ValidationSamples.Single(s => s.Id == "valid");
@@ -73,11 +73,11 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
         report.Signatures.Single().Report.Indication.ShouldNotBe("Valid");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ReportAsync_CustomRootUpload_TrustsIt()
     {
         var sample = fixture.ValidationSamples.Single(s => s.Id == "valid");
-        string rootId = fixture.Documents.Add("root.cer", fixture.Sandbox.Pki.Root.RawData).Id;
+        string rootId = fixture.Documents.Add("root.cer", fixture.Sandbox.Connection.Root.RawData).Id;
 
         var report = await fixture.Validation.ReportAsync(sample.FileId, new ValidationSettings { Trust = [], CustomRootUploadIds = [rootId] }, default);
 
@@ -85,7 +85,7 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
         report.Code.Cli.ShouldContain("--trust root.cer");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BulkAsync_AllSamples_ReportsEachFile()
     {
         var inspection = new InspectionService(fixture.Validation, fixture.Documents);
@@ -97,7 +97,7 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
         report.Items.ShouldAllBe(i => i.Error == null);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task InspectAsync_BltSample_ListsSignatureDictionaryAndDss()
     {
         var inspection = new InspectionService(fixture.Validation, fixture.Documents);
@@ -113,6 +113,6 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
     }
 
     [Fact]
-    public void For_RealMode_TrustsSystemRoots() =>
-        ValidationSettings.For(EnvironmentMode.Real).Trust.ShouldBe([TrustChoice.System]);
+    public void Defaults_TrustTheSandboxAndSystemRoots() =>
+        new ValidationSettings().Trust.ShouldBe([TrustChoice.Sandbox, TrustChoice.System]);
 }

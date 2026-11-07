@@ -287,7 +287,7 @@ function ExistingField({ value, onChange }: { value: string; onChange: (value: s
 }
 
 function Credential() {
-  const { environment, env, credential, set } = useWorkbench()
+  const { env, credential, set } = useWorkbench()
   const t = useT()
   const [open, setOpen] = useState(false)
   if (credential && !open) {
@@ -299,5 +299,5 @@ function Credential() {
       </div>
     )
   }
-  return <CredentialPicker environment={environment} env={env} credential={credential} onCredential={(facts) => { set("credentialId", facts.id); setOpen(false) }} />
+  return <CredentialPicker env={env} credential={credential} onCredential={(facts) => { set("credentialId", facts.id); setOpen(false) }} />
 }

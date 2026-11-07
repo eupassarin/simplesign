@@ -22,7 +22,7 @@ internal static class CodeGenerator
         sb.Append("using SimpleSign.PAdES;\nusing SimpleSign.PAdES.Signing;\nusing SimpleSign.Core.Signing;\n\n");
         if (plan.IsSandbox)
         {
-            sb.Append("// Sandbox: sandboxHttp is an IHttpClientProvider that answers *.sandbox.simplesign.test (TSA and CRLs).\n");
+            sb.Append("// The SimpleSign Sandbox runs on this machine: sandboxHttp (below) lets the library reach it.\n");
             sb.Append("// In production, omit it: the library uses a shared HttpClient.\n");
         }
 

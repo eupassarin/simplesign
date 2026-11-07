@@ -1,6 +1,5 @@
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Localization;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 
 namespace SimpleSign.TestBench.Xml;
@@ -26,13 +25,12 @@ public static class XmlCompatibility
     public const string StepCrypto = "crypto";
     public const string StepDetails = "details";
 
-    public static XmlOptionsReport Evaluate(XmlOptions options, XmlFacts? data, CredentialFacts? credential)
+    public static XmlOptionsReport Evaluate(XmlOptions options, XmlFacts? data, CredentialFacts? credential, bool sandboxConnected = true)
     {
         ArgumentNullException.ThrowIfNull(options);
         var state = new Dictionary<string, OptionState>(StringComparer.Ordinal);
         var issues = new List<OptionIssue>();
         var o = options;
-        bool sandbox = o.Environment == EnvironmentMode.Sandbox;
 
         void Set(string key, OptionState value) => state[key] = value;
         void Error(string step, string message) => issues.Add(new(IssueSeverity.Error, step, message));
@@ -48,7 +46,7 @@ public static class XmlCompatibility
             Error(StepData, L.T("The file is not well-formed XML: {0}", data.Error));
         }
 
-        string level = EvaluateXades(o, data, credential, state, Error, sandbox, out var effective);
+        string level = EvaluateXades(o, data, credential, state, Error, sandboxConnected, out var effective);
 
         // ── 2. Signer ──────────────────────────────────────────────────
         Set("signingPolicy", OptionState.Shown);
@@ -57,7 +55,7 @@ public static class XmlCompatibility
     }
 
     private static string EvaluateXades(XmlOptions o, XmlFacts? data, CredentialFacts? credential, Dictionary<string, OptionState> state,
-        Action<string, string> error, bool sandbox, out XmlOptions effective)
+        Action<string, string> error, bool sandboxConnected, out XmlOptions effective)
     {
         void Set(string key, OptionState value) => state[key] = value;
 
@@ -143,10 +141,10 @@ public static class XmlCompatibility
         bool dataObjectsTimestamp = o.DataObjectsTimestamp && !counterSign;
         bool needsTsa = dataObjectsTimestamp || o.Level != BaselineLevel.BB;
         Set("timestamp", needsTsa ? OptionState.Shown : OptionState.Hidden);
-        SharedRules.TsaProviders(sandbox, Set);
+        SharedRules.TsaProviders(sandboxConnected, Set);
         if (needsTsa)
         {
-            SharedRules.CheckTsa(o.Timestamp, L.T("Signature TSA"), state, error, sandbox, StepType);
+            SharedRules.CheckTsa(o.Timestamp, L.T("Signature TSA"), state, error, StepType);
         }
 
         var padding = SharedRules.Crypto(o.Hash, o.Padding, credential, state, error, StepCrypto);

@@ -4,7 +4,8 @@ using SimpleSign.Core.Signing;
 using SimpleSign.HtmlToPdf;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.TestBench.Sandbox;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SimpleSign.TestBench.Documents;
 
@@ -13,11 +14,12 @@ internal sealed record SampleDocument(string Id, string Title, string Descriptio
 
 /// <summary>
 /// The sample PDFs: plain, PDF/A, with an empty signature field, already signed and certified at
-/// each DocMDP level. Generated at startup with the library itself (HtmlToPdf and the sandbox PKI).
+/// each DocMDP level. Generated at startup with the library itself (HtmlToPdf, and a throwaway
+/// self-signed signer for the signed ones: they show document structure, not a trusted signer).
 /// </summary>
 internal static class SampleDocuments
 {
-    public static async Task<IReadOnlyList<SampleDocument>> CreateAsync(SandboxEnvironment sandbox, CancellationToken cancellationToken = default)
+    public static async Task<IReadOnlyList<SampleDocument>> CreateAsync(CancellationToken cancellationToken = default)
     {
         byte[] contract = await HtmlToPdfConverter.Html(ContractHtml("Contrato de Prestação de Serviços", pages: 2))
             .WithTitle("Contrato de Prestação de Serviços")
@@ -34,11 +36,13 @@ internal static class SampleDocuments
             .ConvertAsync(cancellationToken);
         byte[] pdfA1 = ClaimPdfA1(pdfA2);
 
-        var signer = sandbox.Pki.Signer("rsa-2048");
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=Maria da Silva, OU=Samples, O=SimpleSign TestBench, C=BR", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, true));
+        using var signer = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
         async Task<byte[]> Sign(byte[] pdf, Func<PadesSignerBuilder, PadesSignerBuilder> configure) =>
             await configure(PadesSigner.Document(pdf)
-                    .WithCertificate(signer.Certificate, sandbox.Pki.Chain)
-                    .WithHttpClientProvider(sandbox.Network)
+                    .WithCertificate(signer)
                     .WithLevel(AdesBaselineProfile.Basic()))
                 .SignAsync(cancellationToken);
 
@@ -51,7 +55,7 @@ internal static class SampleDocuments
         [
             new("contract", "Contract (2 pages)", "A plain PDF 1.7 document with no signatures. Every option is available.", "contrato.pdf", contract),
             new("empty-field", "Form with an empty signature field", "Has an unsigned field 'Assinatura' with a visible rectangle, so you can sign into an existing field.", "formulario-campo-vazio.pdf", EmptyFieldPdf()),
-            new("signed", "Already signed (B-B)", "Signed once by the sandbox signer. Adds a second signature in a new revision; certification is no longer possible.", "contrato-assinado.pdf", signed),
+            new("signed", "Already signed (B-B)", "Signed once (by a sample signer). Adds a second signature in a new revision; certification is no longer possible.", "contrato-assinado.pdf", signed),
             new("certified-p1", "Certified, DocMDP P=1 (no changes)", "A certification signature that forbids any change: further signatures are refused (ISO 32000-1 §12.8.2.2).", "contrato-certificado-p1.pdf", p1),
             new("certified-p2", "Certified, DocMDP P=2 (form filling and signing)", "Certified with P=2: further approval signatures are allowed.", "contrato-certificado-p2.pdf", p2),
             new("certified-p3", "Certified, DocMDP P=3 (+ annotations)", "Certified with P=3: further signatures and annotations are allowed.", "contrato-certificado-p3.pdf", p3),

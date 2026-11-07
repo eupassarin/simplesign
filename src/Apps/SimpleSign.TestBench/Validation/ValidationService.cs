@@ -16,7 +16,7 @@ namespace SimpleSign.TestBench.Validation;
 /// <summary>Which roots the validator trusts.</summary>
 public enum TrustChoice
 {
-    /// <summary>The sandbox root (AC Raiz Sandbox SimpleSign).</summary>
+    /// <summary>The root of the connected SimpleSign Sandbox.</summary>
     Sandbox,
 
     /// <summary>The operating system's trusted roots.</summary>
@@ -26,9 +26,8 @@ public enum TrustChoice
 /// <summary>How to validate.</summary>
 public sealed record ValidationSettings
 {
-    public EnvironmentMode Environment { get; init; } = EnvironmentMode.Sandbox;
-
-    public IReadOnlyList<TrustChoice> Trust { get; init; } = [TrustChoice.Sandbox];
+    /// <summary>The roots to trust. Default: the connected Sandbox's root and the operating system's.</summary>
+    public IReadOnlyList<TrustChoice> Trust { get; init; } = [TrustChoice.Sandbox, TrustChoice.System];
 
     /// <summary>Uploaded root certificates (DER or PEM) to trust as well.</summary>
     public IReadOnlyList<string> CustomRootUploadIds { get; init; } = [];
@@ -36,11 +35,6 @@ public sealed record ValidationSettings
     public bool CheckRevocation { get; init; } = true;
 
     public int TimeoutSeconds { get; init; } = 10;
-
-    /// <summary>The defaults for a mode: the sandbox root, or the OS roots.</summary>
-    public static ValidationSettings For(EnvironmentMode mode) => mode == EnvironmentMode.Sandbox
-        ? new ValidationSettings()
-        : new ValidationSettings { Environment = mode, Trust = [TrustChoice.System] };
 }
 
 public sealed record CertificateView(string Subject, string Issuer, string SerialNumber, string NotBefore, string NotAfter, string KeyAlgorithm, int? KeySize, bool HasNonRepudiation, string Thumbprint);
@@ -150,15 +144,12 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     internal PdfSignatureValidator CreateValidator(ValidationSettings settings)
     {
         var trust = Trust(settings);
-        return new PdfSignatureValidator(sandbox.HttpFor(settings.Environment), trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), [], []);
+        return new PdfSignatureValidator(sandbox, trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), [], []);
     }
 
-    /// <summary>The chain revocation checker of the CAdES and XAdES validators, on the environment's network.</summary>
-    internal Core.Revocation.IChainRevocationChecker RevocationChecker(ValidationSettings settings)
-    {
-        var http = sandbox.HttpFor(settings.Environment);
-        return new Core.Revocation.ChainRevocationChecker(http.GetClient(), RunLog.Logger, http.OutboundPolicy);
-    }
+    /// <summary>The chain revocation checker of the CAdES and XAdES validators, on the TestBench's network.</summary>
+    internal Core.Revocation.IChainRevocationChecker RevocationChecker() =>
+        new Core.Revocation.ChainRevocationChecker(sandbox.GetClient(), RunLog.Logger, sandbox.OutboundPolicy);
 
     /// <summary>The ETSI name of a sub-indication, or null.</summary>
     internal static string? SubIndicationName(SignatureSubIndication? subIndication) => subIndication?.ToEtsiName();
@@ -187,9 +178,9 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     internal ValidationTrust Trust(ValidationSettings settings)
     {
         var roots = new List<X509Certificate2>();
-        if (settings.Trust.Contains(TrustChoice.Sandbox))
+        if (settings.Trust.Contains(TrustChoice.Sandbox) && sandbox.Current is { } connection)
         {
-            roots.Add(sandbox.Pki.Root);
+            roots.Add(connection.Root);
         }
 
         foreach (string id in settings.CustomRootUploadIds)

@@ -1,5 +1,4 @@
 using Shouldly;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 
 namespace SimpleSign.TestBench.Tests;
@@ -9,7 +8,7 @@ namespace SimpleSign.TestBench.Tests;
 [Trait("Category", "Unit")]
 public sealed class CodeGeneratorTests(TestBenchFixture fixture)
 {
-    [Fact]
+    [SkippableFact]
     public async Task Generate_BaselineBltWithPss_PrintsProfileAndAlgorithm()
     {
         var result = await fixture.Runner.RunAsync(fixture.Options() with { Level = BaselineLevel.BLT, Padding = RsaPadding.Pss, Hash = HashChoice.Sha384 }, default);
@@ -22,23 +21,23 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--hash SHA384");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Generate_AuthenticatedTsa_NeverPrintsTheSecret()
     {
         var options = fixture.Options() with
         {
             Level = BaselineLevel.BT,
-            Timestamp = new TimestampChoice { Provider = TsaProvider.SandboxAuthenticated, Auth = TsaAuth.Basic, User = SandboxPki.TsaUser, Password = SandboxPki.TsaPassword },
+            Timestamp = new TimestampChoice { Provider = TsaProvider.SandboxAuthenticated, Auth = TsaAuth.Basic, User = fixture.Sandbox.Connection.Info.Tsa.User, Password = fixture.Sandbox.Connection.Info.Tsa.Password },
         };
 
         var result = await fixture.Runner.RunAsync(options, default);
 
         result.Success.ShouldBeTrue(result.Error);
-        result.Code.CSharp.ShouldNotContain(SandboxPki.TsaPassword);
+        result.Code.CSharp.ShouldNotContain(fixture.Sandbox.Connection.Info.Tsa.Password);
         result.Code.CSharp.ShouldContain("Authorization = new AuthenticationHeaderValue(\"Basic\"");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Generate_ExistingField_NamesTheField()
     {
         var options = fixture.Options("empty-field") with
@@ -54,7 +53,7 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--existing-field \"Assinatura\"");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Generate_Deferred_PrintsThreePhases()
     {
         var result = await fixture.Runner.RunAsync(fixture.Options() with { Mode = RunMode.Deferred }, default);

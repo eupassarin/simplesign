@@ -11,18 +11,31 @@ using SimpleSign.TestBench.Xml;
 
 namespace SimpleSign.TestBench.Endpoints;
 
-public sealed record SandboxSignerView(string Id, string Title, string Description, string KeyType, bool IsUsable, string? Problem, string Holder, string NotAfter);
+public sealed record SandboxSignerView(string Id, string Title, string Description, string KeyType, bool IsUsable, string? Problem, string? Evidence, string Holder, string NotAfter);
 
-public sealed record EnvironmentView(
+/// <summary>The connected SimpleSign Sandbox, as the UI shows it.</summary>
+public sealed record SandboxView(
+    string Url,
+    string Name,
+    string RootSubject,
+    string RootThumbprint,
+    IReadOnlyList<string> LoopbackOrigins,
     IReadOnlyList<SandboxSignerView> Signers,
     string TsaUrl,
     string AuthenticatedTsaUrl,
-    string TsaUser,
-    string TsaPassword,
+    string UntrustedTsaUrl,
+    string RevokedTsaUrl,
+    string WrongNameTsaUrl,
     string CscUrl,
     string CscPin,
     string CscOtp,
-    IReadOnlyList<CscCredentialSummary> CscCredentials,
+    IReadOnlyList<CscCredentialSummary> CscCredentials);
+
+/// <summary>The TestBench's environment: the connected Sandbox (if any) and the runtime.</summary>
+public sealed record EnvironmentView(
+    SandboxView? Sandbox,
+    string? SandboxError,
+    string? RememberedSandboxUrl,
     string Runtime,
     bool Sha3Supported,
     string Version);
@@ -37,18 +50,7 @@ internal static class Api
     {
         var api = app.MapGroup("/api");
 
-        api.MapGet("/env", (SandboxEnvironment sandbox) => new EnvironmentView(
-            [.. sandbox.Pki.Signers.Select(s => new SandboxSignerView(s.Id, L.T(s.Title), L.T(s.Description), s.KeyType.ToString(), s.IsUsable, s.Problem is null ? null : L.T(s.Problem),
-                s.Certificate.GetNameInfo(System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false),
-                s.Certificate.NotAfter.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)))],
-            SandboxPki.TsaUri.AbsoluteUri, SandboxPki.AuthenticatedTsaUri.AbsoluteUri, SandboxPki.TsaUser, SandboxPki.TsaPassword,
-            SandboxCsc.BaseUri.AbsoluteUri, SandboxCsc.Pin, SandboxCsc.Otp,
-            [.. sandbox.Csc.Credentials.Select(c => new CscCredentialSummary(c.Id, L.T(c.Description), c.AuthMode, c.Scal, c.MultiSign, c.Algorithms, true))],
-            System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + " · " + System.Runtime.InteropServices.RuntimeInformation.OSDescription,
-            SHA3_256.IsSupported,
-            typeof(PadesSigner).Assembly.GetName().Version?.ToString(3) ?? "?"));
-
-        api.MapGet("/sandbox/log", (SandboxEnvironment sandbox) => sandbox.Network.Log.Reverse().Take(100));
+        api.MapGet("/env", (SandboxEnvironment sandbox) => Environment(sandbox));
         api.MapGet("/catalog", () => OptionCatalog.Localized());
 
         // Documents and uploads
@@ -96,19 +98,19 @@ internal static class Api
         credentials.MapPost("/store", (StoreCredentialRequest body, CredentialStore store) => Open(store, () => CredentialFactory.OpenStore(body)));
         credentials.MapGet("/pkcs11", async (CancellationToken ct) => await CredentialFactory.ListTokensAsync(ct));
         credentials.MapPost("/pkcs11", (Pkcs11CredentialRequest body, CredentialStore store) => Open(store, () => CredentialFactory.OpenPkcs11(body)));
-        credentials.MapPost("/csc/list", async (CscCredentialListRequest body, EnvironmentMode? environment, CredentialFactory factory, CancellationToken ct) =>
+        credentials.MapPost("/csc/list", async (CscCredentialListRequest body, CredentialFactory factory, CancellationToken ct) =>
         {
             try
             {
-                return Results.Ok(await factory.ListCscAsync(body, environment ?? EnvironmentMode.Sandbox, ct));
+                return Results.Ok(await factory.ListCscAsync(body, ct));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
         });
-        credentials.MapPost("/csc", async (CscCredentialRequest body, EnvironmentMode? environment, CredentialFactory factory, CredentialStore store, CancellationToken ct) =>
-            await OpenAsync(store, () => factory.OpenCscAsync(body, environment ?? EnvironmentMode.Sandbox, ct)));
+        credentials.MapPost("/csc", async (CscCredentialRequest body, CredentialFactory factory, CredentialStore store, CancellationToken ct) =>
+            await OpenAsync(store, () => factory.OpenCscAsync(body, ct)));
         credentials.MapDelete("/{id}", (string id, CredentialStore store) =>
         {
             store.Remove(id);
@@ -187,4 +189,25 @@ internal static class Api
         await upload.CopyToAsync(memory, ct);
         return store.Add(upload.FileName, memory.ToArray());
     }
+
+    internal static EnvironmentView Environment(SandboxEnvironment sandbox) => new(
+        sandbox.Current is { } c ? Sandbox(c) : null,
+        sandbox.LastError,
+        sandbox.RememberedUrl,
+        System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + " · " + System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+        SHA3_256.IsSupported,
+        typeof(PadesSigner).Assembly.GetName().Version?.ToString(3) ?? "?");
+
+    private static SandboxView Sandbox(SandboxConnection c) => new(
+        c.Url.AbsoluteUri,
+        c.Info.Name,
+        c.Info.RootSubject,
+        c.Info.RootThumbprint,
+        c.Info.LoopbackOrigins,
+        [.. c.Signers.Select(s => new SandboxSignerView(s.Id, L.T(s.Title), L.T(s.Description), s.KeyType, s.IsUsable, s.Problem is null ? null : L.T(s.Problem), s.Evidence,
+            s.Certificate.GetNameInfo(System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false),
+            s.Certificate.NotAfter.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)))],
+        c.Info.Tsa.Url, c.Info.Tsa.AuthenticatedUrl, c.Info.Tsa.UntrustedUrl, c.Info.Tsa.RevokedUrl, c.Info.Tsa.WrongNameUrl,
+        c.Info.Csc.BaseUrl, c.Info.Csc.Pin, c.Info.Csc.Otp,
+        [.. c.Info.Csc.Credentials.Select(x => new CscCredentialSummary(x.Id, L.T(x.Description), x.AuthMode, x.Scal, x.MultiSign, [], true))]);
 }

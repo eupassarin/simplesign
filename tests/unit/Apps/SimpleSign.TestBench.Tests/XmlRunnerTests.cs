@@ -16,7 +16,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
     private static string Errors(XmlSignResult r) =>
         string.Join("; ", r.Issues.Select(i => i.Message).Concat(r.Validation?.Signatures.SelectMany(s => s.Errors) ?? []).Concat(r.Validation?.Errors ?? []).Append(r.Error ?? ""));
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(XadesFormChoice.Detached, BaselineLevel.BT)]
     [InlineData(XadesFormChoice.Enveloping, BaselineLevel.BLT)]
@@ -30,7 +30,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Validation.SignatureXml.ShouldNotBeNull();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_ProductionPlace_IsInTheSignatureAndTheCode()
     {
         var options = Xades() with { PlaceCity = "Recife", PlaceState = "PE", PlaceCountry = "BR", PlaceStreet = " " };
@@ -49,7 +49,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldNotContain("--place-street");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CrlFirstAtLongTerm_IsValidAndInTheCode()
     {
         var options = Xades() with { Level = BaselineLevel.BLT, RevocationPreference = SimpleSign.Core.Signing.RevocationPreference.CrlFirst };
@@ -62,7 +62,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--revocation-preference crl");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(XadesFormChoice.Enveloping, BaselineLevel.BT)]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BLTA)]
@@ -80,7 +80,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--canonicalization inclusive");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB)]
     [InlineData(BaselineLevel.BLTA)]
     public async Task RunAsync_CustomPolicyWithDocument_EmbedsThePolicyStore(BaselineLevel level)
@@ -100,7 +100,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--policy-specification \"https://example.com/policy-syntax\"");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(XadesFormChoice.Enveloping, BaselineLevel.BT)]
     [InlineData(XadesFormChoice.Detached, BaselineLevel.BLTA)]
@@ -117,7 +117,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithDataObjectsTimestamp(tsa)");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(BaselineLevel.BB)]
     [InlineData(BaselineLevel.BT)]
     public async Task RunAsync_CounterSign_AddsACounterSignatureUnderTheSignature(BaselineLevel level)
@@ -140,7 +140,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--countersign");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CounterSignDocumentWithoutSignature_IsRefused()
     {
         var result = await fixture.Xml.RunAsync(Xades() with { CounterSign = true }, default);
@@ -149,7 +149,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Issues.ShouldContain(i => i.Severity == IssueSeverity.Error);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(XadesFormChoice.Enveloped, BaselineLevel.BB)]
     [InlineData(XadesFormChoice.Detached, BaselineLevel.BLTA)]
     public async Task RunAsync_AdditionalDataObjects_AreSignedAndValidated(XadesFormChoice form, BaselineLevel level)
@@ -175,7 +175,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
             .Overall.ShouldNotBe("Valid");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_CertifiedRoleAndSignedAssertion_AreInSignerRoleV2()
     {
         // Any single DER SEQUENCE stands for the attribute certificate: the library embeds it as given.
@@ -194,7 +194,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithAttributeCertificates([attributeCertificate])");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_Xades132FormWithAttributeCertificate_LeavesItOut()
     {
         var attributeCertificate = fixture.Documents.Add("role.ac", [0x30, 0x03, 0x04, 0x01, 0xAA]);
@@ -209,7 +209,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         signatureXml.ShouldNotContain("X509AttributeCertificate");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RunAsync_XadesDetails_AreInTheSignatureAndTheCode()
     {
         var options = Xades() with { SignerRoles = ["Gerente"], MimeType = "text/xml", Commitment = "ProofOfOrigin", Hash = HashChoice.Sha512, Padding = RsaPadding.Pss, Form = XadesFormChoice.Detached, DataUri = "pedido.xml" };
@@ -224,7 +224,7 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.Cli.ShouldContain("--data-uri pedido.xml");
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("v-xades")]
     [InlineData("v-detached")]
     [InlineData("v-changed")]

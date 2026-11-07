@@ -40,7 +40,7 @@ internal static class Translations
         ["Form with an empty signature field"] = "Formulário com campo de assinatura vazio",
         ["Has an unsigned field 'Assinatura' with a visible rectangle, so you can sign into an existing field."] = "Tem um campo 'Assinatura' não assinado com retângulo visível, para assinar em um campo existente.",
         ["Already signed (B-B)"] = "Já assinado (B-B)",
-        ["Signed once by the sandbox signer. Adds a second signature in a new revision; certification is no longer possible."] = "Assinado uma vez pelo signatário do sandbox. A segunda assinatura entra em nova revisão; certificar não é mais possível.",
+        ["Signed once (by a sample signer). Adds a second signature in a new revision; certification is no longer possible."] = "Assinado uma vez (por um signatário de exemplo). A segunda assinatura entra em nova revisão; certificar não é mais possível.",
         ["Certified, DocMDP P=1 (no changes)"] = "Certificado, DocMDP P=1 (sem alterações)",
         ["A certification signature that forbids any change: further signatures are refused (ISO 32000-1 §12.8.2.2)."] = "Uma assinatura de certificação que proíbe qualquer alteração: novas assinaturas são recusadas (ISO 32000-1 §12.8.2.2).",
         ["Certified, DocMDP P=2 (form filling and signing)"] = "Certificado, DocMDP P=2 (preenchimento e assinaturas)",
@@ -657,5 +657,22 @@ internal static class Translations
         ["Key usage has digitalSignature only (no nonRepudiation): signing works; some validation policies flag it."] = "O uso de chave tem só digitalSignature (sem nonRepudiation): a assinatura funciona; algumas políticas de validação apontam isso.",
         ["Document changed after signing"] = "Documento alterado depois de assinado",
         ["The order total was changed after signing: the reference digest no longer matches."] = "O total do pedido foi alterado depois da assinatura: o digest da referência não confere mais.",
+
+        // ── Connected Sandbox ──────────────────────────────────────────
+        ["Connect a SimpleSign Sandbox in Environment to use its TSAs."] = "Conecte um SimpleSign Sandbox em Ambiente para usar as ACTs dele.",
+        ["Enter the Sandbox's address, such as http://localhost:5300."] = "Informe o endereço do Sandbox, como http://localhost:5300.",
+        ["No SimpleSign Sandbox answered at {0}: {1}"] = "Nenhum SimpleSign Sandbox respondeu em {0}: {1}",
+        ["Certificates of the connected SimpleSign Sandbox: every key type and the cases a client must handle."] = "Certificados do SimpleSign Sandbox conectado: todos os tipos de chave e os casos que um cliente precisa tratar.",
+        ["Each one chains to the Sandbox's root and points to its CRLs (HTTP, HTTPS or LDAP) and OCSP responder, on real endpoints."] = "Cada um encadeia na raiz do Sandbox e aponta para as LCRs dele (HTTP, HTTPS ou LDAP) e para o responder OCSP, em endpoints reais.",
+        ["The connected Sandbox's RFC 3161 TSA."] = "A ACT RFC 3161 do Sandbox conectado.",
+        ["Same TSA, but it requires HTTP Basic; the Sandbox's test credentials are filled in. Shows TimestampOptions.Authorization."] = "A mesma ACT, mas exige HTTP Basic; as credenciais de teste do Sandbox são preenchidas. Mostra TimestampOptions.Authorization.",
+        ["Sandbox TSA outside the chain"] = "ACT do Sandbox fora da cadeia",
+        ["A TSA no trust anchor vouches for: the timestamp is not trusted."] = "Uma ACT que nenhuma âncora de confiança reconhece: o carimbo do tempo não é confiável.",
+        ["Sandbox TSA, revoked"] = "ACT do Sandbox, revogada",
+        ["A TSA whose certificate is revoked: the timestamp must not be trusted."] = "Uma ACT com o certificado revogado: o carimbo do tempo não deve ser aceito.",
+        ["Sandbox TSA, wrong name"] = "ACT do Sandbox, nome divergente",
+        ["Its tokens name another TSA in the tsa field: the name check fails."] = "Os tokens dela trazem outra ACT no campo tsa: a verificação do nome falha.",
+        ["Issued by the Sandbox '{0}' ({1}). Validation in the TestBench trusts its root while it is connected; real validators will not."] = "Emitido pelo Sandbox '{0}' ({1}). A validação no TestBench confia na raiz dele enquanto estiver conectado; validadores reais não confiam.",
+        ["The connected Sandbox's CSC v2 service (PIN {0}, OTP {1}; its OAuth page approves at once)."] = "O serviço CSC v2 do Sandbox conectado (PIN {0}, OTP {1}; a página OAuth dele aprova na hora).",
     };
 }

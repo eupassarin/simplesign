@@ -24,18 +24,32 @@ internal sealed class PlanContext
     private readonly List<string> _setup = [];
     private readonly DocumentStore _documents;
 
-    public PlanContext(EnvironmentMode environment, CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents)
+    private readonly SandboxEnvironment _sandbox;
+
+    public PlanContext(CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents)
     {
         Credential = credential;
         _documents = documents;
-        IsSandbox = environment == EnvironmentMode.Sandbox;
-        Http = sandbox.HttpFor(environment);
+        _sandbox = sandbox;
+        IsSandbox = sandbox.Current is not null;
+        Http = sandbox;
+        if (sandbox.Current is { } connection)
+        {
+            string origins = string.Join(", ", connection.Info.LoopbackOrigins.Select(o => $"new Uri(\"{o}\")"));
+            _setup.Add("// The local SimpleSign Sandbox: list its origins so the SSRF guard lets them through, and trust its root for HTTPS.\n"
+                + "var sandboxHttp = new SingleClientProvider(new HttpClient(handlerTrustingTheSandboxRoot))\n{\n"
+                + "    OutboundPolicy = new OutboundHttpPolicy\n    {\n        AllowLdap = true,\n"
+                + $"        LoopbackOrigins = [{origins}],\n"
+                + "    },\n};");
+        }
     }
 
     public CredentialHandle Credential { get; }
 
+    /// <summary>Whether a Sandbox is connected: the generated code then builds the provider that reaches it.</summary>
     public bool IsSandbox { get; }
 
+    /// <summary>The TestBench's network: the real one, plus the connected Sandbox.</summary>
     public IHttpClientProvider Http { get; }
 
     /// <summary>Statements that must run before the builder chain (variables, clients).</summary>
@@ -67,20 +81,20 @@ internal sealed class PlanContext
         {
             CredentialKind.Pfx => "var certificate = X509CertificateLoader.LoadPkcs12FromFile(\"signer.pfx\", password);",
             CredentialKind.OsStore => "var certificate = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, false)[0];",
-            _ => "var certificate = sandboxSigner; // sandbox A1 certificate with its private key",
+            _ => "var certificate = X509CertificateLoader.LoadPkcs12FromFile(\"sandbox-signer.pfx\", \"sandbox\"); // downloaded from the Sandbox's PKI page",
         });
         return Credential.Chain.Count > 0 ? ".WithCertificate(certificate, chain)" : ".WithCertificate(certificate)";
     }
 
-    /// <summary>The HTTP provider line (sandbox only).</summary>
+    /// <summary>The HTTP provider line (when a Sandbox is connected).</summary>
     public string HttpCode => IsSandbox
-        ? ".WithHttpClientProvider(sandboxHttp) // TSA and CRLs on *.sandbox.simplesign.test"
+        ? ".WithHttpClientProvider(sandboxHttp) // reaches the local Sandbox's TSA, CRLs and OCSP"
         : "// default HttpClient provider (real network)";
 
     public TimestampOptions BuildTimestamp(TimestampChoice choice, string variable)
     {
         var endpoint = Endpoint(choice);
-        var options = new TimestampOptions(endpoint, IsSandbox ? Http : null)
+        var options = new TimestampOptions(endpoint, Http)
         {
             Authorization = Authorization(choice),
             ClientCertificate = ClientCertificate(choice),
@@ -137,7 +151,7 @@ internal sealed class PlanContext
         var endpoint = Endpoint(choice);
         _setup.Add($"var archiveTsa = new ArchiveTimestampOptions(new Uri(\"{endpoint}\"){(IsSandbox ? ", sandboxHttp" : "")})"
             + (choice.Auth == TsaAuth.None ? ";" : " { Authorization = /* as above */ };"));
-        return new ArchiveTimestampOptions(endpoint, IsSandbox ? Http : null)
+        return new ArchiveTimestampOptions(endpoint, Http)
         {
             Authorization = Authorization(choice),
             ClientCertificate = ClientCertificate(choice),
@@ -145,31 +159,40 @@ internal sealed class PlanContext
     }
 
     /// <summary>The URL of a TSA choice, as the CLI's <c>--tsa</c> takes it.</summary>
-    public static string CliUrl(TimestampChoice choice) => choice.Provider switch
+    public string CliUrl(TimestampChoice choice) => choice.Provider switch
     {
         TsaProvider.DigiCert => "http://timestamp.digicert.com",
         TsaProvider.Sectigo => "http://timestamp.sectigo.com",
         TsaProvider.FreeTsa => "https://freetsa.org/tsr",
         TsaProvider.Custom => choice.Url ?? "<tsa-url>",
+        _ when SharedRules.IsSandboxTsa(choice.Provider) && _sandbox.Current is not null => Endpoint(choice).AbsoluteUri,
         _ => "<tsa-url>",
     };
 
-    internal static Uri Endpoint(TimestampChoice choice) => choice.Provider switch
+    /// <summary>The TSA URL of a choice; the Sandbox's TSAs come from the connected Sandbox.</summary>
+    /// <exception cref="SandboxNotConnectedException">A Sandbox TSA was chosen and no Sandbox is connected.</exception>
+    internal Uri Endpoint(TimestampChoice choice) => choice.Provider switch
     {
-        TsaProvider.Sandbox => SandboxPki.TsaUri,
-        TsaProvider.SandboxAuthenticated => SandboxPki.AuthenticatedTsaUri,
+        TsaProvider.Sandbox => _sandbox.Connection.TsaUri,
+        TsaProvider.SandboxAuthenticated => _sandbox.Connection.AuthenticatedTsaUri,
+        TsaProvider.SandboxUntrusted => _sandbox.Connection.UntrustedTsaUri,
+        TsaProvider.SandboxRevoked => _sandbox.Connection.RevokedTsaUri,
+        TsaProvider.SandboxWrongName => _sandbox.Connection.WrongNameTsaUri,
         TsaProvider.DigiCert => TimestampOptions.DigiCert.Endpoint,
         TsaProvider.Sectigo => TimestampOptions.Sectigo.Endpoint,
         TsaProvider.FreeTsa => TimestampOptions.FreeTsa.Endpoint,
         _ => new Uri(choice.Url!),
     };
 
-    private static AuthenticationHeaderValue? Authorization(TimestampChoice choice) => choice.Auth switch
-    {
-        TsaAuth.Basic => new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{choice.User}:{choice.Password}"))),
-        TsaAuth.Bearer => new AuthenticationHeaderValue("Bearer", choice.Token),
-        _ => null,
-    };
+    private AuthenticationHeaderValue? Authorization(TimestampChoice choice) => choice.Provider == TsaProvider.SandboxAuthenticated
+        // The Sandbox's authenticated TSA: its own test credentials.
+        ? new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_sandbox.Connection.Info.Tsa.User}:{_sandbox.Connection.Info.Tsa.Password}")))
+        : choice.Auth switch
+        {
+            TsaAuth.Basic => new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{choice.User}:{choice.Password}"))),
+            TsaAuth.Bearer => new AuthenticationHeaderValue("Bearer", choice.Token),
+            _ => null,
+        };
 
     private X509Certificate2? ClientCertificate(TimestampChoice choice) =>
         string.IsNullOrEmpty(choice.ClientCertificateUploadId)

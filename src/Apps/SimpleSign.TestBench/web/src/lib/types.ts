@@ -1,9 +1,8 @@
 // Mirrors src/Apps/SimpleSign.TestBench/Signing/SigningOptions.cs and the API records (camelCase JSON, enums as names).
 
-export type EnvironmentMode = "Sandbox" | "Real"
 export type SignatureKind = "Baseline" | "CustomPolicy"
 export type BaselineLevel = "BB" | "BT" | "BLT" | "BLTA"
-export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
+export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "SandboxUntrusted" | "SandboxRevoked" | "SandboxWrongName" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
 export type TsaAuth = "None" | "Basic" | "Bearer"
 export type HashChoice = "Sha256" | "Sha384" | "Sha512" | "Sha3_256" | "Sha3_384" | "Sha3_512"
 export type RsaPadding = "Pkcs1" | "Pss"
@@ -44,7 +43,6 @@ export interface MetadataChoice {
 }
 
 export interface SigningOptions {
-  environment: EnvironmentMode
   documentId?: string | null
   credentialId?: string | null
   kind: SignatureKind
@@ -167,6 +165,8 @@ export interface SandboxSigner {
   keyType: string
   isUsable: boolean
   problem?: string | null
+  /** The requirement of the certification guide it is evidence for (Req11…), if any. */
+  evidence?: string | null
   holder: string
   notAfter: string
 }
@@ -181,16 +181,31 @@ export interface CscCredentialSummary {
   enabled: boolean
 }
 
-export interface EnvironmentInfo {
+/** The connected SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox). */
+export interface SandboxInfo {
+  url: string
+  name: string
+  rootSubject: string
+  rootThumbprint: string
+  loopbackOrigins: string[]
   signers: SandboxSigner[]
   tsaUrl: string
   authenticatedTsaUrl: string
-  tsaUser: string
-  tsaPassword: string
+  untrustedTsaUrl: string
+  revokedTsaUrl: string
+  wrongNameTsaUrl: string
   cscUrl: string
   cscPin: string
   cscOtp: string
   cscCredentials: CscCredentialSummary[]
+}
+
+export interface EnvironmentInfo {
+  /** The connected Sandbox, or null. */
+  sandbox: SandboxInfo | null
+  /** Why the remembered Sandbox could not be connected. */
+  sandboxError?: string | null
+  rememberedSandboxUrl?: string | null
   runtime: string
   sha3Supported: boolean
   version: string
@@ -311,19 +326,10 @@ export interface MatrixRunResult {
   cases: MatrixCaseResult[]
 }
 
-export interface SandboxRequest {
-  time: string
-  method: string
-  url: string
-  status: number
-  service: string
-}
-
 // ── Validation area ─────────────────────────────────────────────────
 export type TrustChoice = "Sandbox" | "System"
 
 export interface ValidationSettings {
-  environment: EnvironmentMode
   trust: TrustChoice[]
   customRootUploadIds: string[]
   checkRevocation: boolean
@@ -412,7 +418,6 @@ export type CadesKind = "Baseline" | "CustomPolicy"
 export type CadesExtendedChoice = "None" | "CompleteReferences" | "ExtendedLong" | "Archive"
 
 export interface CadesOptions {
-  environment: EnvironmentMode
   operation: CadesOperation
   dataId?: string | null
   existingSignatureId?: string | null
@@ -552,7 +557,6 @@ export type XadesKind = "Baseline" | "CustomPolicy"
 export type XadesExtendedChoice = "None" | "CompleteReferences" | "ExtendedLong" | "Archive"
 
 export interface XmlOptions {
-  environment: EnvironmentMode
   dataId?: string | null
   credentialId?: string | null
   form: XadesFormChoice

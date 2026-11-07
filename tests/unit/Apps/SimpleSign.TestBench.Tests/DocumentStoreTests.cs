@@ -8,7 +8,7 @@ namespace SimpleSign.TestBench.Tests;
 [Trait("Category", "Unit")]
 public sealed class DocumentStoreTests(TestBenchFixture fixture)
 {
-    [Fact]
+    [SkippableFact]
     public async Task FactsAsync_EmptyFieldSample_ListsTheField()
     {
         var facts = await fixture.Documents.FactsAsync(DocumentStore.SampleKey("empty-field"));
@@ -16,7 +16,7 @@ public sealed class DocumentStoreTests(TestBenchFixture fixture)
         facts.EmptyFields.ShouldBe(["Assinatura"]);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("certified-p1", 1)]
     [InlineData("certified-p2", 2)]
     [InlineData("certified-p3", 3)]
@@ -28,7 +28,7 @@ public sealed class DocumentStoreTests(TestBenchFixture fixture)
         facts.Signatures.Count.ShouldBe(1);
     }
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("pdfa-2b", false)]
     [InlineData("pdfa-1b", true)]
     public async Task FactsAsync_PdfASample_ReportsLevel(string sample, bool isPdfA1)
@@ -39,7 +39,7 @@ public sealed class DocumentStoreTests(TestBenchFixture fixture)
         facts.IsPdfA1.ShouldBe(isPdfA1);
     }
 
-    [Fact]
+    [SkippableFact]
     public void EmptySignatureFields_SignedField_IsNotListed()
     {
         byte[] pdf = Encoding.Latin1.GetBytes("1 0 obj\n<< /FT /Sig /T (Done) /V 5 0 R >>\nendobj\n2 0 obj\n<< /FT/Sig /T (Open) >>\nendobj\n3 0 obj\n<< /FT /Tx /T (Name) >>\nendobj\n");
@@ -47,7 +47,7 @@ public sealed class DocumentStoreTests(TestBenchFixture fixture)
         DocumentStore.EmptySignatureFields(pdf).ShouldBe(["Open"]);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task FactsAsync_NotAPdf_ReportsError()
     {
         var file = fixture.Documents.Add("x.pdf", "hello"u8.ToArray());

@@ -20,12 +20,6 @@ public static class OptionCatalog
 
     public static IReadOnlyDictionary<string, OptionInfo> All { get; } = new Dictionary<string, OptionInfo>(StringComparer.Ordinal)
     {
-        // Environment
-        ["env.Sandbox"] = new("Sandbox", "Everything runs offline against simulated services.",
-            "A test PKI (AC Raiz Sandbox SimpleSign), an RFC 3161 TSA, CRLs, and a fake CSC v2 service, all answered in-process on *.sandbox.simplesign.test. Signatures validate here, but no real validator trusts the sandbox root."),
-        ["env.Real"] = new("Real", "Your certificates, real TSAs and real cloud providers.",
-            "Use a PFX, the OS certificate store, an A3 token or a real CSC account. TSAs, CRLs and OCSP are reached over the internet. Validation trusts the OS roots."),
-
         // Document
         ["document"] = new("Document", "The PDF to sign. Its facts decide what the next steps offer.",
             "SimpleSign signs with an incremental update: the original bytes are kept and a new revision is appended, so existing signatures stay valid.",
@@ -35,8 +29,8 @@ public static class OptionCatalog
             "ISO 32000-1 §12.8.2.2"),
 
         // Signer
-        ["signer.SandboxA1"] = new("Sandbox certificate", "A1 certificates from the sandbox PKI: every key type and the edge cases.",
-            "Each one chains to the sandbox root and carries CRL distribution points served by the sandbox.",
+        ["signer.SandboxA1"] = new("Sandbox certificate", "Certificates of the connected SimpleSign Sandbox: every key type and the cases a client must handle.",
+            "Each one chains to the Sandbox's root and points to its CRLs (HTTP, HTTPS or LDAP) and OCSP responder, on real endpoints.",
             null, "WithCertificate(X509Certificate2, IReadOnlyList<X509Certificate2> chain)"),
         ["signer.Pfx"] = new("A1 (PFX file)", "A certificate and private key in a PKCS#12 file.",
             "The password opens the file once; it is not stored. Intermediate certificates in the file are embedded in the signature.",
@@ -68,8 +62,11 @@ public static class OptionCatalog
         ["timestamp"] = new("Time-stamping authority (TSA)", "Who signs the trusted time of the signature.",
             "The library sends the hash of the signature value (RFC 3161) and embeds the token as the signature-time-stamp unsigned attribute.",
             "RFC 3161; RFC 5816", "new TimestampOptions(Uri endpoint) { Authorization, ClientCertificate }"),
-        ["tsa.Sandbox"] = new("Sandbox TSA", "Offline RFC 3161 TSA signed by the sandbox ACT certificate."),
-        ["tsa.SandboxAuthenticated"] = new("Sandbox TSA (Basic auth)", "Same TSA, but it requires HTTP Basic: user sandbox, password sandbox-tsa. Shows TimestampOptions.Authorization."),
+        ["tsa.Sandbox"] = new("Sandbox TSA", "The connected Sandbox's RFC 3161 TSA."),
+        ["tsa.SandboxAuthenticated"] = new("Sandbox TSA (Basic auth)", "Same TSA, but it requires HTTP Basic; the Sandbox's test credentials are filled in. Shows TimestampOptions.Authorization."),
+        ["tsa.SandboxUntrusted"] = new("Sandbox TSA outside the chain", "A TSA no trust anchor vouches for: the timestamp is not trusted."),
+        ["tsa.SandboxRevoked"] = new("Sandbox TSA, revoked", "A TSA whose certificate is revoked: the timestamp must not be trusted."),
+        ["tsa.SandboxWrongName"] = new("Sandbox TSA, wrong name", "Its tokens name another TSA in the tsa field: the name check fails."),
         ["tsa.DigiCert"] = new("DigiCert", "Free public TSA, trusted by Adobe and most validators.", null, null, "TimestampOptions.DigiCert"),
         ["tsa.Sectigo"] = new("Sectigo", "Free public TSA.", null, null, "TimestampOptions.Sectigo"),
         ["tsa.FreeTsa"] = new("FreeTSA", "Free community TSA (freetsa.org).", null, null, "TimestampOptions.FreeTsa"),
