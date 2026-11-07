@@ -59,9 +59,14 @@ internal static class InvalidSamples
         byte[] revoked = await Sign(connection.Signer("revoked").Certificate, chain, AdesBaselineProfile.Basic());
         // The library refuses to sign with a certificate that is not valid now, so the "expired"
         // sample is signed with a certificate that lives a few seconds and has expired by validation time.
-        using var shortLived = await sandbox.IssueShortLivedAsync(TimeSpan.FromSeconds(3), cancellationToken);
+        // Long enough to sign on a busy machine; then wait until it has really expired.
+        using var shortLived = await sandbox.IssueShortLivedAsync(TimeSpan.FromSeconds(10), cancellationToken);
         byte[] expired = await Sign(shortLived, chain, AdesBaselineProfile.Basic());
-        await Task.Delay(TimeSpan.FromSeconds(3.5), cancellationToken);
+        var remaining = new DateTimeOffset(shortLived.NotAfter.ToUniversalTime(), TimeSpan.Zero) - DateTimeOffset.UtcNow;
+        if (remaining > TimeSpan.Zero)
+        {
+            await Task.Delay(remaining + TimeSpan.FromSeconds(1), cancellationToken);
+        }
 
         using var outsiderKey = RSA.Create(2048);
         var outsiderRequest = new CertificateRequest("CN=Assinante Fora da Cadeia, O=Outside, C=BR", outsiderKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);

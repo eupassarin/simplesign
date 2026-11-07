@@ -12,6 +12,11 @@ namespace SimpleSign.Core.Revocation;
 /// CRL distribution point and online OCSP. Every CRL is checked against its issuer: signature,
 /// issuer name and validity at the given time.
 /// </summary>
+/// <remarks>
+/// <see cref="CheckCurrentAsync"/>, used before signing, asks for the status now instead: the OCSP
+/// responder first, then a CRL downloaded again (never the cached copy), so a revocation published
+/// after a CRL was cached is not missed.
+/// </remarks>
 public sealed class ChainRevocationChecker : IChainRevocationChecker
 {
     private readonly HttpClient _httpClient;
@@ -111,44 +116,95 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             return ChainRevocationStatus.Unknown;
         }
 
-        string? crlUrl = CrlClient.GetCrlUri(certificate, _logger)?.AbsoluteUri
-            ?? (_outboundPolicy.AllowLdap ? CrlClient.GetCrlUrls(certificate, _logger).FirstOrDefault(LdapCrlClient.IsLdapUrl) : null);
-        if (crlUrl is not null)
+        return await OnlineCrlAsync(certificate, issuer, time, useCache: true, cancellationToken).ConfigureAwait(false)
+            ?? await OnlineOcspAsync(certificate, chain, time, cancellationToken).ConfigureAwait(false)
+            ?? ChainRevocationStatus.Unknown;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// For each certificate: its OCSP responder first (a live answer), then its CRL downloaded again
+    /// without the cache (the fresh copy replaces the cached one). A responder that is down, answers
+    /// unknown, or whose response is expired or signed by an unauthorized key gives no answer, and
+    /// the CRL decides.
+    /// </remarks>
+    public async Task<ChainRevocationResult> CheckCurrentAsync(IReadOnlyList<X509Certificate2> chain, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(chain);
+        var now = DateTimeOffset.UtcNow;
+        var messages = new List<string>();
+        var status = ChainRevocationStatus.Good;
+        for (int i = 0; i < chain.Count - 1; i++)
         {
-            byte[]? crl = await DownloadCrlAsync(crlUrl, cancellationToken).ConfigureAwait(false);
-            if (crl is not null)
+            var certificate = chain[i];
+            var certStatus = await OnlineOcspAsync(certificate, chain, now, cancellationToken).ConfigureAwait(false)
+                ?? await OnlineCrlAsync(certificate, chain[i + 1], now, useCache: false, cancellationToken).ConfigureAwait(false)
+                ?? ChainRevocationStatus.Unknown;
+            string name = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
+            if (certStatus == ChainRevocationStatus.Revoked)
             {
-                var crlStatus = CrlEvaluator.Evaluate(certificate, crl, issuer, time, _logger);
-                if (crlStatus != CrlStatus.NotApplicable)
+                messages.Add($"[{name}] Certificate is revoked.");
+                status = ChainRevocationStatus.Revoked;
+            }
+            else if (certStatus == ChainRevocationStatus.Unknown)
+            {
+                messages.Add($"[{name}] Revocation status could not be established (no answer from the OCSP responder and no valid CRL).");
+                if (status != ChainRevocationStatus.Revoked)
                 {
-                    return crlStatus == CrlStatus.Revoked ? ChainRevocationStatus.Revoked : ChainRevocationStatus.Good;
+                    status = ChainRevocationStatus.Unknown;
                 }
             }
         }
 
-        string? ocspUrl = OcspClient.GetOcspUri(certificate)?.AbsoluteUri;
-        if (ocspUrl is not null)
+        return new ChainRevocationResult(status, messages);
+    }
+
+    /// <summary>The status from the certificate's CRL distribution point; null when there is no usable CRL.</summary>
+    private async Task<ChainRevocationStatus?> OnlineCrlAsync(
+        X509Certificate2 certificate, X509Certificate2 issuer, DateTimeOffset time, bool useCache, CancellationToken cancellationToken)
+    {
+        string? crlUrl = CrlClient.GetCrlUri(certificate, _logger)?.AbsoluteUri
+            ?? (_outboundPolicy.AllowLdap ? CrlClient.GetCrlUrls(certificate, _logger).FirstOrDefault(LdapCrlClient.IsLdapUrl) : null);
+        if (crlUrl is null || await DownloadCrlAsync(crlUrl, useCache, cancellationToken).ConfigureAwait(false) is not { } crl)
         {
-            try
-            {
-                bool good = await _ocspClient.CheckOcspWithChainAsync(certificate, chain, ocspUrl, cancellationToken).ConfigureAwait(false);
-                // A live OCSP response tells the status now, without the revocation date: a
-                // certificate revoked after a past validation time cannot be told apart.
-                return good ? ChainRevocationStatus.Good
-                    : time < DateTimeOffset.UtcNow.AddMinutes(-5) ? ChainRevocationStatus.Unknown : ChainRevocationStatus.Revoked;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or AsnContentException
-                or CryptographicException or InvalidOperationException or InvalidDataException)
-            {
-                // Fall through to unknown.
-            }
+            return null;
         }
 
-        return ChainRevocationStatus.Unknown;
+        return CrlEvaluator.Evaluate(certificate, crl, issuer, time, _logger) switch
+        {
+            CrlStatus.Revoked => ChainRevocationStatus.Revoked,
+            CrlStatus.Good => ChainRevocationStatus.Good,
+            _ => null,
+        };
+    }
+
+    /// <summary>The status from the certificate's OCSP responder; null when it gives no usable answer.</summary>
+    private async Task<ChainRevocationStatus?> OnlineOcspAsync(
+        X509Certificate2 certificate, IReadOnlyList<X509Certificate2> chain, DateTimeOffset time, CancellationToken cancellationToken)
+    {
+        string? ocspUrl = OcspClient.GetOcspUri(certificate)?.AbsoluteUri;
+        if (ocspUrl is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            bool good = await _ocspClient.CheckOcspWithChainAsync(certificate, chain, ocspUrl, cancellationToken).ConfigureAwait(false);
+            // A live OCSP response tells the status now, without the revocation date: a
+            // certificate revoked after a past validation time cannot be told apart.
+            return good ? ChainRevocationStatus.Good
+                : time < DateTimeOffset.UtcNow.AddMinutes(-5) ? ChainRevocationStatus.Unknown : ChainRevocationStatus.Revoked;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or AsnContentException
+            or CryptographicException or InvalidOperationException or InvalidDataException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -166,9 +222,10 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
     /// </summary>
     public string? CacheDirectory { get; set; }
 
-    private async Task<byte[]?> DownloadCrlAsync(string url, CancellationToken cancellationToken)
+    /// <summary>Downloads a CRL; <paramref name="useCache"/> false skips the cached copies (the download still refreshes them).</summary>
+    private async Task<byte[]?> DownloadCrlAsync(string url, bool useCache, CancellationToken cancellationToken)
     {
-        if (Cache.TryGet(url, out var cached))
+        if (useCache && Cache.TryGet(url, out var cached))
         {
             return cached;
         }
@@ -176,7 +233,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         string? file = CacheDirectory is null
             ? null
             : Path.Combine(CacheDirectory, Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url))) + ".crl");
-        if (file is not null && TryReadCurrent(file) is { } fromDisk)
+        if (useCache && file is not null && TryReadCurrent(file) is { } fromDisk)
         {
             Remember(url, fromDisk);
             return fromDisk;

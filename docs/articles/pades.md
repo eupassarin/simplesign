@@ -87,7 +87,7 @@ A refusal is a `SigningException` with its `Reason`:
 | Policy | Checks | Reasons |
 |---|---|---|
 | `SigningPolicy.Default` | Validity of every certificate of the chain; key usage digitalSignature or nonRepudiation; RSA ≥ 2048 bits; P-256/384/521 or brainpool r1 curves; SHA-2/SHA-3 | `ChainCertificateNotValid`, `KeyUsageNotPermitted`, `KeyTooWeak`, `AlgorithmNotPermitted` |
-| `SigningPolicy.Strict` | Default plus the revocation of the whole chain (CRL and OCSP) | also `CertificateRevoked`, `RevocationStatusUnknown` |
+| `SigningPolicy.Strict` | Default plus the revocation of the whole chain as it is now: each OCSP responder first, then the CRL downloaded again (never a cached copy) | also `CertificateRevoked`, `RevocationStatusUnknown` |
 | `SigningPolicy.Minimal` | Only the dates of the signing certificate | `CertificateExpired`, `CertificateNotCurrentlyValid` |
 
 ```csharp

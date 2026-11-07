@@ -678,7 +678,7 @@ public sealed class CadesSignerBuilder
         {
             BaselineSigning.RequireOrDowngrade(
                 profile, warnings, SigningWarningCode.LongTermValidationMaterialUnavailable,
-                "The produced CMS does not contain complete LTV attributes.");
+                "The produced CMS does not contain complete LTV attributes. " + LtvGap(ltvEmbedding.Evidence));
         }
 
         if (hasArchiveTimestamp && !artifactHasArchiveTimestamp)
@@ -1149,6 +1149,14 @@ public sealed class CadesSignerBuilder
         With(_options with { Credential = credential });
 
     private sealed record CadesLtvEmbeddingResult(byte[] SignedCms, LtvCollectionResult Evidence);
+
+    /// <summary>Why the LTV data is incomplete: the certificates without revocation data, or a read-back failure.</summary>
+    private static string LtvGap(LtvCollectionResult evidence) =>
+        evidence.CertificateEvidence?.Where(e => !e.IsComplete).ToList() is { Count: > 0 } missing
+            ? "No revocation data for " + string.Join("; ", missing.Select(e => $"certificate {e.Thumbprint}: {e.AbsenceReason}")) + "."
+            : evidence.OcspResponses.Count == 0 && evidence.Crls.Count == 0
+                ? "No revocation data was collected."
+                : "The embedded certificates and revocation data did not validate when the signature was read back.";
 
     private CadesSignerBuilder With(CadesSigningOptions options) =>
         new(_data, options);

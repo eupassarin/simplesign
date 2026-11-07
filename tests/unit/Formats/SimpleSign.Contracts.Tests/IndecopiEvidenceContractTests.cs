@@ -96,6 +96,32 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
         result.Length.ShouldBeGreaterThan(0);
     }
 
+    [Theory]
+    [Trait("Indecopi", "Req11")]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task Req11_SignAfterRevocationWithCrlCached_IsRefused(string format)
+    {
+        // A CRL not updated: the shared checker cached the CRL while the certificate was good
+        // (a first signature); the CA then revoked it. The next signature must see the revocation.
+        byte[] leafCrl = _pki.BuildLeafCrl();
+        byte[] intermediateCrl = _pki.BuildIntermediateCrl();
+        using var http = new HttpClient(new MockHttpHandler(request =>
+        {
+            byte[] body = request.RequestUri!.AbsoluteUri == LeafCrlUrl ? Volatile.Read(ref leafCrl) : intermediateCrl;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) });
+        }));
+        var checker = new ChainRevocationChecker(http);
+        (await Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Strict, checker)).Length.ShouldBeGreaterThan(0);
+
+        Volatile.Write(ref leafCrl, _pki.BuildRevokedLeafCrl());
+        var ex = await Should.ThrowAsync<SigningException>(
+            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Strict, checker));
+
+        ex.Reason.ShouldBe(SigningErrorReason.CertificateRevoked);
+    }
+
     // ── Req. 12: validity of the certificate and its chain ──────────────────────────
 
     [Theory]

@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TimestampClient` no longer refuses a loopback TSA URL in its constructor: it is refused when the request is
   sent, unless its origin is listed (private and link-local URLs are still refused at once).
 
+### Fixed — Strict signing no longer trusts a CRL cached before a revocation
+
+- `SigningPolicy.Strict` asked a shared `ChainRevocationChecker` (DI, `WithChainRevocationChecker`) for the status
+  "now", and the checker answered from a CRL cached up to its nextUpdate: a certificate revoked after that CRL was
+  cached could still sign (INDECOPI Req. 11, "a CRL not updated"). New `IChainRevocationChecker.CheckCurrentAsync`
+  (a default interface method, so existing implementations still compile): `ChainRevocationChecker` asks each OCSP
+  responder first and then downloads the CRL again, refreshing the cache. Signing uses it; validation is unchanged.
+- CAdES/XAdES: "does not contain complete LTV" now says why (the certificates without revocation data and the
+  reason, or that the embedded data did not validate when the signature was read back).
+- TestBench: the "expired" validation sample no longer fails on a busy machine (its certificate lived 3 seconds).
+- TestBench: `SandboxEvidenceTests` sign with Strict against a running SimpleSign Sandbox for each Req. 11/12 case
+  (CRLs over HTTP, HTTPS and LDAP, OCSP only, revoked CA, expired and wrongly signed CRLs, unusable OCSP answers,
+  a stale CRL after a revocation, expired and not-yet-valid certificates, expired CA).
+
 ### Added — apps, DI and packaging follow the new checks
 
 - `SimpleSign.Peru.Iofe` is packed and released (pack lists, `PACKAGE.md`); RELEASING lists it and the signer packages.

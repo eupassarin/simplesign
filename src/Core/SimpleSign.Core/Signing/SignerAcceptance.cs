@@ -203,8 +203,8 @@ internal static class SignerAcceptance
 
         var checker = revocationChecker
             ?? new ChainRevocationChecker(httpClientProvider.GetClient(), logger, httpClientProvider.OutboundPolicy);
-        var result = await checker.CheckAsync(ordered, DateTimeOffset.UtcNow, [], [], allowOnline: true, cancellationToken)
-            .ConfigureAwait(false);
+        // The status now: OCSP first and fresh CRLs, never a CRL cached before a revocation.
+        var result = await checker.CheckCurrentAsync(ordered, cancellationToken).ConfigureAwait(false);
         switch (result.Status)
         {
             case ChainRevocationStatus.Revoked:
