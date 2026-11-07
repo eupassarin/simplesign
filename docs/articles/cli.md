@@ -183,6 +183,37 @@ A refusal prints the reason (`KeyTooWeak`, `KeyUsageNotPermitted`, `ChainCertifi
 `RevocationStatusUnknown`, `AlgorithmNotPermitted`) and what to do about it. `simplesign explain <TERM>` explains the
 ETSI sub-indications of a validation report, such as `CRYPTO_CONSTRAINTS_FAILURE_NO_POE`.
 
+### JSON result
+
+With `--json`, `sign`, `cades sign` and `xades sign` print one JSON object instead of text, for scripts and
+test runners:
+
+```json
+{ "success": true, "format": "pades", "output": "contract_signed.pdf", "signer": "CN=…",
+  "requestedLevel": "B-LT", "achievedLevel": "B-LT", "warnings": [], "error": null }
+```
+
+A refusal is `"success": false` with `"error": { "type": "SigningException", "reason": "CertificateRevoked",
+"message": "…" }`; the exit code is not 0.
+
+## Network
+
+The library refuses requests to `localhost` and private addresses (the SSRF guard). To use a local test
+environment, such as the [SimpleSign Sandbox](sandbox.md), every command accepts:
+
+| Option | Environment variable | Effect |
+|---|---|---|
+| `--allow-origin <URL>` (repeatable) | `SIMPLESIGN_ALLOW_ORIGINS` (comma-separated) | A loopback origin (scheme, host, port) the TSA, CRL, OCSP and AIA requests may reach |
+| `--allow-ldap` | `SIMPLESIGN_ALLOW_LDAP=true` | CRLs over `ldap://` |
+| `--tls-trust <PEM>` | `SIMPLESIGN_TLS_TRUST` | A root, and its intermediates, accepted for HTTPS next to the system's |
+
+```bash
+curl -s http://localhost:5300/chain.pem > sandbox-chain.pem
+simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signing-policy strict --json \
+  --allow-origin http://localhost:5300 --allow-origin https://localhost:5301 --allow-origin ldap://localhost:5302 \
+  --allow-ldap --tls-trust sandbox-chain.pem
+```
+
 ## Validation Policy, Trust Store and Verification Report
 
 `validate`, `validate-dir`, `cades validate` and `xades validate` share these options:

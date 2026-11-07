@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TimestampClient` no longer refuses a loopback TSA URL in its constructor: it is refused when the request is
   sent, unless its origin is listed (private and link-local URLs are still refused at once).
 
+### Added — CLI: network options and JSON result for signing
+
+- Every command accepts `--allow-origin <URL>` (repeatable), `--allow-ldap` and `--tls-trust <PEM>` (also
+  `SIMPLESIGN_ALLOW_ORIGINS`, `SIMPLESIGN_ALLOW_LDAP`, `SIMPLESIGN_TLS_TRUST`): the HTTP provider lets the listed
+  loopback origins through the SSRF guard, reads CRLs over LDAP and accepts the given root (and intermediates) for
+  HTTPS. `sign`, `cades sign` and `xades sign` now use that provider for the TSA, LTV and the Strict revocation check.
+- `sign`, `cades sign` and `xades sign --json`: `{ success, format, output, signer, requestedLevel, achievedLevel,
+  warnings, error: { type, reason, message } }`; a refusal carries its `SigningErrorReason`.
+
 ### Changed — CI, DSS and docs use the Sandbox
 
 - CI starts an ephemeral SimpleSign Sandbox on each OS before the tests (`--ephemeral`, waits for `/api/info`,

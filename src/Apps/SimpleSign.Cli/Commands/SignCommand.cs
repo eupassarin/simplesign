@@ -33,6 +33,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description(SigningPolicyOption.Description)]
         public string? SigningPolicy { get; init; }
 
+        /// <summary>Print the result (or the refusal) as one JSON object instead of text.</summary>
+        [CommandOption("--json")]
+        [Description("Print the result, or the refusal with its reason, as JSON")]
+        public bool Json { get; init; }
+
         /// <summary>Input PDF file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("Input PDF file to sign")]
@@ -575,6 +580,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var loggerFactory = settings.CreateLoggerFactory();
+        SignJson.Enabled = settings.Json;
 
         var outputPath = settings.OutputPath ?? Path.Combine(
             Path.GetDirectoryName(settings.InputPath) ?? ".",
@@ -640,7 +646,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             return AdesBaselineProfile.Basic();
         }
 
-        var timestampOptions = new TimestampOptions(new Uri(settings.TsaUrl));
+        var timestampOptions = new TimestampOptions(new Uri(settings.TsaUrl), CliNetwork.Provider);
         bool ltv = settings.Ltv || settings.Archival;
 
         if (!ltv)
@@ -669,178 +675,199 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         {
             byte[] signed = null!;
             bool dssEmbedded = false;
-            await AnsiConsole.Status()
-                .Spinner(Spinner.Known.Dots)
-                .SpinnerStyle(Style.Parse("blue"))
-                .StartAsync("Signing...", async _ =>
+            ISigningResult? details = null;
+            async Task SignAsync()
+            {
+                var pdfBytes = await File.ReadAllBytesAsync(settings.InputPath, cancellation);
+                ILogger? logger = loggerFactory?.CreateLogger("SimpleSign.Signing");
+                PadesSignerBuilder builder;
+                if (token is not null)
                 {
-                    var pdfBytes = await File.ReadAllBytesAsync(settings.InputPath);
-                    ILogger? logger = loggerFactory?.CreateLogger("SimpleSign.Signing");
-                    PadesSignerBuilder builder;
-                    if (token is not null)
-                    {
-                        builder = PadesSigner.Document(pdfBytes).WithExternalSigner(token.Certificate, token.Signer, token.Chain);
-                    }
-                    else if (chainCerts.Count > 0)
-                    {
-                        builder = PadesSigner.Document(pdfBytes).WithCertificate(cert, chainCerts);
-                    }
-                    else
-                    {
-                        builder = PadesSigner.Document(pdfBytes).WithCertificate(cert);
-                    }
+                    builder = PadesSigner.Document(pdfBytes).WithExternalSigner(token.Certificate, token.Signer, token.Chain);
+                }
+                else if (chainCerts.Count > 0)
+                {
+                    builder = PadesSigner.Document(pdfBytes).WithCertificate(cert, chainCerts);
+                }
+                else
+                {
+                    builder = PadesSigner.Document(pdfBytes).WithCertificate(cert);
+                }
 
-                    if (logger is not null)
-                    {
-                        builder = builder.WithLogger(logger);
-                    }
+                if (logger is not null)
+                {
+                    builder = builder.WithLogger(logger);
+                }
 
-                    if (settings.TsaUrl is not null)
-                    {
-                        var profile = BuildBaselineProfile(settings);
-                        builder = builder.WithLevel(profile);
-                    }
+                if (settings.TsaUrl is not null)
+                {
+                    var profile = BuildBaselineProfile(settings);
+                    builder = builder.WithLevel(profile);
+                }
 
-                    if (settings.Hash is not null)
-                    {
-                        builder = builder.WithHashAlgorithm(SignCommandOptions.ParseHash(settings.Hash));
-                    }
+                if (settings.Hash is not null)
+                {
+                    builder = builder.WithHashAlgorithm(SignCommandOptions.ParseHash(settings.Hash));
+                }
 
-                    // Metadata is applied before partial field configuration so the latter can
-                    // retain it through their immutable updates.
-                    if (settings.Reason is not null || settings.Location is not null
-                        || settings.Contact is not null || settings.SignerName is not null)
+                // Metadata is applied before partial field configuration so the latter can
+                // retain it through their immutable updates.
+                if (settings.Reason is not null || settings.Location is not null
+                    || settings.Contact is not null || settings.SignerName is not null)
+                {
+                    builder = builder.WithFieldOptions(new SignatureFieldOptions
                     {
-                        builder = builder.WithFieldOptions(new SignatureFieldOptions
-                        {
-                            SignerName = settings.SignerName,
-                            Reason = settings.Reason,
-                            Location = settings.Location,
-                            ContactInfo = settings.Contact
-                        });
-                    }
+                        SignerName = settings.SignerName,
+                        Reason = settings.Reason,
+                        Location = settings.Location,
+                        ContactInfo = settings.Contact
+                    });
+                }
 
-                    if (settings.FieldName is not null)
-                    {
-                        builder = builder.WithFieldName(settings.FieldName);
-                    }
+                if (settings.FieldName is not null)
+                {
+                    builder = builder.WithFieldName(settings.FieldName);
+                }
 
-                    if (settings.ExistingField is not null)
-                    {
-                        builder = builder.WithExistingField(settings.ExistingField);
-                    }
+                if (settings.ExistingField is not null)
+                {
+                    builder = builder.WithExistingField(settings.ExistingField);
+                }
 
-                    if (settings.Certify is not null)
-                    {
-                        builder = builder.AsCertification(SignCommandOptions.ParseCertificationLevel(settings.Certify));
-                    }
+                if (settings.Certify is not null)
+                {
+                    builder = builder.AsCertification(SignCommandOptions.ParseCertificationLevel(settings.Certify));
+                }
 
-                    // Brasil AEA — after explicit metadata so it adds extra CMS attributes
+                // Brasil AEA — after explicit metadata so it adds extra CMS attributes
+                if (settings.Brasil)
+                {
+                    var info = BrasilSignOptions.Build(
+                        signerName: settings.SignerName ?? "",
+                        cpf: settings.Cpf!,
+                        authMethod: settings.AuthMethod,
+                        email: settings.SignerEmail,
+                        institution: settings.Institution,
+                        institutionCnpj: settings.InstitutionCnpj,
+                        commitmentType: settings.Commitment,
+                        policyOid: settings.PolicyOid,
+                        policyUri: settings.PolicyUri);
+                    builder = builder.WithAdvancedSignature(info);
+                }
+
+                // Visual appearance
+                if (settings.Visible)
+                {
+                    var appearance = AppearanceBuilder.Build(
+                        visible: true,
+                        backgroundImage: settings.BackgroundImage,
+                        qrUrl: settings.QrUrl,
+                        page: settings.Page,
+                        x: settings.X,
+                        y: settings.Y,
+                        hasReason: settings.Reason is not null || settings.Brasil,
+                        hasLocation: settings.Location is not null,
+                        fontSize: settings.FontSize,
+                        labelFontSize: settings.LabelFontSize,
+                        textColor: settings.TextColor,
+                        font: settings.Font,
+                        borderColor: settings.BorderColor,
+                        borderWidth: settings.BorderWidth,
+                        noDate: settings.NoDate,
+                        text: new AppearanceTextOptions(
+                            settings.SignedByLabel, settings.ReasonLabel, settings.LocationLabel,
+                            settings.DateLabel, settings.DateFormat, settings.TimeZone),
+                        backgroundColor: settings.BackgroundColor,
+                        imageFit: settings.ImageFit,
+                        layout: new AppearanceLayoutOptions(settings.StampWidth, settings.StampHeight, settings.TextAlign));
+
                     if (settings.Brasil)
                     {
-                        var info = BrasilSignOptions.Build(
-                            signerName: settings.SignerName ?? "",
-                            cpf: settings.Cpf!,
-                            authMethod: settings.AuthMethod,
-                            email: settings.SignerEmail,
-                            institution: settings.Institution,
-                            institutionCnpj: settings.InstitutionCnpj,
-                            commitmentType: settings.Commitment,
-                            policyOid: settings.PolicyOid,
-                            policyUri: settings.PolicyUri);
-                        builder = builder.WithAdvancedSignature(info);
+                        appearance = AppearanceBuilder.AddAeaExtraLines(
+                            appearance, settings.SignerName!, settings.Cpf!);
                     }
 
-                    // Visual appearance
-                    if (settings.Visible)
+                    builder = builder.WithAppearance(appearance);
+                }
+
+                if (settings.SubFilter is not null)
+                {
+                    var parsed = SignCommandOptions.ParseSubFilter(settings.SubFilter);
+                    if (parsed.HasValue)
                     {
-                        var appearance = AppearanceBuilder.Build(
-                            visible: true,
-                            backgroundImage: settings.BackgroundImage,
-                            qrUrl: settings.QrUrl,
-                            page: settings.Page,
-                            x: settings.X,
-                            y: settings.Y,
-                            hasReason: settings.Reason is not null || settings.Brasil,
-                            hasLocation: settings.Location is not null,
-                            fontSize: settings.FontSize,
-                            labelFontSize: settings.LabelFontSize,
-                            textColor: settings.TextColor,
-                            font: settings.Font,
-                            borderColor: settings.BorderColor,
-                            borderWidth: settings.BorderWidth,
-                            noDate: settings.NoDate,
-                            text: new AppearanceTextOptions(
-                                settings.SignedByLabel, settings.ReasonLabel, settings.LocationLabel,
-                                settings.DateLabel, settings.DateFormat, settings.TimeZone),
-                            backgroundColor: settings.BackgroundColor,
-                            imageFit: settings.ImageFit,
-                            layout: new AppearanceLayoutOptions(settings.StampWidth, settings.StampHeight, settings.TextAlign));
-
-                        if (settings.Brasil)
-                        {
-                            appearance = AppearanceBuilder.AddAeaExtraLines(
-                                appearance, settings.SignerName!, settings.Cpf!);
-                        }
-
-                        builder = builder.WithAppearance(appearance);
+                        builder = builder.WithSubFilter(parsed.Value);
                     }
+                }
 
-                    if (settings.SubFilter is not null)
+                if (settings.SignatureAlgorithm is not null)
+                {
+                    var oid = SignCommandOptions.ParseSignatureAlgorithm(settings.SignatureAlgorithm);
+                    if (oid is not null)
                     {
-                        var parsed = SignCommandOptions.ParseSubFilter(settings.SubFilter);
-                        if (parsed.HasValue)
-                        {
-                            builder = builder.WithSubFilter(parsed.Value);
-                        }
+                        builder = builder.WithSignatureAlgorithm(oid);
                     }
+                }
 
-                    if (settings.SignatureAlgorithm is not null)
+                if (settings.PdfA)
+                {
+                    builder = builder.WithPdfAPreservation();
+                }
+
+                // ICP-Brasil policy: version by the signer's root, PBAD.PAdES, and the level the policy needs.
+                if (IcpBrasilCliOptions.ParsePolicy(settings.IcpPolicy) is { } icpPolicy)
+                {
+                    IcpBrasilPolicyArtifacts? artifacts = null;
+                    if (icpPolicy == IcpBrasilPolicy.AdRa)
                     {
-                        var oid = SignCommandOptions.ParseSignatureAlgorithm(settings.SignatureAlgorithm);
-                        if (oid is not null)
-                        {
-                            builder = builder.WithSignatureAlgorithm(oid);
-                        }
+                        using var http = new HttpClient();
+                        artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(
+                            http, builder.ResolveIcpBrasilPolicy(icpPolicy), cancellation);
                     }
 
-                    if (settings.PdfA)
+                    builder = builder.WithIcpBrasilPolicy(icpPolicy, new IcpBrasilPadesOptions
                     {
-                        builder = builder.WithPdfAPreservation();
-                    }
+                        Timestamp = settings.TsaUrl is null ? null : new TimestampOptions(new Uri(settings.TsaUrl), CliNetwork.Provider),
+                        Artifacts = artifacts,
+                    });
+                }
 
-                    // ICP-Brasil policy: version by the signer's root, PBAD.PAdES, and the level the policy needs.
-                    if (IcpBrasilCliOptions.ParsePolicy(settings.IcpPolicy) is { } icpPolicy)
-                    {
-                        IcpBrasilPolicyArtifacts? artifacts = null;
-                        if (icpPolicy == IcpBrasilPolicy.AdRa)
-                        {
-                            using var http = new HttpClient();
-                            artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(
-                                http, builder.ResolveIcpBrasilPolicy(icpPolicy), cancellation);
-                        }
+                if (IcpBrasilCliOptions.ParseHealthDocument(settings.HealthDocument) is { } healthDocument)
+                {
+                    builder = builder.WithHealthDocument(
+                        healthDocument,
+                        [.. (settings.Registrations ?? []).Select(r => IcpBrasilCliOptions.ParseRegistration(r)!)]);
+                }
 
-                        builder = builder.WithIcpBrasilPolicy(icpPolicy, new IcpBrasilPadesOptions
-                        {
-                            Timestamp = settings.TsaUrl is null ? null : new TimestampOptions(new Uri(settings.TsaUrl)),
-                            Artifacts = artifacts,
-                        });
-                    }
+                builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
+                if (CliNetwork.IsConfigured)
+                {
+                    builder = builder.WithHttpClientProvider(CliNetwork.Provider);
+                }
 
-                    if (IcpBrasilCliOptions.ParseHealthDocument(settings.HealthDocument) is { } healthDocument)
-                    {
-                        builder = builder.WithHealthDocument(
-                            healthDocument,
-                            [.. (settings.Registrations ?? []).Select(r => IcpBrasilCliOptions.ParseRegistration(r)!)]);
-                    }
+                var result = await builder.SignWithDetailsAsync(cancellation);
+                signed = result.SignedArtifact;
+                dssEmbedded = result.HasLongTermValidationMaterial;
+                details = result;
+            }
 
-                    builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
-                    var result = await builder.SignWithDetailsAsync();
-                    signed = result.SignedArtifact;
-                    dssEmbedded = result.HasLongTermValidationMaterial;
-                });
+            if (settings.Json)
+            {
+                await SignAsync();
+            }
+            else
+            {
+                await AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .SpinnerStyle(Style.Parse("blue"))
+                    .StartAsync("Signing...", async _ => await SignAsync());
+            }
 
             await File.WriteAllBytesAsync(outputPath, signed, cancellation);
+            if (settings.Json)
+            {
+                SignJson.WriteSuccess("pades", outputPath, cert.Subject, details!);
+                return 0;
+            }
 
             AnsiConsole.MarkupLine($"[green]✓ Signed:[/] {outputPath.EscapeMarkup()}");
             AnsiConsole.MarkupLine($"  Certificate: [bold]{cert.Subject.EscapeMarkup()}[/]");

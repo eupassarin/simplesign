@@ -30,6 +30,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         [Description(SigningPolicyOption.Description)]
         public string? SigningPolicy { get; init; }
 
+        /// <summary>Print the result (or the refusal) as one JSON object instead of text.</summary>
+        [CommandOption("--json")]
+        [Description("Print the result, or the refusal with its reason, as JSON")]
+        public bool Json { get; init; }
+
         /// <summary>XML file to sign.</summary>
         [CommandArgument(0, "<input>")]
         [Description("XML file to sign")]
@@ -260,6 +265,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
     public override async Task<int> ExecuteAsync(
         CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        SignJson.Enabled = settings.Json;
         byte[] xmlData = await CommonSettings.ReadInputBytesAsync(settings.InputPath, cancellationToken);
 
         using X509Certificate2 cert = await LoadCertificateAsync(settings, cancellationToken);
@@ -314,10 +320,21 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         }
 
         builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
-        byte[] signed = await builder.SignAsync(cancellationToken);
+        if (CliNetwork.IsConfigured)
+        {
+            builder = builder.WithHttpClientProvider(CliNetwork.Provider);
+        }
+
+        var result = await builder.SignWithDetailsAsync(cancellationToken);
+        byte[] signed = result.SignedArtifact;
 
         string outputPath = settings.OutputPath ?? settings.InputPath + ".signed.xml";
         await File.WriteAllBytesAsync(outputPath, signed, cancellationToken);
+        if (settings.Json)
+        {
+            SignJson.WriteSuccess("xades", outputPath, cert.Subject, result);
+            return 0;
+        }
 
         AnsiConsole.MarkupLine($"[green]XAdES signature saved to:[/] {outputPath}");
 
@@ -348,7 +365,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
 
         if (settings.DataObjectsTimestamp)
         {
-            builder = builder.WithDataObjectsTimestamp(new TimestampOptions(new Uri(settings.TsaUrl!)));
+            builder = builder.WithDataObjectsTimestamp(new TimestampOptions(new Uri(settings.TsaUrl!), CliNetwork.Provider));
         }
 
         if (settings.AttributeCertificates is { Length: > 0 })
@@ -412,7 +429,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
 
     private static AdesBaselineProfile BuildBaselineProfile(string tsaUrl, AdesBaselineLevel level, string? revocationPreference)
     {
-        var timestampOptions = new TimestampOptions(new Uri(tsaUrl));
+        var timestampOptions = new TimestampOptions(new Uri(tsaUrl), CliNetwork.Provider);
         return level switch
         {
             AdesBaselineLevel.Timestamped => AdesBaselineProfile.Timestamped(timestampOptions),

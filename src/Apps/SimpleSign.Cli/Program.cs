@@ -10,8 +10,29 @@ using Spectre.Console.Cli;
 using SimpleSign.Brazil.GovBr;
 using SimpleSign.Brazil.IcpBrasil;
 
+// --allow-origin, --allow-ldap and --tls-trust (any command) are read first: the HTTP provider is
+// registered before the command line is parsed.
+string[] commandArgs;
+try
+{
+    commandArgs = CliNetwork.Configure(args);
+}
+catch (ArgumentException ex)
+{
+    AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message.EscapeMarkup()}");
+    return -1;
+}
+
 var services = new ServiceCollection();
-services.AddSimpleSign();
+if (CliNetwork.IsConfigured)
+{
+    services.AddSimpleSign(configure: null, CliNetwork.Provider);
+}
+else
+{
+    services.AddSimpleSign();
+}
+
 services.AddSimpleSignIcpBrasil();
 services.AddSimpleSignGovBr();
 services.AddSimpleSignCades();
@@ -20,7 +41,7 @@ services.AddSimpleSignXades();
 var registry = new SimpleSignServiceRegistry(services);
 var app = new CommandApp(registry);
 ConfigureApp(app);
-return await app.RunAsync(args);
+return await app.RunAsync(commandArgs);
 
 internal static partial class Program
 {
@@ -103,6 +124,12 @@ internal static partial class Program
 
             config.SetExceptionHandler((ex, _) =>
             {
+                if (SignJson.Enabled)
+                {
+                    SignJson.WriteError(ex);
+                    return -1;
+                }
+
                 if (ex is SimpleSign.Core.Signing.SigningException signing)
                 {
                     AnsiConsole.MarkupLine($"[red]Error ({signing.Reason}):[/] {signing.Message.EscapeMarkup()}");
@@ -135,6 +162,9 @@ internal static partial class Program
         _ => null,
     };
 
-    internal static async Task<int> RunWithAsync(CommandApp app, string[] args) =>
-        await app.RunAsync(args);
+    internal static async Task<int> RunWithAsync(CommandApp app, string[] args)
+    {
+        SignJson.Enabled = false;
+        return await app.RunAsync(args);
+    }
 }
