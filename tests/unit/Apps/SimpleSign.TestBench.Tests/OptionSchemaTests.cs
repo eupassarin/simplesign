@@ -2,8 +2,6 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Shouldly;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.Brazil.Signing;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
@@ -37,19 +35,14 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
         s_schema.Options.GroupBy(o => o.Id).Where(g => g.Count() > 1).Select(g => g.Key).ShouldBeEmpty();
 
     [Fact]
-    public void Options_SectionsFormatsAndFrameworks_Exist()
+    public void Options_SectionsAndFormats_Exist()
     {
         var sections = s_schema.Sections.Select(s => s.Id).ToHashSet();
-        var frameworks = s_schema.Frameworks.Select(f => f.Id).ToHashSet();
         foreach (var option in s_schema.Options)
         {
             sections.ShouldContain(option.Section, option.Id);
             option.Formats.ShouldNotBeEmpty(option.Id);
             option.Formats.ShouldAllBe(f => RunFormats.All.Contains(f), option.Id);
-            if (option.Framework is not null)
-            {
-                frameworks.ShouldContain(option.Framework, option.Id);
-            }
         }
     }
 
@@ -113,9 +106,6 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
     {
         Values("cx.commitment").Where(v => v.Length > 0).ShouldAllBe(v => Enum.IsDefined(typeof(CommitmentType), v));
         Values("pades.metadata.commitmentType").ShouldAllBe(v => Enum.IsDefined(typeof(CommitmentType), v));
-        Values("pades.health.type").ShouldAllBe(v => Enum.IsDefined(typeof(HealthDocumentType), v));
-        Values("pades.aea.authMethod").ShouldAllBe(v => Enum.IsDefined(typeof(AuthenticationMethod), v));
-        Values("xades.fiscalProfile").ShouldAllBe(v => SimpleSign.Brazil.Fiscal.FiscalDocumentProfile.ByName.ContainsKey(v));
 
         static IEnumerable<string> Values(string id) => s_schema.Options.Single(o => o.Id == id).Values.Select(v => v.Value);
     }
@@ -145,15 +135,12 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
             }
         }
 
-        foreach (var mode in Enum.GetValues<XmlMode>())
+        foreach (var kind in Enum.GetValues<XadesKind>())
         {
-            foreach (var kind in Enum.GetValues<XadesKind>())
+            foreach (var form in Enum.GetValues<XadesFormChoice>())
             {
-                foreach (var form in Enum.GetValues<XadesFormChoice>())
-                {
-                    var options = new XmlOptions { Mode = mode, Kind = kind, Form = form, Level = BaselineLevel.BLTA };
-                    known[RunFormats.Xades].UnionWith(XmlCompatibility.Evaluate(options, null, null).Options.Keys);
-                }
+                var options = new XmlOptions { Kind = kind, Form = form, Level = BaselineLevel.BLTA };
+                known[RunFormats.Xades].UnionWith(XmlCompatibility.Evaluate(options, null, null).Options.Keys);
             }
         }
 

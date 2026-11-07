@@ -11,7 +11,7 @@ import { useI18n, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { IssueList, Pill } from "../shared/ui"
 import { OptionForm } from "./OptionForm"
-import { frameworkTone, StandardBadge } from "./parts"
+import { StandardBadge } from "./parts"
 import { ResultPanel } from "./ResultPanel"
 import { asText } from "./schema"
 import { pairwise } from "./combinations"
@@ -38,12 +38,11 @@ export function WorkbenchPage() {
 }
 
 function TopBar() {
-  const { schema, format, setFormat, frameworks, toggleFramework, applyPreset, options, evaluation, evaluating, running, sign, reset } = useWorkbench()
+  const { schema, format, setFormat, applyPreset, options, evaluation, evaluating, running, sign, reset } = useWorkbench()
   const t = useT()
   const current = schema.formats.find((f) => f.id === format)!
   const errors = evaluation?.issues.filter((i) => i.severity === "Error").length ?? 0
   const level = asText(options.level)
-  const baseline = asText(options.kind) !== "IcpBrasil" && asText(options.mode) !== "Fiscal"
   return (
     <div className="space-y-2.5 border-b px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -59,7 +58,7 @@ function TopBar() {
           {schema.presets.filter((p) => p.formats.includes(format)).map((p) => (
             <Tooltip key={p.id}>
               <TooltipTrigger asChild>
-                <Button variant={baseline && p.set.level === level ? "default" : "outline"} size="sm" className="h-8 px-2.5 font-mono text-xs" onClick={() => applyPreset(p)}>{p.title}</Button>
+                <Button variant={p.set.level === level ? "default" : "outline"} size="sm" className="h-8 px-2.5 font-mono text-xs" onClick={() => applyPreset(p)}>{p.title}</Button>
               </TooltipTrigger>
               <TooltipContent>{p.summary}</TooltipContent>
             </Tooltip>
@@ -82,26 +81,7 @@ function TopBar() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
         <span className="text-muted-foreground">{current.summary}</span>
         <StandardBadge explanation={{ title: current.title, summary: current.summary, standards: current.standards, api: current.signerApi }} />
-        <span className="text-muted-foreground ml-auto flex items-center gap-1.5">
-          {t("wb.frameworks")}
-          {schema.frameworks.map((f) => {
-            const on = frameworks.has(f.id)
-            const tone = frameworkTone[f.id]
-            return (
-              <Tooltip key={f.id}>
-                <TooltipTrigger asChild>
-                  <button type="button" role="switch" aria-checked={on} disabled={f.status !== "available"} onClick={() => toggleFramework(f.id)}
-                    className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
-                      f.status !== "available" ? "cursor-not-allowed border-dashed opacity-50" : on ? tone?.chip : "hover:border-foreground/40 hover:text-foreground")}>
-                    {on ? "✓ " : "+ "}{f.title}{f.status !== "available" && ` · ${t("wb.planned")}`}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-72">{f.summary}</TooltipContent>
-              </Tooltip>
-            )
-          })}
-        </span>
-        {errors > 0 && <span className="text-destructive flex items-center gap-1"><CircleAlert className="size-3.5" />{t("wb.errors", { n: errors })}</span>}
+        {errors > 0 && <span className="text-destructive ml-auto flex items-center gap-1"><CircleAlert className="size-3.5" />{t("wb.errors", { n: errors })}</span>}
         {evaluating && <Loader2 className="text-muted-foreground size-3 animate-spin" />}
       </div>
     </div>

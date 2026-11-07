@@ -64,22 +64,6 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
     }
 
     [Theory]
-    [InlineData(CadesIcpPolicy.AdRb)]
-    [InlineData(CadesIcpPolicy.AdRt)]
-    [InlineData(CadesIcpPolicy.AdRv)]
-    [InlineData(CadesIcpPolicy.AdRc)]
-    [InlineData(CadesIcpPolicy.AdRa)]
-    public async Task RunAsync_IcpBrasil_SignsAndValidates(CadesIcpPolicy policy)
-    {
-        var result = await fixture.Cades.RunAsync(Options() with { Kind = CadesKind.IcpBrasil, IcpPolicy = policy }, default);
-
-        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
-        result.Validation!.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
-        result.Validation.Structure.Signers[0].PolicyOid.ShouldNotBeNull();
-        result.Code.CSharp.ShouldContain($"IcpBrasilPolicy.{policy}");
-    }
-
-    [Theory]
     [InlineData(CadesExtendedChoice.CompleteReferences, "esc-time-stamp (CAdES-C timestamp)")]
     [InlineData(CadesExtendedChoice.ExtendedLong, "certificate-values")]
     [InlineData(CadesExtendedChoice.Archive, "archive-time-stamp-v2")]

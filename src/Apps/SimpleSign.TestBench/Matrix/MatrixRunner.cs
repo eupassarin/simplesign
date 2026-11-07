@@ -45,7 +45,7 @@ public sealed record MatrixRunResult(int Total, int Passed, int Failed, int Skip
 /// </summary>
 internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, CredentialFactory factory) : IDisposable
 {
-    private static readonly string[] Signers = ["rsa-2048", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "company"];
+    private static readonly string[] Signers = ["rsa-2048", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521"];
     private static readonly string[] Documents = ["contract", "empty-field", "signed", "certified-p2", "certified-p3", "pdfa-2b", "pdfa-1b"];
     private readonly SemaphoreSlim _gate = new(1, 1);
     private MatrixContext? _context;
@@ -65,11 +65,6 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
                 V("type", "B-T", (o, _) => o with { Kind = SignatureKind.Baseline, Level = BaselineLevel.BT }),
                 V("type", "B-LT", (o, _) => o with { Kind = SignatureKind.Baseline, Level = BaselineLevel.BLT }),
                 V("type", "B-LTA", (o, _) => o with { Kind = SignatureKind.Baseline, Level = BaselineLevel.BLTA }),
-                V("type", "AD-RB", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRb }),
-                V("type", "AD-RB+TS", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRb, IcpAdRbTimestamp = true }),
-                V("type", "AD-RT", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRt }),
-                V("type", "AD-RC", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRc }),
-                V("type", "AD-RA", (o, _) => o with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRa }),
                 V("type", "Custom policy B-T", (o, _) => o with
                 {
                     Kind = SignatureKind.CustomPolicy, Level = BaselineLevel.BT,
@@ -103,17 +98,11 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
                 V("details", "basic", (o, _) => o with { Reason = "Approval", Location = "São Paulo", ContactInfo = "test@example.com", SignerName = "Matrix" }),
                 V("details", "metadata", (o, _) => o with
                 {
-                    UseSignerDetails = true, SignerDetails = SignerDetailsKind.Metadata, Reason = "Approval",
-                    Metadata = new MetadataChoice { SignerName = "Matrix Signer", SignerId = "11144477735", SignerIdType = "CPF", Email = "m@example.com", CommitmentType = "ProofOfOrigin" },
+                    UseSignerDetails = true, Reason = "Approval",
+                    Metadata = new MetadataChoice { SignerName = "Matrix Signer", SignerId = "A-1001", SignerIdType = "Employee", Email = "m@example.com", CommitmentType = "ProofOfOrigin" },
                 }),
-                V("details", "AEA", (o, _) => o with
+                V("details", "info", (o, _) => o with
                 {
-                    UseSignerDetails = true, SignerDetails = SignerDetailsKind.Aea,
-                    Aea = new AeaChoice { SignerName = "Maria da Silva", Cpf = "111.444.777-35", AuthMethod = "GovBr", Email = "maria@example.com", IpAddress = "203.0.113.7" },
-                }),
-                V("details", "health+info", (o, _) => o with
-                {
-                    Health = new HealthChoice { Enabled = true, Type = "Prescricao", Professionals = [new ProfessionalChoice { Council = "Cfm", RegistrationNumber = "123456", StateCode = "SP" }] },
                     DocumentInfo = [new DocumentInfoEntry("Title", "Matrix"), new DocumentInfoEntry("Subject", "Pairwise")],
                     SigningTime = DateTimeOffset.UtcNow.AddMinutes(-5),
                     OperationId = "matrix",
@@ -238,7 +227,7 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
         }
 
         checks.Add("integrity + signature value");
-        if (effective.Kind != SignatureKind.IcpBrasil && mine.Indication != "Valid")
+        if (mine.Indication != "Valid")
         {
             return $"Indication {mine.Indication}: " + string.Join("; ", mine.Errors.Concat(mine.Warnings));
         }
@@ -247,7 +236,6 @@ internal sealed class MatrixRunner(SandboxEnvironment sandbox, DocumentStore doc
         string expectedSubFilter = effective.SubFilter switch
         {
             SubFilterChoice.AdbePkcs7Detached => "adbe.pkcs7.detached",
-            SubFilterChoice.PbadPades => "PBAD.PAdES",
             _ => "ETSI.CAdES.detached",
         };
         if (mine.SubFilter != expectedSubFilter)

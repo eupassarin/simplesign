@@ -103,12 +103,6 @@ export function SandboxPage() {
             <KeyValue label={t("sandbox.status")}>{dssStatus ? (dssStatus.reachable ? <Pill tone="success">{t("lab.dssUp", { ms: dssStatus.ms })}</Pill> : <Pill>{t("lab.dssDown")}</Pill>) : "—"}</KeyValue>
             <p className="text-muted-foreground pt-2 text-xs leading-relaxed">{t("lab.dssTrust")}</p>
           </Service>
-          <Service icon={<Cloud className="size-4" />} title="PSC (DOC-ICP-17.01)" onTraffic={() => setService("PSC")}>
-            <p className="text-muted-foreground pb-2 text-xs leading-relaxed">{t("signer.cloud.psc.what")}</p>
-            <KeyValue stacked mono label="URL" copy={env?.pscUrl}>{env?.pscUrl}</KeyValue>
-            <KeyValue stacked mono label="CPF / OTP">{env?.pscCpf} / {env?.pscOtp}</KeyValue>
-            <KeyValue stacked mono label={t("sandbox.client")}>testbench</KeyValue>
-          </Service>
           <Service icon={<Cloud className="size-4" />} title="CSC API v2" onTraffic={() => setService("CSC")}>
             <p className="text-muted-foreground pb-2 text-xs leading-relaxed">{t("signer.cloud.csc.what")}</p>
             <KeyValue stacked mono label="URL" copy={env?.cscUrl}>{env?.cscUrl}</KeyValue>
@@ -119,7 +113,7 @@ export function SandboxPage() {
 
         <Section title={t("sandbox.log")} description={t("sandbox.logHint")} aside={<span className="text-muted-foreground flex items-center gap-1.5 text-xs"><RefreshCw className="size-3 animate-spin [animation-duration:3s]" /> {t("lab.live")}</span>}>
           <div className="flex flex-wrap gap-1.5">
-            {["", "TSA", "CRL", "AIA", "PSC", "CSC"].map((name) => (
+            {["", "TSA", "CRL", "AIA", "CSC"].map((name) => (
               <button key={name} type="button" onClick={() => setService(name)}
                 className={cn("rounded-full border px-2.5 py-0.5 text-xs", service === name ? "bg-accent border-foreground/30 font-medium" : "text-muted-foreground hover:text-foreground")}>
                 {name || t("lab.allServices")} {log.filter((r) => !name || r.service.startsWith(name)).length}

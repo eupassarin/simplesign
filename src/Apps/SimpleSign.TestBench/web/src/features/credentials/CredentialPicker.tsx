@@ -4,7 +4,6 @@ import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useT, type MessageKey } from "@/i18n"
 import { api } from "@/lib/api"
@@ -26,7 +25,7 @@ function usePicker() {
 }
 
 /**
- * Every way to open a signer (sandbox A1, PFX, OS store, PKCS#11, PSC, CSC), shared by the PDF,
+ * Every way to open a signer (sandbox A1, PFX, OS store, PKCS#11, CSC), shared by the PDF,
  * CAdES and XML pages. Credentials live on the server; the page keeps the id it gets back.
  */
 export function CredentialPicker({ environment, env, credential, onCredential }: PickerContext & { onCredential: (facts: CredentialFacts) => void }) {
@@ -48,7 +47,6 @@ export function CredentialPicker({ environment, env, credential, onCredential }:
             <Tab value="pfx" icon={<FileKey2 />} label="signer.tabs.pfx" info="signer.Pfx" />
             <Tab value="store" icon={<MonitorSmartphone />} label="signer.tabs.store" info="signer.OsStore" />
             <Tab value="pkcs11" icon={<Usb />} label="signer.tabs.pkcs11" info="signer.Pkcs11" />
-            <Tab value="psc" icon={<Cloud />} label="signer.tabs.psc" info="signer.Psc" />
             <Tab value="csc" icon={<Cloud />} label="signer.tabs.csc" info="signer.Csc" />
           </TabsList>
           <div className="pt-5">
@@ -56,7 +54,6 @@ export function CredentialPicker({ environment, env, credential, onCredential }:
             <TabsContent value="pfx"><PfxForm onOpened={opened} /></TabsContent>
             <TabsContent value="store"><StoreList onOpened={opened} /></TabsContent>
             <TabsContent value="pkcs11"><TokenList onOpened={opened} /></TabsContent>
-            <TabsContent value="psc"><PscForm onOpened={opened} /></TabsContent>
             <TabsContent value="csc"><CscForm onOpened={opened} /></TabsContent>
           </div>
         </Tabs>
@@ -248,80 +245,20 @@ function TokenList({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
   )
 }
 
-/** What a cloud certificate is and how a signature happens with it, step by step, with its standard. */
-function CloudExplainer({ kind }: { kind: "psc" | "csc" }) {
+/** What a CSC cloud certificate is and how a signature happens with it, step by step, with its standard. */
+function CloudExplainer() {
   const t = useT()
-  const steps = [1, 2, 3, 4].map((n) => t(`signer.cloud.${kind}.step${n}` as MessageKey))
+  const steps = [1, 2, 3, 4].map((n) => t(`signer.cloud.csc.step${n}` as MessageKey))
   return (
     <div className="bg-muted/40 space-y-2 rounded-lg border p-3 text-sm">
-      <p className="leading-relaxed">{t(`signer.cloud.${kind}.what` as MessageKey)}</p>
+      <p className="leading-relaxed">{t("signer.cloud.csc.what")}</p>
       <ol className="text-muted-foreground list-decimal space-y-0.5 pl-5 text-xs leading-relaxed">
         {steps.map((step) => <li key={step}>{step}</li>)}
       </ol>
       <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        <span className="rounded border px-1.5 py-px font-mono text-[10px]">{kind === "psc" ? "DOC-ICP-17.01" : "CSC API v2.0"}</span>
-        <code className="font-mono text-[11px] break-all">{kind === "psc" ? "PscClient + PscSigner.CreateAsync → WithExternalSigner" : "CscClient + CscSigner.CreateAsync → WithExternalSigner"}</code>
+        <span className="rounded border px-1.5 py-px font-mono text-[10px]">CSC API v2.0</span>
+        <code className="font-mono text-[11px] break-all">CscClient + CscSigner.CreateAsync → WithExternalSigner</code>
       </p>
-    </div>
-  )
-}
-
-function PscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
-  const { environment, env } = usePicker()
-  const sandbox = environment === "Sandbox"
-  const [form, setForm] = useState({ baseUrl: "", clientId: "", clientSecret: "", flow: "Browser", cpf: "", otp: "", scope: "SignatureSession", alias: "" })
-  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }))
-  const { busy, run } = useAction()
-  const t = useT()
-  return (
-    <div className="grid max-w-2xl gap-4">
-      <CloudExplainer kind="psc" />
-      {sandbox ? (
-        <Alert>
-          <Cloud />
-          <AlertTitle>{t("signer.psc.simulated")}</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <span className="block break-words">{t("signer.psc.simulatedHint", { url: env?.pscUrl ?? "", cpf: env?.pscCpf ?? "", otp: env?.pscOtp ?? "" })}</span>
-            <Button size="sm" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.psc(environment, "password", { ...form, otp: env?.pscOtp, alias: "maria-rsa2048" })))}>
-              {busy && <Loader2 className="animate-spin" />} {t("signer.cloud.useSimulated")}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t("signer.psc.baseUrl")} className="sm:col-span-2"><Input value={form.baseUrl} onChange={(e) => set({ baseUrl: e.target.value })} placeholder="https://<provider>/v0/" /></Field>
-          <Field label="client_id"><Input value={form.clientId} onChange={(e) => set({ clientId: e.target.value })} /></Field>
-          <Field label="client_secret"><Input type="password" value={form.clientSecret} onChange={(e) => set({ clientSecret: e.target.value })} autoComplete="off" /></Field>
-        </div>
-      )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <ChoiceCard selected={form.flow === "Browser"} onSelect={() => set({ flow: "Browser" })} title={t("signer.psc.browser")} description={t("signer.psc.browserHint")} />
-        <ChoiceCard selected={form.flow === "Password"} onSelect={() => set({ flow: "Password" })} title="CPF + OTP" description={t("signer.psc.passwordHint")} />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="CPF / CNPJ" description={form.flow === "Browser" ? t("signer.psc.loginHint") : undefined}>
-          <Input value={sandbox ? env?.pscCpf ?? "" : form.cpf} disabled={sandbox} onChange={(e) => set({ cpf: e.target.value })} />
-        </Field>
-        {form.flow === "Password" && (
-          <Field label="OTP"><Input value={form.otp} placeholder={sandbox ? env?.pscOtp : ""} onChange={(e) => set({ otp: e.target.value })} autoComplete="off" /></Field>
-        )}
-        <Field label={t("signer.psc.scope")}>
-          <Select value={form.scope} onValueChange={(v) => set({ scope: v })}>
-            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="SignatureSession">signature_session</SelectItem>
-              <SelectItem value="MultiSignature">multi_signature</SelectItem>
-              <SelectItem value="SingleSignature">single_signature</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label={t("signer.psc.alias")} description={t("signer.psc.aliasHint")}>
-          <Input value={form.alias} onChange={(e) => set({ alias: e.target.value })} placeholder={sandbox ? "maria-rsa2048" : ""} />
-        </Field>
-      </div>
-      <Button className="w-fit" disabled={busy} onClick={() => run(async () => onOpened(await api.credentials.psc(environment, form.flow === "Password" ? "password" : "browser", { ...form, otp: form.otp || undefined })))}>
-        {busy && <Loader2 className="animate-spin" />} {t("signer.psc.authorize")}
-      </Button>
     </div>
   )
 }
@@ -340,7 +277,7 @@ function CscForm({ onOpened }: { onOpened: (f: CredentialFacts) => void }) {
   const chosen = list?.find((c) => c.id === form.credentialId)
   return (
     <div className="grid max-w-3xl gap-5">
-      <CloudExplainer kind="csc" />
+      <CloudExplainer />
       {sandbox ? (
         <Alert>
           <Cloud />
@@ -429,14 +366,11 @@ export function CredentialCard({ facts }: { facts: CredentialFacts }) {
             {facts.isExpired && <Pill tone="danger">{t("signer.card.expired")}</Pill>}
             {facts.isNotYetValid && <Pill tone="warning">{t("signer.card.notYetValid")}</Pill>}
             {!facts.hasNonRepudiation && <Pill tone="warning">{t("signer.card.noNonRepudiation")}</Pill>}
-            {facts.chainsToIcpBrasil && <Pill tone="success">ICP-Brasil</Pill>}
           </span>
         </div>
         <div className="grid gap-x-8 p-4 sm:grid-cols-2">
           <KeyValue label={t("signer.card.key")}>{facts.keyAlgorithm} {facts.keySize}</KeyValue>
           <KeyValue label={t("signer.card.valid")}>{facts.notBefore} → {facts.notAfter}</KeyValue>
-          {facts.cpf && <KeyValue label="CPF">{facts.cpf}</KeyValue>}
-          {facts.cnpj && <KeyValue label="CNPJ">{facts.cnpj}</KeyValue>}
           <KeyValue stacked label={t("signer.card.issuer")}>{facts.issuer}</KeyValue>
           <KeyValue stacked label={t("signer.card.digests")}>{facts.hashes.map((h) => h.replace("Sha3_", "SHA3-").replace("Sha", "SHA-")).join(", ")}</KeyValue>
           <KeyValue label={t("signer.card.schemes")}>{facts.keyAlgorithm === "RSA" ? facts.paddings.map((p) => (p === "Pss" ? "RSASSA-PSS" : "PKCS#1 v1.5")).join(", ") : "ECDSA"}</KeyValue>

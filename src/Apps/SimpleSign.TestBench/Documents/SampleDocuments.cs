@@ -62,7 +62,7 @@ internal static class SampleDocuments
 
     private const string Clause = "As partes acordam que o presente instrumento é celebrado de boa-fé, " +
         "observadas as disposições legais aplicáveis, e que as assinaturas eletrônicas apostas neste documento têm a validade " +
-        "prevista na MP 2.200-2/2001 e na Lei 14.063/2020.";
+        "prevista na legislação aplicável.";
 
     private static string ContractHtml(string title, int pages)
     {

@@ -1,5 +1,4 @@
 using Shouldly;
-using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
@@ -11,24 +10,6 @@ namespace SimpleSign.TestBench.Tests;
 [Trait("Category", "Unit")]
 public sealed class CredentialFactoryTests(TestBenchFixture fixture)
 {
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task OpenPscAsync_SandboxFlow_SignsAndValidates(bool password)
-    {
-        var request = new PscCredentialRequest(null, null, null, null, SandboxPsc.Otp, PscScope.SignatureSession, "maria-rsa2048");
-        var handle = fixture.Credentials.Add(password
-            ? await fixture.Factory.OpenPscPasswordAsync(request, EnvironmentMode.Sandbox, default)
-            : await fixture.Factory.OpenPscBrowserAsync(request, EnvironmentMode.Sandbox, default));
-
-        handle.Facts.Paddings.ShouldBe([RsaPadding.Pkcs1]);
-        var result = await fixture.Runner.RunAsync(fixture.Options() with { CredentialId = handle.Id, Level = BaselineLevel.BT }, default);
-
-        result.Error.ShouldBeNull();
-        result.Validation.Last(v => !v.IsDocumentTimestamp).Indication.ShouldBe("Valid");
-        result.Code.CSharp.ShouldContain("WithExternalSigner(psc.Certificate, psc, psc.Chain)");
-    }
-
     [Theory]
     [InlineData("rsa-scal1", CscAuthorizerKind.Explicit, null, RsaPadding.Pkcs1)]
     [InlineData("rsa-scal2", CscAuthorizerKind.Explicit, SandboxCsc.Otp, RsaPadding.Pkcs1)]

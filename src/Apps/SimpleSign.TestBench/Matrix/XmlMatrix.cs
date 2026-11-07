@@ -7,12 +7,11 @@ namespace SimpleSign.TestBench.Matrix;
 
 /// <summary>
 /// The XML run matrix: XAdES cases generated from <see cref="XmlCompatibility"/> (every value, then
-/// pairwise), plus every fiscal profile with an RSA e-CPF and the e-CNPJ, signed in the sandbox,
-/// validated, and checked against what was asked.
+/// pairwise), signed in the sandbox, validated, and checked against what was asked.
 /// </summary>
 internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, CredentialStore credentials, CredentialFactory factory) : IDisposable
 {
-    private static readonly string[] Signers = ["rsa-2048", "rsa-3072", "ecdsa-p256", "company"];
+    private static readonly string[] Signers = ["rsa-2048", "rsa-3072", "ecdsa-p256", "ecdsa-p384"];
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Dictionary<string, (string Id, CredentialFacts Facts)>? _credentials;
     private IReadOnlyList<MatrixCase>? _cases;
@@ -36,8 +35,7 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
                 V("B-T", o => o with { Level = BaselineLevel.BT }),
                 V("B-LT", o => o with { Level = BaselineLevel.BLT }),
                 V("B-LTA", o => o with { Level = BaselineLevel.BLTA }),
-                V("custom-policy", o => o with { Kind = XadesKind.CustomPolicy, PolicyOid = "2.16.76.1.7.1.6.2.3", PolicyUri = "http://politicas.icpbrasil.gov.br/PA_AD_RB_v2_3.xml" }),
-                .. Enum.GetValues<XadesIcpPolicy>().Select(p => V($"ICP {p}", o => o with { Kind = XadesKind.IcpBrasil, IcpPolicy = p })),
+                V("custom-policy", o => o with { Kind = XadesKind.CustomPolicy, PolicyOid = "1.2.3.4.5", PolicyUri = "https://example.com/policy.xml" }),
             ]),
             new("extended", [.. Enum.GetValues<XadesExtendedChoice>().Select(e => V(e.ToString(), o => o with { ExtendedForm = e }))]),
             new("hash", [.. HashValues().Select(h => V(h.ToString(), o => o with { Hash = h }))]),
@@ -67,9 +65,9 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
                 V("data-timestamp+objects+policy-store", o => o with
                 {
                     DataObjectsTimestamp = true,
-                    EmbeddedObjectId = File("nfe"),
-                    ExternalObjectId = File("cte"),
-                    PolicyDocumentId = File("evento"),
+                    EmbeddedObjectId = File("v-xades"),
+                    ExternalObjectId = File("v-untrusted"),
+                    PolicyDocumentId = File("v-changed"),
                     PlaceCity = "Recife",
                 }),
             ]),
@@ -110,21 +108,11 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
 
     internal XmlOptions Build(IReadOnlyDictionary<string, string> values)
     {
-        var options = new XmlOptions { CredentialId = _credentials![values["signer"]].Id };
-        if (values["form"] == "fiscal")
+        var options = new XmlOptions
         {
-            var sample = samples.Samples.Single(s => s.Id == values["type"]);
-            return options with
-            {
-                Mode = XmlMode.Fiscal,
-                Profile = sample.Profile!,
-                DataId = sample.FileId,
-                SignAll = values["details"] == "sign-all",
-                ElementId = values["details"].StartsWith("id:", StringComparison.Ordinal) ? values["details"][3..] : null,
-            };
-        }
-
-        options = options with { DataId = samples.Samples.Single(s => s.Id == "order").FileId };
+            CredentialId = _credentials![values["signer"]].Id,
+            DataId = samples.Samples.Single(s => s.Id == "order").FileId,
+        };
         foreach (var dimension in Dimensions())
         {
             options = dimension.Values.First(v => v.Value == values[dimension.Name]).Apply(options);
@@ -156,34 +144,8 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
         var generated = Pairwise.Generate([.. dims.Select(d => (IReadOnlyList<string>)[.. d.Values.Select(v => v.Value)])], Valid, 200, out _uncoverable);
         var cases = generated.Select((c, i) => new MatrixCase($"X{c.Group[0]}{i + 1:D3}", c.Group, Map(c.Values))).ToList();
 
-        // Fiscal: every layout with an e-CPF and the e-CNPJ; the batch also by Id and all at once.
-        int n = 0;
-        foreach (var sample in samples.Samples.Where(s => s is { Kind: "data", Mode: XmlMode.Fiscal }))
-        {
-            var modes = sample.Id == "nfe-batch" ? new[] { "sign-all", $"id:{BatchFirstId(sample)}" } : ["sign"];
-            foreach (string signer in new[] { "rsa-2048", "company" })
-            {
-                foreach (string mode in modes)
-                {
-                    var values = new Dictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["signer"] = signer,
-                        ["form"] = "fiscal",
-                        ["type"] = sample.Id,
-                        ["extended"] = "—",
-                        ["hash"] = "profile",
-                        ["padding"] = "—",
-                        ["details"] = mode,
-                    };
-                    cases.Add(new MatrixCase($"XF{++n:D3}", "fiscal", values));
-                }
-            }
-        }
-
         _cases = cases;
     }
-
-    private string BatchFirstId(XmlSample sample) => runner.Facts(sample.FileId)!.FiscalTargets["nfe"][0];
 
     private async Task<MatrixCaseResult> RunCaseAsync(MatrixCase matrixCase, CancellationToken cancellationToken)
     {
@@ -210,38 +172,18 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
         }
 
         checks.Add("valid");
-        if (o.Mode == XmlMode.Fiscal)
+        if (view.Signatures.Count != 1)
         {
-            int expected = o.SignAll ? 2 : 1;
-            if (view.Mode != XmlMode.Fiscal || view.Signatures.Count != expected)
-            {
-                return $"fiscal: expected {expected} XML-DSig signature(s), got {view.Signatures.Count} ({view.Mode})";
-            }
-
-            checks.Add($"{expected} signature(s)");
-            return null;
+            return $"expected one XAdES signature, got {view.Signatures.Count}";
         }
 
-        if (view.Mode != XmlMode.Xades || view.Signatures.Count != 1)
+        string expectedLevel = o.ExtendedForm switch
         {
-            return $"expected one XAdES signature, got {view.Signatures.Count} ({view.Mode})";
-        }
-
-        string expectedLevel = o.Kind == XadesKind.IcpBrasil
-            ? o.IcpPolicy switch
-            {
-                XadesIcpPolicy.AdRb => "B-B",
-                XadesIcpPolicy.AdRt or XadesIcpPolicy.AdRv => "B-T",
-                XadesIcpPolicy.AdRc => "B-LT",
-                _ => "B-LTA",
-            }
-            : o.ExtendedForm switch
-            {
-                XadesExtendedChoice.CompleteReferences => "B-T",
-                XadesExtendedChoice.ExtendedLong => "B-LT",
-                XadesExtendedChoice.Archive => "B-LTA",
-                _ => o.Level switch { BaselineLevel.BB => "B-B", BaselineLevel.BT => "B-T", BaselineLevel.BLT => "B-LT", _ => "B-LTA" },
-            };
+            XadesExtendedChoice.CompleteReferences => "B-T",
+            XadesExtendedChoice.ExtendedLong => "B-LT",
+            XadesExtendedChoice.Archive => "B-LTA",
+            _ => o.Level switch { BaselineLevel.BB => "B-B", BaselineLevel.BT => "B-T", BaselineLevel.BLT => "B-LT", _ => "B-LTA" },
+        };
         if (result.AchievedLevel != expectedLevel)
         {
             return $"level: expected {expectedLevel}, achieved {result.AchievedLevel}";
@@ -258,7 +200,7 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
             return "signer roles missing";
         }
 
-        if ((o.SigningCertificateV1 || o.Kind == XadesKind.IcpBrasil) && signature.Contains("SigningCertificateV2", StringComparison.Ordinal))
+        if (o.SigningCertificateV1 && signature.Contains("SigningCertificateV2", StringComparison.Ordinal))
         {
             return "expected SigningCertificate (V1)";
         }
@@ -270,7 +212,7 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
     /// <summary>The properties and data objects beyond the baseline that were asked for must be in the signature.</summary>
     private static string? ExpectProperties(string signature, XmlOptions o, List<string> checks)
     {
-        bool legacyForm = o.SigningCertificateV1 || o.Kind == XadesKind.IcpBrasil;
+        bool legacyForm = o.SigningCertificateV1;
         bool hasPlace = o.PlaceCity is not null || o.PlaceStreet is not null || o.PlaceState is not null || o.PlacePostalCode is not null || o.PlaceCountry is not null;
         var expectations = new (bool Asked, string Marker, string Name)[]
         {
@@ -279,7 +221,7 @@ internal sealed class XmlMatrix(XmlRunner runner, XmlSampleStore samples, Creden
             (o.Canonicalization == SimpleSign.XAdES.XadesCanonicalization.Inclusive, "CanonicalizationMethod Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\"", "inclusive canonicalization"),
             (o.DataObjectsTimestamp, "AllDataObjectsTimeStamp", "data objects timestamp"),
             (o.EmbeddedObjectId is not null, "http://www.w3.org/2000/09/xmldsig#base64", "embedded data object"),
-            (o.ExternalObjectId is not null, "URI=\"cte.xml\"", "external data object"),
+            (o.ExternalObjectId is not null, "URI=\"raiz-desconhecida.xml\"", "external data object"),
             (o.Kind == XadesKind.CustomPolicy && !string.IsNullOrEmpty(o.PolicyDocumentId), "SignaturePolicyStore", "policy store"),
         };
         foreach (var (asked, marker, name) in expectations)

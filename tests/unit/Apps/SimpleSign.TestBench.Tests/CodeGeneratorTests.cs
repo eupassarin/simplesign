@@ -63,14 +63,4 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain("SignData(prepared.HashToSign");
         result.Code.CSharp.ShouldContain("CompleteAsync(signature)");
     }
-
-    [Fact]
-    public async Task Generate_AdRa_DeclaresTheArtifacts()
-    {
-        var result = await fixture.Runner.RunAsync(fixture.Options() with { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRa }, default);
-
-        result.Code.CSharp.ShouldContain("var artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(http, adRa)");
-        result.Code.CSharp.ShouldContain("Artifacts = artifacts,");
-        result.Code.Cli.ShouldContain("--icp-policy ad-ra");
-    }
 }

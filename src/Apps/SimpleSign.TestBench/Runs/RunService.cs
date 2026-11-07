@@ -321,7 +321,7 @@ internal sealed class RunService(
     }
 
     private static RunVerdict Verdict(SignatureReport v) =>
-        new(v.FieldName, v.Signer, v.Indication, v.PolicyLevel, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp, v.SubIndication);
+        new(v.FieldName, v.Signer, v.Indication, null, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp, v.SubIndication);
 
     private static RunVerdict Verdict(XmlSignatureReport s) => new(
         s.Reference ?? L.T("Signature {0}", s.Index + 1), s.Signer, s.Indication, s.Level, s.SigningTime, s.Checks, s.Errors, s.Warnings, [],

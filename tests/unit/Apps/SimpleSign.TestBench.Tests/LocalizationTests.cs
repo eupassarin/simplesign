@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Shouldly;
-using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
@@ -57,7 +56,6 @@ public sealed partial class LocalizationTests(TestBenchFixture fixture)
         var handles = new List<CredentialHandle>
         {
             fixture.Factory.OpenSandbox(new SandboxCredentialRequest("expired")),
-            await fixture.Factory.OpenPscPasswordAsync(new PscCredentialRequest(null, null, null, null, SandboxPsc.Otp, PscScope.SingleSignature, "maria-rsa2048"), EnvironmentMode.Sandbox, default),
             await fixture.Factory.OpenCscAsync(new CscCredentialRequest(null, CscServiceAuth.Token, null, null, null, "rsa-scal1", CscAuthorizerKind.Explicit, SandboxCsc.Pin, null), EnvironmentMode.Sandbox, default),
         };
 

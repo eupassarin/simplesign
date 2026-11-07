@@ -52,15 +52,11 @@ internal sealed class PlanContext
             string variable = Credential.Kind switch
             {
                 CredentialKind.Pkcs11 => "token",
-                CredentialKind.Psc => "psc",
                 _ => "csc",
             };
             _setup.Add(Credential.Kind switch
             {
                 CredentialKind.Pkcs11 => "using var token = Pkcs11Signer.Open(new Pkcs11SignerOptions { LibraryPath = libraryPath, TokenSerial = serial, Pin = pin });",
-                CredentialKind.Psc => "var pscClient = new PscClient(new PscClientOptions { BaseUri = pscUrl, ClientId = clientId, ClientSecret = clientSecret });\n" +
-                    "var pscToken = await pscClient.AuthorizeAsync(new LoopbackAuthorizationHandler(), PscScope.SignatureSession);\n" +
-                    "using var psc = await PscSigner.CreateAsync(pscClient, pscToken);",
                 _ => "var cscClient = new CscClient(new CscClientOptions { BaseUri = cscUrl, AccessToken = serviceToken });\n" +
                     "using var csc = await CscSigner.CreateAsync(cscClient, credentialId, new ExplicitCscAuthorizer(pin, otp));",
             });

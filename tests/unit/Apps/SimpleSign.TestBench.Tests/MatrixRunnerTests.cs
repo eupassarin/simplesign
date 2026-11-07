@@ -61,7 +61,7 @@ public sealed class CadesMatrixTests(TestBenchFixture fixture, ITestOutputHelper
             cases.ShouldContain(c => c.Values["operation"] == value, $"operation={value} is never generated");
         }
 
-        foreach (string value in new[] { "B-LTA", "ICP AdRv", "ICP AdRa", "custom-policy" })
+        foreach (string value in new[] { "B-LTA", "custom-policy" })
         {
             cases.ShouldContain(c => c.Values["type"] == value, $"type={value} is never generated");
         }
@@ -99,7 +99,6 @@ public sealed class XmlMatrixTests(TestBenchFixture fixture, ITestOutputHelper o
         using var matrix = new XmlMatrix(fixture.Xml, new SimpleSign.TestBench.Xml.XmlSampleStore { Samples = fixture.XmlSamples }, fixture.Credentials, fixture.Factory);
 
         var cases = matrix.Cases();
-        cases.ShouldContain(c => c.Group == "fiscal");
         cases.ShouldContain(c => c.Values["extended"] == "Archive");
         var result = await matrix.RunAsync(new MatrixRunRequest(Format: "xml"), default);
 

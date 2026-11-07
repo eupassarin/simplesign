@@ -14,7 +14,6 @@ export function SignatureList({ view }: { view: XmlValidationView }) {
           <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
             <span className="text-sm font-medium">{t("cades.result.signer", { n: s.index + 1 })}</span>
             <span className="text-muted-foreground truncate text-sm">{s.signer ?? "—"}</span>
-            {s.cnpj && <Pill tone="info">CNPJ {s.cnpj}</Pill>}
             {s.level && <Pill>{s.level}</Pill>}
             {s.reference && <span className="text-muted-foreground font-mono text-xs">{s.reference}</span>}
             <span className="ml-auto"><Indication value={s.indication} subIndication={s.subIndication} /></span>

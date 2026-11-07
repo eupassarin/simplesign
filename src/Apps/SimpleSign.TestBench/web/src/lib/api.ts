@@ -4,8 +4,6 @@ import type {
   DocumentFacts,
   EnvironmentInfo,
   EnvironmentMode,
-  IcpPolicyKind,
-  IcpVersion,
   OptionInfo,
   Pkcs11Driver,
   SampleDocument,
@@ -63,8 +61,6 @@ export const api = {
   uploadDocument: (file: File) => request<DocumentFacts>("POST", "/api/documents", upload(file)),
   uploadFile: (file: File) => request<{ id: string; fileName: string; size: number }>("POST", "/api/uploads", upload(file)),
   fileUrl: (id: string, download = false) => `/api/files/${encodeURIComponent(id)}${download ? "?download=true" : ""}`,
-  icpVersions: (policy: IcpPolicyKind, credentialId?: string | null) =>
-    request<IcpVersion[]>("GET", `/api/icp/versions?policy=${policy}${credentialId ? `&credentialId=${credentialId}` : ""}`),
   validation: {
     samples: () => request<ValidationSample[]>("GET", "/api/validation/samples"),
     bulk: (fileIds: string[], settings: ValidationSettings, maxConcurrency: number) => request<BulkReport>("POST", "/api/validation/bulk", { fileIds, settings, maxConcurrency }),
@@ -86,8 +82,6 @@ export const api = {
     pkcs11: () => request<Pkcs11Driver[]>("GET", "/api/credentials/pkcs11"),
     openPkcs11: (body: { libraryPath: string; tokenSerial?: string; certificateThumbprint?: string; pin?: string; usePinPad: boolean }) =>
       request<CredentialFacts>("POST", "/api/credentials/pkcs11", body),
-    psc: (environment: EnvironmentMode, flow: "browser" | "password", body: Record<string, unknown>) =>
-      request<CredentialFacts>("POST", `/api/credentials/psc/${flow}?environment=${environment}`, body),
     cscList: (environment: EnvironmentMode, body: Record<string, unknown>) =>
       request<CscCredentialSummary[]>("POST", `/api/credentials/csc/list?environment=${environment}`, body),
     csc: (environment: EnvironmentMode, body: Record<string, unknown>) =>

@@ -19,13 +19,7 @@ internal static class CodeGenerator
     private static string CSharp(SigningOptions o, SigningPlan plan, IReadOnlyList<PlanStep> steps)
     {
         var sb = new StringBuilder();
-        sb.Append("using SimpleSign.PAdES;\nusing SimpleSign.PAdES.Signing;\nusing SimpleSign.Core.Signing;\n");
-        if (o.Kind == SignatureKind.IcpBrasil || o.UseSignerDetails && o.SignerDetails == SignerDetailsKind.Aea || o.Health.Enabled)
-        {
-            sb.Append("using SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Brazil.Signing;\n");
-        }
-
-        sb.Append('\n');
+        sb.Append("using SimpleSign.PAdES;\nusing SimpleSign.PAdES.Signing;\nusing SimpleSign.Core.Signing;\n\n");
         if (plan.IsSandbox)
         {
             sb.Append("// Sandbox: sandboxHttp is an IHttpClientProvider that answers *.sandbox.simplesign.test (TSA and CRLs).\n");
@@ -93,7 +87,7 @@ internal static class CodeGenerator
             ? "byte[] signature = rsa.SignData(prepared.HashToSign, HashAlgorithmName." + plan.HashAlgorithm.Name + ", RSASignaturePadding.Pss);\n\n"
             : "byte[] signature = rsa.SignData(prepared.HashToSign, HashAlgorithmName." + plan.HashAlgorithm.Name + ", RSASignaturePadding.Pkcs1);\n" +
               "// ECDSA: ecdsa.SignData(prepared.HashToSign, hash, DSASignatureFormat.Rfc3279DerSequence)\n" +
-              "// Token / PSC / CSC: await externalSigner.SignAsync(new ExternalSigningRequest(prepared.HashToSign, hash, prepared.SignatureAlgorithmOid, ExternalSigningPayloadKind.CmsSignedAttributes), ct)\n\n");
+              "// Token / CSC: await externalSigner.SignAsync(new ExternalSigningRequest(prepared.HashToSign, hash, prepared.SignatureAlgorithmOid, ExternalSigningPayloadKind.CmsSignedAttributes), ct)\n\n");
         sb.Append("// Phase 3 — server: resume and embed the signature (timestamps and LTV are added here).\n");
         sb.Append("byte[] signed = await DeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)\n");
         if (plan.IsSandbox)
@@ -142,7 +136,7 @@ internal static class CodeGenerator
         var notes = new List<string>();
         CliCredential(credential, args, notes);
 
-        bool needsTsa = o.Kind == SignatureKind.IcpBrasil ? o.IcpPolicy != IcpPolicyKind.AdRb || o.IcpAdRbTimestamp : o.Level != BaselineLevel.BB;
+        bool needsTsa = o.Level != BaselineLevel.BB;
         if (needsTsa)
         {
             args.Add("--tsa " + (o.Timestamp.Provider switch
@@ -159,46 +153,35 @@ internal static class CodeGenerator
             }
         }
 
-        if (o.Kind == SignatureKind.IcpBrasil)
+        if (o.Level >= BaselineLevel.BLT)
         {
-            args.Add("--icp-policy " + o.IcpPolicy.ToString().ToLowerInvariant().Replace("ad", "ad-", StringComparison.Ordinal));
-            if (o.IcpVersionOid is not null)
-            {
-                notes.Add("The CLI always picks the policy version by the signer's root; a fixed version needs the library.");
-            }
+            args.Add("--ltv");
         }
-        else
+
+        if (o.Level == BaselineLevel.BLTA)
         {
-            if (o.Level >= BaselineLevel.BLT)
+            args.Add("--archival");
+        }
+
+        if (o.Level >= BaselineLevel.BLT && o.RevocationPreference == Core.Signing.RevocationPreference.CrlFirst)
+        {
+            args.Add("--revocation-preference crl");
+        }
+
+        if (o.Kind == SignatureKind.CustomPolicy)
+        {
+            args.Add($"--policy-oid {o.CustomPolicy.Oid}");
+            if (!string.IsNullOrWhiteSpace(o.CustomPolicy.Uri))
             {
-                args.Add("--ltv");
+                args.Add($"--policy-uri {o.CustomPolicy.Uri}");
             }
 
-            if (o.Level == BaselineLevel.BLTA)
-            {
-                args.Add("--archival");
-            }
+            notes.Add("The CLI's --policy-oid writes the policy through the metadata; the policy hash needs the library.");
+        }
 
-            if (o.Level >= BaselineLevel.BLT && o.RevocationPreference == Core.Signing.RevocationPreference.CrlFirst)
-            {
-                args.Add("--revocation-preference crl");
-            }
-
-            if (o.Kind == SignatureKind.CustomPolicy)
-            {
-                args.Add($"--policy-oid {o.CustomPolicy.Oid}");
-                if (!string.IsNullOrWhiteSpace(o.CustomPolicy.Uri))
-                {
-                    args.Add($"--policy-uri {o.CustomPolicy.Uri}");
-                }
-
-                notes.Add("The CLI's --policy-oid writes the policy through the metadata; the policy hash needs the library.");
-            }
-
-            if (o.SubFilter == SubFilterChoice.AdbePkcs7Detached)
-            {
-                args.Add("--sub-filter adbe.pkcs7.detached");
-            }
+        if (o.SubFilter == SubFilterChoice.AdbePkcs7Detached)
+        {
+            args.Add("--sub-filter adbe.pkcs7.detached");
         }
 
         if (o.Hash != HashChoice.Sha256)
@@ -244,32 +227,12 @@ internal static class CodeGenerator
             args.Add("--pdfa");
         }
 
-        if (o.UseSignerDetails && o.SignerDetails == SignerDetailsKind.Aea)
-        {
-            args.Add("--brasil");
-            AddIf(args, "--cpf", o.Aea.Cpf);
-            AddIf(args, "--auth-method", o.Aea.AuthMethod);
-            AddIf(args, "--signer-email", o.Aea.Email);
-            AddIf(args, "--institution", o.Aea.InstitutionName);
-            AddIf(args, "--institution-cnpj", o.Aea.InstitutionCnpj);
-            AddIf(args, "--commitment", o.Aea.CommitmentType);
-        }
-
-        if (o.Health.Enabled)
-        {
-            args.Add($"--health-document {o.Health.Type}");
-            foreach (var p in o.Health.Professionals)
-            {
-                args.Add($"--registration {p.Council}:{p.RegistrationNumber}{(p.StateCode is null ? "" : ":" + p.StateCode)}");
-            }
-        }
-
         if (o.Mode != RunMode.Sign)
         {
             notes.Add(o.Mode == RunMode.Deferred ? "Deferred signing is a library API (DeferredSigner); the CLI signs in one step." : "For batches, run the command per file or use BatchSigner.");
         }
 
-        if (o.DocumentInfo.Count > 0 || o.UseSignerDetails && o.SignerDetails == SignerDetailsKind.Metadata || o.SigningTime is not null || o.ContentsReservedBytes is not null || o.SeparateArchiveTsa || o.ReturnLowerLevel)
+        if (o.DocumentInfo.Count > 0 || o.UseSignerDetails || o.SigningTime is not null || o.ContentsReservedBytes is not null || o.SeparateArchiveTsa || o.ReturnLowerLevel)
         {
             notes.Add("Some options (document info, structured metadata, signing time, /Contents size, separate archive TSA, return-lower-level) have no CLI flag: use the library.");
         }
@@ -297,9 +260,6 @@ internal static class CodeGenerator
                 break;
             case CredentialKind.Pkcs11:
                 args.Add("--pkcs11-lib /path/to/driver --thumbprint <thumbprint>");
-                break;
-            case CredentialKind.Psc:
-                args.Add("--psc-url https://<psc>/v0/");
                 break;
             case CredentialKind.Csc:
                 args.Add("--csc-url https://<qtsp>/csc/v2/");

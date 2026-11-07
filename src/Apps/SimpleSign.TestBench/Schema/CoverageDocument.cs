@@ -8,7 +8,7 @@ namespace SimpleSign.TestBench.Schema;
 /// </summary>
 public static class CoverageDocument
 {
-    private sealed record Row(string Format, string Section, string Title, string? Framework, IReadOnlyList<StandardRef> Standards, string? Api, bool Supported);
+    private sealed record Row(string Format, string Section, string Title, IReadOnlyList<StandardRef> Standards, string? Api, bool Supported);
 
     /// <summary>The page, in English.</summary>
     public static string Generate()
@@ -21,7 +21,7 @@ public static class CoverageDocument
         text.Append("     run the TestBench tests with SIMPLESIGN_UPDATE_DOCS=1 to write it again. -->\n\n");
         text.Append("What SimpleSign implements of each signature standard, option by option: the clause that\n");
         text.Append("defines the option and the library call it becomes. Lines marked **no** are defined by the\n");
-        text.Append("standard and not implemented. Options of a national trust framework are tagged (**BR**).\n\n");
+        text.Append("standard and not implemented.\n\n");
         text.Append("The same list is in the TestBench, in the *Reference* panel. The clause numbers were written\n");
         text.Append("from the published standards; check them against the version you follow before quoting them.\n\n");
         text.Append("| Format | Options | Implemented | Not implemented |\n|---|---|---|---|\n");
@@ -39,7 +39,7 @@ public static class CoverageDocument
             foreach (var row in rows.Where(r => r.Format == format.Id))
             {
                 string standards = string.Join("<br>", row.Standards.Select(Reference));
-                text.Append(Invariant($"| {Cell(row.Section)} | {Cell(row.Title)}{Tag(row)} | {standards} | {Code(row.Api)} | {(row.Supported ? "yes" : "**no**")} |\n"));
+                text.Append(Invariant($"| {Cell(row.Section)} | {Cell(row.Title)} | {standards} | {Code(row.Api)} | {(row.Supported ? "yes" : "**no**")} |\n"));
             }
         }
 
@@ -53,13 +53,12 @@ public static class CoverageDocument
         {
             text.Append(Invariant($"\n### {document.Key}\n\n| Clause | Option | Formats | Implemented |\n|---|---|---|---|\n"));
             var byClause = document
-                .GroupBy(x => (x.standard.Clause, x.row.Title, x.row.Supported, x.row.Framework))
+                .GroupBy(x => (x.standard.Clause, x.row.Title, x.row.Supported))
                 .OrderBy(g => g.Key.Clause, StringComparer.Ordinal).ThenBy(g => g.Key.Title, StringComparer.Ordinal);
             foreach (var entry in byClause)
             {
                 string formats = string.Join(", ", entry.Select(x => schema.Formats.Single(f => f.Id == x.row.Format).Title).Distinct());
-                string tag = entry.Key.Framework is null ? "" : " (**BR**)";
-                text.Append(Invariant($"| {Cell(entry.Key.Clause)} | {Cell(entry.Key.Title)}{tag} | {formats} | {(entry.Key.Supported ? "yes" : "**no**")} |\n"));
+                text.Append(Invariant($"| {Cell(entry.Key.Clause)} | {Cell(entry.Key.Title)} | {formats} | {(entry.Key.Supported ? "yes" : "**no**")} |\n"));
             }
         }
 
@@ -70,18 +69,16 @@ public static class CoverageDocument
     private static IEnumerable<Row> Rows(WorkbenchSchema schema, SchemaOption option, string format)
     {
         string section = schema.Sections.Single(s => s.Id == option.Section).Title;
-        yield return new Row(format, section, option.Title, option.Framework, option.Standards, option.Api, option.Support == OptionSchema.Supported);
+        yield return new Row(format, section, option.Title, option.Standards, option.Api, option.Support == OptionSchema.Supported);
         foreach (var value in option.Values.Where(v => v.Standards.Count > 0 || v.Api is not null))
         {
-            yield return new Row(format, section, $"{option.Title}: {value.Title}", value.Framework ?? option.Framework, value.Standards, value.Api,
+            yield return new Row(format, section, $"{option.Title}: {value.Title}", value.Standards, value.Api,
                 value.Support == OptionSchema.Supported);
         }
     }
 
     private static string Reference(StandardRef reference) =>
         reference.Clause.Length == 0 ? Cell(reference.Document) : $"{Cell(reference.Document)} · {Cell(reference.Clause)}";
-
-    private static string Tag(Row row) => row.Framework is null ? "" : " (**BR**)";
 
     private static string Code(string? api) => string.IsNullOrEmpty(api) ? "" : $"`{api.Replace("|", "\\|", StringComparison.Ordinal)}`";
 

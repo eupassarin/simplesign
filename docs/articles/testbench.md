@@ -4,6 +4,10 @@ The TestBench is a local web app for signing **PAdES, CAdES and XAdES** with eve
 library has, on one screen, and for seeing what happened: the result, the verdict of two
 validators, the log of every step and the code that does the same.
 
+It covers the ETSI standards only (PAdES, CAdES and XAdES baseline signatures, EN 319 102-1
+validation, RFC 3161 timestamps). National trust frameworks (ICP-Brasil, Gov.br, IOFE…) and the
+visible signature stamp are library features that will get apps of their own.
+
 ```bash
 dotnet run --project src/Apps/SimpleSign.TestBench          # http://127.0.0.1:5199, opens the browser
 dotnet run --project src/Apps/SimpleSign.TestBench -- --port 5200 --no-browser
@@ -23,11 +27,11 @@ terminal, `npm run dev` in `web/` (Vite on :5173, proxying `/api` to :5199). The
 
 | | Sandbox | Real |
 |---|---|---|
-| Certificates | Test PKI (*AC Raiz Sandbox SimpleSign*): RSA 2048/3072/4096, ECDSA P-256/384/521, e-CNPJ, expired, not yet valid, revoked, no nonRepudiation, weak key (RSA 1024) and no signing key usage (refused by the default signing policy; sign them with the Minimal policy) | Your PFX, the OS store, A3 tokens (PKCS#11), real PSC/CSC accounts |
+| Certificates | Test PKI (*AC Raiz Sandbox SimpleSign*): RSA 2048/3072/4096, ECDSA P-256/384/521, expired, not yet valid, revoked, no nonRepudiation, weak key (RSA 1024) and no signing key usage (refused by the default signing policy; sign them with the Minimal policy) | Your PFX, the OS store, A3 tokens (PKCS#11), real CSC accounts |
 | Timestamp | Offline RFC 3161 TSA, plus one that requires HTTP Basic | DigiCert, Sectigo, FreeTSA or any URL (http, https, tcp), with Basic/Bearer and mTLS |
 | Revocation | CRLs of both sandbox CAs | The certificates' real CRL/OCSP |
-| Cloud | Simulated ICP-Brasil PSC (OAuth + PKCE, CPF + OTP) and CSC v2 service (PIN/OTP, SCAL 1/2, OAuth); login pages are approved automatically | Your provider; OAuth opens the system browser |
-| Validation | Trusts the sandbox root | Trusts the OS roots and the ICP-Brasil roots |
+| Cloud | Simulated CSC v2 service (PIN/OTP, SCAL 1/2, OAuth); login pages are approved automatically | Your provider; OAuth opens the system browser |
+| Validation | Trusts the sandbox root | Trusts the OS roots |
 
 Sandbox services answer on `*.sandbox.simplesign.test` through an in-process
 `IHttpClientProvider`, so the library runs its normal code paths without the network. The
@@ -59,13 +63,12 @@ hover it for every reference and the call.
 | Section | What is there |
 |---|---|
 | What to sign | The PDF; the data and the operation (sign, co-sign, countersign) and content type of CAdES; the packaging (enveloped, enveloping, detached) of XAdES |
-| Signer | Sandbox A1, PFX, OS store, A3 token (PKCS#11), PSC or CSC v2 |
+| Signer | Sandbox A1, PFX, OS store, A3 token (PKCS#11) or CSC v2 |
 | Signature level | Baseline level, explicit signature policy, the CAdES and XAdES extended forms |
 | Timestamps | The TSA of the signature timestamp and of the archive timestamp, with their credentials |
 | Cryptography | Digest, RSA PKCS#1 v1.5 or PSS |
 | Signed attributes | Claimed signing time, commitment type, signer metadata, signer roles, MIME type |
 | PDF signature field | Sub-filter, field, certification (DocMDP), reason and location, PDF/A, document information |
-| Visible stamp | Position, text, colors, font, image and QR code, with a preview you can click to place the stamp |
 | Run and validation | Sign now, deferred or batch; whether and how the result is validated |
 
 The rules that say which options combine stay in `Signing/Compatibility.cs`,
@@ -77,21 +80,11 @@ SimpleSign does not implement (for example CAdES signer-location and content-tim
 SignatureProductionPlace and countersignature, EdDSA). They appear at the end of each section,
 disabled, with their clause. The *Reference* panel shows the whole list for each format.
 
-### Trust frameworks
+### Signing and validation policies
 
-The workbench opens with the generic ETSI options only. The chips in the top bar switch a
-national framework on:
-
-- **Brazil (ICP-Brasil · Gov.br)** adds the ICP-Brasil policies (AD-RB…AD-RA and their versions),
-  the PBAD.PAdES sub-filter, the advanced electronic signature of Lei 14.063, health documents,
-  the fiscal XML-DSig layouts, the ICP-Brasil roots and the Brazilian validation rules. These
-  options are in the same sections as the others, in green and tagged **BR**.
-- eIDAS is listed as planned. IOFE exists as the `SimpleSign.Peru.Iofe` package; the workbench offers its validation
-  policy (Validation policy → INDECOPI) but not its trusted list yet.
-- Every format has a **Signing policy** choice (Default, Strict, Minimal); validation shows the ETSI sub-indication
-  next to the indication and the validation policy's checks as rows.
-
-With every framework off, validation uses no `ICountryExtension`.
+Every format has a **Signing policy** choice (Default, Strict, Minimal): the checks the signer
+runs on the certificate, key and algorithm before signing. Validation uses the default validation
+policy and shows the ETSI sub-indication next to the indication, with the policy's checks as rows.
 
 ### The result
 
@@ -163,8 +156,7 @@ inside the file (per signature for PDF, with the dump of the signature objects a
 download; the CMS structure for CAdES; the Signature element for XML), the log and the code.
 **Open in Validate**, on the result of a signature, brings the file here.
 
-The trust settings are the same options the workbench uses (trusted roots, revocation, and the
-Brazilian rules when that framework is on).
+The trust settings are the same options the workbench uses (trusted roots and revocation).
 
 **Samples** are built at startup in the sandbox, valid or broken in one specific way, each with
 the verdict it should get:
@@ -173,7 +165,7 @@ the verdict it should get:
 |---|---|
 | PDF | valid B-LT, content changed, signature value changed, bytes appended, revoked signer, expired signer, root outside the trust anchors, untrusted TSA |
 | CAdES | detached, enveloped, two signers plus a countersignature, data changed, signature value changed, unknown root |
-| XML | XAdES enveloped and detached, signed NF-e, NF-e changed, signature value changed, unknown root |
+| XML | XAdES enveloped and detached, document changed, signature value changed, unknown root |
 
 **Validate all samples** runs every one and shows a table: expected, SimpleSign, DSS. A row opens
 that run. With DSS on, most of these samples are INDETERMINATE there: they are B-B signatures and
@@ -200,9 +192,9 @@ writes it again).
 The **Environment** panel follows the Sandbox | Real switch.
 
 **In Real** nothing is simulated, so it shows what really exists: the roots a validation can
-trust (the operating system's, and the ICP-Brasil and Gov.br roots bundled with the library),
-the public TSAs the library has a preset for, the PKCS#11 drivers and tokens found, the
-certificates with a key in the OS store, what a real PSC or CSC asks for, and DSS.
+trust (the operating system's), the public TSAs the library has a preset for, the PKCS#11
+drivers and tokens found, the certificates with a key in the OS store, what a real CSC service
+asks for, and DSS.
 
 **In Sandbox** it is a lab: it shows the sandbox and lets you break it on purpose. Failures only
 act in Sandbox; the top bar says when one is on.
@@ -222,28 +214,22 @@ act in Sandbox; the top bar says when one is on.
   | CRL server | Expired CRLs | A CA that stopped publishing |
 
   While a failure is on, the top bar says so. *Back to normal* clears failures and revocations.
-- **Services** (TSA, PSC, CSC, DSS) and the **requests** they answered, live, with a filter by
+- **Services** (TSA, CSC, DSS) and the **requests** they answered, live, with a filter by
   service: sign with a cloud certificate and see the authorization and `signHash` calls.
 
-### Cloud certificates: PSC and CSC
+### Cloud certificates: CSC
 
-Both keep the key at a provider; the library sends only the hash and gets the signature back.
+A cloud certificate keeps the key at a provider; the library sends only the hash and gets the
+signature back. **CSC** (Cloud Signature Consortium API v2) is the international standard: the
+service is authorized first; then each signature is authorized on the credential, with PIN and
+OTP or OAuth. SCAL 2 binds the authorization to the exact hashes.
 
-- **PSC** (DOC-ICP-17.01) is the ICP-Brasil cloud certificate (BirdID, VIDaaS, NeoID, SafeID…).
-  You authorize on the provider's page (OAuth with PKCE) or with CPF and OTP; the token's scope
-  says how many signatures it allows.
-- **CSC** (Cloud Signature Consortium API v2) is the international standard, used by European
-  providers. The service is authorized first; then each signature is authorized on the
-  credential, with PIN and OTP or OAuth. SCAL 2 binds the authorization to the exact hashes.
-
-The sandbox simulates one of each, in-process. In the signer picker, the PSC and CSC tabs explain
-the flow step by step and, in Sandbox, **Use the simulated provider** opens a credential in one
-click. The run's log then shows the provider's calls and the signer's events (73xx).
+The sandbox simulates a CSC service in-process. In the signer picker, the CSC tab explains the
+flow step by step and, in Sandbox, **Use the simulated provider** opens a credential in one click.
+The run's log then shows the provider's calls and the signer's events (73xx).
 
 ## Limitations
 
-- Sandbox certificates do not chain to a real ICP-Brasil root: the policy version is not picked
-  by root, and AD-RA embeds simulated policy artifacts.
 - Empty signature fields inside compressed object streams are not listed.
 - PKCS#11 needs a driver; with no token, try SoftHSM2.
 - DSS cannot fetch the sandbox CRLs or reach the sandbox TSA: compare verdicts at B-LT or B-LTA.

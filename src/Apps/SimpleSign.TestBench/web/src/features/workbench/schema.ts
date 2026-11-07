@@ -17,7 +17,6 @@ export interface SchemaValue {
   details?: string | null
   standards: StandardRef[]
   api?: string | null
-  framework?: string | null
   support: "supported" | "notInLibrary"
 }
 
@@ -40,7 +39,6 @@ export interface SchemaOption {
   values: SchemaValue[]
   standards: StandardRef[]
   api?: string | null
-  framework?: string | null
   support: "supported" | "notInLibrary"
   when: SchemaCondition[]
 }
@@ -58,14 +56,6 @@ export interface SchemaFormat {
   standards: StandardRef[]
   signerApi: string
   validatorApi: string
-}
-
-export interface SchemaFramework {
-  id: string
-  title: string
-  summary: string
-  status: "available" | "planned"
-  standards: StandardRef[]
 }
 
 export interface SchemaStage {
@@ -87,7 +77,6 @@ export type Options = Record<string, unknown>
 
 export interface WorkbenchSchema {
   formats: SchemaFormat[]
-  frameworks: SchemaFramework[]
   sections: SchemaSection[]
   options: SchemaOption[]
   stages: SchemaStage[]
@@ -256,10 +245,9 @@ export interface SandboxCertificate {
   revokedNow: boolean
 }
 
-/** What the Real environment has: the roots validation can trust and the public TSAs with a preset. */
+/** What the Real environment has: how many roots validation can trust and the public TSAs with a preset. */
 export interface RealEnvironment {
   systemRootCount: number
-  bundledRoots: { source: string; subject: string; notAfter: string; thumbprint: string }[]
   publicTsas: { name: string; url: string; api: string }[]
 }
 
@@ -285,7 +273,7 @@ export interface SandboxState {
   tsaUrl: string
 }
 
-/** Reads "appearance.visible" from the options. */
+/** Reads "timestamp.provider" from the options. */
 export function getPath(options: Options, path: string): unknown {
   let node: unknown = options
   for (const part of path.split(".")) {

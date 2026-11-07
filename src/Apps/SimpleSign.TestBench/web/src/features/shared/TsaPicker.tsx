@@ -28,7 +28,7 @@ export function TsaPicker({ value, onChange, state, env }: {
       </div>
       {value.provider === "Custom" && (
         <Field label={t("type.tsaUrl")} description={t("type.tsaUrlHint")}>
-          <Input value={value.url ?? ""} onChange={(e) => set({ url: e.target.value })} placeholder="https://act.example.com.br/tsa" className="font-mono" />
+          <Input value={value.url ?? ""} onChange={(e) => set({ url: e.target.value })} placeholder="https://tsa.example.com/tsr" className="font-mono" />
         </Field>
       )}
       <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-3">

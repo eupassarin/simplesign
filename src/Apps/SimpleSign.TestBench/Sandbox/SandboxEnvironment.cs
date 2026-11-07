@@ -21,14 +21,11 @@ internal sealed class SandboxEnvironment : IDisposable
     public SandboxEnvironment(string? rootStorePath = null)
     {
         Pki = new SandboxPki(rootStorePath);
-        Psc = new SandboxPsc(Pki);
         Csc = new SandboxCsc(Pki);
-        Network = new SandboxNetwork(Pki, Psc, Csc);
+        Network = new SandboxNetwork(Pki, Csc);
     }
 
     public SandboxPki Pki { get; }
-
-    public SandboxPsc Psc { get; }
 
     public SandboxCsc Csc { get; }
 
@@ -41,7 +38,6 @@ internal sealed class SandboxEnvironment : IDisposable
     public void Dispose()
     {
         Network.Dispose();
-        Psc.Dispose();
         Csc.Dispose();
         Pki.Dispose();
     }

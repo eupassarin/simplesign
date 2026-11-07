@@ -13,7 +13,7 @@ namespace SimpleSign.TestBench.Matrix;
 /// </summary>
 internal sealed class CadesMatrix(CadesRunner runner, CadesSampleStore samples, CredentialStore credentials, CredentialFactory factory) : IDisposable
 {
-    private static readonly string[] Signers = ["rsa-2048", "rsa-3072", "ecdsa-p256", "ecdsa-p384", "company"];
+    private static readonly string[] Signers = ["rsa-2048", "rsa-3072", "ecdsa-p256", "ecdsa-p384"];
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Dictionary<string, (string Id, CredentialFacts Facts)>? _credentials;
     private IReadOnlyList<MatrixCase>? _cases;
@@ -43,8 +43,7 @@ internal sealed class CadesMatrix(CadesRunner runner, CadesSampleStore samples, 
                 V("B-T", (o, _) => o with { Level = BaselineLevel.BT }),
                 V("B-LT", (o, _) => o with { Level = BaselineLevel.BLT }),
                 V("B-LTA", (o, _) => o with { Level = BaselineLevel.BLTA }),
-                V("custom-policy", (o, _) => o with { Kind = CadesKind.CustomPolicy, PolicyOid = "2.16.76.1.7.1.1.2.3", PolicyUri = "http://politicas.icpbrasil.gov.br/PA_AD_RB_v2_3.der" }),
-                .. Enum.GetValues<CadesIcpPolicy>().Select(p => V($"ICP {p}", (o, _) => o with { Kind = CadesKind.IcpBrasil, IcpPolicy = p })),
+                V("custom-policy", (o, _) => o with { Kind = CadesKind.CustomPolicy, PolicyOid = "1.2.3.4.5", PolicyUri = "https://example.com/policy.der" }),
             ]),
             new("extended", [.. Enum.GetValues<CadesExtendedChoice>().Select(e => V(e.ToString(), (o, _) => o with { ExtendedForm = e }))]),
             new("hash", [.. HashValues().Select(h => V(h.ToString(), (o, _) => o with { Hash = h }))]),
@@ -191,7 +190,7 @@ internal sealed class CadesMatrix(CadesRunner runner, CadesSampleStore samples, 
         }
 
         checks.Add(o.Operation.ToString());
-        bool needsTsa = o.Kind == CadesKind.IcpBrasil ? o.IcpPolicy != CadesIcpPolicy.AdRb : o.Level != BaselineLevel.BB;
+        bool needsTsa = o.Level != BaselineLevel.BB;
         if (mine.HasSignatureTimestamp != needsTsa)
         {
             return $"signature timestamp: expected {needsTsa}";
@@ -207,16 +206,7 @@ internal sealed class CadesMatrix(CadesRunner runner, CadesSampleStore samples, 
             return "policy OID missing";
         }
 
-        var form = o.Kind == CadesKind.IcpBrasil
-            ? o.IcpPolicy switch
-            {
-                CadesIcpPolicy.AdRv => CadesExtendedChoice.CompleteReferences,
-                CadesIcpPolicy.AdRc => CadesExtendedChoice.ExtendedLong,
-                CadesIcpPolicy.AdRa => CadesExtendedChoice.Archive,
-                _ => CadesExtendedChoice.None,
-            }
-            : o.ExtendedForm;
-        string? attribute = form switch
+        string? attribute = o.ExtendedForm switch
         {
             CadesExtendedChoice.CompleteReferences => "esc-time-stamp (CAdES-C timestamp)",
             CadesExtendedChoice.ExtendedLong => "certificate-values",
@@ -225,12 +215,12 @@ internal sealed class CadesMatrix(CadesRunner runner, CadesSampleStore samples, 
         };
         if (attribute is not null && mine.UnsignedAttributes.All(a => a.Name != attribute))
         {
-            return $"{form}: {attribute} missing";
+            return $"{o.ExtendedForm}: {attribute} missing";
         }
 
         if (attribute is not null)
         {
-            checks.Add(form.ToString());
+            checks.Add(o.ExtendedForm.ToString());
         }
 
         if (o.Padding == RsaPadding.Pss && values["signer"].StartsWith("rsa", StringComparison.Ordinal) && mine.SignatureAlgorithm != "RSASSA-PSS")

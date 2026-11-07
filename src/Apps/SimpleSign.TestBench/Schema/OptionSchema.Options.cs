@@ -38,14 +38,6 @@ public static partial class OptionSchema
                 V("Enveloped", "Attached (.p7m)", "The content is inside the CMS (eContent)."),
             ]),
 
-        O("xades.mode", "input", s_xades, "choice", "mode", "XML signature kind", "XAdES, or the plain XML-DSig the Brazilian fiscal layouts require.",
-            valueStateKey: "mode", framework: Brazil,
-            values:
-            [
-                V("Xades", "XAdES", "XMLDSig with the XAdES qualifying properties.", standards: R("ETSI EN 319 132-1|§4 General syntax"), api: "XadesSigner.Document(xml)"),
-                V("Fiscal", "Fiscal XML-DSig", "NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf: enveloped XML-DSig with the layout's own canonicalization and digest.",
-                    standards: R("W3C XMLDSig Core 1.1|§3 Processing rules", "Manual de Orientação do Contribuinte (NF-e)|§4.1 Assinatura digital"), api: "FiscalXmlSigner.Sign(xml, profile, certificate)", framework: Brazil),
-            ]),
         O("xades.data", "input", s_xades, "data", "dataId", "XML to sign", "A well-formed XML document.",
             standards: R("W3C XMLDSig Core 1.1|§4.4.3 The Reference element"), api: "XadesSigner.Document(byte[] xml)"),
         O("xades.form", "input", s_xades, "choice", "form", "Packaging", "Where the signature is in relation to the data.",
@@ -55,21 +47,9 @@ public static partial class OptionSchema
                 V("Enveloped", "Enveloped", "The Signature element goes inside the document it signs (enveloped-signature transform).", standards: R("W3C XMLDSig Core 1.1|§6.6.4 Enveloped signature transform")),
                 V("Enveloping", "Enveloping", "The data goes inside the Signature, in a ds:Object."),
                 V("Detached", "Detached", "The Signature is a separate document that refers to the data by URI."),
-            ], when: When("mode", "Xades")),
+            ]),
         O("xades.dataUri", "input", s_xades, "text", "dataUri", "Reference URI", "Where a validator will find the data of a detached signature.",
             standards: R("W3C XMLDSig Core 1.1|§4.4.3.1 The URI attribute"), api: "WithDataUri(string)", stateKey: "dataUri"),
-        O("xades.fiscalProfile", "input", s_xades, "choice", "profile", "Fiscal layout", "Decides which element is signed, where the Signature goes and which algorithms are used.",
-            api: "FiscalDocumentProfile", stateKey: "profile", valueStateKey: "profile", framework: Brazil,
-            values:
-            [
-                V("nfe", "NF-e / NFC-e", framework: Brazil), V("evento", "NF-e event", framework: Brazil), V("inutilizacao", "NF-e number voiding", framework: Brazil),
-                V("cte", "CT-e", framework: Brazil), V("mdfe", "MDF-e", framework: Brazil), V("nfse", "NFS-e (DPS)", framework: Brazil),
-                V("esocial", "eSocial", framework: Brazil), V("reinf", "EFD-Reinf", framework: Brazil),
-            ]),
-        O("xades.fiscalElementId", "input", s_xades, "text", "elementId", "Element Id", "The Id of the element to sign when the document has several.",
-            api: "FiscalXmlSigner.Sign(…, elementId)", stateKey: "elementId", framework: Brazil),
-        O("xades.fiscalSignAll", "input", s_xades, "toggle", "signAll", "Sign every element", "Signs every unsigned element of the layout in one call.",
-            api: "FiscalXmlSigner.SignAll(xml, profile, certificate)", stateKey: "signAll", framework: Brazil),
 
         O("signer.credential", "signer", s_all, "credential", "credentialId", "Certificate and key", "A sandbox certificate, a PFX, the OS store, a PKCS#11 token or a cloud certificate.",
             "The private key signs the digest of the signed attributes. With a token or a cloud service the key never leaves the device: the library sends the bytes to sign through IExternalSigner.",
@@ -98,8 +78,6 @@ public static partial class OptionSchema
             V("Baseline", "Baseline", "The ETSI baseline levels: B-B, B-T, B-LT, B-LTA.", standards: R("ETSI EN 319 102-1|Annex B Signature classes"), api: "WithLevel(AdesBaselineProfile.…)"),
             V("CustomPolicy", "Explicit signature policy", "A baseline signature that also names a signature policy (OID and hash of the policy document).",
                 standards: R(custom), api: "WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))"),
-            V("IcpBrasil", "ICP-Brasil policy", "AD-RB, AD-RT, AD-RV, AD-RC or AD-RA: the Brazilian signature policies, each with its own required elements.",
-                standards: R("DOC-ICP-15.03|Signature policy requirements"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy, …)", framework: Brazil),
         ];
 
         SchemaValue[] levels(string b, string t, string lt, string lta) =>
@@ -108,15 +86,6 @@ public static partial class OptionSchema
             VC("BT", "level.BT", R(t, "RFC 3161|Time-Stamp Protocol")),
             VC("BLT", "level.BLT", R(lt)),
             VC("BLTA", "level.BLTA", R(lta)),
-        ];
-
-        SchemaValue[] icp(bool withAdRv) =>
-        [
-            VC("AdRb", "icp.AdRb", R("DOC-ICP-15.03|AD-RB"), Brazil),
-            VC("AdRt", "icp.AdRt", R("DOC-ICP-15.03|AD-RT"), Brazil),
-            .. withAdRv ? [V("AdRv", "AD-RV — validation references", "AD-RT plus the references to the certificates and revocation data (complete references).", standards: R("DOC-ICP-15.03|AD-RV"), api: "IcpBrasilPolicy.AdRv", framework: Brazil)] : Array.Empty<SchemaValue>(),
-            VC("AdRc", "icp.AdRc", R("DOC-ICP-15.03|AD-RC"), Brazil),
-            VC("AdRa", "icp.AdRa", R("DOC-ICP-15.03|AD-RA"), Brazil),
         ];
 
         SchemaValue[] extended(string c, string xl, string a, string type) =>
@@ -134,28 +103,17 @@ public static partial class OptionSchema
             O("cades.kind", "level", s_cades, "choice", "kind", "Signature type", "Baseline levels, or a signature policy.",
                 standards: R("ETSI EN 319 122-1|§6 CAdES baseline signatures"), valueStateKey: "kind", values: kinds("ETSI EN 319 122-1|§5.2.9 signature-policy-identifier")),
             O("xades.kind", "level", s_xades, "choice", "kind", "Signature type", "Baseline levels, or a signature policy.",
-                standards: R("ETSI EN 319 132-1|§6 XAdES baseline signatures"), valueStateKey: "kind", values: kinds("ETSI EN 319 132-1|§5.2.9 SignaturePolicyIdentifier"),
-                when: When("mode", "Xades")),
+                standards: R("ETSI EN 319 132-1|§6 XAdES baseline signatures"), valueStateKey: "kind", values: kinds("ETSI EN 319 132-1|§5.2.9 SignaturePolicyIdentifier")),
 
             O("pades.level", "level", s_pades, "choice", "level", "Baseline level", "Each level adds what a validator needs later.",
                 standards: R("ETSI EN 319 142-1|§6.2 Signature levels", "ETSI EN 319 142-1|§6.3 Requirements"), api: "WithLevel(AdesBaselineProfile)", valueStateKey: "level",
-                values: levels("ETSI EN 319 142-1|§6.3 PAdES-B-B", "ETSI EN 319 142-1|§6.3 PAdES-B-T", "ETSI EN 319 142-1|§5.4 Document Security Store (PAdES-B-LT)", "ETSI EN 319 142-1|§5.4.3 Document time-stamp (PAdES-B-LTA)"),
-                when: When("kind", "Baseline", "CustomPolicy")),
+                values: levels("ETSI EN 319 142-1|§6.3 PAdES-B-B", "ETSI EN 319 142-1|§6.3 PAdES-B-T", "ETSI EN 319 142-1|§5.4 Document Security Store (PAdES-B-LT)", "ETSI EN 319 142-1|§5.4.3 Document time-stamp (PAdES-B-LTA)")),
             O("cades.level", "level", s_cades, "choice", "level", "Baseline level", "Each level adds what a validator needs later.",
                 standards: R("ETSI EN 319 122-1|§6.2 Signature levels", "ETSI EN 319 122-1|§6.3 Requirements"), api: "WithLevel(AdesBaselineProfile)", stateKey: "level", valueStateKey: "level",
                 values: levels("ETSI EN 319 122-1|§6.3 CAdES-B-B", "ETSI EN 319 122-1|§5.3 signature-time-stamp (CAdES-B-T)", "ETSI EN 319 122-1|§5.4 Validation data (CAdES-B-LT)", "ETSI EN 319 122-1|§5.5 archive-time-stamp-v3 (CAdES-B-LTA)")),
             O("xades.level", "level", s_xades, "choice", "level", "Baseline level", "Each level adds what a validator needs later.",
                 standards: R("ETSI EN 319 132-1|§6.2 Signature levels", "ETSI EN 319 132-1|§6.3 Requirements"), api: "WithLevel(AdesBaselineProfile)", stateKey: "level", valueStateKey: "level",
                 values: levels("ETSI EN 319 132-1|§6.3 XAdES-B-B", "ETSI EN 319 132-1|§5.3 SignatureTimeStamp (XAdES-B-T)", "ETSI EN 319 132-1|§5.4 CertificateValues and RevocationValues (XAdES-B-LT)", "ETSI EN 319 132-1|§5.5.2 ArchiveTimeStamp (XAdES-B-LTA)")),
-
-            O("pades.icpPolicy", "level", s_pades, "choice", "icpPolicy", "ICP-Brasil policy", "The policy decides the required elements; a qualified signature needs an ICP-Brasil certificate.",
-                standards: R("DOC-ICP-15.03|PAdES policies"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy, IcpBrasilPadesOptions)", stateKey: "icp.policy", framework: Brazil, values: icp(false)),
-            OC("pades.icpVersion", "level", s_pades, "icpVersion", "icpVersionOid", "icp.version", R("DOC-ICP-15.03|LPA_PAdES"), stateKey: "icp.version", framework: Brazil),
-            OC("pades.icpAdRbTimestamp", "level", s_pades, "toggle", "icpAdRbTimestamp", "icp.adrbTimestamp", R("DOC-ICP-15.03|AD-RB"), stateKey: "icp.adrbTimestamp", framework: Brazil),
-            O("cades.icpPolicy", "level", s_cades, "choice", "icpPolicy", "ICP-Brasil policy", "The policy decides the required elements; a qualified signature needs an ICP-Brasil certificate.",
-                standards: R("DOC-ICP-15.03|CAdES policies"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy, TimestampOptions?)", stateKey: "icpPolicy", framework: Brazil, values: icp(true)),
-            O("xades.icpPolicy", "level", s_xades, "choice", "icpPolicy", "ICP-Brasil policy", "The policy decides the required elements; a qualified signature needs an ICP-Brasil certificate.",
-                standards: R("DOC-ICP-15.03|XAdES policies"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy, TimestampOptions?)", stateKey: "icpPolicy", framework: Brazil, values: icp(true)),
 
             O("pades.customPolicy.oid", "level", s_pades, "text", "customPolicy.oid", "Policy OID", "The object identifier of the signature policy.",
                 standards: R("ETSI EN 319 122-1|§5.2.9 signature-policy-identifier"), api: "SignaturePolicyReference.Oid", stateKey: "customPolicy"),
@@ -292,54 +250,26 @@ public static partial class OptionSchema
 
         O("pades.useSignerDetails", "attributes", s_pades, "toggle", "useSignerDetails", "Signer details", "Adds structured signer data and CMS attributes such as the commitment type.",
             standards: R("ETSI EN 319 122-1|§5.2.3 commitment-type-indication"), api: "WithMetadata(SignatureMetadata)", stateKey: "details.signer"),
-        O("pades.signerDetails", "attributes", s_pades, "choice", "signerDetails", "Kind of signer details", "Generic metadata, or the Brazilian advanced signature manifest.",
-            valueStateKey: "details",
-            values:
-            [
-                VC("Metadata", "details.Metadata", R("ETSI EN 319 122-1|§5.2.3 commitment-type-indication")),
-                VC("Aea", "details.Aea", R("Lei 14.063/2020|Art. 4º, II (advanced electronic signature)"), Brazil),
-            ], when: When("useSignerDetails", "true")),
         O("pades.metadata.commitmentType", "attributes", s_pades, "choice", "metadata.commitmentType", "Commitment type", "What the signer commits to by signing.",
             standards: R("ETSI EN 319 122-1|§5.2.3 commitment-type-indication", "ETSI TS 119 172-1|Annex B Commitment types"), api: "SignatureMetadata.CommitmentType",
-            values: CommitmentValues(withNone: false), when: [When("useSignerDetails", "true"), When("signerDetails", "Metadata")]),
+            values: CommitmentValues(withNone: false), when: When("useSignerDetails", "true")),
         O("pades.metadata.signerName", "attributes", s_pades, "text", "metadata.signerName", "Signer name", "Written in the signature dictionary (/Name).",
-            standards: R("ISO 32000-1|§12.8.1 Table 252 /Name"), api: "SignatureMetadata.SignerName", when: [When("useSignerDetails", "true"), When("signerDetails", "Metadata")]),
+            standards: R("ISO 32000-1|§12.8.1 Table 252 /Name"), api: "SignatureMetadata.SignerName", when: When("useSignerDetails", "true")),
         O("pades.metadata.signerId", "attributes", s_pades, "text", "metadata.signerId", "Signer id", "An identifier of the signer (a document number, an employee id…).",
-            api: "SignatureMetadata.SignerId", when: [When("useSignerDetails", "true"), When("signerDetails", "Metadata")]),
+            api: "SignatureMetadata.SignerId", when: When("useSignerDetails", "true")),
         O("pades.metadata.signerIdType", "attributes", s_pades, "text", "metadata.signerIdType", "Signer id type", "What the signer id is (for example: passport, tax id).",
-            api: "SignatureMetadata.SignerIdType", when: [When("useSignerDetails", "true"), When("signerDetails", "Metadata")]),
+            api: "SignatureMetadata.SignerIdType", when: When("useSignerDetails", "true")),
         O("pades.metadata.email", "attributes", s_pades, "text", "metadata.email", "E-mail", "The signer's e-mail.",
-            api: "SignatureMetadata.Email", when: [When("useSignerDetails", "true"), When("signerDetails", "Metadata")]),
+            api: "SignatureMetadata.Email", when: When("useSignerDetails", "true")),
         O("pades.metadata.institutionName", "attributes", s_pades, "text", "metadata.institutionName", "Institution", "The organization the signer acts for.",
-            api: "SignatureMetadata.InstitutionName", when: [When("useSignerDetails", "true"), When("signerDetails", "Metadata")]),
+            api: "SignatureMetadata.InstitutionName", when: When("useSignerDetails", "true")),
         O("pades.metadata.legalBasis", "attributes", s_pades, "text", "metadata.legalBasis", "Legal basis", "The law or contract clause that gives the signature its effect.",
-            api: "SignatureMetadata.LegalBasis", when: [When("useSignerDetails", "true"), When("signerDetails", "Metadata")]),
+            api: "SignatureMetadata.LegalBasis", when: When("useSignerDetails", "true")),
         O("pades.metadata.policyOid", "attributes", s_pades, "text", "metadata.policyOid", "Policy OID", "Adds a signature-policy-identifier with this OID.",
             standards: R("ETSI EN 319 122-1|§5.2.9 signature-policy-identifier"), api: "SignatureMetadata.PolicyOid", stateKey: "metadata.policy",
-            when: [When("useSignerDetails", "true"), When("signerDetails", "Metadata")]),
+            when: When("useSignerDetails", "true")),
 
-        O("pades.aea.signerName", "attributes", s_pades, "text", "aea.signerName", "Signer name", "The signer's full name, written in the manifest.",
-            standards: R("Lei 14.063/2020|Art. 4º, II"), api: "AdvancedSignatureInfo.SignerName", framework: Brazil, when: [When("useSignerDetails", "true"), When("signerDetails", "Aea")]),
-        O("pades.aea.cpf", "attributes", s_pades, "text", "aea.cpf", "CPF", "The signer's CPF; it is masked in the manifest.",
-            standards: R("Lei 14.063/2020|Art. 4º, II"), api: "AdvancedSignatureInfo.Cpf", framework: Brazil, when: [When("useSignerDetails", "true"), When("signerDetails", "Aea")]),
-        O("pades.aea.authMethod", "attributes", s_pades, "choice", "aea.authMethod", "Authentication method", "How the signer was identified before signing.",
-            standards: R("Lei 14.063/2020|Art. 4º, II, b"), api: "AdvancedSignatureInfo.AuthMethod", framework: Brazil,
-            values:
-            [
-                V("GovBr", "Gov.br account", framework: Brazil), V("InstitutionalLogin", "Institutional login", framework: Brazil),
-                V("DigitalCertificate", "Digital certificate", framework: Brazil), V("FacialBiometrics", "Facial biometrics", framework: Brazil),
-                V("TokenOtp", "Token or OTP", framework: Brazil), V("UsernamePassword", "User name and password", framework: Brazil),
-            ], when: [When("useSignerDetails", "true"), When("signerDetails", "Aea")]),
-        O("pades.aea.email", "attributes", s_pades, "text", "aea.email", "E-mail", "The signer's e-mail.",
-            api: "AdvancedSignatureInfo.Email", framework: Brazil, when: [When("useSignerDetails", "true"), When("signerDetails", "Aea")]),
-        O("pades.aea.ipAddress", "attributes", s_pades, "text", "aea.ipAddress", "IP address", "The address the signer signed from.",
-            api: "AdvancedSignatureInfo.IpAddress", framework: Brazil, when: [When("useSignerDetails", "true"), When("signerDetails", "Aea")]),
-        O("pades.aea.institutionName", "attributes", s_pades, "text", "aea.institutionName", "Institution", "The organization that collected the signature.",
-            api: "AdvancedSignatureInfo.InstitutionName", framework: Brazil, when: [When("useSignerDetails", "true"), When("signerDetails", "Aea")]),
-        O("pades.aea.institutionCnpj", "attributes", s_pades, "text", "aea.institutionCnpj", "Institution CNPJ", "The CNPJ of that organization.",
-            api: "AdvancedSignatureInfo.InstitutionCnpj", framework: Brazil, when: [When("useSignerDetails", "true"), When("signerDetails", "Aea")]),
-
-        O("xades.signingCertificateV1", "attributes", s_xades, "toggle", "signingCertificateV1", "SigningCertificate (XAdES 1.3.2)", "Use the older SigningCertificate property instead of SigningCertificateV2. The ICP-Brasil XML policies require it.",
+        O("xades.signingCertificateV1", "attributes", s_xades, "toggle", "signingCertificateV1", "SigningCertificate (XAdES 1.3.2)", "Use the older SigningCertificate property instead of SigningCertificateV2.",
             standards: R("ETSI EN 319 132-1|§5.2.2 SigningCertificateV2", "ETSI TS 101 903|§7.2.2 SigningCertificate"), api: "WithSigningCertificateForm(XadesSigningCertificateForm.V1)", stateKey: "signingCertificate"),
         O("xades.signerRoles", "attributes", s_xades, "lines", "signerRoles", "Signer roles", "The roles the signer claims, one per line (ClaimedRoles).",
             standards: R("ETSI EN 319 132-1|§5.2.6 SignerRoleV2"), api: "WithSignerRoles(IReadOnlyList<string>)", stateKey: "roles"),
@@ -388,7 +318,6 @@ public static partial class OptionSchema
             [
                 V("EtsiCadesDetached", "ETSI.CAdES.detached", "PAdES: the CMS follows the CAdES rules (signing-certificate-v2, no signing-time attribute).", standards: R("ETSI EN 319 142-1|§6.3 Table 1 /SubFilter")),
                 V("AdbePkcs7Detached", "adbe.pkcs7.detached", "The legacy format. PDF/A-1 requires it; baseline B-B only.", standards: R("ISO 32000-1|§12.8.3.3 PKCS#7 signatures")),
-                V("PbadPades", "PBAD.PAdES", "The ICP-Brasil PAdES format (/Filter /PBAD_PAdES).", standards: R("DOC-ICP-15.03|PBAD-PAdES"), framework: Brazil),
             ]),
         OC("pades.contents", "pdf", s_pades, "number", "contentsReservedBytes", "contents", R("ISO 32000-1|§12.8.1 Table 252 /Contents"), stateKey: "contents"),
         OC("pades.pdfa", "pdf", s_pades, "toggle", "preservePdfA", "pdfa", R("ISO 19005-1|PDF/A-1", "ISO 19005-2|PDF/A-2", "ETSI EN 319 142-1|§5.2 General syntax"), stateKey: "pdfa"),
@@ -417,18 +346,6 @@ public static partial class OptionSchema
             standards: R("ISO 32000-1|§12.8.1 Table 252 /Name"), api: "SignatureFieldOptions.SignerName", stateKey: "details.basic"),
         OC("pades.documentInfo", "pdf", s_pades, "keyValues", "documentInfo", "documentInfo", R("ISO 32000-1|§14.3.3 Document information dictionary"), stateKey: "documentInfo"),
 
-        O("pades.health.enabled", "pdf", s_pades, "toggle", "health.enabled", "Health document", "Prescriptions, certificates and exam requests, as the ITI VALIDAR service expects.",
-            "Writes the document type and the professional registrations, keyed by OID, to the document information dictionary.",
-            R("ITI VALIDAR|Guia de documentos de saúde"), "WithHealthDocument(HealthDocumentType, params ProfessionalRegistration[])", stateKey: "health", framework: Brazil),
-        O("pades.health.type", "pdf", s_pades, "choice", "health.type", "Document type", "The kind of health document.",
-            standards: R("ITI VALIDAR|Guia de documentos de saúde"), framework: Brazil,
-            values:
-            [
-                V("Prescricao", "Prescription", framework: Brazil), V("Atestado", "Medical certificate", framework: Brazil),
-                V("SolicitacaoExame", "Exam request", framework: Brazil), V("Relatorio", "Report", framework: Brazil),
-            ], when: When("health.enabled", "true")),
-        O("pades.health.professionals", "pdf", s_pades, "professionals", "health.professionals", "Professional registrations", "The council registrations of the professionals who sign (CRM, CRF, CRO…).",
-            standards: R("ITI VALIDAR|Guia de documentos de saúde"), api: "new ProfessionalRegistration(council, number, state)", framework: Brazil, when: When("health.enabled", "true")),
     ];
 
     // ── Run and validation ──────────────────────────────────────────────
@@ -451,18 +368,8 @@ public static partial class OptionSchema
             [
                 V("Sandbox", "Sandbox root", "The root of the sandbox PKI."),
                 V("System", "Operating system roots", "The roots the operating system trusts."),
-                V("IcpBrasil", "ICP-Brasil and Gov.br roots", "The roots bundled with SimpleSign.Brazil.IcpBrasil and SimpleSign.Brazil.GovBr.", framework: Brazil),
             ], when: When("validate", "true")),
         O("common.validation.checkRevocation", "run", s_all, "toggle", "validation.checkRevocation", "Check revocation", "Looks the certificates up in the embedded or online CRLs and OCSP responses.",
             standards: R("ETSI EN 319 102-1|§5.2.6 X.509 certificate validation", "RFC 5280|§6.3 CRL validation", "RFC 6960|OCSP"), api: "ValidationOptions.CheckRevocation", when: When("validate", "true")),
-        O("common.validation.policy", "run", s_all, "choice", "validation.policy", "Validation policy", "Which algorithms, key sizes and key usages the validation accepts.",
-            standards: R("ETSI EN 319 102-1|§5.2.8 Cryptographic verification", "ETSI TS 119 312|Cryptographic suites"), api: "ValidationOptions.Policy",
-            values:
-            [
-                V("Default", "Default", "Obsolete algorithms (MD5, SHA-1 without an older timestamp, RSA under 2048 bits) make the result INDETERMINATE; a missing key usage is a warning.", api: "ValidationPolicy.Default"),
-                V("Indecopi", "INDECOPI (Peru)", "The policy of INDECOPI's accreditation guide: like the default, and a signing certificate without digitalSignature or nonRepudiation fails too.", api: "IofePolicies.Validation"),
-            ], when: When("validate", "true")),
-        O("common.validation.useBrasil", "run", s_all, "toggle", "validation.useBrasil", "Apply the Brazilian rules", "Validates the chain with the ICP-Brasil and Gov.br rules and classifies the signature under Lei 14.063.",
-            standards: R("DOC-ICP-15.03|Signature policy requirements", "Lei 14.063/2020|Art. 4º"), api: "IcpBrasilExtension + GovBrExtension (ICountryExtension)", framework: Brazil, when: When("validate", "true")),
     ];
 }

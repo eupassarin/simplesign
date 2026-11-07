@@ -1,9 +1,8 @@
 // Mirrors src/Apps/SimpleSign.TestBench/Signing/SigningOptions.cs and the API records (camelCase JSON, enums as names).
 
 export type EnvironmentMode = "Sandbox" | "Real"
-export type SignatureKind = "Baseline" | "IcpBrasil" | "CustomPolicy"
+export type SignatureKind = "Baseline" | "CustomPolicy"
 export type BaselineLevel = "BB" | "BT" | "BLT" | "BLTA"
-export type IcpPolicyKind = "AdRb" | "AdRt" | "AdRc" | "AdRa"
 export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
 export type TsaAuth = "None" | "Basic" | "Bearer"
 export type HashChoice = "Sha256" | "Sha384" | "Sha512" | "Sha3_256" | "Sha3_384" | "Sha3_512"
@@ -11,12 +10,11 @@ export type RsaPadding = "Pkcs1" | "Pss"
 export type RevocationPreference = "OcspFirst" | "CrlFirst"
 export type SigningPolicyChoice = "Default" | "Strict" | "Minimal"
 export type XadesCanonicalization = "Exclusive" | "Inclusive"
-export type SubFilterChoice = "EtsiCadesDetached" | "AdbePkcs7Detached" | "PbadPades"
+export type SubFilterChoice = "EtsiCadesDetached" | "AdbePkcs7Detached"
 export type FieldMode = "New" | "Existing"
 export type CertificationChoice = "None" | "NoChanges" | "FormFilling" | "FormFillingAndAnnotations"
-export type SignerDetailsKind = "Metadata" | "Aea"
 export type RunMode = "Sign" | "Deferred" | "Batch"
-export type CredentialKind = "SandboxA1" | "Pfx" | "OsStore" | "Pkcs11" | "Psc" | "Csc"
+export type CredentialKind = "SandboxA1" | "Pfx" | "OsStore" | "Pkcs11" | "Csc"
 
 export interface TimestampChoice {
   provider: TsaProvider
@@ -45,35 +43,12 @@ export interface MetadataChoice {
   policyUri?: string | null
 }
 
-export interface AeaChoice {
-  signerName: string
-  cpf: string
-  authMethod: string
-  email?: string | null
-  ipAddress?: string | null
-  commitmentType: string
-  institutionName?: string | null
-  institutionCnpj?: string | null
-  policyOid?: string | null
-  policyUri?: string | null
-}
-
-export interface ProfessionalChoice {
-  council: string
-  registrationNumber: string
-  stateCode?: string | null
-  specialty?: string | null
-}
-
 export interface SigningOptions {
   environment: EnvironmentMode
   documentId?: string | null
   credentialId?: string | null
   kind: SignatureKind
   level: BaselineLevel
-  icpPolicy: IcpPolicyKind
-  icpVersionOid?: string | null
-  icpAdRbTimestamp: boolean
   customPolicy: { oid: string; hashAlgorithm: HashChoice; hashHex: string; uri?: string | null }
   timestamp: TimestampChoice
   separateArchiveTsa: boolean
@@ -95,10 +70,7 @@ export interface SigningOptions {
   signerName?: string | null
   signingTime?: string | null
   useSignerDetails: boolean
-  signerDetails: SignerDetailsKind
   metadata: MetadataChoice
-  aea: AeaChoice
-  health: { enabled: boolean; type: string; professionals: ProfessionalChoice[] }
   certification: CertificationChoice
   documentInfo: { key: string; value: string }[]
   operationId?: string | null
@@ -160,8 +132,6 @@ export interface CredentialFacts {
   holder: string
   subject: string
   issuer: string
-  cpf?: string | null
-  cnpj?: string | null
   keyAlgorithm: string
   keySize: number
   notBefore: string
@@ -169,7 +139,6 @@ export interface CredentialFacts {
   isExpired: boolean
   isNotYetValid: boolean
   hasNonRepudiation: boolean
-  chainsToIcpBrasil: boolean
   hashes: HashChoice[]
   paddings: RsaPadding[]
   canSignHashLocally: boolean
@@ -218,9 +187,6 @@ export interface EnvironmentInfo {
   authenticatedTsaUrl: string
   tsaUser: string
   tsaPassword: string
-  pscUrl: string
-  pscCpf: string
-  pscOtp: string
   cscUrl: string
   cscPin: string
   cscOtp: string
@@ -235,20 +201,6 @@ export interface SampleDocument {
   title: string
   description: string
   facts: DocumentFacts
-}
-
-export interface IcpVersion {
-  oid: string
-  version: string
-  notBefore: string
-  notAfter: string
-  revokedAt?: string | null
-  inForce: boolean
-  isAutomatic: boolean
-  disabled?: string | null
-  acceptedRoots: string[]
-  requirements: string[]
-  uri: string
 }
 
 export interface CodeSnippets {
@@ -274,8 +226,6 @@ export interface SignatureReport {
   subFilter?: string | null
   digest?: string | null
   signingTime?: string | null
-  policyLevel?: string | null
-  signerId?: string | null
   checks: CheckRow[]
   errors: string[]
   warnings: string[]
@@ -370,18 +320,14 @@ export interface SandboxRequest {
 }
 
 // ── Validation area ─────────────────────────────────────────────────
-export type TrustChoice = "Sandbox" | "System" | "IcpBrasil"
-
-export type ValidationPolicyChoice = "Default" | "Indecopi"
+export type TrustChoice = "Sandbox" | "System"
 
 export interface ValidationSettings {
-  policy: ValidationPolicyChoice
   environment: EnvironmentMode
   trust: TrustChoice[]
   customRootUploadIds: string[]
   checkRevocation: boolean
   timeoutSeconds: number
-  useBrasil: boolean
 }
 
 export interface ValidationSample {
@@ -408,7 +354,6 @@ export interface CertificateView {
 export interface DetailedSignature {
   report: SignatureReport
   padesLevel?: string | null
-  lei14063Level?: string | null
   signer?: CertificateView | null
   embeddedCertificates: CertificateView[]
   timestamp?: { time: string; tsa?: string | null; policyOid?: string | null; hashAlgorithm?: string | null; serialNumber?: string | null } | null
@@ -417,7 +362,6 @@ export interface DetailedSignature {
   deprecatedAlgorithm: boolean
   commitmentTypeOid?: string | null
   policyOid?: string | null
-  policyName?: string | null
   reason?: string | null
   location?: string | null
   contactInfo?: string | null
@@ -464,8 +408,7 @@ export interface InspectionReport {
 // ── CAdES ───────────────────────────────────────────────────────────
 export type CadesOperation = "Sign" | "CoSign" | "CounterSign"
 export type CadesContentChoice = "Detached" | "Enveloped"
-export type CadesKind = "Baseline" | "IcpBrasil" | "CustomPolicy"
-export type CadesIcpPolicy = "AdRb" | "AdRt" | "AdRv" | "AdRc" | "AdRa"
+export type CadesKind = "Baseline" | "CustomPolicy"
 export type CadesExtendedChoice = "None" | "CompleteReferences" | "ExtendedLong" | "Archive"
 
 export interface CadesOptions {
@@ -478,7 +421,6 @@ export interface CadesOptions {
   credentialId?: string | null
   kind: CadesKind
   level: BaselineLevel
-  icpPolicy: CadesIcpPolicy
   policyOid: string
   policyUri?: string | null
   policyDocumentId?: string | null
@@ -604,23 +546,19 @@ export interface CadesSample {
   expectedCheck?: string | null
 }
 
-// ── XML: XAdES and fiscal XML-DSig ──────────────────────────────────
-export type XmlMode = "Xades" | "Fiscal"
+// ── XML: XAdES ──────────────────────────────────────────────────────
 export type XadesFormChoice = "Enveloped" | "Detached" | "Enveloping"
-export type XadesKind = "Baseline" | "IcpBrasil" | "CustomPolicy"
-export type XadesIcpPolicy = "AdRb" | "AdRt" | "AdRv" | "AdRc" | "AdRa"
+export type XadesKind = "Baseline" | "CustomPolicy"
 export type XadesExtendedChoice = "None" | "CompleteReferences" | "ExtendedLong" | "Archive"
 
 export interface XmlOptions {
   environment: EnvironmentMode
-  mode: XmlMode
   dataId?: string | null
   credentialId?: string | null
   form: XadesFormChoice
   dataUri: string
   kind: XadesKind
   level: BaselineLevel
-  icpPolicy: XadesIcpPolicy
   policyOid: string
   policyUri?: string | null
   policyDocumentId?: string | null
@@ -650,9 +588,6 @@ export interface XmlOptions {
   commitment?: string | null
   signingTime?: string | null
   operationId?: string | null
-  profile: string
-  elementId?: string | null
-  signAll: boolean
   validate: boolean
   validation?: ValidationSettings | null
 }
@@ -664,7 +599,6 @@ export interface XmlFacts {
   root?: string | null
   namespace?: string | null
   signatures: number
-  fiscalTargets: Record<string, string[]>
   error?: string | null
 }
 
@@ -684,8 +618,6 @@ export interface XmlSignatureReport {
   index: number
   reference?: string | null
   signer?: string | null
-  cnpj?: string | null
-  cpf?: string | null
   indication: "Valid" | "Invalid" | "Indeterminate"
   /** The ETSI EN 319 102-1 sub-indication (HASH_FAILURE, TRY_LATER…) when the result is not valid. */
   subIndication?: string | null
@@ -698,7 +630,6 @@ export interface XmlSignatureReport {
 
 export interface XmlValidationView {
   overall: "Valid" | "Invalid" | "Indeterminate"
-  mode: XmlMode
   signatures: XmlSignatureReport[]
   errors: string[]
   signatureXml?: string | null
@@ -726,8 +657,6 @@ export interface XmlSignResult {
 export interface XmlSample {
   id: string
   kind: "data" | "validation"
-  mode: XmlMode
-  profile?: string | null
   fileId: string
   fileName: string
   dataId?: string | null

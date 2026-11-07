@@ -36,18 +36,4 @@ public sealed class SigningRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain("{ RevocationPreference = RevocationPreference.CrlFirst }");
         result.Code.Cli.ShouldContain("--revocation-preference crl");
     }
-
-    [Theory]
-    [InlineData(IcpPolicyKind.AdRb)]
-    [InlineData(IcpPolicyKind.AdRt)]
-    [InlineData(IcpPolicyKind.AdRc)]
-    [InlineData(IcpPolicyKind.AdRa)]
-    public async Task RunAsync_IcpPolicy_Signs(IcpPolicyKind policy)
-    {
-        var result = await fixture.Runner.RunAsync(fixture.Options() with { Kind = SignatureKind.IcpBrasil, IcpPolicy = policy }, default);
-
-        result.Error.ShouldBeNull();
-        result.Success.ShouldBeTrue();
-        result.Code.CSharp.ShouldContain("WithIcpBrasilPolicy");
-    }
 }

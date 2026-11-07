@@ -2,7 +2,7 @@
 
   <!--
     SimpleSign TestBench: a local web app (ASP.NET Core + React/shadcn in web/) that exercises
-    every PDF signing option of the library, with an offline sandbox (PKI, TSA, CRL, fake PSC/CSC).
+    every PDF signing option of the library, with an offline sandbox (PKI, TSA, CRL, fake CSC).
     Not packaged; listens on 127.0.0.1 only.
   -->
   <PropertyGroup>
@@ -20,16 +20,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil.Xades\SimpleSign.Brazil.IcpBrasil.Xades.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.Fiscal\SimpleSign.Brazil.Fiscal.csproj" />
     <ProjectReference Include="..\..\Extras\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -56,7 +56,6 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
         report.Overall.ShouldBe("Valid");
         var signature = report.Signatures.Single();
         signature.PadesLevel.ShouldBe("BaselineLT");
-        signature.Lei14063Level.ShouldBe("Simples");
         signature.Signer!.Subject.ShouldContain("Maria da Silva");
         signature.Timestamp.ShouldNotBeNull();
         signature.Coverage!.Revisions.ShouldBeGreaterThan(1);
@@ -114,6 +113,6 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
     }
 
     [Fact]
-    public void For_RealMode_TrustsSystemAndIcpRoots() =>
-        ValidationSettings.For(EnvironmentMode.Real).Trust.ShouldBe([TrustChoice.System, TrustChoice.IcpBrasil]);
+    public void For_RealMode_TrustsSystemRoots() =>
+        ValidationSettings.For(EnvironmentMode.Real).Trust.ShouldBe([TrustChoice.System]);
 }

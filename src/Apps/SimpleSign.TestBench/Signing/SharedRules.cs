@@ -88,7 +88,6 @@ internal static class SharedRules
             state[$"padding.{p}"] = credential is null || credential.Paddings.Contains(p) ? OptionState.Shown
                 : OptionState.Off(credential.Kind switch
                 {
-                    CredentialKind.Psc => L.T("PSCs only produce RSA PKCS#1 v1.5 signatures."),
                     CredentialKind.Csc => L.T("This CSC credential does not list the algorithm in its key/algo."),
                     _ => L.T("Not supported by this key."),
                 });
@@ -115,7 +114,7 @@ internal static class SharedRules
 
     /// <summary>
     /// The signer certificate: chosen, currently valid, with nonRepudiation; and what the signing policy refuses
-    /// (null for the fiscal layouts, which have no signing policy).
+    /// (null: no signing policy applies).
     /// </summary>
     public static void Signer(CredentialFacts? credential, Action<string, string> error, Action<string, string> warn, string step,
         SigningPolicyChoice? policy = SigningPolicyChoice.Default)
@@ -151,7 +150,7 @@ internal static class SharedRules
 
         if (!credential.HasNonRepudiation)
         {
-            warn(step, L.T("The certificate lacks the nonRepudiation key usage: ICP-Brasil validators warn about it."));
+            warn(step, L.T("The certificate lacks the nonRepudiation key usage: some validation policies warn about it."));
         }
     }
 }

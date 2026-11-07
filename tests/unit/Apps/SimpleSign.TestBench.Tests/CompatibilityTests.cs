@@ -59,39 +59,12 @@ public sealed class CompatibilityTests
     }
 
     [Fact]
-    public void Evaluate_IcpPolicy_ForcesPbadSubFilterAndHidesLevels()
-    {
-        var report = Compatibility.Evaluate(new SigningOptions { Kind = SignatureKind.IcpBrasil, IcpPolicy = IcpPolicyKind.AdRt }, Plain, Rsa);
-
-        report.Effective.SubFilter.ShouldBe(SubFilterChoice.PbadPades);
-        report.Effective.Level.ShouldBe(BaselineLevel.BT);
-        report.Options["level.BB"].Visible.ShouldBeFalse();
-        report.Options["subFilter.EtsiCadesDetached"].Disabled.ShouldNotBeNull();
-        report.Options["timestamp"].Visible.ShouldBeTrue();
-    }
-
-    [Theory]
-    [InlineData(IcpPolicyKind.AdRb, false, BaselineLevel.BB)]
-    [InlineData(IcpPolicyKind.AdRb, true, BaselineLevel.BT)]
-    [InlineData(IcpPolicyKind.AdRt, false, BaselineLevel.BT)]
-    [InlineData(IcpPolicyKind.AdRc, false, BaselineLevel.BLTA)]
-    [InlineData(IcpPolicyKind.AdRa, false, BaselineLevel.BLTA)]
-    public void Evaluate_IcpPolicy_MapsToBaselineLevel(IcpPolicyKind policy, bool timestamp, BaselineLevel expected)
-    {
-        var report = Compatibility.Evaluate(new SigningOptions { Kind = SignatureKind.IcpBrasil, IcpPolicy = policy, IcpAdRbTimestamp = timestamp }, Plain, Rsa);
-
-        report.Effective.Level.ShouldBe(expected);
-        report.Options["archiveTimestamp"].Visible.ShouldBe(expected == BaselineLevel.BLTA);
-    }
-
-    [Fact]
     public void Evaluate_PdfA1Preserved_ForcesAdbeAndBB()
     {
         var report = Compatibility.Evaluate(new SigningOptions { PreservePdfA = true, Level = BaselineLevel.BT }, Doc(pdfA1: true), Rsa);
 
         report.Effective.SubFilter.ShouldBe(SubFilterChoice.AdbePkcs7Detached);
         report.Options["level.BT"].Disabled.ShouldNotBeNull();
-        report.Options["kind.IcpBrasil"].Disabled.ShouldNotBeNull();
     }
 
     [Fact]
@@ -101,18 +74,6 @@ public sealed class CompatibilityTests
 
         report.Options["level.BLT"].Disabled.ShouldNotBeNull();
         report.CanSign.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void Evaluate_PscCredential_OffersPkcs1AndSha2Only()
-    {
-        var psc = Credential("RSA", [RsaPadding.Pkcs1], CredentialKind.Psc, [HashChoice.Sha256, HashChoice.Sha384, HashChoice.Sha512]);
-
-        var report = Compatibility.Evaluate(new SigningOptions { Padding = RsaPadding.Pss }, Plain, psc);
-
-        report.Options["padding.Pss"].Disabled.ShouldNotBeNull();
-        report.Effective.Padding.ShouldBe(RsaPadding.Pkcs1);
-        report.Options["hash.Sha3_256"].Disabled.ShouldNotBeNull();
     }
 
     [Fact]
@@ -147,7 +108,6 @@ public sealed class CompatibilityTests
 
         report.Options["fieldName"].Visible.ShouldBeFalse();
         report.Options["documentInfo"].Disabled.ShouldNotBeNull();
-        report.Options["health"].Disabled.ShouldNotBeNull();
         report.CanSign.ShouldBeTrue();
     }
 
@@ -165,36 +125,13 @@ public sealed class CompatibilityTests
     [InlineData(RunMode.Batch)]
     public void Evaluate_DeferredOrBatch_DisablesPoliciesAndBuilderOnlyOptions(RunMode mode)
     {
-        var report = Compatibility.Evaluate(new SigningOptions { Mode = mode, Kind = SignatureKind.IcpBrasil }, Plain, Rsa);
+        var report = Compatibility.Evaluate(new SigningOptions { Mode = mode, Kind = SignatureKind.CustomPolicy }, Plain, Rsa);
 
-        report.Options["kind.IcpBrasil"].Disabled.ShouldNotBeNull();
+        report.Options["kind.CustomPolicy"].Disabled.ShouldNotBeNull();
         report.Options["documentInfo"].Disabled.ShouldNotBeNull();
         report.Options["details.signer"].Disabled.ShouldNotBeNull();
         report.CanSign.ShouldBeFalse();
     }
-
-    [Fact]
-    public void Evaluate_AeaWithIcpPolicy_IsRefused()
-    {
-        var report = Compatibility.Evaluate(new SigningOptions
-        {
-            Kind = SignatureKind.IcpBrasil,
-            UseSignerDetails = true,
-            SignerDetails = SignerDetailsKind.Aea,
-            Aea = new AeaChoice { SignerName = "Maria", Cpf = "11144477735" },
-        }, Plain, Rsa);
-
-        report.Options["details.Aea"].Disabled.ShouldNotBeNull();
-        report.CanSign.ShouldBeFalse();
-    }
-
-    [Theory]
-    [InlineData("111.444.777-35", true)]
-    [InlineData("11144477735", true)]
-    [InlineData("11144477736", false)]
-    [InlineData("11111111111", false)]
-    [InlineData("123", false)]
-    public void IsCpf_Values_ChecksDigits(string cpf, bool expected) => Compatibility.IsCpf(cpf).ShouldBe(expected);
 
     [Fact]
     public void Evaluate_SandboxWithPublicTsa_IsRefused()
@@ -254,6 +191,6 @@ public sealed class CompatibilityTests
         emptyFields ?? [], null);
 
     private static CredentialFacts Credential(string algorithm, IReadOnlyList<RsaPadding> paddings, CredentialKind kind = CredentialKind.SandboxA1, IReadOnlyList<HashChoice>? hashes = null) => new(
-        "cred", kind, "test", "Holder", "CN=Holder", "CN=CA", "11144477735", null, algorithm, 2048, "2025-01-01", "2030-01-01",
-        false, false, true, false, hashes ?? Enum.GetValues<HashChoice>(), paddings, kind is CredentialKind.SandboxA1 or CredentialKind.Pfx, [], "");
+        "cred", kind, "test", "Holder", "CN=Holder", "CN=CA", algorithm, 2048, "2025-01-01", "2030-01-01",
+        false, false, true, hashes ?? Enum.GetValues<HashChoice>(), paddings, kind is CredentialKind.SandboxA1 or CredentialKind.Pfx, [], "");
 }

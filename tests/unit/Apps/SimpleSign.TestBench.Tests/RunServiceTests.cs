@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Shouldly;
-using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.CrossValidation;
@@ -185,22 +184,6 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
     }
 
     [Fact]
-    public async Task RunAsync_SimulatedPsc_SignsThroughTheProviderAndShowsItInTheLog()
-    {
-        var handle = fixture.Credentials.Add(await fixture.Factory.OpenPscPasswordAsync(
-            new PscCredentialRequest(null, null, null, null, SandboxPsc.Otp, PscScope.SignatureSession, "maria-rsa2048"), EnvironmentMode.Sandbox, default));
-
-        var run = await fixture.Runs().RunAsync(Request(RunFormats.Pades, fixture.Options() with { CredentialId = handle.Id, Level = BaselineLevel.BT }), default);
-
-        run.Success.ShouldBeTrue(Problems(run));
-        run.Overall.ShouldBe("Valid", Problems(run));
-        // The hash goes to the provider (network), and the cloud signer reports it (events 731x).
-        run.Logs.ShouldContain(l => l.Source == "network" && l.Message.StartsWith("PSC:", StringComparison.Ordinal));
-        run.Logs.ShouldContain(l => l.EventId == 7311 && l.Stage == RunStages.Signature);
-        run.Logs.ShouldContain(l => l.EventId == 7312);
-    }
-
-    [Fact]
     public async Task RunAsync_SimulatedCsc_AuthorizesTheCredentialAndShowsItInTheLog()
     {
         var handle = fixture.Credentials.Add(await fixture.Factory.OpenCscAsync(
@@ -223,11 +206,10 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
     }
 
     [Fact]
-    public void Real_ListsBundledRootsAndPublicTsas()
+    public void Real_ListsPublicTsas()
     {
         var real = SimpleSign.TestBench.Endpoints.EnvironmentApi.Real();
 
-        real.BundledRoots.ShouldContain(r => r.Source == "ICP-Brasil");
         real.PublicTsas.Select(t => t.Name).ShouldBe(["DigiCert", "Sectigo", "FreeTSA"]);
         real.PublicTsas.ShouldAllBe(t => t.Url.StartsWith("http", StringComparison.Ordinal));
     }

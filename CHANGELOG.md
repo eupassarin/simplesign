@@ -19,12 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SignatureSubIndication.ToEtsiName()`.
 - CLI: `--signing-policy` on the sign commands, refusal reasons with a hint, `validate-dir` with the policy/trust
   options and sub-indications, three-state CAdES/XAdES output, `explain` for the ETSI terms.
-- TestBench: signing policy option, validation policy choice (Default, INDECOPI), sub-indications and policy checks
-  in the reports, real revocation for CAdES/XAdES, weak-key and no-key-usage sandbox signers.
+- TestBench: signing policy option, sub-indications and policy checks in the reports, real revocation for
+  CAdES/XAdES, weak-key and no-key-usage sandbox signers.
 - Agent: `/api/certificates` reports `policyIssue` (keyUsage, weakKey), shown in the Overview; `/api/sign` refuses an
   unsupported `hashAlgorithm` with 400 instead of signing SHA-256.
 - Docs: README, conformance, PAdES/CAdES/XAdES, validation, getting started, deferred, PKCS#11, cloud and TestBench
   articles; ADRs 0009, 0011, 0013, 0018 and 0020 point to ADRs 0021/0022; CLAUDE.md, CONTRIBUTING, SECURITY.
+
+### Removed (TestBench) — ETSI only
+
+The TestBench now covers the ETSI standards only; trust frameworks and the visible stamp will get apps of their own.
+The libraries are unchanged (the Brazil and Peru packages, `PadesSignerBuilder.WithAppearance`).
+
+- Visible signature stamp: the appearance options, the stamp preview (`/api/preview`) and the matrix dimension.
+- Trust frameworks: the frameworks bar and the `framework` tags of the option schema; the ICP-Brasil policies
+  (AD-RB…AD-RA, versions, `/api/icp/versions`), the PBAD.PAdES sub-filter, the AEA of Lei 14.063, health documents,
+  the fiscal XML-DSig layouts and their samples, the ICP-Brasil/Gov.br roots and rules in validation, the Lei 14.063
+  classification and the INDECOPI validation policy choice.
+- The simulated ICP-Brasil PSC and the PSC signer (CSC v2 stays).
+- The sandbox PKI is generic: no CPF/CNPJ (SAN otherName 2.16.76.*), no e-CNPJ signer, neutral subjects.
 
 ### Added — signing policy: checks before signing (INDECOPI Req. 11–13, 16)
 

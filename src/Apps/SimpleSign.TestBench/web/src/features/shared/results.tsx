@@ -31,8 +31,6 @@ export function SignatureCard({ report }: { report: SignatureReport }) {
         <KeyValue label="Sub-filter" mono>{report.subFilter ?? "—"}</KeyValue>
         <KeyValue label={t("result.report.digest")}>{report.digest ?? "—"}</KeyValue>
         <KeyValue label={t("result.report.signingTime")}>{report.signingTime ?? "—"}</KeyValue>
-        {report.policyLevel && <KeyValue label={t("result.report.policyLevel")}>{report.policyLevel}</KeyValue>}
-        {report.signerId && <KeyValue label={t("result.report.signerId")}>{report.signerId}</KeyValue>}
       </div>
       <ul className="divide-y border-t">
         {report.checks.map((c) => (

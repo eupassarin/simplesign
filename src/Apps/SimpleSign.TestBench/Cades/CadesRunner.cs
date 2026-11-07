@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Signing;
@@ -148,8 +147,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
 
         var trust = validation.Trust(settings);
         var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger, chainRevocationChecker: validation.RevocationChecker(settings));
-        var result = await validator.ValidateAllAsync(signature.Content, structure.IsDetached ? data : null,
-            trust.IcpAnchors.Count > 0 ? trust.IcpAnchors : null, cancellationToken);
+        var result = await validator.ValidateAllAsync(signature.Content, structure.IsDetached ? data : null, null, cancellationToken);
         var signers = result.Signers.Select(Signer).ToList();
         string overall = result.Errors.Count > 0 || signers.Count == 0 ? "Invalid"
             : Flatten(signers).All(s => s.Indication == "Valid") ? "Valid"
@@ -193,13 +191,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     private static CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool sandboxRoot = settings.Trust.Contains(TrustChoice.Sandbox);
-        bool icp = settings.Trust.Contains(TrustChoice.IcpBrasil);
         var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n");
-        if (icp)
-        {
-            sb.Append("using SimpleSign.Brazil.GovBr;\nusing SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Core.Extensions;\n");
-        }
-
         sb.Append("\nvar validator = new CadesSignatureValidator(new ValidationOptions\n{\n");
         sb.Append(CultureInfo.InvariantCulture, $"    TrustSystemRoots = {(settings.Trust.Contains(TrustChoice.System) ? "true" : "false")},\n");
         if (sandboxRoot || settings.CustomRootUploadIds.Count > 0)
@@ -213,15 +205,10 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         }
 
         sb.Append("});\n");
-        if (icp)
-        {
-            sb.Append("var icpRoots = new ICountryExtension[] { new IcpBrasilExtension(), new GovBrExtension() }\n");
-            sb.Append("    .SelectMany(e => e.TrustAnchorProviders).SelectMany(p => p.GetTrustAnchors()).ToList();\n");
-        }
 
         sb.Append("\nCadesValidationReport report = validator.ValidateAll(\n    File.ReadAllBytes(\"signature.p7s\"),\n");
         sb.Append(detached ? "    File.ReadAllBytes(\"document\") /* the signed data: the signature is detached */" : "    null /* enveloped: the content is inside */");
-        sb.Append(icp ? ",\n    icpRoots);\n" : ");\n");
+        sb.Append(");\n");
         sb.Append("\nforeach (var signer in report.Signers)\n{\n    Console.WriteLine($\"#{signer.Index}: {(signer.IsValid ? \"valid\" : \"not valid\")}\");\n");
         sb.Append("    foreach (var error in signer.Result.Errors) Console.WriteLine($\"  ✕ {error}\");\n");
         sb.Append("    foreach (var counter in signer.CounterSignatures) Console.WriteLine($\"  countersignature #{counter.Index}: {counter.IsValid}\");\n}\n");
@@ -238,9 +225,9 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             args.Add("--trust root.cer");
         }
 
-        if (icp || !settings.CheckRevocation || !settings.Trust.Contains(TrustChoice.System))
+        if (!settings.CheckRevocation || !settings.Trust.Contains(TrustChoice.System))
         {
-            notes.Add("The CLI validates against the OS roots plus --trust; ICP-Brasil anchors and revocation settings need the library.");
+            notes.Add("The CLI validates against the OS roots plus --trust; turning revocation or the OS roots off needs the library.");
         }
 
         return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), notes);
@@ -385,30 +372,6 @@ internal sealed class CadesPlan
 
     private void AddType()
     {
-        if (_o.Kind == CadesKind.IcpBrasil)
-        {
-            var policy = _o.IcpPolicy switch
-            {
-                CadesIcpPolicy.AdRb => IcpBrasilPolicy.AdRb,
-                CadesIcpPolicy.AdRt => IcpBrasilPolicy.AdRt,
-                CadesIcpPolicy.AdRv => IcpBrasilPolicy.AdRv,
-                CadesIcpPolicy.AdRc => IcpBrasilPolicy.AdRc,
-                _ => IcpBrasilPolicy.AdRa,
-            };
-            if (policy == IcpBrasilPolicy.AdRb)
-            {
-                _steps.Add((".WithIcpBrasilPolicy(IcpBrasilPolicy.AdRb) // the version is picked by the signer's root", b => b.WithIcpBrasilPolicy(policy)));
-            }
-            else
-            {
-                var tsa = _context.BuildTimestamp(_o.Timestamp, "tsa");
-                _steps.Add(($".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}, tsa) // policy + B-T{(policy == IcpBrasilPolicy.AdRt ? "" : " + extended form")}",
-                    b => b.WithIcpBrasilPolicy(policy, tsa)));
-            }
-
-            return;
-        }
-
         if (_o.Kind == CadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);
@@ -453,13 +416,7 @@ internal sealed class CadesPlan
     /// <summary>The C# and the <c>simplesign cades sign</c> command.</summary>
     public CodeSnippets Code(CredentialFacts credential)
     {
-        var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Signing;\n");
-        if (_o.Kind == CadesKind.IcpBrasil)
-        {
-            sb.Append("using SimpleSign.Brazil.IcpBrasil;\nusing SimpleSign.Brazil.Signing;\n");
-        }
-
-        sb.Append('\n');
+        var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Signing;\n\n");
         if (_context.IsSandbox)
         {
             sb.Append("// Sandbox: sandboxHttp is an IHttpClientProvider that answers *.sandbox.simplesign.test (TSA and CRLs).\n");
@@ -505,33 +462,26 @@ internal sealed class CadesPlan
             args.Add("--content-type enveloped");
         }
 
-        if (_o.Kind == CadesKind.IcpBrasil)
+        if (_o.Level != BaselineLevel.BB)
         {
-            notes.Add("The CLI has no ICP-Brasil CAdES policy flag: use WithIcpBrasilPolicy in the library.");
+            args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
+            args.Add("--level " + _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
         }
-        else
+
+        if (_o.Kind == CadesKind.CustomPolicy)
         {
-            if (_o.Level != BaselineLevel.BB)
+            args.Add($"--policy-oid {_o.PolicyOid}");
+            CodeGenerator.AddIf(args, "--policy-uri", SigningPlan.Blank(_o.PolicyUri));
+            if (!string.IsNullOrEmpty(_o.PolicyDocumentId))
             {
-                args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
-                args.Add("--level " + _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
+                CodeGenerator.AddIf(args, "--policy-document", _context.FileName(_o.PolicyDocumentId));
+                CodeGenerator.AddIf(args, "--policy-specification", _o.PolicySpecification);
             }
+        }
 
-            if (_o.Kind == CadesKind.CustomPolicy)
-            {
-                args.Add($"--policy-oid {_o.PolicyOid}");
-                CodeGenerator.AddIf(args, "--policy-uri", SigningPlan.Blank(_o.PolicyUri));
-                if (!string.IsNullOrEmpty(_o.PolicyDocumentId))
-                {
-                    CodeGenerator.AddIf(args, "--policy-document", _context.FileName(_o.PolicyDocumentId));
-                    CodeGenerator.AddIf(args, "--policy-specification", _o.PolicySpecification);
-                }
-            }
-
-            if (_o.ExtendedForm != CadesExtendedChoice.None)
-            {
-                notes.Add("Extended forms (CAdES-X / X Long / A) need the library: WithExtendedValidationData.");
-            }
+        if (_o.ExtendedForm != CadesExtendedChoice.None)
+        {
+            notes.Add("Extended forms (CAdES-X / X Long / A) need the library: WithExtendedValidationData.");
         }
 
         if (_o.Hash != HashChoice.Sha256)
@@ -551,7 +501,7 @@ internal sealed class CadesPlan
         }
 
         AddSignedAttributeArgs(args);
-        if (_o.Kind != CadesKind.IcpBrasil && _o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
+        if (_o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
         {
             args.Add("--revocation-preference crl");
         }
@@ -588,7 +538,7 @@ internal sealed class CadesPlan
         CodeGenerator.AddIf(args, "--content-description", _o.ContentDescription);
         if (_o.ContentTimestamp)
         {
-            if (_o.Kind == CadesKind.IcpBrasil || _o.Level == BaselineLevel.BB)
+            if (_o.Level == BaselineLevel.BB)
             {
                 args.Add("--tsa " + PlanContext.CliUrl(_o.Timestamp));
             }

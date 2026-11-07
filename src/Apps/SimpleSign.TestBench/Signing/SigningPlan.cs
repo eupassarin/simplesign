@@ -1,8 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.Brazil.Signing;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
@@ -52,7 +50,7 @@ internal sealed class SigningPlan
 
     public SignatureFieldOptions Field { get; }
 
-    /// <summary>The baseline profile (null for ICP-Brasil, whose extension builds the profile).</summary>
+    /// <summary>The baseline profile.</summary>
     public AdesBaselineProfile? Profile { get; }
 
     public TimestampOptions? Timestamp { get; private set; }
@@ -63,7 +61,7 @@ internal sealed class SigningPlan
     public IReadOnlyList<string> Setup => _context.Setup;
 
     /// <summary>The builder steps after <c>PadesSigner.Document(pdf)</c>, in order.</summary>
-    public async Task<IReadOnlyList<PlanStep>> SignStepsAsync(CancellationToken cancellationToken)
+    public IReadOnlyList<PlanStep> SignSteps()
     {
         var steps = new List<PlanStep>();
         steps.Add(CredentialStep());
@@ -97,14 +95,11 @@ internal sealed class SigningPlan
 
         if (_o.UseSignerDetails)
         {
-            steps.Add(_o.SignerDetails == SignerDetailsKind.Aea ? AeaStep() : MetadataStep());
+            steps.Add(MetadataStep());
         }
 
         switch (_o.Kind)
         {
-            case SignatureKind.IcpBrasil:
-                steps.Add(await IcpStepAsync(cancellationToken));
-                break;
             case SignatureKind.CustomPolicy:
                 var policy = new SignaturePolicyReference(_o.CustomPolicy.Oid, HashOid(_o.CustomPolicy.HashAlgorithm), Convert.FromHexString(_o.CustomPolicy.HashHex),
                     string.IsNullOrWhiteSpace(_o.CustomPolicy.Uri) ? null : _o.CustomPolicy.Uri);
@@ -115,16 +110,6 @@ internal sealed class SigningPlan
             default:
                 steps.Add(new($".WithLevel({ProfileCode()})", b => b.WithLevel(Profile!)));
                 break;
-        }
-
-        if (_o.Health.Enabled && _o.FieldMode == FieldMode.New)
-        {
-            var professionals = _o.Health.Professionals.Select(p => new ProfessionalRegistration(
-                Enum.Parse<ProfessionalCouncil>(p.Council), p.RegistrationNumber, Blank(p.StateCode), Blank(p.Specialty))).ToArray();
-            var type = Enum.Parse<HealthDocumentType>(_o.Health.Type);
-            string list = string.Join(", ", professionals.Select(p =>
-                $"new ProfessionalRegistration(ProfessionalCouncil.{p.Council}, {Str(p.RegistrationNumber)}, {Str(p.StateCode)}, {Str(p.Specialty)})"));
-            steps.Add(new($".WithHealthDocument(HealthDocumentType.{type}, {list})", b => b.WithHealthDocument(type, professionals)));
         }
 
         if (_o.FieldMode == FieldMode.New)
@@ -200,119 +185,8 @@ internal sealed class SigningPlan
         return new(sb.ToString(), b => b.WithMetadata(metadata));
     }
 
-    private PlanStep AeaStep()
-    {
-        var a = _o.Aea;
-        var info = new AdvancedSignatureInfo
-        {
-            SignerName = a.SignerName,
-            Cpf = string.Concat(a.Cpf.Where(char.IsAsciiDigit)),
-            AuthMethod = Enum.Parse<AuthenticationMethod>(a.AuthMethod),
-            Email = Blank(a.Email),
-            IpAddress = Blank(a.IpAddress),
-            CommitmentType = Enum.Parse<CommitmentType>(a.CommitmentType),
-            InstitutionName = Blank(a.InstitutionName),
-            InstitutionCnpj = Blank(a.InstitutionCnpj),
-            PolicyOid = Blank(a.PolicyOid),
-            PolicyUri = Blank(a.PolicyUri),
-        };
-        var sb = new StringBuilder(".WithAdvancedSignature(new AdvancedSignatureInfo\n    {\n");
-        Prop(sb, "SignerName", info.SignerName);
-        Prop(sb, "Cpf", info.Cpf);
-        sb.Append(CultureInfo.InvariantCulture, $"        AuthMethod = AuthenticationMethod.{info.AuthMethod},\n");
-        Prop(sb, "Email", info.Email);
-        Prop(sb, "IpAddress", info.IpAddress);
-        sb.Append(CultureInfo.InvariantCulture, $"        CommitmentType = CommitmentType.{info.CommitmentType},\n");
-        Prop(sb, "InstitutionName", info.InstitutionName);
-        Prop(sb, "InstitutionCnpj", info.InstitutionCnpj);
-        Prop(sb, "PolicyOid", info.PolicyOid);
-        Prop(sb, "PolicyUri", info.PolicyUri);
-        sb.Append("    })");
-        return new(sb.ToString(), b => b.WithAdvancedSignature(info));
-    }
-
-    private async Task<PlanStep> IcpStepAsync(CancellationToken cancellationToken)
-    {
-        var policy = _o.IcpPolicy switch
-        {
-            IcpPolicyKind.AdRb => IcpBrasilPolicy.AdRb,
-            IcpPolicyKind.AdRt => IcpBrasilPolicy.AdRt,
-            IcpPolicyKind.AdRc => IcpBrasilPolicy.AdRc,
-            _ => IcpBrasilPolicy.AdRa,
-        };
-        IcpBrasilSignaturePolicy? version = null;
-        if (!string.IsNullOrWhiteSpace(_o.IcpVersionOid))
-        {
-            if (!IcpBrasilSignaturePolicies.TryFind(_o.IcpVersionOid, out version))
-            {
-                throw new ArgumentException($"Unknown ICP-Brasil policy {_o.IcpVersionOid}.");
-            }
-        }
-
-        bool needsTsa = policy != IcpBrasilPolicy.AdRb || _o.IcpAdRbTimestamp;
-        bool longTerm = policy is IcpBrasilPolicy.AdRc or IcpBrasilPolicy.AdRa;
-        if (needsTsa)
-        {
-            Timestamp = BuildTimestamp(_o.Timestamp, "tsa");
-        }
-
-        if (longTerm && _o.SeparateArchiveTsa)
-        {
-            ArchiveTimestamp = BuildArchive(_o.ArchiveTimestamp);
-        }
-
-        IcpBrasilPolicyArtifacts? artifacts = null;
-        string artifactsCode = "";
-        if (policy == IcpBrasilPolicy.AdRa)
-        {
-            var resolved = version ?? IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Pades);
-            if (IsSandbox)
-            {
-                // Simulated: the PA, LPA and LPA signature of a real AD-RA are downloaded from the ITI.
-                byte[] Fake(string name) => Encoding.ASCII.GetBytes($"SimpleSign sandbox {name} for {resolved.Oid}");
-                artifacts = new IcpBrasilPolicyArtifacts(resolved, Fake("PA"), Fake("LPA"), Fake("LPA signature"));
-            }
-            else
-            {
-                using var http = new HttpClient();
-                artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(http, resolved, cancellationToken);
-            }
-
-            // The artifacts must be those of the version the signature will carry.
-            _context.AddSetup("using var http = new HttpClient();\n"
-                + (version is null
-                    ? "var adRa = PadesSigner.Document(pdf).WithCertificate(certificate, chain).ResolveIcpBrasilPolicy(IcpBrasilPolicy.AdRa); // the version picked by the signer's root\n"
-                    : $"var adRa = IcpBrasilSignaturePolicies.All.Single(p => p.Oid == \"{version.Oid}\");\n")
-                + "var artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(http, adRa); // PA, LPA and LPA signature from the ITI (LPA signature verified)"
-                + (IsSandbox ? "\n// (the sandbox embeds simulated artifacts instead)" : ""));
-            artifactsCode = "\n        Artifacts = artifacts,";
-        }
-
-        var options = new IcpBrasilPadesOptions
-        {
-            Timestamp = Timestamp,
-            ArchiveTimestamp = ArchiveTimestamp,
-            LongTermValidation = longTerm ? _context.BuildLongTerm(_o.RevocationPreference) : null,
-            Version = version,
-            Artifacts = artifacts,
-        };
-        string code = $".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}, new IcpBrasilPadesOptions\n    {{"
-            + (Timestamp is not null ? "\n        Timestamp = tsa," : "")
-            + (ArchiveTimestamp is not null ? "\n        ArchiveTimestamp = archiveTsa," : "")
-            + (longTerm ? $"\n        LongTermValidation = {_context.LongTermCode(_o.RevocationPreference)}," : "")
-            + (version is not null ? $"\n        Version = IcpBrasilSignaturePolicies.All.Single(p => p.Oid == \"{version.Oid}\")," : "")
-            + artifactsCode
-            + "\n    })";
-        return new(code, b => b.WithIcpBrasilPolicy(policy, options));
-    }
-
     private AdesBaselineProfile? BuildProfile()
     {
-        if (_o.Kind == SignatureKind.IcpBrasil)
-        {
-            return null;
-        }
-
         var failure = _o.ReturnLowerLevel && _o.Mode == RunMode.Sign ? SigningLevelFailureBehavior.ReturnLowerLevel : SigningLevelFailureBehavior.Throw;
         switch (_o.Level)
         {
@@ -363,7 +237,6 @@ internal sealed class SigningPlan
             SubFilter = _o.SubFilter switch
             {
                 SubFilterChoice.AdbePkcs7Detached => PdfSignatureSubFilter.AdbePkcs7Detached,
-                SubFilterChoice.PbadPades => PdfSignatureSubFilter.PbadPades,
                 _ => PdfSignatureSubFilter.EtsiCadesDetached,
             },
             CertificationLevel = _o.Certification switch

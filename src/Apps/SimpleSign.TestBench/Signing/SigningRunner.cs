@@ -25,8 +25,6 @@ public sealed record SignatureReport(
     string? SubFilter,
     string? Digest,
     string? SigningTime,
-    string? PolicyLevel,
-    string? SignerId,
     IReadOnlyList<CheckRow> Checks,
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
@@ -96,7 +94,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         try
         {
             plan = new SigningPlan(effective, credential!, sandbox, documents);
-            var steps = await plan.SignStepsAsync(cancellationToken);
+            var steps = plan.SignSteps();
             code = CodeGenerator.Generate(effective, plan, steps, credential!.Facts);
             var watch = Stopwatch.StartNew();
             return effective.Mode switch
@@ -123,7 +121,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
 
         var result = await builder.SignWithDetailsAsync(cancellationToken);
         long signMs = watch.ElapsedMilliseconds;
-        return await FinishAsync(o, report, code, result.SignedArtifact, LevelName(result.AchievedLevel, o),
+        return await FinishAsync(o, report, code, result.SignedArtifact, LevelName(result.AchievedLevel),
             result.HasSignatureTimestamp, result.HasLongTermValidationMaterial, result.HasArchiveTimestamp,
             [.. result.Warnings.Select(w => $"{w.Code}: {w.Message}")], signMs, null, [], cancellationToken);
     }
@@ -165,7 +163,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         var info = new DeferredInfo(Convert.ToHexString(prepared.HashToSign.AsSpan(0, Math.Min(prepared.HashToSign.Length, 96))) + "…", prepared.DigestAlgorithm, prepared.SignatureAlgorithmOid,
             prepared.SessionData.Length, Convert.ToHexString(raw.AsSpan(0, Math.Min(raw.Length, 64))) + (raw.Length > 64 ? "…" : ""));
         var level = plan.Profile!.Level;
-        return await FinishAsync(o, report, code, signed, LevelName(level, o), level >= AdesBaselineLevel.Timestamped,
+        return await FinishAsync(o, report, code, signed, LevelName(level), level >= AdesBaselineLevel.Timestamped,
             level >= AdesBaselineLevel.LongTerm, level >= AdesBaselineLevel.Archive, [], signMs, info, [], cancellationToken);
     }
 
@@ -213,7 +211,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         }
 
         var level = plan.Profile!.Level;
-        var result = await FinishAsync(o, report, code, first, LevelName(level, o), level >= AdesBaselineLevel.Timestamped,
+        var result = await FinishAsync(o, report, code, first, LevelName(level), level >= AdesBaselineLevel.Timestamped,
             level >= AdesBaselineLevel.LongTerm, level >= AdesBaselineLevel.Archive,
             [L.T("Batch: {0} signed, {1} failed, {2:0} ms average per document. The report below validates the first one.", batch.SuccessCount, batch.FailureCount, batch.AverageElapsedMs)],
             signMs, null, items, cancellationToken);
@@ -295,17 +293,13 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         : hash == HashAlgorithmName.SHA512 || hash == HashAlgorithmName.SHA3_512 ? 64
         : 32;
 
-    private static string LevelName(AdesBaselineLevel level, SigningOptions o)
+    private static string LevelName(AdesBaselineLevel level) => level switch
     {
-        string baseline = level switch
-        {
-            AdesBaselineLevel.Basic => "B-B",
-            AdesBaselineLevel.Timestamped => "B-T",
-            AdesBaselineLevel.LongTerm => "B-LT",
-            _ => "B-LTA",
-        };
-        return o.Kind == SignatureKind.IcpBrasil ? $"{Compatibility.LevelName(o).Split(' ')[0]} ({baseline})" : baseline;
-    }
+        AdesBaselineLevel.Basic => "B-B",
+        AdesBaselineLevel.Timestamped => "B-T",
+        AdesBaselineLevel.LongTerm => "B-LT",
+        _ => "B-LTA",
+    };
 
     private static SigningResult Failure(OptionsReport report, string error, string type, CodeSnippets code) =>
         new(false, error, type, null, null, 0, report.EffectiveLevel, null, false, false, false, [], 0, 0, [], null, null, [], code, report.Issues);

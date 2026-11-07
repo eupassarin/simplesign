@@ -1,5 +1,5 @@
 // en-US: the source of the keys. pt-BR.ts must have the same shape (checked by tsc).
-// Library names, OIDs and standard terms (B-LTA, PBAD.PAdES, SHA-256…) are kept as they are.
+// Library names, OIDs and standard terms (B-LTA, ETSI.CAdES.detached, SHA-256…) are kept as they are.
 
 export const en = {
   app: {
@@ -14,8 +14,8 @@ export const en = {
     env: {
       sandbox: "Sandbox",
       real: "Real",
-      sandboxHint: "Offline: test PKI, TSA, CRLs and simulated PSC/CSC. Nothing leaves this machine.",
-      realHint: "Your certificates, real TSAs, real PSC/CSC providers and validation against real roots.",
+      sandboxHint: "Offline: test PKI, TSA, CRLs and a simulated CSC service. Nothing leaves this machine.",
+      realHint: "Your certificates, real TSAs, real CSC providers and validation against real roots.",
     },
     language: "Language",
     theme: "Theme",
@@ -37,13 +37,6 @@ export const en = {
   signer: {
     cloud: {
       useSimulated: "Use the simulated provider",
-      psc: {
-        what: "A PSC is an ICP-Brasil provider that keeps your certificate and its key in the cloud (BirdID, VIDaaS, NeoID, SafeID…). The key never leaves the provider: the library sends only the hash and gets the signature back.",
-        step1: "You authorize the application: on the provider's page (OAuth with PKCE), or with CPF and the OTP of the provider's app.",
-        step2: "The provider gives a token whose scope says how many signatures it allows (one, several, or a session).",
-        step3: "The library reads your certificate from the provider and builds the signed attributes.",
-        step4: "It sends their hash; the provider signs with RSA PKCS#1 v1.5 and returns the signature.",
-      },
       csc: {
         what: "CSC is the Cloud Signature Consortium API (v2), the international standard for remote signing, used by European trust service providers. The key stays in the provider's HSM; the library sends only the hash.",
         step1: "The application is authorized to use the service: an access token, client credentials or a user login (OAuth).",
@@ -60,7 +53,6 @@ export const en = {
       pfx: "A1 (PFX)",
       store: "OS store",
       pkcs11: "A3 token",
-      psc: "Cloud PSC",
       csc: "Cloud CSC v2",
     },
     pfx: {
@@ -75,7 +67,7 @@ export const en = {
       noneHint: "Import a PFX into your keychain / Windows certificate store, or use the A1 (PFX) tab.",
     },
     pkcs11: {
-      intro: "Installed drivers of known ICP-Brasil tokens and SoftHSM, plus $SIMPLESIGN_PKCS11_LIBRARY. Listing needs no PIN.",
+      intro: "Installed drivers of known tokens and SoftHSM, plus $SIMPLESIGN_PKCS11_LIBRARY. Listing needs no PIN.",
       rescan: "Rescan",
       none: "No PKCS#11 driver found",
       noneHint: "Install your token's driver (SafeNet, Watchdata, GD…) or try SoftHSM2: brew install softhsm / apt install softhsm2, create a token with softhsm2-util --init-token and import a key.",
@@ -84,19 +76,6 @@ export const en = {
       locked: "PIN locked",
       other: "Other driver (library path)",
       otherHint: "Any PKCS#11 module; the first certificate with a key on the first token is used.",
-    },
-    psc: {
-      simulated: "Simulated PSC",
-      simulatedHint: "{url} — the provider's login page is approved automatically. CPF {cpf}, OTP {otp}. Two certificates: maria-rsa2048 and empresa-ecnpj.",
-      baseUrl: "PSC API base URL",
-      browser: "Login in the browser",
-      browserHint: "OAuth authorization code + PKCE. The provider's page opens; you approve with your app/OTP.",
-      passwordHint: "Password grant with the one-time code from the provider's app (when the PSC offers it).",
-      loginHint: "Optional login hint.",
-      scope: "Scope",
-      alias: "Certificate alias",
-      aliasHint: "Only when the account has more than one.",
-      authorize: "Authorize and load certificate",
     },
     csc: {
       simulated: "Simulated CSC v2 service",
@@ -188,8 +167,6 @@ export const en = {
       docTimestamp: "document timestamp",
       digest: "Digest",
       signingTime: "Signing time",
-      policyLevel: "Policy level",
-      signerId: "Signer id",
     },
     indication: { Valid: "Valid", Invalid: "Invalid", Indeterminate: "Indeterminate" },
     signing: "Signing and validating…",
@@ -199,7 +176,6 @@ export const en = {
     page: "Page {page} of {total}",
   },
   validation: {
-    lei: "Lei 14.063: {level}",
     deprecated: "Deprecated algorithm",
     embedded: "Certificates embedded in the CMS ({n})",
     sections: { certificate: "Signer certificate", timestamp: "Signature timestamp", coverage: "Document coverage", attributes: "Signed attributes" },
@@ -253,8 +229,6 @@ export const en = {
     presets: "Baseline level presets",
     sign: "Sign",
     reset: "Back to the defaults",
-    frameworks: "Trust frameworks:",
-    planned: "planned",
     errors: "{n} option(s) to fix",
     notInLibrary: "not in SimpleSign",
     missingInSection: "Defined by the standard, not implemented in SimpleSign ({n})",
@@ -263,7 +237,6 @@ export const en = {
     remove: "Remove",
     chooseFile: "Choose file",
     uploaded: "uploaded",
-    specialty: "Specialty",
     pickDocument: "Choose a PDF",
     pickFile: "Choose a file",
     pickField: "Choose a field",
@@ -273,8 +246,6 @@ export const en = {
     emptyFields: "{n} empty field(s)",
     encrypted: "encrypted",
     noEmptyFields: "This document has no empty signature field.",
-    icpAutomatic: "Automatic: the newest version that accepts the signer's root",
-    icpAutomaticUses: "Automatic: v{version} ({oid})",
     changeSigner: "Change signer",
     signerSummary: "{holder} · {key} · {source}",
     run: {
@@ -424,11 +395,8 @@ export const en = {
     trust: "Trusted roots",
     trustHint: "What a validation can trust. Choose which ones in “Trusted roots”, in the Run and validation section or in Validate.",
     systemRoots: "Operating system roots",
-    bundledRoots: "{source} roots bundled with the library",
-    showRoots: "Show the bundled roots",
-    hideRoots: "Hide the bundled roots",
     tsa: "Public time-stamping authorities",
-    tsaHint: "Free TSAs the library has a preset for. An ICP-Brasil ACT is a paid service: use “Custom URL” with its address and credentials.",
+    tsaHint: "Free TSAs the library has a preset for. For a paid or qualified TSA, use “Custom URL” with its address and credentials.",
     keys: "Keys on this machine",
     keysHint: "Where a private key can come from besides a PFX file.",
     tokens: "PKCS#11 drivers and tokens",
@@ -439,7 +407,6 @@ export const en = {
     noStore: "No certificate with a private key in the user's store.",
     cloud: "Cloud certificates",
     cloudHint: "What a real provider asks for. The Sandbox has a simulated one of each to try the flow first.",
-    pscNeeds: "You need: the provider's API base URL, a client_id (and secret) registered with it, and the redirect URI it accepts (default http://127.0.0.1:43821/callback).",
     cscNeeds: "You need: the service base URL, and a service access token or OAuth client; then the PIN/OTP or OAuth login of the credential.",
     dssHint: "The same DSS serves both modes. In Real it validates against the roots it was given: add yours to tools/dss/trust, or load the EU trusted lists.",
   },
@@ -449,7 +416,6 @@ export const en = {
     tsa: "Time-stamping authority",
     withBasic: "With Basic auth",
     userPassword: "User / password",
-    client: "Client",
     credentials: "Credentials",
     log: "Network log",
     logHint: "Requests the library made to the sandbox services (most recent first).",

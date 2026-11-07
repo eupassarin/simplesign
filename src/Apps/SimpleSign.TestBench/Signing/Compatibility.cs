@@ -113,20 +113,12 @@ public static class Compatibility
             Error(StepMode, L.T("Batch: max concurrency between 1 and 16."));
         }
 
-        if (batch && credential?.Kind == CredentialKind.Psc)
-        {
-            Info(StepMode, L.T("PSC tokens with the single_signature scope are spent after one document; use signature_session for batches."));
-        }
-
         string? policyUnsupported = deferred ? L.T("DeferredSigner has no signature policy option.")
             : batch ? L.T("BatchSigner has no signature policy option.") : null;
 
         // ── 3. Signature type ──────────────────────────────────────────
         bool pdfA1Preserved = isPdfA1 && o.PreservePdfA && !deferred && !batch;
         Set("kind.Baseline", OptionState.Shown);
-        Set("kind.IcpBrasil", policyUnsupported is not null ? OptionState.Off(policyUnsupported)
-            : pdfA1Preserved ? OptionState.Off(L.T("ICP-Brasil policies require the PBAD.PAdES sub-filter, which PDF/A-1 does not allow. Turn off PDF/A preservation or use a PDF/A-2 document."))
-            : OptionState.Shown);
         Set("kind.CustomPolicy", policyUnsupported is not null ? OptionState.Off(policyUnsupported) : OptionState.Shown);
 
         var kind = o.Kind;
@@ -135,25 +127,20 @@ public static class Compatibility
             Error(StepType, kindReason);
         }
 
-        bool icp = kind == SignatureKind.IcpBrasil;
         string adbeOnly = L.T("PAdES B-T and above (ETSI EN 319 142-1) need the ETSI.CAdES.detached sub-filter; this document is PDF/A-1 with preservation on, which only allows adbe.pkcs7.detached.");
         foreach (var level in Enum.GetValues<BaselineLevel>())
         {
-            Set($"level.{level}", icp ? OptionState.Hidden
-                : level != BaselineLevel.BB && pdfA1Preserved ? OptionState.Off(adbeOnly)
+            Set($"level.{level}", level != BaselineLevel.BB && pdfA1Preserved ? OptionState.Off(adbeOnly)
                 : level != BaselineLevel.BB && o.SubFilter == SubFilterChoice.AdbePkcs7Detached ? OptionState.Off(L.T("adbe.pkcs7.detached is a legacy (pre-PAdES) format: B-T and above need ETSI.CAdES.detached. Change the sub-filter in Cryptography."))
                 : OptionState.Shown);
         }
 
-        Set("icp.policy", icp ? OptionState.Shown : OptionState.Hidden);
-        Set("icp.version", icp ? OptionState.Shown : OptionState.Hidden);
-        Set("icp.adrbTimestamp", icp && o.IcpPolicy == IcpPolicyKind.AdRb ? OptionState.Shown : OptionState.Hidden);
         Set("customPolicy", kind == SignatureKind.CustomPolicy ? OptionState.Shown : OptionState.Hidden);
         if (kind == SignatureKind.CustomPolicy)
         {
             if (string.IsNullOrWhiteSpace(o.CustomPolicy.Oid) || !IsOid(o.CustomPolicy.Oid))
             {
-                Error(StepType, L.T("Custom policy: enter a valid OID (e.g. 2.16.76.1.7.1.11.1.3)."));
+                Error(StepType, L.T("Custom policy: enter a valid OID (e.g. 1.2.3.4.5)."));
             }
 
             if (!IsHex(o.CustomPolicy.HashHex))
@@ -163,15 +150,8 @@ public static class Compatibility
         }
 
         // The effective level: what the library will be asked to produce.
-        BaselineLevel effectiveLevel = icp
-            ? o.IcpPolicy switch
-            {
-                IcpPolicyKind.AdRb => o.IcpAdRbTimestamp ? BaselineLevel.BT : BaselineLevel.BB,
-                IcpPolicyKind.AdRt => BaselineLevel.BT,
-                _ => BaselineLevel.BLTA,
-            }
-            : pdfA1Preserved ? BaselineLevel.BB : o.Level;
-        if (!icp && state[$"level.{o.Level}"].Disabled is { } levelReason)
+        BaselineLevel effectiveLevel = pdfA1Preserved ? BaselineLevel.BB : o.Level;
+        if (state[$"level.{o.Level}"].Disabled is { } levelReason)
         {
             Error(StepType, levelReason);
         }
@@ -181,7 +161,7 @@ public static class Compatibility
         Set("timestamp", needsTsa ? OptionState.Shown : OptionState.Hidden);
         Set("archiveTimestamp", needsArchive ? OptionState.Shown : OptionState.Hidden);
         Set("revocationPreference", effectiveLevel >= BaselineLevel.BLT ? OptionState.Shown : OptionState.Hidden);
-        Set("returnLowerLevel", !needsTsa || icp ? OptionState.Hidden
+        Set("returnLowerLevel", !needsTsa ? OptionState.Hidden
             : o.Mode != RunMode.Sign ? OptionState.Off(L.T("Only SignWithDetailsAsync (Sign now) reports a lower achieved level; deferred and batch always throw."))
             : OptionState.Shown);
         SharedRules.TsaProviders(sandbox, Set);
@@ -194,33 +174,17 @@ public static class Compatibility
             }
         }
 
-        if (icp && o.IcpPolicy == IcpPolicyKind.AdRa && sandbox)
-        {
-            Info(StepType, L.T("AD-RA in the sandbox embeds simulated policy artifacts (PA, LPA and LPA signature); in Real mode they are downloaded from the ITI and the LPA signature is checked."));
-        }
-
-        if (icp && sandbox)
-        {
-            Info(StepType, L.T("Sandbox certificates do not chain to a real ICP-Brasil root, so the policy version is not filtered by root (Real mode picks the newest version that accepts the signer's AC Raiz)."));
-        }
-
         // ── 4. Cryptography ────────────────────────────────────────────
         var effective = o with { Padding = SharedRules.Crypto(o.Hash, o.Padding, credential, state, Error, StepCrypto) };
 
-        Set("subFilter", icp ? new OptionState(true, L.T("ICP-Brasil PAdES policies mandate /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES (DOC-ICP-15.03).")) : OptionState.Shown);
-        Set("subFilter.EtsiCadesDetached", icp ? OptionState.Off(L.T("Fixed by the ICP-Brasil policy."))
-            : pdfA1Preserved ? OptionState.Off(L.T("PDF/A-1 (ISO 19005-1) only allows adbe.pkcs7.detached signatures."))
+        Set("subFilter", OptionState.Shown);
+        Set("subFilter.EtsiCadesDetached", pdfA1Preserved ? OptionState.Off(L.T("PDF/A-1 (ISO 19005-1) only allows adbe.pkcs7.detached signatures."))
             : OptionState.Shown);
-        Set("subFilter.AdbePkcs7Detached", icp ? OptionState.Off(L.T("Fixed by the ICP-Brasil policy."))
-            : o.Level != BaselineLevel.BB ? OptionState.Off(L.T("Legacy PKCS#7: only for B-B. B-T and above need ETSI.CAdES.detached."))
+        Set("subFilter.AdbePkcs7Detached", o.Level != BaselineLevel.BB ? OptionState.Off(L.T("Legacy PKCS#7: only for B-B. B-T and above need ETSI.CAdES.detached."))
             : OptionState.Shown);
-        Set("subFilter.PbadPades", OptionState.Off(L.T("Set automatically by the ICP-Brasil policies (choose ICP-Brasil in Signature type).")));
         effective = effective with
         {
-            SubFilter = icp ? SubFilterChoice.PbadPades
-                : pdfA1Preserved ? SubFilterChoice.AdbePkcs7Detached
-                : o.SubFilter == SubFilterChoice.PbadPades ? SubFilterChoice.EtsiCadesDetached
-                : o.SubFilter,
+            SubFilter = pdfA1Preserved ? SubFilterChoice.AdbePkcs7Detached : o.SubFilter,
             Level = effectiveLevel,
         };
 
@@ -269,31 +233,10 @@ public static class Compatibility
         Set("details.basic", OptionState.Shown);
         Set("details.signingTime", builderOnly is not null ? OptionState.Off(builderOnly) : OptionState.Shown);
         Set("details.signer", builderOnly is not null ? OptionState.Off(builderOnly) : OptionState.Shown);
-        Set("details.Metadata", OptionState.Shown);
-        Set("details.Aea", icp ? OptionState.Off(L.T("AEA (Lei 14.063) is the non-ICP route: an ICP-Brasil signature is already a qualified signature (QES) and carries its own policy."))
-            : kind == SignatureKind.CustomPolicy ? OptionState.Off(L.T("AEA writes its own signature-policy-identifier; it cannot be combined with a custom policy."))
-            : OptionState.Shown);
         Set("metadata.policy", kind != SignatureKind.Baseline ? new OptionState(false, Note: L.T("The signature policy comes from the Signature type step.")) : OptionState.Shown);
         if (o.UseSignerDetails && builderOnly is null)
         {
-            if (o.SignerDetails == SignerDetailsKind.Aea)
-            {
-                if (state["details.Aea"].Disabled is { } aeaReason)
-                {
-                    Error(StepDetails, aeaReason);
-                }
-
-                if (string.IsNullOrWhiteSpace(o.Aea.SignerName))
-                {
-                    Error(StepDetails, L.T("AEA: the signer name is required."));
-                }
-
-                if (!IsCpf(o.Aea.Cpf))
-                {
-                    Error(StepDetails, L.T("AEA: enter a valid CPF (11 digits with check digits)."));
-                }
-            }
-            else if (string.IsNullOrWhiteSpace(o.Metadata.SignerName))
+            if (string.IsNullOrWhiteSpace(o.Metadata.SignerName))
             {
                 Error(StepDetails, L.T("Signer metadata: the signer name is required."));
             }
@@ -301,13 +244,6 @@ public static class Compatibility
 
         string? docInfoReason = builderOnly ?? (existing ? L.T("The document information dictionary cannot be changed when signing an existing field.") : null);
         Set("documentInfo", docInfoReason is not null ? OptionState.Off(docInfoReason) : OptionState.Shown);
-        string? healthReason = builderOnly ?? (existing ? L.T("Health-document metadata is written to the document information dictionary, which cannot be changed when signing an existing field.") : null);
-        Set("health", healthReason is not null ? OptionState.Off(healthReason) : OptionState.Shown);
-        if (o.Health.Enabled && docInfoReason is null && o.Health.Professionals.Count == 0)
-        {
-            Error(StepDetails, L.T("Health document: add at least one professional registration."));
-        }
-
         foreach (var entry in o.DocumentInfo)
         {
             if (string.IsNullOrWhiteSpace(entry.Key) || entry.Key.Any(c => c <= ' ' || c > '~' || "()<>[]{}/%#".Contains(c, StringComparison.Ordinal)))
@@ -334,36 +270,20 @@ public static class Compatibility
         // ── 2. Signer ──────────────────────────────────────────────────
         Set("signingPolicy", OptionState.Shown);
         SharedRules.Signer(credential, Error, Warn, StepSigner, o.SigningPolicy);
-        if (credential is not null)
-        {
-            if (icp && !sandbox && !credential.ChainsToIcpBrasil)
-            {
-                Warn(StepType, L.T("The certificate does not chain to an ICP-Brasil root: the signature will carry the policy, but it will not be valid under it."));
-            }
-        }
-
         return new OptionsReport(state, issues, effective, LevelName(effective));
     }
 
-    /// <summary>The level as shown to users (B-B… or AD-RB…).</summary>
+    /// <summary>The level as shown to users (B-B, B-T, B-LT, B-LTA).</summary>
     public static string LevelName(SigningOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return options.Kind == SignatureKind.IcpBrasil
-            ? options.IcpPolicy switch
-            {
-                IcpPolicyKind.AdRb => options.IcpAdRbTimestamp ? "AD-RB (B-T)" : "AD-RB (B-B)",
-                IcpPolicyKind.AdRt => "AD-RT (B-T)",
-                IcpPolicyKind.AdRc => "AD-RC (B-LTA)",
-                _ => "AD-RA (B-LTA)",
-            }
-            : options.Level switch
-            {
-                BaselineLevel.BB => "B-B",
-                BaselineLevel.BT => "B-T",
-                BaselineLevel.BLT => "B-LT",
-                _ => "B-LTA",
-            };
+        return options.Level switch
+        {
+            BaselineLevel.BB => "B-B",
+            BaselineLevel.BT => "B-T",
+            BaselineLevel.BLT => "B-LT",
+            _ => "B-LTA",
+        };
     }
 
     internal static bool IsOid(string value) =>
@@ -371,27 +291,4 @@ public static class Compatibility
 
     internal static bool IsHex(string? value) =>
         !string.IsNullOrEmpty(value) && value.Length % 2 == 0 && value.All(char.IsAsciiHexDigit);
-
-    internal static bool IsCpf(string? value)
-    {
-        string digits = string.Concat((value ?? "").Where(char.IsAsciiDigit));
-        if (digits.Length != 11 || digits.Distinct().Count() == 1)
-        {
-            return false;
-        }
-
-        int Check(int length)
-        {
-            int sum = 0;
-            for (int i = 0; i < length; i++)
-            {
-                sum += (digits[i] - '0') * (length + 1 - i);
-            }
-
-            int rest = sum % 11;
-            return rest < 2 ? 0 : 11 - rest;
-        }
-
-        return Check(9) == digits[9] - '0' && Check(10) == digits[10] - '0';
-    }
 }

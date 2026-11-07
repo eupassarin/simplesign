@@ -136,18 +136,6 @@ public sealed class CadesCompatibilityTests(TestBenchFixture fixture)
         Evaluate(Options() with { Level = level, ExtendedForm = form }).CanSign.ShouldBe(allowed);
 
     [Fact]
-    public void Evaluate_IcpBrasil_HidesLevelAndExtendedForm()
-    {
-        var report = Evaluate(Options() with { Kind = CadesKind.IcpBrasil, IcpPolicy = CadesIcpPolicy.AdRc, ExtendedForm = CadesExtendedChoice.Archive });
-
-        report.CanSign.ShouldBeTrue();
-        report.Options["level"].Visible.ShouldBeFalse();
-        report.Options["extendedForm"].Visible.ShouldBeFalse();
-        report.Effective.ExtendedForm.ShouldBe(CadesExtendedChoice.None);
-        report.EffectiveLevel.ShouldBe("AD-RC (CAdES-X Long)");
-    }
-
-    [Fact]
     public void Evaluate_BadCustomPolicyOid_IsAnError() =>
         Evaluate(Options() with { Kind = CadesKind.CustomPolicy, PolicyOid = "not-an-oid" }).CanSign.ShouldBeFalse();
 

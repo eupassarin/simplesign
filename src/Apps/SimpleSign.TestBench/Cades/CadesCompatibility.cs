@@ -23,7 +23,7 @@ public sealed record CadesOptionsReport(
 
 /// <summary>
 /// Which CAdES options combine. Every rule mirrors a library constraint (<c>CadesSigner</c>,
-/// <c>CadesSignerBuilder</c>, <c>IcpBrasilCadesExtensions</c>) and says why.
+/// <c>CadesSignerBuilder</c>) and says why.
 /// </summary>
 public static class CadesCompatibility
 {
@@ -118,13 +118,11 @@ public static class CadesCompatibility
             Set($"kind.{kind}", OptionState.Shown);
         }
 
-        bool icp = o.Kind == CadesKind.IcpBrasil;
-        Set("icpPolicy", icp ? OptionState.Shown : OptionState.Hidden);
-        Set("level", icp ? new OptionState(false, Note: L.T("The ICP-Brasil policy sets the level.")) : OptionState.Shown);
+        Set("level", OptionState.Shown);
         Set("customPolicy", o.Kind == CadesKind.CustomPolicy ? OptionState.Shown : OptionState.Hidden);
         if (o.Kind == CadesKind.CustomPolicy && !Compatibility.IsOid(o.PolicyOid))
         {
-            Error(StepType, L.T("The policy OID must be dotted digits (e.g. 2.16.76.1.7.1.1.2.3)."));
+            Error(StepType, L.T("The policy OID must be dotted digits (e.g. 1.2.3.4.5)."));
         }
 
         if (o.Kind == CadesKind.CustomPolicy && !string.IsNullOrWhiteSpace(o.PolicyUri) && !Uri.TryCreate(o.PolicyUri, UriKind.Absolute, out _))
@@ -144,16 +142,15 @@ public static class CadesCompatibility
         }
 
         // Extended forms build on the signature timestamp (B-T, B-LT or B-LTA).
-        Set("extendedForm", icp ? new OptionState(false, Note: L.T("The ICP-Brasil policy sets the extended form (AD-RV: references, AD-RC: references and values, AD-RA: archive)."))
-            : OptionState.Shown);
+        Set("extendedForm", OptionState.Shown);
         string needsTimestamp = L.T("Extended forms need a signature timestamp: choose B-T or above.");
         foreach (var form in Enum.GetValues<CadesExtendedChoice>())
         {
             Set($"extendedForm.{form}", form == CadesExtendedChoice.None || o.Level != BaselineLevel.BB ? OptionState.Shown : OptionState.Off(needsTimestamp));
         }
 
-        var extended = icp ? CadesExtendedChoice.None : o.ExtendedForm;
-        if (!icp && state[$"extendedForm.{extended}"].Disabled is { } extendedReason)
+        var extended = o.ExtendedForm;
+        if (state[$"extendedForm.{extended}"].Disabled is { } extendedReason)
         {
             Error(StepType, extendedReason);
         }
@@ -163,7 +160,7 @@ public static class CadesCompatibility
             ? OptionState.Off(L.T("A countersignature signs a signature value, not content: it cannot carry a content timestamp."))
             : OptionState.Shown);
         bool contentTimestamp = o.ContentTimestamp && !counterSign;
-        bool needsTsa = contentTimestamp || (icp ? o.IcpPolicy != CadesIcpPolicy.AdRb : o.Level != BaselineLevel.BB);
+        bool needsTsa = contentTimestamp || o.Level != BaselineLevel.BB;
         Set("timestamp", needsTsa ? OptionState.Shown : OptionState.Hidden);
         SharedRules.TsaProviders(sandbox, Set);
         if (needsTsa)
@@ -171,12 +168,7 @@ public static class CadesCompatibility
             SharedRules.CheckTsa(o.Timestamp, L.T("Signature TSA"), state, Error, sandbox, StepType);
         }
 
-        if (icp && sandbox)
-        {
-            Info(StepType, L.T("Sandbox certificates do not chain to a real ICP-Brasil root, so the policy version is not filtered by root (Real mode picks the newest version that accepts the signer's AC Raiz)."));
-        }
-
-        if (counterSign && (icp ? o.IcpPolicy >= CadesIcpPolicy.AdRv : o.Level >= BaselineLevel.BLT || extended != CadesExtendedChoice.None))
+        if (counterSign && (o.Level >= BaselineLevel.BLT || extended != CadesExtendedChoice.None))
         {
             Info(StepType, L.T("The countersignature gets its own validation data; the parent signer is left as it was."));
         }
@@ -191,7 +183,7 @@ public static class CadesCompatibility
             Error(StepDetails, L.T("Unknown commitment type."));
         }
 
-        Set("revocationPreference", !icp && o.Level >= BaselineLevel.BLT ? OptionState.Shown : OptionState.Hidden);
+        Set("revocationPreference", o.Level >= BaselineLevel.BLT ? OptionState.Shown : OptionState.Hidden);
         Set("signerLocation", OptionState.Shown);
         Set("roles", OptionState.Shown);
         Set("certifiedRoles", OptionState.Shown);
@@ -211,11 +203,6 @@ public static class CadesCompatibility
         // ── 2. Signer ──────────────────────────────────────────────────
         Set("signingPolicy", OptionState.Shown);
         SharedRules.Signer(credential, Error, Warn, StepSigner, o.SigningPolicy);
-        if (credential is not null && icp && !sandbox && !credential.ChainsToIcpBrasil)
-        {
-            Warn(StepType, L.T("The certificate does not chain to an ICP-Brasil root: the signature will carry the policy, but it will not be valid under it."));
-        }
-
         var effective = o with
         {
             Padding = padding,
@@ -239,18 +226,6 @@ public static class CadesCompatibility
     public static string LevelName(CadesOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        if (options.Kind == CadesKind.IcpBrasil)
-        {
-            return options.IcpPolicy switch
-            {
-                CadesIcpPolicy.AdRb => "AD-RB (B-B)",
-                CadesIcpPolicy.AdRt => "AD-RT (B-T)",
-                CadesIcpPolicy.AdRv => "AD-RV (CAdES-X)",
-                CadesIcpPolicy.AdRc => "AD-RC (CAdES-X Long)",
-                _ => "AD-RA (CAdES-A)",
-            };
-        }
-
         string level = options.Level switch
         {
             BaselineLevel.BB => "B-B",

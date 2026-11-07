@@ -53,7 +53,7 @@ internal static class InvalidSamples
         byte[] revoked = await Sign(pki.Signer("revoked").Certificate, pki.Chain, AdesBaselineProfile.Basic());
         // The library refuses to sign with a certificate that is not valid now, so the "expired"
         // sample is signed with a certificate that lives a few seconds and has expired by validation time.
-        var shortLived = pki.IssueShortLived("CN=Certificado de Vida Curta:11144477735, OU=Sandbox e-CPF A1, O=ICP-Brasil Sandbox, C=BR", "11144477735", TimeSpan.FromSeconds(3));
+        var shortLived = pki.IssueShortLived("CN=Certificado de Vida Curta, OU=Sandbox, O=SimpleSign TestBench, C=BR", TimeSpan.FromSeconds(3));
         byte[] expired = await Sign(shortLived, pki.Chain, AdesBaselineProfile.Basic());
         await Task.Delay(TimeSpan.FromSeconds(3.5), cancellationToken);
 

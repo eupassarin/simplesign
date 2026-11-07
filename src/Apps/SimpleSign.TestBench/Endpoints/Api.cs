@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.PAdES;
 using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Credentials;
@@ -20,9 +19,6 @@ public sealed record EnvironmentView(
     string AuthenticatedTsaUrl,
     string TsaUser,
     string TsaPassword,
-    string PscUrl,
-    string PscCpf,
-    string PscOtp,
     string CscUrl,
     string CscPin,
     string CscOtp,
@@ -30,10 +26,6 @@ public sealed record EnvironmentView(
     string Runtime,
     bool Sha3Supported,
     string Version);
-
-public sealed record IcpVersionView(
-    string Oid, string Version, string NotBefore, string NotAfter, string? RevokedAt, bool InForce, bool IsAutomatic,
-    string? Disabled, IReadOnlyList<string> AcceptedRoots, IReadOnlyList<string> Requirements, string Uri);
 
 public sealed record UploadView(string Id, string FileName, long Size);
 
@@ -50,7 +42,6 @@ internal static class Api
                 s.Certificate.GetNameInfo(System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false),
                 s.Certificate.NotAfter.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)))],
             SandboxPki.TsaUri.AbsoluteUri, SandboxPki.AuthenticatedTsaUri.AbsoluteUri, SandboxPki.TsaUser, SandboxPki.TsaPassword,
-            SandboxPsc.BaseUri.AbsoluteUri, sandbox.Psc.Cpf, SandboxPsc.Otp,
             SandboxCsc.BaseUri.AbsoluteUri, SandboxCsc.Pin, SandboxCsc.Otp,
             [.. sandbox.Csc.Credentials.Select(c => new CscCredentialSummary(c.Id, L.T(c.Description), c.AuthMode, c.Scal, c.MultiSign, c.Algorithms, true))],
             System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + " · " + System.Runtime.InteropServices.RuntimeInformation.OSDescription,
@@ -105,10 +96,6 @@ internal static class Api
         credentials.MapPost("/store", (StoreCredentialRequest body, CredentialStore store) => Open(store, () => CredentialFactory.OpenStore(body)));
         credentials.MapGet("/pkcs11", async (CancellationToken ct) => await CredentialFactory.ListTokensAsync(ct));
         credentials.MapPost("/pkcs11", (Pkcs11CredentialRequest body, CredentialStore store) => Open(store, () => CredentialFactory.OpenPkcs11(body)));
-        credentials.MapPost("/psc/browser", async (PscCredentialRequest body, EnvironmentMode? environment, CredentialFactory factory, CredentialStore store, CancellationToken ct) =>
-            await OpenAsync(store, () => factory.OpenPscBrowserAsync(body, environment ?? EnvironmentMode.Sandbox, ct)));
-        credentials.MapPost("/psc/password", async (PscCredentialRequest body, EnvironmentMode? environment, CredentialFactory factory, CredentialStore store, CancellationToken ct) =>
-            await OpenAsync(store, () => factory.OpenPscPasswordAsync(body, environment ?? EnvironmentMode.Sandbox, ct)));
         credentials.MapPost("/csc/list", async (CscCredentialListRequest body, EnvironmentMode? environment, CredentialFactory factory, CancellationToken ct) =>
         {
             try
@@ -128,8 +115,6 @@ internal static class Api
             return Results.NoContent();
         });
 
-        // ICP-Brasil policy versions (options, rules and signing: RunApi)
-        api.MapGet("/icp/versions", (IcpPolicyKind policy, string? credentialId, CredentialStore store) => IcpVersions(policy, credentialId, store));
         // Validation area
         api.MapGet("/validation/samples", (ValidationSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
         api.MapPost("/validation/bulk", async (BulkRequest body, InspectionService inspection, CancellationToken ct) => await inspection.BulkAsync(body, ct));
@@ -148,7 +133,7 @@ internal static class Api
             return CadesInspector.Inspect(body.FileId, file.FileName, file.Content);
         });
 
-        // XML: XAdES and fiscal XML-DSig
+        // XML: XAdES
         var xml = api.MapGroup("/xml");
         xml.MapGet("/samples", (XmlSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
 
@@ -201,64 +186,5 @@ internal static class Api
         using var memory = new MemoryStream();
         await upload.CopyToAsync(memory, ct);
         return store.Add(upload.FileName, memory.ToArray());
-    }
-
-    private static IReadOnlyList<IcpVersionView> IcpVersions(IcpPolicyKind kind, string? credentialId, CredentialStore store)
-    {
-        var policy = kind switch
-        {
-            IcpPolicyKind.AdRb => IcpBrasilPolicy.AdRb,
-            IcpPolicyKind.AdRt => IcpBrasilPolicy.AdRt,
-            IcpPolicyKind.AdRc => IcpBrasilPolicy.AdRc,
-            _ => IcpBrasilPolicy.AdRa,
-        };
-        store.TryGet(credentialId, out var credential);
-        string? automatic = null;
-        try
-        {
-            var builder = PadesSigner.Document([]);
-            if (credential is not null)
-            {
-                builder = credential.External is { } external
-                    ? builder.WithExternalSigner(credential.Certificate, external, credential.Chain)
-                    : builder.WithCertificate(credential.Certificate, credential.Chain);
-            }
-
-            automatic = builder.ResolveIcpBrasilPolicy(policy).Oid;
-        }
-        catch (Exception ex) when (ex is IcpBrasilPolicyException or InvalidOperationException or ArgumentException)
-        {
-            // No version accepts the signer's root: every version is listed, none marked automatic.
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        string[] requirements = policy switch
-        {
-            IcpBrasilPolicy.AdRb => [L.T("Signature dictionary /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES (2.16.76.1.8.1)"), L.T("signature-policy-identifier with the PA hash"), L.T("signing-certificate-v2")],
-            IcpBrasilPolicy.AdRt => [L.T("Everything in AD-RB"), L.T("signature-time-stamp from an ICP-Brasil ACT")],
-            IcpBrasilPolicy.AdRc => [L.T("Everything in AD-RT"), L.T("DSS with Certs and CRLs or OCSPs, and a VRI entry for the signature (2.16.76.1.8.2)"), L.T("A later document timestamp /ETSI.RFC3161 (2.16.76.1.8.3)")],
-            _ => [L.T("Everything in AD-RC"), L.T("DSS arrays PBAD_PolicyArtifacts, PBAD_LpaArtifacts, PBAD_LpaSignatures and the matching VRI entries")],
-        };
-        return [.. IcpBrasilSignaturePolicies.All
-            .Where(p => p.Info.Format == IcpBrasilPolicyFormat.Pades && p.Info.Policy == policy)
-            .OrderByDescending(p => p.NotBefore)
-            .Select(p =>
-            {
-                IcpBrasilSignaturePolicies.TryGetRules(p.Oid, out var rules);
-                bool inForce = p.IsValidAt(now);
-                string? disabled = !inForce
-                    ? p.RevokedAt is { } revoked && revoked <= now ? L.T("Revoked by the ITI on {0:yyyy-MM-dd}.", revoked) : L.T("Signing period {0:yyyy-MM-dd} – {1:yyyy-MM-dd} is over.", p.NotBefore, p.NotAfter)
-                    : null;
-                if (disabled is null && credential is { Facts.ChainsToIcpBrasil: true } && automatic is not null && rules is not null
-                    && credential.Chain.LastOrDefault() is { } root && !rules.AcceptsRoot(root))
-                {
-                    disabled = L.T("This version does not accept the signer's AC Raiz.");
-                }
-
-                return new IcpVersionView(p.Oid, p.Info.Version ?? "?", p.NotBefore.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-                    p.NotAfter.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), p.RevokedAt?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-                    inForce, p.Oid == automatic, disabled,
-                    rules?.TrustAnchorSubjects ?? [], requirements, p.Uri);
-            })];
     }
 }

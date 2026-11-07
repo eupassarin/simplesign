@@ -1,4 +1,3 @@
-using System.Formats.Asn1;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -28,9 +27,9 @@ internal sealed record SandboxSigner(
     string? Problem);
 
 /// <summary>
-/// An offline, ICP-Brasil-like test PKI: a root, an intermediate CA, a TSA, and signers that cover
-/// every key type the library supports plus the edge cases (expired, not yet valid, revoked,
-/// no non-repudiation, company certificate). Certificates carry CRL distribution points on
+/// An offline test PKI: a root, an intermediate CA, a TSA, and signers that cover every key type
+/// the library supports plus the edge cases (expired, not yet valid, revoked, no non-repudiation,
+/// weak key, no signing key usage). Certificates carry CRL distribution points on
 /// <c>*.sandbox.simplesign.test</c>, served by <see cref="SandboxNetwork"/> (which also serves the CA certificates).
 /// Generated once per process; nothing is written to disk.
 /// </summary>
@@ -49,10 +48,6 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>Basic credentials the authenticated sandbox TSA accepts (user:password).</summary>
     public const string TsaUser = "sandbox";
     public const string TsaPassword = "sandbox-tsa";
-
-    private const string HolderDataOid = "2.16.76.1.3.1";
-    private const string CnpjOid = "2.16.76.1.3.3";
-    private const string CompanyResponsibleOid = "2.16.76.1.3.2";
 
     private readonly RSA _rootKey = RSA.Create(2048);
     private readonly RSA _intermediateKey = RSA.Create(2048);
@@ -92,24 +87,23 @@ internal sealed class SandboxPki : IDisposable
 
         Signers =
         [
-            Person("rsa-2048", "Maria da Silva (RSA 2048)", "e-CPF A1 with an RSA 2048 key — the most common ICP-Brasil certificate.", SandboxKeyType.Rsa2048, "11144477735"),
-            Person("rsa-3072", "João Souza (RSA 3072)", "RSA 3072 key: same algorithms, larger signature.", SandboxKeyType.Rsa3072, "52998224725"),
-            Person("rsa-4096", "Ana Pereira (RSA 4096)", "RSA 4096 key, as used by ICP-Brasil v5+ hierarchies for long-lived certificates.", SandboxKeyType.Rsa4096, "39053344705"),
-            Person("ecdsa-p256", "Carlos Lima (ECDSA P-256)", "Elliptic-curve key (NIST P-256). Signature algorithm is ECDSA; RSASSA-PSS is not available.", SandboxKeyType.EcdsaP256, "71428793860"),
-            Person("ecdsa-p384", "Beatriz Costa (ECDSA P-384)", "Elliptic-curve key (NIST P-384).", SandboxKeyType.EcdsaP384, "16899535009"),
-            Person("ecdsa-p521", "Rafael Alves (ECDSA P-521)", "Elliptic-curve key (NIST P-521).", SandboxKeyType.EcdsaP521, "05447007081"),
-            Company("company", "Empresa Exemplo Ltda (e-CNPJ)", "Company certificate (e-CNPJ) with the responsible person's CPF.", "11222333000181", "11144477735"),
-            Person("expired", "Expired certificate", "Valid chain, but the certificate expired yesterday: the library refuses to sign with it.", SandboxKeyType.Rsa2048, "11144477735",
+            Person("rsa-2048", "Maria da Silva (RSA 2048)", "RSA 2048 key: the most common key size for signing certificates.", SandboxKeyType.Rsa2048),
+            Person("rsa-3072", "João Souza (RSA 3072)", "RSA 3072 key: same algorithms, larger signature.", SandboxKeyType.Rsa3072),
+            Person("rsa-4096", "Ana Pereira (RSA 4096)", "RSA 4096 key, common in long-lived certificates.", SandboxKeyType.Rsa4096),
+            Person("ecdsa-p256", "Carlos Lima (ECDSA P-256)", "Elliptic-curve key (NIST P-256). Signature algorithm is ECDSA; RSASSA-PSS is not available.", SandboxKeyType.EcdsaP256),
+            Person("ecdsa-p384", "Beatriz Costa (ECDSA P-384)", "Elliptic-curve key (NIST P-384).", SandboxKeyType.EcdsaP384),
+            Person("ecdsa-p521", "Rafael Alves (ECDSA P-521)", "Elliptic-curve key (NIST P-521).", SandboxKeyType.EcdsaP521),
+            Person("expired", "Expired certificate", "Valid chain, but the certificate expired yesterday: the library refuses to sign with it.", SandboxKeyType.Rsa2048,
                 notBefore: now.AddYears(-2), notAfter: now.AddDays(-1), problem: "Expired"),
-            Person("not-yet-valid", "Not yet valid", "The certificate only becomes valid next month: the library refuses to sign with it.", SandboxKeyType.Rsa2048, "11144477735",
+            Person("not-yet-valid", "Not yet valid", "The certificate only becomes valid next month: the library refuses to sign with it.", SandboxKeyType.Rsa2048,
                 notBefore: now.AddDays(30), notAfter: now.AddYears(2), problem: "Not yet valid"),
-            Person("revoked", "Revoked certificate", "Listed in the intermediate CA's CRL: B-LT/LTA embed the CRL, validation reports revoked.", SandboxKeyType.Rsa2048, "11144477735",
+            Person("revoked", "Revoked certificate", "Listed in the intermediate CA's CRL: B-LT/LTA embed the CRL, validation reports revoked.", SandboxKeyType.Rsa2048,
                 revoke: true, problem: "Revoked"),
-            Person("no-nonrepudiation", "Without non-repudiation", "Key usage has digitalSignature only (no nonRepudiation): signing works, ICP-Brasil validation warns.", SandboxKeyType.Rsa2048, "11144477735",
+            Person("no-nonrepudiation", "Without non-repudiation", "Key usage has digitalSignature only (no nonRepudiation): signing works; some validation policies flag it.", SandboxKeyType.Rsa2048,
                 keyUsage: X509KeyUsageFlags.DigitalSignature, problem: "No non-repudiation"),
-            Person("rsa-1024", "Weak key (RSA 1024)", "RSA 1024 key: the default signing policy refuses it (KeyTooWeak); the Minimal policy signs, and validation reports CRYPTO_CONSTRAINTS_FAILURE_NO_POE.", SandboxKeyType.Rsa1024, "11144477735",
+            Person("rsa-1024", "Weak key (RSA 1024)", "RSA 1024 key: the default signing policy refuses it (KeyTooWeak); the Minimal policy signs, and validation reports CRYPTO_CONSTRAINTS_FAILURE_NO_POE.", SandboxKeyType.Rsa1024,
                 problem: "Key too small"),
-            Person("no-signing-key-usage", "Without a signing key usage", "Key usage has keyEncipherment only: the default signing policy refuses it (KeyUsageNotPermitted).", SandboxKeyType.Rsa2048, "11144477735",
+            Person("no-signing-key-usage", "Without a signing key usage", "Key usage has keyEncipherment only: the default signing policy refuses it (KeyUsageNotPermitted).", SandboxKeyType.Rsa2048,
                 keyUsage: X509KeyUsageFlags.KeyEncipherment, problem: "No signing key usage"),
         ];
         RootCrl = BuildCrl(Root, _rootKey, []);
@@ -183,21 +177,12 @@ internal sealed class SandboxPki : IDisposable
     public SandboxSigner Signer(string id) =>
         Signers.FirstOrDefault(s => s.Id == id) ?? throw new KeyNotFoundException($"No sandbox signer '{id}'.");
 
-    /// <summary>Issues a leaf for an arbitrary key (fake cloud providers, SoftHSM).</summary>
-    public X509Certificate2 IssueFor(AsymmetricAlgorithm key, string subject, string cpf) =>
-        key switch
-        {
-            RSA rsa => Issue(subject, rsa, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1), san: HolderData(cpf)),
-            ECDsa ec => Issue(subject, ec, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1), san: HolderData(cpf)),
-            _ => throw new NotSupportedException(key.GetType().Name),
-        };
-
     /// <summary>A sandbox signer valid only for <paramref name="lifetime"/> from now (to produce a signature whose certificate has since expired).</summary>
-    public X509Certificate2 IssueShortLived(string subject, string cpf, TimeSpan lifetime)
+    public X509Certificate2 IssueShortLived(string subject, TimeSpan lifetime)
     {
         using var key = RSA.Create(2048);
         var now = DateTimeOffset.UtcNow;
-        return Issue(subject, key, now.AddMinutes(-1), now.Add(lifetime), san: HolderData(cpf));
+        return Issue(subject, key, now.AddMinutes(-1), now.Add(lifetime));
     }
 
     public void Dispose()
@@ -211,18 +196,18 @@ internal sealed class SandboxPki : IDisposable
         }
     }
 
-    private SandboxSigner Person(string id, string name, string description, SandboxKeyType keyType, string cpf,
+    private SandboxSigner Person(string id, string name, string description, SandboxKeyType keyType,
         DateTimeOffset? notBefore = null, DateTimeOffset? notAfter = null, bool revoke = false,
         X509KeyUsageFlags keyUsage = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, string? problem = null)
     {
         string holder = name.Split(" (")[0];
-        string subject = $"CN={holder}:{cpf}, OU=Sandbox e-CPF A1, O=ICP-Brasil Sandbox, C=BR";
+        string subject = $"CN={holder}, OU=Sandbox, O=SimpleSign TestBench, C=BR";
         var from = notBefore ?? DateTimeOffset.UtcNow.AddDays(-1);
         var to = notAfter ?? DateTimeOffset.UtcNow.AddYears(1);
         var certificate = keyType switch
         {
-            SandboxKeyType.Rsa1024 or SandboxKeyType.Rsa2048 or SandboxKeyType.Rsa3072 or SandboxKeyType.Rsa4096 => IssueRsa(subject, keyType, from, to, keyUsage, HolderData(cpf)),
-            _ => IssueEc(subject, keyType, from, to, keyUsage, HolderData(cpf)),
+            SandboxKeyType.Rsa1024 or SandboxKeyType.Rsa2048 or SandboxKeyType.Rsa3072 or SandboxKeyType.Rsa4096 => IssueRsa(subject, keyType, from, to, keyUsage),
+            _ => IssueEc(subject, keyType, from, to, keyUsage),
         };
         if (revoke)
         {
@@ -232,24 +217,15 @@ internal sealed class SandboxPki : IDisposable
         return new SandboxSigner(id, name, description, keyType, certificate, problem is null || problem == "No non-repudiation", problem);
     }
 
-    private SandboxSigner Company(string id, string name, string description, string cnpj, string responsibleCpf)
-    {
-        string subject = $"CN=EMPRESA EXEMPLO LTDA:{cnpj}, OU=Sandbox e-CNPJ A1, O=ICP-Brasil Sandbox, C=BR";
-        var san = new List<(string, string)> { (CnpjOid, cnpj), (CompanyResponsibleOid, "01011980" + responsibleCpf + new string('0', 26)) };
-        var certificate = IssueRsa(subject, SandboxKeyType.Rsa2048, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1),
-            X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, san);
-        return new SandboxSigner(id, name, description, SandboxKeyType.Rsa2048, certificate, true, null);
-    }
-
     private X509Certificate2 IssueRsa(string subject, SandboxKeyType type, DateTimeOffset from, DateTimeOffset to,
-        X509KeyUsageFlags keyUsage, List<(string, string)> san)
+        X509KeyUsageFlags keyUsage)
     {
         using var key = RSA.Create(type switch { SandboxKeyType.Rsa1024 => 1024, SandboxKeyType.Rsa3072 => 3072, SandboxKeyType.Rsa4096 => 4096, _ => 2048 });
-        return Issue(subject, key, from, to, keyUsage: keyUsage, san: san);
+        return Issue(subject, key, from, to, keyUsage: keyUsage);
     }
 
     private X509Certificate2 IssueEc(string subject, SandboxKeyType type, DateTimeOffset from, DateTimeOffset to,
-        X509KeyUsageFlags keyUsage, List<(string, string)> san)
+        X509KeyUsageFlags keyUsage)
     {
         using var key = ECDsa.Create(type switch
         {
@@ -257,13 +233,12 @@ internal sealed class SandboxPki : IDisposable
             SandboxKeyType.EcdsaP521 => ECCurve.NamedCurves.nistP521,
             _ => ECCurve.NamedCurves.nistP256,
         });
-        return Issue(subject, key, from, to, keyUsage: keyUsage, san: san);
+        return Issue(subject, key, from, to, keyUsage: keyUsage);
     }
 
     private X509Certificate2 Issue(string subject, AsymmetricAlgorithm key, DateTimeOffset from, DateTimeOffset to,
         Oid[]? eku = null, bool ekuCritical = false,
-        X509KeyUsageFlags keyUsage = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation,
-        List<(string Oid, string Value)>? san = null)
+        X509KeyUsageFlags keyUsage = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)
     {
         var request = key switch
         {
@@ -280,11 +255,6 @@ internal sealed class SandboxPki : IDisposable
         request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([IntermediateCrlUri.AbsoluteUri]));
         // No AIA caIssuers: the chain is always embedded, and on macOS an AIA URL makes the OS trust
         // evaluation try to fetch it (about a second per certificate for an unresolvable host).
-        if (san is { Count: > 0 })
-        {
-            request.CertificateExtensions.Add(new X509Extension("2.5.29.17", OtherNames(san), false));
-        }
-
         // Not before the issuer: clamp, so an "expired" leaf still nests in the intermediate's validity.
         if (from < Intermediate.NotBefore)
         {
@@ -412,30 +382,6 @@ internal sealed class SandboxPki : IDisposable
         bytes[0] &= 0x7F;
         BitConverter.TryWriteBytes(bytes.AsSpan(5), (int)serial);
         return bytes;
-    }
-
-    /// <summary>ICP-Brasil holder data: birth date (8) + CPF (11) + NIS (11) + RG (15) + issuer/UF (10).</summary>
-    private static List<(string, string)> HolderData(string cpf) => [(HolderDataOid, "01011980" + cpf + new string('0', 11) + new string('0', 15) + "SSPSP     ")];
-
-    private static byte[] OtherNames(List<(string Oid, string Value)> names)
-    {
-        var writer = new AsnWriter(AsnEncodingRules.DER);
-        using (writer.PushSequence())
-        {
-            foreach (var (oid, value) in names)
-            {
-                using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
-                {
-                    writer.WriteObjectIdentifier(oid);
-                    using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
-                    {
-                        writer.WriteOctetString(System.Text.Encoding.ASCII.GetBytes(value));
-                    }
-                }
-            }
-        }
-
-        return writer.Encode();
     }
 
     private static OidCollection ToCollection(Oid[] oids)

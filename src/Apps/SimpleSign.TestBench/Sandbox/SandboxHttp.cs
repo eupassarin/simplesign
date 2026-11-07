@@ -50,27 +50,24 @@ public sealed record SandboxFaults(TsaFault Tsa = TsaFault.None, int TsaDelayMs 
 
 /// <summary>
 /// The sandbox "internet": an in-process <see cref="HttpMessageHandler"/> that serves the TSA,
-/// CRLs, AIA certificates and the fake PSC/CSC on <c>*.sandbox.simplesign.test</c>. Signing and
+/// CRLs, AIA certificates and the fake CSC on <c>*.sandbox.simplesign.test</c>. Signing and
 /// validation get it through <see cref="IHttpClientProvider"/>, so nothing leaves the machine.
 /// </summary>
 internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
 {
     private readonly SandboxPki _pki;
     private readonly HttpClient _client;
-    private readonly HttpMessageInvoker _psc;
     private readonly HttpMessageInvoker _csc;
     private readonly Lock _gate = new();
     private readonly List<SandboxRequest> _log = [];
     private readonly SandboxTsa _untrustedTsa;
 
-    public SandboxNetwork(SandboxPki pki, SandboxPsc psc, SandboxCsc csc)
+    public SandboxNetwork(SandboxPki pki, SandboxCsc csc)
     {
         _pki = pki;
         Tsa = new SandboxTsa(pki);
         _untrustedTsa = new SandboxTsa(pki.UntrustedTsa, pki.UntrustedTsaKey, []);
-        Psc = psc;
         Csc = csc;
-        _psc = new HttpMessageInvoker(psc, disposeHandler: false);
         _csc = new HttpMessageInvoker(csc, disposeHandler: false);
         _client = new HttpClient(this, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(30) };
     }
@@ -79,8 +76,6 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
 
     /// <summary>The failures switched on now (none by default).</summary>
     public SandboxFaults Faults { get; set; } = new();
-
-    public SandboxPsc Psc { get; }
 
     public SandboxCsc Csc { get; }
 
@@ -106,7 +101,6 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
             _ when host == $"tsa.{SandboxPki.Host}" => ("TSA", await TimestampAsync(request, cancellationToken)),
             _ when host == $"crl.{SandboxPki.Host}" => ("CRL", Crl(uri)),
             _ when host == $"aia.{SandboxPki.Host}" => ("AIA", Aia(uri)),
-            _ when host == $"psc.{SandboxPki.Host}" => ("PSC", await _psc.SendAsync(request, cancellationToken)),
             _ when host == $"csc.{SandboxPki.Host}" => ("CSC", await _csc.SendAsync(request, cancellationToken)),
             _ => ("Blocked", Text(HttpStatusCode.BadGateway, $"The sandbox is offline: {host} is not a sandbox service. Switch to Real to reach the internet.")),
         };
@@ -200,7 +194,6 @@ internal sealed class SandboxNetwork : HttpMessageHandler, IHttpClientProvider
         if (disposing)
         {
             _client.Dispose();
-            _psc.Dispose();
             _csc.Dispose();
         }
 

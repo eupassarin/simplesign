@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Signers.Cloud;
 using SimpleSign.Signers.Cloud.Csc;
-using SimpleSign.Signers.Cloud.Psc;
 using SimpleSign.Signers.Pkcs11;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
@@ -18,10 +17,6 @@ public sealed record PfxCredentialRequest(string UploadId, string? Password);
 public sealed record StoreCredentialRequest(string Thumbprint);
 
 public sealed record Pkcs11CredentialRequest(string LibraryPath, string? TokenSerial, string? CertificateThumbprint, string? Pin, bool UsePinPad);
-
-public sealed record PscCredentialRequest(
-    string? BaseUrl, string? ClientId, string? ClientSecret, string? Cpf, string? Otp,
-    PscScope Scope = PscScope.SignatureSession, string? Alias = null, string? RedirectUri = null);
 
 public enum CscServiceAuth
 {
@@ -143,62 +138,7 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
         return new CredentialHandle(CredentialKind.Pkcs11, $"PKCS#11 · {Path.GetFileName(request.LibraryPath)}", signer.Certificate, signer.Chain, signer, signer,
             hashes: Sha2,
             notes: ["The token session stays open (logged in) until you close this credential or the TestBench stops.",
-                "RSASSA-PSS needs the token to support CKM_RSA_PKCS_PSS; many ICP-Brasil tokens only do PKCS#1 v1.5."]);
-    }
-
-    /// <summary>PSC with OAuth authorization code + PKCE: the user logs in on the provider's page.</summary>
-    public async Task<CredentialHandle> OpenPscBrowserAsync(PscCredentialRequest request, EnvironmentMode mode, CancellationToken cancellationToken)
-    {
-        bool isSandbox = mode == EnvironmentMode.Sandbox;
-        var client = PscClient(request, isSandbox);
-        var token = await client.AuthorizeAsync(isSandbox ? sandbox.Psc : new LoopbackAuthorizationHandler(),
-            request.Scope, TimeSpan.FromMinutes(30), loginHint: request.Cpf, cancellationToken);
-        return await PscHandleAsync(client, token, request, isSandbox, cancellationToken);
-    }
-
-    /// <summary>PSC with CPF + OTP (password grant).</summary>
-    public async Task<CredentialHandle> OpenPscPasswordAsync(PscCredentialRequest request, EnvironmentMode mode, CancellationToken cancellationToken)
-    {
-        bool isSandbox = mode == EnvironmentMode.Sandbox;
-        var client = PscClient(request, isSandbox);
-        var token = await client.PasswordAuthorizeAsync(isSandbox ? sandbox.Psc.Cpf : Required(request.Cpf, "CPF"),
-            isSandbox ? request.Otp ?? SandboxPsc.Otp : Required(request.Otp, "OTP"), request.Scope, TimeSpan.FromMinutes(30), cancellationToken);
-        return await PscHandleAsync(client, token, request, isSandbox, cancellationToken);
-    }
-
-    private PscClient PscClient(PscCredentialRequest request, bool isSandbox)
-    {
-        var options = new PscClientOptions
-        {
-            BaseUri = isSandbox ? SandboxPsc.BaseUri : HttpsUrl(request.BaseUrl, "PSC base URL"),
-            ClientId = isSandbox ? SandboxPsc.ClientId : Required(request.ClientId, "client_id"),
-            ClientSecret = isSandbox ? SandboxPsc.ClientSecret : request.ClientSecret,
-            RedirectUri = request.RedirectUri is { Length: > 0 } redirect ? new Uri(redirect) : new Uri("http://127.0.0.1:43821/callback"),
-            Logger = Runs.AmbientRunLogger.Instance,
-        };
-        return new PscClient(options, isSandbox ? sandbox.Network.GetClient() : null);
-    }
-
-    private async Task<CredentialHandle> PscHandleAsync(PscClient client, OAuthToken token, PscCredentialRequest request, bool isSandbox, CancellationToken cancellationToken)
-    {
-        var signer = await PscSigner.CreateAsync(client, token, string.IsNullOrWhiteSpace(request.Alias) ? null : request.Alias, cancellationToken: cancellationToken);
-        var notes = new List<Note>
-        {
-            "PSCs sign RAW hashes with RSA PKCS#1 v1.5 only: RSASSA-PSS and ECDSA are not offered.",
-            request.Scope switch
-            {
-                PscScope.SingleSignature => "Scope single_signature: one signature, then the token is spent (batch needs a new login per document).",
-                PscScope.MultiSignature => "Scope multi_signature: several hashes in one call.",
-                _ => "Scope signature_session: any number of signatures until the token expires.",
-            },
-        };
-        if (isSandbox)
-        {
-            notes.Insert(0, "Simulated PSC: the provider's login page is approved automatically (OTP 123456 for the CPF + OTP flow).");
-        }
-
-        return new CredentialHandle(CredentialKind.Psc, $"PSC · {client.Options.BaseUri.Host} · {signer.CertificateAlias}", signer.Certificate,
-            isSandbox ? sandbox.Pki.Chain : signer.Chain, signer, signer, hashes: Sha2, paddings: [RsaPadding.Pkcs1], notes: notes);
+                "RSASSA-PSS needs the token to support CKM_RSA_PKCS_PSS; many tokens only do PKCS#1 v1.5."]);
     }
 
     public async Task<IReadOnlyList<CscCredentialSummary>> ListCscAsync(CscCredentialListRequest request, EnvironmentMode mode, CancellationToken cancellationToken)

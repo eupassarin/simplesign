@@ -21,8 +21,6 @@ export function DetailedCard({ signature: s }: { signature: DetailedSignature })
       <SignatureCard report={s.report} />
       <div className="flex flex-wrap gap-1.5">
         {s.padesLevel && <Pill tone="info">PAdES {s.padesLevel.replace("Baseline", "B-").replace("B-LTA", "B-LTA")}</Pill>}
-        {s.lei14063Level && <Pill tone="success">{t("validation.lei", { level: s.lei14063Level })}</Pill>}
-        {s.policyName && <Pill>{s.policyName}</Pill>}
         {s.deprecatedAlgorithm && <Pill tone="warning">{t("validation.deprecated")}</Pill>}
       </div>
       <Accordion type="multiple" className="rounded-lg border px-4">
