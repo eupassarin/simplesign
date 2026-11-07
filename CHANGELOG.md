@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — SimpleSign Sandbox and loopback origins
+
+- `src/Apps/SimpleSign.Sandbox`: a test PKI and its services on real HTTP endpoints (AIA, CRLs, RFC 3161 TSA,
+  CSC v2), with failures to switch on, revocation, a request log, an admin API and a UI. Environments are kept by
+  name; the URL written into the certificates is fixed when an environment is created.
+- `OutboundHttpPolicy.LoopbackOrigins`: services on this machine listed by exact origin (scheme, host, port) pass
+  the SSRF guard, for local test environments; empty by default. HTTP, LDAP and the TSA TCP transport honor it.
+- `TimestampClient` no longer refuses a loopback TSA URL in its constructor: it is refused when the request is
+  sent, unless its origin is listed (private and link-local URLs are still refused at once).
+
 ### Added — apps, DI and packaging follow the new checks
 
 - `SimpleSign.Peru.Iofe` is packed and released (pack lists, `PACKAGE.md`); RELEASING lists it and the signer packages.

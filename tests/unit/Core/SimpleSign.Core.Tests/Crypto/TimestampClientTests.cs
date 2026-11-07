@@ -63,9 +63,7 @@ public sealed class TimestampClientTests
             () => new TimestampClient(new HttpClient(), ""));
     }
 
-    [Theory(DisplayName = "SSRF: localhost/private TSA URLs are blocked")]
-    [InlineData("http://localhost/tsa")]
-    [InlineData("http://127.0.0.1/tsa")]
+    [Theory(DisplayName = "SSRF: private TSA URLs are blocked")]
     [InlineData("http://10.0.0.1/tsa")]
     [InlineData("http://192.168.1.1/tsa")]
     [InlineData("http://169.254.169.254/tsa")]
@@ -73,6 +71,30 @@ public sealed class TimestampClientTests
     {
         Assert.Throws<ArgumentException>(
             () => new TimestampClient(new HttpClient(), tsaUrl));
+    }
+
+    [Theory(DisplayName = "SSRF: a loopback TSA is refused when the request is sent, unless its origin is listed")]
+    [InlineData("http://localhost:5300/tsa/tsr")]
+    [InlineData("http://127.0.0.1:5300/tsa/tsr")]
+    public async Task GetTimestampAsync_LoopbackUrl_BlockedUnlessListed(string tsaUrl)
+    {
+        int calls = 0;
+        var http = new HttpClient(new MockHttpHandler(async request =>
+        {
+            Interlocked.Increment(ref calls);
+            byte[] body = await request.Content!.ReadAsByteArrayAsync();
+            var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(BuildTimestampResponseForRequest(body)) };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-reply");
+            return response;
+        }));
+
+        var blocked = new TimestampClient(http, tsaUrl);
+        await Should.ThrowAsync<InvalidOperationException>(() => blocked.GetTimestampAsync(new byte[] { 1, 2, 3 }, HashAlgorithmName.SHA256));
+        calls.ShouldBe(0);
+
+        var allowed = new TimestampClient(http, tsaUrl) { OutboundPolicy = new() { LoopbackOrigins = [new Uri(new Uri(tsaUrl).GetLeftPart(UriPartial.Authority))] } };
+        (await allowed.GetTimestampAsync(new byte[] { 1, 2, 3 }, HashAlgorithmName.SHA256)).Length.ShouldBeGreaterThan(0);
+        calls.ShouldBe(1);
     }
 
     [Fact(DisplayName = "Valid response returns timestamp token")]

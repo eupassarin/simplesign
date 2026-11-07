@@ -52,7 +52,8 @@ internal static class LdapCrlClient
         IPAddress[] addresses = IPAddress.TryParse(target.Host, out var literal)
             ? [literal]
             : await (resolve ?? Dns.GetHostAddressesAsync)(target.Host, token).ConfigureAwait(false);
-        var address = addresses.FirstOrDefault(a => !UrlValidator.IsBlockedAddress(target.Host, a, policy));
+        var origin = new Uri($"{(target.Secure ? "ldaps" : "ldap")}://{(target.Host.Contains(':', StringComparison.Ordinal) ? $"[{target.Host}]" : target.Host)}:{target.Port}/");
+        var address = addresses.FirstOrDefault(a => !UrlValidator.IsBlockedAddress(target.Host, a, policy, origin));
         if (address is null)
         {
             return null;

@@ -175,6 +175,9 @@ Two settings help when B-LT falls back to B-T on a corporate network (PAdES, CAd
   answers a public CA host with a private address while the request goes out through the proxy, list
   that host in the provider's `OutboundHttpPolicy`. Loopback, link-local (cloud metadata) and literal
   IP addresses stay blocked.
+- **Local test services.** A test PKI on this machine (the SimpleSign Sandbox at `http://localhost:5300`)
+  is reached only when its origin is listed: `new OutboundHttpPolicy { LoopbackOrigins = [new Uri("http://localhost:5300")] }`.
+  Only that scheme, host and port pass; keep the list empty in production.
 
 ```csharp
 var provider = new SingleClientProvider(proxiedClient)

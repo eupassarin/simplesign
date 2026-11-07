@@ -170,6 +170,7 @@ public static class ResilientHttp
     {
         string host = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : url;
         return $"SSRF blocked: {host} points to localhost or a private network. If a corporate DNS resolves this " +
-            $"public host to a private address, list it in {nameof(OutboundHttpPolicy)}.{nameof(OutboundHttpPolicy.PrivateNetworkHosts)}.";
+            $"public host to a private address, list it in {nameof(OutboundHttpPolicy)}.{nameof(OutboundHttpPolicy.PrivateNetworkHosts)}; " +
+            $"for a local test service (such as the SimpleSign Sandbox), list its origin in {nameof(OutboundHttpPolicy)}.{nameof(OutboundHttpPolicy.LoopbackOrigins)}.";
     }
 }

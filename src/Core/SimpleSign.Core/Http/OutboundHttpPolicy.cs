@@ -20,6 +20,11 @@ namespace SimpleSign.Core.Http;
 /// unspecified address is always refused.
 /// </para>
 /// <para>
+/// The one exception is <see cref="LoopbackOrigins"/>: services on this machine listed one by one
+/// (scheme, host and port), for a local test environment such as the SimpleSign Sandbox. It is
+/// empty by default and is not meant for production.
+/// </para>
+/// <para>
 /// Return the policy from <see cref="IHttpClientProvider.OutboundPolicy"/>, for example through
 /// <see cref="SingleClientProvider.OutboundPolicy"/>.
 /// </para>
@@ -61,6 +66,82 @@ public sealed record OutboundHttpPolicy
 
             _privateNetworkHosts = hosts.AsReadOnly();
         }
+    }
+
+    private readonly IReadOnlyList<Uri> _loopbackOrigins = [];
+
+    /// <summary>
+    /// Services on this machine that may be reached although the guard refuses loopback addresses:
+    /// each entry is an origin (scheme, host and port) whose host is <c>localhost</c> or a loopback
+    /// address, for example <c>http://localhost:5300</c> for a local SimpleSign Sandbox or
+    /// <c>ldap://127.0.0.1:3890</c>. A request is allowed only when its scheme, host and port match an
+    /// entry exactly; every other loopback, private or link-local target stays refused.
+    /// Default: empty. For test environments only.
+    /// </summary>
+    /// <exception cref="ArgumentException">An entry is not an absolute http, https, ldap, ldaps or tcp (TSA) URI,
+    /// its host is not <c>localhost</c> or a loopback address, or it has a path, query or user info.</exception>
+    public IReadOnlyList<Uri> LoopbackOrigins
+    {
+        get => _loopbackOrigins;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            var origins = new List<Uri>(value.Count);
+            foreach (var entry in value)
+            {
+                origins.Add(NormalizeOrigin(entry, out string? error) ?? throw new ArgumentException(error, nameof(value)));
+            }
+
+            _loopbackOrigins = origins.AsReadOnly();
+        }
+    }
+
+    /// <summary>Whether <paramref name="target"/> is on a listed loopback origin (same scheme, host and port).</summary>
+    internal bool AllowsLoopback(Uri target)
+    {
+        foreach (var origin in _loopbackOrigins)
+        {
+            if (string.Equals(origin.Scheme, target.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(origin.IdnHost, target.IdnHost, StringComparison.OrdinalIgnoreCase)
+                && origin.Port == target.Port)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static Uri? NormalizeOrigin(Uri? entry, out string? error)
+    {
+        error = null;
+        if (entry is null || !entry.IsAbsoluteUri)
+        {
+            error = "A loopback origin must be an absolute URI such as http://localhost:5300.";
+            return null;
+        }
+
+        if (entry.Scheme is not ("http" or "https" or "ldap" or "ldaps" or "tcp"))
+        {
+            error = $"'{entry}' cannot be a loopback origin: the scheme must be http, https, ldap, ldaps or tcp.";
+            return null;
+        }
+
+        bool loopback = string.Equals(entry.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || (IPAddress.TryParse(entry.IdnHost.Trim('[', ']'), out var address) && IPAddress.IsLoopback(address));
+        if (!loopback)
+        {
+            error = $"'{entry}' cannot be a loopback origin: its host must be localhost or a loopback address (use {nameof(PrivateNetworkHosts)} for other hosts).";
+            return null;
+        }
+
+        if (entry.AbsolutePath != "/" || entry.Query.Length > 0 || entry.UserInfo.Length > 0)
+        {
+            error = $"'{entry}' cannot be a loopback origin: give only the scheme, host and port.";
+            return null;
+        }
+
+        return new Uri(entry.GetLeftPart(UriPartial.Authority) + "/");
     }
 
     /// <summary>Whether <paramref name="host"/> is listed in <see cref="PrivateNetworkHosts"/>.</summary>

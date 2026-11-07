@@ -61,15 +61,16 @@ public sealed class TimestampClient : ITimestampClient
 
         if (Uri.TryCreate(tsaUrl, UriKind.Absolute, out var uri) && uri.Scheme == "tcp")
         {
-            // Same SSRF rules as HTTP: no localhost or private networks.
-            if (!Http.UrlValidator.IsSafeUrl($"https://{uri.Host}/"))
+            // Same SSRF rules as HTTP: no private networks; loopback is checked when sending,
+            // against OutboundPolicy.LoopbackOrigins.
+            if (!Http.UrlValidator.IsSafeUrl($"https://{uri.Host}/", deferLoopback: true))
             {
                 throw new ArgumentException("TSA URL is blocked: it must not point to localhost or private networks.", nameof(tsaUrl));
             }
 
             _tcpEndpoint = uri;
         }
-        else if (!Http.UrlValidator.IsSafeUrl(tsaUrl))
+        else if (!Http.UrlValidator.IsSafeUrl(tsaUrl, deferLoopback: true))
         {
             throw new ArgumentException($"TSA URL is blocked: must be an absolute HTTP(S) URL that does not point to localhost or private networks.", nameof(tsaUrl));
         }
@@ -273,6 +274,12 @@ public sealed class TimestampClient : ITimestampClient
     {
         if (_tcpEndpoint is not null)
         {
+            if (Http.UrlValidator.IsLoopbackHost(_tcpEndpoint) && !OutboundPolicy.AllowsLoopback(_tcpEndpoint))
+            {
+                throw new InvalidOperationException(
+                    $"SSRF blocked: {_tcpEndpoint.Host} is this machine. List {_tcpEndpoint.GetLeftPart(UriPartial.Authority)} in {nameof(OutboundHttpPolicy)}.{nameof(OutboundHttpPolicy.LoopbackOrigins)} to reach a local test TSA.");
+            }
+
             return await SendTcpAsync(_tcpEndpoint, timestampRequest, ct).ConfigureAwait(false);
         }
 

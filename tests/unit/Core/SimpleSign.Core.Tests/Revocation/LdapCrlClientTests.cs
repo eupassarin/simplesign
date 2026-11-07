@@ -102,6 +102,23 @@ public sealed class LdapCrlClientTests
         crl.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task GetCrlAsync_LoopbackOriginListed_ReadsTheCrl()
+    {
+        using var pki = new SyntheticPki();
+        byte[] crl = pki.BuildLeafCrl();
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var server = ServeOnceAsync(listener, "certificateRevocationList;binary", crl, resultCode: 0);
+        var policy = new OutboundHttpPolicy { AllowLdap = true, LoopbackOrigins = [new Uri($"ldap://127.0.0.1:{port}")] };
+
+        byte[]? value = await LdapCrlClient.GetCrlAsync($"ldap://127.0.0.1:{port}/cn=CA,c=PE", policy, TimeSpan.FromSeconds(5), CancellationToken.None);
+
+        value.ShouldBe(crl);
+        (await server).ShouldBe("cn=CA,c=PE");
+    }
+
     /// <summary>A one-connection LDAP server: answers the bind, then the search with one entry.</summary>
     private static async Task<string?> ServeOnceAsync(TcpListener listener, string attribute, byte[] value, int resultCode)
     {

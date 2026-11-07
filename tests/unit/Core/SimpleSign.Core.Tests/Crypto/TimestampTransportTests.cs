@@ -85,12 +85,42 @@ public sealed class TimestampTransportTests
         TimestampClient.Create(options, DefaultHttpClientProvider()).ShouldNotBeNull();
     }
 
+    [Fact]
+    public void Constructor_TcpToPrivateNetwork_Throws() =>
+        Should.Throw<ArgumentException>(() => new TimestampClient(new HttpClient(), "tcp://10.0.0.1:318"));
+
     [Theory]
     [InlineData("tcp://127.0.0.1:318")]
-    [InlineData("tcp://localhost")]
-    [InlineData("tcp://10.0.0.1:318")]
-    public void Constructor_TcpToPrivateNetwork_Throws(string endpoint) =>
-        Should.Throw<ArgumentException>(() => new TimestampClient(new HttpClient(), endpoint));
+    [InlineData("tcp://localhost:318")]
+    public async Task GetTimestampAsync_TcpToLoopback_BlockedUnlessListed(string endpoint)
+    {
+        var client = new TimestampClient(new HttpClient(), endpoint);
+
+        var ex = await Should.ThrowAsync<InvalidOperationException>(() => client.GetTimestampAsync(new byte[] { 1, 2, 3 }, HashAlgorithmName.SHA256));
+        ex.Message.ShouldContain(nameof(SimpleSign.Core.Http.OutboundHttpPolicy.LoopbackOrigins));
+    }
+
+    [Fact]
+    public async Task GetTimestampAsync_TcpToListedLoopback_SendsTheRequest()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var accepted = listener.AcceptTcpClientAsync();
+        var client = new TimestampClient(new HttpClient(), $"tcp://127.0.0.1:{port}")
+        {
+            OutboundPolicy = new() { LoopbackOrigins = [new Uri($"tcp://127.0.0.1:{port}")] },
+        };
+
+        var request = client.GetTimestampAsync(new byte[] { 1, 2, 3 }, HashAlgorithmName.SHA256);
+        using (var connection = await accepted)
+        {
+            connection.Close();
+        }
+
+        await Should.ThrowAsync<Exception>(() => request);
+        accepted.IsCompletedSuccessfully.ShouldBeTrue();
+    }
 
     [Fact]
     public async Task SendTcpAsync_FramesRequestAndReadsFinalMessage()
