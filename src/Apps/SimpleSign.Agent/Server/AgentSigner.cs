@@ -97,6 +97,7 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
                 UserCertificateBase64 = Convert.ToBase64String(e.Certificate.RawData),
                 Source = e.Kind == CertificateSourceKind.Token ? "pkcs11" : "store",
                 TokenLabel = e.Token?.TokenLabel.Trim(),
+                PolicyIssue = e.PolicyIssue,
             })];
     }
 
@@ -233,12 +234,17 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
     private static bool Same(CertificateEntry entry, string? thumbprint) =>
         string.Equals(entry.Certificate.Thumbprint, thumbprint?.Replace(" ", "", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Whether the hash algorithm of a request is one the agent signs with (SHA-256 when absent).</summary>
+    internal static bool IsSupportedHash(string? name) =>
+        name is null || name.Replace("-", "", StringComparison.Ordinal).ToUpperInvariant() is "SHA256" or "SHA384" or "SHA512";
+
     private static HashAlgorithmName ParseHash(string? name) =>
         name?.Replace("-", "", StringComparison.Ordinal).ToUpperInvariant() switch
         {
+            null or "SHA256" => HashAlgorithmName.SHA256,
             "SHA384" => HashAlgorithmName.SHA384,
             "SHA512" => HashAlgorithmName.SHA512,
-            _ => HashAlgorithmName.SHA256,
+            _ => throw new ArgumentException(L.T("api.hashUnsupported", name), nameof(name)),
         };
 
     private static string Trim(string value, int max) => value.Length <= max ? value : value[..max] + "…";

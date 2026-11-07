@@ -25,6 +25,16 @@ Another program, or another copy of the agent, is using port `{port}`. Close it 
 - It must allow signing (key usage *digital signature* or *non-repudiation*).
 - On macOS the first use may ask for permission to use the key in the Keychain. Allow it.
 
+## The site refuses my certificate
+
+The site's server checks the certificate before signing. The **Overview** marks the certificates it will refuse:
+
+- **Not for signing**: its key usage allows neither *digital signature* nor *non-repudiation*.
+- **Weak key**: an RSA key under 2048 bits.
+
+Use another certificate, or ask the certificate authority for a new one. A certificate whose chain has expired is
+refused too.
+
 ## The PIN is refused
 
 The PIN belongs to the token, not to the agent. After a few wrong attempts the token locks itself, and only the certificate authority or the token's own tool can unlock it. Stop trying and check the PIN.

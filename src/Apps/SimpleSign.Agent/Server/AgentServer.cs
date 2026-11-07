@@ -183,6 +183,12 @@ internal sealed class AgentServer : IAsyncDisposable
                 return;
             }
 
+            if (!AgentSigner.IsSupportedHash(body.HashAlgorithm))
+            {
+                await WriteErrorAsync(response, 400, L.T("api.hashUnsupported", body.HashAlgorithm ?? ""));
+                return;
+            }
+
             var results = await _signer.SignAsync(label, body, context.RequestAborted);
             if (results is null)
             {

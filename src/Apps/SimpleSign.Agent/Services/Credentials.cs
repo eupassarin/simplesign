@@ -40,6 +40,25 @@ internal sealed record CertificateEntry(CertificateSourceKind Kind, X509Certific
 
     public bool IsExpired => Certificate.NotAfter < DateTime.Now;
 
+    /// <summary>
+    /// Why a server with SimpleSign's default signing policy refuses this certificate: "keyUsage" when the key usage
+    /// allows neither digitalSignature nor nonRepudiation (or is missing), "weakKey" for RSA under 2048 bits; else null.
+    /// </summary>
+    public string? PolicyIssue
+    {
+        get
+        {
+            var usage = Certificate.Extensions.OfType<X509KeyUsageExtension>().FirstOrDefault();
+            if (usage is null || (usage.KeyUsages & (X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)) == 0)
+            {
+                return "keyUsage";
+            }
+
+            using var rsa = Certificate.GetRSAPublicKey();
+            return rsa is not null && rsa.KeySize < 2048 ? "weakKey" : null;
+        }
+    }
+
     public string? Document
     {
         get
