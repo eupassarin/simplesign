@@ -18,12 +18,12 @@ using Xunit;
 namespace SimpleSign.Contracts.Tests;
 
 /// <summary>
-/// Evidence for the INDECOPI accreditation guide (v4.0): one test per requirement and format, tagged with
-/// <c>[Trait("Indecopi", "ReqNN")]</c> so the evidence can be run and listed per requirement
-/// (<c>dotnet test --filter Indecopi=Req11</c>).
+/// What the signers refuse and what the validators report, the same in PAdES, CAdES and XAdES: the
+/// revocation of the whole chain (Strict), the validity of the chain, the key usage, obsolete
+/// cryptography, an altered document, each signing connector and the timestamp checks.
 /// </summary>
 [Trait("Category", "Contract")]
-public sealed class IndecopiEvidenceContractTests : IDisposable
+public sealed class PolicyEnforcementContractTests : IDisposable
 {
     private const string LeafCrlUrl = "http://198.51.100.1/leaf.crl";
     private const string IntermediateCrlUrl = "http://198.51.100.1/intermediate.crl";
@@ -32,14 +32,13 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
 
     public void Dispose() => _pki.Dispose();
 
-    // ── Req. 11: revocation of the whole chain before signing ──────────────────────
+    // ── Revocation of the whole chain before signing ──────────────────────
 
     [Theory]
-    [Trait("Indecopi", "Req11")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req11_SignWithRevokedCertificate_IsRefused(string format)
+    public async Task SignWithRevokedCertificate_IsRefused(string format)
     {
         using var http = CrlServer(_pki.BuildRevokedLeafCrl(), _pki.BuildIntermediateCrl());
 
@@ -50,11 +49,10 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
     }
 
     [Theory]
-    [Trait("Indecopi", "Req11")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req11_SignWithCrlOfInvalidSignature_IsRefused(string format)
+    public async Task SignWithCrlOfInvalidSignature_IsRefused(string format)
     {
         byte[] crl = _pki.BuildLeafCrl();
         crl[^1] ^= 0xFF;
@@ -67,11 +65,10 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
     }
 
     [Theory]
-    [Trait("Indecopi", "Req11")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req11_SignWithExpiredCrl_IsRefused(string format)
+    public async Task SignWithExpiredCrl_IsRefused(string format)
     {
         byte[] crl = _pki.BuildLeafCrl(DateTimeOffset.UtcNow.AddDays(-20), DateTimeOffset.UtcNow.AddDays(-10));
         using var http = CrlServer(crl, _pki.BuildIntermediateCrl());
@@ -83,11 +80,10 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
     }
 
     [Theory]
-    [Trait("Indecopi", "Req11")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req11_SignWithGoodChain_Succeeds(string format)
+    public async Task SignWithGoodChain_Succeeds(string format)
     {
         using var http = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
 
@@ -97,13 +93,12 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
     }
 
     [Theory]
-    [Trait("Indecopi", "Req11")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req11_SignAfterRevocationWithCrlCached_IsRefused(string format)
+    public async Task SignAfterRevocationWithCrlCached_IsRefused(string format)
     {
-        // A CRL not updated: the shared checker cached the CRL while the certificate was good
+        // A stale CRL: the shared checker cached the CRL while the certificate was good
         // (a first signature); the CA then revoked it. The next signature must see the revocation.
         byte[] leafCrl = _pki.BuildLeafCrl();
         byte[] intermediateCrl = _pki.BuildIntermediateCrl();
@@ -122,14 +117,13 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
         ex.Reason.ShouldBe(SigningErrorReason.CertificateRevoked);
     }
 
-    // ── Req. 12: validity of the certificate and its chain ──────────────────────────
+    // ── Validity of the certificate and its chain ──────────────────────────
 
     [Theory]
-    [Trait("Indecopi", "Req12")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req12_SignWithExpiredIntermediate_IsRefused(string format)
+    public async Task SignWithExpiredIntermediate_IsRefused(string format)
     {
         var (leaf, intermediate, root) = ConstraintTestCertificates.ExpiredIntermediateChain();
         using (leaf)
@@ -142,14 +136,13 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
         }
     }
 
-    // ── Req. 13: purpose of the certificate ────────────────────────────────────────
+    // ── Purpose of the certificate ────────────────────────────────────────
 
     [Theory]
-    [Trait("Indecopi", "Req13")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req13_SignWithoutDigitalSignatureOrNonRepudiation_IsRefused(string format)
+    public async Task SignWithoutDigitalSignatureOrNonRepudiation_IsRefused(string format)
     {
         using var certificate = ConstraintTestCertificates.SelfSigned(X509KeyUsageFlags.KeyEncipherment);
 
@@ -158,17 +151,16 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
         ex.Reason.ShouldBe(SigningErrorReason.KeyUsageNotPermitted);
     }
 
-    // ── Req. 16: no obsolete cryptography ─────────────────────────────────────────
+    // ── No obsolete cryptography ─────────────────────────────────────────
 
     [Theory]
-    [Trait("Indecopi", "Req16")]
     [InlineData("pades", "SHA1")]
     [InlineData("cades", "SHA1")]
     [InlineData("xades", "SHA1")]
     [InlineData("pades", "MD5")]
     [InlineData("cades", "MD5")]
     [InlineData("xades", "MD5")]
-    public async Task Req16_SignWithObsoleteHash_IsRefused(string format, string hash)
+    public async Task SignWithObsoleteHash_IsRefused(string format, string hash)
     {
         using var certificate = ConstraintTestCertificates.SelfSigned(X509KeyUsageFlags.NonRepudiation);
 
@@ -179,11 +171,10 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
     }
 
     [Theory]
-    [Trait("Indecopi", "Req16")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req16_SignWithRsa1024_IsRefused(string format)
+    public async Task SignWithRsa1024_IsRefused(string format)
     {
         using var certificate = ConstraintTestCertificates.SelfSigned(X509KeyUsageFlags.NonRepudiation, rsaKeySize: 1024);
 
@@ -192,14 +183,13 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
         ex.Reason.ShouldBe(SigningErrorReason.KeyTooWeak);
     }
 
-    // ── Req. 21–29: verification ─────────────────────────────────────────────────
+    // ── Verification ─────────────────────────────────────────────────
 
     [Theory]
-    [Trait("Indecopi", "Req22")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req22_DocumentAlteredAfterSigning_IsInvalid(string format)
+    public async Task DocumentAlteredAfterSigning_IsInvalid(string format)
     {
         var signed = await Sign(format, _pki.Leaf, [_pki.IntermediateCa], SigningPolicy.Default);
 
@@ -210,14 +200,13 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
     }
 
     [Theory]
-    [Trait("Indecopi", "Req25")]
     [InlineData("pades", "pfx")]
     [InlineData("cades", "pfx")]
     [InlineData("xades", "pfx")]
     [InlineData("pades", "remote")]
     [InlineData("cades", "remote")]
     [InlineData("xades", "remote")]
-    public async Task Req25_SignatureByEachConnector_IsValid(string format, string connector)
+    public async Task SignatureByEachConnector_IsValid(string format, string connector)
     {
         var signed = connector == "pfx"
             ? await Sign(format, _pki.Leaf, [_pki.IntermediateCa], SigningPolicy.Default)
@@ -228,14 +217,13 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
         indication.ShouldBe(SignatureIndication.Valid);
     }
 
-    // ── Req. 30: timestamp verification ──────────────────────────────────────────
+    // ── Timestamp verification ──────────────────────────────────────────
 
     [Theory]
-    [Trait("Indecopi", "Req30")]
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
-    public async Task Req30_TimestampWithTamperedSignature_IsRefused(string format)
+    public async Task TimestampWithTamperedSignature_IsRefused(string format)
     {
         using var tsa = TsaClient(new TimestampTokenOptions { TamperSignature = true });
         var profile = AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(TsaUrl), new SingleClientProvider(tsa)));
@@ -245,8 +233,7 @@ public sealed class IndecopiEvidenceContractTests : IDisposable
     }
 
     [Fact]
-    [Trait("Indecopi", "Req30")]
-    public async Task Req30_TimestampByRevokedTsa_TsaIsNotTrusted()
+    public async Task TimestampByRevokedTsa_TsaIsNotTrusted()
     {
         using var tsaCertificate = _pki.IssueTimestampingCertificate();
         using var tsa = TsaClient(new TimestampTokenOptions

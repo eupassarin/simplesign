@@ -10,7 +10,7 @@ using Xunit;
 namespace SimpleSign.Signers.Pkcs11.Tests;
 
 /// <summary>
-/// Evidence with a real token or HSM (INDECOPI Req. 15/25, connectors): signs in the three formats through the
+/// A real token or HSM: signs in the three formats through the
 /// device's PKCS#11 driver and validates the result. Skipped unless the device is configured:
 /// <list type="bullet">
 /// <item><c>SIMPLESIGN_PKCS11_MODULE</c>: path of the driver (.so, .dylib, .dll)</item>
@@ -20,7 +20,6 @@ namespace SimpleSign.Signers.Pkcs11.Tests;
 /// The certificate chain must be on the token, or the signer's root must be trusted by the system.
 /// </summary>
 [Trait("Category", "Integration")]
-[Trait("Indecopi", "Req25")]
 public sealed class Pkcs11RealDeviceTests
 {
     private static Pkcs11Signer? OpenDevice()

@@ -92,7 +92,6 @@ export const api = {
     samples: () => request<ValidationSampleView[]>("GET", "/api/validation/samples/all"),
     run: (id: string) => request<RunView | undefined>("GET", `/api/runs/${id}`),
     eventsUrl: (id: string) => `/api/runs/${id}/events`,
-    evidenceUrl: (id: string, format: "md" | "json") => `/api/runs/${id}/evidence.${format}`,
     history: () => request<RunSummary[]>("GET", "/api/runs"),
   },
   environment: {

@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Pill } from "@/components/parts"
 import { EnvironmentPage } from "@/features/EnvironmentPage"
-import { EvidencePage } from "@/features/EvidencePage"
 import { FaultsPage } from "@/features/FaultsPage"
 import { LogPage } from "@/features/LogPage"
 import { PkiPage } from "@/features/PkiPage"
@@ -71,14 +70,12 @@ export default function App() {
                 <TabsTrigger value="environment">{t("tabs.environment")}</TabsTrigger>
                 <TabsTrigger value="pki">{t("tabs.pki")}</TabsTrigger>
                 <TabsTrigger value="faults">{t("tabs.faults")}</TabsTrigger>
-                <TabsTrigger value="evidence">{t("tabs.evidence")}</TabsTrigger>
                 <TabsTrigger value="log">{t("tabs.log")}</TabsTrigger>
               </TabsList>
               <div className="pt-6">
                 <TabsContent value="environment"><EnvironmentPage info={info} /></TabsContent>
                 <TabsContent value="pki"><PkiPage info={info} pki={pki} onChanged={refresh} /></TabsContent>
                 <TabsContent value="faults"><FaultsPage key={JSON.stringify(faults)} onChanged={setFaults} /></TabsContent>
-                <TabsContent value="evidence"><EvidencePage faults={faults} onFaults={setFaults} /></TabsContent>
                 <TabsContent value="log"><LogPage /></TabsContent>
               </div>
             </Tabs>

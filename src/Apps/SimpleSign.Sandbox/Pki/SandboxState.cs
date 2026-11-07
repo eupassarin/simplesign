@@ -97,8 +97,6 @@ internal sealed record StoredCertificate
     /// <summary>What it demonstrates when signing is expected to be refused (Expired, Revoked…).</summary>
     public string? Problem { get; init; }
 
-    /// <summary>The requirement of the certification guide it serves as evidence for, if any.</summary>
-    public string? Evidence { get; init; }
 
     /// <summary>Whether it is revoked when the environment is reset (the "revoked" signers).</summary>
     public bool RevokedByDefault { get; init; }

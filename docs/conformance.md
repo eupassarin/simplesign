@@ -4,7 +4,7 @@
 
 SimpleSign implements PAdES, CAdES, and XAdES digital signatures with conformance
 boundaries documented below. This document details compliance with ISO, ETSI, RFC, and
-Brazilian (ICP-Brasil) and Peruvian (IOFE, INDECOPI accreditation guide v4.0) specifications for the current source tree. Consult the
+Brazilian (ICP-Brasil) and Peruvian (IOFE) specifications for the current source tree. Consult the
 [release history](https://github.com/eupassarin/SimpleSign/blob/main/CHANGELOG.md) and release-tagged documentation for the
 implementation delivered in a particular package version.
 
@@ -82,7 +82,7 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **ETSI TS 119 612 / TS 102 231 v3** | Trusted lists | ✅ | `TrustedList`: signature checked against the scheme operator, active CA/TSA services as anchors, NextUpdate enforced |
 | **RFC 3161** | TSA checks | ✅ | TSA signature and critical exclusive timeStamping EKU at signing time; `tsa` name (§2.4.2) and TSA chain revocation at validation |
 | **RFC 4511 / RFC 4516** | LDAP CRL retrieval | ✅ | Read-only, opt-in (`OutboundHttpPolicy.AllowLdap`), same address checks as HTTP |
-| **INDECOPI** (Peru) | Accreditation guide v4.0 | 🟡 | `SimpleSign.Peru.Iofe` (INDECOPI trusted list, `IofePolicies`); evidence per requirement in [indecopi-evidence.md](articles/indecopi-evidence.md) |
+| **IOFE** (Peru, Ley 27269) | Trust anchors and policies | 🟡 | `SimpleSign.Peru.Iofe` (anchors from INDECOPI's signed trusted list, `IofePolicies`) |
 
 ## SubFilter Support
 

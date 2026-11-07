@@ -165,8 +165,6 @@ export interface SandboxSigner {
   keyType: string
   isUsable: boolean
   problem?: string | null
-  /** The requirement of the certification guide it is evidence for (Req11…), if any. */
-  evidence?: string | null
   holder: string
   notAfter: string
 }

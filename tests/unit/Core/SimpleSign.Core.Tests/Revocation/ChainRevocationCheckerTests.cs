@@ -120,10 +120,9 @@ public sealed class ChainRevocationCheckerTests
     }
 
     [Fact]
-    [Trait("Indecopi", "Req11")]
     public async Task CheckCurrentAsync_RevokedAfterTheCrlWasCached_ReturnsRevoked()
     {
-        // A CRL not updated: the copy cached while the leaf was good must not decide before signing.
+        // A stale CRL: the copy cached while the leaf was good must not decide before signing.
         using var pki = NewPki();
         byte[] leafCrl = pki.BuildLeafCrl();
         byte[] intermediateCrl = pki.BuildIntermediateCrl();

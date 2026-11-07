@@ -37,7 +37,6 @@ public sealed record SandboxCertificateInfo(
     string? Usage,
     string? Pointers,
     string? Problem,
-    string? Evidence,
     bool IsUsable,
     DateTimeOffset? RevokedAt);
 
@@ -53,8 +52,7 @@ internal sealed record SandboxSigner(
     X509Certificate2 Certificate,
     IReadOnlyList<X509Certificate2> Chain,
     bool IsUsable,
-    string? Problem,
-    string? Evidence);
+    string? Problem);
 
 [JsonConverter(typeof(JsonStringEnumConverter<TsaFault>))]
 public enum TsaFault

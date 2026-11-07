@@ -7,13 +7,13 @@ using SimpleSign.TestBench.Signing;
 namespace SimpleSign.TestBench.Tests;
 
 /// <summary>
-/// The INDECOPI evidence (Requirements 11 and 12) end to end: the TestBench signs with the Strict
-/// signing policy against the services of a running SimpleSign Sandbox (CRLs over HTTP, HTTPS and
-/// LDAP, OCSP, revoked and expired CAs, failures) and must refuse with the right reason.
+/// The Strict signing policy end to end against a running SimpleSign Sandbox: CRLs over HTTP, HTTPS
+/// and LDAP, OCSP, revoked and expired CAs, and failures of the services. Each case must sign, or be
+/// refused with the right <see cref="SigningErrorReason"/>.
 /// </summary>
 [Collection(TestBenchCollection.Name)]
 [Trait("Category", "Unit")]
-public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
+public sealed class SandboxScenarioTests(TestBenchFixture fixture) : IDisposable
 {
     // The Sandbox is shared by the collection: every test puts its revocations and failures back.
     public void Dispose()
@@ -47,7 +47,6 @@ public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
     }
 
     [SkippableTheory]
-    [Trait("Indecopi", "Req11")]
     [InlineData("revoked")]
     [InlineData("revoked-ocsp")]
     [InlineData("revoked-crl-https")]
@@ -57,7 +56,6 @@ public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
         ShouldBeRefused(await SignStrictAsync(signer), "CertificateRevoked");
 
     [SkippableTheory]
-    [Trait("Indecopi", "Req11")]
     [InlineData("rsa-2048")]
     [InlineData("good-ocsp")]
     [InlineData("good-crl-https")]
@@ -70,7 +68,6 @@ public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
     }
 
     [SkippableTheory]
-    [Trait("Indecopi", "Req11")]
     [InlineData(CrlFault.Expired)]
     [InlineData(CrlFault.WrongKey)]
     [InlineData(CrlFault.Down)]
@@ -83,7 +80,6 @@ public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
     }
 
     [SkippableFact]
-    [Trait("Indecopi", "Req11")]
     public async Task Strict_RevokedAfterTheLastCrlWasCached_IsRefused()
     {
         // The CRL is fetched while the certificate is good; then it is revoked and the CRL server
@@ -97,7 +93,6 @@ public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
     }
 
     [SkippableTheory]
-    [Trait("Indecopi", "Req11")]
     [InlineData(OcspFault.Expired)]
     [InlineData(OcspFault.Unauthorized)]
     [InlineData(OcspFault.Unknown)]
@@ -110,7 +105,6 @@ public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
     }
 
     [SkippableFact]
-    [Trait("Indecopi", "Req12")]
     public async Task Default_ExpiredCertificate_IsRefused()
     {
         // The TestBench's own option check already refuses it; the library must too.
@@ -120,7 +114,6 @@ public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
     }
 
     [SkippableFact]
-    [Trait("Indecopi", "Req12")]
     public async Task Default_NotYetValidCertificate_IsRefused()
     {
         // The TestBench's own option check already refuses it; the library must too.
@@ -130,7 +123,6 @@ public sealed class SandboxEvidenceTests(TestBenchFixture fixture) : IDisposable
     }
 
     [SkippableFact]
-    [Trait("Indecopi", "Req12")]
     public async Task Default_ExpiredIssuingCa_IsRefused()
     {
         var result = await fixture.Runner.RunAsync(fixture.Options(signer: "under-expired-ca") with { Level = BaselineLevel.BB }, default);

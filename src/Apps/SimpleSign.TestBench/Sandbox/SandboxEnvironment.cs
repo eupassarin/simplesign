@@ -271,7 +271,7 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
         var collection = X509CertificateLoader.LoadPkcs12Collection(pfx, password, KeyStorage);
         var leaf = collection.Single(c => c.HasPrivateKey);
         return new SandboxSigner(info.Id, info.Title, info.Description, info.KeyType ?? "?", leaf,
-            [.. collection.Where(c => !ReferenceEquals(c, leaf))], info.IsUsable, info.Problem, info.Evidence);
+            [.. collection.Where(c => !ReferenceEquals(c, leaf))], info.IsUsable, info.Problem);
     }
 
     private static X509KeyStorageFlags KeyStorage =>

@@ -91,7 +91,6 @@ export function SandboxPage() {
                   <li key={s.id} className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm">
                     <span className="font-medium">{s.title}</span>
                     <span className="text-muted-foreground font-mono text-[11px]">{s.id}</span>
-                    {s.evidence && <Pill tone="info">{s.evidence.replace("Req", t("sandbox.req"))}</Pill>}
                     {s.problem ? <Pill tone="warning">{s.problem}</Pill> : <Pill tone="success">{t("sandbox.usable")}</Pill>}
                     {/* Inside the panel's sheet: picking a signer closes it, back to the workbench. */}
                     <SheetClose asChild>

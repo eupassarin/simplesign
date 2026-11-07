@@ -22,9 +22,6 @@ dotnet test tests/unit/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBra
 dotnet test tests/unit/Extras/SimpleSign.HtmlToPdf.Tests
 dotnet test tests/unit/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe.Tests
 
-# INDECOPI evidence, one requirement at a time (traits Indecopi=Req11, Req12, …)
-dotnet test tests/unit/Formats/SimpleSign.Contracts.Tests --filter Indecopi=Req11
-
 # Integration tests (requires network for TSA/OCSP)
 dotnet test tests/integration/SimpleSign.Integration.Tests
 
@@ -71,7 +68,7 @@ src/
     ├── SimpleSign.Cli/         CLI tool
     ├── SimpleSign.Agent/       Avalonia tray app + window (pt-BR/en-US, TestBench look, Native AOT): local signing agent (HTTP on 127.0.0.1)
     ├── SimpleSign.TestBench/   Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option (real network + a connected Sandbox)
-    └── SimpleSign.Sandbox/     Test PKI on real endpoints (CRL over HTTP/HTTPS/LDAP, OCSP, TSA, CSC), failures, evidence scenarios
+    └── SimpleSign.Sandbox/     Test PKI on real endpoints (CRL over HTTP/HTTPS/LDAP, OCSP, TSA, CSC) and failures to switch on
 ```
 
 Internal infrastructure (logs, DER helpers, revocation plumbing) lives in each project's `Internal/` folder (ADR 0018).

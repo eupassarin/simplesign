@@ -92,7 +92,6 @@ function SandboxSigners({ onOpened }: { onOpened: (f: CredentialFacts) => void }
             <span className="ml-auto flex gap-1">
               <Pill>{s.keyType.replace("Rsa", "RSA ").replace("EcdsaP", "P-")}</Pill>
               {s.problem && <Pill tone="warning">{s.problem}</Pill>}
-              {s.evidence && <Pill tone="info">{s.evidence}</Pill>}
             </span>
           }
           onSelect={async () => {

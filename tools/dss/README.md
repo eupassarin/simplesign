@@ -87,7 +87,7 @@ trust anchors: it validates the chain but does not report a qualification (QES/Q
 ## Peru trusted list
 
 The container also trusts the certification authorities of the Peruvian trusted list, published
-by INDECOPI (the IOFE's accreditation authority) at `https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml`.
+by INDECOPI (the IOFE's supervisory authority) at `https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml`.
 It is downloaded at every start. A copy is kept in the `tl-cache` volume and used when the
 download fails. Set `DSS_TRUST_PERU=false` to turn this off.
 

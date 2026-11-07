@@ -33,7 +33,7 @@ internal sealed class OcspResponder(SandboxPki pki)
         var (certIds, nonce) = Parse(request);
         var authority = pki.Authority(caId);
         var now = DateTimeOffset.UtcNow;
-        // thisUpdate an hour back, as responders that pre-produce their answers do: embedded evidence is
+        // thisUpdate an hour back, as responders that pre-produce their answers do: an embedded response is
         // checked with thisUpdate not after the signing time, and a client may claim a signing time a
         // few minutes back (the TestBench's "time" option claims five).
         var (thisUpdate, nextUpdate) = faults.Ocsp == OcspFault.Expired ? (now.AddDays(-8), now.AddDays(-1)) : (now.AddHours(-1), now.AddDays(1));

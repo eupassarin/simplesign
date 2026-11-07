@@ -3,8 +3,7 @@
 **Status:** Accepted
 
 **Context:**
-Accreditation schemes for signature software (INDECOPI's Software Accreditation Guide, Req. 11–13, 16, 21–26)
-ask for checks the library did not make:
+Signature software is expected to make checks the library did not make:
 - **Before signing**, only the dates of the signing certificate were checked. The chain, the key usage, the key
   size and revocation were not, so a signer could produce a signature that every validator would reject.
 - **CRL distribution points** were followed over HTTP(S) only. Some CAs publish `ldap://` locations, sometimes as

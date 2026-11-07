@@ -16,7 +16,7 @@ namespace SimpleSign.Sandbox.Tests;
 /// <summary>
 /// The revocation services, read by the library's own checkers as a client would: CRLs over HTTP,
 /// HTTPS and LDAP, OCSP (by the CA or a delegated responder) and their failures, the revoked and
-/// expired CAs, and the TSA name. These are the cases of INDECOPI requirements 11, 12 and 30.
+/// expired CAs, and the TSA name.
 /// </summary>
 [Collection(SandboxCollection.Name)]
 [Trait("Category", "Unit")]

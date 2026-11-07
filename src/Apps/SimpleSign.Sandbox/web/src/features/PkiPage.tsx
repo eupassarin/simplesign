@@ -50,7 +50,6 @@ export function PkiPage({ info, pki, onChanged }: { info: SandboxInfo; pki: PkiV
               <TableCell className="whitespace-normal">
                 <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                   {c.title}<span className="text-muted-foreground font-mono text-[11px] font-normal">{c.id}</span>
-                  {c.evidence && <Pill tone="info">{t("pki.evidence", { req: c.evidence.replace("Req", "") })}</Pill>}
                 </span>
                 <span className="text-muted-foreground block text-xs">{c.description}</span>
                 <span className="mt-1 flex flex-wrap gap-1">

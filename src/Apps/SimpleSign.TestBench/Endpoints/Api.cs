@@ -11,7 +11,7 @@ using SimpleSign.TestBench.Xml;
 
 namespace SimpleSign.TestBench.Endpoints;
 
-public sealed record SandboxSignerView(string Id, string Title, string Description, string KeyType, bool IsUsable, string? Problem, string? Evidence, string Holder, string NotAfter);
+public sealed record SandboxSignerView(string Id, string Title, string Description, string KeyType, bool IsUsable, string? Problem, string Holder, string NotAfter);
 
 /// <summary>The connected SimpleSign Sandbox, as the UI shows it.</summary>
 public sealed record SandboxView(
@@ -204,7 +204,7 @@ internal static class Api
         c.Info.RootSubject,
         c.Info.RootThumbprint,
         c.Info.LoopbackOrigins,
-        [.. c.Signers.Select(s => new SandboxSignerView(s.Id, L.T(s.Title), L.T(s.Description), s.KeyType, s.IsUsable, s.Problem is null ? null : L.T(s.Problem), s.Evidence,
+        [.. c.Signers.Select(s => new SandboxSignerView(s.Id, L.T(s.Title), L.T(s.Description), s.KeyType, s.IsUsable, s.Problem is null ? null : L.T(s.Problem),
             s.Certificate.GetNameInfo(System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false),
             s.Certificate.NotAfter.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)))],
         c.Info.Tsa.Url, c.Info.Tsa.AuthenticatedUrl, c.Info.Tsa.UntrustedUrl, c.Info.Tsa.RevokedUrl, c.Info.Tsa.WrongNameUrl,

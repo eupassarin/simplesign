@@ -49,7 +49,6 @@ public sealed record CertificateView(
     string? Usage,
     string? Pointers,
     string? Problem,
-    string? Evidence,
     bool IsUsable,
     DateTimeOffset? RevokedAt,
     string? RevocationReason,
@@ -158,7 +157,6 @@ internal static class AdminEndpoints
             Usage = c.Usage.ToString(),
             Pointers = c.Pointers.ToString(),
             Problem = c.Problem,
-            Evidence = c.Evidence,
             IsUsable = c.IsUsable,
             RevokedAt = c.RevokedAt,
             RevocationReason = c.RevocationReason,
@@ -179,5 +177,5 @@ internal static class AdminEndpoints
         id, title, "", certificate.Subject, certificate.Issuer, null, certificate.SerialNumber, certificate.Thumbprint,
         certificate.NotBefore.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture),
         certificate.NotAfter.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture),
-        null, null, null, null, null, true, null, null, null);
+        null, null, null, null, true, null, null, null);
 }

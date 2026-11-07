@@ -4,9 +4,7 @@ using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.CrossValidation;
 using SimpleSign.TestBench.Documents;
 using SimpleSign.TestBench.Localization;
-using SimpleSign.PAdES;
 using SimpleSign.TestBench.Runs;
-using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Schema;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Xml;
@@ -72,18 +70,6 @@ internal static class RunApi
             service.Find(id) is { } run
                 ? run.Result is { } result ? Results.Ok(result) : Results.Accepted()
                 : Results.NotFound());
-        runs.MapGet("/{id}/evidence.{extension}", (string id, string extension, RunService service, SandboxEnvironment sandbox, CredentialStore credentials) =>
-        {
-            if (service.Find(id)?.Result is not { } result || extension is not ("md" or "json"))
-            {
-                return Results.NotFound();
-            }
-
-            var evidence = EvidenceReport.From(result, sandbox, credentials, typeof(PadesSigner).Assembly.GetName().Version?.ToString(3) ?? "?");
-            return extension == "md"
-                ? Results.File(System.Text.Encoding.UTF8.GetBytes(evidence.ToMarkdown()), "text/markdown; charset=utf-8", $"evidence-{id}.md")
-                : Results.File(JsonSerializer.SerializeToUtf8Bytes(evidence, WorkbenchJson.Options), "application/json", $"evidence-{id}.json");
-        });
         runs.MapGet("/{id}/events", async (string id, RunService service, HttpContext context) =>
         {
             if (service.Find(id) is not { } run)

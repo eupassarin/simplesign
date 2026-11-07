@@ -6,9 +6,10 @@ cloud-signing service, with failures you can switch on. It runs on its own, apar
 application under test, so any client reaches it the way it reaches a real PKI: the TestBench,
 the CLI, the Agent, your own application, or another validator such as DSS.
 
-Its main use is **evidence for certification**: each scenario of INDECOPI's Requirements 11, 12,
-13, 16 and 30 (revoked certificate by CRL or OCSP, revoked CA, CRL not updated, expired
-certificate or CA…) is a certificate or a failure the Sandbox has ready.
+It simulates what a real PKI does, including what goes wrong: a certificate revoked by CRL or
+OCSP, a revoked or expired CA, a CRL that expired, is signed by the wrong key or is stale, a
+responder that is down or not authorized, an expired certificate. Each case is a certificate or
+a failure the Sandbox has ready.
 
 ```bash
 dotnet run --project src/Apps/SimpleSign.Sandbox                 # http://localhost:5300, opens the browser
@@ -89,12 +90,8 @@ puts every revocation and failure back.
 
 Every request is in the **Log** tab (service, URL, status, the failure applied).
 
-## Evidence scenarios
-
-The **Evidence** tab lists the certification scenarios by requirement. Each one names the
-certificate to use, switches on the failure it needs, and says what the application under
-evaluation must do. The TestBench runs all of them with the Strict signing policy in
-`SandboxEvidenceTests` (see [INDECOPI evidence](indecopi-evidence.md)).
+The TestBench signs with each of these certificates and failures under the Strict signing policy
+in `SandboxScenarioTests`.
 
 ## Using it from a client
 

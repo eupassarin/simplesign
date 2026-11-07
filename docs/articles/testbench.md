@@ -210,16 +210,6 @@ trust (the operating system's), the public TSAs the library has a preset for, th
 and tokens found, the certificates with a key in the OS store, what a real CSC service asks for,
 and DSS.
 
-## Evidence
-
-Each result has **Evidence .md** and **.json** (`GET /api/runs/{id}/evidence.md|json`): the run
-written for a certification file. It has the time, the application and runtime, the connected
-Sandbox and its root, the certificate, the signing policy, the TSA, the outcome (the
-`SigningException` reason of a refusal, or each signature's indication and sub-indication), every
-network request of the run (CRL, OCSP, TSA, AIA, CSC) and the warnings. For example, signing with
-the Sandbox's `revoked-ocsp` certificate and the Strict policy gives a refusal
-`SigningException (CertificateRevoked)` with the OCSP request that established it.
-
 ## Cloud certificates: CSC
 
 A cloud certificate keeps the key at a provider; the library sends only the hash and gets the

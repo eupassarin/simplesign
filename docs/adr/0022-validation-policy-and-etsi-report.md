@@ -5,8 +5,8 @@
 **Context:**
 Validation results were booleans plus free-text errors. PAdES alone had an indication; CAdES and XAdES had only
 `IsValid`. Nothing said *why* a signature was INDETERMINATE in the terms of ETSI EN 319 102-1, and the accepted
-algorithms were hard-coded: a SHA-1 signature was valid with a warning, an RSA-1024 key was accepted. Accreditation
-(INDECOPI Req. 21–29) asks for a structured report per signature and for a policy that can change without a rebuild.
+algorithms were hard-coded: a SHA-1 signature was valid with a warning, an RSA-1024 key was accepted. A structured report per signature and a
+policy that can change without a rebuild were needed.
 
 **Decision:**
 1. **`ValidationPolicy`** (`SimpleSign.Core.Validation.Policy`), set on `ValidationOptions.Policy`:
@@ -17,7 +17,7 @@ algorithms were hard-coded: a SHA-1 signature was valid with a warning, an RSA-1
    It is read from JSON (`ValidationPolicy.Load`, `FromJson`) with the DOM rather than the source generator, so a
    property left out keeps its default and the code stays AOT-safe. `ValidationPolicy.LoadSigned` refuses a file
    whose detached CMS signature does not verify, does not cover the file or is not by the trusted certificate
-   (Req. 14/24: the configuration is protected).
+   (the configuration is protected).
 2. **`ValidationPolicyEvaluator`** turns what a format validator found into an indication, the sub-indication of the
    first decisive failure (`SignatureSubIndication`, named after EN 319 102-1 §5.1.3) and the list of checks
    (`ValidationConstraintResult`). The order is the one PAdES already used: integrity, signing certificate,

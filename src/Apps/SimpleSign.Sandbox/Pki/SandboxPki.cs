@@ -42,7 +42,6 @@ internal sealed record SandboxCertificate(
     CertificateUsage Usage,
     RevocationPointers Pointers,
     string? Problem,
-    string? Evidence,
     DateTimeOffset? RevokedAt,
     string? RevocationReason,
     RevocationPublication Publication)
@@ -505,8 +504,7 @@ internal sealed class SandboxPki : IDisposable
         string IssuerId = IntermediateId,
         CertificateUsage Usage = CertificateUsage.Signing,
         RevocationPointers Pointers = RevocationPointers.CrlHttp | RevocationPointers.Ocsp,
-        bool Revoked = false,
-        string? Evidence = null)
+        bool Revoked = false)
     {
         /// <summary>What decides the certificate's content: a seed whose profile changed is issued again.</summary>
         public string Profile => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
@@ -523,34 +521,34 @@ internal sealed class SandboxPki : IDisposable
         new("ecdsa-p384", "Beatriz Costa (ECDSA P-384)", "Elliptic-curve key (NIST P-384).", SandboxKeyType.EcdsaP384),
         new("ecdsa-p521", "Rafael Alves (ECDSA P-521)", "Elliptic-curve key (NIST P-521).", SandboxKeyType.EcdsaP521),
         new("expired", "Expired certificate", "Valid chain, but the certificate expired yesterday: a correct client refuses to sign with it.",
-            Problem: "Expired", Evidence: "Req12"),
+            Problem: "Expired"),
         new("not-yet-valid", "Not yet valid", "The certificate only becomes valid next month: a correct client refuses to sign with it.",
-            Problem: "Not yet valid", Evidence: "Req12"),
+            Problem: "Not yet valid"),
         new("revoked", "Revoked certificate", "Revoked in the intermediate CA's CRL (HTTP) and by its OCSP responder: a client that checks revocation refuses to sign with it.",
-            Problem: "Revoked", Revoked: true, Evidence: "Req11"),
+            Problem: "Revoked", Revoked: true),
         new("revoked-ocsp", "Revoked, OCSP only", "Points to the OCSP responder only (no CRL distribution point), which answers revoked.",
-            Problem: "Revoked", Pointers: RevocationPointers.Ocsp, Revoked: true, Evidence: "Req11"),
+            Problem: "Revoked", Pointers: RevocationPointers.Ocsp, Revoked: true),
         new("revoked-crl-https", "Revoked, CRL over HTTPS", "Its only CRL distribution point is on the HTTPS endpoint; the CRL lists it.",
-            Problem: "Revoked", Pointers: RevocationPointers.CrlHttps, Revoked: true, Evidence: "Req11"),
+            Problem: "Revoked", Pointers: RevocationPointers.CrlHttps, Revoked: true),
         new("revoked-crl-ldap", "Revoked, CRL over LDAP", "Its only CRL distribution point is an ldap:// URL; the CRL lists it.",
-            Problem: "Revoked", Pointers: RevocationPointers.CrlLdap, Revoked: true, Evidence: "Req11"),
-        new("good-ocsp", "Good, OCSP only", "Points to the OCSP responder only: the control for the revoked-ocsp case.", Pointers: RevocationPointers.Ocsp, Evidence: "Req11"),
+            Problem: "Revoked", Pointers: RevocationPointers.CrlLdap, Revoked: true),
+        new("good-ocsp", "Good, OCSP only", "Points to the OCSP responder only: the control for the revoked-ocsp case.", Pointers: RevocationPointers.Ocsp),
         new("good-crl-https", "Good, CRL over HTTPS", "Its only CRL distribution point is on the HTTPS endpoint: the control for revoked-crl-https.",
-            Pointers: RevocationPointers.CrlHttps, Evidence: "Req11"),
+            Pointers: RevocationPointers.CrlHttps),
         new("good-crl-ldap", "Good, CRL over LDAP", "Its only CRL distribution point is an ldap:// URL: the control for revoked-crl-ldap.",
-            Pointers: RevocationPointers.CrlLdap, Evidence: "Req11"),
+            Pointers: RevocationPointers.CrlLdap),
         new("under-revoked-ca", "Under a revoked CA", "Not revoked itself, but its issuing CA is revoked in the root's CRL: the chain is revoked.",
-            Problem: "Issuer revoked", IssuerId: RevokedIntermediateId, Evidence: "Req11"),
+            Problem: "Issuer revoked", IssuerId: RevokedIntermediateId),
         new("under-expired-ca", "Under an expired CA", "Valid itself, but its issuing CA expired yesterday: the chain is not valid.",
-            Problem: "Issuer expired", IssuerId: ExpiredIntermediateId, Evidence: "Req12"),
+            Problem: "Issuer expired", IssuerId: ExpiredIntermediateId),
         new("no-nonrepudiation", "Without non-repudiation", "Key usage has digitalSignature only (no nonRepudiation): signing works; some validation policies flag it.",
             Problem: "No non-repudiation", KeyUsage: X509KeyUsageFlags.DigitalSignature),
-        new("rsa-1024", "Weak key (RSA 1024)", "RSA 1024 key: the default signing policy refuses it (KeyTooWeak).", SandboxKeyType.Rsa1024, "Key too small", Evidence: "Req16"),
+        new("rsa-1024", "Weak key (RSA 1024)", "RSA 1024 key: the default signing policy refuses it (KeyTooWeak).", SandboxKeyType.Rsa1024, "Key too small"),
         new("no-signing-key-usage", "Without a signing key usage", "Key usage has keyEncipherment only: the default signing policy refuses it (KeyUsageNotPermitted).",
-            Problem: "No signing key usage", KeyUsage: X509KeyUsageFlags.KeyEncipherment, Evidence: "Req13"),
+            Problem: "No signing key usage", KeyUsage: X509KeyUsageFlags.KeyEncipherment),
         new("tsa", "TSA", "The time-stamping authority of /tsa/tsr and /tsa/authenticated.", Usage: CertificateUsage.Timestamping),
         new("tsa-revoked", "Revoked TSA", "The TSA of /tsa/revoked: its certificate is revoked, so its tokens must not be trusted.",
-            Problem: "Revoked", Usage: CertificateUsage.Timestamping, Revoked: true, Evidence: "Req30"),
+            Problem: "Revoked", Usage: CertificateUsage.Timestamping, Revoked: true),
         new("ocsp-responder", "Delegated OCSP responder", "Signs the intermediate CA's OCSP responses when the delegated signer is chosen (OCSPSigning, id-pkix-ocsp-nocheck).",
             Usage: CertificateUsage.OcspSigning, Pointers: RevocationPointers.None),
         new("tls-server", "HTTPS endpoint", "The TLS certificate of the HTTPS endpoint (serverAuth, localhost and the public host).",
@@ -585,7 +583,6 @@ internal sealed class SandboxPki : IDisposable
                     Description = seed.Description,
                     KeyType = seed.KeyType,
                     Problem = seed.Problem,
-                    Evidence = seed.Evidence,
                     IssuerId = seed.IssuerId,
                     Usage = seed.Usage,
                     Pointers = seed.Pointers,
@@ -790,8 +787,7 @@ internal sealed class SandboxPki : IDisposable
 
         _certificates = [.. _state.Certificates.Select(c => new SandboxCertificate(
             c.Id, c.Title, c.Description, c.KeyType, X509Certificate2.CreateFromPem(c.Pair.Certificate, c.Pair.Key), c.IssuerId, c.Usage, c.Pointers,
-            // The requirement label comes from the current seed: it may have been corrected since the environment was made.
-            c.Problem, s_seeds.FirstOrDefault(seed => seed.Id == c.Id) is { } seed ? seed.Evidence : c.Evidence, c.RevokedAt, c.RevocationReason, c.Publication))];
+            c.Problem, c.RevokedAt, c.RevocationReason, c.Publication))];
         if (OperatingSystem.IsWindows())
         {
             // Ephemeral keys cannot sign everywhere on Windows: round-trip through PKCS#12.

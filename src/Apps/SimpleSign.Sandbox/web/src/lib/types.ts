@@ -40,7 +40,6 @@ export interface CertificateView {
   usage?: "Signing" | "Timestamping" | "OcspSigning" | "TlsServer" | null
   pointers?: string | null
   problem?: string | null
-  evidence?: string | null
   isUsable: boolean
   revokedAt?: string | null
   revocationReason?: string | null

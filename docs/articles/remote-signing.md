@@ -46,7 +46,7 @@ that answers later (a mobile approval, for instance), use `DeferredSigner` (see 
 ## Simulated service in the tests
 
 - `tests/shared/SimpleSign.TestHelpers/DelegatingExternalSigner.cs` turns a callback into an `IExternalSigner`; the
-  INDECOPI evidence tests (`IndecopiEvidenceContractTests.Req25_SignatureByEachConnector_IsValid`) sign in the three
+  contract tests (`PolicyEnforcementContractTests.SignatureByEachConnector_IsValid`) sign in the three
   formats through it and validate the result.
 - `tests/unit/Signers/SimpleSign.Signers.Cloud.Tests/Fakes/FakeCscServer.cs` simulates a CSC v2 server (OAuth,
   credentials, signHash).
