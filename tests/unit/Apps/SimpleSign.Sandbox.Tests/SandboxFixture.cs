@@ -53,7 +53,7 @@ public sealed class SandboxFixture : IAsyncLifetime
         Client = new HttpClient(new HttpClientHandler
         {
             CheckCertificateRevocationList = false,
-            ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
+            ServerCertificateCustomValidationCallback = (_, certificate, sent, _) =>
             {
                 if (certificate is null)
                 {
@@ -63,6 +63,12 @@ public sealed class SandboxFixture : IAsyncLifetime
                 using var chain = new X509Chain();
                 chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
                 chain.ChainPolicy.CustomTrustStore.Add(root);
+                // The intermediate the server sent with its certificate (a fresh machine has no other copy).
+                if (sent is not null)
+                {
+                    chain.ChainPolicy.ExtraStore.AddRange(sent.ChainPolicy.ExtraStore);
+                }
+
                 chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
                 return chain.Build(certificate);
             },

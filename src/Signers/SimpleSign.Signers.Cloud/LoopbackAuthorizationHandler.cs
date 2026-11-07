@@ -104,13 +104,11 @@ public sealed class LoopbackAuthorizationHandler : IAuthorizationCodeHandler
             throw new ArgumentException("Only absolute http(s) URLs are opened in the browser.", nameof(uri));
         }
 
-        var start = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }
-            : new ProcessStartInfo(OperatingSystem.IsMacOS() ? "open" : "xdg-open") { UseShellExecute = false };
-        if (!OperatingSystem.IsWindows())
-        {
-            start.ArgumentList.Add(uri.AbsoluteUri);
-        }
+        // A fixed program with the URL as its one argument, never the URL as the program to run
+        // (explorer.exe opens a URL in the default browser, as open and xdg-open do).
+        string program = OperatingSystem.IsWindows() ? "explorer.exe" : OperatingSystem.IsMacOS() ? "open" : "xdg-open";
+        var start = new ProcessStartInfo(program) { UseShellExecute = false };
+        start.ArgumentList.Add(uri.AbsoluteUri);
 
         using var process = Process.Start(start);
     }

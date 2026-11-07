@@ -200,6 +200,8 @@ internal static class CliNetwork
 
         if (serverChain is not null)
         {
+            // What the server sent with its certificate (ExtraStore) and what the platform built.
+            chain.ChainPolicy.ExtraStore.AddRange(serverChain.ChainPolicy.ExtraStore);
             foreach (var element in serverChain.ChainElements)
             {
                 chain.ChainPolicy.ExtraStore.Add(element.Certificate);

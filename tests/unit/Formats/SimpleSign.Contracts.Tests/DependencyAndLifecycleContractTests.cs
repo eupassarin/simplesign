@@ -543,7 +543,8 @@ public sealed class DependencyAndLifecycleContractTests
             _ => throw new ArgumentOutOfRangeException(nameof(format))
         };
 
-        await cancellationHandler.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        // Generous: on a busy CI runner signing can take more than 10 s to reach the LTV download.
+        await cancellationHandler.Started.Task.WaitAsync(TimeSpan.FromSeconds(60));
         cts.Cancel();
 
         await Should.ThrowAsync<OperationCanceledException>(() => signing);

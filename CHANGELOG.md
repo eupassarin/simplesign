@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TestBench's "time" option claims as signing time, and embedded OCSP evidence is checked with no clock-skew
   tolerance against it, so CAdES/XAdES matrix cases failed "incomplete LTV" whenever a second boundary fell between.
 
+### Changed — opening the OAuth page on Windows
+
+- `LoopbackAuthorizationHandler.OpenInSystemBrowser` starts `explorer.exe` with the URL as its argument on Windows,
+  like `open`/`xdg-open` elsewhere, instead of shell-executing the URL itself (CodeQL `cs/command-line-injection`).
+
 ### Fixed — Strict signing no longer trusts a CRL cached before a revocation
 
 - `SigningPolicy.Strict` asked a shared `ChainRevocationChecker` (DI, `WithChainRevocationChecker`) for the status
