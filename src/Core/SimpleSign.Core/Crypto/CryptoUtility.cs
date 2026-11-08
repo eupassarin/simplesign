@@ -127,4 +127,18 @@ internal static class CryptoUtility
 
         return HashAlgorithmName.SHA1; // DEFAULT per RFC 4055 §3.1
     }
+
+    /// <summary>
+    /// Whether a chain reaches a trust anchor with sound certificates, even when a certificate is revoked or outside its
+    /// validity: built, or failing only for revocation or time. Those failures are the policy's NotRevoked and NotExpired
+    /// constraints; an untrusted root, a partial chain or a bad signature are not.
+    /// </summary>
+    internal static bool ReachesTrustAnchor(X509Chain chain, bool built)
+    {
+        const X509ChainStatusFlags RevocationOrTime =
+            X509ChainStatusFlags.Revoked | X509ChainStatusFlags.RevocationStatusUnknown | X509ChainStatusFlags.OfflineRevocation
+            | X509ChainStatusFlags.NotTimeValid | X509ChainStatusFlags.NotTimeNested;
+        return built
+            || (chain.ChainElements.Count > 0 && chain.ChainStatus.All(s => (s.Status & ~RevocationOrTime) == 0));
+    }
 }

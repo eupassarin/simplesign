@@ -102,7 +102,7 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
             // The same policy on both sides: SimpleSign's, written as the DSS constraint.xml.
             ["policy"] = new JsonObject
             {
-                ["bytes"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(DssPolicyConverter.ToConstraintXml(Policy.ToJson()))),
+                ["bytes"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(DssPolicyConverter.ToConstraintXml(Policy.ToJson(), DssPolicyConverter.NotInDss63))),
                 ["digestAlgorithm"] = null,
                 ["name"] = "simplesign-policy.xml",
             },

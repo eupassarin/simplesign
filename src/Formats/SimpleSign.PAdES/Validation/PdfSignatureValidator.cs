@@ -412,7 +412,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _cryptoVerifier.ValidateSigningCertV2(cmsData, errors, _logger);
 
         // 4. Certificate chain
-        bool chainValid = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
+        var (chainValid, chainAnchored) = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
 
         // 4a. Signature timestamp: its genTime is the time the chain is validated at (B-T and above).
         // Below ValidationLevel.Timestamps the token is not looked at: no proof of existence.
@@ -449,7 +449,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // 5. Revocation (optional — requires network)
         var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
-            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainValid || chainTrustWarning, cancellationToken).ConfigureAwait(false);
+            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainAnchored || chainTrustWarning, cancellationToken).ConfigureAwait(false);
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
         {
@@ -459,6 +459,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             SignerCertificate = cmsData.SignerCertificate,
             IsCertificateChainValid = chainValid,
             IsChainTrustWarning = chainTrustWarning,
+            ChainReachesAnchor = chainAnchored,
             IsNotRevoked = RevocationFact(notRevoked, revocationSource),
             RevocationSource = revocationSource,
             // A live OCSP answer is issued now; for the other sources the issue time is not reported yet.
@@ -538,7 +539,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         bool sigValid = ValidateSignatureStep(cmsData, errors, out bool signatureVerificationIndeterminate);
 
         // 3. TSA certificate chain
-        bool chainValid = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
+        var (chainValid, chainAnchored) = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
 
         // 3a. Country-specific chain validation providers (policy level, signer ID enrichment)
         var chainValidationResult = await RunChainValidationProvidersAsync(
@@ -576,7 +577,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // 4. Revocation (optional)
         var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
-            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainValid || chainTrustWarning, cancellationToken).ConfigureAwait(false);
+            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainAnchored || chainTrustWarning, cancellationToken).ConfigureAwait(false);
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
         {
@@ -586,6 +587,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             SignerCertificate = cmsData.SignerCertificate,
             IsCertificateChainValid = chainValid,
             IsChainTrustWarning = chainTrustWarning,
+            ChainReachesAnchor = chainAnchored,
             IsNotRevoked = RevocationFact(notRevoked, revocationSource),
             RevocationSource = revocationSource,
             // A live OCSP answer is issued now; for the other sources the issue time is not reported yet.
@@ -666,14 +668,16 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
     }
 
-    private async Task<bool> ValidateChainStep(CmsSignedData cmsData, List<string> errors, List<string> warnings, CancellationToken ct = default)
+    /// <summary>Validates the chain; also tells whether it reaches a trust anchor, even when it is invalid (revoked, expired).</summary>
+    private async Task<(bool Valid, bool Anchored)> ValidateChainStep(CmsSignedData cmsData, List<string> errors, List<string> warnings, CancellationToken ct = default)
     {
         // Guard: signer cert can be null when CmsParser fails to identify it.
         // ValidateCertificateChain handles null correctly, but DownloadAiaCertsAsync requires
         // a non-null cert — skip AIA chasing in that case.
         if (cmsData.SignerCertificate is null || !_options.Verifier.UseAia)
         {
-            return ValidateCertificateChain(cmsData.SignerCertificate, cmsData.Certificates, errors, warnings);
+            bool valid = ValidateCertificateChain(cmsData.SignerCertificate, cmsData.Certificates, errors, warnings, out bool anchored);
+            return (valid, anchored);
         }
 
         try
@@ -695,9 +699,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
                 ? [.. cmsData.Certificates, .. aiaCerts]
                 : cmsData.Certificates;
 
-            bool chainValid = ValidateCertificateChain(cmsData.SignerCertificate, allCerts, errors, warnings);
+            bool chainValid = ValidateCertificateChain(cmsData.SignerCertificate, allCerts, errors, warnings, out bool chainAnchored);
             ct.ThrowIfCancellationRequested();
-            return chainValid;
+            return (chainValid, chainAnchored);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -708,7 +712,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         {
             _logger.ChainError(ex);
             errors.Add($"Certificate chain validation error: {ex.Message}");
-            return false;
+            return (false, false);
         }
     }
 
@@ -841,8 +845,16 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         X509Certificate2? signerCert,
         IReadOnlyList<X509Certificate2> embeddedCerts,
         List<string> errors,
-        List<string> warnings)
+        List<string> warnings) => ValidateCertificateChain(signerCert, embeddedCerts, errors, warnings, out _);
+
+    private bool ValidateCertificateChain(
+        X509Certificate2? signerCert,
+        IReadOnlyList<X509Certificate2> embeddedCerts,
+        List<string> errors,
+        List<string> warnings,
+        out bool reachesAnchor)
     {
+        reachesAnchor = false;
         if (signerCert is null)
         {
             errors.Add("No signer certificate found in CMS.");
@@ -892,6 +904,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         bool chainBuilt = chain.Build(signerCert);
+        reachesAnchor = CryptoUtility.ReachesTrustAnchor(chain, chainBuilt);
 
         foreach (var element in chain.ChainElements)
         {

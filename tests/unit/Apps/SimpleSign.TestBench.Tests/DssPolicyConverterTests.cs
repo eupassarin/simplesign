@@ -16,6 +16,7 @@ public sealed class DssPolicyConverterTests
         var xml = XDocument.Parse(DssPolicyConverter.ToConstraintXml(ValidationPolicy.Default.ToJson()));
         XNamespace ns = "http://dss.esig.europa.eu/validation/policy";
 
+        xml.Declaration!.Encoding.ShouldBe("utf-8", StringCompareShould.IgnoreCase);
         xml.Root!.Name.ShouldBe(ns + "ConstraintsParameters");
         xml.Root.Attribute("Name")!.Value.ShouldBe("SimpleSign default");
         xml.Root.Elements().First().Name.LocalName.ShouldBe("Description");
@@ -89,6 +90,28 @@ public sealed class DssPolicyCompatibilityTests
 
         var errors = new List<string>();
         XDocument.Parse(DssPolicyConverter.ToConstraintXml(ValidationPolicy.Default.ToJson()))
+            .Validate(schemas, (_, e) => errors.Add(e.Message));
+
+        errors.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ConstraintXmlForDss63_IsValidAgainstTheDss63Schema()
+    {
+        string? xsd = await TryDownloadAsync("https://raw.githubusercontent.com/esig/dss/6.3/dss-policy-jaxb/src/main/resources/xsd/policy.xsd");
+        if (xsd is null)
+        {
+            return;
+        }
+
+        var schemas = new XmlSchemaSet();
+        using (var reader = XmlReader.Create(new StringReader(xsd), new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit }))
+        {
+            schemas.Add(null, reader);
+        }
+
+        var errors = new List<string>();
+        XDocument.Parse(DssPolicyConverter.ToConstraintXml(ValidationPolicy.Default.ToJson(), DssPolicyConverter.NotInDss63))
             .Validate(schemas, (_, e) => errors.Add(e.Message));
 
         errors.ShouldBeEmpty();

@@ -17,19 +17,33 @@ internal static class DssPolicyConverter
 {
     internal static readonly XNamespace Namespace = "http://dss.esig.europa.eu/validation/policy";
 
-    /// <summary>The DSS <c>constraint.xml</c> of a SimpleSign validation policy.</summary>
-    internal static string ToConstraintXml(string json)
+    /// <summary>
+    /// Elements of the current DSS policy schema that DSS 6.3 (the version of <c>tools/dss</c>) does not know: DSS
+    /// refuses a policy that has them. They are left out of the XML sent to it, so DSS does not evaluate them.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> NotInDss63 = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "AuthorityKeyIdentifierPresent", "SubjectKeyIdentifierPresent", "SigningTimeInCertRange", "SignatureType",
+        "X509UrlPresent", "X509UrlMatch", "KeyBindingSignatureConstraints", "Attestation", "AttestationRevocation",
+        "LoTEFreshness", "LoTENotExpired", "LoTEWellSigned", "LoTEVersion", "LoTEStructure",
+        "QcIdentificationMethod", "QcPSBAuthSourceIdentification", "QcPSBCountryOfLegislation",
+        "QcPSBLegislationIdentification", "QcQSCDLegislation",
+    };
+
+    /// <summary>The DSS <c>constraint.xml</c> of a SimpleSign validation policy, for the current DSS schema or, with <paramref name="omit"/>, an older one.</summary>
+    internal static string ToConstraintXml(string json, IReadOnlySet<string>? omit = null)
     {
         using var document = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
         var root = document.RootElement.GetProperty("ConstraintsParameters");
-        var xml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), Element("ConstraintsParameters", root));
-        var builder = new StringBuilder();
-        using (var writer = XmlWriter.Create(builder, new XmlWriterSettings { Indent = true, OmitXmlDeclaration = false }))
+        var xml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), Element("ConstraintsParameters", root, omit));
+        // Written as UTF-8 bytes, so the declaration says UTF-8 (a StringBuilder would declare UTF-16).
+        using var stream = new MemoryStream();
+        using (var writer = XmlWriter.Create(stream, new XmlWriterSettings { Indent = true, Encoding = new UTF8Encoding(false) }))
         {
             xml.Save(writer);
         }
 
-        return builder.ToString();
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>A SimpleSign validation policy (JSON) from a DSS <c>constraint.xml</c>.</summary>
@@ -41,11 +55,16 @@ internal static class DssPolicyConverter
         return json.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
     }
 
-    private static XElement Element(string name, JsonElement value)
+    private static XElement Element(string name, JsonElement value, IReadOnlySet<string>? omit)
     {
         var element = new XElement(Namespace + name);
         foreach (var property in value.EnumerateObject())
         {
+            if (omit?.Contains(property.Name) == true)
+            {
+                continue;
+            }
+
             switch (property.Name)
             {
                 case "$schema":
@@ -62,7 +81,7 @@ internal static class DssPolicyConverter
                 default:
                     if (property.Value.ValueKind == JsonValueKind.Object)
                     {
-                        element.Add(Element(property.Name, property.Value));
+                        element.Add(Element(property.Name, property.Value, omit));
                     }
                     else
                     {

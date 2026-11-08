@@ -253,7 +253,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     {
         // An untrusted chain is not checked unless asked (VerifierOptions.CheckRevocationForUntrustedChains).
         if (result.Facts is null
-            || !_options.ChecksRevocationFor(result.Facts.IsCertificateChainValid || result.Facts.IsChainTrustWarning))
+            || !_options.ChecksRevocationFor(result.Facts.IsChainAnchored))
         {
             return result;
         }
@@ -448,7 +448,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
 
         // 5. Certificate chain validation (intermediates come from the CMS certificates field)
-        bool chainValid = ValidateChain(cmsData.SignerCertificate!, errors, warnings, trustAnchors, cmsData.Certificates);
+        bool chainValid = ValidateChain(cmsData.SignerCertificate!, errors, warnings, trustAnchors, cmsData.Certificates, out bool chainAnchored);
 
         // 6. Timestamp validation
         bool? tsValid = null;
@@ -465,7 +465,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
                         return false;
                     }
 
-                    return ValidateChain(certificate, tsaErrors, tsaWarnings, trustAnchors, certificates);
+                    return ValidateChain(certificate, tsaErrors, tsaWarnings, trustAnchors, certificates, out _);
                 };
             TimestampTokenValidationResult timestamp = _timestampValidator.ValidateWithTrust(
                 cmsData, warnings, tsaPolicy, _logger);
@@ -553,6 +553,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             IsTsaTrusted = tsaTrusted,
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
             ProofOfExistence = provenTime,
+            ChainReachesAnchor = chainAnchored,
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -667,8 +668,10 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         List<string> errors,
         List<string> warnings,
         IEnumerable<X509Certificate2>? trustAnchors,
-        IReadOnlyList<X509Certificate2>? additionalCertificates = null)
+        IReadOnlyList<X509Certificate2>? additionalCertificates,
+        out bool reachesAnchor)
     {
+        reachesAnchor = false;
         try
         {
             bool hasCustomRoots = trustAnchors is not null
@@ -698,6 +701,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             }
 
             bool built = chain.Build(signerCert);
+            reachesAnchor = CryptoUtility.ReachesTrustAnchor(chain, built);
 
             foreach (var element in chain.ChainElements)
             {

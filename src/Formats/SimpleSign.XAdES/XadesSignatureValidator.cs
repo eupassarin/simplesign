@@ -155,7 +155,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     {
         // An untrusted chain is not checked unless asked (VerifierOptions.CheckRevocationForUntrustedChains).
         if (result.Facts is null
-            || !_options.ChecksRevocationFor(result.Facts.IsCertificateChainValid || result.Facts.IsChainTrustWarning))
+            || !_options.ChecksRevocationFor(result.Facts.IsChainAnchored))
         {
             return result;
         }
@@ -489,7 +489,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
 
         // Certificate chain validation
-        bool chainValid = ValidateCertificateChain(signerCert, trustAnchors, sigElement, ns, errors);
+        bool chainValid = ValidateCertificateChain(signerCert, trustAnchors, sigElement, ns, errors, out bool chainAnchored);
         var (claimedRoles, attributeCertificates, signedAssertions) = ReadSignerRoles(sigElement, ns, warnings);
         var facts = new ValidationFacts
         {
@@ -500,6 +500,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             IsTsaTrusted = tsaTrusted,
             DigestAlgorithmOid = SignatureMethodDigestOid(sigElement, ns),
             ProofOfExistence = provenTime,
+            ChainReachesAnchor = chainAnchored,
             Chain = signerCert is null ? null : SignerAcceptance.OrderChain(
                 signerCert, [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []]),
             ClaimedSigningTime = extraction.SigningTime,
@@ -623,8 +624,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         IEnumerable<X509Certificate2>? trustAnchors,
         XmlElement sigElement,
         XmlNamespaceManager ns,
-        List<string> errors)
+        List<string> errors,
+        out bool reachesAnchor)
     {
+        reachesAnchor = false;
         if (signerCert is null)
         {
             errors.Add("No signer certificate found in the signature.");
@@ -662,6 +665,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             }
 
             bool chainValid = chain.Build(signerCert);
+            reachesAnchor = CryptoUtility.ReachesTrustAnchor(chain, chainValid);
             if (!chainValid)
             {
                 foreach (var status in chain.ChainStatus)

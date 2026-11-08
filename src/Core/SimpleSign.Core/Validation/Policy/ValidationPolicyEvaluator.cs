@@ -13,6 +13,12 @@ internal sealed record ValidationFacts
     public bool IsCertificateChainValid { get; init; }
     public bool IsChainTrustWarning { get; init; }
 
+    /// <summary>Whether the chain reaches a trust anchor and fails, if at all, only for revocation or time; null: not established.</summary>
+    public bool? ChainReachesAnchor { get; init; }
+
+    /// <summary>Whether the chain is trusted enough for its revocation to be checked.</summary>
+    public bool IsChainAnchored => ChainReachesAnchor ?? (IsCertificateChainValid || IsChainTrustWarning);
+
     /// <summary>True: not revoked; false: revoked or unknown (see <see cref="RevocationSource"/>); null: not checked.</summary>
     public bool? IsNotRevoked { get; init; }
     public RevocationSource RevocationSource { get; init; }
@@ -148,7 +154,8 @@ internal static class ValidationPolicyEvaluator
             }
 
             string chain = basic + "/ProspectiveCertificateChain";
-            if (facts.IsCertificateChainValid)
+            // A chain that reaches its anchor and fails only for revocation or time is left to NotRevoked and NotExpired.
+            if (facts.IsCertificateChainValid || facts.ChainReachesAnchor == true)
             {
                 Check(chain, true, "The certificate chain reaches a trust anchor.", "", SignatureIndication.Indeterminate, SignatureSubIndication.NoCertificateChainFound);
             }
