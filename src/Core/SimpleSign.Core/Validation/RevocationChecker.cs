@@ -19,6 +19,12 @@ internal sealed class RevocationChecker : IRevocationChecker
     private readonly ICrlClient _crlClient;
     private readonly ILogger _logger;
 
+    /// <summary>Which online source is asked first. Default: OCSP, as in the EU DSS.</summary>
+    internal RevocationStrategy Strategy { get; init; } = RevocationStrategy.OcspFirst;
+
+    /// <summary>Whether the other online source is asked when the first gives no answer.</summary>
+    internal bool Fallback { get; init; } = true;
+
     internal RevocationChecker(IOcspClient ocspClient, ICrlClient crlClient, ILogger? logger = null)
     {
         _ocspClient = ocspClient;
@@ -108,34 +114,28 @@ internal sealed class RevocationChecker : IRevocationChecker
             }
         }
 
-        // 2. Try OCSP
+        // 2. Online: the source of the strategy first, then the other one when the first gives no answer.
         var ocspUrl = OcspClient.GetOcspUrl(cert);
-        if (ocspUrl is not null)
-        {
-            _logger.TryingOcsp(cert.Subject, ocspUrl);
-            try
-            {
-                bool ok = await _ocspClient.CheckOcspWithChainAsync(cert, chain, ocspUrl, ct).ConfigureAwait(false);
-                return (ok, RevocationSource.OnlineOcsp);
-            }
-            catch (Exception ex) when (ex is HttpRequestException or AsnContentException or CryptographicException or InvalidOperationException or InvalidDataException)
-            {
-                _logger.OcspCheckFailed(ex.Message);
-            }
-        }
-
-        // 3. Try online CRL
 #pragma warning disable CA1508 // GetCrlUrl can return non-null; analyzer false positive
         var crlUrl = CrlClient.GetCrlUrl(cert);
 #pragma warning restore CA1508
-        if (crlUrl is not null)
+        var first = Strategy == RevocationStrategy.OcspFirst
+            ? await OnlineOcspAsync(cert, chain, ocspUrl, ct).ConfigureAwait(false)
+            : await OnlineCrlAsync(cert, chain, crlUrl, ct).ConfigureAwait(false);
+        if (first is { } answer)
         {
-            _logger.TryingCrlDownload(cert.Subject, crlUrl);
-            var crlIssuer = chain.FindIssuerOf(cert);
-            bool ok = crlIssuer is not null
-                ? await _crlClient.CheckCrlAsync(cert, crlIssuer, crlUrl, ct).ConfigureAwait(false)
-                : await _crlClient.CheckCrlAsync(cert, crlUrl, ct).ConfigureAwait(false);
-            return (ok, RevocationSource.OnlineCrl);
+            return answer;
+        }
+
+        if (Fallback)
+        {
+            var second = Strategy == RevocationStrategy.OcspFirst
+                ? await OnlineCrlAsync(cert, chain, crlUrl, ct).ConfigureAwait(false)
+                : await OnlineOcspAsync(cert, chain, ocspUrl, ct).ConfigureAwait(false);
+            if (second is { } other)
+            {
+                return other;
+            }
         }
 
         // No revocation URL available — indeterminate
@@ -144,5 +144,42 @@ internal sealed class RevocationChecker : IRevocationChecker
             cert.Thumbprint,
             ocspUrl is not null ? new Uri(ocspUrl) : null,
             null);
+    }
+
+    private async Task<(bool IsNotRevoked, RevocationSource Source)?> OnlineOcspAsync(
+        X509Certificate2 cert, IReadOnlyList<X509Certificate2> chain, string? ocspUrl, CancellationToken ct)
+    {
+        if (ocspUrl is null)
+        {
+            return null;
+        }
+
+        _logger.TryingOcsp(cert.Subject, ocspUrl);
+        try
+        {
+            bool ok = await _ocspClient.CheckOcspWithChainAsync(cert, chain, ocspUrl, ct).ConfigureAwait(false);
+            return (ok, RevocationSource.OnlineOcsp);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or AsnContentException or CryptographicException or InvalidOperationException or InvalidDataException)
+        {
+            _logger.OcspCheckFailed(ex.Message);
+            return null;
+        }
+    }
+
+    private async Task<(bool IsNotRevoked, RevocationSource Source)?> OnlineCrlAsync(
+        X509Certificate2 cert, IReadOnlyList<X509Certificate2> chain, string? crlUrl, CancellationToken ct)
+    {
+        if (crlUrl is null)
+        {
+            return null;
+        }
+
+        _logger.TryingCrlDownload(cert.Subject, crlUrl);
+        var crlIssuer = chain.FindIssuerOf(cert);
+        bool ok = crlIssuer is not null
+            ? await _crlClient.CheckCrlAsync(cert, crlIssuer, crlUrl, ct).ConfigureAwait(false)
+            : await _crlClient.CheckCrlAsync(cert, crlUrl, ct).ConfigureAwait(false);
+        return (ok, RevocationSource.OnlineCrl);
     }
 }

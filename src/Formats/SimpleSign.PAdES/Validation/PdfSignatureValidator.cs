@@ -122,7 +122,11 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _revocationChecker = new RevocationChecker(
             new OcspClient(client, _logger) { OutboundPolicy = _outboundPolicy },
             new CrlClient(client, _logger) { OutboundPolicy = _outboundPolicy },
-            _logger);
+            _logger)
+        {
+            Strategy = _options.Verifier.RevocationStrategy,
+            Fallback = _options.Verifier.RevocationFallback,
+        };
         _certChainService = new CertificateChainService();
         _cryptoVerifier = new CryptoVerifierService();
         _integrityVerifier = new IntegrityVerifierService();
@@ -154,7 +158,11 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _revocationChecker = new RevocationChecker(
             new OcspClient(client, _logger) { OutboundPolicy = _outboundPolicy },
             new CrlClient(client, _logger) { OutboundPolicy = _outboundPolicy },
-            _logger);
+            _logger)
+        {
+            Strategy = _options.Verifier.RevocationStrategy,
+            Fallback = _options.Verifier.RevocationFallback,
+        };
         _certChainService = new CertificateChainService();
         _cryptoVerifier = new CryptoVerifierService();
         _integrityVerifier = new IntegrityVerifierService();
@@ -407,9 +415,11 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         bool chainValid = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
 
         // 4a. Signature timestamp: its genTime is the time the chain is validated at (B-T and above).
-        TimestampTokenValidationResult timestamp = _timestampValidator.ValidateWithTrust(
-            cmsData, warnings, ValidateCertificateChain, _logger);
-        if (_options.CheckRevocation && cmsData.SignatureTimestampToken is { } signatureTimestampToken)
+        // Below ValidationLevel.Timestamps the token is not looked at: no proof of existence.
+        TimestampTokenValidationResult timestamp = _options.ValidatesTimestamps
+            ? _timestampValidator.ValidateWithTrust(cmsData, warnings, ValidateCertificateChain, _logger)
+            : new TimestampTokenValidationResult();
+        if (_options.ChecksRevocation && _options.ValidatesTimestamps && cmsData.SignatureTimestampToken is { } signatureTimestampToken)
         {
             timestamp = await TimestampTsaChecks.CheckTsaRevocationAsync(
                 timestamp, signatureTimestampToken, [.. cmsData.Certificates, .. TrustAnchorCertificates()],
@@ -439,7 +449,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // 5. Revocation (optional — requires network)
         var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
-            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken).ConfigureAwait(false);
+            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainValid || chainTrustWarning, cancellationToken).ConfigureAwait(false);
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
         {
@@ -451,11 +461,14 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             IsChainTrustWarning = chainTrustWarning,
             IsNotRevoked = RevocationFact(notRevoked, revocationSource),
             RevocationSource = revocationSource,
+            // A live OCSP answer is issued now; for the other sources the issue time is not reported yet.
+            RevocationIssuedAt = revocationSource == RevocationSource.OnlineOcsp ? DateTimeOffset.UtcNow : null,
             IsDocumentTimestamp = false,
             IsTsaTrusted = timestamp.IsTsaTrusted,
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
             ProofOfExistence = provenTime,
-        }, _options.Policy);
+            TrustedLists = TrustedListInfos(),
+        }.WithCms(cmsData, _options.TrustedRoots, field.PdfSigningTime), _options.PolicyFor(cmsData.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
 
         return new SignatureValidationResult
@@ -463,6 +476,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            AppliedPolicy = evaluation.Policy,
+            BestSignatureTime = provenTime,
             FieldName = field.FieldName,
             IsIntegrityValid = integrityValid,
             IsSignatureValid = sigValid,
@@ -561,7 +576,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // 4. Revocation (optional)
         var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
-            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, cancellationToken).ConfigureAwait(false);
+            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainValid || chainTrustWarning, cancellationToken).ConfigureAwait(false);
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
         {
@@ -573,11 +588,14 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             IsChainTrustWarning = chainTrustWarning,
             IsNotRevoked = RevocationFact(notRevoked, revocationSource),
             RevocationSource = revocationSource,
+            // A live OCSP answer is issued now; for the other sources the issue time is not reported yet.
+            RevocationIssuedAt = revocationSource == RevocationSource.OnlineOcsp ? DateTimeOffset.UtcNow : null,
             IsDocumentTimestamp = true,
             IsTsaTrusted = null,
             DigestAlgorithmOid = cmsData.TstMessageImprintHashAlgOid ?? cmsData.DigestAlgorithmOid,
             ProofOfExistence = null,
-        }, _options.Policy);
+            TrustedLists = TrustedListInfos(),
+        }.WithCms(cmsData, _options.TrustedRoots), _options.PolicyFor(null));
         warnings.AddRange(evaluation.Warnings);
 
         return new SignatureValidationResult
@@ -585,6 +603,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            AppliedPolicy = evaluation.Policy,
             FieldName = field.FieldName,
             IsIntegrityValid = integrityValid,
             IsSignatureValid = sigValid,
@@ -652,9 +671,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // Guard: signer cert can be null when CmsParser fails to identify it.
         // ValidateCertificateChain handles null correctly, but DownloadAiaCertsAsync requires
         // a non-null cert — skip AIA chasing in that case.
-        if (cmsData.SignerCertificate is null)
+        if (cmsData.SignerCertificate is null || !_options.Verifier.UseAia)
         {
-            return ValidateCertificateChain(null, cmsData.Certificates, errors, warnings);
+            return ValidateCertificateChain(cmsData.SignerCertificate, cmsData.Certificates, errors, warnings);
         }
 
         try
@@ -700,9 +719,11 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IReadOnlyList<byte[]> embeddedOcsps,
         List<string> errors,
         List<string> warnings,
+        bool chainTrusted,
         CancellationToken cancellationToken)
     {
-        if (!_options.CheckRevocation || cmsData.SignerCertificate is null)
+        // An untrusted chain is not checked unless asked (VerifierOptions.CheckRevocationForUntrustedChains).
+        if (!_options.ChecksRevocationFor(chainTrusted) || cmsData.SignerCertificate is null)
         {
             return (true, RevocationSource.None);
         }
@@ -829,8 +850,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         using var chain = new X509Chain();
-        CryptoUtility.ConfigureChainPolicy(chain, _options.CheckRevocation);
+        CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
         chain.ChainPolicy.UrlRetrievalTimeout = _options.NetworkTimeout;
+        chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
         chain.ChainPolicy.VerificationFlags =
             X509VerificationFlags.IgnoreEndRevocationUnknown |
             X509VerificationFlags.IgnoreCertificateAuthorityRevocationUnknown;
@@ -933,7 +955,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             IsValidationTimeFromTimestamp = provenTime is not null,
             EmbeddedCrls = embeddedCrls,
             EmbeddedOcsps = embeddedOcsps,
-            CheckRevocation = _options.CheckRevocation,
+            CheckRevocation = _options.ChecksRevocation,
             Signature = cmsData,
             Pdf = pdfFacts,
         };
@@ -988,11 +1010,22 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         return null;
     }
 
+    /// <summary>The trusted lists behind the trust anchor providers, for the eIDAS constraints of the policy.</summary>
+    private IReadOnlyList<TrustedListInfo>? TrustedListInfos()
+    {
+        var lists = _trustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists).ToList();
+        return lists.Count == 0 ? null : lists;
+    }
+
     private ChainRevocationChecker? _tsaRevocationChecker;
 
     /// <summary>The checker for the revocation of TSA chains, created on first use.</summary>
     private ChainRevocationChecker TsaRevocationChecker =>
-        _tsaRevocationChecker ??= new ChainRevocationChecker(_httpClient, _logger, _outboundPolicy);
+        _tsaRevocationChecker ??= new ChainRevocationChecker(_httpClient, _logger, _outboundPolicy)
+        {
+            Strategy = _options.Verifier.RevocationStrategy,
+            Fallback = _options.Verifier.RevocationFallback,
+        };
 
     /// <summary>The trust anchors and intermediates of the providers and the options, to complete TSA chains.</summary>
     private IEnumerable<X509Certificate2> TrustAnchorCertificates() =>

@@ -209,7 +209,7 @@ environment, such as the [SimpleSign Sandbox](sandbox.md), every command accepts
 
 ```bash
 curl -s http://localhost:5300/chain.pem > sandbox-chain.pem
-simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signing-policy strict --json \
+simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signing-policy strict-signing-policy.json --json \
   --allow-origin http://localhost:5300 --allow-origin https://localhost:5301 --allow-origin ldap://localhost:5302 \
   --allow-ldap --tls-trust sandbox-chain.pem
 ```
@@ -220,13 +220,19 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 
 | Option | What it does |
 |---|---|
-| `--policy <file>` | Validation policy (JSON): accepted digest algorithms and their dates, minimum RSA size, accepted curves, key usage of the signing certificate |
+| `--policy <file>` | Validation policy: JSON in the structure of the EU DSS `constraint.xml` (root `ConstraintsParameters`); see [ADR 0023](../adr/0023-policies-in-the-dss-structure.md) |
 | `--policy-signer <cert>` | The policy must be signed with this certificate (detached CMS in `<policy>.p7s`) |
 | `--trust-dir <dir>` | Folder of trust anchor certificates (`.cer`, `.crt`, `.der`, `.pem`) |
 | `--trust-dir-signer <cert>` | The folder must carry `manifest.json` (SHA-256 of every file) signed with this certificate |
 | `--tsl <url\|file>` + `--tsl-signer <cert>` | Trusted list (ETSI TS 119 612 / TS 102 231): its active CA and TSA services become trust anchors |
+| `--lotl <url>` + `--lotl-signer <cert>` | List of trusted lists (e.g. the EU LOTL): the national lists it points to are checked with the certificates it gives and their CA and TSA services become trust anchors; `--lotl-territory PT` (repeatable) loads only some |
 | `--lang es` | Write the verification report in Spanish |
 | `--check-revocation` (CAdES, XAdES) | Check the revocation of the signer and TSA chains |
+| `--level basic\|timestamps\|lt\|lta` | How much is validated, as the EU DSS validation level: the signature and chain only, plus signature timestamps, plus revocation and long-term data, plus archive timestamps (default) |
+| `--revocation-strategy ocsp-first\|crl-first` | Which revocation source is asked first (default `ocsp-first`, as DSS); the other one answers when the first gives nothing |
+| `--etsi-report <file>` | Write the ETSI TS 119 102-2 signature validation report (XML, namespace `http://uri.etsi.org/19102/v1.2.1#`) |
+| `--simple-report <file>` | Write the simple report (JSON): per signature the indication, sub-indication, signer, times, policy, errors and warnings |
+| `--revocation-for-untrusted` | Also check the revocation of chains that do not reach a trust anchor (off by default, as DSS) |
 
 Every signature gets a verification report: the indication (TOTAL-PASSED, TOTAL-FAILED, INDETERMINATE), the
 ETSI EN 319 102-1 sub-indication, the signer's public key (algorithm, size, SHA-256 of the SubjectPublicKeyInfo and
@@ -237,18 +243,37 @@ the PEM) and each check of the validation. With `--json` the same data is in `su
 simplesign validate contrato.pdf --policy indecopi.json --tsl tsl-pe.xml --tsl-signer indecopi-tsl.cer --lang es
 ```
 
-A policy file (every property is optional):
+A policy file has the elements, names and levels of the DSS validation policy; a constraint left out is not
+evaluated, and one SimpleSign does not evaluate yet is reported as `NOT_CHECKED`. Start from the default
+(`simplesign policy export validation -o policy.json`) and change what you need:
 
 ```json
 {
-  "name": "INDECOPI",
-  "cryptographic": {
-    "level": "fail",
-    "digestAlgorithms": [ { "name": "SHA1", "acceptedUntil": "2012-08-01T00:00:00Z" }, "SHA256", "SHA384", "SHA512" ],
-    "minimumRsaKeySize": 2048
-  },
-  "signingCertificate": { "keyUsage": "fail" }
+  "ConstraintsParameters": {
+    "Name": "INDECOPI",
+    "Description": "Key usage required; obsolete algorithms fail.",
+    "SignatureConstraints": {
+      "BasicSignatureConstraints": {
+        "SigningCertificate": {
+          "NotExpired": { "Level": "FAIL" },
+          "KeyUsage": { "Level": "FAIL", "Id": [ "digitalSignature", "nonRepudiation" ] }
+        }
+      }
+    },
+    "Cryptographic": {
+      "Level": "FAIL",
+      "AcceptableDigestAlgo": { "Algo": [ "SHA1", "SHA256", "SHA384", "SHA512" ] },
+      "MiniPublicKeySize": { "Algo": [ { "Value": "RSA", "Size": 2048 } ] },
+      "AlgoExpirationDate": {
+        "Format": "yyyy-MM-dd",
+        "Algo": [ { "Value": "SHA1", "Date": "2012-08-01" }, "SHA256", "SHA384", "SHA512", { "Value": "RSA", "Size": 2048 } ]
+      }
+    }
+  }
 }
 ```
+
+`--signing-policy <file>` on the sign commands takes the signing policy (root `SigningConstraints`, see
+[PAdES signing](pades.md#signing-policy)); `simplesign policy export signing` writes the default one.
 
 `timestamp verify` also tells whether the `tsa` name of the token matches the TSA certificate (RFC 3161 §2.4.2).

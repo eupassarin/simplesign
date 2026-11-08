@@ -604,6 +604,33 @@ public sealed class OcspClient : IOcspClient
         catch (CryptographicException ex) { logger?.OcspSignatureVerificationFailed(ex.Message); return false; }
     }
 
+    /// <summary>The producedAt of an OCSP response (when it was issued), or null when it cannot be parsed.</summary>
+    /// <param name="ocspResponse">The DER encoded OCSPResponse.</param>
+    /// <returns>The producedAt time, or <see langword="null"/>.</returns>
+    public static DateTimeOffset? ReadProducedAt(byte[] ocspResponse)
+    {
+        try
+        {
+            var response = new AsnReader(ocspResponse, AsnEncodingRules.DER).ReadSequence();
+            response.ReadEnumeratedBytes(); // responseStatus
+            var responseBytes = response.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0)).ReadSequence();
+            responseBytes.ReadObjectIdentifier(); // responseType
+            var basic = new AsnReader(responseBytes.ReadOctetString(), AsnEncodingRules.DER).ReadSequence();
+            var data = basic.ReadSequence(); // tbsResponseData
+            if (data.PeekTag().HasSameClassAndValue(new Asn1Tag(TagClass.ContextSpecific, 0)))
+            {
+                data.ReadEncodedValue(); // version
+            }
+
+            data.ReadEncodedValue(); // responderID
+            return data.ReadGeneralizedTime();
+        }
+        catch (AsnContentException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// The OCSP responder URL of the certificate's Authority Information Access extension, or
     /// <see langword="null"/> when it has none.

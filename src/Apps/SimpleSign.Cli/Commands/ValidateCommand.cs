@@ -116,6 +116,8 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             CheckRevocation = !settings.NoRevocation,
             TrustedRoots = roots.Count == 0 ? null : roots,
             Policy = policy,
+            Level = settings.ValidationLevel,
+            Verifier = settings.Verifier,
         };
         var logger = settings.CreateLogger<PdfSignatureValidator>();
         var validator = new PdfSignatureValidator(
@@ -134,6 +136,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 
         await using var stream = File.OpenRead(settings.InputPath);
         var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);
+        settings.WriteReports([.. results.Select(r => r.ToReportEntry())]);
 
         // Run inspection to get PAdES conformance levels and AEA info
         stream.Position = 0;

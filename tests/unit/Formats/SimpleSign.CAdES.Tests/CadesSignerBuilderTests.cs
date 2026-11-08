@@ -9,6 +9,7 @@ using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestHelpers;
 using Shouldly;
+using SimpleSign.Core.Validation;
 using Xunit;
 
 namespace SimpleSign.CAdES.Tests;
@@ -306,6 +307,26 @@ public sealed class CadesSignerBuilderTests : IDisposable
 
         var parsed = CmsParser.Parse(cms);
         parsed.SignaturePolicyOid.ShouldBe(policyOid);
+    }
+
+    [Fact]
+    public async Task Validate_PolicyProvider_ChoosesThePolicyByTheSignaturePolicyOid()
+    {
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithSignaturePolicy("2.16.76.1.7.1.1.1.1", "https://example.com/policy")
+            .SignAsync();
+        var brazil = SimpleSign.Core.Policies.ValidationPolicy.Default.WithName("ICP-Brasil");
+        var options = new ValidationOptions
+        {
+            CheckRevocation = false,
+            PolicyProvider = new SimpleSign.Core.Policies.StaticPolicyProvider().Add(brazil, "2.16.76.1.7.1.*"),
+        };
+
+        var validation = new CadesSignatureValidator(options).Validate(cms, _data);
+
+        validation.AppliedPolicy!.Name.ShouldBe("ICP-Brasil");
+        validation.AppliedPolicy.Digest.ShouldBe(brazil.Digest);
     }
 
     [Fact]

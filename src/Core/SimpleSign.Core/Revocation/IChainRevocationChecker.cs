@@ -43,4 +43,12 @@ public interface IChainRevocationChecker
 /// <summary>The outcome of a chain revocation check.</summary>
 /// <param name="Status">Good when no certificate is revoked and every status is known; Revoked when any is revoked; Unknown otherwise.</param>
 /// <param name="Messages">One message per certificate that is revoked or whose status is unknown.</param>
-public sealed record ChainRevocationResult(ChainRevocationStatus Status, IReadOnlyList<string> Messages);
+public sealed record ChainRevocationResult(ChainRevocationStatus Status, IReadOnlyList<string> Messages)
+{
+    /// <summary>
+    /// When the revocation data used for the first certificate of the chain (the signer) was issued: the CRL's
+    /// thisUpdate or the OCSP response's producedAt; null when not known. Validation policies check its freshness
+    /// (<c>RevocationFreshness</c>).
+    /// </summary>
+    public DateTimeOffset? IssuedAt { get; init; }
+}

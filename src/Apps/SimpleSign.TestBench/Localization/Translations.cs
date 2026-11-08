@@ -19,7 +19,7 @@ internal static class Translations
         ["Strict"] = "Estrita",
         ["The default checks plus the revocation of the whole chain (CRL and OCSP); a revoked certificate or an unknown status stops the signature."] = "As verificações padrão mais a revogação da cadeia inteira (LCR e OCSP); um certificado revogado ou um status desconhecido impede a assinatura.",
         ["Minimal"] = "Mínima",
-        ["Only the dates of the signing certificate, as before signing policies existed. For tests and migrations."] = "Só as datas do certificado do signatário, como antes das políticas de assinatura. Para testes e migrações.",
+        ["Only the dates of the signing certificate: the other constraints of the signing policy at IGNORE. For tests and migrations."] = "Só as datas do certificado do signatário: as outras restrições da política de assinatura em IGNORE. Para testes e migrações.",
 
         // ── Credentials ────────────────────────────────────────────────
         ["The PFX has no certificate with a private key."] = "O PFX não tem certificado com chave privada.",

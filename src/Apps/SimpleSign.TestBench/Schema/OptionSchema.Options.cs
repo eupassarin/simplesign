@@ -193,8 +193,8 @@ public static partial class OptionSchema
             values:
             [
                 V("Default", "Default", "Validity of every certificate of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. The default.", api: "SigningPolicy.Default"),
-                V("Strict", "Strict", "The default checks plus the revocation of the whole chain (CRL and OCSP); a revoked certificate or an unknown status stops the signature.", api: "SigningPolicy.Strict"),
-                V("Minimal", "Minimal", "Only the dates of the signing certificate, as before signing policies existed. For tests and migrations.", api: "SigningPolicy.Minimal"),
+                V("Strict", "Strict", "The default checks plus the revocation of the whole chain (CRL and OCSP); a revoked certificate or an unknown status stops the signature.", api: "SigningPolicy.Default.With(\"SigningCertificate/NotRevoked\", FAIL)…"),
+                V("Minimal", "Minimal", "Only the dates of the signing certificate: the other constraints of the signing policy at IGNORE. For tests and migrations.", api: "SigningPolicy.Default.With(…, IGNORE)"),
             ]),
         OC("common.hash", "crypto", s_all, "choice", "hash", "hash",
             R("ETSI TS 119 312|Hash functions", "RFC 5652|§5.4 Message digest calculation", "W3C XMLDSig Core 1.1|§6.2 Message digests"), valueStateKey: "hash", values: HashValues()),

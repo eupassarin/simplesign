@@ -5,6 +5,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.DependencyInjection;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
@@ -61,14 +62,19 @@ public static class SimpleSignServiceCollectionExtensions
 
         services.AddSingleton(options);
 
+        // The policies: a provider registered before AddSimpleSign (to change them at run time, or choose them by the
+        // signature policy OID) wins over the fixed ones of the options.
+        services.TryAddSingleton<IPolicyProvider>(new StaticPolicyProvider(options.ValidationPolicy, options.SigningPolicy));
+
         // Map SimpleSignOptions → ValidationOptions
-        services.TryAddSingleton(new ValidationOptions
+        services.TryAddSingleton(sp => new ValidationOptions
         {
             CheckRevocation = options.CheckRevocation,
             TrustSystemRoots = options.TrustSystemRoots,
             TrustedRoots = options.TrustedRoots.Count > 0 ? options.TrustedRoots : null,
             NetworkTimeout = options.NetworkTimeout,
             Policy = options.ValidationPolicy,
+            PolicyProvider = sp.GetRequiredService<IPolicyProvider>(),
         });
 
         // IHttpClientProvider — custom, IHttpClientFactory-backed, or default shared-static

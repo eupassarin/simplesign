@@ -45,6 +45,11 @@
 
 
   <ItemGroup>
+    <EmbeddedResource Include="Policies\Default\validation-policy.json" LogicalName="SimpleSign.Core.Policies.Default.validation-policy.json" />
+    <EmbeddedResource Include="Policies\Default\signing-policy.json" LogicalName="SimpleSign.Core.Policies.Default.signing-policy.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
   </ItemGroup>
 </Project>

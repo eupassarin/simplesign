@@ -165,6 +165,6 @@ Secret options accept `env:NAME` to keep values out of the shell history.
 ## Signing policy
 
 Cloud certificates go through the same checks as local ones: the builder's `SigningPolicy` (chain validity, key
-usage, key size, hash algorithm) runs before the provider is asked to sign. With `SigningPolicy.Strict` the revocation
+usage, key size, hash algorithm) runs before the provider is asked to sign. With a signing policy whose `NotRevoked` is FAIL the revocation
 of the chain is checked too, so the provider's chain (`signer.Chain`) must reach the root. The provider interface is
 the generic `IExternalSigner` described in [remote signing](remote-signing.md).

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
@@ -89,7 +90,8 @@ public static class DeferredSigner
             certificate, options.HashAlgorithm, options.HashAlgorithmExplicitlySet,
             options.SignatureAlgorithmOid);
         HashAlgorithmName effectiveHash = resolvedAlgorithm.HashAlgorithm;
-        SignerAcceptance.EnsureHashAllowed(effectiveHash, options.SigningPolicy);
+        var warnings = new List<SigningWarning>();
+        SignerAcceptance.EnsureHashAllowed(effectiveHash, options.SigningPolicy, warnings, logger);
 
         (logger ?? NullLogger.Instance).DeferredPrepareStarted(certificate.Subject, effectiveHash.Name!);
 
@@ -112,7 +114,7 @@ public static class DeferredSigner
 
         await SignerAcceptance.EnsureSignerAcceptableAsync(
             certificate, options.ExtraCertificates ?? [], options.SigningPolicy, options.ChainRevocationChecker,
-            options.HttpClientProvider ?? DefaultHttpClientProvider.Instance, logger ?? NullLogger.Instance, cancellationToken).ConfigureAwait(false);
+            options.HttpClientProvider ?? DefaultHttpClientProvider.Instance, logger ?? NullLogger.Instance, warnings, cancellationToken).ConfigureAwait(false);
 
         string sigAlgOid = resolvedAlgorithm.SignatureAlgorithmOid;
         string digestOid = CmsSignatureBuilder.GetDigestOid(effectiveHash);
@@ -172,7 +174,8 @@ public static class DeferredSigner
             HashToSign = signedAttrs,
             SessionData = session.Serialize(sessionIntegrityKey),
             DigestAlgorithm = effectiveHash.Name!,
-            SignatureAlgorithmOid = sigAlgOid
+            SignatureAlgorithmOid = sigAlgOid,
+            Warnings = warnings.AsReadOnly(),
         };
 
         (logger ?? NullLogger.Instance).DeferredPrepareCompleted(result.HashToSign.Length, result.SessionData.Length);
@@ -451,6 +454,9 @@ public sealed class DeferredSigningPrepareResult
 
     /// <summary>OID of the expected signature algorithm (e.g., "1.2.840.113549.1.1.11" for RSA-SHA256).</summary>
     public required string SignatureAlgorithmOid { get; init; }
+
+    /// <summary>The WARN constraints of the signing policy the certificate or the algorithms did not meet.</summary>
+    public IReadOnlyList<SigningWarning> Warnings { get; init; } = [];
 }
 
 /// <summary>Internal configuration used while a deferred builder prepares a signature.</summary>

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.XAdES.Internal;
 
@@ -171,8 +172,9 @@ public sealed class XadesSignerBuilder
     }
 
     /// <summary>
-    /// Sets the checks run before signing: validity of the chain, key usage, key size, hash algorithm
-    /// and, with <see cref="SigningPolicy.Strict"/>, the revocation of the chain. Default: <see cref="SigningPolicy.Default"/>.
+    /// Sets the checks run before signing, read from a JSON signing policy (<see cref="SigningPolicy.Load"/>):
+    /// validity of the chain, key usage, key size, digest algorithm and, when <c>NotRevoked</c> is not IGNORE, the
+    /// revocation of the chain. Default: <see cref="SigningPolicy.Default"/>.
     /// </summary>
     /// <param name="policy">The signing policy.</param>
     /// <returns>A new builder with the policy configured.</returns>
@@ -182,7 +184,7 @@ public sealed class XadesSignerBuilder
         return With(_options with { SigningPolicy = policy });
     }
 
-    /// <summary>Sets the checker used for the revocation check of <see cref="SigningPolicy.CheckRevocation"/>.</summary>
+    /// <summary>Sets the checker used for the revocation check of the signing policy (<c>NotRevoked</c>, <c>RevocationDataAvailable</c>).</summary>
     /// <param name="checker">The chain revocation checker.</param>
     /// <returns>A new builder with the checker configured.</returns>
     public XadesSignerBuilder WithChainRevocationChecker(SimpleSign.Core.Revocation.IChainRevocationChecker checker)
@@ -492,9 +494,10 @@ public sealed class XadesSignerBuilder
         var profile = _options.Profile;
 
         ValidatePrerequisites(credential);
+        var warnings = new List<SigningWarning>();
         await SignerAcceptance.EnsureSignerAcceptableAsync(
             certificate, chain, _options.SigningPolicy, _options.Dependencies.ChainRevocationChecker,
-            _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger, cancellationToken).ConfigureAwait(false);
+            _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger, warnings, cancellationToken).ConfigureAwait(false);
         if (_options.ExtendedForm != XadesExtendedForm.None && profile.Timestamp is null)
         {
             throw new SigningException(
@@ -538,7 +541,6 @@ public sealed class XadesSignerBuilder
                 SigningErrorReason.Unspecified);
         }
 
-        var warnings = new List<SigningWarning>();
         if (_options.HashAlgorithmExplicitlySet)
         {
             SignerAcceptance.EnsureHashAllowed(_options.HashAlgorithm, _options.SigningPolicy);
@@ -547,7 +549,7 @@ public sealed class XadesSignerBuilder
         var resolvedAlgorithm = SigningAlgorithmResolver.Resolve(
             certificate, _options.HashAlgorithm, _options.HashAlgorithmExplicitlySet, _options.SignatureAlgorithmOid);
         var hashAlg = resolvedAlgorithm.HashAlgorithm;
-        SignerAcceptance.EnsureHashAllowed(hashAlg, _options.SigningPolicy);
+        SignerAcceptance.EnsureHashAllowed(hashAlg, _options.SigningPolicy, warnings, _options.Dependencies.Logger);
         string sigAlgOid = resolvedAlgorithm.SignatureAlgorithmOid;
 
         var logger = _options.Dependencies.Logger;

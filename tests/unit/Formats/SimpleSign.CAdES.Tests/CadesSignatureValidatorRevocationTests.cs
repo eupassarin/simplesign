@@ -70,6 +70,51 @@ public sealed class CadesSignatureValidatorRevocationTests
         result.IsNotRevoked.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task ValidateAsync_UntrustedChain_IsNotCheckedUnlessAsked()
+    {
+        using var pki = NewPki();
+        // The whole chain in the signature, but its root is not trusted.
+        byte[] cms = await CadesSigner.Document(Content).WithCertificate(pki.Leaf, [pki.IntermediateCa, pki.RootCa]).SignAsync();
+        int requests = 0;
+        using var http = new HttpClient(new MockHttpHandler(_ =>
+        {
+            Interlocked.Increment(ref requests);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }));
+
+        var untrusted = await Validator(http).ValidateAsync(cms, Content, trustAnchors: []);
+        requests.ShouldBe(0);
+        untrusted.IsNotRevoked.ShouldBeNull();
+
+        var asked = new CadesSignatureValidator(
+            new ValidationOptions
+            {
+                CheckRevocation = true,
+                TrustSystemRoots = false,
+                Verifier = new VerifierOptions { CheckRevocationForUntrustedChains = true },
+            },
+            chainRevocationChecker: new ChainRevocationChecker(http));
+        (await asked.ValidateAsync(cms, Content, trustAnchors: [])).IsNotRevoked.ShouldNotBeNull();
+        requests.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_LevelBelowLongTermData_DoesNotCheckRevocation()
+    {
+        using var pki = NewPki();
+        byte[] cms = await Sign(pki);
+        using var http = MockHttpHandler.Failing();
+        var validator = new CadesSignatureValidator(
+            new ValidationOptions { CheckRevocation = true, TrustSystemRoots = false, Level = ValidationLevel.Timestamps },
+            chainRevocationChecker: new ChainRevocationChecker(http));
+
+        var result = await validator.ValidateAsync(cms, Content, [pki.RootCa]);
+
+        result.Indication.ShouldBe(SignatureIndication.Valid);
+        result.IsNotRevoked.ShouldBeNull();
+    }
+
     private static CadesSignatureValidator Validator(HttpClient http) =>
         new(new ValidationOptions { CheckRevocation = true, TrustSystemRoots = false },
             chainRevocationChecker: new ChainRevocationChecker(http));

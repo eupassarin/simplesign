@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestHelpers;
@@ -61,13 +62,14 @@ public sealed class SignerAcceptanceTests
     }
 
     [Fact]
-    public async Task EnsureSignerAcceptable_CurveOutsidePolicy_ThrowsAlgorithmNotPermitted()
+    public async Task EnsureSignerAcceptable_KeyAlgorithmOutsidePolicy_ThrowsAlgorithmNotPermitted()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var request = new CertificateRequest("CN=EC Signer", key, HashAlgorithmName.SHA256);
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: true));
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
-        var policy = SigningPolicy.Default with { AllowedEllipticCurves = ["1.3.132.0.34"] };
+        var policy = SigningPolicy.Default.With("Cryptographic/AcceptableEncryptionAlgo",
+            new PolicyConstraint(null) { Algorithms = [new PolicyAlgorithm("RSA")] });
 
         var ex = await Should.ThrowAsync<SigningException>(() => Check(certificate, [], policy));
 
@@ -100,7 +102,7 @@ public sealed class SignerAcceptanceTests
         using var intermediate = CaCertificate("CN=Expired Intermediate", intermediateKey, root, rootKey, now.AddYears(-3), now.AddDays(-1));
         using var leaf = LeafCertificate(intermediate, intermediateKey, now.AddDays(-10), now.AddYears(1));
 
-        await Check(leaf, [intermediate, root], SigningPolicy.Minimal);
+        await Check(leaf, [intermediate, root], TestPolicies.SigningDatesOnly);
     }
 
     [Fact]
@@ -108,7 +110,7 @@ public sealed class SignerAcceptanceTests
     {
         using var certificate = SelfSigned(X509KeyUsageFlags.DigitalSignature, notAfter: DateTimeOffset.UtcNow.AddDays(-1));
 
-        var ex = await Should.ThrowAsync<SigningException>(() => Check(certificate, [], SigningPolicy.Minimal));
+        var ex = await Should.ThrowAsync<SigningException>(() => Check(certificate, [], TestPolicies.SigningDatesOnly));
 
         ex.Reason.ShouldBe(SigningErrorReason.CertificateExpired);
     }
@@ -120,7 +122,7 @@ public sealed class SignerAcceptanceTests
         var checker = new FixedChecker(ChainRevocationStatus.Revoked);
 
         var ex = await Should.ThrowAsync<SigningException>(
-            () => Check(pki.Leaf, pki.IntermediatesAndRoot(), SigningPolicy.Strict, checker));
+            () => Check(pki.Leaf, pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, checker));
 
         ex.Reason.ShouldBe(SigningErrorReason.CertificateRevoked);
         checker.CheckedChain!.Count.ShouldBe(3);
@@ -132,7 +134,7 @@ public sealed class SignerAcceptanceTests
         using var pki = new SyntheticPki();
 
         var ex = await Should.ThrowAsync<SigningException>(
-            () => Check(pki.Leaf, pki.IntermediatesAndRoot(), SigningPolicy.Strict, new FixedChecker(ChainRevocationStatus.Unknown)));
+            () => Check(pki.Leaf, pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, new FixedChecker(ChainRevocationStatus.Unknown)));
 
         ex.Reason.ShouldBe(SigningErrorReason.RevocationStatusUnknown);
     }
@@ -143,7 +145,7 @@ public sealed class SignerAcceptanceTests
         using var pki = new SyntheticPki();
         var checker = new FixedChecker(ChainRevocationStatus.Good);
 
-        var ex = await Should.ThrowAsync<SigningException>(() => Check(pki.Leaf, [], SigningPolicy.Strict, checker));
+        var ex = await Should.ThrowAsync<SigningException>(() => Check(pki.Leaf, [], TestPolicies.SigningWithRevocation, checker));
 
         ex.Reason.ShouldBe(SigningErrorReason.RevocationStatusUnknown);
         checker.CheckedChain.ShouldBeNull();
@@ -155,7 +157,7 @@ public sealed class SignerAcceptanceTests
         using var pki = new SyntheticPki();
         var checker = new FixedChecker(ChainRevocationStatus.Good);
 
-        await Check(pki.Leaf, [pki.RootCa, pki.IntermediateCa], SigningPolicy.Strict, checker);
+        await Check(pki.Leaf, [pki.RootCa, pki.IntermediateCa], TestPolicies.SigningWithRevocation, checker);
 
         checker.CheckedChain!.Select(c => c.Subject).ShouldBe([pki.Leaf.Subject, pki.IntermediateCa.Subject, pki.RootCa.Subject]);
     }
@@ -172,6 +174,34 @@ public sealed class SignerAcceptanceTests
     }
 
     [Fact]
+    public async Task EnsureSignerAcceptable_KeyUsageAtWarn_AddsWarningAndSigns()
+    {
+        using var certificate = SelfSigned(X509KeyUsageFlags.KeyEncipherment);
+        var policy = SigningPolicy.Default.With("SigningCertificate/KeyUsage",
+            new PolicyConstraint(ConstraintLevel.Warn) { Ids = ["digitalSignature", "nonRepudiation"] });
+        var warnings = new List<SigningWarning>();
+
+        await SignerAcceptance.EnsureSignerAcceptableAsync(
+            certificate, [], policy, null, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings, CancellationToken.None);
+
+        warnings.ShouldHaveSingleItem().Code.ShouldBe(SigningWarningCode.PolicyConstraint);
+    }
+
+    [Fact]
+    public async Task EnsureSignerAcceptable_KeyUsageAtInform_NeitherThrowsNorWarns()
+    {
+        using var certificate = SelfSigned(X509KeyUsageFlags.KeyEncipherment);
+        var policy = SigningPolicy.Default.With("SigningCertificate/KeyUsage",
+            new PolicyConstraint(ConstraintLevel.Inform) { Ids = ["digitalSignature"] });
+        var warnings = new List<SigningWarning>();
+
+        await SignerAcceptance.EnsureSignerAcceptableAsync(
+            certificate, [], policy, null, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings, CancellationToken.None);
+
+        warnings.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void EnsureHashAllowed_Sha256_Passes() =>
         SignerAcceptance.EnsureHashAllowed(HashAlgorithmName.SHA256, SigningPolicy.Default);
 
@@ -181,7 +211,7 @@ public sealed class SignerAcceptanceTests
         SigningPolicy policy,
         IChainRevocationChecker? checker = null) =>
         SignerAcceptance.EnsureSignerAcceptableAsync(
-            certificate, chain, policy, checker, DefaultHttpClientProvider.Instance, NullLogger.Instance, CancellationToken.None);
+            certificate, chain, policy, checker, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings: null, CancellationToken.None);
 
     private static X509Certificate2 SelfSigned(
         X509KeyUsageFlags? keyUsage, int rsaKeySize = 2048, DateTimeOffset? notAfter = null)

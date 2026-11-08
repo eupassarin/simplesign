@@ -98,7 +98,7 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 |---|---|
 | **Hash** | SHA-256, SHA-384, SHA-512, SHA3-256, SHA3-384, SHA3-512 |
 | **Signature** | RSA PKCS#1 v1.5, RSA-PSS, RSA-SHA3-256/384/512¹, ECDSA (P-256/P-384/P-521), ECDSA-SHA3-256/384/512¹ |
-| **Revocation** | CRL (HTTP; LDAP/LDAPS opt-in), OCSP (HTTP), embedded DSS; CRLs checked against their issuer and cached until nextUpdate; whole-chain check before signing with `SigningPolicy.Strict` |
+| **Revocation** | CRL (HTTP; LDAP/LDAPS opt-in), OCSP (HTTP), embedded DSS; CRLs checked against their issuer and cached until nextUpdate; whole-chain check before signing with a `SigningPolicy` whose `NotRevoked` is FAIL |
 | **Timestamps** | RFC 3161, with TSA name and TSA chain revocation checks |
 | **Signing limits** (default `SigningPolicy`) | RSA ≥ 2048 bits; curves P-256/384/521 and brainpoolP256/384/512r1; SHA-2 and SHA-3 only; key usage digitalSignature or nonRepudiation; every chain certificate within its validity |
 | **PDF/A** | 1a, 1b, 2a, 2b, 2u, 3a, 3b, 3u, 4a, 4b, 4u, 4e (detection + preservation) |

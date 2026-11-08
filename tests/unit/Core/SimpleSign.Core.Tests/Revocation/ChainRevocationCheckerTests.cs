@@ -2,6 +2,7 @@ using System.Net;
 using Shouldly;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -83,6 +84,37 @@ public sealed class ChainRevocationCheckerTests
             pki.Chain(), DateTimeOffset.UtcNow, [pki.BuildRevokedLeafCrl(), pki.BuildIntermediateCrl()], [], false, default);
 
         result.Status.ShouldBe(ChainRevocationStatus.Revoked);
+    }
+
+    [Fact]
+    public async Task CheckAsync_EmbeddedCrl_ReportsItsThisUpdate()
+    {
+        using var pki = NewPki();
+        using var http = MockHttpHandler.Failing();
+        var issued = new DateTimeOffset(DateTimeOffset.UtcNow.AddDays(-2).Date, TimeSpan.Zero);
+
+        var result = await new ChainRevocationChecker(http).CheckAsync(
+            pki.Chain(), DateTimeOffset.UtcNow, [pki.BuildLeafCrl(issued, issued.AddDays(30)), pki.BuildIntermediateCrl()], [], false, default);
+
+        result.Status.ShouldBe(ChainRevocationStatus.Good);
+        result.IssuedAt.ShouldBe(issued);
+    }
+
+    [Theory]
+    [InlineData(RevocationStrategy.CrlFirst, false, ChainRevocationStatus.Good)]
+    [InlineData(RevocationStrategy.OcspFirst, true, ChainRevocationStatus.Good)]
+    [InlineData(RevocationStrategy.OcspFirst, false, ChainRevocationStatus.Unknown)]
+    public async Task CheckAsync_StrategyAndFallback_DecideWhichSourceAnswers(
+        RevocationStrategy strategy, bool fallback, ChainRevocationStatus expected)
+    {
+        // The certificates name no OCSP responder: OCSP first without fallback gives no answer.
+        using var pki = NewPki();
+        using var http = CrlServer(pki.BuildLeafCrl(), pki.BuildIntermediateCrl());
+        var checker = new ChainRevocationChecker(http) { Strategy = strategy, Fallback = fallback };
+
+        var result = await checker.CheckAsync(pki.Chain(), DateTimeOffset.UtcNow, [], [], true, default);
+
+        result.Status.ShouldBe(expected);
     }
 
     [Fact]

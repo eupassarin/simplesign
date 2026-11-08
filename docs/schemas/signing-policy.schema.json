@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/signing-policy.schema.json",
+  "title": "SimpleSign signing policy",
+  "description": "The checks SimpleSign makes before signing, with the names of the EU DSS certificate and cryptographic constraints.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "SigningConstraints": {
+      "$ref": "#/$defs/SigningConstraints"
+    }
+  },
+  "required": [
+    "SigningConstraints"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Level": {
+      "type": "string",
+      "enum": [
+        "FAIL",
+        "WARN",
+        "INFORM",
+        "IGNORE"
+      ]
+    },
+    "TimeUnit": {
+      "type": "string",
+      "enum": [
+        "DAYS",
+        "HOURS",
+        "MINUTES",
+        "SECONDS",
+        "MILLISECONDS"
+      ]
+    },
+    "Model": {
+      "type": "string",
+      "enum": [
+        "SHELL",
+        "CHAIN",
+        "HYBRID"
+      ]
+    },
+    "Algo": {
+      "description": "An algorithm name, or an object with its name (Value), the key size it is about (Size) and its expiration date (Date).",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Value": {
+              "type": "string"
+            },
+            "Size": {
+              "type": "integer"
+            },
+            "Date": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "Value"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AlgoExpirationDate": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "Format": {
+          "type": "string"
+        },
+        "UpdateDate": {
+          "type": "string"
+        },
+        "LevelAfterUpdate": {
+          "$ref": "#/$defs/Level"
+        },
+        "Algo": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Algo"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CryptographicConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "AcceptableEncryptionAlgo": {
+          "$ref": "#/$defs/ListAlgo"
+        },
+        "MiniPublicKeySize": {
+          "$ref": "#/$defs/ListAlgo"
+        },
+        "AcceptableDigestAlgo": {
+          "$ref": "#/$defs/ListAlgo"
+        },
+        "AlgoExpirationDate": {
+          "$ref": "#/$defs/AlgoExpirationDate"
+        }
+      },
+      "additionalProperties": false
+    },
+    "LevelConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ListAlgo": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "Algo": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Algo"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "MultiValuesConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "Id": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SigningCaCertificateConstraints": {
+      "type": "object",
+      "properties": {
+        "NotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationDataAvailable": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotRevoked": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Cryptographic": {
+          "$ref": "#/$defs/CryptographicConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SigningCertificateConstraints": {
+      "type": "object",
+      "properties": {
+        "NotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationDataAvailable": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "KeyUsage": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ExtendedKeyUsage": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "NotRevoked": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Cryptographic": {
+          "$ref": "#/$defs/CryptographicConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SigningConstraints": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "type": "string"
+        },
+        "Description": {
+          "type": "string"
+        },
+        "SigningCertificate": {
+          "$ref": "#/$defs/SigningCertificateConstraints"
+        },
+        "CACertificate": {
+          "$ref": "#/$defs/SigningCaCertificateConstraints"
+        },
+        "Cryptographic": {
+          "$ref": "#/$defs/CryptographicConstraint"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

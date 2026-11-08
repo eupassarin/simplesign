@@ -24,6 +24,13 @@ When Tomcat is up:
 Then, in the TestBench, open **DSS** in the top bar, turn it on and check the address. Every
 run is then validated twice, and the **Validation** tab shows both verdicts.
 
+## The validation policy
+
+The TestBench sends SimpleSign's validation policy with every request, written as the DSS `constraint.xml`
+(`DssPolicyConverter`): both validators judge under the same constraints and levels (see
+[ADR 0023](../../docs/adr/0023-policies-in-the-dss-structure.md)). What stays apart is the server's own configuration:
+its trust store (below) and how it fetches revocation data.
+
 ## Trusting the Sandbox certificates
 
 DSS only knows the roots it is given. The test certificates come from the SimpleSign Sandbox

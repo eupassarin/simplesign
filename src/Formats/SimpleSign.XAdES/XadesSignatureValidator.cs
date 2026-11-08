@@ -57,7 +57,11 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
         _logger = logger ?? NullLogger.Instance;
         _chainRevocationChecker = chainRevocationChecker
-            ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), _logger);
+            ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), _logger)
+            {
+                Strategy = _options.Verifier.RevocationStrategy,
+                Fallback = _options.Verifier.RevocationFallback,
+            };
     }
 
     /// <summary>
@@ -132,7 +136,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     private async Task<IReadOnlyList<XadesValidationResult>> WithRevocationAsync(
         IReadOnlyList<XadesValidationResult> results, CancellationToken cancellationToken)
     {
-        if (!_options.CheckRevocation)
+        if (!_options.ChecksRevocation)
         {
             return results;
         }
@@ -149,19 +153,23 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
     private async Task<XadesValidationResult> WithRevocationAsync(XadesValidationResult result, CancellationToken cancellationToken)
     {
-        if (!_options.CheckRevocation || result.Facts is null)
+        // An untrusted chain is not checked unless asked (VerifierOptions.CheckRevocationForUntrustedChains).
+        if (result.Facts is null
+            || !_options.ChecksRevocationFor(result.Facts.IsCertificateChainValid || result.Facts.IsChainTrustWarning))
         {
             return result;
         }
 
         var (facts, evaluation, revocationWarnings) = await RevocationStep.RunAsync(
             result.Facts, result.ChainCandidates, result.SignatureTimestampToken, _chainRevocationChecker,
-            [], [], _options.Policy, cancellationToken).ConfigureAwait(false);
+            result.EmbeddedCrls, result.EmbeddedOcsps, _options.PolicyFor(result.Facts.SignaturePolicyOid), cancellationToken).ConfigureAwait(false);
         return result with
         {
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            AppliedPolicy = evaluation.Policy,
+            BestSignatureTime = facts.ProofOfExistence,
             Facts = facts,
             IsNotRevoked = facts.IsNotRevoked,
             RevocationSource = facts.RevocationSource,
@@ -453,7 +461,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         bool? tsValid = null;
         bool? tsaTrusted = null;
         DateTimeOffset? provenTime = null;
-        if (extraction.HasSignatureTimeStamp)
+        if (extraction.HasSignatureTimeStamp && _options.ValidatesTimestamps)
         {
             TimestampTokenValidationResult timestamp = ValidateSignatureTimeStamp(
                 sigElement, ns, extraction.SigningTime, trustAnchors, warnings);
@@ -467,14 +475,14 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
         // LTV data validation (CertificateValues + RevocationValues)
         bool? ltvValid = null;
-        if (extraction.HasCertificateValues || extraction.HasRevocationValues)
+        if ((extraction.HasCertificateValues || extraction.HasRevocationValues) && _options.ValidatesLongTermData)
         {
             ltvValid = ValidateLtvData(sigElement, ns, signerCert, extraction.SigningTime, warnings);
         }
 
         // Archive timestamp validation
         bool? archiveTsValid = null;
-        if (extraction.HasArchiveTimeStamp)
+        if (extraction.HasArchiveTimeStamp && _options.ValidatesArchivalData)
         {
             archiveTsValid = ValidateArchiveTimeStamp(
                 sigElement, ns, originalData, warnings);
@@ -492,8 +500,17 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             IsTsaTrusted = tsaTrusted,
             DigestAlgorithmOid = SignatureMethodDigestOid(sigElement, ns),
             ProofOfExistence = provenTime,
+            Chain = signerCert is null ? null : SignerAcceptance.OrderChain(
+                signerCert, [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []]),
+            ClaimedSigningTime = extraction.SigningTime,
+            SigningTimeKnown = true,
+            HasSigningCertificateReference = sigElement.SelectSingleNode(
+                "ds:Object/xades:QualifyingProperties/xades:SignedProperties/xades:SignedSignatureProperties/xades:SigningCertificateV2"
+                + " | ds:Object/xades:QualifyingProperties/xades:SignedProperties/xades:SignedSignatureProperties/xades:SigningCertificate", ns) is not null,
+            SignaturePolicyOid = ReadSignaturePolicy(sigElement, ns)?.Oid,
+            SignaturePolicyKnown = true,
         };
-        var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.Policy);
+        var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
 
         return new XadesValidationResult
@@ -501,8 +518,12 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            AppliedPolicy = evaluation.Policy,
+            BestSignatureTime = facts.ProofOfExistence,
             Facts = facts,
             ChainCandidates = [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+            EmbeddedCrls = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "CRLValues", "EncapsulatedCRLValue") : [],
+            EmbeddedOcsps = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "OCSPValues", "EncapsulatedOCSPValue") : [],
             SignatureTimestampToken = SignatureTimeStampToken(sigElement, ns),
             SignatureId = extraction.SignatureId,
             IsSignatureValid = sigValid,
@@ -615,7 +636,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         try
         {
             using var chain = new X509Chain { ChainPolicy = { TrustMode = X509ChainTrustMode.System } };
-            CryptoUtility.ConfigureChainPolicy(chain, _options.CheckRevocation);
+            CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
+            chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
             foreach (var certificate in embedded)
             {
                 chain.ChainPolicy.ExtraStore.Add(certificate);
@@ -1326,6 +1348,37 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     }
 
     /// <summary>Reads SignedSignatureProperties/SignaturePolicyIdentifier/SignaturePolicyId, if any.</summary>
+    /// <summary>
+    /// The encapsulated revocation values of the signature's RevocationValues (ETSI EN 319 132-1 §5.5.2): the DER CRLs
+    /// (<c>CRLValues/EncapsulatedCRLValue</c>) or OCSP responses (<c>OCSPValues/EncapsulatedOCSPValue</c>).
+    /// </summary>
+    private static List<byte[]> EmbeddedValues(XmlElement sigElement, XmlNamespaceManager ns, string container, string element)
+    {
+        var values = new List<byte[]>();
+        string path = "xades:RevocationValues/xades:" + container + "/xades:" + element;
+        var nodes = sigElement.SelectNodes(
+            "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties/" + path
+            + " | ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/" + path, ns);
+        if (nodes is null)
+        {
+            return values;
+        }
+
+        foreach (XmlElement node in nodes)
+        {
+            try
+            {
+                values.Add(Convert.FromBase64String(node.InnerText.Trim()));
+            }
+            catch (FormatException)
+            {
+                // Not base64: the online sources decide.
+            }
+        }
+
+        return values;
+    }
+
     private static SignaturePolicyReference? ReadSignaturePolicy(XmlElement sigElement, XmlNamespaceManager ns)
     {
         if (sigElement.SelectSingleNode(

@@ -21,6 +21,17 @@ public sealed record TrustedListService(
     string Status,
     IReadOnlyList<X509Certificate2> Certificates);
 
+/// <summary>A pointer of a list of trusted lists (LOTL) to another trusted list (<c>OtherTSLPointer</c>).</summary>
+/// <param name="Territory">The territory of the pointed list.</param>
+/// <param name="Location">Where the list is published (<c>TSLLocation</c>).</param>
+/// <param name="MimeType">The MIME type of the list (<c>application/vnd.etsi.tsl+xml</c> for XML), or null.</param>
+/// <param name="SignerCertificates">The certificates the pointed list must be signed with.</param>
+public sealed record TrustedListPointer(
+    string Territory,
+    Uri Location,
+    string? MimeType,
+    IReadOnlyList<X509Certificate2> SignerCertificates);
+
 /// <summary>Which services of a trusted list become trust anchors.</summary>
 public sealed record TrustedListOptions
 {
@@ -51,7 +62,7 @@ public sealed record TrustedListOptions
 /// signature has been checked against the scheme operator's certificate. It is an <see cref="ITrustAnchorProvider"/>:
 /// the certificates of the active services of the kept types are the trust anchors.
 /// </summary>
-public sealed class TrustedList : ITrustAnchorProvider
+public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
 {
     private const string Namespace = "http://uri.etsi.org/02231/v2#";
     private readonly List<X509Certificate2> _anchors;
@@ -59,8 +70,10 @@ public sealed class TrustedList : ITrustAnchorProvider
 
     private TrustedList(
         string territory, string? operatorName, string? sequenceNumber, DateTimeOffset? issued, DateTimeOffset? nextUpdate,
-        IReadOnlyList<TrustedListService> services, TrustedListOptions options)
+        IReadOnlyList<TrustedListService> services, TrustedListOptions options, string? version, IReadOnlyList<TrustedListPointer> pointers)
     {
+        Version = version;
+        Pointers = pointers;
         Territory = territory;
         SchemeOperatorName = operatorName;
         SequenceNumber = sequenceNumber;
@@ -93,6 +106,39 @@ public sealed class TrustedList : ITrustAnchorProvider
 
     /// <summary>The NextUpdate; null for a closed list.</summary>
     public DateTimeOffset? NextUpdate { get; }
+
+    /// <summary>The TSLVersionIdentifier (5 for TS 119 612 v2, 6 for v2.3).</summary>
+    public string? Version { get; }
+
+    /// <summary>The pointers to other trusted lists (a LOTL has them: one per member state).</summary>
+    public IReadOnlyList<TrustedListPointer> Pointers { get; }
+
+    /// <summary>Where the list was read from, when it was downloaded.</summary>
+    public Uri? Location { get; private init; }
+
+    /// <summary>When the list was read (downloaded, or loaded from its cache).</summary>
+    public DateTimeOffset LoadedAt { get; private init; } = DateTimeOffset.UtcNow;
+
+    /// <inheritdoc />
+    public IReadOnlyList<TrustedListInfo> TrustedLists =>
+        [new TrustedListInfo(Territory, Location, Version, IssueDate, NextUpdate, LoadedAt, IsWellSigned: true, _anchors)];
+
+    /// <summary>A copy that records where and when the list was read.</summary>
+    internal TrustedList WithOrigin(Uri? location, DateTimeOffset loadedAt) => new(this) { Location = location, LoadedAt = loadedAt };
+
+    private TrustedList(TrustedList other)
+    {
+        Territory = other.Territory;
+        SchemeOperatorName = other.SchemeOperatorName;
+        SequenceNumber = other.SequenceNumber;
+        IssueDate = other.IssueDate;
+        NextUpdate = other.NextUpdate;
+        Services = other.Services;
+        Version = other.Version;
+        Pointers = other.Pointers;
+        _anchors = other._anchors;
+        _intermediates = other._intermediates;
+    }
 
     /// <summary>Every service of the list, whatever its type and status.</summary>
     public IReadOnlyList<TrustedListService> Services { get; }
@@ -188,7 +234,9 @@ public sealed class TrustedList : ITrustAnchorProvider
             ReadDate(scheme.SelectSingleNode("tsl:ListIssueDateTime", ns)),
             nextUpdate,
             services,
-            options);
+            options,
+            scheme.SelectSingleNode("tsl:TSLVersionIdentifier", ns)?.InnerText.Trim(),
+            ReadPointers(scheme, ns));
     }
 
     /// <summary>
@@ -225,13 +273,14 @@ public sealed class TrustedList : ITrustAnchorProvider
         {
             if (cacheFile is not null && File.Exists(cacheFile))
             {
-                return Load(await File.ReadAllBytesAsync(cacheFile, cancellationToken).ConfigureAwait(false), options);
+                return Load(await File.ReadAllBytesAsync(cacheFile, cancellationToken).ConfigureAwait(false), options)
+                    .WithOrigin(url, File.GetLastWriteTimeUtc(cacheFile));
             }
 
             throw new HttpRequestException($"The trusted list could not be downloaded from {url}.");
         }
 
-        var list = Load(xml, options);
+        var list = Load(xml, options).WithOrigin(url, DateTimeOffset.UtcNow);
         if (cacheFile is not null)
         {
             await File.WriteAllBytesAsync(cacheFile, xml, cancellationToken).ConfigureAwait(false);
@@ -264,6 +313,54 @@ public sealed class TrustedList : ITrustAnchorProvider
         {
             throw new CryptographicException("The trusted list is not signed by the scheme operator's certificate.");
         }
+    }
+
+    /// <summary>The OtherTSLPointer entries of SchemeInformation/PointersToOtherTSL.</summary>
+    private static List<TrustedListPointer> ReadPointers(XmlNode scheme, XmlNamespaceManager ns)
+    {
+        var pointers = new List<TrustedListPointer>();
+        foreach (XmlNode pointer in scheme.SelectNodes("tsl:PointersToOtherTSL/tsl:OtherTSLPointer", ns)!)
+        {
+            string? location = pointer.SelectSingleNode("tsl:TSLLocation", ns)?.InnerText.Trim();
+            if (location is null || !Uri.TryCreate(location, UriKind.Absolute, out var uri))
+            {
+                continue;
+            }
+
+            string territory = string.Empty;
+            string? mimeType = null;
+            foreach (XmlNode info in pointer.SelectNodes("tsl:AdditionalInformation/tsl:OtherInformation/*", ns)!)
+            {
+                switch (info.LocalName)
+                {
+                    case "SchemeTerritory":
+                        territory = info.InnerText.Trim();
+                        break;
+                    case "MimeType":
+                        mimeType = info.InnerText.Trim();
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            var signers = new List<X509Certificate2>();
+            foreach (XmlNode cert in pointer.SelectNodes("tsl:ServiceDigitalIdentities/tsl:ServiceDigitalIdentity/tsl:DigitalId/tsl:X509Certificate", ns)!)
+            {
+                try
+                {
+                    signers.Add(CertificateLoader.LoadCertificate(Convert.FromBase64String(cert.InnerText.Trim())));
+                }
+                catch (Exception ex) when (ex is FormatException or CryptographicException)
+                {
+                    // An unreadable identity cannot check the list.
+                }
+            }
+
+            pointers.Add(new TrustedListPointer(territory, uri, mimeType, signers));
+        }
+
+        return pointers;
     }
 
     private static DateTimeOffset? ReadDate(XmlNode? node) =>

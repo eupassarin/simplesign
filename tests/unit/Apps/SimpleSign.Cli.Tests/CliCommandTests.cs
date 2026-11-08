@@ -86,7 +86,7 @@ public sealed class CliCommandTests : IDisposable
         using var json = JsonDocument.Parse(output);
         var signature = json.RootElement.GetProperty("signatures")[0];
         signature.GetProperty("constraints").EnumerateArray().Select(c => c.GetProperty("id").GetString())
-            .ShouldContain("integrity");
+            .ShouldContain("SignatureConstraints/BasicSignatureConstraints/ReferenceDataIntact");
         signature.GetProperty("publicKey").GetProperty("pem").GetString()!.ShouldStartWith("-----BEGIN PUBLIC KEY-----");
         signature.GetProperty("publicKey").GetProperty("spkiSha256").GetString()!.Length.ShouldBe(64);
     }
@@ -133,13 +133,49 @@ public sealed class CliCommandTests : IDisposable
     {
         string signed = await SignAsync("policy.pdf");
         string policy = Path.Combine(_tempDir, "policy.json");
-        await File.WriteAllTextAsync(policy, """{ "cryptographic": { "minimumRsaKeySize": 8192 } }""");
+        await File.WriteAllTextAsync(policy, LargeKeysPolicy);
 
         var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--policy", policy, "--json");
 
         exit.ShouldBe(1);
         using var json = JsonDocument.Parse(output);
-        json.RootElement.GetProperty("signatures")[0].GetProperty("subIndication").GetString().ShouldBe("CRYPTO_CONSTRAINTS_FAILURE_NO_POE");
+        json.RootElement.GetProperty("signatures")[0].GetProperty("subIndication").GetString().ShouldBe("CRYPTO_CONSTRAINTS_FAILURE");
+    }
+
+    [Fact]
+    public async Task Validate_LevelAndRevocationStrategy_AreAccepted()
+    {
+        string signed = await SignAsync("level.pdf");
+
+        var (exit, output) = await RunAsync("validate", signed, "--trust", _cerPath, "--level", "basic",
+            "--revocation-strategy", "crl-first", "--json");
+
+        exit.ShouldBe(0, output);
+    }
+
+    [Fact]
+    public async Task Validate_Reports_WritesTheEtsiAndSimpleReports()
+    {
+        string signed = await SignAsync("reports.pdf");
+        string etsi = Path.Combine(_tempDir, "report.xml");
+        string simple = Path.Combine(_tempDir, "report.json");
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath,
+            "--etsi-report", etsi, "--simple-report", simple);
+
+        exit.ShouldBe(0, output);
+        File.ReadAllText(etsi).ShouldContain("urn:etsi:019102:mainindication:total-passed");
+        File.ReadAllText(simple).ShouldContain("TOTAL_PASSED");
+    }
+
+    [Fact]
+    public async Task Validate_UnknownLevel_IsRefused()
+    {
+        string signed = await SignAsync("bad-level.pdf");
+
+        var (exit, _) = await RunAsync("validate", signed, "--level", "everything");
+
+        exit.ShouldNotBe(0);
     }
 
     [Fact]
@@ -217,6 +253,12 @@ public sealed class CliCommandTests : IDisposable
         exit.ShouldNotBe(0);
     }
 
+    /// <summary>A validation policy that asks for RSA keys of 8192 bits.</summary>
+    private const string LargeKeysPolicy = """
+        { "ConstraintsParameters": { "Description": "large keys",
+          "Cryptographic": { "Level": "FAIL", "MiniPublicKeySize": { "Algo": [ { "Value": "RSA", "Size": 8192 } ] } } } }
+        """;
+
     // ── validate-dir ────────────────────────────────────────────────────
 
     [Fact]
@@ -226,11 +268,11 @@ public sealed class CliCommandTests : IDisposable
         Directory.CreateDirectory(dir);
         File.Copy(await SignAsync("policy-dir-source.pdf"), Path.Combine(dir, "a.pdf"));
         string policy = Path.Combine(_tempDir, "dir-policy.json");
-        await File.WriteAllTextAsync(policy, """{ "cryptographic": { "minimumRsaKeySize": 8192 } }""");
+        await File.WriteAllTextAsync(policy, LargeKeysPolicy);
 
         var (_, output) = await RunAsync("validate-dir", dir, "--no-revocation", "--trust", _cerPath, "--policy", policy);
 
-        output.ShouldContain("CRYPTO_CONSTRAINTS_FAILURE_NO_POE");
+        output.ShouldContain("CRYPTO_CONSTRAINTS_FAILURE");
     }
 
     // ── signing policy ──────────────────────────────────────────────────
@@ -245,7 +287,7 @@ public sealed class CliCommandTests : IDisposable
 
         exit.ShouldNotBe(0);
         output.ShouldContain("KeyTooWeak");
-        output.ShouldContain("--signing-policy minimal");
+        output.ShouldContain("--signing-policy");
     }
 
     [Fact]
@@ -253,11 +295,36 @@ public sealed class CliCommandTests : IDisposable
     {
         string pfx = WriteWeakPfx();
         string input = WriteMinimalPdf("weak-minimal-input.pdf");
+        string policy = Path.Combine(_tempDir, "no-crypto-signing-policy.json");
+        await File.WriteAllTextAsync(policy, """{ "SigningConstraints": { "Cryptographic": { "Level": "IGNORE" } } }""");
 
         var (exit, output) = await RunAsync("sign", input, "--cert", pfx, "--password", Password,
-            "--output", Path.Combine(_tempDir, "weak-minimal.pdf"), "--signing-policy", "minimal");
+            "--output", Path.Combine(_tempDir, "weak-minimal.pdf"), "--signing-policy", policy);
 
         exit.ShouldBe(0, output);
+    }
+
+    [Fact]
+    public async Task PolicyExport_Signing_WritesAPolicyTheSignCommandReads()
+    {
+        string policy = Path.Combine(_tempDir, "exported-signing-policy.json");
+
+        var (exit, _) = await RunAsync("policy", "export", "signing", "--output", policy);
+        var (signExit, output) = await RunAsync("sign", WriteMinimalPdf("exported-policy-input.pdf"), "--cert", _pfxPath,
+            "--password", Password, "--output", Path.Combine(_tempDir, "exported-policy.pdf"), "--signing-policy", policy);
+
+        exit.ShouldBe(0);
+        signExit.ShouldBe(0, output);
+        File.ReadAllText(policy).ShouldContain("SigningConstraints");
+    }
+
+    [Fact]
+    public async Task PolicyExport_Validation_WritesTheDssStructure()
+    {
+        var (exit, output) = await RunAsync("policy", "export", "validation");
+
+        exit.ShouldBe(0);
+        output.ShouldContain("ConstraintsParameters");
     }
 
     [Fact]

@@ -6,6 +6,7 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
@@ -222,8 +223,9 @@ public sealed class PadesSignerBuilder
     }
 
     /// <summary>
-    /// Sets the checks run before signing: validity of the chain, key usage, key size, hash algorithm
-    /// and, with <see cref="SigningPolicy.Strict"/>, the revocation of the chain. Default: <see cref="SigningPolicy.Default"/>.
+    /// Sets the checks run before signing, read from a JSON signing policy (<see cref="SigningPolicy.Load"/>):
+    /// validity of the chain, key usage, key size, digest algorithm and, when <c>NotRevoked</c> is not IGNORE, the
+    /// revocation of the chain. Default: <see cref="SigningPolicy.Default"/>.
     /// </summary>
     /// <param name="policy">The signing policy.</param>
     /// <returns>A new builder with the policy configured.</returns>
@@ -233,7 +235,7 @@ public sealed class PadesSignerBuilder
         return With(_options with { SigningPolicy = policy });
     }
 
-    /// <summary>Sets the checker used for the revocation check of <see cref="SigningPolicy.CheckRevocation"/>.</summary>
+    /// <summary>Sets the checker used for the revocation check of the signing policy (<c>NotRevoked</c>, <c>RevocationDataAvailable</c>).</summary>
     /// <param name="checker">The chain revocation checker.</param>
     /// <returns>A new builder with the checker configured.</returns>
     public PadesSignerBuilder WithChainRevocationChecker(SimpleSign.Core.Revocation.IChainRevocationChecker checker)
@@ -616,9 +618,10 @@ public sealed class PadesSignerBuilder
             ?? Guid.NewGuid().ToString("N")[..8];
 
         ValidateSigningPrerequisites(credential, useExternal);
+        var warnings = new List<SigningWarning>();
         await SignerAcceptance.EnsureSignerAcceptableAsync(
             certificate, chain, _options.SigningPolicy, _options.Dependencies.ChainRevocationChecker,
-            _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger, cancellationToken).ConfigureAwait(false);
+            _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger, warnings, cancellationToken).ConfigureAwait(false);
 
         var logger = _options.Dependencies.Logger;
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -632,14 +635,13 @@ public sealed class PadesSignerBuilder
         var resolvedAlgorithm = SigningAlgorithmResolver.Resolve(
             certificate, _options.HashAlgorithm, _options.HashAlgorithmExplicitlySet, _options.SignatureAlgorithmOid);
         var effectiveHash = resolvedAlgorithm.HashAlgorithm;
-        SignerAcceptance.EnsureHashAllowed(effectiveHash, _options.SigningPolicy);
+        SignerAcceptance.EnsureHashAllowed(effectiveHash, _options.SigningPolicy, warnings, logger);
         var sigOid = resolvedAlgorithm.SignatureAlgorithmOid;
         logger.AlgorithmResolved(opId, effectiveHash.Name ?? "?", sigOid, _options.Profile.Level.ToString(), _options.Field.SubFilter.ToString());
         logger.FieldConfigured(opId, _options.Field.ExistingFieldName ?? _options.Field.FieldName,
             _options.Field.ExistingFieldName is not null, _options.Field.Appearance is not null,
             _options.Field.CertificationLevel?.ToString() ?? "none");
 
-        var warnings = new List<SigningWarning>();
         var kuExt = certificate.Extensions.OfType<X509KeyUsageExtension>().FirstOrDefault();
         if (kuExt is not null && !kuExt.KeyUsages.HasFlag(X509KeyUsageFlags.NonRepudiation))
         {

@@ -6,6 +6,7 @@ using System.Text;
 using Shouldly;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
@@ -43,7 +44,7 @@ public sealed class PolicyEnforcementContractTests : IDisposable
         using var http = CrlServer(_pki.BuildRevokedLeafCrl(), _pki.BuildIntermediateCrl());
 
         var ex = await Should.ThrowAsync<SigningException>(
-            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Strict, new ChainRevocationChecker(http)));
+            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, new ChainRevocationChecker(http)));
 
         ex.Reason.ShouldBe(SigningErrorReason.CertificateRevoked);
     }
@@ -59,7 +60,7 @@ public sealed class PolicyEnforcementContractTests : IDisposable
         using var http = CrlServer(crl, _pki.BuildIntermediateCrl());
 
         var ex = await Should.ThrowAsync<SigningException>(
-            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Strict, new ChainRevocationChecker(http)));
+            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, new ChainRevocationChecker(http)));
 
         ex.Reason.ShouldBe(SigningErrorReason.RevocationStatusUnknown);
     }
@@ -74,7 +75,7 @@ public sealed class PolicyEnforcementContractTests : IDisposable
         using var http = CrlServer(crl, _pki.BuildIntermediateCrl());
 
         var ex = await Should.ThrowAsync<SigningException>(
-            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Strict, new ChainRevocationChecker(http)));
+            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, new ChainRevocationChecker(http)));
 
         ex.Reason.ShouldBe(SigningErrorReason.RevocationStatusUnknown);
     }
@@ -87,7 +88,7 @@ public sealed class PolicyEnforcementContractTests : IDisposable
     {
         using var http = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
 
-        var result = await Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Strict, new ChainRevocationChecker(http));
+        var result = await Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, new ChainRevocationChecker(http));
 
         result.Length.ShouldBeGreaterThan(0);
     }
@@ -108,11 +109,11 @@ public sealed class PolicyEnforcementContractTests : IDisposable
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) });
         }));
         var checker = new ChainRevocationChecker(http);
-        (await Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Strict, checker)).Length.ShouldBeGreaterThan(0);
+        (await Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, checker)).Length.ShouldBeGreaterThan(0);
 
         Volatile.Write(ref leafCrl, _pki.BuildRevokedLeafCrl());
         var ex = await Should.ThrowAsync<SigningException>(
-            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Strict, checker));
+            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, checker));
 
         ex.Reason.ShouldBe(SigningErrorReason.CertificateRevoked);
     }

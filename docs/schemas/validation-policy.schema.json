@@ -1,0 +1,1082 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/validation-policy.schema.json",
+  "title": "SimpleSign validation policy",
+  "description": "A validation policy in the structure of the EU DSS validation policy (policy.xsd, http://dss.esig.europa.eu/validation/policy), as JSON: one property per element, attributes as properties, the Id and Algo lists as arrays.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "ConstraintsParameters": {
+      "$ref": "#/$defs/ConstraintsParameters"
+    }
+  },
+  "required": [
+    "ConstraintsParameters"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Level": {
+      "type": "string",
+      "enum": [
+        "FAIL",
+        "WARN",
+        "INFORM",
+        "IGNORE"
+      ]
+    },
+    "TimeUnit": {
+      "type": "string",
+      "enum": [
+        "DAYS",
+        "HOURS",
+        "MINUTES",
+        "SECONDS",
+        "MILLISECONDS"
+      ]
+    },
+    "Model": {
+      "type": "string",
+      "enum": [
+        "SHELL",
+        "CHAIN",
+        "HYBRID"
+      ]
+    },
+    "Algo": {
+      "description": "An algorithm name, or an object with its name (Value), the key size it is about (Size) and its expiration date (Date).",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Value": {
+              "type": "string"
+            },
+            "Size": {
+              "type": "integer"
+            },
+            "Date": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "Value"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AlgoExpirationDate": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "Format": {
+          "type": "string"
+        },
+        "UpdateDate": {
+          "type": "string"
+        },
+        "LevelAfterUpdate": {
+          "$ref": "#/$defs/Level"
+        },
+        "Algo": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Algo"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "AttestationConstraints": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "AttestationSignatureUnicity": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AttestationSignatureValid": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DisclosurePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DisclosureFound": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DisclosureIntact": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DisclosureListExhaustive": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "KeyBindingSignaturePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "KeyBindingSignatureValid": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ETSI194721Conformance": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AttestationType": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "AttestationTypeIntegrityPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "IdentifierPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "IssuanceDatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotBeforePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ExpirationPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AdministrativeIssuanceDatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AdministrativeExpirationDatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AdministrativePeriodNotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Category": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "Subject": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "Pseudonym": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "IssuingCountry": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "IssuingAuthority": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "IssuingAuthorityRegistrationIdentifier": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "OneTimeUse": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ShortLived": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationAvailable": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AcceptableRevocationFound": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotRevoked": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotOnHold": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "UsePseudonym": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Claims": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "SupportedClaims": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "SupportedNamespaces": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "Cryptographic": {
+          "$ref": "#/$defs/CryptographicConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AttestationRevocationConstraints": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "Type": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "UnknownStatus": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "IssuanceTime": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ExpirationTime": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Subject": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "SubjectMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "IssuerValidAtIssuanceTime": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "BasicSignatureConstraints": {
+          "$ref": "#/$defs/BasicSignatureConstraints"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BasicSignatureConstraints": {
+      "type": "object",
+      "properties": {
+        "ReferenceDataExistence": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ReferenceDataIntact": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ReferenceDataNameMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ManifestEntryObjectExistence": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ManifestEntryObjectGroup": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ManifestEntryObjectIntact": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ManifestEntryNameMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignatureIntact": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignatureValid": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignatureDuplicated": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ProspectiveCertificateChain": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignerInformationStore": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ByteRange": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ByteRangeCollision": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ByteRangeAllDocument": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "PdfSignatureDictionary": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "PdfPageDifference": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "PdfAnnotationOverlap": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "PdfVisualDifference": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DocMDP": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "FieldMDP": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SigFieldLock": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "FormFillChanges": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AnnotationChanges": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "UndefinedChanges": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "TrustServiceTypeIdentifier": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "TrustServiceStatus": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "SigningCertificate": {
+          "$ref": "#/$defs/CertificateConstraints"
+        },
+        "CACertificate": {
+          "$ref": "#/$defs/CertificateConstraints"
+        },
+        "Cryptographic": {
+          "$ref": "#/$defs/CryptographicConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CertificateConstraints": {
+      "type": "object",
+      "properties": {
+        "Recognition": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Signature": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SunsetDate": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AuthorityInfoAccessPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationDataSkip": {
+          "$ref": "#/$defs/CertificateValuesConstraint"
+        },
+        "RevocationInfoAccessPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationDataAvailable": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AcceptableRevocationDataFound": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "CRLNextUpdatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "OCSPNextUpdatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationFreshness": {
+          "$ref": "#/$defs/TimeConstraint"
+        },
+        "RevocationFreshnessNextUpdate": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "CA": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "MaxPathLength": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "KeyUsage": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ExtendedKeyUsage": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "PolicyTree": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NameConstraints": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AuthorityKeyIdentifierPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SubjectKeyIdentifierPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NoRevAvail": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SupportedCriticalExtensions": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ForbiddenExtensions": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "IssuerName": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Surname": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "GivenName": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "CommonName": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "Pseudonym": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "Title": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "Email": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "OrganizationIdentifier": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "OrganizationUnit": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "OrganizationName": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "Country": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "Locality": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "State": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "SerialNumberPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotRevoked": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotOnHold": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationIssuerNotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SelfSigned": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotSelfSigned": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "PolicyIds": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "PolicyQualificationIds": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "PolicySupportedByQSCDIds": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "QcCompliance": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "QcEuLimitValueCurrency": {
+          "$ref": "#/$defs/ValueConstraint"
+        },
+        "MinQcEuLimitValue": {
+          "$ref": "#/$defs/IntValueConstraint"
+        },
+        "MinQcEuRetentionPeriod": {
+          "$ref": "#/$defs/IntValueConstraint"
+        },
+        "QcSSCD": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "QcEuPDSLocation": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "QcType": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "QcLegislationCountryCodes": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "IssuedToNaturalPerson": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "IssuedToLegalPerson": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SemanticsIdentifier": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "PSD2QcTypeRolesOfPSP": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "PSD2QcCompetentAuthorityName": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "PSD2QcCompetentAuthorityId": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "QcQSCDLegislation": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "QcIdentificationMethod": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "QcPSBCountryOfLegislation": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "QcPSBAuthSourceIdentification": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "QcPSBLegislationIdentification": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "UsePseudonym": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Cryptographic": {
+          "$ref": "#/$defs/CryptographicConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CertificateValuesConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "CertificateExtensions": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "CertificatePolicies": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConstraintsParameters": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "type": "string"
+        },
+        "Description": {
+          "type": "string"
+        },
+        "ContainerConstraints": {
+          "$ref": "#/$defs/ContainerConstraints"
+        },
+        "PDFAConstraints": {
+          "$ref": "#/$defs/PDFAConstraints"
+        },
+        "SignatureConstraints": {
+          "$ref": "#/$defs/SignatureConstraints"
+        },
+        "CounterSignatureConstraints": {
+          "$ref": "#/$defs/SignatureConstraints"
+        },
+        "KeyBindingSignatureConstraints": {
+          "$ref": "#/$defs/SignatureConstraints"
+        },
+        "Timestamp": {
+          "$ref": "#/$defs/TimestampConstraints"
+        },
+        "Revocation": {
+          "$ref": "#/$defs/RevocationConstraints"
+        },
+        "EvidenceRecord": {
+          "$ref": "#/$defs/EvidenceRecordConstraints"
+        },
+        "Attestation": {
+          "$ref": "#/$defs/AttestationConstraints"
+        },
+        "AttestationRevocation": {
+          "$ref": "#/$defs/AttestationRevocationConstraints"
+        },
+        "Cryptographic": {
+          "$ref": "#/$defs/CryptographicConstraint"
+        },
+        "Model": {
+          "$ref": "#/$defs/ModelConstraint"
+        },
+        "eIDAS": {
+          "$ref": "#/$defs/eIDAS"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ContainerConstraints": {
+      "type": "object",
+      "properties": {
+        "AcceptableContainerTypes": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ZipCommentPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AcceptableZipComment": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "MimeTypeFilePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AcceptableMimeTypeFileContent": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ManifestFilePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignedFilesPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "FilenameAdherence": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AllFilesSigned": {
+          "$ref": "#/$defs/LevelConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CryptographicConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "AcceptableEncryptionAlgo": {
+          "$ref": "#/$defs/ListAlgo"
+        },
+        "MiniPublicKeySize": {
+          "$ref": "#/$defs/ListAlgo"
+        },
+        "AcceptableDigestAlgo": {
+          "$ref": "#/$defs/ListAlgo"
+        },
+        "AlgoExpirationDate": {
+          "$ref": "#/$defs/AlgoExpirationDate"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EvidenceRecordConstraints": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "EvidenceRecordValid": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DataObjectExistence": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DataObjectIntact": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DataObjectFound": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DataObjectGroup": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignedFilesCovered": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ContainerSignedAndTimestampedFilesCovered": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "HashTreeRenewal": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Cryptographic": {
+          "$ref": "#/$defs/CryptographicConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "IntValueConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "value": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "LevelConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ListAlgo": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "Algo": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Algo"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelConstraint": {
+      "type": "object",
+      "properties": {
+        "Value": {
+          "$ref": "#/$defs/Model"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MultiValuesConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "Id": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "PDFAConstraints": {
+      "type": "object",
+      "properties": {
+        "AcceptablePDFAProfiles": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "PDFACompliant": {
+          "$ref": "#/$defs/LevelConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RevocationConstraints": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "UnknownStatus": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ThisUpdatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationIssuerKnown": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationIssuerValidAtProductionTime": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationAfterCertificateIssuance": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationHasInformationAboutCertificate": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "OCSPResponderIdMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "OCSPCertHashPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "OCSPCertHashMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SelfIssuedOCSP": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "BasicSignatureConstraints": {
+          "$ref": "#/$defs/BasicSignatureConstraints"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SignatureConstraints": {
+      "type": "object",
+      "properties": {
+        "StructuralValidation": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AcceptablePolicies": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "PolicyAvailable": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignaturePolicyStorePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "PolicyHashMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AcceptableFormats": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "FullScope": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "BasicSignatureConstraints": {
+          "$ref": "#/$defs/BasicSignatureConstraints"
+        },
+        "SignedAttributes": {
+          "$ref": "#/$defs/SignedAttributesConstraints"
+        },
+        "UnsignedAttributes": {
+          "$ref": "#/$defs/UnsignedAttributesConstraints"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SignedAttributesConstraints": {
+      "type": "object",
+      "properties": {
+        "SigningCertificatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "UnicitySigningCertificate": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SigningCertificateRefersCertificateChain": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ReferencesToAllCertificateChainPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SigningCertificateDigestAlgorithm": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "CertDigestPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "CertDigestMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "IssuerSerialMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "KeyIdentifierPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "KeyIdentifierMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "X509UrlPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "X509UrlMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SigningTime": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SigningTimeInCertRange": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignatureType": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ContentType": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ContentHints": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ContentIdentifier": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "MessageDigestOrSignedPropertiesPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "EllipticCurveKeySize": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "CommitmentTypeIndication": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "SignerLocation": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ClaimedRoles": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "CertifiedRoles": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "ContentTimeStamp": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ContentTimeStampMessageImprint": {
+          "$ref": "#/$defs/LevelConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TimeConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "Unit": {
+          "$ref": "#/$defs/TimeUnit"
+        },
+        "Value": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TimestampConstraints": {
+      "type": "object",
+      "properties": {
+        "TimestampDelay": {
+          "$ref": "#/$defs/TimeConstraint"
+        },
+        "RevocationTimeAgainstBestSignatureTime": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "BestSignatureTimeBeforeExpirationDateOfSigningCertificate": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "Coherence": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "TimestampValid": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "BasicSignatureConstraints": {
+          "$ref": "#/$defs/BasicSignatureConstraints"
+        },
+        "SignedAttributes": {
+          "$ref": "#/$defs/SignedAttributesConstraints"
+        },
+        "TSAGeneralNamePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "TSAGeneralNameContentMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "TSAGeneralNameOrderMatch": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AtsHashIndex": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ContainerSignedAndTimestampedFilesCovered": {
+          "$ref": "#/$defs/LevelConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "UnsignedAttributesConstraints": {
+      "type": "object",
+      "properties": {
+        "CounterSignature": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "SignatureTimeStamp": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ValidationDataTimeStamp": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ValidationDataRefsOnlyTimeStamp": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ArchiveTimeStamp": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "DocumentTimeStamp": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "TLevelTimeStamp": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "LTALevelTimeStamp": {
+          "$ref": "#/$defs/LevelConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ValueConstraint": {
+      "type": "object",
+      "properties": {
+        "Level": {
+          "$ref": "#/$defs/Level"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "eIDAS": {
+      "type": "object",
+      "properties": {
+        "TLFreshness": {
+          "$ref": "#/$defs/TimeConstraint"
+        },
+        "TLNotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "TLWellSigned": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "TLVersion": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "TLStructure": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "LoTEFreshness": {
+          "$ref": "#/$defs/TimeConstraint"
+        },
+        "LoTENotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "LoTEWellSigned": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "LoTEVersion": {
+          "$ref": "#/$defs/MultiValuesConstraint"
+        },
+        "LoTEStructure": {
+          "$ref": "#/$defs/LevelConstraint"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

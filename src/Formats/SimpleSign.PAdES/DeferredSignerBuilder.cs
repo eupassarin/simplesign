@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 
@@ -212,9 +213,9 @@ public sealed class DeferredSignerBuilder
     }
 
     /// <summary>
-    /// Sets the checks run before the hash is prepared: validity of the chain, key usage, key size,
-    /// hash algorithm and, with <see cref="SigningPolicy.Strict"/>, the revocation of the chain.
-    /// Default: <see cref="SigningPolicy.Default"/>.
+    /// Sets the checks run before the hash is prepared, read from a JSON signing policy (<see cref="SigningPolicy.Load"/>):
+    /// validity of the chain, key usage, key size, digest algorithm and, when <c>NotRevoked</c> is not IGNORE, the
+    /// revocation of the chain. Default: <see cref="SigningPolicy.Default"/>.
     /// </summary>
     public DeferredSignerBuilder WithSigningPolicy(SigningPolicy policy)
     {
@@ -222,7 +223,7 @@ public sealed class DeferredSignerBuilder
         return With(signingPolicy: policy);
     }
 
-    /// <summary>Sets the checker used for the revocation check of <see cref="SigningPolicy.CheckRevocation"/>.</summary>
+    /// <summary>Sets the checker used for the revocation check of the signing policy (<c>NotRevoked</c>, <c>RevocationDataAvailable</c>).</summary>
     public DeferredSignerBuilder WithChainRevocationChecker(SimpleSign.Core.Revocation.IChainRevocationChecker checker)
     {
         ArgumentNullException.ThrowIfNull(checker);

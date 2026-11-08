@@ -26,7 +26,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
     internal sealed class Settings : CommonSettings
     {
         /// <summary>Checks run before signing.</summary>
-        [CommandOption("--signing-policy <POLICY>")]
+        [CommandOption("--signing-policy <PATH>")]
         [Description(SigningPolicyOption.Description)]
         public string? SigningPolicy { get; init; }
 
@@ -189,7 +189,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         {
             if (!SigningPolicyOption.IsValid(SigningPolicy))
             {
-                return ValidationResult.Error($"Unknown --signing-policy '{SigningPolicy}': use default, strict or minimal.");
+                return ValidationResult.Error(SigningPolicyOption.Error(SigningPolicy));
             }
 
             if (!File.Exists(InputPath))

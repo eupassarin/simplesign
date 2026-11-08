@@ -133,6 +133,8 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
             CheckRevocation = !settings.NoRevocation,
             TrustedRoots = roots.Count == 0 ? null : roots,
             Policy = policy,
+            Level = settings.ValidationLevel,
+            Verifier = settings.Verifier,
         };
         var validator = new PdfSignatureValidator(
             _httpClientProvider, _revocationChecker, options,

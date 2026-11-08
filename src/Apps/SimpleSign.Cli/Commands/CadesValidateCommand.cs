@@ -85,14 +85,22 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
         }
 
         var validator = new CadesSignatureValidator(
-            new ValidationOptions { CheckRevocation = settings.CheckRevocation, TrustSystemRoots = trustAnchors is null, Policy = policy },
-            chainRevocationChecker: TrustedValidationSettings.RevocationCheckerFor(_httpClientProvider));
+            new ValidationOptions
+            {
+                CheckRevocation = settings.CheckRevocation,
+                TrustSystemRoots = trustAnchors is null,
+                Policy = policy,
+                Level = settings.ValidationLevel,
+                Verifier = settings.Verifier,
+            },
+            chainRevocationChecker: settings.RevocationCheckerFor(_httpClientProvider));
 
         var result = await validator.ValidateAsync(
             cmsBytes,
             originalData ?? throw new InvalidOperationException("Original data file is required. Use --data <path>."),
             trustAnchors,
             cancellationToken);
+        settings.WriteReports([result.ToReportEntry()]);
 
         if (settings.Json)
         {

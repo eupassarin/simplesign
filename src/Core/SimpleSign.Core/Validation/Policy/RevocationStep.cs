@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 
 namespace SimpleSign.Core.Validation.Policy;
@@ -54,6 +55,7 @@ internal static class RevocationStep
                 warnings.AddRange(result.Messages.Select(m => "Revocation: " + m));
                 facts = facts with
                 {
+                    RevocationIssuedAt = result.IssuedAt,
                     IsNotRevoked = result.Status == ChainRevocationStatus.Good,
                     RevocationSource = result.Status switch
                     {

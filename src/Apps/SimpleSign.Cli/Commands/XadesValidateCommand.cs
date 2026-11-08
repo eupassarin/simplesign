@@ -104,9 +104,16 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         }
 
         var validator = new XadesSignatureValidator(
-            new ValidationOptions { CheckRevocation = settings.CheckRevocation, TrustSystemRoots = trustAnchors is null, Policy = policy },
+            new ValidationOptions
+            {
+                CheckRevocation = settings.CheckRevocation,
+                TrustSystemRoots = trustAnchors is null,
+                Policy = policy,
+                Level = settings.ValidationLevel,
+                Verifier = settings.Verifier,
+            },
             logger: null,
-            chainRevocationChecker: TrustedValidationSettings.RevocationCheckerFor(_httpClientProvider));
+            chainRevocationChecker: settings.RevocationCheckerFor(_httpClientProvider));
         byte[]? originalData = settings.DataPath is null
             ? null
             : await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
@@ -126,6 +133,8 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         {
             result = await validator.ValidateAsync(signedXml, trustAnchors, originalData, cancellationToken);
         }
+
+        settings.WriteReports([result.ToReportEntry()]);
 
 
         if (settings.Json)

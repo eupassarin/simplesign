@@ -20,6 +20,9 @@ public enum SigningWarningCode
 
     /// <summary>The signing certificate does not declare the NonRepudiation key usage.</summary>
     NonRepudiationMissing = 4,
+
+    /// <summary>A WARN constraint of the signing policy is not met.</summary>
+    PolicyConstraint = 5,
 }
 
 /// <summary>

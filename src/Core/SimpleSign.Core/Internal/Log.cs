@@ -7,6 +7,12 @@ namespace SimpleSign.Core.Internal;
 /// </summary>
 internal static partial class Log
 {
+    // ── Policies (28xx) ──────────────────────────────────────────────
+
+    [LoggerMessage(EventId = 2800, Level = LogLevel.Information,
+        Message = "Signing policy ({Constraint}): {Message}")]
+    internal static partial void SigningPolicyInformation(this ILogger logger, string constraint, string message);
+
     // ── Revocation (24xx) ────────────────────────────────────────────
 
     [LoggerMessage(EventId = 2410, Level = LogLevel.Debug,
