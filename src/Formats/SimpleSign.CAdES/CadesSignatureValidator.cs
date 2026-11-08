@@ -84,6 +84,12 @@ public sealed record CadesValidationResult
     /// <summary>The checks of the validation and their outcome, including the validation policy's constraints.</summary>
     public IReadOnlyList<ValidationConstraintResult> Constraints { get; init; } = [];
 
+    /// <summary>The validation policy applied (its name and digest), chosen by the signature policy the signature names.</summary>
+    public SimpleSign.Core.Policies.AppliedPolicy? AppliedPolicy { get; init; }
+
+    /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
+    public DateTimeOffset? BestSignatureTime { get; init; }
+
     /// <summary>
     /// Whether the signing certificate chain is not revoked: null when revocation was not checked by
     /// <c>ValidateAsync</c>; false when a certificate is revoked or the status is unknown (see <see cref="RevocationSource"/>).
@@ -98,6 +104,12 @@ public sealed record CadesValidationResult
 
     /// <summary>The certificates that may complete the signer and TSA chains (embedded certificates, trust anchors).</summary>
     internal IReadOnlyList<X509Certificate2> ChainCandidates { get; init; } = [];
+
+    /// <summary>The CRLs the signature carries (revocation-values), for the revocation step.</summary>
+    internal IReadOnlyList<byte[]> EmbeddedCrls { get; init; } = [];
+
+    /// <summary>The OCSP responses the signature carries (revocation-values), for the revocation step.</summary>
+    internal IReadOnlyList<byte[]> EmbeddedOcsps { get; init; } = [];
 
     /// <summary>The signature timestamp token, for the TSA revocation check.</summary>
     internal byte[]? SignatureTimestampToken { get; init; }
@@ -130,7 +142,11 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         _options = options ?? new ValidationOptions();
         _logger = logger;
         _chainRevocationChecker = chainRevocationChecker
-            ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), logger);
+            ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), logger)
+            {
+                Strategy = _options.Verifier.RevocationStrategy,
+                Fallback = _options.Verifier.RevocationFallback,
+            };
         _cryptoVerifier = cryptoVerifier ?? new CryptoVerifierService();
         _cmsParser = cmsParser ?? new CmsParserService();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
@@ -203,7 +219,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         CancellationToken cancellationToken = default)
     {
         var report = ValidateAll(cmsBytes, originalData, trustAnchors?.ToList());
-        if (!_options.CheckRevocation)
+        if (!_options.ChecksRevocation)
         {
             return report;
         }
@@ -235,19 +251,23 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
     private async Task<CadesValidationResult> WithRevocationAsync(CadesValidationResult result, CancellationToken cancellationToken)
     {
-        if (!_options.CheckRevocation || result.Facts is null)
+        // An untrusted chain is not checked unless asked (VerifierOptions.CheckRevocationForUntrustedChains).
+        if (result.Facts is null
+            || !_options.ChecksRevocationFor(result.Facts.IsChainAnchored))
         {
             return result;
         }
 
         var (facts, evaluation, revocationWarnings) = await RevocationStep.RunAsync(
             result.Facts, result.ChainCandidates, result.SignatureTimestampToken, _chainRevocationChecker,
-            [], [], _options.Policy, cancellationToken).ConfigureAwait(false);
+            result.EmbeddedCrls, result.EmbeddedOcsps, _options.PolicyFor(result.Facts.SignaturePolicyOid), cancellationToken).ConfigureAwait(false);
         return result with
         {
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            AppliedPolicy = evaluation.Policy,
+            BestSignatureTime = facts.ProofOfExistence,
             Facts = facts,
             IsNotRevoked = facts.IsNotRevoked,
             RevocationSource = facts.RevocationSource,
@@ -428,13 +448,13 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
 
         // 5. Certificate chain validation (intermediates come from the CMS certificates field)
-        bool chainValid = ValidateChain(cmsData.SignerCertificate!, errors, warnings, trustAnchors, cmsData.Certificates);
+        bool chainValid = ValidateChain(cmsData.SignerCertificate!, errors, warnings, trustAnchors, cmsData.Certificates, out bool chainAnchored);
 
         // 6. Timestamp validation
         bool? tsValid = null;
         bool? tsaTrusted = null;
         DateTimeOffset? provenTime = null;
-        if (cmsData.SignatureTimestampToken is not null)
+        if (cmsData.SignatureTimestampToken is not null && _options.ValidatesTimestamps)
         {
             TimestampValidator.CertificateChainValidatorDelegate? tsaPolicy = trustAnchors is null ? null :
                 (certificate, certificates, tsaErrors, tsaWarnings) =>
@@ -445,7 +465,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
                         return false;
                     }
 
-                    return ValidateChain(certificate, tsaErrors, tsaWarnings, trustAnchors, certificates);
+                    return ValidateChain(certificate, tsaErrors, tsaWarnings, trustAnchors, certificates, out _);
                 };
             TimestampTokenValidationResult timestamp = _timestampValidator.ValidateWithTrust(
                 cmsData, warnings, tsaPolicy, _logger);
@@ -481,7 +501,10 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
 
         // 7. LTV data validation (root SignedData certificate and revocation sets)
-        bool? ltvValid = cmsBytes is null ? null : ValidateLtvData(cmsBytes, cmsData, warnings);
+        bool? ltvValid = cmsBytes is null || !_options.ValidatesLongTermData ? null : ValidateLtvData(cmsBytes, cmsData, warnings);
+        var embedded = _options.ValidatesLongTermData
+            ? EmbeddedRevocationValues.Read(cmsData.UnsignedAttributes?.GetValueOrDefault(Oids.RevocationValues))
+            : ([], []);
 
         // 7a. escTimeStamp (CAdES-X type 1, RFC 5126 §5.11.3)
         bool? escValid = null;
@@ -496,7 +519,11 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
         // 8. Archive timestamp validation (covers the first signer of the SignedData)
         bool? archiveTsValid = null;
-        if (cmsBytes is not null && content is not null && isFirstSigner
+        if (!_options.ValidatesArchivalData)
+        {
+            // Below ValidationLevel.ArchivalData the archive timestamps are not looked at.
+        }
+        else if (cmsBytes is not null && content is not null && isFirstSigner
             && cmsData.UnsignedAttributes?.TryGetValue(Oids.ArchiveTimeStamp, out byte[][]? archiveV2) == true && archiveV2.Length > 0)
         {
             archiveTsValid = TimestampCovers(archiveV2[0], CadesExtendedValidationData.ArchiveTimeStampV2Input(cmsBytes, content), cmsData.DigestAlgorithmOid);
@@ -526,8 +553,9 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             IsTsaTrusted = tsaTrusted,
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
             ProofOfExistence = provenTime,
-        };
-        var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.Policy);
+            ChainReachesAnchor = chainAnchored,
+        }.WithCms(cmsData, _options.TrustedRoots);
+        var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
 
         return new CadesValidationResult
@@ -535,8 +563,12 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            AppliedPolicy = evaluation.Policy,
+            BestSignatureTime = facts.ProofOfExistence,
             Facts = facts,
             ChainCandidates = [.. cmsData.Certificates, .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+            EmbeddedCrls = embedded.Crls,
+            EmbeddedOcsps = embedded.Ocsps,
             SignatureTimestampToken = cmsData.SignatureTimestampToken,
             IsSignatureValid = sigValid,
             IsIntegrityValid = integrityValid,
@@ -636,8 +668,10 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         List<string> errors,
         List<string> warnings,
         IEnumerable<X509Certificate2>? trustAnchors,
-        IReadOnlyList<X509Certificate2>? additionalCertificates = null)
+        IReadOnlyList<X509Certificate2>? additionalCertificates,
+        out bool reachesAnchor)
     {
+        reachesAnchor = false;
         try
         {
             bool hasCustomRoots = trustAnchors is not null
@@ -645,7 +679,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
                 || !_options.TrustSystemRoots;
 
             using var chain = new X509Chain();
-            CryptoUtility.ConfigureChainPolicy(chain, _options.CheckRevocation);
+            CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
+            chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
             if (additionalCertificates is not null)
             {
                 foreach (X509Certificate2 certificate in additionalCertificates)
@@ -666,6 +701,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             }
 
             bool built = chain.Build(signerCert);
+            reachesAnchor = CryptoUtility.ReachesTrustAnchor(chain, built);
 
             foreach (var element in chain.ChainElements)
             {

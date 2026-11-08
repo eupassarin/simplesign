@@ -27,7 +27,10 @@ public sealed class SimpleSignOptions
 
     /// <summary>
     /// The validation policy of the registered validators: accepted algorithms and key sizes, key usage of the
-    /// signing certificate. Default: <see cref="Validation.Policy.ValidationPolicy.Default"/>.
+    /// signing certificate. Default: <see cref="Policies.ValidationPolicy.Default"/>.
     /// </summary>
-    public Validation.Policy.ValidationPolicy ValidationPolicy { get; set; } = Validation.Policy.ValidationPolicy.Default;
+    public Policies.ValidationPolicy ValidationPolicy { get; set; } = Policies.ValidationPolicy.Default;
+
+    /// <summary>The signing policy of the registered <see cref="Policies.IPolicyProvider"/>. Default: <see cref="Policies.SigningPolicy.Default"/>.</summary>
+    public Policies.SigningPolicy SigningPolicy { get; set; } = Policies.SigningPolicy.Default;
 }

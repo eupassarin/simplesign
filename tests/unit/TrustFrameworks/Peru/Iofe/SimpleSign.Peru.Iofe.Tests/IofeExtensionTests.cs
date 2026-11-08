@@ -4,7 +4,7 @@ using System.Security.Cryptography.Xml;
 using System.Xml;
 using Shouldly;
 using SimpleSign.Core.Validation;
-using SimpleSign.Core.Validation.Policy;
+using SimpleSign.Core.Policies;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
@@ -43,7 +43,9 @@ public sealed class IofeExtensionTests : IDisposable
         var iofe = IofeExtension.Load(TrustedListXml(), [_operator]);
         byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(_pki.Leaf, [_pki.IntermediateCa])
-            .WithSigningPolicy(IofePolicies.Signing with { CheckRevocation = false })
+            .WithSigningPolicy(IofePolicies.Signing
+                .With("SigningCertificate/NotRevoked", null).With("SigningCertificate/RevocationDataAvailable", null)
+                .With("CACertificate/NotRevoked", null).With("CACertificate/RevocationDataAvailable", null))
             .SignAsync();
 
         var validator = new PdfSignatureValidator(
@@ -52,16 +54,16 @@ public sealed class IofeExtensionTests : IDisposable
         var result = (await validator.ValidateAsync(new MemoryStream(signed))).ShouldHaveSingleItem();
 
         result.Indication.ShouldBe(SignatureIndication.Valid);
-        result.Constraints.ShouldContain(c => c.Id == "signingCertificate.keyUsage" && c.Status == ConstraintStatus.Passed);
+        result.Constraints.ShouldContain(c => c.Id == TestPolicies.SigningCertificate("KeyUsage") && c.Status == ConstraintStatus.Passed);
     }
 
     [Fact]
     public void Policies_Validation_FailsOnKeyUsage() =>
-        IofePolicies.Validation.SigningCertificate.KeyUsage.ShouldBe(ConstraintLevel.Fail);
+        IofePolicies.Validation.Find(TestPolicies.SigningCertificate("KeyUsage"))!.Level.ShouldBe(ConstraintLevel.Fail);
 
     [Fact]
     public void Policies_Signing_ChecksRevocation() =>
-        IofePolicies.Signing.CheckRevocation.ShouldBeTrue();
+        IofePolicies.Signing.Find("SigningCertificate/NotRevoked")!.Level.ShouldBe(ConstraintLevel.Fail);
 
     public void Dispose()
     {

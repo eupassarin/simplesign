@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using Shouldly;
-using SimpleSign.Core.Validation.Policy;
+using SimpleSign.Core.Policies;
 using Xunit;
 
 namespace SimpleSign.Core.Tests.Validation.Policy;
@@ -10,92 +10,117 @@ namespace SimpleSign.Core.Tests.Validation.Policy;
 [Trait("Category", "Unit")]
 public sealed class ValidationPolicyTests : IDisposable
 {
+    private const string KeyUsage = "SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage";
     private readonly string _directory = Directory.CreateTempSubdirectory("simplesign-policy-").FullName;
 
     [Fact]
-    public void FromJson_RoundTrip_KeepsTheConstraints()
+    public void Default_HasTheConstraintsOfTheDssDefaultPolicy()
     {
-        var policy = ValidationPolicy.Default with
-        {
-            Name = "INDECOPI",
-            SigningCertificate = new SigningCertificateConstraints { KeyUsage = ConstraintLevel.Fail },
-            Cryptographic = new CryptographicConstraints { MinimumRsaKeySize = 3072, DigestAlgorithms = [new("SHA512")] },
-        };
+        var policy = ValidationPolicy.Default;
 
-        var read = ValidationPolicy.FromJson(policy.ToJson());
-
-        read.Name.ShouldBe("INDECOPI");
-        read.SigningCertificate.KeyUsage.ShouldBe(ConstraintLevel.Fail);
-        read.Cryptographic.MinimumRsaKeySize.ShouldBe(3072);
-        read.Cryptographic.DigestAlgorithms.ShouldHaveSingleItem().Name.ShouldBe("SHA512");
+        policy.Find(KeyUsage).ShouldBe(new PolicyConstraint(ConstraintLevel.Warn) { Ids = ["nonRepudiation"] }, new ConstraintComparer());
+        policy.Find("Model")!.Value.ShouldBe("SHELL");
+        policy.Find("Cryptographic")!.Level.ShouldBe(ConstraintLevel.Fail);
+        policy.Find("Cryptographic/AlgoExpirationDate")!.Algorithms.ShouldContain(new PolicyAlgorithm("SHA1", null, "2012-08-01"));
+        policy.Find("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/RevocationFreshness")!
+            .ShouldSatisfyAllConditions(c => c.Level.ShouldBe(ConstraintLevel.Ignore), c => c.Unit.ShouldBe(PolicyTimeUnit.Days));
     }
 
     [Fact]
-    public void FromJson_EnumAsString_IsRead()
+    public void ToJson_RoundTrip_IsStable()
     {
-        var policy = ValidationPolicy.FromJson("""{ "signingCertificate": { "keyUsage": "fail" } }""");
+        string json = ValidationPolicy.Default.ToJson();
 
-        policy.SigningCertificate.KeyUsage.ShouldBe(ConstraintLevel.Fail);
-        policy.Cryptographic.MinimumRsaKeySize.ShouldBe(2048);
+        ValidationPolicy.FromJson(json).ToJson().ShouldBe(json);
+        ValidationPolicy.FromJson(json).Digest.ShouldBe(ValidationPolicy.Default.Digest);
     }
 
     [Fact]
-    public void FromJson_NotJson_ThrowsInvalidDataException() =>
-        Should.Throw<InvalidDataException>(() => ValidationPolicy.FromJson("{ not json"));
-
-    [Fact]
-    public void Load_File_ReadsThePolicy()
+    public void FromJson_NameOutsideTheSchema_ThrowsWithThePath()
     {
-        string path = Path.Combine(_directory, "policy.json");
-        File.WriteAllText(path, """{ "name": "from file" }""");
+        const string json = """{ "ConstraintsParameters": { "SignatureConstraints": { "Typo": { "Level": "FAIL" } } } }""";
 
-        ValidationPolicy.Load(path).Name.ShouldBe("from file");
+        var ex = Should.Throw<InvalidDataException>(() => ValidationPolicy.FromJson(json));
+
+        ex.Message.ShouldContain("$.ConstraintsParameters.SignatureConstraints.Typo");
     }
 
     [Fact]
-    public void LoadSigned_SignedByTrustedSigner_ReadsThePolicy()
+    public void FromJson_UnknownLevel_Throws() =>
+        Should.Throw<InvalidDataException>(() => ValidationPolicy.FromJson(
+            """{ "ConstraintsParameters": { "Model": { "Value": "SHELL" }, "Cryptographic": { "Level": "STRICT" } } }"""));
+
+    [Fact]
+    public void FromJson_OtherRoot_Throws() =>
+        Should.Throw<InvalidDataException>(() => ValidationPolicy.FromJson("""{ "SigningConstraints": {} }"""));
+
+    [Fact]
+    public void FromJson_SchemaAndComments_AreAccepted()
+    {
+        var policy = ValidationPolicy.FromJson("""
+            {
+              "$schema": "validation-policy.schema.json",
+              // A comment.
+              "ConstraintsParameters": { "Name": "mine", "Description": "d", "Model": { "Value": "chain" } }
+            }
+            """);
+
+        policy.Name.ShouldBe("mine");
+        policy.Description.ShouldBe("d");
+        policy.Find("Model")!.Value.ShouldBe("CHAIN");
+    }
+
+    [Fact]
+    public void With_SetsAndRemovesAConstraint()
+    {
+        var failing = ValidationPolicy.Default.With(KeyUsage, new PolicyConstraint(ConstraintLevel.Fail) { Ids = ["digitalSignature"] });
+        var removed = failing.With(KeyUsage, null);
+
+        failing.Find(KeyUsage)!.Level.ShouldBe(ConstraintLevel.Fail);
+        ValidationPolicy.Default.Find(KeyUsage)!.Level.ShouldBe(ConstraintLevel.Warn);
+        removed.Find(KeyUsage).ShouldBeNull();
+        failing.Digest.ShouldNotBe(ValidationPolicy.Default.Digest);
+    }
+
+    [Fact]
+    public void With_PathOutsideTheSchema_ThrowsArgumentException() =>
+        Should.Throw<ArgumentException>(() => ValidationPolicy.Default.With("SignatureConstraints/Typo", new PolicyConstraint(ConstraintLevel.Fail)));
+
+    [Fact]
+    public void With_MissingSections_AreCreated()
+    {
+        var policy = ValidationPolicy.FromJson("""{ "ConstraintsParameters": { "Description": "" } }""")
+            .With("Timestamp/TimestampDelay", new PolicyConstraint(ConstraintLevel.Fail) { Unit = PolicyTimeUnit.Hours, IntValue = 2 });
+
+        policy.Find("Timestamp/TimestampDelay")!.Duration.ShouldBe(TimeSpan.FromHours(2));
+        policy.ToJson().ShouldContain("\"Unit\": \"HOURS\"");
+    }
+
+    [Fact]
+    public void LoadSigned_SignedByTheTrustedCertificate_Loads()
     {
         using var signer = Signer();
-        string path = Write("""{ "name": "signed" }""", signer);
+        string path = Write("""{ "ConstraintsParameters": { "Name": "signed", "Description": "" } }""", signer, signedAttributes: true);
 
         ValidationPolicy.LoadSigned(path, path + ".p7s", signer).Name.ShouldBe("signed");
     }
 
     [Fact]
-    public void LoadSigned_WithSignedAttributes_ReadsThePolicy()
+    public void LoadSigned_FileChangedAfterSigning_Throws()
     {
         using var signer = Signer();
-        string path = Write("""{ "name": "signed" }""", signer, signedAttributes: true);
-
-        ValidationPolicy.LoadSigned(path, path + ".p7s", signer).Name.ShouldBe("signed");
-    }
-
-    [Fact]
-    public void LoadSigned_WithSignedAttributesChanged_ThrowsCryptographicException()
-    {
-        using var signer = Signer();
-        string path = Write("""{ "name": "signed" }""", signer, signedAttributes: true);
-        File.WriteAllText(path, """{ "name": "tampered" }""");
+        string path = Write("""{ "ConstraintsParameters": { "Name": "signed", "Description": "" } }""", signer);
+        File.WriteAllText(path, """{ "ConstraintsParameters": { "Name": "changed", "Description": "" } }""");
 
         Should.Throw<CryptographicException>(() => ValidationPolicy.LoadSigned(path, path + ".p7s", signer));
     }
 
     [Fact]
-    public void LoadSigned_ChangedAfterSigning_ThrowsCryptographicException()
-    {
-        using var signer = Signer();
-        string path = Write("""{ "name": "signed" }""", signer);
-        File.WriteAllText(path, """{ "name": "tampered" }""");
-
-        Should.Throw<CryptographicException>(() => ValidationPolicy.LoadSigned(path, path + ".p7s", signer));
-    }
-
-    [Fact]
-    public void LoadSigned_OtherSigner_ThrowsCryptographicException()
+    public void LoadSigned_SignedByAnotherCertificate_Throws()
     {
         using var signer = Signer();
         using var other = Signer();
-        string path = Write("""{ "name": "signed" }""", signer);
+        string path = Write("""{ "ConstraintsParameters": { "Name": "signed", "Description": "" } }""", signer);
 
         Should.Throw<CryptographicException>(() => ValidationPolicy.LoadSigned(path, path + ".p7s", other));
     }
@@ -126,5 +151,13 @@ public sealed class ValidationPolicyTests : IDisposable
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
         return SimpleSign.Core.Crypto.CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx, "p"), "p");
+    }
+
+    private sealed class ConstraintComparer : IEqualityComparer<PolicyConstraint>
+    {
+        public bool Equals(PolicyConstraint? x, PolicyConstraint? y) =>
+            x is not null && y is not null && x.Level == y.Level && x.Ids.SequenceEqual(y.Ids) && x.Algorithms.SequenceEqual(y.Algorithms);
+
+        public int GetHashCode(PolicyConstraint obj) => obj.Level.GetHashCode();
     }
 }

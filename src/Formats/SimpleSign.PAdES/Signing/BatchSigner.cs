@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 
 namespace SimpleSign.PAdES.Signing;
@@ -311,7 +312,7 @@ public sealed class BatchSigner : IAsyncDisposable
             return new BatchSignerBuilder(this, signingPolicy: policy);
         }
 
-        /// <summary>Sets the checker used for the revocation check of <see cref="SigningPolicy.CheckRevocation"/>.</summary>
+        /// <summary>Sets the checker used for the revocation check of the signing policy (<c>NotRevoked</c>, <c>RevocationDataAvailable</c>).</summary>
         public BatchSignerBuilder WithChainRevocationChecker(SimpleSign.Core.Revocation.IChainRevocationChecker checker)
         {
             ArgumentNullException.ThrowIfNull(checker);

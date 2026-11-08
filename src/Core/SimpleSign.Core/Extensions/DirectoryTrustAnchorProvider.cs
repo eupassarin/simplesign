@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using SimpleSign.Core.Crypto;
-using SimpleSign.Core.Validation.Policy;
+using SimpleSign.Core.Policies;
 
 namespace SimpleSign.Core.Extensions;
 

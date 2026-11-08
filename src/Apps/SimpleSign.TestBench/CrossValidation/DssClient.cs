@@ -84,6 +84,9 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
         return report.Available ? Compare(format, run, report) : report;
     }
 
+    /// <summary>The validation policy sent to DSS with every request; SimpleSign's default unless changed.</summary>
+    public SimpleSign.Core.Policies.ValidationPolicy Policy { get; set; } = SimpleSign.Core.Policies.ValidationPolicy.Default;
+
     /// <summary>Validates a stored file with DSS (the original document goes along for detached signatures).</summary>
     public async Task<DssComparison> ValidateAsync(string fileId, string? detachedDataId, RunLogger? logger, CancellationToken cancellationToken, string? detachedDataName = null)
     {
@@ -96,7 +99,13 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
             ["originalDocuments"] = detachedDataId is not null && documents.TryGet(detachedDataId, out var original)
                 ? new JsonArray(Document(original!, detachedDataName))
                 : null,
-            ["policy"] = null,
+            // The same policy on both sides: SimpleSign's, written as the DSS constraint.xml.
+            ["policy"] = new JsonObject
+            {
+                ["bytes"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(DssPolicyConverter.ToConstraintXml(Policy.ToJson(), DssPolicyConverter.NotInDss63))),
+                ["digestAlgorithm"] = null,
+                ["name"] = "simplesign-policy.xml",
+            },
             ["tokenExtractionStrategy"] = "NONE",
             ["signatureId"] = null,
         };

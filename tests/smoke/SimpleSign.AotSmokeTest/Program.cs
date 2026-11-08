@@ -17,6 +17,11 @@ string[] results = [];
 
 try
 {
+    // Policies: the embedded JSON policies are read without reflection
+    var validationPolicy = SimpleSign.Core.Policies.ValidationPolicy.FromJson(SimpleSign.Core.Policies.ValidationPolicy.Default.ToJson());
+    var signingPolicy = SimpleSign.Core.Policies.SigningPolicy.Default;
+    Console.WriteLine($"[PASS] Policies: {validationPolicy.Name}, {signingPolicy.Name}");
+
     // PAdES sign
     var pdf = CreateMinimalPdf();
     var signedPdf = await PadesSigner.Document(pdf).WithCertificate(cert).SignAsync();

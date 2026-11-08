@@ -114,6 +114,23 @@ public sealed record XadesValidationResult
     /// <summary>Non-blocking warnings.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 
+    /// <summary>The signature as a report entry, for <see cref="ValidationReports"/>.</summary>
+    /// <returns>The entry.</returns>
+    public SignatureReportEntry ToReportEntry() => new()
+    {
+        Id = SignatureId ?? "signature-1",
+        Format = "XAdES",
+        Indication = Indication,
+        SubIndication = SubIndication,
+        Constraints = Constraints,
+        SignerCertificate = SignerCertificate,
+        ClaimedSigningTime = SigningTime,
+        BestSignatureTime = BestSignatureTime,
+        Policy = AppliedPolicy,
+        Errors = Errors,
+        Warnings = Warnings,
+    };
+
     /// <summary>True when all fundamental checks pass, the validation policy's constraints included.</summary>
     public bool IsValid =>
         IsIntegrityValid && IsSignatureValid && IsCertificateChainValid && Indication == SignatureIndication.Valid;
@@ -138,6 +155,12 @@ public sealed record XadesValidationResult
     /// <summary>The checks of the validation and their outcome, including the validation policy's constraints.</summary>
     public IReadOnlyList<ValidationConstraintResult> Constraints { get; init; } = [];
 
+    /// <summary>The validation policy applied (its name and digest), chosen by the signature policy the signature names.</summary>
+    public SimpleSign.Core.Policies.AppliedPolicy? AppliedPolicy { get; init; }
+
+    /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
+    public DateTimeOffset? BestSignatureTime { get; init; }
+
     /// <summary>
     /// Whether the signing certificate chain is not revoked: null when revocation was not checked by
     /// <c>ValidateAsync</c>; false when a certificate is revoked or the status is unknown (see <see cref="RevocationSource"/>).
@@ -152,6 +175,12 @@ public sealed record XadesValidationResult
 
     /// <summary>The certificates that may complete the signer and TSA chains (embedded certificates, trust anchors).</summary>
     internal IReadOnlyList<X509Certificate2> ChainCandidates { get; init; } = [];
+
+    /// <summary>The CRLs the signature carries (RevocationValues), for the revocation step.</summary>
+    internal IReadOnlyList<byte[]> EmbeddedCrls { get; init; } = [];
+
+    /// <summary>The OCSP responses the signature carries (RevocationValues), for the revocation step.</summary>
+    internal IReadOnlyList<byte[]> EmbeddedOcsps { get; init; } = [];
 
     /// <summary>The signature timestamp token, for the TSA revocation check.</summary>
     internal byte[]? SignatureTimestampToken { get; init; }

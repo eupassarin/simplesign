@@ -135,11 +135,34 @@ public sealed class SignatureValidationResult
     /// <summary>The checks of the validation and their outcome, including the validation policy's constraints.</summary>
     public IReadOnlyList<ValidationConstraintResult> Constraints { get; init; } = [];
 
+    /// <summary>The validation policy applied (its name and digest), chosen by the signature policy the signature names.</summary>
+    public SimpleSign.Core.Policies.AppliedPolicy? AppliedPolicy { get; init; }
+
+    /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
+    public DateTimeOffset? BestSignatureTime { get; init; }
+
     /// <summary>Errors found during validation.</summary>
     public IReadOnlyList<string> Errors { get; init; } = [];
 
     /// <summary>Diagnostic warnings. Consult the validation outcomes and <see cref="RevocationSource"/> when determining validity.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
+
+    /// <summary>The signature as a report entry, for <see cref="ValidationReports"/>.</summary>
+    /// <returns>The entry.</returns>
+    public SignatureReportEntry ToReportEntry() => new()
+    {
+        Id = FieldName,
+        Format = IsDocumentTimestamp ? "Document timestamp" : "PAdES",
+        Indication = Indication,
+        SubIndication = SubIndication,
+        Constraints = Constraints,
+        SignerCertificate = SignerCertificate,
+        ClaimedSigningTime = IsDocumentTimestamp ? null : SigningTime,
+        BestSignatureTime = IsDocumentTimestamp ? SigningTime : BestSignatureTime,
+        Policy = AppliedPolicy,
+        Errors = Errors,
+        Warnings = Warnings,
+    };
 
     private SignatureIndication DetermineIndication()
     {

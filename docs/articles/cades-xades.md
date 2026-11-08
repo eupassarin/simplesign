@@ -191,7 +191,7 @@ var provider = new SingleClientProvider(proxiedClient)
 ```
 
 The policy applies wherever the provider is used: TSA, OCSP, CRL and AIA downloads when signing (and the chain
-revocation check of `SigningPolicy.Strict`), and revocation and AIA downloads when validating (`PdfSignatureValidator`,
+revocation check of a signing policy whose `NotRevoked` is FAIL), and revocation and AIA downloads when validating (`PdfSignatureValidator`,
 the `ValidateAsync` methods of the CAdES and XAdES validators through `ChainRevocationChecker`, ICP-Brasil and Gov.br
 chain validators). CRL distribution points on `ldap://`/`ldaps://` are followed only with
 `OutboundHttpPolicy { AllowLdap = true }`, under the same host checks.
@@ -199,8 +199,8 @@ chain validators). CRL distribution points on `ldap://`/`ldaps://` are followed 
 ## Signing Policy
 
 `CadesSigner` and `XadesSigner` check the certificate before signing like `PadesSigner`: `SigningPolicy.Default`
-(chain validity, key usage, RSA ≥ 2048, SHA-2/SHA-3), `SigningPolicy.Strict` (plus the revocation of the chain) or
-`SigningPolicy.Minimal`, set with `.WithSigningPolicy(...)`. See [PAdES signing](pades.md#signing-policy).
+(chain validity, key usage, RSA ≥ 2048, SHA-2/SHA-3) or a JSON signing policy (`SigningPolicy.Load`), set with
+`.WithSigningPolicy(...)`. See [PAdES signing](pades.md#signing-policy).
 
 ## Validate CAdES Signatures
 

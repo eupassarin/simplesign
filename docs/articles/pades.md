@@ -81,21 +81,51 @@ Set `SignedByLabel = ""` to hide the first line, `SignerDisplayName` to show a n
 
 ## Signing Policy
 
-Before anything is signed, the builder checks the certificate, its chain and the algorithms with a `SigningPolicy`.
-A refusal is a `SigningException` with its `Reason`:
+Before anything is signed, the builder checks the certificate, its chain and the algorithms with a `SigningPolicy`,
+a JSON document in the style of the EU DSS validation policy (root `SigningConstraints`, levels FAIL, WARN, INFORM,
+IGNORE — see [ADR 0023](../adr/0023-policies-in-the-dss-structure.md)). A FAIL constraint refuses the signature with a
+`SigningException` and its `Reason`; a WARN one adds a `SigningWarning` (`PolicyConstraint`); an INFORM one is logged.
 
-| Policy | Checks | Reasons |
+| Constraint | Checks | Reason |
 |---|---|---|
-| `SigningPolicy.Default` | Validity of every certificate of the chain; key usage digitalSignature or nonRepudiation; RSA ≥ 2048 bits; P-256/384/521 or brainpool r1 curves; SHA-2/SHA-3 | `ChainCertificateNotValid`, `KeyUsageNotPermitted`, `KeyTooWeak`, `AlgorithmNotPermitted` |
-| `SigningPolicy.Strict` | Default plus the revocation of the whole chain as it is now: each OCSP responder first, then the CRL downloaded again (never a cached copy) | also `CertificateRevoked`, `RevocationStatusUnknown` |
-| `SigningPolicy.Minimal` | Only the dates of the signing certificate | `CertificateExpired`, `CertificateNotCurrentlyValid` |
+| `SigningCertificate/NotExpired`, `CACertificate/NotExpired` | Validity of the signing certificate and of every certificate of the chain | `CertificateExpired`, `CertificateNotCurrentlyValid`, `ChainCertificateNotValid` |
+| `SigningCertificate/KeyUsage`, `ExtendedKeyUsage` | One of the listed usages | `KeyUsageNotPermitted` |
+| `Cryptographic` | Key algorithm and size, digest algorithm (DSS `AcceptableEncryptionAlgo`, `MiniPublicKeySize`, `AcceptableDigestAlgo`, `AlgoExpirationDate`) | `KeyTooWeak`, `AlgorithmNotPermitted` |
+| `NotRevoked`, `RevocationDataAvailable` | The revocation of the whole chain as it is now: each OCSP responder first, then the CRL downloaded again (never a cached copy). Needs the chain up to the root | `CertificateRevoked`, `RevocationStatusUnknown` |
+
+`SigningPolicy.Default` checks the validity of the chain, key usage digitalSignature or nonRepudiation, RSA and
+RSASSA-PSS ≥ 2048 bits, ECDSA ≥ 256 bits and SHA-2/SHA-3; revocation is at IGNORE. To also check revocation:
+
+```json
+{
+  "SigningConstraints": {
+    "SigningCertificate": {
+      "NotExpired": { "Level": "FAIL" },
+      "KeyUsage": { "Level": "FAIL", "Id": [ "digitalSignature", "nonRepudiation" ] },
+      "NotRevoked": { "Level": "FAIL" },
+      "RevocationDataAvailable": { "Level": "FAIL" }
+    },
+    "CACertificate": { "NotExpired": { "Level": "FAIL" }, "NotRevoked": { "Level": "FAIL" }, "RevocationDataAvailable": { "Level": "FAIL" } },
+    "Cryptographic": {
+      "Level": "FAIL",
+      "AcceptableEncryptionAlgo": { "Algo": [ "RSA", "RSASSA-PSS", "ECDSA" ] },
+      "MiniPublicKeySize": { "Algo": [ { "Value": "RSA", "Size": 2048 }, { "Value": "ECDSA", "Size": 256 } ] },
+      "AcceptableDigestAlgo": { "Algo": [ "SHA256", "SHA384", "SHA512" ] }
+    }
+  }
+}
+```
 
 ```csharp
 byte[] signed = await PadesSigner.Document(pdf)
-    .WithCertificate(certificate, chain)            // Strict needs the chain up to the root
-    .WithSigningPolicy(SigningPolicy.Strict)
+    .WithCertificate(certificate, chain)            // the revocation check needs the chain up to the root
+    .WithSigningPolicy(SigningPolicy.Load("signing-policy.json"))
     .SignAsync();
 ```
+
+The same in code: `SigningPolicy.Default.With("SigningCertificate/NotRevoked", new PolicyConstraint(ConstraintLevel.Fail))`.
+`SigningPolicy.LoadSigned` refuses a file whose detached signature is not by the trusted certificate, and
+`WithCryptographicSuite` replaces the `Cryptographic` constraints with an ETSI TS 119 322 suite (JSON).
 
 `WithSigningPolicy` is on the CAdES, XAdES, deferred and batch builders too. `WithChainRevocationChecker` replaces the
 checker used for the revocation check (by default it downloads through the builder's `IHttpClientProvider`).

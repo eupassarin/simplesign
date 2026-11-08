@@ -30,7 +30,7 @@ public sealed class SimpleSignServiceCollectionExtensionsTests
     [Fact(DisplayName = "AddSimpleSign maps the validation policy and registers the shared revocation services")]
     public void AddSimpleSign_MapsPolicyAndRegistersRevocation()
     {
-        var policy = SimpleSign.Core.Validation.Policy.ValidationPolicy.Default with { Name = "custom" };
+        var policy = SimpleSign.Core.Policies.ValidationPolicy.Default.WithName("custom");
         var services = new ServiceCollection();
         services.AddSimpleSign(o => o.ValidationPolicy = policy);
         var provider = services.BuildServiceProvider();
@@ -38,6 +38,18 @@ public sealed class SimpleSignServiceCollectionExtensionsTests
         provider.GetRequiredService<ValidationOptions>().Policy.Name.ShouldBe("custom");
         provider.GetService<SimpleSign.Core.Revocation.IChainRevocationChecker>().ShouldNotBeNull();
         provider.GetService<SimpleSign.Core.Revocation.IRevocationCache>().ShouldNotBeNull();
+    }
+
+    [Fact(DisplayName = "AddSimpleSign keeps a policy provider registered before it")]
+    public void AddSimpleSign_RegisteredPolicyProvider_IsUsedByTheValidators()
+    {
+        var custom = new SimpleSign.Core.Policies.StaticPolicyProvider(SimpleSign.Core.Policies.ValidationPolicy.Default.WithName("runtime"));
+        var services = new ServiceCollection();
+        services.AddSingleton<SimpleSign.Core.Policies.IPolicyProvider>(custom);
+        services.AddSimpleSign();
+        var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<ValidationOptions>().PolicyProvider.ShouldBeSameAs(custom);
     }
 
     [Fact(DisplayName = "AddSimpleSign uses DefaultHttpClientProvider when no custom provider")]

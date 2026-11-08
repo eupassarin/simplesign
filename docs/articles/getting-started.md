@@ -62,7 +62,7 @@ This creates a **PAdES B-B** (basic) signature.
 Before signing, the default `SigningPolicy` checks the certificate: a certificate without the digitalSignature or
 nonRepudiation key usage, an RSA key under 2048 bits or an expired certificate in the chain is refused with a
 `SigningException` (`KeyUsageNotPermitted`, `KeyTooWeak`, `ChainCertificateNotValid`). For a quick test with such a
-certificate use `.WithSigningPolicy(SigningPolicy.Minimal)`; see [PAdES signing](pades.md#signing-policy).
+certificate use a signing policy with those constraints at IGNORE (`SigningPolicy.Default.With("SigningCertificate/KeyUsage", new PolicyConstraint(ConstraintLevel.Ignore))`); see [PAdES signing](pades.md#signing-policy).
 
 ### In one line, from a .pfx file
 

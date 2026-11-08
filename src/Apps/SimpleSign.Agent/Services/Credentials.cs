@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Agent.Localization;
 using SimpleSign.Brazil.IcpBrasil;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.Signers.Pkcs11;
 
@@ -42,20 +43,19 @@ internal sealed record CertificateEntry(CertificateSourceKind Kind, X509Certific
 
     /// <summary>
     /// Why a server with SimpleSign's default signing policy refuses this certificate: "keyUsage" when the key usage
-    /// allows neither digitalSignature nor nonRepudiation (or is missing), "weakKey" for RSA under 2048 bits; else null.
+    /// allows neither digitalSignature nor nonRepudiation (or is missing), "weakKey" for a key the policy finds too
+    /// small; else null. The checks are those of <see cref="SigningPolicy.Default"/>.
     /// </summary>
     public string? PolicyIssue
     {
         get
         {
-            var usage = Certificate.Extensions.OfType<X509KeyUsageExtension>().FirstOrDefault();
-            if (usage is null || (usage.KeyUsages & (X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)) == 0)
-            {
-                return "keyUsage";
-            }
-
-            using var rsa = Certificate.GetRSAPublicKey();
-            return rsa is not null && rsa.KeySize < 2048 ? "weakKey" : null;
+            var findings = SigningPolicy.Default.Evaluate(Certificate, DateTimeOffset.UtcNow)
+                .Where(f => f.Level == ConstraintLevel.Fail)
+                .ToList();
+            return findings.Exists(f => f.Reason == SigningErrorReason.KeyUsageNotPermitted) ? "keyUsage"
+                : findings.Exists(f => f.Reason == SigningErrorReason.KeyTooWeak) ? "weakKey"
+                : null;
         }
     }
 

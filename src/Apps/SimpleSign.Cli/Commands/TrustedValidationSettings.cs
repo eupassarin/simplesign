@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Extensions;
-using SimpleSign.Core.Validation.Policy;
+using SimpleSign.Core.Policies;
 using SimpleSign.XAdES.TrustedLists;
 using Spectre.Console.Cli;
 
@@ -12,13 +12,70 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy (JSON): accepted algorithms, key sizes, key usage")]
+    [Description("Validation policy (JSON in the structure of the EU DSS constraint.xml, root ConstraintsParameters). Write the default with 'simplesign policy export validation'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>
     [CommandOption("--policy-signer <PATH>")]
     [Description("Certificate the policy must be signed with; its detached signature is <policy>.p7s")]
     public string? PolicySignerPath { get; init; }
+
+    /// <summary>How much of each signature is validated.</summary>
+    [CommandOption("--level <LEVEL>")]
+    [Description("How much is validated: basic (signature and chain), timestamps, lt (plus revocation and long-term data) or lta (plus archive timestamps; the default)")]
+    public string? Level { get; init; }
+
+    /// <summary>Which revocation source is asked first.</summary>
+    [CommandOption("--revocation-strategy <STRATEGY>")]
+    [Description("ocsp-first (the default, as the EU DSS) or crl-first")]
+    public string? RevocationStrategy { get; init; }
+
+    /// <summary>Check the revocation of chains that do not reach a trust anchor.</summary>
+    [CommandOption("--revocation-for-untrusted")]
+    [Description("Also check the revocation of chains that do not reach a trust anchor (off by default)")]
+    public bool RevocationForUntrusted { get; init; }
+
+    /// <summary>Write the ETSI TS 119 102-2 validation report (XML) to this file.</summary>
+    [CommandOption("--etsi-report <PATH>")]
+    [Description("Write the ETSI TS 119 102-2 signature validation report (XML) to this file")]
+    public string? EtsiReportPath { get; init; }
+
+    /// <summary>Write the simple report (JSON) to this file.</summary>
+    [CommandOption("--simple-report <PATH>")]
+    [Description("Write the simple report (JSON: indication, sub-indication, signer, times, policy per signature) to this file")]
+    public string? SimpleReportPath { get; init; }
+
+    /// <summary>Writes the reports asked with <see cref="EtsiReportPath"/> and <see cref="SimpleReportPath"/>.</summary>
+    internal void WriteReports(IReadOnlyList<SimpleSign.Core.Validation.SignatureReportEntry> entries)
+    {
+        if (EtsiReportPath is not null)
+        {
+            File.WriteAllText(EtsiReportPath, SimpleSign.Core.Validation.ValidationReports.ToEtsiXml(entries, ValidationLevel));
+        }
+
+        if (SimpleReportPath is not null)
+        {
+            File.WriteAllText(SimpleReportPath, SimpleSign.Core.Validation.ValidationReports.ToSimpleJson(entries));
+        }
+    }
+
+    /// <summary>The validation level of <see cref="Level"/>.</summary>
+    internal SimpleSign.Core.Validation.ValidationLevel ValidationLevel => Level?.ToLowerInvariant() switch
+    {
+        "basic" => SimpleSign.Core.Validation.ValidationLevel.BasicSignatures,
+        "timestamps" => SimpleSign.Core.Validation.ValidationLevel.Timestamps,
+        "lt" => SimpleSign.Core.Validation.ValidationLevel.LongTermData,
+        _ => SimpleSign.Core.Validation.ValidationLevel.ArchivalData,
+    };
+
+    /// <summary>The verifier options of the revocation options.</summary>
+    internal SimpleSign.Core.Validation.VerifierOptions Verifier => new()
+    {
+        RevocationStrategy = string.Equals(RevocationStrategy, "crl-first", StringComparison.OrdinalIgnoreCase)
+            ? SimpleSign.Core.Validation.RevocationStrategy.CrlFirst
+            : SimpleSign.Core.Validation.RevocationStrategy.OcspFirst,
+        CheckRevocationForUntrustedChains = RevocationForUntrusted,
+    };
 
     /// <summary>Folder of trust anchor certificates.</summary>
     [CommandOption("--trust-dir <DIR>")]
@@ -40,6 +97,21 @@ internal class TrustedValidationSettings : CommonSettings
     [Description("Certificate the trusted list must be signed with (the scheme operator's)")]
     public string? TrustedListSignerPath { get; init; }
 
+    /// <summary>A list of trusted lists (LOTL); its national lists become trust anchors.</summary>
+    [CommandOption("--lotl <URL>")]
+    [Description("List of trusted lists (LOTL, e.g. https://ec.europa.eu/tools/lotl/eu-lotl.xml): the CA and TSA services of the national lists it points to become trust anchors")]
+    public string? Lotl { get; init; }
+
+    /// <summary>Certificate the LOTL must be signed with.</summary>
+    [CommandOption("--lotl-signer <PATH>")]
+    [Description("Certificate the LOTL must be signed with (for the EU LOTL, one the Official Journal publishes)")]
+    public string? LotlSignerPath { get; init; }
+
+    /// <summary>Territories of the LOTL to load.</summary>
+    [CommandOption("--lotl-territory <CODE>")]
+    [Description("Load only this territory's list (repeatable, e.g. --lotl-territory PT --lotl-territory DE)")]
+    public string[] LotlTerritories { get; init; } = [];
+
     /// <summary>Language of the verification report.</summary>
     [CommandOption("--lang <LANG>")]
     [Description("Language of the verification report: en (default) or es")]
@@ -55,6 +127,7 @@ internal class TrustedValidationSettings : CommonSettings
         {
             (PolicyPath, "Policy"), (PolicySignerPath, "Policy signer"), (TrustDirectorySignerPath, "Trust folder signer"),
             (TrustedListSignerPath, "Trusted list signer"),
+            (LotlSignerPath, "LOTL signer"),
         })
         {
             if (path is not null && !File.Exists(path))
@@ -63,9 +136,24 @@ internal class TrustedValidationSettings : CommonSettings
             }
         }
 
+        if (Level is not null && Level.ToLowerInvariant() is not ("basic" or "timestamps" or "lt" or "lta"))
+        {
+            return Spectre.Console.ValidationResult.Error($"Unknown --level '{Level}': use basic, timestamps, lt or lta.");
+        }
+
+        if (RevocationStrategy is not null && RevocationStrategy.ToLowerInvariant() is not ("ocsp-first" or "crl-first"))
+        {
+            return Spectre.Console.ValidationResult.Error($"Unknown --revocation-strategy '{RevocationStrategy}': use ocsp-first or crl-first.");
+        }
+
         if (TrustDirectory is not null && !Directory.Exists(TrustDirectory))
         {
             return Spectre.Console.ValidationResult.Error($"Trust folder not found: {TrustDirectory}");
+        }
+
+        if (Lotl is not null && (LotlSignerPath is null || !Uri.TryCreate(Lotl, UriKind.Absolute, out _)))
+        {
+            return Spectre.Console.ValidationResult.Error("--lotl needs a URL and --lotl-signer: the certificate the LOTL must be signed with.");
         }
 
         if (TrustedList is not null && TrustedListSignerPath is null)
@@ -103,12 +191,30 @@ internal class TrustedValidationSettings : CommonSettings
             anchors.AddRange(list.GetTrustAnchors());
         }
 
+        if (Lotl is not null)
+        {
+            var set = await SimpleSign.XAdES.TrustedLists.TrustedListSet.LoadAsync(new SimpleSign.XAdES.TrustedLists.TrustedListSetOptions
+            {
+                LotlLocation = new Uri(Lotl),
+                LotlSignerCertificates = [LoadCertificate(LotlSignerPath!)],
+                Territories = LotlTerritories,
+            }, cancellationToken: cancellationToken);
+            anchors.AddRange(set.GetTrustAnchors());
+            foreach (var problem in set.Problems)
+            {
+                Spectre.Console.AnsiConsole.MarkupLine($"[yellow]LOTL:[/] {Spectre.Console.Markup.Escape($"{problem.Territory} ({problem.Location}): {problem.Reason}")}");
+            }
+        }
+
         return (policy, anchors);
     }
 
     /// <summary>A chain revocation checker that downloads through the CLI's HTTP provider (proxy, outbound policy).</summary>
-    internal static SimpleSign.Core.Revocation.IChainRevocationChecker RevocationCheckerFor(SimpleSign.Core.Http.IHttpClientProvider http) =>
-        new SimpleSign.Core.Revocation.ChainRevocationChecker(http.GetClient(), outboundPolicy: http.OutboundPolicy);
+    internal SimpleSign.Core.Revocation.IChainRevocationChecker RevocationCheckerFor(SimpleSign.Core.Http.IHttpClientProvider http) =>
+        new SimpleSign.Core.Revocation.ChainRevocationChecker(http.GetClient(), outboundPolicy: http.OutboundPolicy)
+        {
+            Strategy = Verifier.RevocationStrategy,
+        };
 
     private static X509Certificate2 LoadCertificate(string path) =>
         new SimpleSign.Core.Validation.CertificateChainService().LoadCertsFromBytes(File.ReadAllBytes(path)).FirstOrDefault()

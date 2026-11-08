@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/signing-policy.schema.json",
+  "SigningConstraints": {
+    "Name": "SimpleSign default",
+    "Description": "Checks made before signing: validity of the chain, key usage of the signing certificate, key and digest algorithms. Set NotRevoked and RevocationDataAvailable to FAIL to also check the revocation of the chain (network).",
+    "SigningCertificate": {
+      "NotExpired": { "Level": "FAIL" },
+      "RevocationDataAvailable": { "Level": "IGNORE" },
+      "KeyUsage": { "Level": "FAIL", "Id": [ "digitalSignature", "nonRepudiation" ] },
+      "NotRevoked": { "Level": "IGNORE" }
+    },
+    "CACertificate": {
+      "NotExpired": { "Level": "FAIL" },
+      "RevocationDataAvailable": { "Level": "IGNORE" },
+      "NotRevoked": { "Level": "IGNORE" }
+    },
+    "Cryptographic": {
+      "Level": "FAIL",
+      "AcceptableEncryptionAlgo": { "Algo": [ "RSA", "RSASSA-PSS", "ECDSA" ] },
+      "MiniPublicKeySize": {
+        "Algo": [
+          { "Value": "RSA", "Size": 2048 },
+          { "Value": "RSASSA-PSS", "Size": 2048 },
+          { "Value": "ECDSA", "Size": 256 }
+        ]
+      },
+      "AcceptableDigestAlgo": { "Algo": [ "SHA256", "SHA384", "SHA512", "SHA3-256", "SHA3-384", "SHA3-512" ] }
+    }
+  }
+}

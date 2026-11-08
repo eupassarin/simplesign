@@ -61,7 +61,7 @@ byte[] signedPdf = await DeferredSigner.Resume(sessionData, sessionIntegrityKey)
 
 `PrepareAsync` checks the certificate with the library's signing policy and throws a `SigningException` the page
 should explain to the user: `KeyUsageNotPermitted` (the certificate is not for signing), `KeyTooWeak` (RSA under
-2048 bits) or `ChainCertificateNotValid` (a certificate of the chain expired); with `WithSigningPolicy(SigningPolicy.Strict)`
+2048 bits) or `ChainCertificateNotValid` (a certificate of the chain expired); with a signing policy whose `NotRevoked` is FAIL
 also `CertificateRevoked` and `RevocationStatusUnknown`, and then the chain must be given with `.WithCertificate(certificate, chain)`.
 `/api/certificates` marks such certificates in `policyIssue` (`keyUsage` or `weakKey`), so the page can leave them out.
 

@@ -5,6 +5,7 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
@@ -297,19 +298,33 @@ internal sealed class SigningPlan
 
     internal static string HashName(HashChoice hash) => ToHash(hash).Name!;
 
+    private static readonly PolicyConstraint Fail = new(ConstraintLevel.Fail);
+    private static readonly PolicyConstraint Ignore = new(ConstraintLevel.Ignore);
+
+    /// <summary>The default signing policy plus the revocation of the whole chain.</summary>
+    private static readonly SigningPolicy s_withRevocation = SigningPolicy.Default
+        .WithName("Default + revocation")
+        .With("SigningCertificate/NotRevoked", Fail).With("SigningCertificate/RevocationDataAvailable", Fail)
+        .With("CACertificate/NotRevoked", Fail).With("CACertificate/RevocationDataAvailable", Fail);
+
+    /// <summary>Only the dates of the signing certificate.</summary>
+    private static readonly SigningPolicy s_datesOnly = SigningPolicy.Default
+        .WithName("Signing certificate dates only")
+        .With("SigningCertificate/KeyUsage", Ignore).With("CACertificate/NotExpired", Ignore).With("Cryptographic", Ignore);
+
     /// <summary>The library policy of a choice.</summary>
     internal static SigningPolicy ToSigningPolicy(SigningPolicyChoice choice) => choice switch
     {
-        SigningPolicyChoice.Strict => SigningPolicy.Strict,
-        SigningPolicyChoice.Minimal => SigningPolicy.Minimal,
+        SigningPolicyChoice.Strict => s_withRevocation,
+        SigningPolicyChoice.Minimal => s_datesOnly,
         _ => SigningPolicy.Default,
     };
 
     /// <summary>The builder call of a policy choice other than the default.</summary>
     internal static string SigningPolicyCode(SigningPolicyChoice choice) => choice switch
     {
-        SigningPolicyChoice.Strict => ".WithSigningPolicy(SigningPolicy.Strict) // also checks the revocation of the chain",
-        _ => ".WithSigningPolicy(SigningPolicy.Minimal) // only the signing certificate's dates",
+        SigningPolicyChoice.Strict => ".WithSigningPolicy(SigningPolicy.Load(\"signing-policy.json\")) // NotRevoked and RevocationDataAvailable: FAIL",
+        _ => ".WithSigningPolicy(SigningPolicy.Load(\"signing-policy.json\")) // only SigningCertificate/NotExpired",
     };
 
     private static string HashOid(HashChoice hash) => hash switch

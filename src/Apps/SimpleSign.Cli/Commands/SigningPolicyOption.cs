@@ -1,4 +1,4 @@
-using SimpleSign.Core.Signing;
+using SimpleSign.Core.Policies;
 
 namespace SimpleSign.Cli.Commands;
 
@@ -7,20 +7,17 @@ internal static class SigningPolicyOption
 {
     /// <summary>The option's description.</summary>
     internal const string Description =
-        "Checks before signing: default (chain validity, key usage, RSA >= 2048, SHA-2/SHA-3), " +
-        "strict (default plus the revocation of the whole chain; needs the chain up to the root) " +
-        "or minimal (only the signing certificate's dates)";
+        "Signing policy (JSON, root SigningConstraints): the checks made before signing. Default: chain validity, " +
+        "key usage, RSA >= 2048, SHA-2/SHA-3. Write the default with 'simplesign policy export signing'";
 
-    /// <summary>The policy named by the option.</summary>
-    internal static SigningPolicy Parse(string? name) => name?.ToLowerInvariant() switch
-    {
-        null or "" or "default" => SigningPolicy.Default,
-        "strict" => SigningPolicy.Strict,
-        "minimal" => SigningPolicy.Minimal,
-        _ => throw new ArgumentException($"Unknown signing policy '{name}': use default, strict or minimal."),
-    };
+    /// <summary>The policy in the file, or the default policy when no file is given.</summary>
+    internal static SigningPolicy Parse(string? path) =>
+        string.IsNullOrWhiteSpace(path) ? SigningPolicy.Default : SigningPolicy.Load(path);
 
-    /// <summary>Whether the name is a known policy.</summary>
-    internal static bool IsValid(string? name) =>
-        name is null || name.ToLowerInvariant() is "default" or "strict" or "minimal";
+    /// <summary>Whether the option names an existing file (or is absent).</summary>
+    internal static bool IsValid(string? path) => path is null || File.Exists(path);
+
+    /// <summary>The error when <see cref="IsValid"/> is false.</summary>
+    internal static string Error(string? path) =>
+        $"--signing-policy '{path}' is not a file: give a JSON signing policy (write the default one with 'simplesign policy export signing').";
 }

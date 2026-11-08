@@ -76,7 +76,7 @@ few wrong attempts, so do not retry a wrong PIN automatically.
 
 | Key | Signature | PKCS#11 mechanism |
 |---|---|---|
-| RSA | PKCS#1 v1.5 (SHA-2, SHA-3; SHA-1 only with `SigningPolicy.Minimal` or a custom `AllowedHashAlgorithms`) | `CKM_RSA_PKCS` |
+| RSA | PKCS#1 v1.5 (SHA-2, SHA-3; SHA-1 only with a signing policy whose `AcceptableDigestAlgo` lists it) | `CKM_RSA_PKCS` |
 | RSA | RSASSA-PSS (SHA-1, SHA-2) — `WithSignatureAlgorithm(Oids.RsaPss)` | `CKM_RSA_PKCS_PSS` |
 | EC | ECDSA (SHA-2, SHA-3) | `CKM_ECDSA` |
 

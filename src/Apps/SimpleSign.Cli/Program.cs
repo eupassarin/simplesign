@@ -114,6 +114,14 @@ internal static partial class Program
                     .WithDescription("Validate a signed XAdES XML document");
             });
 
+            config.AddBranch("policy", policy =>
+            {
+                policy.AddCommand<PolicyExportCommand>("export")
+                    .WithDescription("Write the default validation or signing policy as JSON");
+                policy.AddCommand<PolicySchemaCommand>("schema")
+                    .WithDescription("Write the JSON Schema of the validation or signing policy files");
+            });
+
             config.AddBranch("fiscal", fiscal =>
             {
                 fiscal.AddCommand<FiscalSignCommand>("sign")
@@ -152,9 +160,9 @@ internal static partial class Program
     {
         SimpleSign.Core.Signing.SigningErrorReason.KeyUsageNotPermitted or SimpleSign.Core.Signing.SigningErrorReason.KeyTooWeak
             or SimpleSign.Core.Signing.SigningErrorReason.ChainCertificateNotValid =>
-            "The certificate does not meet the signing policy. Use a suitable certificate, or --signing-policy minimal for tests.",
+            "The certificate does not meet the signing policy. Use a suitable certificate, or a signing policy (--signing-policy) that relaxes the check.",
         SimpleSign.Core.Signing.SigningErrorReason.AlgorithmNotPermitted =>
-            "Choose SHA-256, SHA-384 or SHA-512 (--hash), or --signing-policy minimal for tests.",
+            "Choose SHA-256, SHA-384 or SHA-512 (--hash), or a signing policy (--signing-policy) that accepts the algorithm.",
         SimpleSign.Core.Signing.SigningErrorReason.RevocationStatusUnknown =>
             "Give the whole chain up to the root and check that its CRL/OCSP locations are reachable.",
         SimpleSign.Core.Signing.SigningErrorReason.CertificateRevoked =>

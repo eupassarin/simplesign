@@ -112,7 +112,7 @@ var http = new SingleClientProvider(new HttpClient(handlerThatTrustsTheSandboxRo
 byte[] signed = await PadesSigner.Document(pdf)
     .WithCertificate(certificate, chain)
     .WithHttpClientProvider(http)
-    .WithSigningPolicy(SigningPolicy.Strict)
+    .WithSigningPolicy(SigningPolicy.Load("strict-signing-policy.json")) // NotRevoked: FAIL
     .SignAsync();
 ```
 
