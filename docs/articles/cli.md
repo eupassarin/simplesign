@@ -220,7 +220,7 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 
 | Option | What it does |
 |---|---|
-| `--policy <file>` | Validation policy: JSON in the structure of the EU DSS `constraint.xml` (root `ConstraintsParameters`); see [ADR 0023](../adr/0023-policies-in-the-dss-structure.md) |
+| `--policy <file>` | Validation policy: JSON, root `ValidationConstraints`; see [ADR 0024](../adr/0024-own-policy-format.md) |
 | `--policy-signer <cert>` | The policy must be signed with this certificate (detached CMS in `<policy>.p7s`) |
 | `--trust-dir <dir>` | Folder of trust anchor certificates (`.cer`, `.crt`, `.der`, `.pem`) |
 | `--trust-dir-signer <cert>` | The folder must carry `manifest.json` (SHA-256 of every file) signed with this certificate |
@@ -228,11 +228,11 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 | `--lotl <url>` + `--lotl-signer <cert>` | List of trusted lists (e.g. the EU LOTL): the national lists it points to are checked with the certificates it gives and their CA and TSA services become trust anchors; `--lotl-territory PT` (repeatable) loads only some |
 | `--lang es` | Write the verification report in Spanish |
 | `--check-revocation` (CAdES, XAdES) | Check the revocation of the signer and TSA chains |
-| `--level basic\|timestamps\|lt\|lta` | How much is validated, as the EU DSS validation level: the signature and chain only, plus signature timestamps, plus revocation and long-term data, plus archive timestamps (default) |
-| `--revocation-strategy ocsp-first\|crl-first` | Which revocation source is asked first (default `ocsp-first`, as DSS); the other one answers when the first gives nothing |
+| `--level basic\|timestamps\|lt\|lta` | How much is validated: the signature and chain only, plus signature timestamps, plus revocation and long-term data, plus archive timestamps (default) |
+| `--revocation-strategy ocsp-first\|crl-first` | Which revocation source is asked first (default `ocsp-first`); the other one answers when the first gives nothing |
 | `--etsi-report <file>` | Write the ETSI TS 119 102-2 signature validation report (XML, namespace `http://uri.etsi.org/19102/v1.2.1#`) |
 | `--simple-report <file>` | Write the simple report (JSON): per signature the indication, sub-indication, signer, times, policy, errors and warnings |
-| `--revocation-for-untrusted` | Also check the revocation of chains that do not reach a trust anchor (off by default, as DSS) |
+| `--revocation-for-untrusted` | Also check the revocation of chains that do not reach a trust anchor (off by default) |
 
 Every signature gets a verification report: the indication (TOTAL-PASSED, TOTAL-FAILED, INDETERMINATE), the
 ETSI EN 319 102-1 sub-indication, the signer's public key (algorithm, size, SHA-256 of the SubjectPublicKeyInfo and
@@ -243,13 +243,13 @@ the PEM) and each check of the validation. With `--json` the same data is in `su
 simplesign validate contrato.pdf --policy indecopi.json --tsl tsl-pe.xml --tsl-signer indecopi-tsl.cer --lang es
 ```
 
-A policy file has the elements, names and levels of the DSS validation policy; a constraint left out is not
+A policy file lists constraints grouped by what they apply to, each with a level; a constraint left out is not
 evaluated, and one SimpleSign does not evaluate yet is reported as `NOT_CHECKED`. Start from the default
 (`simplesign policy export validation -o policy.json`) and change what you need:
 
 ```json
 {
-  "ConstraintsParameters": {
+  "ValidationConstraints": {
     "Name": "INDECOPI",
     "Description": "Key usage required; obsolete algorithms fail.",
     "SignatureConstraints": {

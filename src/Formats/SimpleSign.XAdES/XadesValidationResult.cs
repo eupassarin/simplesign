@@ -126,6 +126,7 @@ public sealed record XadesValidationResult
         SignerCertificate = SignerCertificate,
         ClaimedSigningTime = SigningTime,
         BestSignatureTime = BestSignatureTime,
+        ValidationObjects = ValidationObjects,
         Policy = AppliedPolicy,
         Errors = Errors,
         Warnings = Warnings,
@@ -160,6 +161,9 @@ public sealed record XadesValidationResult
 
     /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
     public DateTimeOffset? BestSignatureTime { get; init; }
+
+    /// <summary>The timestamps and revocation data the validation used, each with the outcome of its own evaluation.</summary>
+    public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];
 
     /// <summary>
     /// Whether the signing certificate chain is not revoked: null when revocation was not checked by

@@ -111,6 +111,9 @@ public sealed record PdfSignatureFacts
 
     /// <summary>A document timestamp (ETSI.RFC3161) was added after this signature.</summary>
     public bool HasLaterDocumentTimestamp { get; init; }
+
+    /// <summary>The ByteRange has the same ranges as another signature's, or its /Contents overlaps another's.</summary>
+    internal bool ByteRangeCollides { get; init; }
 }
 
 /// <summary>The revocation status a chain validation provider established for the chain.</summary>

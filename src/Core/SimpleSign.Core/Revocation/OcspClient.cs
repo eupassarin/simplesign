@@ -419,7 +419,7 @@ public sealed class OcspClient : IOcspClient
             EmbeddedRevocationEvidence.IsIssuedBy(responder, issuer);
     }
 
-    private static bool ResponderIdMatches(byte[] tbsDataRaw, X509Certificate2 responder)
+    internal static bool ResponderIdMatches(byte[] tbsDataRaw, X509Certificate2 responder)
     {
         var responseData = new AsnReader(tbsDataRaw, AsnEncodingRules.BER).ReadSequence();
         if (responseData.HasData && responseData.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))

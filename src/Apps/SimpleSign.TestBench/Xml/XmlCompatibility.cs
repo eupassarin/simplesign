@@ -25,7 +25,7 @@ public static class XmlCompatibility
     public const string StepCrypto = "crypto";
     public const string StepDetails = "details";
 
-    public static XmlOptionsReport Evaluate(XmlOptions options, XmlFacts? data, CredentialFacts? credential, bool sandboxConnected = true)
+    public static XmlOptionsReport Evaluate(XmlOptions options, XmlFacts? data, CredentialFacts? credential, bool sandboxConnected = true, SigningPolicyInput? signingPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         var state = new Dictionary<string, OptionState>(StringComparer.Ordinal);
@@ -50,7 +50,7 @@ public static class XmlCompatibility
 
         // ── 2. Signer ──────────────────────────────────────────────────
         Set("signingPolicy", OptionState.Shown);
-        SharedRules.Signer(credential, Error, Warn, StepSigner, o.SigningPolicy);
+        SharedRules.Signer(credential, Error, Warn, StepSigner, signingPolicy);
         return new XmlOptionsReport(state, issues, effective, level);
     }
 

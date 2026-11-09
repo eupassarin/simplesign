@@ -11,7 +11,7 @@ internal enum PolicyAttributeKind
 }
 
 /// <summary>A type of policy element: its attributes, its children and its lists.</summary>
-/// <param name="Name">The type name, as in the EU DSS <c>policy.xsd</c>.</param>
+/// <param name="Name">The type name.</param>
 /// <param name="Attributes">The attributes, in document order.</param>
 /// <param name="Children">The child elements and their types, in document order.</param>
 /// <param name="HasIds">Whether the element carries an <c>Id</c> list (<c>MultiValuesConstraint</c>).</param>
@@ -51,13 +51,13 @@ internal sealed record PolicyType(
 }
 
 /// <summary>
-/// The element tree of a validation policy, after the EU DSS validation policy schema (<c>policy.xsd</c>,
-/// namespace <c>http://dss.esig.europa.eu/validation/policy</c>), and of SimpleSign's signing policy, which reuses its
-/// certificate and cryptographic types. A policy file may only use these names.
+/// The element tree of SimpleSign's validation policy (root <c>ValidationConstraints</c>) and signing policy (root
+/// <c>SigningConstraints</c>, which reuses the certificate and cryptographic types). A policy file may only use these
+/// names; docs/policies/compatibility.md lists how they correspond to other validators' policies.
 /// </summary>
 internal static class PolicySchema
 {
-    internal const string ValidationRoot = "ConstraintsParameters";
+    internal const string ValidationRoot = "ValidationConstraints";
     internal const string SigningRoot = "SigningConstraints";
 
     private static readonly (string, PolicyAttributeKind)[] LevelOnly = [("Level", PolicyAttributeKind.Level)];
@@ -77,8 +77,6 @@ internal static class PolicySchema
         Add("LevelConstraint", "", LevelOnly);
         Add("MultiValuesConstraint", "", LevelOnly, ids: true);
         Add("TimeConstraint", "", [("Level", PolicyAttributeKind.Level), ("Unit", PolicyAttributeKind.TimeUnit), ("Value", PolicyAttributeKind.Int)]);
-        Add("ValueConstraint", "", [("Level", PolicyAttributeKind.Level), ("value", PolicyAttributeKind.String)]);
-        Add("IntValueConstraint", "", [("Level", PolicyAttributeKind.Level), ("value", PolicyAttributeKind.Int)]);
         Add("ModelConstraint", "", [("Value", PolicyAttributeKind.Model)]);
         Add("String", "");
         Add("ListAlgo", "", LevelOnly, algorithms: true);
@@ -91,12 +89,10 @@ internal static class PolicySchema
             LevelOnly);
 
         // Sections.
-        Add("ConstraintsParameters",
-            "Description:String ContainerConstraints:ContainerConstraints PDFAConstraints:PDFAConstraints " +
-            "SignatureConstraints:SignatureConstraints CounterSignatureConstraints:SignatureConstraints " +
-            "KeyBindingSignatureConstraints:SignatureConstraints Timestamp:TimestampConstraints Revocation:RevocationConstraints " +
-            "EvidenceRecord:EvidenceRecordConstraints Attestation:AttestationConstraints " +
-            "AttestationRevocation:AttestationRevocationConstraints Cryptographic:C Model:ModelConstraint eIDAS:eIDAS",
+        Add("ValidationConstraints",
+            "Description:String SignatureConstraints:SignatureConstraints " +
+            "CounterSignatureConstraints:SignatureConstraints Timestamp:TimestampConstraints " +
+            "Revocation:RevocationConstraints Cryptographic:C Model:ModelConstraint TrustedLists:TrustedLists",
             [("Name", PolicyAttributeKind.String)]);
         // The signing policy: the checks SimpleSign makes before signing, with the names of CertificateConstraints.
         Add("SigningConstraints",
@@ -105,78 +101,47 @@ internal static class PolicySchema
         Add("SigningCertificateConstraints",
             "NotExpired:L RevocationDataAvailable:L KeyUsage:M ExtendedKeyUsage:M NotRevoked:L Cryptographic:C");
         Add("SigningCaCertificateConstraints", "NotExpired:L RevocationDataAvailable:L NotRevoked:L Cryptographic:C");
-        Add("ContainerConstraints",
-            "AcceptableContainerTypes:M ZipCommentPresent:L AcceptableZipComment:M MimeTypeFilePresent:L " +
-            "AcceptableMimeTypeFileContent:M ManifestFilePresent:L SignedFilesPresent:L FilenameAdherence:L AllFilesSigned:L");
-        Add("PDFAConstraints", "AcceptablePDFAProfiles:M PDFACompliant:L");
         Add("SignatureConstraints",
             "StructuralValidation:L AcceptablePolicies:M PolicyAvailable:L SignaturePolicyStorePresent:L PolicyHashMatch:L " +
             "AcceptableFormats:M FullScope:L BasicSignatureConstraints:BasicSignatureConstraints " +
             "SignedAttributes:SignedAttributesConstraints UnsignedAttributes:UnsignedAttributesConstraints");
         Add("SignedAttributesConstraints",
             "SigningCertificatePresent:L UnicitySigningCertificate:L SigningCertificateRefersCertificateChain:L " +
-            "ReferencesToAllCertificateChainPresent:L SigningCertificateDigestAlgorithm:L CertDigestPresent:L CertDigestMatch:L " +
-            "IssuerSerialMatch:L KeyIdentifierPresent:L KeyIdentifierMatch:L X509UrlPresent:L X509UrlMatch:L SigningTime:L " +
-            "SigningTimeInCertRange:L SignatureType:M ContentType:M ContentHints:M ContentIdentifier:M " +
-            "MessageDigestOrSignedPropertiesPresent:L EllipticCurveKeySize:L CommitmentTypeIndication:M SignerLocation:L " +
-            "ClaimedRoles:M CertifiedRoles:M ContentTimeStamp:L ContentTimeStampMessageImprint:L");
+            "ReferencesToAllCertificateChainPresent:L SigningCertificateDigestAlgorithm:L CertDigestPresent:L " +
+            "CertDigestMatch:L IssuerSerialMatch:L SigningTime:L SigningTimeInCertRange:L ContentType:M " +
+            "ContentHints:M ContentIdentifier:M MessageDigestOrSignedPropertiesPresent:L CommitmentTypeIndication:M " +
+            "SignerLocation:L ClaimedRoles:M CertifiedRoles:M ContentTimeStamp:L ContentTimeStampMessageImprint:L");
         Add("UnsignedAttributesConstraints",
             "CounterSignature:L SignatureTimeStamp:L ValidationDataTimeStamp:L ValidationDataRefsOnlyTimeStamp:L " +
             "ArchiveTimeStamp:L DocumentTimeStamp:L TLevelTimeStamp:L LTALevelTimeStamp:L");
         Add("TimestampConstraints",
-            "TimestampDelay:T RevocationTimeAgainstBestSignatureTime:L BestSignatureTimeBeforeExpirationDateOfSigningCertificate:L " +
-            "Coherence:L TimestampValid:L BasicSignatureConstraints:BasicSignatureConstraints SignedAttributes:SignedAttributesConstraints " +
-            "TSAGeneralNamePresent:L TSAGeneralNameContentMatch:L TSAGeneralNameOrderMatch:L AtsHashIndex:L " +
-            "ContainerSignedAndTimestampedFilesCovered:L");
+            "TimestampDelay:T RevocationTimeAgainstBestSignatureTime:L " +
+            "BestSignatureTimeBeforeExpirationDateOfSigningCertificate:L Coherence:L TimestampValid:L " +
+            "BasicSignatureConstraints:BasicSignatureConstraints SignedAttributes:SignedAttributesConstraints " +
+            "TSAGeneralNamePresent:L TSAGeneralNameContentMatch:L TSAGeneralNameOrderMatch:L AtsHashIndex:L");
         Add("RevocationConstraints",
             "UnknownStatus:L ThisUpdatePresent:L RevocationIssuerKnown:L RevocationIssuerValidAtProductionTime:L " +
             "RevocationAfterCertificateIssuance:L RevocationHasInformationAboutCertificate:L OCSPResponderIdMatch:L " +
-            "OCSPCertHashPresent:L OCSPCertHashMatch:L SelfIssuedOCSP:L BasicSignatureConstraints:BasicSignatureConstraints",
-            LevelOnly);
-        Add("EvidenceRecordConstraints",
-            "EvidenceRecordValid:L DataObjectExistence:L DataObjectIntact:L DataObjectFound:L DataObjectGroup:L " +
-            "SignedFilesCovered:L ContainerSignedAndTimestampedFilesCovered:L HashTreeRenewal:L Cryptographic:C",
-            LevelOnly);
-        Add("AttestationConstraints",
-            "AttestationSignatureUnicity:L AttestationSignatureValid:L DisclosurePresent:L DisclosureFound:L DisclosureIntact:L " +
-            "DisclosureListExhaustive:L KeyBindingSignaturePresent:L KeyBindingSignatureValid:L ETSI194721Conformance:L " +
-            "AttestationType:M AttestationTypeIntegrityPresent:L IdentifierPresent:L IssuanceDatePresent:L NotBeforePresent:L " +
-            "ExpirationPresent:L NotExpired:L AdministrativeIssuanceDatePresent:L AdministrativeExpirationDatePresent:L " +
-            "AdministrativePeriodNotExpired:L Category:M Subject:M Pseudonym:M IssuingCountry:M IssuingAuthority:M " +
-            "IssuingAuthorityRegistrationIdentifier:M OneTimeUse:L ShortLived:L RevocationPresent:L RevocationAvailable:L " +
-            "AcceptableRevocationFound:L NotRevoked:L NotOnHold:L UsePseudonym:L Claims:M SupportedClaims:M " +
-            "SupportedNamespaces:M Cryptographic:C",
-            LevelOnly);
-        Add("AttestationRevocationConstraints",
-            "Type:M UnknownStatus:L IssuanceTime:L ExpirationTime:L NotExpired:L Subject:M SubjectMatch:L " +
-            "IssuerValidAtIssuanceTime:L BasicSignatureConstraints:BasicSignatureConstraints",
+            "SelfIssuedOCSP:L BasicSignatureConstraints:BasicSignatureConstraints",
             LevelOnly);
         Add("BasicSignatureConstraints",
-            "ReferenceDataExistence:L ReferenceDataIntact:L ReferenceDataNameMatch:L ManifestEntryObjectExistence:L " +
-            "ManifestEntryObjectGroup:L ManifestEntryObjectIntact:L ManifestEntryNameMatch:L SignatureIntact:L SignatureValid:L " +
-            "SignatureDuplicated:L ProspectiveCertificateChain:L SignerInformationStore:L ByteRange:L ByteRangeCollision:L " +
-            "ByteRangeAllDocument:L PdfSignatureDictionary:L PdfPageDifference:L PdfAnnotationOverlap:L PdfVisualDifference:L " +
-            "DocMDP:L FieldMDP:L SigFieldLock:L FormFillChanges:L AnnotationChanges:L UndefinedChanges:L " +
+            "ReferenceDataExistence:L ReferenceDataIntact:L SignatureIntact:L SignatureValid:L SignatureDuplicated:L " +
+            "ProspectiveCertificateChain:L SignerInformationStore:L ByteRange:L ByteRangeCollision:L " +
+            "ByteRangeAllDocument:L PdfSignatureDictionary:L PdfPageDifference:L PdfAnnotationOverlap:L DocMDP:L " +
+            "FieldMDP:L SigFieldLock:L FormFillChanges:L AnnotationChanges:L UndefinedChanges:L " +
             "TrustServiceTypeIdentifier:M TrustServiceStatus:M SigningCertificate:CertificateConstraints " +
             "CACertificate:CertificateConstraints Cryptographic:C");
         Add("CertificateConstraints",
-            "Recognition:L Signature:L NotExpired:L SunsetDate:L AuthorityInfoAccessPresent:L " +
+            "Recognition:L Signature:L NotExpired:L AuthorityInfoAccessPresent:L " +
             "RevocationDataSkip:CertificateValuesConstraint RevocationInfoAccessPresent:L RevocationDataAvailable:L " +
             "AcceptableRevocationDataFound:L CRLNextUpdatePresent:L OCSPNextUpdatePresent:L RevocationFreshness:T " +
-            "RevocationFreshnessNextUpdate:L CA:L MaxPathLength:L KeyUsage:M ExtendedKeyUsage:M PolicyTree:L NameConstraints:L " +
-            "AuthorityKeyIdentifierPresent:L SubjectKeyIdentifierPresent:L NoRevAvail:L SupportedCriticalExtensions:M " +
-            "ForbiddenExtensions:M IssuerName:L Surname:M GivenName:M CommonName:M Pseudonym:M Title:M Email:M " +
-            "OrganizationIdentifier:M OrganizationUnit:M OrganizationName:M Country:M Locality:M State:M SerialNumberPresent:L " +
-            "NotRevoked:L NotOnHold:L RevocationIssuerNotExpired:L SelfSigned:L NotSelfSigned:L PolicyIds:M " +
-            "PolicyQualificationIds:L PolicySupportedByQSCDIds:L QcCompliance:L QcEuLimitValueCurrency:ValueConstraint " +
-            "MinQcEuLimitValue:IntValueConstraint MinQcEuRetentionPeriod:IntValueConstraint QcSSCD:L QcEuPDSLocation:M " +
-            "QcType:M QcLegislationCountryCodes:M IssuedToNaturalPerson:L IssuedToLegalPerson:L SemanticsIdentifier:M " +
-            "PSD2QcTypeRolesOfPSP:M PSD2QcCompetentAuthorityName:M PSD2QcCompetentAuthorityId:M QcQSCDLegislation:M " +
-            "QcIdentificationMethod:M QcPSBCountryOfLegislation:M QcPSBAuthSourceIdentification:M " +
-            "QcPSBLegislationIdentification:M UsePseudonym:L Cryptographic:C");
-        Add("eIDAS",
-            "TLFreshness:T TLNotExpired:L TLWellSigned:L TLVersion:M TLStructure:L LoTEFreshness:T LoTENotExpired:L " +
-            "LoTEWellSigned:L LoTEVersion:M LoTEStructure:L");
+            "RevocationFreshnessNextUpdate:L CA:L MaxPathLength:L KeyUsage:M ExtendedKeyUsage:M PolicyTree:L " +
+            "NameConstraints:L AuthorityKeyIdentifierPresent:L SubjectKeyIdentifierPresent:L NoRevAvail:L " +
+            "SupportedCriticalExtensions:M ForbiddenExtensions:M IssuerName:L Surname:M GivenName:M CommonName:M " +
+            "Pseudonym:M Title:M Email:M OrganizationIdentifier:M OrganizationUnit:M OrganizationName:M Country:M " +
+            "Locality:M State:M SerialNumberPresent:L NotRevoked:L NotOnHold:L RevocationIssuerNotExpired:L " +
+            "SelfSigned:L NotSelfSigned:L PolicyIds:M QcCompliance:L QcSSCD:L UsePseudonym:L Cryptographic:C");
+        Add("TrustedLists", "TLFreshness:T TLNotExpired:L TLWellSigned:L TLVersion:M TLStructure:L");
         return types;
     }
 

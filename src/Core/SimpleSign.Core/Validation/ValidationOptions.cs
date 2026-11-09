@@ -17,7 +17,7 @@ public sealed class ValidationOptions
 
     /// <summary>
     /// The validation policy: accepted algorithms and key sizes, constraints on the signing certificate.
-    /// Default: <see cref="Policies.ValidationPolicy.Default"/> (the EU DSS default constraints). Load one with <see cref="Policies.ValidationPolicy.Load"/>.
+    /// Default: <see cref="Policies.ValidationPolicy.Default"/> (the policy embedded in SimpleSign). Load one with <see cref="Policies.ValidationPolicy.Load"/>.
     /// </summary>
     public Policies.ValidationPolicy Policy { get; init; } = Policies.ValidationPolicy.Default;
 
@@ -36,6 +36,13 @@ public sealed class ValidationOptions
 
     /// <summary>How much of each signature is validated. Default: <see cref="ValidationLevel.ArchivalData"/>.</summary>
     public ValidationLevel Level { get; init; } = ValidationLevel.ArchivalData;
+
+    /// <summary>
+    /// The trusted lists the trust anchors come from, for the <c>TrustedLists</c> constraints of the CAdES and XAdES
+    /// validators (the PAdES validator reads them from its trust anchor providers). Null when the anchors are not from
+    /// trusted lists.
+    /// </summary>
+    public IReadOnlyList<Extensions.TrustedListInfo>? TrustedLists { get; init; }
 
     /// <summary>Whether signature timestamps are validated (and give a proof of existence).</summary>
     internal bool ValidatesTimestamps => Level >= ValidationLevel.Timestamps;

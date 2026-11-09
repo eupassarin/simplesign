@@ -12,8 +12,9 @@ namespace SimpleSign.Core.Policies;
 public sealed record SigningPolicyFinding(string Constraint, ConstraintLevel Level, SigningErrorReason Reason, string Message);
 
 /// <summary>
-/// The checks a signer makes before it signs, written as JSON in the style of the EU DSS validation policy (root
-/// <c>SigningConstraints</c>): <c>SigningCertificate</c> and <c>CACertificate</c> with the DSS names
+/// The checks a signer makes before it signs, written as JSON in the style of the validation policy (root
+/// <c>SigningConstraints</c>): <c>SigningCertificate</c> and <c>CACertificate</c> with the names of its certificate
+/// constraints
 /// (<c>NotExpired</c>, <c>KeyUsage</c>, <c>ExtendedKeyUsage</c>, <c>NotRevoked</c>, <c>RevocationDataAvailable</c>,
 /// <c>Cryptographic</c>) and a <c>Cryptographic</c> element for the signature to be made. Levels: FAIL refuses the
 /// signature (<see cref="SigningException"/>), WARN adds a <see cref="SigningWarning"/>, INFORM logs.

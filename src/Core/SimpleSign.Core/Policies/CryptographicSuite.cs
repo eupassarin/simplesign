@@ -34,9 +34,8 @@ public sealed record CryptographicSuiteAlgorithm(
 /// <summary>
 /// A cryptographic suite in the JSON format of ETSI TS 119 322 (Annex B, <c>SecuritySuitabilityPolicy</c>): the
 /// algorithms and key sizes and until when each is suitable. Given to a <see cref="ValidationPolicy"/> or a
-/// <see cref="SigningPolicy"/>, it replaces their <c>Cryptographic</c> constraints, globally or for one context, as
-/// the EU DSS does: an algorithm that expired on or before <see cref="PolicyIssueDate"/> fails, one that expires after
-/// it gives a warning.
+/// <see cref="SigningPolicy"/>, it replaces their <c>Cryptographic</c> constraints, globally or for one context: an
+/// algorithm that expired on or before <see cref="PolicyIssueDate"/> fails, one that expires after it gives a warning.
 /// </summary>
 public sealed class CryptographicSuite
 {

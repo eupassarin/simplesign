@@ -52,14 +52,6 @@ public enum TsaAuth
     Bearer,
 }
 
-/// <summary>The checks the signer runs before signing (<c>WithSigningPolicy</c>).</summary>
-public enum SigningPolicyChoice
-{
-    Default,
-    Strict,
-    Minimal,
-}
-
 public enum HashChoice
 {
     Sha256,
@@ -196,8 +188,8 @@ public sealed record SigningOptions
     // 4. Cryptography
     public HashChoice Hash { get; init; } = HashChoice.Sha256;
 
-    /// <summary>The checks run before signing: Default, Strict (adds chain revocation) or Minimal.</summary>
-    public SigningPolicyChoice SigningPolicy { get; init; }
+    /// <summary>The uploaded signing policy (JSON, root SigningConstraints); null: <c>SigningPolicy.Default</c>.</summary>
+    public string? SigningPolicyId { get; init; }
 
     public RsaPadding Padding { get; init; } = RsaPadding.Pkcs1;
 

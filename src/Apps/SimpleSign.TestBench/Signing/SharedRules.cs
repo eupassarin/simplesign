@@ -1,3 +1,5 @@
+using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Policies;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Localization;
 
@@ -103,44 +105,98 @@ internal static class SharedRules
     }
 
     /// <summary>
-    /// The signer certificate: chosen, currently valid, with nonRepudiation; and what the signing policy refuses
-    /// (null: no signing policy applies).
+    /// The signer certificate: chosen, and what the signing policy says about it (FAIL: an error, WARN: a warning).
+    /// The certificate is checked with <see cref="SigningPolicy.Evaluate"/>; without the certificate itself, only
+    /// with the facts read from it.
     /// </summary>
     public static void Signer(CredentialFacts? credential, Action<string, string> error, Action<string, string> warn, string step,
-        SigningPolicyChoice? policy = SigningPolicyChoice.Default)
+        SigningPolicyInput? policy = null)
     {
+        policy ??= SigningPolicyInput.Default;
+        if (policy.Error is { } policyError)
+        {
+            error(step, L.T("The signing policy cannot be read: {0}", policyError));
+        }
+
         if (credential is null)
         {
             error(step, L.T("Choose a signer (certificate)."));
             return;
         }
 
-        if (credential.IsExpired)
+        if (Certificate(credential) is { } certificate)
         {
-            error(step, L.T("The certificate has expired: the library refuses to sign with it (SigningException)."));
-        }
-
-        if (credential.IsNotYetValid)
-        {
-            error(step, L.T("The certificate is not valid yet: the library refuses to sign with it (SigningException)."));
-        }
-
-        if (policy is SigningPolicyChoice.Default or SigningPolicyChoice.Strict)
-        {
-            if (!credential.HasSigningKeyUsage)
+            using (certificate)
             {
-                error(step, L.T("The certificate allows neither digitalSignature nor nonRepudiation: the signing policy refuses it (KeyUsageNotPermitted). Choose the Minimal policy to try it anyway."));
+                foreach (var finding in policy.Policy.Evaluate(certificate, DateTimeOffset.UtcNow))
+                {
+                    string text = L.T("The signing policy \"{0}\" ({1}: {2}) says: {3}", policy.Policy.Name, finding.Constraint, finding.Level.ToString().ToUpperInvariant(), finding.Message);
+                    switch (finding.Level)
+                    {
+                        case ConstraintLevel.Fail:
+                            error(step, L.T("{0} The library refuses to sign (SigningException, {1}). Upload a signing policy that relaxes the constraint to try it anyway.", text, finding.Reason));
+                            break;
+                        case ConstraintLevel.Warn:
+                            warn(step, text);
+                            break;
+                    }
+                }
             }
-
-            if (credential.KeyAlgorithm == "RSA" && credential.KeySize is > 0 and < 2048)
-            {
-                error(step, L.T("The RSA key has {0} bits: the signing policy requires at least 2048 (KeyTooWeak). Choose the Minimal policy to try it anyway.", credential.KeySize));
-            }
+        }
+        else
+        {
+            FromFacts(credential, policy.Policy, error, step);
         }
 
         if (!credential.HasNonRepudiation)
         {
             warn(step, L.T("The certificate lacks the nonRepudiation key usage: some validation policies warn about it."));
+        }
+    }
+
+    /// <summary>The checks of the policy that the facts of a credential answer, when its certificate is not at hand.</summary>
+    private static void FromFacts(CredentialFacts credential, SigningPolicy policy, Action<string, string> error, string step)
+    {
+        if (Fails(policy, "SigningCertificate/NotExpired"))
+        {
+            if (credential.IsExpired)
+            {
+                error(step, L.T("The certificate has expired: the library refuses to sign with it (SigningException)."));
+            }
+
+            if (credential.IsNotYetValid)
+            {
+                error(step, L.T("The certificate is not valid yet: the library refuses to sign with it (SigningException)."));
+            }
+        }
+
+        if (Fails(policy, "SigningCertificate/KeyUsage") && !credential.HasSigningKeyUsage)
+        {
+            error(step, L.T("The certificate allows neither digitalSignature nor nonRepudiation: the signing policy refuses it (KeyUsageNotPermitted). Upload a signing policy that relaxes the constraint to try it anyway."));
+        }
+
+        if (Fails(policy, "Cryptographic") && credential.KeyAlgorithm == "RSA" && credential.KeySize is > 0 and < 2048)
+        {
+            error(step, L.T("The RSA key has {0} bits: the signing policy requires at least 2048 (KeyTooWeak). Upload a signing policy that relaxes the constraint to try it anyway.", credential.KeySize));
+        }
+    }
+
+    private static bool Fails(SigningPolicy policy, string path) => policy.Find(path)?.Level == ConstraintLevel.Fail;
+
+    private static X509Certificate2? Certificate(CredentialFacts credential)
+    {
+        if (string.IsNullOrEmpty(credential.CertificateBase64))
+        {
+            return null;
+        }
+
+        try
+        {
+            return X509CertificateLoader.LoadCertificate(Convert.FromBase64String(credential.CertificateBase64));
+        }
+        catch (Exception ex) when (ex is FormatException or System.Security.Cryptography.CryptographicException)
+        {
+            return null;
         }
     }
 }

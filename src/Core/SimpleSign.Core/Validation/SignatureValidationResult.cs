@@ -141,6 +141,9 @@ public sealed class SignatureValidationResult
     /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
     public DateTimeOffset? BestSignatureTime { get; init; }
 
+    /// <summary>The timestamps and revocation data the validation used, each with the outcome of its own evaluation.</summary>
+    public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];
+
     /// <summary>Errors found during validation.</summary>
     public IReadOnlyList<string> Errors { get; init; } = [];
 
@@ -162,6 +165,7 @@ public sealed class SignatureValidationResult
         Policy = AppliedPolicy,
         Errors = Errors,
         Warnings = Warnings,
+        ValidationObjects = ValidationObjects,
     };
 
     private SignatureIndication DetermineIndication()

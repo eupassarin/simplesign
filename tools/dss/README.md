@@ -27,8 +27,9 @@ run is then validated twice, and the **Validation** tab shows both verdicts.
 ## The validation policy
 
 The TestBench sends SimpleSign's validation policy with every request, written as the DSS `constraint.xml`
-(`DssPolicyConverter`): both validators judge under the same constraints and levels (see
-[ADR 0023](../../docs/adr/0023-policies-in-the-dss-structure.md)). What stays apart is the server's own configuration:
+(`DssPolicyConverter`, following [the compatibility table](../../docs/policies/compatibility.md)): both validators
+judge under the same constraints and levels. Constraints SimpleSign's format does not have are absent, so DSS does not
+check them either. What stays apart is the server's own configuration:
 its trust store (below) and how it fetches revocation data.
 
 ## Trusting the Sandbox certificates

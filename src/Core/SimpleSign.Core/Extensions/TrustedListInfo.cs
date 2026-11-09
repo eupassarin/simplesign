@@ -19,7 +19,20 @@ public sealed record TrustedListInfo(
     DateTimeOffset? NextUpdate,
     DateTimeOffset LoadedAt,
     bool IsWellSigned,
-    IReadOnlyList<X509Certificate2> Anchors);
+    IReadOnlyList<X509Certificate2> Anchors)
+{
+    /// <summary>The trust services of the list, for the <c>TrustServiceTypeIdentifier</c> and <c>TrustServiceStatus</c> constraints.</summary>
+    public IReadOnlyList<TrustedServiceInfo> Services { get; init; } = [];
+
+    /// <summary>Whether the list is valid against the ETSI TS 119 612 XML schema, for the <c>TLStructure</c> constraint; null when not checked.</summary>
+    public bool? IsStructureValid { get; init; }
+}
+
+/// <summary>A trust service of a trusted list: its type, its status and its digital identity.</summary>
+/// <param name="ServiceType">The ServiceTypeIdentifier URI.</param>
+/// <param name="Status">The ServiceStatus URI.</param>
+/// <param name="Certificates">The service's certificates.</param>
+public sealed record TrustedServiceInfo(string ServiceType, string Status, IReadOnlyList<X509Certificate2> Certificates);
 
 /// <summary>
 /// A trust anchor provider backed by trusted lists: validators read the lists' state for the eIDAS constraints

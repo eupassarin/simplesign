@@ -88,6 +88,15 @@ internal static class Api
                 : Results.File(file!.Content, "application/pdf");
         });
 
+        // The library's default policies, to download, change and upload again
+        api.MapGet("/policies/{kind}", (string kind) => kind switch
+        {
+            "signing" => Results.File(System.Text.Encoding.UTF8.GetBytes(SimpleSign.Core.Policies.SigningPolicy.Default.ToJson()), "application/json", PolicyUploads.SigningFileName),
+            "validation" => Results.File(System.Text.Encoding.UTF8.GetBytes(SimpleSign.Core.Policies.ValidationPolicy.Default.ToJson()), "application/json", PolicyUploads.ValidationFileName),
+            _ => Results.NotFound(),
+        });
+        api.MapPost("/policies/view", (Policies.PolicyViewRequest body, DocumentStore store) => Policies.PolicyViewer.View(body, store));
+
         // Credentials
         var credentials = api.MapGroup("/credentials");
         credentials.MapPost("/sandbox", (SandboxCredentialRequest body, CredentialFactory factory, CredentialStore store) =>

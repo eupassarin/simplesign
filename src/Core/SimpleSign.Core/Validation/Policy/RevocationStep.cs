@@ -55,6 +55,9 @@ internal static class RevocationStep
                 warnings.AddRange(result.Messages.Select(m => "Revocation: " + m));
                 facts = facts with
                 {
+                    // The data the statuses came from, downloaded included, is evaluated in the Revocation context.
+                    EmbeddedCrls = [.. (facts.EmbeddedCrls ?? []).Concat(result.Crls).DistinctBy(Convert.ToBase64String)],
+                    EmbeddedOcsps = [.. (facts.EmbeddedOcsps ?? []).Concat(result.Ocsps).DistinctBy(Convert.ToBase64String)],
                     RevocationIssuedAt = result.IssuedAt,
                     IsNotRevoked = result.Status == ChainRevocationStatus.Good,
                     RevocationSource = result.Status switch

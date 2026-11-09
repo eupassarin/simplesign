@@ -80,7 +80,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         ArgumentNullException.ThrowIfNull(options);
         DocumentFacts? document = options.DocumentId is { } id ? await documents.FactsAsync(id, cancellationToken) : null;
         credentials.TryGet(options.CredentialId, out var credential);
-        var report = Compatibility.Evaluate(options, document, credential?.Facts, sandbox.IsConnected);
+        var report = Compatibility.Evaluate(options, document, credential?.Facts, sandbox.IsConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
         var empty = new CodeSnippets("", "", []);
         if (!report.CanSign)
         {

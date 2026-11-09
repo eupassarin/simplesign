@@ -41,6 +41,14 @@ public sealed class TrustedListTests : IDisposable
     }
 
     [Fact]
+    public void Load_SignedList_ReportsItsStructureToThePolicy()
+    {
+        var list = TrustedList.Load(Build([(CaQc, Granted, _pki.RootCa)]), Options());
+
+        list.TrustedLists.ShouldHaveSingleItem().IsStructureValid.ShouldBe(list.StructureErrors.Count == 0);
+    }
+
+    [Fact]
     public void Load_Version3UnderSupervision_IsActive()
     {
         byte[] xml = Build([(CaQc, UnderSupervision, _pki.RootCa)]);

@@ -40,9 +40,8 @@ public sealed record TrustedListSetOptions
 public sealed record TrustedListProblem(string Territory, Uri Location, string Reason);
 
 /// <summary>
-/// The trusted lists of a list of trusted lists (LOTL, ETSI TS 119 612), loaded as the EU DSS trusted list validation
-/// job does: the LOTL is checked with the configured certificates, each list it points to with the certificates the
-/// LOTL gives for it, and the anchors of every list loaded become trust anchors. A list that cannot be loaded is
+/// The trusted lists of a list of trusted lists (LOTL, ETSI TS 119 612): the LOTL is checked with the configured
+/// certificates, each list it points to with the certificates the LOTL gives for it, and the anchors of every list loaded become trust anchors. A list that cannot be loaded is
 /// reported in <see cref="Problems"/> instead of failing the whole set.
 /// </summary>
 public sealed class TrustedListSet : ITrustAnchorProvider, ITrustedListInfoProvider

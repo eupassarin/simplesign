@@ -12,7 +12,7 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy (JSON in the structure of the EU DSS constraint.xml, root ConstraintsParameters). Write the default with 'simplesign policy export validation'")]
+    [Description("Validation policy (JSON, root ValidationConstraints). Write the default with 'simplesign policy export validation'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>
@@ -27,7 +27,7 @@ internal class TrustedValidationSettings : CommonSettings
 
     /// <summary>Which revocation source is asked first.</summary>
     [CommandOption("--revocation-strategy <STRATEGY>")]
-    [Description("ocsp-first (the default, as the EU DSS) or crl-first")]
+    [Description("ocsp-first (the default) or crl-first")]
     public string? RevocationStrategy { get; init; }
 
     /// <summary>Check the revocation of chains that do not reach a trust anchor.</summary>
@@ -166,6 +166,9 @@ internal class TrustedValidationSettings : CommonSettings
             : Spectre.Console.ValidationResult.Error($"Unknown language '{Language}': use en or es.");
     }
 
+    /// <summary>The trusted lists <see cref="LoadTrustAsync"/> loaded, for the TrustedLists constraints.</summary>
+    internal List<TrustedListInfo> LoadedTrustedLists { get; } = [];
+
     /// <summary>The policy, and the trust anchors of the trust folder and the trusted list.</summary>
     internal async Task<(ValidationPolicy Policy, List<X509Certificate2> Anchors)> LoadTrustAsync(CancellationToken cancellationToken)
     {
@@ -189,6 +192,7 @@ internal class TrustedValidationSettings : CommonSettings
                 ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, cancellationToken: cancellationToken)
                 : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(TrustedList, cancellationToken), options);
             anchors.AddRange(list.GetTrustAnchors());
+            LoadedTrustedLists.AddRange(list.TrustedLists);
         }
 
         if (Lotl is not null)
@@ -200,6 +204,7 @@ internal class TrustedValidationSettings : CommonSettings
                 Territories = LotlTerritories,
             }, cancellationToken: cancellationToken);
             anchors.AddRange(set.GetTrustAnchors());
+            LoadedTrustedLists.AddRange(set.TrustedLists);
             foreach (var problem in set.Problems)
             {
                 Spectre.Console.AnsiConsole.MarkupLine($"[yellow]LOTL:[/] {Spectre.Console.Markup.Escape($"{problem.Territory} ({problem.Location}): {problem.Reason}")}");

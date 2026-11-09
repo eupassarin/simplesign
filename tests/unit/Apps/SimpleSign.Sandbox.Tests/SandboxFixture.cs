@@ -34,17 +34,32 @@ public sealed class SandboxFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        int port = FreePort();
-        _app = SandboxApp.Build(new SandboxOptions
+        int port;
+        // A free port can be taken by another test process before Kestrel binds it: try again with new ports.
+        for (int attempt = 1; ; attempt++)
         {
-            Name = "tests",
-            Port = port,
-            HttpsPort = FreePort(),
-            LdapPort = FreePort(),
-            Ephemeral = true,
-            OpenBrowser = false,
-        });
-        await _app.StartAsync();
+            port = FreePort();
+            _app = SandboxApp.Build(new SandboxOptions
+            {
+                Name = "tests",
+                Port = port,
+                HttpsPort = FreePort(),
+                LdapPort = FreePort(),
+                Ephemeral = true,
+                OpenBrowser = false,
+            });
+            try
+            {
+                await _app.StartAsync();
+                break;
+            }
+            catch (Exception ex) when (attempt < 5 && IsAddressInUse(ex))
+            {
+                await _app.DisposeAsync();
+                _app = null;
+            }
+        }
+
         BaseUrl = new Uri($"http://localhost:{port}/");
         Http.BaseAddress = BaseUrl;
         Info = (await Http.GetFromJsonAsync<SandboxInfo>("api/info", Json))!;
@@ -87,6 +102,11 @@ public sealed class SandboxFixture : IAsyncLifetime
             await _app.DisposeAsync();
         }
     }
+
+    private static bool IsAddressInUse(Exception ex) =>
+        ex is IOException { InnerException: Microsoft.AspNetCore.Connections.AddressInUseException }
+            or Microsoft.AspNetCore.Connections.AddressInUseException
+            or SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse };
 
     internal static int FreePort()
     {

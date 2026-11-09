@@ -65,7 +65,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     public XmlOptionsReport Evaluate(XmlOptions o)
     {
         credentials.TryGet(o.CredentialId, out var credential);
-        return XmlCompatibility.Evaluate(o, Facts(o.DataId), credential?.Facts, sandbox.IsConnected);
+        return XmlCompatibility.Evaluate(o, Facts(o.DataId), credential?.Facts, sandbox.IsConnected, PolicyUploads.Signing(o.SigningPolicyId, documents));
     }
 
     public async Task<XmlSignResult> RunAsync(XmlOptions options, CancellationToken cancellationToken)
@@ -260,7 +260,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     private static CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool customRoot = settings.Trust.Contains(TrustChoice.Sandbox) || settings.CustomRootUploadIds.Count > 0;
-        var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Validation;\n\nvar validator = new XadesSignatureValidator(new ValidationOptions\n{\n");
+        var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null ? "" : "using SimpleSign.Core.Policies;\n") + "\nvar validator = new XadesSignatureValidator(new ValidationOptions\n{\n");
         sb.Append(CultureInfo.InvariantCulture, $"    TrustSystemRoots = {(settings.Trust.Contains(TrustChoice.System) ? "true" : "false")},\n");
         if (customRoot)
         {
@@ -270,6 +270,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         if (!settings.CheckRevocation)
         {
             sb.Append("    CheckRevocation = false,\n");
+        }
+
+        foreach (string option in ValidationService.PolicyOptionsCode(settings))
+        {
+            sb.Append("    ").Append(option).Append(",\n");
         }
 
         sb.Append("});\n\nIReadOnlyList<XadesValidationResult> results = validator.ValidateAll(\n    File.ReadAllBytes(\"signed.xml\")");
@@ -290,6 +295,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         {
             args.Add("--check-revocation");
         }
+
+        args.AddRange(ValidationService.PolicyCliArgs(settings));
 
         return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), []);
     }
@@ -336,10 +343,15 @@ internal sealed class XadesPlan
             _steps.Add(($".WithHashAlgorithm(HashAlgorithmName.{hash.Name})", b => b.WithHashAlgorithm(hash)));
         }
 
-        if (o.SigningPolicy != SigningPolicyChoice.Default)
+        var signingPolicy = PolicyUploads.Signing(o.SigningPolicyId, context.Documents);
+        if (signingPolicy.Error is { } policyError)
         {
-            var signingPolicy = SigningPlan.ToSigningPolicy(o.SigningPolicy);
-            _steps.Add((SigningPlan.SigningPolicyCode(o.SigningPolicy), b => b.WithSigningPolicy(signingPolicy)));
+            throw new ArgumentException(L.T("The signing policy cannot be read: {0}", policyError));
+        }
+
+        if (signingPolicy.Uploaded)
+        {
+            _steps.Add((PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
         }
 
         if (credential.Facts.KeyAlgorithm == "RSA" && o.Padding == RsaPadding.Pss)
@@ -557,9 +569,9 @@ internal sealed class XadesPlan
             args.Add("--hash " + SigningPlan.HashName(_o.Hash));
         }
 
-        if (_o.SigningPolicy != SigningPolicyChoice.Default)
+        if (_o.SigningPolicyId is not null)
         {
-            args.Add("--signing-policy " + _o.SigningPolicy.ToString().ToLowerInvariant());
+            args.Add("--signing-policy " + PolicyUploads.SigningFileName);
         }
 
         CodeGenerator.AddIf(args, "--commitment", _o.Commitment);

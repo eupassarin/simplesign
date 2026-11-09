@@ -5,9 +5,9 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
-using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
+using SimpleSign.TestBench.Localization;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.Documents;
@@ -27,12 +27,19 @@ internal sealed class SigningPlan
     private readonly SigningOptions _o;
     private readonly CredentialHandle _credential;
     private readonly PlanContext _context;
+    private readonly SigningPolicyInput _signingPolicy;
 
     public SigningPlan(SigningOptions effective, CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents)
     {
         _o = effective;
         _credential = credential;
         _context = new PlanContext(credential, sandbox, documents);
+        _signingPolicy = PolicyUploads.Signing(effective.SigningPolicyId, documents);
+        if (_signingPolicy.Error is { } error)
+        {
+            throw new ArgumentException(L.T("The signing policy cannot be read: {0}", error));
+        }
+
         IsSandbox = _context.IsSandbox;
         Http = _context.Http;
         HashAlgorithm = ToHash(effective.Hash);
@@ -78,10 +85,10 @@ internal sealed class SigningPlan
             steps.Add(new($".WithHashAlgorithm(HashAlgorithmName.{HashName(_o.Hash)})", b => b.WithHashAlgorithm(HashAlgorithm)));
         }
 
-        if (_o.SigningPolicy != SigningPolicyChoice.Default)
+        if (_signingPolicy.Uploaded)
         {
-            var policy = ToSigningPolicy(_o.SigningPolicy);
-            steps.Add(new(SigningPolicyCode(_o.SigningPolicy), b => b.WithSigningPolicy(policy)));
+            var policy = _signingPolicy.Policy;
+            steps.Add(new(PolicyUploads.SigningCode(_signingPolicy), b => b.WithSigningPolicy(policy)));
         }
 
         if (SignatureAlgorithmOid is { } oid)
@@ -297,35 +304,6 @@ internal sealed class SigningPlan
     };
 
     internal static string HashName(HashChoice hash) => ToHash(hash).Name!;
-
-    private static readonly PolicyConstraint Fail = new(ConstraintLevel.Fail);
-    private static readonly PolicyConstraint Ignore = new(ConstraintLevel.Ignore);
-
-    /// <summary>The default signing policy plus the revocation of the whole chain.</summary>
-    private static readonly SigningPolicy s_withRevocation = SigningPolicy.Default
-        .WithName("Default + revocation")
-        .With("SigningCertificate/NotRevoked", Fail).With("SigningCertificate/RevocationDataAvailable", Fail)
-        .With("CACertificate/NotRevoked", Fail).With("CACertificate/RevocationDataAvailable", Fail);
-
-    /// <summary>Only the dates of the signing certificate.</summary>
-    private static readonly SigningPolicy s_datesOnly = SigningPolicy.Default
-        .WithName("Signing certificate dates only")
-        .With("SigningCertificate/KeyUsage", Ignore).With("CACertificate/NotExpired", Ignore).With("Cryptographic", Ignore);
-
-    /// <summary>The library policy of a choice.</summary>
-    internal static SigningPolicy ToSigningPolicy(SigningPolicyChoice choice) => choice switch
-    {
-        SigningPolicyChoice.Strict => s_withRevocation,
-        SigningPolicyChoice.Minimal => s_datesOnly,
-        _ => SigningPolicy.Default,
-    };
-
-    /// <summary>The builder call of a policy choice other than the default.</summary>
-    internal static string SigningPolicyCode(SigningPolicyChoice choice) => choice switch
-    {
-        SigningPolicyChoice.Strict => ".WithSigningPolicy(SigningPolicy.Load(\"signing-policy.json\")) // NotRevoked and RevocationDataAvailable: FAIL",
-        _ => ".WithSigningPolicy(SigningPolicy.Load(\"signing-policy.json\")) // only SigningCertificate/NotExpired",
-    };
 
     private static string HashOid(HashChoice hash) => hash switch
     {

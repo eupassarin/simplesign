@@ -142,6 +142,19 @@ public sealed class TestBenchFixture : IAsyncLifetime, IDisposable
         return Credentials.Add(Factory.OpenSandbox(new SandboxCredentialRequest(signerId))).Id;
     }
 
+    /// <summary>Uploads a policy (JSON) as the user would, and returns its upload id.</summary>
+    internal string UploadPolicy(string json, string fileName = "policy.json") =>
+        Documents.Add(fileName, System.Text.Encoding.UTF8.GetBytes(json)).Id;
+
+    /// <summary>The default signing policy plus the revocation of the whole chain, uploaded.</summary>
+    internal string UploadStrictSigningPolicy()
+    {
+        var fail = new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Fail);
+        return UploadPolicy(SimpleSign.Core.Policies.SigningPolicy.Default.WithName("Default + revocation")
+            .With("SigningCertificate/NotRevoked", fail).With("SigningCertificate/RevocationDataAvailable", fail)
+            .With("CACertificate/NotRevoked", fail).With("CACertificate/RevocationDataAvailable", fail).ToJson());
+    }
+
     internal SigningOptions Options(string sample = "contract", string signer = "rsa-2048") => new()
     {
         DocumentId = DocumentStore.SampleKey(sample),

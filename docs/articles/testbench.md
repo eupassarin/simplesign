@@ -97,9 +97,32 @@ disabled, with their clause. The *Reference* panel shows the whole list for each
 
 ### Signing and validation policies
 
-Every format has a **Signing policy** choice (Default, Strict, Minimal): the checks the signer
-runs on the certificate, key and algorithm before signing. Validation uses the default validation
-policy and shows the ETSI sub-indication next to the indication, with the policy's checks as rows.
+Both policies are JSON files (ADR 0024), uploaded in the
+options; without a file, the library's default applies. **Download the default** next to each
+upload gives the file to start from (also at `GET /api/policies/signing` and
+`GET /api/policies/validation`, or `simplesign policy export signing|validation`).
+
+- **Signing policy (JSON)**, in every format: the checks the signer runs on the certificate, key and
+  algorithm before signing (root `SigningConstraints`). The option check evaluates the chosen
+  certificate against it (`SigningPolicy.Evaluate`): a constraint at FAIL is an error, at WARN a
+  warning. To check the revocation of the chain, set `SigningCertificate/NotRevoked` and
+  `CACertificate/NotRevoked` to FAIL; to try a certificate the default refuses, set the constraint to
+  IGNORE.
+- **Validation policy (JSON)**, with the **Validation level** and the **Revocation strategy**, in the
+  validation options (after signing and in the Validate page): the constraints and levels of the
+  validator (root `ValidationConstraints`). The ETSI sub-indication is shown next to the indication,
+  with the policy's checks as rows. With DSS on, the same policy goes to DSS, translated to its format (see docs/policies/compatibility.md).
+
+The Code tab loads the files as `signing-policy.json` and `validation-policy.json`
+(`SigningPolicy.Load`, `ValidationPolicy.Load`, `--signing-policy`, `--policy`).
+
+**Policies** in the top bar opens the policy viewer: the default signing or validation policy, or a
+JSON file you open, as a tree. Each element shows what it checks, the clause that defines it
+(EN 319 102-1, RFC 5280, EN 319 412-5…), its level and, for the validation policy, whether
+SimpleSign evaluates it (the others are reported as not checked, while DSS evaluates them). A
+summary counts the constraints per level. Click a level to change it; the JSON tab edits the file
+directly. **Download JSON** saves it; **Use for signing** / **Use for validation** uploads it as the
+policy of the next runs (and of DSS). The same view is at `POST /api/policies/view`.
 
 ### The result
 

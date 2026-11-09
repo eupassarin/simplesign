@@ -6,7 +6,7 @@ using Spectre.Console.Cli;
 namespace SimpleSign.Cli.Commands;
 
 /// <summary>Write SimpleSign's default validation or signing policy as JSON, to start a policy file from.</summary>
-[Description("Write the default validation or signing policy (JSON in the structure of the EU DSS policies)")]
+[Description("Write the default validation or signing policy (JSON)")]
 internal class PolicyExportCommand : Command<PolicyExportCommand.Settings>
 {
     /// <summary>Policy export settings.</summary>
@@ -14,7 +14,7 @@ internal class PolicyExportCommand : Command<PolicyExportCommand.Settings>
     {
         /// <summary>Which policy: validation or signing.</summary>
         [CommandArgument(0, "<kind>")]
-        [Description("validation (root ConstraintsParameters, the EU DSS default constraints) or signing (root SigningConstraints)")]
+        [Description("validation (root ValidationConstraints) or signing (root SigningConstraints)")]
         public string Kind { get; init; } = "";
 
         /// <summary>Output file; standard output when absent.</summary>

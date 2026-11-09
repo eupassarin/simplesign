@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/signing-policy.schema.json",
   "title": "SimpleSign signing policy",
-  "description": "The checks SimpleSign makes before signing, with the names of the EU DSS certificate and cryptographic constraints.",
+  "description": "The checks SimpleSign makes before signing, with the certificate and cryptographic constraints of the validation policy.",
   "type": "object",
   "properties": {
     "$schema": {

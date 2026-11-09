@@ -78,18 +78,21 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
     }
 
     /// <summary>Sends a run's output to DSS and lines its verdict up with SimpleSign's.</summary>
-    public async Task<DssComparison> CompareAsync(string format, RunView run, string? detachedDataId, string? detachedDataName, RunLogger logger, CancellationToken cancellationToken)
+    public async Task<DssComparison> CompareAsync(string format, RunView run, string? detachedDataId, string? detachedDataName, RunLogger logger, CancellationToken cancellationToken,
+        SimpleSign.Core.Policies.ValidationPolicy? policy = null)
     {
-        var report = await ValidateAsync(run.OutputId!, detachedDataId, logger, cancellationToken, detachedDataName);
+        var report = await ValidateAsync(run.OutputId!, detachedDataId, logger, cancellationToken, detachedDataName, policy);
         return report.Available ? Compare(format, run, report) : report;
     }
 
-    /// <summary>The validation policy sent to DSS with every request; SimpleSign's default unless changed.</summary>
-    public SimpleSign.Core.Policies.ValidationPolicy Policy { get; set; } = SimpleSign.Core.Policies.ValidationPolicy.Default;
-
-    /// <summary>Validates a stored file with DSS (the original document goes along for detached signatures).</summary>
-    public async Task<DssComparison> ValidateAsync(string fileId, string? detachedDataId, RunLogger? logger, CancellationToken cancellationToken, string? detachedDataName = null)
+    /// <summary>
+    /// Validates a stored file with DSS (the original document goes along for detached signatures), under
+    /// <paramref name="policy"/> written as the DSS constraint.xml (null: SimpleSign's default policy).
+    /// </summary>
+    public async Task<DssComparison> ValidateAsync(string fileId, string? detachedDataId, RunLogger? logger, CancellationToken cancellationToken, string? detachedDataName = null,
+        SimpleSign.Core.Policies.ValidationPolicy? policy = null)
     {
+        policy ??= SimpleSign.Core.Policies.ValidationPolicy.Default;
         var settings = Settings;
         var watch = Stopwatch.StartNew();
         var file = documents.Get(fileId);
@@ -102,7 +105,7 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
             // The same policy on both sides: SimpleSign's, written as the DSS constraint.xml.
             ["policy"] = new JsonObject
             {
-                ["bytes"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(DssPolicyConverter.ToConstraintXml(Policy.ToJson(), DssPolicyConverter.NotInDss63))),
+                ["bytes"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(DssPolicyConverter.ToConstraintXml(policy.ToJson(), DssPolicyConverter.NotInDss63))),
                 ["digestAlgorithm"] = null,
                 ["name"] = "simplesign-policy.xml",
             },
@@ -113,7 +116,7 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
         try
         {
             var endpoint = new Uri(BaseUri(settings), ValidatePath);
-            logger?.Note(RunStages.CrossValidation, $"DSS: POST {endpoint} ({file.FileName}, {file.Content.Length} bytes)");
+            logger?.Note(RunStages.CrossValidation, $"DSS: POST {endpoint} ({file.FileName}, {file.Content.Length} bytes, policy \"{policy.Name}\")");
             using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
             using var response = await _http.PostAsync(endpoint, content, cancellationToken);
             string text = await response.Content.ReadAsStringAsync(cancellationToken);

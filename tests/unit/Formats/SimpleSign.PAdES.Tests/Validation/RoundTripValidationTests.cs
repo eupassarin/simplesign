@@ -151,6 +151,30 @@ public sealed class RoundTripValidationTests
     }
 
     /// <summary>
+    /// A later signature is the only change after the first one: the PDF modification checks pass.
+    /// </summary>
+    [Fact]
+    public async Task RoundTrip_SecondSignature_FirstSeesNoUndefinedChanges()
+    {
+        using var cert1 = TestCertificateFactory.CreateSelfSignedCert("CN=RT-Changes1");
+        using var cert2 = TestCertificateFactory.CreateSelfSignedCert("CN=RT-Changes2");
+        var signed1 = await PadesSigner.Document(MinimalPdf()).WithCertificate(cert1).SignAsync();
+        var signed2 = await PadesSigner.Document(signed1).WithCertificate(cert2).SignAsync();
+
+        var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false }, httpClient: null, logger: null,
+            trustAnchorProviders: [new InMemoryTrust(cert1), new InMemoryTrust(cert2)]);
+        using var ms = new MemoryStream(signed2, writable: false);
+        var results = await validator.ValidateAsync(ms);
+
+        const string Basic = "SignatureConstraints/BasicSignatureConstraints";
+        foreach (string id in new[] { "PdfPageDifference", "PdfAnnotationOverlap", "DocMDP", "UndefinedChanges" })
+        {
+            results[0].Constraints.ShouldContain(c => c.Id == Basic + "/" + id && c.Status == ConstraintStatus.Passed,
+                string.Join(" | ", results[0].Constraints.Where(c => c.Id.EndsWith(id, StringComparison.Ordinal)).Select(c => c.Message)));
+        }
+    }
+
+    /// <summary>
     /// Five sequential signatures on the same document: all must remain integrity-valid.
     /// This is a common contract countersigning scenario.
     /// </summary>

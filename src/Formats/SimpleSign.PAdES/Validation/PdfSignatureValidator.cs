@@ -404,6 +404,13 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // 2. Integrity (ByteRange + document hash)
         bool integrityValid = await _integrityVerifier.ValidateByteRangeAsync(
             pdfStream, field, cmsData, errors, warnings, cancellationToken, _logger, isLastSignature).ConfigureAwait(false);
+        // Well formed: starts at 0, the /Contents hole after the first range, the second range inside the file.
+        // Content appended after the last signature is ByteRangeAllDocument's, not this check's.
+        var range = field.ByteRange;
+        bool byteRangeValid = range.Offset1 == 0 && range.Length1 > 0 && range.Offset2 > range.Length1
+            && range.Length2 >= 0 && range.Offset2 + range.Length2 <= pdfStream.Length;
+        bool coversWholeFile = field.ByteRange.Offset2 + field.ByteRange.Length2 >= pdfStream.Length - 2;
+        bool? dictionaryConsistent = await SignatureDictionaryConsistentAsync(pdfStream, field, cancellationToken).ConfigureAwait(false);
 
         // 3. Cryptographic signature
         bool sigValid = ValidateSignatureStep(cmsData, errors, out bool signatureVerificationIndeterminate);
@@ -447,9 +454,21 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             }
         }
 
-        // 5. Revocation (optional — requires network)
-        var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
-            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainAnchored || chainTrustWarning, cancellationToken).ConfigureAwait(false);
+        // 5. Revocation (optional — requires network). The OCSP responses fetched on the way are kept for the policy.
+        var fetchedOcsps = new List<byte[]>();
+        RevocationChecker.FetchedOcsps.Value = fetchedOcsps;
+        (bool notRevoked, RevocationSource revocationSource) revocation;
+        try
+        {
+            revocation = await ValidateRevocationIfEnabled(
+                field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainAnchored || chainTrustWarning, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            RevocationChecker.FetchedOcsps.Value = null;
+        }
+
+        var (notRevoked, revocationSource) = revocation;
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
         {
@@ -469,6 +488,25 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
             ProofOfExistence = provenTime,
             TrustedLists = TrustedListInfos(),
+            SignedDataFound = true,
+            SignerInfoCount = field.ContentsBytes is { } contents ? CmsStructure.SignerInfoCount(contents) : null,
+            ByteRangeValid = byteRangeValid,
+            ByteRangeCoversDocument = isLastSignature ? coversWholeFile : null,
+            ByteRangeCollides = pdfFacts?.ByteRangeCollides,
+            SignatureDictionaryConsistent = dictionaryConsistent,
+            PdfChanges = await RevisionChangesAsync(pdfStream, field, cancellationToken).ConfigureAwait(false),
+            CoversWholeDocument = coversWholeFile,
+            SignatureFormat = PadesFormat(cmsData, pdfFacts),
+            UnsignedAttributes = CmsValidationFacts.UnsignedOf(cmsData) with
+            {
+                DocumentTimeStamp = pdfFacts?.HasLaterDocumentTimestamp == true,
+                TLevelTimeStampValid = provenTime is not null,
+            },
+            EmbeddedCrls = embeddedCrls,
+            EmbeddedOcsps = [.. embeddedOcsps, .. fetchedOcsps],
+            Timestamps = cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps
+                ? [new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, timestamp.IsIntegrityValid, timestamp.IsTsaTrusted)]
+                : null,
         }.WithCms(cmsData, _options.TrustedRoots, field.PdfSigningTime), _options.PolicyFor(cmsData.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
 
@@ -477,8 +515,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            ValidationObjects = evaluation.ValidationObjects,
             AppliedPolicy = evaluation.Policy,
-            BestSignatureTime = provenTime,
+            BestSignatureTime = evaluation.BestSignatureTime,
             FieldName = field.FieldName,
             IsIntegrityValid = integrityValid,
             IsSignatureValid = sigValid,
@@ -597,6 +636,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             DigestAlgorithmOid = cmsData.TstMessageImprintHashAlgOid ?? cmsData.DigestAlgorithmOid,
             ProofOfExistence = null,
             TrustedLists = TrustedListInfos(),
+            PdfChanges = await RevisionChangesAsync(pdfStream, field, cancellationToken).ConfigureAwait(false),
         }.WithCms(cmsData, _options.TrustedRoots), _options.PolicyFor(null));
         warnings.AddRange(evaluation.Warnings);
 
@@ -605,6 +645,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            ValidationObjects = evaluation.ValidationObjects,
             AppliedPolicy = evaluation.Policy,
             FieldName = field.FieldName,
             IsIntegrityValid = integrityValid,
@@ -787,8 +828,101 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             VriKeys = vri?.Keys ?? [],
             HasLaterDocumentTimestamp = fields.Any(f => f.IsDocumentTimestamp && f.IsSigned
                 && f.ByteRange.Offset2 + f.ByteRange.Length2 > end),
+            ByteRangeCollides = fields.Where((f, i) => i != index && f.IsSigned).Any(f => Collides(field.ByteRange, f.ByteRange)),
         };
     }
+
+    /// <summary>
+    /// Whether the revisions after the signature leave its dictionary alone: a later definition of the same object must
+    /// keep the ByteRange and the Contents. Null when the dictionary's object number is unknown.
+    /// </summary>
+    private static async Task<bool?> SignatureDictionaryConsistentAsync(Stream pdf, PdfSignatureField field, CancellationToken cancellationToken)
+    {
+        long end = field.ByteRange.Offset2 + field.ByteRange.Length2;
+        if (field.SigDictObjectNumber <= 0 || !pdf.CanSeek || end >= pdf.Length)
+        {
+            return field.SigDictObjectNumber <= 0 ? null : true;
+        }
+
+        long position = pdf.Position;
+        byte[] later = new byte[pdf.Length - end];
+        try
+        {
+            pdf.Seek(end, SeekOrigin.Begin);
+            await pdf.ReadExactlyAsync(later, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            pdf.Seek(position, SeekOrigin.Begin);
+        }
+
+        string text = System.Text.Encoding.Latin1.GetString(later);
+        string range = $"[{field.ByteRange.Offset1} {field.ByteRange.Length1} {field.ByteRange.Offset2} {field.ByteRange.Length2}]";
+        string contents = Convert.ToHexString(field.ContentsBytes);
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+            text, $@"(?<![0-9]){field.SigDictObjectNumber}\s+\d+\s+obj(?<body>.*?)endobj", System.Text.RegularExpressions.RegexOptions.Singleline,
+            TimeSpan.FromSeconds(2)))
+        {
+            string body = match.Groups["body"].Value;
+            var byteRange = System.Text.RegularExpressions.Regex.Match(body, @"/ByteRange\s*\[([^\]]*)\]", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
+            var hex = System.Text.RegularExpressions.Regex.Match(body, @"/Contents\s*<([0-9A-Fa-f\s]*)>", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
+            bool sameRange = byteRange.Success && "[" + string.Join(' ', byteRange.Groups[1].Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) + "]" == range;
+            bool sameContents = hex.Success && string.Concat(hex.Groups[1].Value.Where(char.IsAsciiHexDigit)).TrimEnd('0')
+                .Equals(contents.TrimEnd('0'), StringComparison.OrdinalIgnoreCase);
+            if (!sameRange || !sameContents)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The PDF objects of each stream, indexed once for all its signatures.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Stream, PdfObjectIndex> s_objectIndexes = new();
+
+    /// <summary>What the revisions after the signature changed; null when the stream cannot be read again.</summary>
+    private static async Task<PdfChangeFacts?> RevisionChangesAsync(Stream pdf, PdfSignatureField field, CancellationToken cancellationToken)
+    {
+        if (!pdf.CanSeek || pdf.Length > int.MaxValue)
+        {
+            return null;
+        }
+
+        long position = pdf.Position;
+        byte[] bytes = new byte[pdf.Length];
+        try
+        {
+            pdf.Seek(0, SeekOrigin.Begin);
+            await pdf.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            pdf.Seek(position, SeekOrigin.Begin);
+        }
+
+        long end = field.ByteRange.Offset2 + field.ByteRange.Length2;
+        if (!s_objectIndexes.TryGetValue(pdf, out var index) || index.Length != bytes.Length)
+        {
+            index = PdfObjectIndex.Build(bytes);
+            s_objectIndexes.AddOrUpdate(pdf, index);
+        }
+
+        return PdfRevisionComparer.Compare(index, bytes, end, field.SigDictObjectNumber);
+    }
+
+    /// <summary>Two signatures collide when they have the same ranges or their /Contents holes overlap.</summary>
+    private static bool Collides(PdfByteRange a, PdfByteRange b) =>
+        (a.Offset1 == b.Offset1 && a.Length1 == b.Length1 && a.Offset2 == b.Offset2 && a.Length2 == b.Length2)
+        || (a.Offset1 + a.Length1 < b.Offset2 && b.Offset1 + b.Length1 < a.Offset2);
+
+    /// <summary>The PAdES format and level of a signature, from what it carries and what follows it in the document.</summary>
+    private static string PadesFormat(CmsSignedData cms, PdfSignatureFacts? pdf) =>
+        cms.SigningCertificateHash is null ? "PDF-NOT-ETSI"
+        : cms.SignatureTimestampToken is null ? "PAdES-BASELINE-B"
+        : pdf?.HasDss != true ? "PAdES-BASELINE-T"
+        : pdf.HasLaterDocumentTimestamp ? "PAdES-BASELINE-LTA"
+        : "PAdES-BASELINE-LT";
 
     /// <summary>
     /// Gets the revocation data (CRLs + OCSPs) for a specific signature field.

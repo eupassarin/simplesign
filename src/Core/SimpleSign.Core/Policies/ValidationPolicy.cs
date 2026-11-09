@@ -3,14 +3,14 @@ using System.Security.Cryptography.X509Certificates;
 namespace SimpleSign.Core.Policies;
 
 /// <summary>
-/// A validation policy in the structure of the EU DSS validation policy (<c>constraint.xml</c>, schema
-/// <c>http://dss.esig.europa.eu/validation/policy</c>), written as JSON: the same elements, names and levels
-/// (FAIL, WARN, INFORM, IGNORE), one JSON property per element, attributes as properties, the <c>Id</c> and
+/// A validation policy as JSON (root <c>ValidationConstraints</c>): the constraints the validator checks, grouped by
+/// what they apply to (the signature, countersignatures, timestamps, revocation data, trusted lists), each with a level
+/// (FAIL, WARN, INFORM, IGNORE); one JSON property per element, attributes as properties, the <c>Id</c> and
 /// <c>Algo</c> lists as arrays. A constraint left out is not evaluated; a constraint SimpleSign does not evaluate yet
 /// is reported as not checked.
 /// </summary>
 /// <remarks>
-/// <see cref="Default"/> has the values of the DSS default policy. A policy is immutable: <see cref="With"/> and
+/// <see cref="Default"/> is the policy embedded in SimpleSign. A policy is immutable: <see cref="With"/> and
 /// <see cref="WithCryptographicSuite"/> return a new one.
 /// </remarks>
 public sealed class ValidationPolicy
@@ -25,7 +25,7 @@ public sealed class ValidationPolicy
 
     internal PolicyTree Tree { get; }
 
-    /// <summary>The policy embedded in SimpleSign, with the constraints and levels of the EU DSS default policy.</summary>
+    /// <summary>The policy embedded in SimpleSign: the constraints and levels SimpleSign recommends.</summary>
     public static ValidationPolicy Default => s_default.Value;
 
     /// <summary>The policy's name (<c>Name</c>), or null.</summary>
@@ -72,7 +72,7 @@ public sealed class ValidationPolicy
     /// <returns>The new policy.</returns>
     public ValidationPolicy WithCryptographicSuite(CryptographicSuite suite, string? context = null) => new(Tree.WithSuite(suite, context));
 
-    /// <summary>Reads a policy from JSON (root object <c>ConstraintsParameters</c>).</summary>
+    /// <summary>Reads a policy from JSON (root object <c>ValidationConstraints</c>).</summary>
     /// <param name="json">The JSON document.</param>
     /// <returns>The policy.</returns>
     /// <exception cref="InvalidDataException">The JSON is not a policy, or uses a name outside the policy schema.</exception>

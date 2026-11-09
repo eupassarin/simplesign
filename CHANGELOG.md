@@ -7,15 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed — policies in the structure of the EU DSS (ADR 0023)
+### Changed — configurable signing and validation policies (ADR 0023, ADR 0024)
 
-- `ValidationPolicy` (now `SimpleSign.Core.Policies`) reads and writes JSON in the structure of the EU DSS validation
-  policy (`ConstraintsParameters`, the elements, names and FAIL/WARN/INFORM/IGNORE levels of `constraint.xml`). Names
-  outside the schema are refused. `ValidationPolicy.Default` carries the values of the DSS default policy.
-  Constraints SimpleSign does not evaluate are reported as `NotChecked`; INFORM gives `ConstraintStatus.Information`.
-  Constraint ids are DSS paths (`SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage`).
-- `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the DSS names for the
-  signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
+- **Migration of validation policy files:** rename the root `ConstraintsParameters` to `ValidationConstraints` and
+  `eIDAS` to `TrustedLists`, and drop the elements SimpleSign's format no longer has (ASiC containers, PDF/A,
+  evidence records, attestations and key binding signatures, JSON-signature headers, EU qualification and PSD2
+  statements, `OCSPCertHash*`, lists of trusted entities, `SunsetDate`, `ManifestEntry*`, `PdfVisualDifference`). The
+  reader names each one; `docs/policies/compatibility.md` lists them with the reason.
+- `ValidationPolicy` (now `SimpleSign.Core.Policies`) reads and writes JSON in SimpleSign's own format (root
+  `ValidationConstraints`; contexts `SignatureConstraints`, `CounterSignatureConstraints`, `Timestamp`, `Revocation`,
+  `Cryptographic`, `Model`, `TrustedLists`), one FAIL/WARN/INFORM/IGNORE level per constraint. Names outside the
+  format are refused, with a pointer to `docs/policies/compatibility.md` (how the names correspond to other
+  validators' policies). Constraints SimpleSign does not evaluate yet are reported as `NotChecked`; INFORM gives
+  `ConstraintStatus.Information`. Constraint ids are paths
+  (`SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage`).
+- Validation policy, signature context: the levels of the policy now apply to the RFC 5280 certificate checks
+  (`IssuerName`, `MaxPathLength`, `NameConstraints`, `PolicyTree`, `SupportedCriticalExtensions`,
+  `ForbiddenExtensions`, AIA, CRL/OCSP locations, AKI, SKI, `SerialNumberPresent`, `NoRevAvail`,
+  `RevocationDataSkip`), the subject attributes (`CommonName`, `Country`…), the PDF ByteRange checks, the CMS
+  SignerInfo count, the signature Id (XAdES), the signed attributes (signing-certificate references, content type,
+  hints and identifier, commitment, location, roles), the unsigned attributes (timestamps, countersignatures, valid
+  T/LTA timestamp) and `AcceptableFormats`, `FullScope`, `PolicyAvailable`, `SignaturePolicyStorePresent`. A check
+  that does not apply to the format is not reported. `PolicyCoverage` says what SimpleSign evaluates, by path;
+  `SignatureSubIndication` gains `SignedDataNotFound` and `SignaturePolicyNotAvailable`.
+- Validation policy, timestamp and revocation contexts: each signature timestamp is evaluated in the `Timestamp`
+  context (the token, the TSA certificate at the timestamp's time and its chain, the signed attributes,
+  `TimestampValid`, `TSAGeneralName*`); one that fails there is not a proof of existence. Each CRL and OCSP response
+  the signature carries is evaluated in the `Revocation` context (`UnknownStatus`, `ThisUpdatePresent`, issuer known
+  and valid when it produced it, `OCSPResponderIdMatch`, `SelfIssuedOCSP`, the issuer certificate); one that fails
+  there is not acceptable revocation data. The certificates gain `AcceptableRevocationDataFound`,
+  `CRL/OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` and `NotOnHold`, and the
+  signature `BestSignatureTimeBeforeExpirationDateOfSigningCertificate` and `RevocationTimeAgainstBestSignatureTime`.
+  Messages of a token name it (`[OCSP of 'Leaf'] …`).
+- Validation policy: each countersignature (CAdES, XAdES) is evaluated in the `CounterSignatureConstraints`
+  context, with its own result. `ValidationOptions.TrustedLists` gives the CAdES and XAdES validators the trusted lists
+  the anchors come from, for the `TrustedLists` constraints (the CLI passes those of `--tsl` and `--lotl`).
+- Validation policy: archive timestamps are evaluated as tokens too (`Coherence`, `AtsHashIndex`); the CRLs and OCSP
+  responses fetched online are kept and evaluated like the ones the signature carries (CAdES, XAdES; PAdES: OCSP
+  responses); `TrustServiceTypeIdentifier`/`TrustServiceStatus` read the service of the anchor in its trusted list
+  (`TrustedListInfo.Services`); `PdfSignatureDictionary` checks that later PDF revisions keep the signature dictionary's
+  ByteRange and Contents. `ChainRevocationResult` gains `Crls`/`Ocsps` (the data the statuses came from).
+- Validation results (`SignatureValidationResult`, `CadesValidationResult`, `XadesValidationResult`) gain
+  `ValidationObjects`: the timestamps and revocation data used, each with the outcome of its own evaluation; the ETSI
+  TS 119 102-2 report lists them as validation objects (with the POE of each timestamp). `BestSignatureTime` is the
+  earliest accepted signature timestamp.
+- Validation policy: `RevocationHasInformationAboutCertificate` (revocation data issued after the certificate expired
+  counts only with expiredCertsOnCRL or archiveCutoff from before the expiry); `ContentTimeStamp` and
+  `ContentTimeStampMessageImprint` (CAdES content-time-stamp, XAdES data objects timestamps), the content timestamp
+  being judged in the Timestamp context and ordered before the signature timestamps (`Coherence`).
+- Validation policy, PAdES: the revision a signature (or document timestamp) covers is compared with the final one.
+  `PdfPageDifference`, `PdfAnnotationOverlap`, `DocMDP` (the changes the certification's P forbids), `FieldMDP` and
+  `SigFieldLock` (locked fields whose value changed), `FormFillChanges`, `AnnotationChanges` and `UndefinedChanges`
+  (page content, resources, the catalog, fields added or removed) are evaluated; the messages name the changes.
+  Validation data (DSS) and document timestamps added later are not changes (ETSI EN 319 142-1).
+- Validation policy: `StructuralValidation` (XAdES: the signature against the XML Signature and XAdES schemas;
+  CAdES/PAdES: the CMS decoded) and `TLStructure` (`TrustedList.StructureErrors`, `TrustedListInfo.IsStructureValid`:
+  the list against the ETSI TS 119 612 schema). The schemas are embedded in SimpleSign.XAdES; nothing is fetched.
+  Every constraint of the validation policy format is now evaluated.
+- `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
+  policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,
   or the constraints to IGNORE. `SigningPolicy.Evaluate` gives the local checks of a certificate.
 - `CryptographicSuite`: ETSI TS 119 322 cryptographic suites (JSON), globally or per context
@@ -26,15 +76,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ValidationOptions.PolicyProvider`, DI (`SimpleSignOptions.SigningPolicy`), `AppliedPolicy` on the results.
 - `ChainRevocationResult.IssuedAt`, `CrlEvaluator.ReadThisUpdate`, `OcspClient.ReadProducedAt`: the freshness of
   revocation data (`RevocationFreshness`).
-- TestBench: DSS validates with the same policy, sent as `constraint.xml`.
+- TestBench: a policy viewer (**Policies** in the top bar) shows the signing and validation policies as an explained
+  tree — what each constraint checks, its clause, its level, and whether SimpleSign evaluates it — lets the levels be
+  changed, and downloads the result or uses it in the next runs (`POST /api/policies/view`).
+- TestBench: the signing and validation policies are uploaded as JSON files (the Default/Strict/Minimal choice is
+  gone), with a download of each default; the validation options gain the validation level and the revocation
+  strategy. The option check evaluates the signer against the chosen signing policy, and DSS validates with the
+  chosen validation policy, translated to its format. The generated CLI passes the policy files
+  (`--signing-policy signing-policy.json`, `--policy validation-policy.json`) instead of `--signing-policy strict`,
+  which the CLI no longer reads.
 - `ValidationOptions.Verifier` (`VerifierOptions`: revocation strategy, now OCSP first everywhere, fallback, AIA,
-  revocation of untrusted chains — off) and `ValidationOptions.Level` (`ValidationLevel`), as the EU DSS
-  `CertificateVerifier` and validation level; CLI `--level`, `--revocation-strategy`, `--revocation-for-untrusted`.
+  revocation of untrusted chains — off) and `ValidationOptions.Level` (`ValidationLevel`); CLI `--level`, `--revocation-strategy`, `--revocation-for-untrusted`.
 - `ValidationReports`: the ETSI TS 119 102-2 validation report (XML) and a simple report (JSON);
   `ToReportEntry()` on the PAdES, CAdES and XAdES results, `BestSignatureTime` on them; CLI `--etsi-report`,
   `--simple-report`.
 - `TrustedListSet`: trusted lists loaded from a LOTL (EU or other), with per-list problems and a disk cache;
-  `TrustedList.Version`/`Pointers`; `TrustedListInfo`/`ITrustedListInfoProvider` and the `eIDAS` constraints
+  `TrustedList.Version`/`Pointers`; `TrustedListInfo`/`ITrustedListInfoProvider` and the `TrustedLists` constraints
   (`TLFreshness`, `TLNotExpired`, `TLWellSigned`, `TLVersion`); CLI `--lotl`, `--lotl-signer`, `--lotl-territory`.
 - CAdES and XAdES revocation uses the CRLs and OCSP responses the signature carries.
 - `DeferredSigningPrepareResult.Warnings`. CLI: `--signing-policy` takes a JSON file; `policy export validation|signing` writes the defaults. `IofePolicies` derive from the

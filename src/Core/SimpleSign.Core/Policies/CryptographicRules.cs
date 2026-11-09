@@ -14,7 +14,7 @@ internal sealed record CryptoFinding(string Id, ConstraintLevel Level, bool IsEx
 
 /// <summary>
 /// The effective cryptographic constraints of one context of a policy: from its <c>Cryptographic</c> elements (the
-/// context's own, then the enclosing ones, then the global one, element by element, as the EU DSS does) or from an
+/// context's own, then the enclosing ones, then the global one, element by element) or from an
 /// ETSI TS 119 322 cryptographic suite.
 /// </summary>
 internal sealed class CryptographicRules
@@ -207,13 +207,13 @@ internal sealed class CryptographicRules
             ? new DateTimeOffset(exact, TimeSpan.Zero)
             : DateTimeOffset.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
 
-    /// <summary>The EU DSS name of a digest algorithm OID (<c>SHA256</c>, <c>SHA3-256</c>…), or the OID itself.</summary>
+    /// <summary>The policy name of a digest algorithm OID (<c>SHA256</c>, <c>SHA3-256</c>…), or the OID itself.</summary>
     public static string DigestName(string oid) => DigestNames.TryGetValue(oid, out string? name) ? name : oid;
 
-    /// <summary>The EU DSS name of a hash algorithm (<c>SHA256</c>, <c>SHA3-256</c>…).</summary>
+    /// <summary>The policy name of a hash algorithm (<c>SHA256</c>, <c>SHA3-256</c>…).</summary>
     public static string DigestName(HashAlgorithmName hash) => hash.Name ?? "";
 
-    /// <summary>The EU DSS name and size of a certificate's public key: <c>RSA</c> 2048, <c>ECDSA</c> 256…; null when unknown.</summary>
+    /// <summary>The policy name and size of a certificate's public key: <c>RSA</c> 2048, <c>ECDSA</c> 256…; null when unknown.</summary>
     public static (string Algorithm, int Size)? KeyOf(X509Certificate2 certificate, bool pss = false)
     {
         try
@@ -253,6 +253,12 @@ internal sealed class CryptographicRules
             return null;
         }
     }
+
+    /// <summary>The digest OID of a signature algorithm OID (sha256WithRSAEncryption → SHA-256…); null when unknown or RSASSA-PSS.</summary>
+    internal static string? DigestOidOf(string signatureAlgorithmOid) =>
+        SignatureDigests.TryGetValue(signatureAlgorithmOid, out string? digest)
+            ? DigestNames.FirstOrDefault(p => p.Value == digest).Key
+            : null;
 
     /// <summary>The digest of a certificate's signature algorithm and whether it is RSASSA-PSS; null when unknown.</summary>
     public static (string Digest, bool Pss)? SignatureAlgorithmOf(X509Certificate2 certificate) =>

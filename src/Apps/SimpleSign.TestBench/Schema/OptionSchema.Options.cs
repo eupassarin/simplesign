@@ -188,14 +188,10 @@ public static partial class OptionSchema
 
     private static List<SchemaOption> CryptoOptions() =>
     [
-        O("common.signingPolicy", "crypto", s_all, "choice", "signingPolicy", "Signing policy", "The checks made before signing; a certificate, key or algorithm they refuse stops the signature.",
-            standards: R("ETSI TS 119 312|Cryptographic suites", "RFC 5280|§4.2.1.3 Key usage", "RFC 5280|§6.3 CRL validation"), api: "WithSigningPolicy(SigningPolicy)", stateKey: "signingPolicy",
-            values:
-            [
-                V("Default", "Default", "Validity of every certificate of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. The default.", api: "SigningPolicy.Default"),
-                V("Strict", "Strict", "The default checks plus the revocation of the whole chain (CRL and OCSP); a revoked certificate or an unknown status stops the signature.", api: "SigningPolicy.Default.With(\"SigningCertificate/NotRevoked\", FAIL)…"),
-                V("Minimal", "Minimal", "Only the dates of the signing certificate: the other constraints of the signing policy at IGNORE. For tests and migrations.", api: "SigningPolicy.Default.With(…, IGNORE)"),
-            ]),
+        O("common.signingPolicy", "crypto", s_all, "upload", "signingPolicyId", "Signing policy (JSON)",
+            "The checks made before signing: a JSON file with root SigningConstraints. Without a file, the library's default: validity of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. A constraint at FAIL stops the signature, at WARN it becomes a warning.",
+            details: "Download the default (GET /api/policies/signing, or simplesign policy export signing), change the levels — for example SigningCertificate/NotRevoked to FAIL to check the revocation of the chain — and upload it.",
+            standards: R("ETSI TS 119 312|Cryptographic suites", "RFC 5280|§4.2.1.3 Key usage", "RFC 5280|§6.3 CRL validation"), api: "WithSigningPolicy(SigningPolicy.Load(path))", stateKey: "signingPolicy"),
         OC("common.hash", "crypto", s_all, "choice", "hash", "hash",
             R("ETSI TS 119 312|Hash functions", "RFC 5652|§5.4 Message digest calculation", "W3C XMLDSig Core 1.1|§6.2 Message digests"), valueStateKey: "hash", values: HashValues()),
         OC("common.padding", "crypto", s_all, "choice", "padding", "padding",
@@ -371,5 +367,27 @@ public static partial class OptionSchema
             ], when: When("validate", "true")),
         O("common.validation.checkRevocation", "run", s_all, "toggle", "validation.checkRevocation", "Check revocation", "Looks the certificates up in the embedded or online CRLs and OCSP responses.",
             standards: R("ETSI EN 319 102-1|§5.2.6 X.509 certificate validation", "RFC 5280|§6.3 CRL validation", "RFC 6960|OCSP"), api: "ValidationOptions.CheckRevocation", when: When("validate", "true")),
+        O("common.validation.policy", "run", s_all, "upload", "validation.policyId", "Validation policy (JSON)",
+            "The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on.",
+            details: "Download the default (GET /api/policies/validation, or simplesign policy export validation), change the levels (FAIL, WARN, INFORM, IGNORE) and upload it. Constraints SimpleSign does not evaluate are reported as not checked.",
+            standards: R("ETSI EN 319 102-1|§5 Validation process", "ETSI TS 119 172-1|Signature policies"), api: "ValidationOptions.Policy = ValidationPolicy.Load(path)", when: When("validate", "true")),
+        O("common.validation.level", "run", s_all, "choice", "validation.level", "Validation level",
+            "How much of each signature is validated.",
+            standards: R("ETSI EN 319 102-1|§5.3 Validation process for Basic Signatures", "ETSI EN 319 102-1|§5.5 Validation process for Signatures providing Long Term Availability"), api: "ValidationOptions.Level",
+            values:
+            [
+                V("BasicSignatures", "Basic signatures", "The signature and the certificate chain only."),
+                V("Timestamps", "Timestamps", "Plus the timestamps."),
+                V("LongTermData", "Long-term data", "Plus the revocation data and the long-term validation material."),
+                V("ArchivalData", "Archival data", "Plus the archive timestamps. The default."),
+            ], when: When("validate", "true")),
+        O("common.validation.revocationStrategy", "run", s_all, "choice", "validation.revocationStrategy", "Revocation strategy",
+            "Which revocation source is asked first; the other one is the fallback.",
+            standards: R("RFC 6960|OCSP", "RFC 5280|§5 CRL"), api: "ValidationOptions.Verifier.RevocationStrategy",
+            values:
+            [
+                V("OcspFirst", "OCSP first", "OCSP, then the CRL. The default."),
+                V("CrlFirst", "CRL first", "The CRL, then OCSP."),
+            ], when: When("validate", "true")),
     ];
 }

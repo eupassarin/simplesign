@@ -1,6 +1,6 @@
 namespace SimpleSign.Core.Policies;
 
-/// <summary>How a failed constraint of a policy weighs on the result (the <c>Level</c> of the EU DSS policies).</summary>
+/// <summary>How a failed constraint of a policy weighs on the result (the <c>Level</c> of a policy element).</summary>
 /// <remarks>
 /// When validating, <see cref="Fail"/> decides the indication with the constraint's ETSI EN 319 102-1 sub-indication,
 /// <see cref="Warn"/> adds a warning and <see cref="Inform"/> records the check without a warning. When signing,
@@ -22,7 +22,7 @@ public enum ConstraintLevel
     Ignore,
 }
 
-/// <summary>The unit of a time constraint (the <c>Unit</c> of the EU DSS policies).</summary>
+/// <summary>The unit of a time constraint (the <c>Unit</c> of a policy element).</summary>
 public enum PolicyTimeUnit
 {
     /// <summary>Days.</summary>
@@ -41,14 +41,14 @@ public enum PolicyTimeUnit
     Milliseconds,
 }
 
-/// <summary>An entry of an algorithm list of a policy (an <c>Algo</c> element of the EU DSS policies).</summary>
+/// <summary>An entry of an algorithm list of a policy (an <c>Algo</c> entry of a policy element).</summary>
 /// <param name="Name">The algorithm: <c>SHA256</c>, <c>RSA</c>, <c>ECDSA</c>…</param>
 /// <param name="Size">The key size the entry is about, in bits, or null.</param>
 /// <param name="Date">The expiration date, in the format of the list (<c>yyyy-MM-dd</c> by default), or null for none.</param>
 public sealed record PolicyAlgorithm(string Name, int? Size = null, string? Date = null);
 
 /// <summary>
-/// One constraint of a policy: an element of the EU DSS policy tree with its level and values. Which properties are
+/// One constraint of a policy: an element of the policy tree with its level and values. Which properties are
 /// meaningful depends on the element's type: <see cref="Ids"/> for a list of accepted values, <see cref="Algorithms"/>
 /// for an algorithm list, <see cref="Unit"/> and <see cref="IntValue"/> for a time constraint.
 /// </summary>

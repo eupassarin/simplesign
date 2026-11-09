@@ -12,6 +12,8 @@ public sealed class TestPki : IDisposable
         var caRequest = new CertificateRequest("CN=Cloud Test CA, O=SimpleSign Tests", CaKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         caRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
         caRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+        // RFC 5280 §4.2.1.2: a CA certificate has a Subject Key Identifier (the default validation policy requires it).
+        caRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(caRequest.PublicKey, false));
         Ca = caRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(5));
 
         RsaKey = RSA.Create(2048);

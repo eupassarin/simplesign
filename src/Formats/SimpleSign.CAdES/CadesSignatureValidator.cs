@@ -90,6 +90,9 @@ public sealed record CadesValidationResult
     /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
     public DateTimeOffset? BestSignatureTime { get; init; }
 
+    /// <summary>The timestamps and revocation data the validation used, each with the outcome of its own evaluation.</summary>
+    public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];
+
     /// <summary>
     /// Whether the signing certificate chain is not revoked: null when revocation was not checked by
     /// <c>ValidateAsync</c>; false when a certificate is revoked or the status is unknown (see <see cref="RevocationSource"/>).
@@ -266,8 +269,9 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            ValidationObjects = evaluation.ValidationObjects,
             AppliedPolicy = evaluation.Policy,
-            BestSignatureTime = facts.ProofOfExistence,
+            BestSignatureTime = evaluation.BestSignatureTime,
             Facts = facts,
             IsNotRevoked = facts.IsNotRevoked,
             RevocationSource = facts.RevocationSource,
@@ -374,7 +378,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         {
             var counter = parent.CounterSignatures[i];
             byte[] parentSignature = parent.Signature;
-            var result = ValidateSigner(null, counter, null, (data, errors) => VerifyContentHash(parentSignature, data, errors), trustAnchors, isFirstSigner: false);
+            var result = ValidateSigner(null, counter, null, (data, errors) => VerifyContentHash(parentSignature, data, errors), trustAnchors, isFirstSigner: false, isCounterSignature: true);
             results.Add(new CadesSignerValidationResult
             {
                 Index = i,
@@ -405,6 +409,45 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
     private static CadesValidationResult Failed(string error) => new() { Errors = [error] };
 
+    /// <summary>The signature and archive timestamps of a signer, for the Timestamp context of the policy.</summary>
+    private IReadOnlyList<TimestampTokenFacts>? TimestampTokens(
+        CmsSignedData cmsData, bool? tsValid, bool? tsaTrusted, byte[]? archiveToken, bool? archiveTsValid, bool archiveV3,
+        IEnumerable<X509Certificate2>? trustAnchors, byte[]? contentToken, bool? contentValid)
+    {
+        var tokens = new List<TimestampTokenFacts>();
+        if (contentToken is not null && contentValid is not null)
+        {
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Content, contentToken, contentValid,
+                TimestampTrust.ChainsTo(contentToken, trustAnchors ?? _options.TrustedRoots)));
+        }
+
+        if (cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps)
+        {
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted));
+        }
+
+        // An archive timestamp whose TSA cannot be judged (no anchors) is left out rather than reported as untrusted.
+        if (archiveToken is not null && archiveTsValid is not null
+            && TimestampTrust.ChainsTo(archiveToken, trustAnchors ?? _options.TrustedRoots) is { } archiveTrusted)
+        {
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Archive, archiveToken, archiveTsValid, archiveTrusted,
+                AtsHashIndexValid: archiveV3 ? archiveTsValid : null));
+        }
+
+        return tokens.Count == 0 ? null : tokens;
+    }
+
+    /// <summary>The CAdES format and level of a signer, from the attributes it carries.</summary>
+    private static string CadesFormat(CmsSignedData cms)
+    {
+        bool Has(string oid) => cms.UnsignedAttributes?.ContainsKey(oid) == true;
+        return cms.SigningCertificateHash is null ? "CMS-NOT-ETSI"
+            : cms.SignatureTimestampToken is null ? "CAdES-BASELINE-B"
+            : !(Has("1.2.840.113549.1.9.16.2.23") && Has("1.2.840.113549.1.9.16.2.24")) ? "CAdES-BASELINE-T"
+            : cms.ArchiveTimestampToken is not null || Has(Oids.ArchiveTimeStamp) || Has(Oids.ArchiveTimeStampV3) ? "CAdES-BASELINE-LTA"
+            : "CAdES-BASELINE-LT";
+    }
+
     /// <summary>Validates one signer; <paramref name="cmsBytes"/>/<paramref name="content"/> null skip the SignedData-level (LTV, archive) checks.</summary>
     private CadesValidationResult ValidateSigner(
         byte[]? cmsBytes,
@@ -412,7 +455,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         byte[]? content,
         Func<CmsSignedData, List<string>, bool> verifyIntegrity,
         IEnumerable<X509Certificate2>? trustAnchors,
-        bool isFirstSigner)
+        bool isFirstSigner,
+        bool isCounterSignature = false)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -477,7 +521,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         // 6a. content-time-stamp: a signed attribute whose token covers the content itself
         bool? contentTsValid = null;
         DateTimeOffset? contentTsTime = null;
-        if (ReadSignedAttribute(cmsData.SignedAttrs, Oids.ContentTimestamp) is { } contentToken)
+        byte[]? contentTimestampToken = ReadSignedAttribute(cmsData.SignedAttrs, Oids.ContentTimestamp);
+        if (contentTimestampToken is { } contentToken)
         {
             if (content is null)
             {
@@ -519,6 +564,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
         // 8. Archive timestamp validation (covers the first signer of the SignedData)
         bool? archiveTsValid = null;
+        byte[]? archiveToken = null;
+        bool archiveV3 = false;
         if (!_options.ValidatesArchivalData)
         {
             // Below ValidationLevel.ArchivalData the archive timestamps are not looked at.
@@ -527,6 +574,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             && cmsData.UnsignedAttributes?.TryGetValue(Oids.ArchiveTimeStamp, out byte[][]? archiveV2) == true && archiveV2.Length > 0)
         {
             archiveTsValid = TimestampCovers(archiveV2[0], CadesExtendedValidationData.ArchiveTimeStampV2Input(cmsBytes, content), cmsData.DigestAlgorithmOid);
+            archiveToken = archiveV2[0];
             if (archiveTsValid == false)
             {
                 errors.Add("archive-time-stamp (v2) does not cover the signature and its validation data.");
@@ -537,6 +585,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             if (cmsBytes is not null && content is not null && isFirstSigner)
             {
                 archiveTsValid = ValidateArchiveTimestamp(cmsBytes, content, cmsData, warnings);
+                archiveToken = cmsData.ArchiveTimestampToken;
+                archiveV3 = true;
             }
             else
             {
@@ -554,6 +604,19 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
             ProofOfExistence = provenTime,
             ChainReachesAnchor = chainAnchored,
+            SignedDataFound = content is not null || integrityValid,
+            CoversWholeDocument = integrityValid ? true : null,
+            SignatureFormat = CadesFormat(cmsData),
+            UnsignedAttributes = CmsValidationFacts.UnsignedOf(cmsData) with
+            {
+                TLevelTimeStampValid = provenTime is not null,
+                LtaLevelTimeStampValid = archiveTsValid,
+            },
+            EmbeddedCrls = embedded.Crls,
+            EmbeddedOcsps = embedded.Ocsps,
+            IsCounterSignature = isCounterSignature,
+            TrustedLists = _options.TrustedLists,
+            Timestamps = TimestampTokens(cmsData, tsValid, tsaTrusted, archiveToken, archiveTsValid, archiveV3, trustAnchors, contentTimestampToken, contentTsValid),
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -563,8 +626,9 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            ValidationObjects = evaluation.ValidationObjects,
             AppliedPolicy = evaluation.Policy,
-            BestSignatureTime = facts.ProofOfExistence,
+            BestSignatureTime = evaluation.BestSignatureTime,
             Facts = facts,
             ChainCandidates = [.. cmsData.Certificates, .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
             EmbeddedCrls = embedded.Crls,

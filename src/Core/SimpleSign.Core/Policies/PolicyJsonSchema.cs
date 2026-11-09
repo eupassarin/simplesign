@@ -4,9 +4,9 @@ using System.Text.Json;
 namespace SimpleSign.Core.Policies;
 
 /// <summary>
-/// Writes the JSON Schema (draft 2020-12) of a policy document from <see cref="PolicySchema"/>, the EU DSS
-/// <c>policy.xsd</c> turned into JSON: one definition per XSD type, the attributes as properties, the <c>Id</c> and
-/// <c>Algo</c> lists as arrays, no other property allowed.
+/// Writes the JSON Schema (draft 2020-12) of a policy document from <see cref="PolicySchema"/>: one definition
+/// per element type, the attributes as properties, the <c>Id</c> and <c>Algo</c> lists as arrays, no other property
+/// allowed.
 /// </summary>
 internal static class PolicyJsonSchema
 {
@@ -28,8 +28,8 @@ internal static class PolicyJsonSchema
             writer.WriteString("$id", validation ? ValidationUri : SigningUri);
             writer.WriteString("title", validation ? "SimpleSign validation policy" : "SimpleSign signing policy");
             writer.WriteString("description", validation
-                ? "A validation policy in the structure of the EU DSS validation policy (policy.xsd, http://dss.esig.europa.eu/validation/policy), as JSON: one property per element, attributes as properties, the Id and Algo lists as arrays."
-                : "The checks SimpleSign makes before signing, with the names of the EU DSS certificate and cryptographic constraints.");
+                ? "The constraints SimpleSign checks when it validates a signature and the level of each (FAIL, WARN, INFORM, IGNORE): one property per element, attributes as properties, the Id and Algo lists as arrays."
+                : "The checks SimpleSign makes before signing, with the certificate and cryptographic constraints of the validation policy.");
             writer.WriteString("type", "object");
             writer.WriteStartObject("properties");
             writer.WriteStartObject("$schema");

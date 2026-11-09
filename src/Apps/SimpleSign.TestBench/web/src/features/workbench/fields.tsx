@@ -1,16 +1,18 @@
 import { createContext, useContext, useEffect, useState } from "react"
-import { FileText, Lock, Plus, Trash2 } from "lucide-react"
+import { Download, Eye, FileText, Lock, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useT } from "@/i18n"
 import { api } from "@/lib/api"
-import type { CadesSample, OptionState, SampleDocument, TimestampChoice, XmlSample } from "@/lib/types"
+import type { CadesSample, OptionState, PolicyKind, SampleDocument, TimestampChoice, XmlSample } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { CredentialPicker } from "../credentials/CredentialPicker"
+import { PoliciesPage } from "../policies/PoliciesPage"
 import { TsaPicker } from "../shared/TsaPicker"
 import { Pill } from "../shared/ui"
 import { UploadButton } from "../shared/UploadButton"
@@ -63,15 +65,21 @@ export function OptionField({ option }: { option: SchemaOption }) {
     case "lines":
       return <OptionRow {...row}><Textarea rows={3} value={Array.isArray(value) ? value.join("\n") : ""} disabled={locked}
         onChange={(e) => set(path, e.target.value.split("\n").map((l) => l.trimEnd()).filter((l, i, all) => l !== "" || i < all.length - 1))} /></OptionRow>
-    case "upload":
+    case "upload": {
+      // The JSON policies: the one in use (the library's default until a file is uploaded), to view or change.
+      const policy = path === "signingPolicyId" ? "signing" : path === "validation.policyId" ? "validation" : null
+      if (policy) {
+        return <OptionRow {...row}><PolicyField kind={policy} uploadId={typeof value === "string" ? value : null} onChange={(id) => set(path, id)} /></OptionRow>
+      }
       return (
         <OptionRow {...row}>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <UploadButton label={t("wb.chooseFile")} accept="*/*" onUploaded={(f) => set(path, f.id)} />
             {!!value && <><Pill tone="success">{t("wb.uploaded")}</Pill><Button variant="ghost" size="sm" onClick={() => set(path, null)}>{t("wb.clear")}</Button></>}
           </div>
         </OptionRow>
       )
+    }
     case "tsa":
       return <OptionRow {...row}><Tsa value={value as TimestampChoice} onChange={(v) => set(path, v)} /></OptionRow>
     case "trust":
@@ -300,4 +308,42 @@ function Credential() {
     )
   }
   return <CredentialPicker env={env} credential={credential} onCredential={(facts) => { set("credentialId", facts.id); setOpen(false) }} />
+}
+
+/** A policy option: the policy in use (the default until a file is uploaded), with a link to view it explained. */
+function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId: string | null; onChange: (id: string | null) => void }) {
+  const t = useT()
+  const [name, setName] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let current = true
+    api.policies.view({ kind, uploadId }).then((v) => {
+      if (!current) return
+      setName(v.name ?? null)
+      setError(v.error ?? null)
+    }).catch(() => undefined)
+    return () => { current = false }
+  }, [kind, uploadId])
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Pill tone={error ? "danger" : uploadId ? "info" : "default"}>
+          {t("policies.current", { name: name ?? "…" })}{!uploadId && ` (${t("policies.defaultName")})`}
+        </Pill>
+        {error && <span className="text-destructive">{error}</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <Sheet>
+          <SheetTrigger asChild><Button variant="outline" size="sm"><Eye /> {t("policies.view")}</Button></SheetTrigger>
+          <SheetContent className="flex w-[min(96vw,1000px)] flex-col p-0 sm:max-w-none">
+            <SheetHeader className="sr-only"><SheetTitle>{t(kind === "signing" ? "policies.signing" : "policies.validation")}</SheetTitle><SheetDescription>{t("policies.readOnlyIntro")}</SheetDescription></SheetHeader>
+            <PoliciesPage initial={{ kind, uploadId }} readOnly />
+          </SheetContent>
+        </Sheet>
+        <UploadButton label={t("wb.chooseFile")} accept=".json,application/json" onUploaded={(f) => onChange(f.id)} />
+        <Button variant="ghost" size="sm" asChild><a href={`/api/policies/${kind}`} download><Download /> {t("wb.downloadDefault")}</a></Button>
+        {uploadId && <Button variant="ghost" size="sm" onClick={() => onChange(null)}>{t("wb.clear")}</Button>}
+      </div>
+    </div>
+  )
 }
