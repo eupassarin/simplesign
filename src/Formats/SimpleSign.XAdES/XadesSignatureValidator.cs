@@ -510,6 +510,19 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                 + " | ds:Object/xades:QualifyingProperties/xades:SignedProperties/xades:SignedSignatureProperties/xades:SigningCertificate", ns) is not null,
             SignaturePolicyOid = ReadSignaturePolicy(sigElement, ns)?.Oid,
             SignaturePolicyKnown = true,
+            SignedAttributes = XadesSignedAttributeFacts.Read(sigElement, ns, claimedRoles, attributeCertificates.Count),
+            UnsignedAttributes = XadesUnsigned(sigElement, ns, extraction.HasSignatureTimeStamp, extraction.HasArchiveTimeStamp, tsValid, archiveTsValid),
+            SignatureFormat = (extraction.HasSignedProperties ? "XAdES-BASELINE-" : "XML-NOT-ETSI-") + detectedLevel switch
+            {
+                AdesBaselineLevel.Archive => "LTA",
+                AdesBaselineLevel.LongTerm => "LT",
+                AdesBaselineLevel.Timestamped => "T",
+                _ => "B",
+            },
+            SignatureIdUnique = string.IsNullOrEmpty(extraction.SignatureId) ? null : CountIds(doc, extraction.SignatureId) == 1,
+            CoversWholeDocument = sigElement.SelectSingleNode("ds:SignedInfo/ds:Reference[@URI='']", ns) is not null ? true : null,
+            PolicyStorePresent = ReadSignaturePolicy(sigElement, ns) is null ? null : XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null,
+            PolicyDocumentAvailable = XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null ? true : null,
         };
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -551,6 +564,26 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             Warnings = warnings
         };
     }
+
+    /// <summary>The unsigned properties of a signature in the terms of the UnsignedAttributes constraints.</summary>
+    private static UnsignedAttributeFacts XadesUnsigned(XmlElement sigElement, XmlNamespaceManager ns, bool signatureTimeStamp, bool archiveTimeStamp, bool? tsValid, bool? archiveValid)
+    {
+        const string Unsigned = "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties/";
+        return new UnsignedAttributeFacts
+        {
+            CounterSignature = sigElement.SelectSingleNode(Unsigned + "xades:CounterSignature", ns) is not null,
+            SignatureTimeStamp = signatureTimeStamp,
+            ValidationDataTimeStamp = sigElement.SelectSingleNode(Unsigned + "xades:SigAndRefsTimeStamp | " + Unsigned + "xades141:SigAndRefsTimeStampV2", ns) is not null,
+            ValidationDataRefsOnlyTimeStamp = sigElement.SelectSingleNode(Unsigned + "xades:RefsOnlyTimeStamp | " + Unsigned + "xades141:RefsOnlyTimeStampV2", ns) is not null,
+            ArchiveTimeStamp = archiveTimeStamp,
+            TLevelTimeStampValid = signatureTimeStamp ? tsValid : false,
+            LtaLevelTimeStampValid = archiveTimeStamp ? archiveValid : false,
+        };
+    }
+
+    /// <summary>How many elements of the document have the Id <paramref name="id"/>.</summary>
+    private static int CountIds(XmlDocument doc, string id) =>
+        doc.SelectNodes("//*[@Id]")?.OfType<XmlElement>().Count(e => e.GetAttribute("Id") == id) ?? 0;
 
     /// <summary>The OID of the digest of the SignedInfo's SignatureMethod (RSA, ECDSA), or null when it has none of its own (RSA-PSS).</summary>
     private static string? SignatureMethodDigestOid(XmlElement sigElement, XmlNamespaceManager ns)

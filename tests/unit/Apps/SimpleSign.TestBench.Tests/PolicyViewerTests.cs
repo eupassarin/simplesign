@@ -41,7 +41,8 @@ public sealed class PolicyViewerTests(TestBenchFixture fixture)
         keyUsage.Ids.ShouldBe(["nonRepudiation"]);
         keyUsage.Evaluation.ShouldBe("evaluated");
         keyUsage.Standard.ShouldNotBeNull();
-        nodes["SignatureConstraints/BasicSignatureConstraints/ByteRange"].Evaluation.ShouldBe("toConnect");
+        nodes["SignatureConstraints/BasicSignatureConstraints/ByteRange"].Evaluation.ShouldBe("evaluated");
+        nodes["SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary"].Evaluation.ShouldBe("toConnect");
         nodes["SignatureConstraints/BasicSignatureConstraints/DocMDP"].Evaluation.ShouldBe("toImplement");
         nodes["Revocation/UnknownStatus"].Evaluation.ShouldBe("toConnect");
         nodes["TrustedLists/TLVersion"].Evaluation.ShouldBe("evaluated");
@@ -125,22 +126,6 @@ public sealed class PolicyViewerTests(TestBenchFixture fixture)
         string id = fixture.UploadPolicy(SigningPolicy.Default.WithName("Uploaded").ToJson());
 
         View(new PolicyViewRequest(UploadId: id)).Name.ShouldBe("Uploaded");
-    }
-
-    [SkippableFact]
-    public void EvaluatedValidationNames_AreCheckedByTheEvaluator()
-    {
-        // The viewer's list of evaluated constraints must follow ValidationPolicyEvaluator.
-        string root = AppContext.BaseDirectory;
-        while (!File.Exists(Path.Combine(root, "SimpleSign.sln")))
-        {
-            root = Path.GetDirectoryName(root) ?? throw new DirectoryNotFoundException("SimpleSign.sln");
-        }
-
-        string source = File.ReadAllText(Path.Combine(root, "src", "Core", "SimpleSign.Core", "Validation", "Policy", "ValidationPolicyEvaluator.cs"));
-
-        PolicyViewer.EvaluatedValidationNames.Where(n => !source.Contains($"\"{n}\"", StringComparison.Ordinal) && !source.Contains($"/{n}\"", StringComparison.Ordinal))
-            .ShouldBeEmpty();
     }
 }
 

@@ -50,4 +50,10 @@ public enum SignatureSubIndication
 
     /// <summary>TIMESTAMP_ORDER_FAILURE: the timestamps are not in the order the format requires.</summary>
     TimestampOrderFailure,
+
+    /// <summary>SIGNED_DATA_NOT_FOUND: the signed data cannot be obtained.</summary>
+    SignedDataNotFound,
+
+    /// <summary>SIGNATURE_POLICY_NOT_AVAILABLE: the signature policy document cannot be obtained.</summary>
+    SignaturePolicyNotAvailable,
 }

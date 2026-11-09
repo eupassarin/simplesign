@@ -20,7 +20,9 @@ so a policy can be translated in either direction and the verdicts of both valid
 
 ## Element by element
 
-States: **evaluated** — SimpleSign checks it with the policy's level; **to connect** — the validator already has the
+The table describes the signature context; in the timestamp, revocation and countersignature contexts an element is
+evaluated only where the row of that context says so. States: **evaluated** — SimpleSign checks it with the policy's
+level (a check that does not apply to a format, such as `ByteRange` for CAdES, is skipped); **to connect** — the validator already has the
 information (or checks it with a fixed rule) and the constraint is not wired yet, so it is reported as not checked;
 **to implement** — kept, needs new work; **removed** — not in SimpleSign's format.
 
@@ -43,10 +45,10 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
 | `AcceptablePolicies`, `PolicyHashMatch` | same | evaluated |  |
-| `PolicyAvailable` | same | to connect | CAdES policy store; ICP-Brasil downloads the policies of the LPA. |
-| `SignaturePolicyStorePresent` | same | to connect | `CadesSignaturePolicyStore.Read`. |
-| `AcceptableFormats` | same | to connect | Detected level (e.g. require B-LT for archiving). |
-| `FullScope` | same | to connect | PAdES coverage; CAdES and enveloped XAdES cover the whole content. |
+| `PolicyAvailable` | same | evaluated | CAdES policy store; ICP-Brasil downloads the policies of the LPA. |
+| `SignaturePolicyStorePresent` | same | evaluated | `CadesSignaturePolicyStore.Read`. |
+| `AcceptableFormats` | same | evaluated | Detected level (e.g. require B-LT for archiving). |
+| `FullScope` | same | evaluated | PAdES coverage; CAdES and enveloped XAdES cover the whole content. |
 | `StructuralValidation` | same | to implement | CAdES/PAdES: the ASN.1 decoded; XAdES: validate against the XSD. |
 | CounterSignatureConstraints (context) | same | to connect | Countersignatures exist in CAdES and XAdES; evaluate each one in this context (today fixed rules). |
 
@@ -55,9 +57,10 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
 | `ReferenceDataIntact`, `SignatureIntact`, `ProspectiveCertificateChain` | same | evaluated |  |
-| `ReferenceDataExistence`, `SignatureValid`, `SignerInformationStore` | same | to connect | The validators already know. |
-| `ByteRange`, `ByteRangeAllDocument`, `ByteRangeCollision`, `PdfSignatureDictionary` | same | to connect | `IntegrityVerifier`, the coverage and the ranges of every field are already read. |
-| `SignatureDuplicated` | same | to connect | Id uniqueness in XAdES. |
+| `ReferenceDataExistence`, `SignatureValid`, `SignerInformationStore` | same | evaluated | The validators already know. |
+| `ByteRange`, `ByteRangeAllDocument`, `ByteRangeCollision` | same | evaluated | `IntegrityVerifier`, the coverage and the ranges of every field. |
+| `PdfSignatureDictionary` | same | to connect | Needs the signature dictionary of every revision. |
+| `SignatureDuplicated` | same | evaluated | Id uniqueness in XAdES. |
 | `TrustServiceTypeIdentifier`, `TrustServiceStatus` | same | to connect | `TrustedList` already reads the service type and status. |
 | `DocMDP`, `FieldMDP`, `SigFieldLock`, `FormFillChanges`, `AnnotationChanges`, `UndefinedChanges`, `PdfPageDifference`, `PdfAnnotationOverlap` | same | to implement | Compare PDF revisions (protection against shadow attacks). |
 | `ReferenceDataNameMatch`, `ManifestEntryObjectExistence`, `ManifestEntryObjectGroup`, `ManifestEntryObjectIntact`, `ManifestEntryNameMatch` | same | removed | ASiC-E and `ds:Manifest`, not supported. |
@@ -68,10 +71,11 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
 | `Recognition`, `Signature`, `NotExpired`, `RevocationDataAvailable`, `RevocationFreshness`, `CA`, `KeyUsage`, `ExtendedKeyUsage`, `NotRevoked`, `SelfSigned`, `NotSelfSigned`, `PolicyIds`, `QcCompliance`, `QcSSCD` | same | evaluated |  |
-| `MaxPathLength`, `NameConstraints`, `PolicyTree`, `SupportedCriticalExtensions`, `IssuerName` | same | to connect | The status of the X509Chain. |
-| AuthorityInfoAccessPresent, RevocationInfoAccessPresent, AuthorityKeyIdentifierPresent, SubjectKeyIdentifierPresent, ForbiddenExtensions, SerialNumberPresent, NoRevAvail, NotOnHold, RevocationDataSkip (CertificateExtensions, CertificatePolicies) | same | to connect | RFC 5280 extensions and attributes; `ocsp-nocheck`. |
+| `MaxPathLength`, `NameConstraints`, `PolicyTree`, `SupportedCriticalExtensions`, `IssuerName` | same | evaluated | The status of the X509Chain. |
+| AuthorityInfoAccessPresent, RevocationInfoAccessPresent, AuthorityKeyIdentifierPresent, SubjectKeyIdentifierPresent, ForbiddenExtensions, SerialNumberPresent, NoRevAvail, RevocationDataSkip (CertificateExtensions, CertificatePolicies) | same | evaluated | RFC 5280 extensions and attributes; `ocsp-nocheck`. |
+| `NotOnHold` | same | to connect | Needs the revocation reason of the revocation data. |
 | `AcceptableRevocationDataFound`, `CRLNextUpdatePresent`, `OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` | same | to connect | The revocation checkers read thisUpdate, nextUpdate and the issuer. |
-| `CommonName`, `Surname`, `GivenName`, `Pseudonym`, `Title`, `Email`, `OrganizationName`, `OrganizationUnit`, `OrganizationIdentifier`, `Country`, `Locality`, `State`, `UsePseudonym` | same | to connect | Subject name attributes. |
+| `CommonName`, `Surname`, `GivenName`, `Pseudonym`, `Title`, `Email`, `OrganizationName`, `OrganizationUnit`, `OrganizationIdentifier`, `Country`, `Locality`, `State`, `UsePseudonym` | same | evaluated | Subject name attributes. |
 | `PolicyQualificationIds`, `PolicySupportedByQSCDIds`, `QcType`, `QcLegislationCountryCodes`, `QcEuPDSLocation`, `QcEuLimitValueCurrency`, `MinQcEuLimitValue`, `MinQcEuRetentionPeriod`, `QcQSCDLegislation`, `QcIdentificationMethod`, `QcPSBCountryOfLegislation`, `QcPSBAuthSourceIdentification`, `QcPSBLegislationIdentification`, `IssuedToNaturalPerson`, `IssuedToLegalPerson`, `SemanticsIdentifier` | same | removed | EU qualification decision; SimpleSign does not make it (a European framework package is only planned). |
 | `PSD2QcTypeRolesOfPSP`, `PSD2QcCompetentAuthorityName`, `PSD2QcCompetentAuthorityId` | same | removed | Payment service providers (EU banking). |
 | `SunsetDate` | same | removed | A trust anchor retirement date is a setting of the anchor source, not of the list; `ITrustAnchorProvider` has no such date. |
@@ -81,8 +85,8 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
 | `SigningCertificatePresent`, `CertDigestPresent`, `CertDigestMatch`, `SigningTime`, `SigningTimeInCertRange` | same | evaluated |  |
-| `UnicitySigningCertificate`, `SigningCertificateRefersCertificateChain`, `ReferencesToAllCertificateChainPresent`, `SigningCertificateDigestAlgorithm`, `IssuerSerialMatch`, `MessageDigestOrSignedPropertiesPresent` | same | to connect | ESSCertIDv2 and SigningCertificateV2 are already read. |
-| `ContentType`, `ContentHints`, `ContentIdentifier`, `CommitmentTypeIndication`, `SignerLocation`, `ClaimedRoles`, `CertifiedRoles` | same | to connect | Attributes SimpleSign creates and reads (`ContentIdentifier`: read the attribute). |
+| `UnicitySigningCertificate`, `SigningCertificateRefersCertificateChain`, `ReferencesToAllCertificateChainPresent`, `SigningCertificateDigestAlgorithm`, `IssuerSerialMatch`, `MessageDigestOrSignedPropertiesPresent` | same | evaluated | ESSCertIDv2 and SigningCertificateV2 are already read. |
+| `ContentType`, `ContentHints`, `ContentIdentifier`, `CommitmentTypeIndication`, `SignerLocation`, `ClaimedRoles`, `CertifiedRoles` | same | evaluated | `CertifiedRoles` by presence: the role names inside attribute certificates are not read. |
 | `ContentTimeStamp`, `ContentTimeStampMessageImprint` | same | to implement | XAdES creates data object timestamps; validation does not check them yet. |
 | `KeyIdentifierPresent`, `KeyIdentifierMatch`, `X509UrlPresent`, `X509UrlMatch`, `SignatureType`, `EllipticCurveKeySize` | same | removed | JSON signature headers (kid, x5u, typ, RFC 7518 curves): no JSON signatures. |
 
@@ -90,7 +94,7 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
-| `CounterSignature`, `SignatureTimeStamp`, `ValidationDataTimeStamp`, `ValidationDataRefsOnlyTimeStamp`, `ArchiveTimeStamp`, `DocumentTimeStamp`, `TLevelTimeStamp`, `LTALevelTimeStamp` | same | to connect | The validators know which timestamps and countersignatures exist and whether they are valid. |
+| `CounterSignature`, `SignatureTimeStamp`, `ValidationDataTimeStamp`, `ValidationDataRefsOnlyTimeStamp`, `ArchiveTimeStamp`, `DocumentTimeStamp`, `TLevelTimeStamp`, `LTALevelTimeStamp` | same | evaluated | The validators know which timestamps and countersignatures exist and whether they are valid. |
 
 ### Timestamp
 

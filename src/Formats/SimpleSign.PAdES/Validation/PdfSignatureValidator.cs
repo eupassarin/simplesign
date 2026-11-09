@@ -404,6 +404,12 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // 2. Integrity (ByteRange + document hash)
         bool integrityValid = await _integrityVerifier.ValidateByteRangeAsync(
             pdfStream, field, cmsData, errors, warnings, cancellationToken, _logger, isLastSignature).ConfigureAwait(false);
+        // Well formed: starts at 0, the /Contents hole after the first range, the second range inside the file.
+        // Content appended after the last signature is ByteRangeAllDocument's, not this check's.
+        var range = field.ByteRange;
+        bool byteRangeValid = range.Offset1 == 0 && range.Length1 > 0 && range.Offset2 > range.Length1
+            && range.Length2 >= 0 && range.Offset2 + range.Length2 <= pdfStream.Length;
+        bool coversWholeFile = field.ByteRange.Offset2 + field.ByteRange.Length2 >= pdfStream.Length - 2;
 
         // 3. Cryptographic signature
         bool sigValid = ValidateSignatureStep(cmsData, errors, out bool signatureVerificationIndeterminate);
@@ -469,6 +475,18 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
             ProofOfExistence = provenTime,
             TrustedLists = TrustedListInfos(),
+            SignedDataFound = true,
+            SignerInfoCount = field.ContentsBytes is { } contents ? CmsStructure.SignerInfoCount(contents) : null,
+            ByteRangeValid = byteRangeValid,
+            ByteRangeCoversDocument = isLastSignature ? coversWholeFile : null,
+            ByteRangeCollides = pdfFacts?.ByteRangeCollides,
+            CoversWholeDocument = coversWholeFile,
+            SignatureFormat = PadesFormat(cmsData, pdfFacts),
+            UnsignedAttributes = CmsValidationFacts.UnsignedOf(cmsData) with
+            {
+                DocumentTimeStamp = pdfFacts?.HasLaterDocumentTimestamp == true,
+                TLevelTimeStampValid = provenTime is not null,
+            },
         }.WithCms(cmsData, _options.TrustedRoots, field.PdfSigningTime), _options.PolicyFor(cmsData.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
 
@@ -787,8 +805,22 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             VriKeys = vri?.Keys ?? [],
             HasLaterDocumentTimestamp = fields.Any(f => f.IsDocumentTimestamp && f.IsSigned
                 && f.ByteRange.Offset2 + f.ByteRange.Length2 > end),
+            ByteRangeCollides = fields.Where((f, i) => i != index && f.IsSigned).Any(f => Collides(field.ByteRange, f.ByteRange)),
         };
     }
+
+    /// <summary>Two signatures collide when they have the same ranges or their /Contents holes overlap.</summary>
+    private static bool Collides(PdfByteRange a, PdfByteRange b) =>
+        (a.Offset1 == b.Offset1 && a.Length1 == b.Length1 && a.Offset2 == b.Offset2 && a.Length2 == b.Length2)
+        || (a.Offset1 + a.Length1 < b.Offset2 && b.Offset1 + b.Length1 < a.Offset2);
+
+    /// <summary>The PAdES format and level of a signature, from what it carries and what follows it in the document.</summary>
+    private static string PadesFormat(CmsSignedData cms, PdfSignatureFacts? pdf) =>
+        cms.SigningCertificateHash is null ? "PDF-NOT-ETSI"
+        : cms.SignatureTimestampToken is null ? "PAdES-BASELINE-B"
+        : pdf?.HasDss != true ? "PAdES-BASELINE-T"
+        : pdf.HasLaterDocumentTimestamp ? "PAdES-BASELINE-LTA"
+        : "PAdES-BASELINE-LT";
 
     /// <summary>
     /// Gets the revocation data (CRLs + OCSPs) for a specific signature field.

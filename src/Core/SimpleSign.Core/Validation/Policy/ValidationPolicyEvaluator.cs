@@ -62,6 +62,64 @@ internal sealed record ValidationFacts
 
     /// <summary>The trusted lists the trust anchors come from, for the TrustedLists constraints; null when none.</summary>
     public IReadOnlyList<Extensions.TrustedListInfo>? TrustedLists { get; init; }
+
+    /// <summary>The signed attributes (CAdES, PAdES) or signed properties (XAdES); null when not read.</summary>
+    public SignedAttributeFacts? SignedAttributes { get; init; }
+
+    /// <summary>The unsigned attributes (timestamps, countersignatures) present; null when not read.</summary>
+    public UnsignedAttributeFacts? UnsignedAttributes { get; init; }
+
+    /// <summary>The format and level of the signature (<c>PAdES-BASELINE-LT</c>, <c>CAdES-BASELINE-B</c>…); null when not established.</summary>
+    public string? SignatureFormat { get; init; }
+
+    /// <summary>Whether the signature covers the whole document (a later PDF revision makes it partial); null when not established.</summary>
+    public bool? CoversWholeDocument { get; init; }
+
+    /// <summary>Whether the signed data was found (the document, the detached content); null when not established.</summary>
+    public bool? SignedDataFound { get; init; }
+
+    /// <summary>Whether the signature carries the signature policy document; null when not established.</summary>
+    public bool? PolicyStorePresent { get; init; }
+
+    /// <summary>Whether the signature policy document was obtained (from the signature or elsewhere); null when not established.</summary>
+    public bool? PolicyDocumentAvailable { get; init; }
+
+    /// <summary>How many SignerInfos the CMS SignedData has; null for other formats.</summary>
+    public int? SignerInfoCount { get; init; }
+
+    /// <summary>Whether the PDF ByteRange is well formed; null for other formats.</summary>
+    public bool? ByteRangeValid { get; init; }
+
+    /// <summary>Whether the ByteRange of the document's last signature covers the whole file; null when it is not the last one or not a PDF.</summary>
+    public bool? ByteRangeCoversDocument { get; init; }
+
+    /// <summary>Whether the ByteRange collides with another signature's (the same ranges, or overlapping /Contents); null for other formats.</summary>
+    public bool? ByteRangeCollides { get; init; }
+
+    /// <summary>Whether no other element of the document has the signature's Id (XAdES); null for other formats.</summary>
+    public bool? SignatureIdUnique { get; init; }
+}
+
+/// <summary>The unsigned attributes of a signature, in the terms of the <c>UnsignedAttributes</c> constraints.</summary>
+internal sealed record UnsignedAttributeFacts
+{
+    public bool CounterSignature { get; init; }
+
+    public bool SignatureTimeStamp { get; init; }
+
+    public bool ValidationDataTimeStamp { get; init; }
+
+    public bool ValidationDataRefsOnlyTimeStamp { get; init; }
+
+    public bool ArchiveTimeStamp { get; init; }
+
+    public bool DocumentTimeStamp { get; init; }
+
+    /// <summary>Whether a valid T-level timestamp (signature or document timestamp) is present; null when not established.</summary>
+    public bool? TLevelTimeStampValid { get; init; }
+
+    /// <summary>Whether a valid LTA-level timestamp (archive or later document timestamp) is present; null when not established.</summary>
+    public bool? LtaLevelTimeStampValid { get; init; }
 }
 
 /// <summary>The indication, sub-indication and checks of a validation.</summary>
@@ -108,10 +166,12 @@ internal static class ValidationPolicyEvaluator
             EvaluateSigningCertificate(basic + "/SigningCertificate");
             EvaluateCaCertificates(basic + "/CACertificate");
             EvaluateSignatureCrypto(basic);
+            EvaluateChain(basic);
             if (!facts.IsDocumentTimestamp)
             {
                 EvaluateSignatureConstraints();
                 EvaluateSignedAttributes(Signature + "/SignedAttributes");
+                EvaluateUnsignedAttributes(Signature + "/UnsignedAttributes");
                 EvaluateTimestampDelay();
             }
 
@@ -145,6 +205,23 @@ internal static class ValidationPolicyEvaluator
                     "The signature value does not verify with the signing certificate.",
                     SignatureIndication.Invalid, SignatureSubIndication.SigCryptoFailure);
             }
+
+            Fact(basic + "/ReferenceDataExistence", facts.SignedDataFound, "The signed data was found.", "The signed data was not found.",
+                SignatureIndication.Indeterminate, SignatureSubIndication.SignedDataNotFound);
+            Check(basic + "/SignatureValid", facts.IsIntegrityValid && facts.IsSignatureValid, "The signature is intact.", "The signature is not intact.",
+                SignatureIndication.Invalid, SignatureSubIndication.SigCryptoFailure);
+            Fact(basic + "/SignerInformationStore", facts.SignerInfoCount is { } count ? count == 1 : null,
+                "The CMS has one SignerInfo.", $"The CMS has {facts.SignerInfoCount} SignerInfos; one is expected.",
+                SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
+            Fact(basic + "/ByteRange", facts.ByteRangeValid, "The ByteRange is well formed.", "The ByteRange is not well formed.",
+                SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
+            Fact(basic + "/ByteRangeAllDocument", facts.ByteRangeCoversDocument, "The last signature covers the whole file.",
+                "Bytes were appended after the last signature.", SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
+            Fact(basic + "/ByteRangeCollision", facts.ByteRangeCollides is { } collides ? !collides : null,
+                "The ByteRange does not collide with another signature's.", "The ByteRange collides with another signature's.",
+                SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
+            Fact(basic + "/SignatureDuplicated", facts.SignatureIdUnique, "The signature's Id is unique.",
+                "Another element of the document has the signature's Id.", SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
 
             // Document timestamps whose chain is only a warning need a trusted TSA.
             if (facts.IsDocumentTimestamp && facts.IsChainTrustWarning && facts.IsTsaTrusted != true)
@@ -202,8 +279,113 @@ internal static class ValidationPolicyEvaluator
             }
 
             CheckCertificateValues(path, certificate);
-            EvaluateRevocation(path);
+            CheckCertificateRules(path, certificate, facts.Chain is { Count: > 1 } chain ? chain[1] : null);
+            if (SkipsRevocation(path, certificate))
+            {
+                Check(path + "/RevocationDataAvailable", true, $"'{Name(certificate)}' needs no revocation data.", "",
+                    SignatureIndication.Indeterminate, SignatureSubIndication.TryLater);
+            }
+            else
+            {
+                EvaluateRevocation(path);
+            }
+
             EvaluateCertificateCrypto(path, 0);
+        }
+
+        /// <summary>The RFC 5280 checks of one certificate and the subject attributes the policy restricts.</summary>
+        private void CheckCertificateRules(string path, X509Certificate2 certificate, X509Certificate2? issuer)
+        {
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.ChainConstraintsFailure;
+            string name = Name(certificate);
+
+            Check(path + "/AuthorityInfoAccessPresent", CertificateChecks.HasExtension(certificate, CertificateChecks.AuthorityInfoAccess),
+                $"'{name}' has the Authority Information Access extension.", $"'{name}' has no Authority Information Access extension.", I, S);
+            Check(path + "/RevocationInfoAccessPresent", CertificateChecks.HasRevocationInfoAccess(certificate),
+                $"'{name}' says where its revocation data is.", $"'{name}' has neither CRL distribution points nor an OCSP location.", I, S);
+            Check(path + "/AuthorityKeyIdentifierPresent", CertificateChecks.HasExtension(certificate, CertificateChecks.AuthorityKeyIdentifier),
+                $"'{name}' has the Authority Key Identifier extension.", $"'{name}' has no Authority Key Identifier extension.", I, S);
+            Check(path + "/SubjectKeyIdentifierPresent", CertificateChecks.HasExtension(certificate, CertificateChecks.SubjectKeyIdentifier),
+                $"'{name}' has the Subject Key Identifier extension.", $"'{name}' has no Subject Key Identifier extension.", I, S);
+            Check(path + "/SerialNumberPresent", CertificateChecks.HasSubjectSerialNumber(certificate),
+                $"The subject of '{name}' has a serialNumber.", $"The subject of '{name}' has no serialNumber.", I, S);
+            Check(path + "/NoRevAvail", CertificateChecks.NoRevAvailCompliant(certificate),
+                $"'{name}' follows RFC 9608 for noRevAvail.", $"'{name}' has noRevAvail but is a CA or says where its revocation data is (RFC 9608).", I, S);
+            if (tree.Find(path + "/ForbiddenExtensions") is { } forbidden)
+            {
+                var present = CertificateChecks.ForbiddenPresent(certificate, forbidden.Ids).ToList();
+                Check(path + "/ForbiddenExtensions", present.Count == 0, $"'{name}' has none of the forbidden extensions.",
+                    $"'{name}' has the forbidden extensions {string.Join(", ", present)}.", I, S);
+            }
+
+            if (tree.Find(path + "/SupportedCriticalExtensions") is { } supported)
+            {
+                var unsupported = CertificateChecks.CriticalExtensions(certificate).Where(oid => !supported.Ids.Contains(oid)).ToList();
+                Check(path + "/SupportedCriticalExtensions", unsupported.Count == 0, $"Every critical extension of '{name}' is supported.",
+                    $"'{name}' has critical extensions that are not supported: {string.Join(", ", unsupported)}.", I, S);
+            }
+
+            if (issuer is not null)
+            {
+                Check(path + "/IssuerName", CertificateChecks.IssuerNameMatches(certificate, issuer),
+                    $"The issuer name of '{name}' is its issuer's subject name.", $"The issuer name of '{name}' is not its issuer's subject name.", I, S);
+            }
+
+            Check(path + "/UsePseudonym", !CertificateChecks.SubjectValues(certificate, CertificateChecks.SubjectAttributes["Pseudonym"]).Any(),
+                $"'{name}' does not use a pseudonym.", $"'{name}' uses a pseudonym.", I, S);
+            foreach (var (constraint, oid) in CertificateChecks.SubjectAttributes)
+            {
+                if (tree.Find(path + "/" + constraint) is { Ids.Count: > 0 } accepted)
+                {
+                    var values = CertificateChecks.SubjectValues(certificate, oid).ToList();
+                    Check(path + "/" + constraint, values.Any(accepted.Ids.Contains),
+                        $"The {constraint} of '{name}' is accepted.",
+                        values.Count == 0 ? $"'{name}' has no {constraint}." : $"The {constraint} of '{name}' ({string.Join(", ", values)}) is not accepted.", I, S);
+                }
+            }
+        }
+
+        /// <summary>Whether the certificate needs no revocation data (RevocationDataSkip); reports the constraint when it applies.</summary>
+        private bool SkipsRevocation(string path, X509Certificate2 certificate)
+        {
+            string id = path + "/RevocationDataSkip";
+            if (tree.Find(id) is null || tree.Level(id) == ConstraintLevel.Ignore)
+            {
+                return false;
+            }
+
+            var extensions = tree.Find(id + "/CertificateExtensions")?.Ids ?? [];
+            var policies = tree.Find(id + "/CertificatePolicies")?.Ids ?? [];
+            _evaluated.Add(id + "/CertificateExtensions");
+            _evaluated.Add(id + "/CertificatePolicies");
+            bool skips = CertificateChecks.SkipsRevocation(certificate, extensions, policies);
+            Check(id, !skips, $"'{Name(certificate)}' needs revocation data.", $"'{Name(certificate)}' needs no revocation data (RevocationDataSkip).",
+                SignatureIndication.Indeterminate, SignatureSubIndication.TryLater);
+            return skips;
+        }
+
+        /// <summary>The chain-wide RFC 5280 checks: path lengths, name constraints and the policy tree.</summary>
+        private void EvaluateChain(string basic)
+        {
+            if (facts.Chain is not { Count: > 1 } chain)
+            {
+                return;
+            }
+
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.ChainConstraintsFailure;
+            bool pathLengths = CertificateChecks.PathLengthsRespected(chain);
+            var flags = CertificateChecks.ChainFlags(chain);
+            foreach (string path in new[] { basic + "/SigningCertificate", basic + "/CACertificate" })
+            {
+                Check(path + "/MaxPathLength", pathLengths, "The chain respects the path length constraints.",
+                    "A CA of the chain has more CAs below it than its pathLenConstraint allows.", I, S);
+                Check(path + "/NameConstraints", CertificateChecks.NameConstraintsRespected(flags), "The chain respects its name constraints.",
+                    "A certificate of the chain breaks the name constraints of its CAs.", I, S);
+                Check(path + "/PolicyTree", CertificateChecks.PolicyTreeValid(flags), "The certificate policies of the chain form a valid policy tree.",
+                    "The certificate policies of the chain do not form a valid policy tree.", I, S);
+            }
         }
 
         private void CheckCertificateValues(string path, X509Certificate2 certificate)
@@ -318,6 +500,7 @@ internal static class ValidationPolicyEvaluator
                     Check(path + "/Signature", true, $"The signature of '{Name(ca)}' verifies.", "", SignatureIndication.Indeterminate, SignatureSubIndication.ChainConstraintsFailure);
                 }
 
+                CheckCertificateRules(path, ca, i + 1 < chain.Count ? chain[i + 1] : null);
                 EvaluateCertificateCrypto(path, i);
             }
         }
@@ -396,6 +579,35 @@ internal static class ValidationPolicyEvaluator
 
         private void EvaluateSignatureConstraints()
         {
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.SigConstraintsFailure;
+            if (tree.Find(Signature + "/AcceptableFormats") is { } formats)
+            {
+                if (facts.SignatureFormat is { } format)
+                {
+                    Check(Signature + "/AcceptableFormats", formats.Ids.Count == 0 || formats.Ids.Contains("*") || formats.Ids.Contains(format),
+                        $"The format {format} is accepted.", $"The format {format} is not accepted ({string.Join(", ", formats.Ids)}).", I, SignatureSubIndication.FormatFailure);
+                }
+                else
+                {
+                    NotApplicable(Signature + "/AcceptableFormats");
+                }
+            }
+
+            Fact(Signature + "/FullScope", facts.CoversWholeDocument, "The signature covers the whole document.",
+                "The signature covers only part of the document (later changes are not signed).", I, S);
+            Fact(Signature + "/SignaturePolicyStorePresent", facts.PolicyStorePresent, "The signature carries its signature policy document.",
+                "The signature does not carry its signature policy document.", I, S);
+            if (facts.SignaturePolicyOid is null)
+            {
+                NotApplicable(Signature + "/PolicyAvailable");
+            }
+            else
+            {
+                Fact(Signature + "/PolicyAvailable", facts.PolicyDocumentAvailable, "The signature policy document was obtained.",
+                    "The signature policy document could not be obtained.", I, SignatureSubIndication.SignaturePolicyNotAvailable);
+            }
+
             if (!facts.SignaturePolicyKnown)
             {
                 return;
@@ -450,6 +662,99 @@ internal static class ValidationPolicyEvaluator
                 Check(path + "/CertDigestMatch", match, "The certificate digest in the signature matches the signing certificate.",
                     "The certificate digest in the signature does not match the signing certificate.", I, S);
             }
+
+            if (facts.SignedAttributes is not { } attributes)
+            {
+                return;
+            }
+
+            Check(path + "/MessageDigestOrSignedPropertiesPresent", attributes.MessageDigestOrSignedPropertiesPresent,
+                "The message-digest attribute (or the SignedProperties) is present.", "The message-digest attribute (or the SignedProperties) is missing.",
+                SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
+            if (attributes.SigningCertificateAttributes > 0)
+            {
+                Check(path + "/UnicitySigningCertificate", attributes.SigningCertificateAttributes == 1, "There is one signing-certificate attribute.",
+                    $"There are {attributes.SigningCertificateAttributes} signing-certificate attributes.", I, S);
+            }
+
+            EvaluateCertificateReferences(path, attributes.CertificateReferences);
+            CheckValues(path + "/ContentType", attributes.ContentType is { } type ? [type] : [], "content type");
+            CheckValues(path + "/ContentHints", attributes.ContentHints is { } hints ? [hints] : [], "content hints");
+            CheckValues(path + "/ContentIdentifier", attributes.ContentIdentifier is { } identifier ? [identifier] : [], "content identifier");
+            CheckValues(path + "/CommitmentTypeIndication", attributes.CommitmentTypes, "commitment type");
+            CheckValues(path + "/ClaimedRoles", attributes.ClaimedRoles, "claimed role");
+            Check(path + "/SignerLocation", attributes.SignerLocation, "The signature has a signer location.", "The signature has no signer location.", I, S);
+            // Certified roles are matched by presence: the role names inside attribute certificates are not read.
+            Check(path + "/CertifiedRoles", attributes.CertifiedRoles > 0, $"The signature has {attributes.CertifiedRoles} certified role(s).",
+                "The signature has no certified role.", I, S);
+        }
+
+        /// <summary>The signing certificate references: digest algorithm, issuer and serial, and how they cover the chain.</summary>
+        private void EvaluateCertificateReferences(string path, IReadOnlyList<CertificateReference> references)
+        {
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.SigConstraintsFailure;
+            if (references.Count == 0 || facts.SignerCertificate is not { } signer)
+            {
+                return;
+            }
+
+            var own = references.FirstOrDefault(r => r.DigestMatches(signer)) ?? references[0];
+            var rules = tree.Crypto(path);
+            var findings = rules.CheckDigest(own.DigestAlgorithm, ReferenceTime);
+            Check(path + "/SigningCertificateDigestAlgorithm", findings.All(f => f.Level != ConstraintLevel.Fail),
+                $"The signing certificate reference uses {own.DigestAlgorithm}, which is accepted.",
+                $"The signing certificate reference uses {own.DigestAlgorithm}, which is not accepted.", I, SignatureSubIndication.CryptoConstraintsFailure);
+            if (own.IssuerSerialMatches(signer) is { } issuerSerial)
+            {
+                Check(path + "/IssuerSerialMatch", issuerSerial, "The issuer and serial number of the reference match the signing certificate.",
+                    "The issuer and serial number of the reference do not match the signing certificate.", I, S);
+            }
+
+            if (facts.Chain is { Count: > 0 } chain)
+            {
+                Check(path + "/SigningCertificateRefersCertificateChain", references.All(r => chain.Any(r.DigestMatches)),
+                    "Every certificate reference designates a certificate of the chain.", "A certificate reference designates no certificate of the chain.", I, S);
+                var notReferenced = chain.Where(c => !CertificateFacts.IsSelfSigned(c) && !references.Any(r => r.DigestMatches(c))).ToList();
+                Check(path + "/ReferencesToAllCertificateChainPresent", notReferenced.Count == 0,
+                    "Every certificate of the chain is referenced.", $"{notReferenced.Count} certificate(s) of the chain are not referenced.", I, S);
+            }
+        }
+
+        /// <summary>A multi-value constraint on attribute values: one of the policy's values (or any, with <c>*</c>) must be present.</summary>
+        private void CheckValues(string id, IReadOnlyList<string> values, string what)
+        {
+            if (tree.Find(id) is not { } accepted)
+            {
+                return;
+            }
+
+            bool any = accepted.Ids.Count == 0 || accepted.Ids.Contains("*");
+            Check(id, values.Count > 0 && (any || values.Any(accepted.Ids.Contains)),
+                $"The {what} ({string.Join(", ", values)}) is accepted.",
+                values.Count == 0 ? $"The signature has no {what}." : $"The {what} ({string.Join(", ", values)}) is not accepted.",
+                SignatureIndication.Indeterminate, SignatureSubIndication.SigConstraintsFailure);
+        }
+
+        private void EvaluateUnsignedAttributes(string path)
+        {
+            if (facts.UnsignedAttributes is not { } unsigned)
+            {
+                return;
+            }
+
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.SigConstraintsFailure;
+            Check(path + "/CounterSignature", unsigned.CounterSignature, "The signature has a countersignature.", "The signature has no countersignature.", I, S);
+            Check(path + "/SignatureTimeStamp", unsigned.SignatureTimeStamp, "The signature has a signature timestamp.", "The signature has no signature timestamp.", I, S);
+            Check(path + "/ValidationDataTimeStamp", unsigned.ValidationDataTimeStamp, "The signature has a timestamp over its validation data.",
+                "The signature has no timestamp over its validation data.", I, S);
+            Check(path + "/ValidationDataRefsOnlyTimeStamp", unsigned.ValidationDataRefsOnlyTimeStamp,
+                "The signature has a timestamp over the references to its validation data.", "The signature has no timestamp over the references to its validation data.", I, S);
+            Check(path + "/ArchiveTimeStamp", unsigned.ArchiveTimeStamp, "The signature has an archive timestamp.", "The signature has no archive timestamp.", I, S);
+            Check(path + "/DocumentTimeStamp", unsigned.DocumentTimeStamp, "The document has a document timestamp.", "The document has no document timestamp.", I, S);
+            Fact(path + "/TLevelTimeStamp", unsigned.TLevelTimeStampValid, "A valid T-level timestamp is present.", "No valid T-level timestamp is present.", I, S);
+            Fact(path + "/LTALevelTimeStamp", unsigned.LtaLevelTimeStampValid, "A valid LTA-level timestamp is present.", "No valid LTA-level timestamp is present.", I, S);
         }
 
         private void EvaluateTimestampDelay()
@@ -527,6 +832,22 @@ internal static class ValidationPolicyEvaluator
             Record(id, level, failedMessage, indication, sub);
         }
 
+        /// <summary>A constraint whose fact may be unknown: null means it does not apply to this signature (it is then not reported).</summary>
+        private void Fact(string id, bool? passed, string passedMessage, string failedMessage, SignatureIndication indication, SignatureSubIndication sub)
+        {
+            if (passed is { } value)
+            {
+                Check(id, value, passedMessage, failedMessage, indication, sub);
+            }
+            else
+            {
+                NotApplicable(id);
+            }
+        }
+
+        /// <summary>A constraint that does not apply to this signature (a PDF check on a CMS file, say): not reported, not "not checked".</summary>
+        private void NotApplicable(string id) => _evaluated.Add(id);
+
         private void Record(string id, ConstraintLevel level, string message, SignatureIndication indication, SignatureSubIndication sub)
         {
             _evaluated.Add(id);
@@ -562,7 +883,10 @@ internal static class ValidationPolicyEvaluator
             {
                 if (leaf.Level is { } level && level != ConstraintLevel.Ignore && !_evaluated.Contains(path))
                 {
-                    _constraints.Add(new(path, ConstraintStatus.NotChecked, null, "Not evaluated by SimpleSign."));
+                    _constraints.Add(new(path, ConstraintStatus.NotChecked, null,
+                        PolicyCoverage.Validation(path) == ConstraintCoverage.ToImplement
+                            ? "Not evaluated by SimpleSign: it needs work not done yet."
+                            : "Not evaluated by SimpleSign yet."));
                 }
             }
         }
@@ -649,6 +973,24 @@ internal static class CmsValidationFacts
             SigningCertificateReferenceMatches = matches,
             SignaturePolicyOid = cms.SignaturePolicyOid,
             SignaturePolicyKnown = true,
+            SignedAttributes = SignedAttributeFacts.FromCms(cms.SignedAttrs),
+            UnsignedAttributes = facts.UnsignedAttributes ?? UnsignedOf(cms),
+            PolicyStorePresent = cms.SignaturePolicyOid is null ? null : HasUnsigned(cms, Constants.Oids.SignaturePolicyStore),
+            PolicyDocumentAvailable = facts.PolicyDocumentAvailable
+                ?? (cms.SignaturePolicyOid is not null && HasUnsigned(cms, Constants.Oids.SignaturePolicyStore) ? true : null),
         };
     }
+
+    /// <summary>The unsigned attributes of a CMS signature (the validity of the timestamps is the validator's to add).</summary>
+    internal static UnsignedAttributeFacts UnsignedOf(Crypto.CmsSignedData cms) => new()
+    {
+        CounterSignature = cms.CounterSignatures.Count > 0 || HasUnsigned(cms, Constants.Oids.CounterSignature),
+        SignatureTimeStamp = cms.SignatureTimestampToken is not null,
+        ValidationDataTimeStamp = HasUnsigned(cms, Constants.Oids.EscTimeStamp),
+        ValidationDataRefsOnlyTimeStamp = HasUnsigned(cms, "1.2.840.113549.1.9.16.2.26"),
+        ArchiveTimeStamp = cms.ArchiveTimestampToken is not null || HasUnsigned(cms, Constants.Oids.ArchiveTimeStamp)
+            || HasUnsigned(cms, Constants.Oids.ArchiveTimeStampV3),
+    };
+
+    private static bool HasUnsigned(Crypto.CmsSignedData cms, string oid) => cms.UnsignedAttributes?.ContainsKey(oid) == true;
 }

@@ -137,7 +137,8 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
 
         evaluation.Indication.ShouldBe(SignatureIndication.Valid);
         evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/KeyUsage" && c.Status == ConstraintStatus.Information);
-        evaluation.Warnings.ShouldBeEmpty();
+        // INFORM gives no warning; the WARN checks of a bare self-signed certificate (no AKI, no AIA…) still do.
+        evaluation.Warnings.ShouldNotContain(w => w.Contains("key usage", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -145,7 +146,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
 
-        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/AuthorityInfoAccessPresent" && c.Status == ConstraintStatus.NotChecked);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/AcceptableRevocationDataFound" && c.Status == ConstraintStatus.NotChecked);
     }
 
     [Fact]
@@ -247,6 +248,136 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { TrustedLists = [list] }, ValidationPolicy.Default);
 
         evaluation.Constraints.ShouldNotContain(c => c.Id.StartsWith("TrustedLists/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Evaluate_CmsSignature_PdfChecksAreNotReported()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
+
+        // A check that does not apply to the format is neither passed nor "not checked".
+        evaluation.Constraints.ShouldNotContain(c => c.Id == Basic + "/ByteRange");
+        evaluation.Constraints.ShouldNotContain(c => c.Id == Basic + "/SignerInformationStore");
+    }
+
+    [Fact]
+    public void Evaluate_ByteRangeMalformed_InvalidFormatFailure()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { ByteRangeValid = false }, ValidationPolicy.Default);
+
+        evaluation.Indication.ShouldBe(SignatureIndication.Invalid);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.FormatFailure);
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/ByteRange" && c.Status == ConstraintStatus.Failed);
+    }
+
+    [Fact]
+    public void Evaluate_SignedDataMissing_IndeterminateSignedDataNotFound()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { SignedDataFound = false }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/ReferenceDataExistence" && c.Status == ConstraintStatus.Failed
+            && c.SubIndication == SignatureSubIndication.SignedDataNotFound);
+    }
+
+    [Fact]
+    public void Evaluate_SyntheticChain_PassesTheRfc5280Checks()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
+
+        foreach (string constraint in new[] { "IssuerName", "ForbiddenExtensions", "AuthorityKeyIdentifierPresent", "NoRevAvail", "MaxPathLength" })
+        {
+            evaluation.Constraints.ShouldContain(c => c.Id.EndsWith("/" + constraint, StringComparison.Ordinal) && c.Status == ConstraintStatus.Passed, constraint);
+        }
+
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/CACertificate/SubjectKeyIdentifierPresent" && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
+    public void Evaluate_SignerWithOcspNoCheck_ForbiddenExtensionFails()
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=Responder as signer", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.NonRepudiation, true));
+        request.CertificateExtensions.Add(new X509Extension("1.3.6.1.5.5.7.48.1.5", [0x05, 0x00], false));
+        using var signer = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { SignerCertificate = signer, Chain = [signer] }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/ForbiddenExtensions" && c.Status == ConstraintStatus.Failed);
+    }
+
+    [Fact]
+    public void Evaluate_UnsupportedCriticalExtension_Warns()
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=Odd signer", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509Extension("1.2.3.4.5.6", [0x05, 0x00], critical: true));
+        using var signer = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { SignerCertificate = signer, Chain = [signer] }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/SupportedCriticalExtensions" && c.Status == ConstraintStatus.Warning);
+    }
+
+    [Fact]
+    public void Evaluate_SubjectCountryNotAccepted_Fails()
+    {
+        var policy = ValidationPolicy.Default.With(SigningCertificate + "/Country", new PolicyConstraint(ConstraintLevel.Fail) { Ids = ["XX"] });
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), policy);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/Country" && c.Status == ConstraintStatus.Failed);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.ChainConstraintsFailure);
+    }
+
+    [Fact]
+    public void Evaluate_FormatNotAccepted_FailsWithFormatFailure()
+    {
+        var policy = ValidationPolicy.Default.With("SignatureConstraints/AcceptableFormats",
+            new PolicyConstraint(ConstraintLevel.Fail) { Ids = ["PAdES-BASELINE-LTA"] });
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { SignatureFormat = "PAdES-BASELINE-B" }, policy);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/AcceptableFormats" && c.Status == ConstraintStatus.Failed);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.FormatFailure);
+    }
+
+    [Fact]
+    public void Evaluate_LtaTimestampRequired_FailsWithoutOne()
+    {
+        var policy = ValidationPolicy.Default.With("SignatureConstraints/UnsignedAttributes/LTALevelTimeStamp", new PolicyConstraint(ConstraintLevel.Fail));
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with { UnsignedAttributes = new UnsignedAttributeFacts { LtaLevelTimeStampValid = false } }, policy);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/UnsignedAttributes/LTALevelTimeStamp" && c.Status == ConstraintStatus.Failed);
+    }
+
+    [Fact]
+    public void Evaluate_ReferenceWithWrongSerial_IssuerSerialMismatchWarns()
+    {
+        byte[] digest = SHA256.HashData(_pki.Leaf.RawData);
+        var attributes = new SignedAttributeFacts
+        {
+            SigningCertificateAttributes = 1,
+            MessageDigestOrSignedPropertiesPresent = true,
+            CertificateReferences = [new CertificateReference("SHA256", digest, _pki.Leaf.IssuerName, [0x01, 0x02])],
+        };
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { SignedAttributes = attributes }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/IssuerSerialMatch" && c.Status == ConstraintStatus.Warning);
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/UnicitySigningCertificate" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/SigningCertificateRefersCertificateChain" && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
+    public void Evaluate_ConstraintToImplement_SaysSo()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/DocMDP" && c.Status == ConstraintStatus.NotChecked
+            && c.Message.Contains("needs work", StringComparison.Ordinal));
     }
 
     public void Dispose() => _pki.Dispose();

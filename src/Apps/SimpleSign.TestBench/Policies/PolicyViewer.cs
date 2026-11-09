@@ -66,27 +66,6 @@ internal static class PolicyViewer
     public const string Signing = "signing";
     public const string Validation = "validation";
 
-    /// <summary>
-    /// The constraint names the validation evaluator checks (see <c>ValidationPolicyEvaluator</c>), in the contexts
-    /// it checks them: the signature, document timestamps, the trusted lists and the chain model.
-    /// </summary>
-    internal static readonly HashSet<string> EvaluatedValidationNames = new(StringComparer.Ordinal)
-    {
-        "AcceptablePolicies", "CA", "CertDigestMatch", "CertDigestPresent", "ExtendedKeyUsage", "KeyUsage", "NotExpired",
-        "NotRevoked", "NotSelfSigned", "PolicyHashMatch", "PolicyIds", "ProspectiveCertificateChain", "QcCompliance", "QcSSCD",
-        "Recognition", "ReferenceDataIntact", "RevocationDataAvailable", "RevocationFreshness", "SelfSigned", "Signature",
-        "SignatureIntact", "SigningCertificatePresent", "SigningTime", "SigningTimeInCertRange", "TimestampDelay",
-        "TLFreshness", "TLNotExpired", "TLVersion", "TLWellSigned", "Model",
-    };
-
-    /// <summary>Kept constraints that need new work before SimpleSign can evaluate them (docs/policies/compatibility.md).</summary>
-    internal static readonly HashSet<string> ToImplementNames = new(StringComparer.Ordinal)
-    {
-        "StructuralValidation", "DocMDP", "FieldMDP", "SigFieldLock", "FormFillChanges", "AnnotationChanges",
-        "UndefinedChanges", "PdfPageDifference", "PdfAnnotationOverlap", "ContentTimeStamp",
-        "ContentTimeStampMessageImprint", "RevocationHasInformationAboutCertificate", "TLStructure",
-    };
-
     private static readonly HashSet<string> s_attributes = new(StringComparer.Ordinal) { "Level", "Id", "Algo" };
 
     /// <summary>The view of a request.</summary>
@@ -234,7 +213,7 @@ internal static class PolicyViewer
         bool empty = level is null && ids.Count == 0 && algorithms.Count == 0 && attributes.Count == 0;
         string nodeKind = name == "Cryptographic" ? "crypto" : children.Count > 0 || isRoot || empty ? "section" : "constraint";
         var guide = PolicyGuide.Of(name) ?? (nodeKind == "section" ? PolicyGuide.Section : PolicyGuide.Constraint);
-        return new(name, path, nodeKind, level, guide.Text, guide.Standard, Evaluation(kind, path, name, nodeKind),
+        return new(name, path, nodeKind, level, guide.Text, guide.Standard, Evaluation(kind, path, nodeKind),
             ids, algorithms, attributes, children);
     }
 
@@ -245,38 +224,20 @@ internal static class PolicyViewer
                 algorithm.TryGetProperty("Date", out var date) ? date.ToString() : null)
             : new(algorithm.ToString(), null, null);
 
-    /// <summary>Whether SimpleSign evaluates the element where it is (the signing policy: always), and if not, what is missing.</summary>
-    private static string Evaluation(string kind, string path, string name, string nodeKind)
+    /// <summary>Whether SimpleSign evaluates the element where it is (from <see cref="PolicyCoverage"/>), and if not, what is missing.</summary>
+    private static string Evaluation(string kind, string path, string nodeKind)
     {
         if (nodeKind == "section")
         {
             return "none";
         }
 
-        if (kind == Signing)
+        var coverage = kind == Signing ? PolicyCoverage.Signing(path) : PolicyCoverage.Validation(path);
+        return coverage switch
         {
-            return "evaluated";
-        }
-
-        bool inContext = path.StartsWith("SignatureConstraints/", StringComparison.Ordinal)
-            || path.StartsWith("Timestamp/BasicSignatureConstraints/", StringComparison.Ordinal)
-            || path == "Timestamp/TimestampDelay"
-            || path.StartsWith("TrustedLists/", StringComparison.Ordinal)
-            || path is "Model" or "Cryptographic";
-        if (nodeKind == "crypto")
-        {
-            return inContext ? "evaluated" : "toConnect";
-        }
-
-        // The cryptographic lists are evaluated with the section that holds them.
-        if (path.Contains("/Cryptographic/", StringComparison.Ordinal) || path.StartsWith("Cryptographic/", StringComparison.Ordinal))
-        {
-            string crypto = path[..(path.LastIndexOf('/'))];
-            return Evaluation(kind, crypto, "Cryptographic", "crypto");
-        }
-
-        return inContext && EvaluatedValidationNames.Contains(name) ? "evaluated"
-            : ToImplementNames.Contains(name) ? "toImplement"
-            : "toConnect";
+            ConstraintCoverage.Evaluated => "evaluated",
+            ConstraintCoverage.ToImplement => "toImplement",
+            _ => "toConnect",
+        };
     }
 }

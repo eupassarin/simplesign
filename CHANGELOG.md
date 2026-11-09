@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validators' policies). Constraints SimpleSign does not evaluate yet are reported as `NotChecked`; INFORM gives
   `ConstraintStatus.Information`. Constraint ids are paths
   (`SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage`).
+- Validation policy, signature context: the levels of the policy now apply to the RFC 5280 certificate checks
+  (`IssuerName`, `MaxPathLength`, `NameConstraints`, `PolicyTree`, `SupportedCriticalExtensions`,
+  `ForbiddenExtensions`, AIA, CRL/OCSP locations, AKI, SKI, `SerialNumberPresent`, `NoRevAvail`,
+  `RevocationDataSkip`), the subject attributes (`CommonName`, `Country`…), the PDF ByteRange checks, the CMS
+  SignerInfo count, the signature Id (XAdES), the signed attributes (signing-certificate references, content type,
+  hints and identifier, commitment, location, roles), the unsigned attributes (timestamps, countersignatures, valid
+  T/LTA timestamp) and `AcceptableFormats`, `FullScope`, `PolicyAvailable`, `SignaturePolicyStorePresent`. A check
+  that does not apply to the format is not reported. `PolicyCoverage` says what SimpleSign evaluates, by path;
+  `SignatureSubIndication` gains `SignedDataNotFound` and `SignaturePolicyNotAvailable`.
 - `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
   policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,

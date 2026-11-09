@@ -4,6 +4,7 @@ using Shouldly;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -263,7 +264,28 @@ public sealed class CadesSignedAttributesTests : IDisposable
 
         var report = new CadesSignatureValidator().ValidateAll(cms, _data, [_cert]);
 
-        report.IsValid.ShouldBeTrue(string.Join("; ", report.Errors.Concat(report.Signers.SelectMany(s => s.Result.Errors))));
+        report.IsValid.ShouldBeTrue(string.Join("; ", report.Errors.Concat(report.Signers.SelectMany(s => s.Result.Errors))
+            .Concat(report.Signers.SelectMany(s => s.Result.Constraints).Where(c => c.Status == ConstraintStatus.Failed).Select(c => c.Id + ": " + c.Message))));
+    }
+
+    [Fact]
+    public async Task Validate_PolicyRequiringTheRoleAndLocation_ReadsThemFromTheSignature()
+    {
+        byte[] cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .WithSignerLocation(new CadesSignerLocation { CountryName = "BR" })
+            .WithSignerRole("Diretor")
+            .SignAsync();
+        var policy = SimpleSign.Core.Policies.ValidationPolicy.Default
+            .With("SignatureConstraints/SignedAttributes/ClaimedRoles",
+                new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Fail) { Ids = ["Diretor"] })
+            .With("SignatureConstraints/SignedAttributes/SignerLocation",
+                new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Fail));
+
+        var result = new CadesSignatureValidator(new ValidationOptions { Policy = policy }).ValidateAll(cms, _data, [_cert]).Signers.Single().Result;
+
+        result.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/ClaimedRoles" && c.Status == ConstraintStatus.Passed);
+        result.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/SignerLocation" && c.Status == ConstraintStatus.Passed);
     }
 
     [Fact]

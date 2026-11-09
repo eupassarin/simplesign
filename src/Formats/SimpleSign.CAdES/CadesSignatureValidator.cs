@@ -405,6 +405,17 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
     private static CadesValidationResult Failed(string error) => new() { Errors = [error] };
 
+    /// <summary>The CAdES format and level of a signer, from the attributes it carries.</summary>
+    private static string CadesFormat(CmsSignedData cms)
+    {
+        bool Has(string oid) => cms.UnsignedAttributes?.ContainsKey(oid) == true;
+        return cms.SigningCertificateHash is null ? "CMS-NOT-ETSI"
+            : cms.SignatureTimestampToken is null ? "CAdES-BASELINE-B"
+            : !(Has("1.2.840.113549.1.9.16.2.23") && Has("1.2.840.113549.1.9.16.2.24")) ? "CAdES-BASELINE-T"
+            : cms.ArchiveTimestampToken is not null || Has(Oids.ArchiveTimeStamp) || Has(Oids.ArchiveTimeStampV3) ? "CAdES-BASELINE-LTA"
+            : "CAdES-BASELINE-LT";
+    }
+
     /// <summary>Validates one signer; <paramref name="cmsBytes"/>/<paramref name="content"/> null skip the SignedData-level (LTV, archive) checks.</summary>
     private CadesValidationResult ValidateSigner(
         byte[]? cmsBytes,
@@ -554,6 +565,14 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
             ProofOfExistence = provenTime,
             ChainReachesAnchor = chainAnchored,
+            SignedDataFound = content is not null || integrityValid,
+            CoversWholeDocument = integrityValid ? true : null,
+            SignatureFormat = CadesFormat(cmsData),
+            UnsignedAttributes = CmsValidationFacts.UnsignedOf(cmsData) with
+            {
+                TLevelTimeStampValid = provenTime is not null,
+                LtaLevelTimeStampValid = archiveTsValid,
+            },
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
