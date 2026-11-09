@@ -50,23 +50,62 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     }
 
     [Fact]
-    public void Evaluate_Revoked_InvalidRevoked()
+    public void Evaluate_RevokedWithoutProofOfExistence_IndeterminateRevokedNoPoe()
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(
             Facts() with { IsNotRevoked = false, RevocationSource = RevocationSource.OnlineCrl }, ValidationPolicy.Default);
 
-        evaluation.Indication.ShouldBe(SignatureIndication.Invalid);
-        evaluation.SubIndication.ShouldBe(SignatureSubIndication.Revoked);
+        // EN 319 102-1 §5.2.6: nothing proves the signature existed before the revocation.
+        evaluation.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.RevokedNoPoe);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/NotRevoked" && c.Status == ConstraintStatus.Failed);
     }
 
     [Fact]
-    public void Evaluate_RevocationUnknown_IndeterminateTryLater()
+    public void Evaluate_RevokedAfterProofOfExistence_Valid()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with
+            {
+                IsNotRevoked = false,
+                RevocationSource = RevocationSource.CertificateChain,
+                EmbeddedCrls = [_pki.BuildRevokedLeafCrl(), _pki.BuildIntermediateCrl()],
+                EmbeddedOcsps = [],
+                ProofOfExistence = DateTimeOffset.UtcNow.AddHours(-2),
+            }, ValidationPolicy.Default);
+
+        // §5.6.2.4: the signature existed before the revocation (an hour ago).
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/NotRevoked" && c.Status == ConstraintStatus.Passed);
+        evaluation.Indication.ShouldBe(SignatureIndication.Valid);
+    }
+
+    [Fact]
+    public void Evaluate_CaRevoked_IndeterminateRevokedCaNoPoe()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with
+            {
+                IsNotRevoked = false,
+                RevocationSource = RevocationSource.CertificateChain,
+                EmbeddedCrls = [_pki.BuildLeafCrl(), _pki.BuildRevokedIntermediateCrl()],
+                EmbeddedOcsps = [],
+            }, ValidationPolicy.Default);
+
+        evaluation.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.RevokedCaNoPoe);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/NotRevoked" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/CACertificate/NotRevoked" && c.Status == ConstraintStatus.Failed);
+    }
+
+    [Fact]
+    public void Evaluate_RevocationUnknown_IndeterminateCertificateChainGeneralFailure()
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(
             Facts() with { IsNotRevoked = false, RevocationSource = RevocationSource.Indeterminate }, ValidationPolicy.Default);
 
+        // No revocation data is a chain failure (§5.2.6); TRY_LATER is for data that is not fresh.
         evaluation.Indication.ShouldBe(SignatureIndication.Indeterminate);
-        evaluation.SubIndication.ShouldBe(SignatureSubIndication.TryLater);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.CertificateChainGeneralFailure);
         evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/RevocationDataAvailable" && c.Status == ConstraintStatus.Failed);
     }
 

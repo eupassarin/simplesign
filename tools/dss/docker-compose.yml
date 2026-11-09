@@ -8,11 +8,20 @@ services:
       args:
         DSS_VERSION: "6.3"
     image: simplesign-dss-webapp:6.3
+    # Rebuild on every "up" (seconds, from the build cache), so a changed entrypoint is never stale.
+    pull_policy: build
     ports:
       - "127.0.0.1:${DSS_PORT:-8080}:8080"
     environment:
       # Where the SimpleSign Sandbox is, to trust its root at start (Docker Desktop reaches the host this way).
       SANDBOX_URL: ${SANDBOX_URL:-http://host.docker.internal:5300}
+      # The ports the Sandbox's certificates name on localhost (HTTP, HTTPS, LDAP), forwarded from
+      # the container's localhost to SANDBOX_FORWARD_HOST, so a default Sandbox works as is. "" turns it off.
+      SANDBOX_FORWARD_PORTS: ${SANDBOX_FORWARD_PORTS-5300 5301 5302}
+      SANDBOX_FORWARD_HOST: ${SANDBOX_FORWARD_HOST:-host.docker.internal}
+      # "false" (default): DSS fetches revocation data for every request, like SimpleSign. "true": the DSS
+      # demo's cache (CRLs up to 3 h), which answers from old data when the Sandbox's servers are down.
+      DSS_REVOCATION_CACHE: ${DSS_REVOCATION_CACHE:-false}
       # Optional: a TestBench, whose connected Sandbox's root is used when SANDBOX_URL does not answer.
       TESTBENCH_URL: ${TESTBENCH_URL:-}
       # The EU trusted lists, to validate real EU signatures: "false" (none), "true" (download at

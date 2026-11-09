@@ -973,10 +973,6 @@ public sealed class XadesSignerBuilder
         BaselineSigning.CreateTimestampClient(
             timestampOptions, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger);
 
-    private ITimestampClient CreateTimestampClient(string endpoint, IHttpClientProvider? scopedProvider) =>
-        BaselineSigning.CreateTimestampClient(
-            endpoint, scopedProvider, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger);
-
     private async Task<(byte[] SignedXml, XadesLtvEmbeddingResult? Ltv)> ApplyExtendedFormAsync(
         byte[] signedXml,
         string signatureId,
@@ -1104,14 +1100,13 @@ public sealed class XadesSignerBuilder
         CancellationToken cancellationToken)
     {
         var profile = _options.Profile;
-        var archiveOptions = profile.ArchiveTimestamp;
-        var timestampOptions = profile.Timestamp!;
-        var endpoint = archiveOptions?.Endpoint ?? timestampOptions.Endpoint;
-        var scopedProvider = archiveOptions?.HttpClientProvider ?? timestampOptions.HttpClientProvider;
+        // The archive TSA with its own credentials, or the signature TSA's (endpoint, provider and credentials).
+        var archiveTimestamp = profile.ArchiveTimestamp?.Resolve(profile.Timestamp!) ?? profile.Timestamp!;
+        var endpoint = archiveTimestamp.Endpoint;
 
         byte[] withPlaceholder = XadesSignatureBuilder.EmbedArchiveTimeStamp(signedXml, [], signatureId);
         byte[] input = XadesSignatureBuilder.CreateArchiveTimeStampInput(withPlaceholder, DetachedData(), signatureId);
-        var tsaClient = CreateTimestampClient(endpoint.ToString(), scopedProvider);
+        var tsaClient = CreateTimestampClient(archiveTimestamp);
         string operationId = _options.OperationId ?? "-";
         _options.Dependencies.Logger.ArchiveTimestampRequested(operationId, endpoint.ToString());
         byte[] archiveToken = await tsaClient.GetTimestampAsync(input, hashAlgorithm, cancellationToken).ConfigureAwait(false);

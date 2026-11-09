@@ -56,4 +56,21 @@ public sealed class DocumentStoreTests(TestBenchFixture fixture)
 
         facts.Error.ShouldNotBeNull();
     }
+
+    [Fact]
+    public void Add_PastTheLimit_KeepsAnUploadThatIsStillRead()
+    {
+        var store = new DocumentStore();
+        string policy = store.Add("policy.json", "{}"u8.ToArray()).Id;
+        string first = store.Add("output-0.pdf", [0]).Id;
+
+        for (int i = 1; i < 400; i++)
+        {
+            store.Add($"output-{i}.pdf", [1]);
+            store.Get(policy);
+        }
+
+        store.TryGet(policy, out _).ShouldBeTrue();
+        store.TryGet(first, out _).ShouldBeFalse();
+    }
 }

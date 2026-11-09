@@ -491,6 +491,7 @@ internal static class ValidationPolicyEvaluator
         {
             const SignatureIndication I = SignatureIndication.Indeterminate;
             const SignatureSubIndication S = SignatureSubIndication.TryLater;
+            const SignatureSubIndication NoData = SignatureSubIndication.CertificateChainGeneralFailure;
             var tokens = _revocationTokens.Where(t => t.Token.Certificate.RawData.AsSpan().SequenceEqual(certificate.RawData)).ToList();
             if (tokens.Count == 0)
             {
@@ -499,13 +500,13 @@ internal static class ValidationPolicyEvaluator
                     path.EndsWith("/SigningCertificate", StringComparison.Ordinal) && facts.IsNotRevoked is not null
                         ? facts.RevocationSource is not (RevocationSource.None or RevocationSource.Indeterminate)
                         : null,
-                    "Acceptable revocation data was found.", "No acceptable revocation data was found.", I, S);
+                    "Acceptable revocation data was found.", "No acceptable revocation data was found.", I, NoData);
                 return;
             }
 
             string name = Name(certificate);
             Check(path + "/AcceptableRevocationDataFound", tokens.Any(t => t.Accepted),
-                $"Acceptable revocation data was found for '{name}'.", $"No acceptable revocation data was found for '{name}'.", I, S);
+                $"Acceptable revocation data was found for '{name}'.", $"No acceptable revocation data was found for '{name}'.", I, NoData);
             var crls = tokens.Where(t => t.Token.Kind == RevocationTokenKind.Crl).ToList();
             var ocsps = tokens.Where(t => t.Token.Kind == RevocationTokenKind.Ocsp).ToList();
             Fact(path + "/CRLNextUpdatePresent", crls.Count == 0 ? null : crls.All(t => t.Token.NextUpdate is not null),
@@ -520,7 +521,7 @@ internal static class ValidationPolicyEvaluator
                 Check(path + "/RevocationIssuerNotExpired", accepted.Any(t => t.Issuer is { } issuer
                         && issuer.NotBefore.ToUniversalTime() <= ReferenceTime && issuer.NotAfter.ToUniversalTime() >= ReferenceTime),
                     $"The issuer of the revocation data of '{name}' is within its validity.",
-                    $"The issuer of the revocation data of '{name}' is not valid at {ReferenceTime:yyyy-MM-dd HH:mm} UTC.", I, S);
+                    $"The issuer of the revocation data of '{name}' is not valid at {ReferenceTime:yyyy-MM-dd HH:mm} UTC.", I, NoData);
             }
 
             Check(path + "/NotOnHold", !tokens.Any(t => t.Token.Reason == 6), $"'{name}' is not on hold.", $"'{name}' is on hold (certificateHold).",
@@ -823,28 +824,29 @@ internal static class ValidationPolicyEvaluator
 
         private void EvaluateRevocation(string path)
         {
+            // No (acceptable) revocation data: the chain cannot be validated (EN 319 102-1 §5.2.6). TRY_LATER is for stale data.
+            const SignatureSubIndication NoData = SignatureSubIndication.CertificateChainGeneralFailure;
             switch (facts.IsNotRevoked)
             {
                 case null:
                     return;
                 case true:
                     Check(path + "/RevocationDataAvailable", true, $"Revocation data was found ({facts.RevocationSource}).", "",
-                        SignatureIndication.Indeterminate, SignatureSubIndication.TryLater);
+                        SignatureIndication.Indeterminate, NoData);
                     Check(path + "/NotRevoked", true, $"The signing certificate is not revoked ({facts.RevocationSource}).", "",
-                        SignatureIndication.Invalid, SignatureSubIndication.Revoked);
+                        SignatureIndication.Indeterminate, SignatureSubIndication.RevokedNoPoe);
                     break;
                 default:
                     if (facts.RevocationSource is RevocationSource.None or RevocationSource.Indeterminate)
                     {
                         Check(path + "/RevocationDataAvailable", false, "", "The revocation status could not be established.",
-                            SignatureIndication.Indeterminate, SignatureSubIndication.TryLater);
+                            SignatureIndication.Indeterminate, NoData);
                         return;
                     }
 
                     Check(path + "/RevocationDataAvailable", true, $"Revocation data was found ({facts.RevocationSource}).", "",
-                        SignatureIndication.Indeterminate, SignatureSubIndication.TryLater);
-                    Check(path + "/NotRevoked", false, "", $"The signing certificate is revoked ({facts.RevocationSource}).",
-                        SignatureIndication.Invalid, SignatureSubIndication.Revoked);
+                        SignatureIndication.Indeterminate, NoData);
+                    EvaluateSignerNotRevoked(path);
                     break;
             }
 
@@ -855,6 +857,62 @@ internal static class ValidationPolicyEvaluator
                     $"The revocation data was issued {issued:yyyy-MM-dd HH:mm} UTC, within {maxAge}.",
                     $"The revocation data was issued {issued:yyyy-MM-dd HH:mm} UTC, more than {maxAge} before {ReferenceTime:yyyy-MM-dd HH:mm} UTC.",
                     SignatureIndication.Indeterminate, SignatureSubIndication.TryLater);
+            }
+        }
+
+        /// <summary>
+        /// The chain was found revoked: says whether the signing certificate itself is. A revoked certificate is
+        /// INDETERMINATE/REVOKED_NO_POE (EN 319 102-1 §5.2.6) unless a proof of existence predates the revocation
+        /// (§5.6.2.4); a revoked CA is CACertificate/NotRevoked's (REVOKED_CA_NO_POE).
+        /// </summary>
+        private void EvaluateSignerNotRevoked(string path)
+        {
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.RevokedNoPoe;
+            var signer = facts.SignerCertificate!;
+            if (RevokedAt(signer) is { } revoked)
+            {
+                Check(path + "/NotRevoked", _proofOfExistence is { } poe && poe < revoked,
+                    $"The signing certificate was revoked at {revoked:yyyy-MM-dd HH:mm} UTC, after the signature was proven to exist.",
+                    $"The signing certificate is revoked since {revoked:yyyy-MM-dd HH:mm} UTC, and nothing proves the signature existed before ({facts.RevocationSource}).", I, S);
+            }
+            else if (facts.Chain is { Count: > 1 } chain && chain.Skip(1).Any(ca => RevokedAt(ca) is not null))
+            {
+                Check(path + "/NotRevoked", true, "The signing certificate is not revoked; a CA of its chain is (CACertificate/NotRevoked).", "", I, S);
+            }
+            else
+            {
+                Check(path + "/NotRevoked", false, "", $"The signing certificate is revoked ({facts.RevocationSource}).", I, S);
+            }
+        }
+
+        /// <summary>When accepted revocation data says <paramref name="certificate"/> was revoked; null when none does.</summary>
+        private DateTimeOffset? RevokedAt(X509Certificate2 certificate) =>
+            _revocationTokens
+                .Where(t => t.Accepted && t.Token.Status == RevocationTokenStatus.Revoked
+                    && t.Token.Certificate.RawData.AsSpan().SequenceEqual(certificate.RawData))
+                .Select(t => t.Token.RevocationTime ?? DateTimeOffset.MinValue)
+                .Cast<DateTimeOffset?>()
+                .FirstOrDefault();
+
+        /// <summary>
+        /// CACertificate/NotRevoked, from the revocation data about the CA: revoked with no proof of existence before
+        /// the revocation is REVOKED_CA_NO_POE. Without data about the CA it is left unevaluated.
+        /// </summary>
+        private void EvaluateCaNotRevoked(string path, X509Certificate2 ca)
+        {
+            string name = Name(ca);
+            if (RevokedAt(ca) is { } revoked)
+            {
+                Check(path + "/NotRevoked", _proofOfExistence is { } poe && poe < revoked,
+                    $"'{name}' was revoked at {revoked:yyyy-MM-dd HH:mm} UTC, after the signature was proven to exist.",
+                    $"'{name}' is revoked since {revoked:yyyy-MM-dd HH:mm} UTC, and nothing proves the signature existed before.",
+                    SignatureIndication.Indeterminate, SignatureSubIndication.RevokedCaNoPoe);
+            }
+            else if (_revocationTokens.Any(t => t.Accepted && t.Token.Status == RevocationTokenStatus.Good
+                && t.Token.Certificate.RawData.AsSpan().SequenceEqual(ca.RawData)))
+            {
+                Check(path + "/NotRevoked", true, $"'{name}' is not revoked.", "", SignatureIndication.Indeterminate, SignatureSubIndication.RevokedCaNoPoe);
             }
         }
 
@@ -897,6 +955,7 @@ internal static class ValidationPolicyEvaluator
                 if (i + 1 < chain.Count)
                 {
                     EvaluateRevocationQuality(path, ca);
+                    EvaluateCaNotRevoked(path, ca);
                 }
                 EvaluateCertificateCrypto(path, i);
             }

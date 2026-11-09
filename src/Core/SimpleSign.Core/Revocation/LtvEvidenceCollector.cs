@@ -223,7 +223,9 @@ internal static class LtvEvidenceCollector
                 }
 
                 X509Certificate2? issuer = allCerts.FindIssuerOf(cert);
-                if (cert.IsSelfSigned())
+                // A trust anchor, and a delegated OCSP responder with id-pkix-ocsp-nocheck (RFC 6960 §4.2.2.2.1),
+                // need no revocation data.
+                if (cert.IsSelfSigned() || Validation.EmbeddedRevocationEvidence.IsNoCheckResponder(cert))
                 {
                     evidence.Add(new LtvEvidenceItem(thumbprint, true)
                     {

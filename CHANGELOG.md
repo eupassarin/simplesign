@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — validation against DSS 6.3 (every Sandbox scenario cross-validated)
+
+- **PAdES no longer accepts a signature under a revoked CA.** The validator checked online revocation for the
+  signing certificate only, and the failed chain status was waived because the chain reaches its anchor. It now checks
+  the CA certificates of the chain too (`ChainRevocationChecker`, as CAdES and XAdES do), with the data it used going to
+  the policy.
+- PAdES validation reads CRLs published only over LDAP when the outbound policy allows LDAP (`AllowLdap`), like CAdES and
+  XAdES: the signing certificate's own check falls back to the chain checker when it cannot decide.
+- **Revocation sub-indications follow EN 319 102-1 §5.2.6:** a revoked signing certificate gives INDETERMINATE /
+  `RevokedNoPoe` (no longer TOTAL_FAILED / `Revoked`) and PASSES when a proof of existence predates the revocation; a
+  revoked CA gives INDETERMINATE / `RevokedCaNoPoe` (`CACertificate/NotRevoked` is now evaluated). No revocation data, or
+  none acceptable, gives `CertificateChainGeneralFailure`; `TryLater` is kept for data that is not fresh and for
+  certificates on hold. New `SignatureSubIndication` values: `CertificateChainGeneralFailure`, `RevokedCaNoPoe`.
+- XAdES: a changed `ds:SignatureValue` gives `SigCryptoFailure` (was `HashFailure`); a changed reference still gives
+  `HashFailure`.
+- CAdES and XAdES B-LT can be made when the OCSP responses come from a delegated responder: its certificate
+  (id-pkix-ocsp-nocheck) needs no revocation data of its own (RFC 6960 §4.2.2.2.1).
+- CAdES and XAdES B-LTA send the TSA's credentials (Basic/bearer, client certificate) with the archive timestamp request
+  too, as PAdES does (`ArchiveTimestampOptions.Resolve`).
+- TestBench: past its limit, the in-memory store forgets the least recently used files, not the oldest, so an uploaded
+  policy or PFX that runs keep reading is not lost after about a hundred runs.
+- `tools/dss`: DSS reaches a default Sandbox (`localhost` ports forwarded inside the container), trusts its root for TLS
+  (CRLs over HTTPS), keeps no revocation cache (`DSS_REVOCATION_CACHE`), waits for the Sandbox at start, and the image is
+  rebuilt on every `up`. New test `DssScenarioCrossValidationTests` requires the same indication and sub-indication from
+  SimpleSign and DSS for every Sandbox scenario (222 of 226 agree; the other cases are documented in the test).
+
 ### Changed — configurable signing and validation policies (ADR 0023, ADR 0024)
 
 - **Migration of validation policy files:** rename the root `ConstraintsParameters` to `ValidationConstraints` and

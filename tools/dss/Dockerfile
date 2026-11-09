@@ -27,6 +27,7 @@ FROM eclipse-temurin:21-jre
 RUN apt-get update && apt-get install -y --no-install-recommends curl xmlstarlet && rm -rf /var/lib/apt/lists/*
 COPY --from=bundle /opt/tomcat /opt/tomcat
 COPY entrypoint.sh /entrypoint.sh
+COPY forward.pl /forward.pl
 RUN chmod +x /opt/tomcat/bin/*.sh /entrypoint.sh
 EXPOSE 8080
 ENTRYPOINT ["/entrypoint.sh"]

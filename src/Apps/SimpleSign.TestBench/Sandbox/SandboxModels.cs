@@ -87,6 +87,17 @@ public enum OcspFault
     Unknown,
 }
 
+/// <summary>Who signs the OCSP responses of the Sandbox's intermediate CA.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<OcspSigner>))]
+public enum OcspSigner
+{
+    /// <summary>The CA itself.</summary>
+    Issuer,
+
+    /// <summary>A delegated responder certificate (OCSPSigning, id-pkix-ocsp-nocheck) issued by the CA.</summary>
+    Delegated,
+}
+
 /// <summary>The failures of a Sandbox (its /api/faults).</summary>
 public sealed record SandboxFaults(
     TsaFault Tsa = TsaFault.None,
@@ -94,7 +105,8 @@ public sealed record SandboxFaults(
     CrlFault Crl = CrlFault.None,
     int CrlDelayMs = 3000,
     OcspFault Ocsp = OcspFault.None,
-    int OcspDelayMs = 3000)
+    int OcspDelayMs = 3000,
+    OcspSigner OcspSigner = OcspSigner.Issuer)
 {
     /// <summary>Whether any failure is on.</summary>
     public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None;

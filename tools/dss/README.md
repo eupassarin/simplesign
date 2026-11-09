@@ -9,9 +9,17 @@ This folder runs the DSS demo web application in Docker and exposes its REST val
 
 ## Start
 
+Start the Sandbox first (any port), then DSS:
+
 ```bash
-docker compose -f tools/dss/docker-compose.yml up --build
+dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral --no-browser
+docker compose -f tools/dss/docker-compose.yml up -d
 ```
+
+Nothing else is needed: DSS trusts the Sandbox's root, reaches its CRLs, OCSP responders and LDAP
+server, and fetches revocation data on every request, like SimpleSign. Compose rebuilds the image
+on every `up` (`pull_policy: build`; seconds, from the build cache), so a changed entrypoint is
+never left out.
 
 The first build downloads the DSS bundle published by the European Commission (353 MB). That
 server is slow (about 0.5 MB/s), so allow **around 15 minutes**. The download is kept in the
@@ -40,7 +48,9 @@ chain to the root of its environment, served at `/root.pem`. The root is kept wi
 environment, so DSS keeps trusting it until the environment is deleted.
 
 - **Docker Desktop (macOS, Windows):** start the Sandbox first. The container fetches the root
-  from `http://host.docker.internal:5300/root.pem` when it starts (`SANDBOX_URL`).
+  from `http://host.docker.internal:5300/root.pem` when it starts (`SANDBOX_URL`; it waits up to
+  `SANDBOX_WAIT_SECONDS`, 20 by default). The root is also added to the JVM's TLS trust store, so
+  DSS can download the CRLs the Sandbox publishes over HTTPS.
 - **Linux, or when the Sandbox was not running:** save the root to this folder and restart the
   container:
 
@@ -48,19 +58,29 @@ environment, so DSS keeps trusting it until the environment is deleted.
   curl http://127.0.0.1:5300/root.pem > tools/dss/trust/sandbox-root.pem
   ```
 
-### Letting DSS reach the Sandbox's CRLs, OCSP and TSA
+### Letting DSS reach the Sandbox's CRLs, OCSP and LDAP
 
-The Sandbox writes its own address into the certificates (CRL distribution points, AIA, OCSP).
-With the default `http://localhost:5300`, DSS, inside the container, cannot reach them, so a
-B-B or B-T signature (no revocation data embedded) is INDETERMINATE there. For DSS to fetch them,
-create a Sandbox environment whose certificates name an address both sides reach:
+The Sandbox writes its own address into the certificates: `http://localhost:5300` (CRLs, OCSP,
+AIA), `https://localhost:5301` and `ldap://localhost:5302`. Inside the container `localhost` is
+the container itself, so the entrypoint forwards those ports from the container's localhost to
+the host (`forward.pl`, one per port in `SANDBOX_FORWARD_PORTS`, to `SANDBOX_FORWARD_HOST`).
+The certificates keep naming `localhost`, which is what SimpleSign accepts: its outbound policy
+only lets a request to a private address through when it is loopback.
+
+A Sandbox on another port needs the same ports here:
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --name dss --public-base-url http://host.docker.internal:5300
+dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral --no-browser --port 5310
+SANDBOX_URL=http://host.docker.internal:5310 SANDBOX_FORWARD_PORTS="5310 5311 5312" \
+  docker compose -f tools/dss/docker-compose.yml up -d
 ```
 
-The TestBench on the host must then resolve `host.docker.internal` (Docker Desktop adds it on
-Windows; on macOS and Linux add `127.0.0.1 host.docker.internal` to `/etc/hosts`).
+### Revocation data: no cache
+
+The DSS demo keeps the CRLs and OCSP responses it downloads (up to 3 hours) and answers from them
+when the server is down. SimpleSign fetches every time, so under a Sandbox failure (CRL server
+down, expired CRL) the two would see different data. `DSS_REVOCATION_CACHE=false` (the default
+here) turns the cache off; `true` restores the demo's.
 
 Any other certificate (PEM or DER, as `.pem`, `.cer`, `.crt` or `.der`) placed in
 `tools/dss/trust/` is trusted too. The container log lists what it trusts (`[dss] trusting …`).
@@ -155,9 +175,7 @@ list (a TSL XML) on its own. To trust the services of such a list, put their cer
 
 | Signature | DSS says | Why |
 |---|---|---|
-| B-B, B-T with Sandbox certificates (default environment) | INDETERMINATE / CERTIFICATE_CHAIN_GENERAL_FAILURE ("No revocation data found") | The certificates name `localhost`, which DSS cannot reach from the container. |
-| B-B, B-T with Sandbox certificates (`--public-base-url http://host.docker.internal:5300`) | the same verdict as SimpleSign | DSS fetches the CRLs and OCSP responses itself. |
-| B-LT, B-LTA with Sandbox certificates | the same verdict as SimpleSign | The certificates and revocation data are embedded in the signature. |
+| Any Sandbox scenario, any level | the same indication and sub-indication as SimpleSign | DSS fetches the CRLs and OCSP responses itself (forwarded ports, no cache). `DssScenarioCrossValidationTests` checks it, scenario by scenario. |
 | Any level, Sandbox root not trusted | INDETERMINATE / NO_CERTIFICATE_CHAIN_FOUND | See "Trusting the Sandbox certificates". |
 | Real ICP-Brasil or Gov.br certificates | validated against their roots | See "ICP-Brasil and Gov.br roots". |
 | Real Peruvian certificates | validated against the CAs of the Peruvian trusted list | See "Peru trusted list". |
@@ -169,6 +187,10 @@ list (a TSL XML) on its own. To trust the services of such a list, put their cer
 |---|---|---|
 | `DSS_PORT` | `8080` | The host port. |
 | `SANDBOX_URL` | `http://host.docker.internal:5300` | The SimpleSign Sandbox whose root is trusted (`/root.pem`). |
+| `SANDBOX_WAIT_SECONDS` | `20` | How long to wait for the Sandbox's root at start. |
+| `SANDBOX_FORWARD_PORTS` | `5300 5301 5302` | The Sandbox ports forwarded from the container's localhost (HTTP, HTTPS, LDAP); empty turns it off. |
+| `SANDBOX_FORWARD_HOST` | `host.docker.internal` | Where they are forwarded to. |
+| `DSS_REVOCATION_CACHE` | `false` | `true` keeps the DSS demo's revocation cache (CRLs up to 3 h). |
 | `TESTBENCH_URL` | (none) | A TestBench whose connected Sandbox's root is used when `SANDBOX_URL` does not answer. |
 | `DSS_LOAD_EU_TRUSTED_LISTS` | `false` | `true` downloads the EU trusted lists; `cached` only uses the copy kept from an earlier run. See "EU trusted lists". |
 | `DSS_TRUST_ICP_BRASIL` | `true` | `true` trusts the ICP-Brasil roots (all but v4, v7 and v13; see above). |
@@ -186,8 +208,13 @@ or in the `SIMPLESIGN_DSS_URL` environment variable.
 With the container up, the test suite also uses it:
 
 ```bash
-dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --filter "FullyQualifiedName~DssCrossValidationTests"
+dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --filter "FullyQualifiedName~DssCrossValidationTests|FullyQualifiedName~DssScenarioCrossValidationTests"
 ```
+
+`DssScenarioCrossValidationTests` signs every Sandbox scenario (each signer, TSA and failure, in
+PAdES, CAdES and XAdES, at each level that can be made) and requires the same indication and
+sub-indication from both validators, under the same policy. The few known differences are listed
+in the test, each with its reason. A Sandbox on another port: set `SIMPLESIGN_SANDBOX_URL` too.
 
 The tests sign with the connected Sandbox's certificates and assert what DSS reads from each file (signatures and timestamps
 intact, references found, structure valid, baseline level). They do not depend on the roots DSS

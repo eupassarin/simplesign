@@ -470,6 +470,32 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         var (notRevoked, revocationSource) = revocation;
 
+        // 5a. The CA certificates of the chain, and the signing certificate when its own check could not decide
+        // (a CRL published only over LDAP, say): the chain revocation checker, as for CAdES and XAdES. The data
+        // it used goes to the policy, which tells a revoked CA from a revoked signer.
+        var chainCrls = new List<byte[]>();
+        var chainOcsps = new List<byte[]>();
+        if (await CheckChainRevocationAsync(
+            cmsData, embeddedCrls, embeddedOcsps, provenTime, revocationSource, chainAnchored || chainTrustWarning, warnings, cancellationToken).ConfigureAwait(false) is { } chainRevocation)
+        {
+            chainCrls.AddRange(chainRevocation.Crls);
+            chainOcsps.AddRange(chainRevocation.Ocsps);
+            bool signerUndecided = revocationSource == RevocationSource.Indeterminate;
+            if (chainRevocation.Status == ChainRevocationStatus.Revoked)
+            {
+                if (notRevoked)
+                {
+                    errors.Add("Certificate revocation check failed.");
+                }
+
+                (notRevoked, revocationSource) = (false, RevocationSource.CertificateChain);
+            }
+            else if (signerUndecided && chainRevocation.Status == ChainRevocationStatus.Good)
+            {
+                (notRevoked, revocationSource) = (true, RevocationSource.CertificateChain);
+            }
+        }
+
         var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
         {
             IsIntegrityValid = integrityValid,
@@ -502,8 +528,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
                 DocumentTimeStamp = pdfFacts?.HasLaterDocumentTimestamp == true,
                 TLevelTimeStampValid = provenTime is not null,
             },
-            EmbeddedCrls = embeddedCrls,
-            EmbeddedOcsps = [.. embeddedOcsps, .. fetchedOcsps],
+            EmbeddedCrls = [.. embeddedCrls, .. chainCrls],
+            EmbeddedOcsps = [.. embeddedOcsps, .. fetchedOcsps, .. chainOcsps],
             Timestamps = cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps
                 ? [new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, timestamp.IsIntegrityValid, timestamp.IsTsaTrusted)]
                 : null,
@@ -802,6 +828,59 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             warnings.Add($"Revocation check could not be completed: {ex.Message}");
             // No revocation was established, but unknown status cannot establish overall validity.
             return (true, RevocationSource.Indeterminate);
+        }
+    }
+
+    /// <summary>
+    /// Checks the revocation of the CA certificates of the signer's chain (the whole chain when the signing
+    /// certificate's own check was indeterminate). Null when revocation is not checked, the chain does not end
+    /// at a root, or there is nothing to check. Only a revoked certificate is reported as a warning: a CA with no
+    /// revocation data does not change the result.
+    /// </summary>
+    private async Task<ChainRevocationResult?> CheckChainRevocationAsync(
+        CmsSignedData cmsData,
+        IReadOnlyList<byte[]> embeddedCrls,
+        IReadOnlyList<byte[]> embeddedOcsps,
+        DateTimeOffset? provenTime,
+        RevocationSource signerSource,
+        bool chainTrusted,
+        List<string> warnings,
+        CancellationToken cancellationToken)
+    {
+        if (!_options.ChecksRevocationFor(chainTrusted) || cmsData.SignerCertificate is not { } signer)
+        {
+            return null;
+        }
+
+        var ordered = SimpleSign.Core.Signing.SignerAcceptance.OrderChain(signer, [.. cmsData.Certificates, .. TrustAnchorCertificates()]);
+        if (!ordered[^1].IsSelfSigned())
+        {
+            return null;
+        }
+
+        IReadOnlyList<X509Certificate2> subject = signerSource == RevocationSource.Indeterminate ? ordered : [.. ordered.Skip(1)];
+        if (subject.Count < 2)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(_options.NetworkTimeout);
+            var result = await TsaRevocationChecker.CheckAsync(
+                subject, provenTime ?? DateTimeOffset.UtcNow, embeddedCrls, embeddedOcsps, allowOnline: true, timeoutCts.Token).ConfigureAwait(false);
+            if (result.Status == ChainRevocationStatus.Revoked)
+            {
+                warnings.AddRange(result.Messages.Select(m => "Revocation: " + m));
+            }
+
+            return result;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            warnings.Add("Revocation: the revocation of the chain could not be checked in time.");
+            return null;
         }
     }
 
