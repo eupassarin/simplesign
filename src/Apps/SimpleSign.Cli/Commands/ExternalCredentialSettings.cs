@@ -5,7 +5,7 @@ namespace SimpleSign.Cli.Commands;
 
 /// <summary>
 /// Options for signing without a local private key: a PKCS#11 token, an ICP-Brasil cloud
-/// certificate (PSC) or a CSC v2 remote signing service. Shared by <c>sign</c> and <c>cades sign</c>.
+/// certificate (PSC) or a CSC v2 remote signing service. Shared by <c>sign</c>, <c>sign-dir</c>, <c>cades sign</c> and <c>xades sign</c>.
 /// Secret values accept <c>env:NAME</c> to read them from an environment variable.
 /// </summary>
 internal abstract class ExternalCredentialSettings : TimestampedSigningSettings

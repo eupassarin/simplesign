@@ -389,10 +389,18 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Kind of --institution-id, e.g. CNPJ")]
         public string? InstitutionIdType { get; init; }
 
+        /// <summary>Correlation id for the logs.</summary>
+        [CommandOption("--operation-id <ID>")]
+        [Description("Correlation id written in the logs of this signature")]
+        public string? OperationId { get; init; }
+
         /// <summary>Legal basis of the signature (metadata).</summary>
         [CommandOption("--legal-basis <TEXT>")]
         [Description("Legal basis of the signature, for the signature metadata")]
         public string? LegalBasis { get; init; }
+
+        /// <summary>The level options, as <see cref="PadesProfileOptions"/> takes them.</summary>
+        internal PadesProfileOptions.Level LevelOptions => new(TsaUrl, Ltv, Archival, ArchiveTsaUrl, ReturnLowerLevel, RevocationPreference);
 
         /// <summary>Whether a structured-metadata option was given without --brasil.</summary>
         internal bool HasMetadata => !Brasil && (SignerId ?? SignerIdType ?? IpAddress ?? InstitutionId ?? InstitutionIdType
@@ -781,31 +789,8 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         _ => null
     };
 
-    private static AdesBaselineProfile BuildBaselineProfile(Settings settings)
-    {
-        if (string.IsNullOrWhiteSpace(settings.TsaUrl))
-        {
-            return AdesBaselineProfile.Basic();
-        }
-
-        var timestampOptions = settings.Timestamp(settings.TsaUrl);
-        var failure = settings.ReturnLowerLevel ? SigningLevelFailureBehavior.ReturnLowerLevel : SigningLevelFailureBehavior.Throw;
-        bool ltv = settings.Ltv || settings.Archival;
-
-        if (!ltv)
-        {
-            return AdesBaselineProfile.Timestamped(timestampOptions, failure);
-        }
-
-        var validationOptions = AdesOptionSupport.LongTermOptions(settings.RevocationPreference);
-        if (settings.Archival)
-        {
-            var archiveTimestamp = settings.ArchiveTsaUrl is null ? null : settings.ArchiveTimestamp(settings.ArchiveTsaUrl);
-            return AdesBaselineProfile.Archive(timestampOptions, validationOptions, archiveTimestamp, failure);
-        }
-
-        return AdesBaselineProfile.LongTerm(timestampOptions, validationOptions, failure);
-    }
+    private static AdesBaselineProfile BuildBaselineProfile(Settings settings) =>
+        PadesProfileOptions.Build(settings.LevelOptions, settings);
 
     private async Task<int> ExecuteCertSigningAsync(
         Settings settings, string outputPath, ILoggerFactory? loggerFactory, CancellationToken cancellation)
@@ -1024,6 +1009,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                     builder = builder.WithHealthDocument(
                         healthDocument,
                         [.. (settings.Registrations ?? []).Select(r => IcpBrasilCliOptions.ParseRegistration(r)!)]);
+                }
+
+                if (settings.OperationId is not null)
+                {
+                    builder = builder.WithOperationId(settings.OperationId);
                 }
 
                 builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));

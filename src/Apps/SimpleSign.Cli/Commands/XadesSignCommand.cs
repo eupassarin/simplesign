@@ -23,7 +23,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
     }
 
     /// <summary>XAdES sign command settings.</summary>
-    internal sealed class Settings : TimestampedSigningSettings
+    internal sealed class Settings : ExternalCredentialSettings
     {
         /// <summary>Checks run before signing.</summary>
         [CommandOption("--signing-policy <PATH>")]
@@ -185,6 +185,36 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         [Description("Id of the ds:Signature to countersign (with --countersign; optional when there is a single signature)")]
         public string? CounterSignatureId { get; init; }
 
+        /// <summary>Correlation id for the logs.</summary>
+        [CommandOption("--operation-id <ID>")]
+        [Description("Correlation id written in the logs of this signature")]
+        public string? OperationId { get; init; }
+
+        /// <summary>The claimed signing time (ISO 8601) instead of now.</summary>
+        [CommandOption("--signing-time <TIME>")]
+        [Description("Claimed signing time, ISO 8601 (e.g. 2026-11-09T10:00:00-03:00), instead of now")]
+        public string? SigningTime { get; init; }
+
+        /// <summary>RSA signature scheme: rsa-pkcs1 (default) or rsassa-pss.</summary>
+        [CommandOption("--signature-algorithm <ALGO>")]
+        [Description("RSA signature scheme: rsa-pkcs1 (default) or rsassa-pss")]
+        public string? SignatureAlgorithm { get; init; }
+
+        /// <summary>Extended form: complete-references, extended-long or archive.</summary>
+        [CommandOption("--extended-form <FORM>")]
+        [Description("XAdES extended form (EN 319 132-1 Annex A): complete-references (-C), extended-long (-X-L) or archive (-A)")]
+        public string? ExtendedForm { get; init; }
+
+        /// <summary>Writes the XAdES 1.3.2 SigningCertificate (V1) instead of SigningCertificateV2.</summary>
+        [CommandOption("--signing-certificate-v1")]
+        [Description("Write the XAdES 1.3.2 SigningCertificate (SHA-1 era) instead of SigningCertificateV2, for older validators")]
+        public bool SigningCertificateV1 { get; init; }
+
+        /// <summary>MIME type of the signed data (DataObjectFormat).</summary>
+        [CommandOption("--data-mime-type <MIME>")]
+        [Description("MIME type of the signed data, written as its DataObjectFormat (e.g. application/xml)")]
+        public string? DataMimeType { get; init; }
+
         public override ValidationResult Validate()
         {
             if (!SigningPolicyOption.IsValid(SigningPolicy))
@@ -253,6 +283,16 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
                 return "--countersign-id is used with --countersign";
             }
 
+            if (AdesOptionSupport.ValidateSigningOptions(SigningTime, SignatureAlgorithm, ExtendedForm) is { } signingError)
+            {
+                return signingError;
+            }
+
+            if (ExternalCredentialSupport.Validate(this, CertPath is not null) is { } externalError)
+            {
+                return externalError;
+            }
+
             if (ExternalObjects?.FirstOrDefault(o => AdesOptionSupport.SplitUriAndPath(o) is null) is { } malformed)
             {
                 return $"Invalid --external-object: {malformed}. Expected URI=PATH[,MIME]";
@@ -273,7 +313,9 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         SignJson.Enabled = settings.Json;
         byte[] xmlData = await CommonSettings.ReadInputBytesAsync(settings.InputPath, cancellationToken);
 
-        using X509Certificate2 cert = await LoadCertificateAsync(settings, cancellationToken);
+        using ExternalCredential? token = await ExternalCredentialSupport.OpenAsync(settings, cancellationToken);
+        using X509Certificate2? ownCert = token is null ? await LoadCertificateAsync(settings, cancellationToken) : null;
+        X509Certificate2 cert = token?.Certificate ?? ownCert!;
 
         var level = ParseLevel(settings.Level) ?? AdesBaselineLevel.Basic;
         var hashAlg = ParseHashAlgorithm(settings.HashAlgorithm) ?? HashAlgorithmName.SHA256;
@@ -281,9 +323,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         var commitment = settings.Commitment is not null ? ParseCommitment(settings.Commitment) : null;
 
         var logger = settings.CreateLogger<XadesSignCommand>();
-        var builder = settings.CounterSign
-            ? XadesSigner.CounterSign(xmlData, settings.CounterSignatureId).WithCertificate(cert).WithHashAlgorithm(hashAlg)
-            : XadesSigner.Document(xmlData).WithCertificate(cert).WithHashAlgorithm(hashAlg).WithForm(form);
+        var start = settings.CounterSign
+            ? XadesSigner.CounterSign(xmlData, settings.CounterSignatureId)
+            : XadesSigner.Document(xmlData).WithForm(form);
+        var builder = (token is null ? start.WithCertificate(cert) : start.WithExternalSigner(token.Certificate, token.Signer, token.Chain))
+            .WithHashAlgorithm(hashAlg);
 
         if (logger is not null)
         {
@@ -318,10 +362,18 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         }
 
         builder = await ApplyExtrasAsync(builder, settings, cancellationToken);
+        builder = ApplySigningOptions(builder, settings);
 
         if (settings.ChainPath is not null)
         {
-            builder = builder.WithCertificate(cert, LoadChainCertificates(settings.ChainPath));
+            builder = token is null
+                ? builder.WithCertificate(cert, LoadChainCertificates(settings.ChainPath))
+                : builder.WithExternalSigner(token.Certificate, token.Signer, [.. token.Chain, .. LoadChainCertificates(settings.ChainPath)]);
+        }
+
+        if (settings.OperationId is not null)
+        {
+            builder = builder.WithOperationId(settings.OperationId);
         }
 
         builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
@@ -402,6 +454,34 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         }
 
         return builder;
+    }
+
+    /// <summary>Signing time, RSA scheme, extended form, SigningCertificate V1 and the data's DataObjectFormat.</summary>
+    private static XadesSignerBuilder ApplySigningOptions(XadesSignerBuilder builder, Settings settings)
+    {
+        if (Rendering.SignCommandOptions.ParseSigningTime(settings.SigningTime) is { } signingTime)
+        {
+            builder = builder.WithSigningTime(signingTime);
+        }
+
+        if (settings.SignatureAlgorithm is not null && Rendering.SignCommandOptions.ParseSignatureAlgorithm(settings.SignatureAlgorithm) is { } oid)
+        {
+            builder = builder.WithSignatureAlgorithm(oid);
+        }
+
+        if (AdesOptionSupport.ParseExtendedForm(settings.ExtendedForm) is { } extendedForm)
+        {
+            builder = builder.WithExtendedValidationData(Enum.Parse<XadesExtendedForm>(extendedForm));
+        }
+
+        if (settings.SigningCertificateV1)
+        {
+            builder = builder.WithSigningCertificateForm(XadesSigningCertificateForm.V1);
+        }
+
+        return settings.DataMimeType is null
+            ? builder
+            : builder.WithDataObjectFormat(new DataObjectFormat { MimeType = settings.DataMimeType });
     }
 
     private async Task<X509Certificate2> LoadCertificateAsync(Settings settings, CancellationToken ct)

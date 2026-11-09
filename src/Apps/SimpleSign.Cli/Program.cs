@@ -55,6 +55,16 @@ internal static partial class Program
 
             config.AddCommand<SignCommand>("sign")
                 .WithDescription("Sign a PDF document");
+            config.AddCommand<SignDirCommand>("sign-dir")
+                .WithDescription("Sign every PDF of a directory (batch)");
+            config.AddBranch("deferred", deferred =>
+            {
+                deferred.SetDescription("Sign a PDF with a key that is elsewhere: prepare, sign outside, complete");
+                deferred.AddCommand<DeferredPrepareCommand>("prepare")
+                    .WithDescription("Prepare a PDF and write the session and the data to sign");
+                deferred.AddCommand<DeferredCompleteCommand>("complete")
+                    .WithDescription("Embed the signature made elsewhere into the prepared PDF");
+            });
             config.AddCommand<ValidateCommand>("validate")
                 .WithDescription("Validate PDF signatures");
             config.AddCommand<ValidateDirCommand>("validate-dir")
