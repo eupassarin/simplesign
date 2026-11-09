@@ -80,6 +80,30 @@ public sealed class ValidationReportsTests : IDisposable
         second.GetProperty("policy").GetProperty("name").GetString().ShouldBe("SimpleSign default");
     }
 
+    [Fact]
+    public void ToSimpleJson_ValidationObjects_ListsTimestampsAndRevocationData()
+    {
+        var time = new DateTimeOffset(2026, 11, 9, 12, 0, 0, TimeSpan.Zero);
+        var entry = Entry("Signature1") with
+        {
+            ValidationObjects =
+            [
+                new ValidationObjectEntry(ValidationObjectType.Timestamp, new byte[] { 1, 2, 3 }, SignatureIndication.Valid, null) { Time = time },
+                new ValidationObjectEntry(ValidationObjectType.Crl, new byte[] { 4, 5 }, SignatureIndication.Indeterminate, SignatureSubIndication.TryLater),
+            ],
+        };
+
+        using var json = JsonDocument.Parse(ValidationReports.ToSimpleJson([entry]));
+
+        var signature = json.RootElement.GetProperty("signatures")[0];
+        var timestamp = signature.GetProperty("timestamps").EnumerateArray().ShouldHaveSingleItem();
+        timestamp.GetProperty("time").GetDateTimeOffset().ShouldBe(time);
+        timestamp.GetProperty("indication").GetString().ShouldBe("PASSED");
+        var crl = signature.GetProperty("revocationData").EnumerateArray().ShouldHaveSingleItem();
+        crl.GetProperty("type").GetString().ShouldBe("CRL");
+        crl.GetProperty("subIndication").GetString().ShouldBe("TRY_LATER");
+    }
+
     public void Dispose() => _pki.Dispose();
 
     private SignatureReportEntry Entry(string id, bool invalid = false) => new()
