@@ -494,6 +494,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             ByteRangeCoversDocument = isLastSignature ? coversWholeFile : null,
             ByteRangeCollides = pdfFacts?.ByteRangeCollides,
             SignatureDictionaryConsistent = dictionaryConsistent,
+            PdfChanges = await RevisionChangesAsync(pdfStream, field, cancellationToken).ConfigureAwait(false),
             CoversWholeDocument = coversWholeFile,
             SignatureFormat = PadesFormat(cmsData, pdfFacts),
             UnsignedAttributes = CmsValidationFacts.UnsignedOf(cmsData) with
@@ -635,6 +636,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             DigestAlgorithmOid = cmsData.TstMessageImprintHashAlgOid ?? cmsData.DigestAlgorithmOid,
             ProofOfExistence = null,
             TrustedLists = TrustedListInfos(),
+            PdfChanges = await RevisionChangesAsync(pdfStream, field, cancellationToken).ConfigureAwait(false),
         }.WithCms(cmsData, _options.TrustedRoots), _options.PolicyFor(null));
         warnings.AddRange(evaluation.Warnings);
 
@@ -874,6 +876,39 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         return true;
+    }
+
+    /// <summary>The PDF objects of each stream, indexed once for all its signatures.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Stream, PdfObjectIndex> s_objectIndexes = new();
+
+    /// <summary>What the revisions after the signature changed; null when the stream cannot be read again.</summary>
+    private static async Task<PdfChangeFacts?> RevisionChangesAsync(Stream pdf, PdfSignatureField field, CancellationToken cancellationToken)
+    {
+        if (!pdf.CanSeek || pdf.Length > int.MaxValue)
+        {
+            return null;
+        }
+
+        long position = pdf.Position;
+        byte[] bytes = new byte[pdf.Length];
+        try
+        {
+            pdf.Seek(0, SeekOrigin.Begin);
+            await pdf.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            pdf.Seek(position, SeekOrigin.Begin);
+        }
+
+        long end = field.ByteRange.Offset2 + field.ByteRange.Length2;
+        if (!s_objectIndexes.TryGetValue(pdf, out var index) || index.Length != bytes.Length)
+        {
+            index = PdfObjectIndex.Build(bytes);
+            s_objectIndexes.AddOrUpdate(pdf, index);
+        }
+
+        return PdfRevisionComparer.Compare(index, bytes, end, field.SigDictObjectNumber);
     }
 
     /// <summary>Two signatures collide when they have the same ranges or their /Contents holes overlap.</summary>

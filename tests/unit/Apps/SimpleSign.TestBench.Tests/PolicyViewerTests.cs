@@ -43,7 +43,8 @@ public sealed class PolicyViewerTests(TestBenchFixture fixture)
         keyUsage.Standard.ShouldNotBeNull();
         nodes["SignatureConstraints/BasicSignatureConstraints/ByteRange"].Evaluation.ShouldBe("evaluated");
         nodes["SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary"].Evaluation.ShouldBe("evaluated");
-        nodes["SignatureConstraints/BasicSignatureConstraints/DocMDP"].Evaluation.ShouldBe("toImplement");
+        nodes["SignatureConstraints/BasicSignatureConstraints/DocMDP"].Evaluation.ShouldBe("evaluated");
+        nodes["SignatureConstraints/StructuralValidation"].Evaluation.ShouldBe("toImplement");
         nodes["Revocation/UnknownStatus"].Evaluation.ShouldBe("evaluated");
         nodes["Timestamp/Coherence"].Evaluation.ShouldBe("evaluated");
         nodes["TrustedLists/TLVersion"].Evaluation.ShouldBe("evaluated");

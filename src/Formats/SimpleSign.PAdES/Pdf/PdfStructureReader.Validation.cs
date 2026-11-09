@@ -35,7 +35,7 @@ public sealed partial class PdfStructureReader
     /// Per ITI VALIDAR developer guide, /Perms is NOT added to the catalog.
     /// Detection is based solely on /TransformMethod /DocMDP in signature objects.
     /// </summary>
-    private static int GetDocMdpPermissionLevel(ReadOnlySpan<byte> data)
+    internal static int GetDocMdpPermissionLevel(ReadOnlySpan<byte> data)
     {
         // Find /TransformMethod /DocMDP in any signature object
         int tmPos = IndexOf(data, TransformMethodDocMdp, 0);

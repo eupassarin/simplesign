@@ -62,7 +62,7 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | `PdfSignatureDictionary` | same | evaluated | A later revision that redefines the signature dictionary must keep its ByteRange and Contents. |
 | `SignatureDuplicated` | same | evaluated | Id uniqueness in XAdES. |
 | `TrustServiceTypeIdentifier`, `TrustServiceStatus` | same | evaluated | `TrustedList` already reads the service type and status. |
-| `DocMDP`, `FieldMDP`, `SigFieldLock`, `FormFillChanges`, `AnnotationChanges`, `UndefinedChanges`, `PdfPageDifference`, `PdfAnnotationOverlap` | same | to implement | Compare PDF revisions (protection against shadow attacks). |
+| `DocMDP`, `FieldMDP`, `SigFieldLock`, `FormFillChanges`, `AnnotationChanges`, `UndefinedChanges`, `PdfPageDifference`, `PdfAnnotationOverlap` | same | evaluated | PAdES: the revision the signature covers is compared with the final one (protection against shadow attacks); validation data (DSS) and document timestamps are not changes. Not reported for CAdES/XAdES. |
 | `ReferenceDataNameMatch`, `ManifestEntryObjectExistence`, `ManifestEntryObjectGroup`, `ManifestEntryObjectIntact`, `ManifestEntryNameMatch` | same | removed | ASiC-E and `ds:Manifest`, not supported. |
 | `PdfVisualDifference` | same | removed | Needs rendering the pages; SimpleSign has no PDF renderer. |
 

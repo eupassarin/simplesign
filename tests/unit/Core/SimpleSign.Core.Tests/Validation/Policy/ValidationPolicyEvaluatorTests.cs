@@ -146,7 +146,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
 
-        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/DocMDP" && c.Status == ConstraintStatus.NotChecked);
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/StructuralValidation" && c.Status == ConstraintStatus.NotChecked);
     }
 
     [Fact]
@@ -258,6 +258,76 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
         // A check that does not apply to the format is neither passed nor "not checked".
         evaluation.Constraints.ShouldNotContain(c => c.Id == Basic + "/ByteRange");
         evaluation.Constraints.ShouldNotContain(c => c.Id == Basic + "/SignerInformationStore");
+    }
+
+    [Fact]
+    public void Evaluate_NoPdfChanges_PdfModificationChecksAreNotReported()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldNotContain(c => c.Id == Basic + "/DocMDP");
+        evaluation.Constraints.ShouldNotContain(c => c.Id == Basic + "/PdfPageDifference");
+    }
+
+    [Fact]
+    public void Evaluate_PdfUnchanged_PdfModificationChecksPass()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { PdfChanges = new() { SignedPageCount = 1, FinalPageCount = 1 } }, ValidationPolicy.Default);
+
+        foreach (string id in new[] { "PdfPageDifference", "PdfAnnotationOverlap", "DocMDP", "FieldMDP", "SigFieldLock", "UndefinedChanges" })
+        {
+            evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/" + id && c.Status == ConstraintStatus.Passed, id);
+        }
+    }
+
+    [Fact]
+    public void Evaluate_PageAdded_InvalidFormatFailure()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { PdfChanges = new() { SignedPageCount = 1, FinalPageCount = 2 } }, ValidationPolicy.Default);
+
+        evaluation.Indication.ShouldBe(SignatureIndication.Invalid);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.FormatFailure);
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/PdfPageDifference" && c.Status == ConstraintStatus.Failed);
+    }
+
+    [Fact]
+    public void Evaluate_AnnotationOnFormFillCertification_DocMdpWarns()
+    {
+        var changes = new PdfChangeFacts { SignedPageCount = 1, FinalPageCount = 1, DocMdpLevel = 2, Annotations = ["Annotation /Text added on page 1."] };
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { PdfChanges = changes }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/DocMDP" && c.Status == ConstraintStatus.Warning
+            && c.Message.Contains("/Text", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Evaluate_FormFillOnFormFillCertification_DocMdpPasses()
+    {
+        var changes = new PdfChangeFacts { SignedPageCount = 1, FinalPageCount = 1, DocMdpLevel = 2, FormFills = ["Field 'name' filled."], ChangedFields = ["name"] };
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { PdfChanges = changes }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/DocMDP" && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
+    public void Evaluate_LockedFieldFilled_FieldMdpAndSigFieldLockWarn()
+    {
+        var changes = new PdfChangeFacts
+        {
+            SignedPageCount = 1,
+            FinalPageCount = 1,
+            FormFills = ["Field 'name' filled."],
+            ChangedFields = ["name", "other"],
+            FieldMdp = new PdfFieldLock("Include", ["name"]),
+            SigFieldLock = new PdfFieldLock("Exclude", ["name", "other"]),
+        };
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { PdfChanges = changes }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/FieldMDP" && c.Status == ConstraintStatus.Warning && c.Message.Contains("name", StringComparison.Ordinal));
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/SigFieldLock" && c.Status == ConstraintStatus.Passed);
     }
 
     [Fact]
@@ -376,7 +446,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
 
-        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/DocMDP" && c.Status == ConstraintStatus.NotChecked
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/StructuralValidation" && c.Status == ConstraintStatus.NotChecked
             && c.Message.Contains("needs work", StringComparison.Ordinal));
     }
 

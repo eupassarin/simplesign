@@ -99,6 +99,9 @@ internal sealed record ValidationFacts
     /// <summary>Whether no later PDF revision redefines the signature dictionary with another ByteRange or Contents; null for other formats.</summary>
     public bool? SignatureDictionaryConsistent { get; init; }
 
+    /// <summary>What the PDF revisions after the signature changed; null for other formats.</summary>
+    public PdfChangeFacts? PdfChanges { get; init; }
+
     /// <summary>Whether no other element of the document has the signature's Id (XAdES); null for other formats.</summary>
     public bool? SignatureIdUnique { get; init; }
 
@@ -555,6 +558,7 @@ internal static class ValidationPolicyEvaluator
                 SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
             Fact(basic + "/PdfSignatureDictionary", facts.SignatureDictionaryConsistent, "The signature dictionary is the same in every later revision.",
                 "A later revision redefines the signature dictionary with another ByteRange or Contents.", SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
+            EvaluatePdfChanges(basic);
             Fact(basic + "/SignatureDuplicated", facts.SignatureIdUnique, "The signature's Id is unique.",
                 "Another element of the document has the signature's Id.", SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
 
@@ -702,6 +706,53 @@ internal static class ValidationPolicyEvaluator
         }
 
         /// <summary>The chain-wide RFC 5280 checks: path lengths, name constraints and the policy tree.</summary>
+        /// <summary>The changes of the later PDF revisions (EN 319 102-1 format checking; ISO 32000 DocMDP and field locks).</summary>
+        private void EvaluatePdfChanges(string basic)
+        {
+            string[] ids = ["PdfPageDifference", "PdfAnnotationOverlap", "DocMDP", "FieldMDP", "SigFieldLock", "FormFillChanges", "AnnotationChanges", "UndefinedChanges"];
+            if (facts.PdfChanges is not { } changes)
+            {
+                foreach (string id in ids)
+                {
+                    NotApplicable(basic + "/" + id);
+                }
+
+                return;
+            }
+
+            const SignatureIndication Invalid = SignatureIndication.Invalid;
+            const SignatureSubIndication Format = SignatureSubIndication.FormatFailure;
+            Check(basic + "/PdfPageDifference", changes.SignedPageCount == changes.FinalPageCount,
+                "No page was added or removed after the signature.",
+                $"The signed revision has {changes.SignedPageCount} pages, the final one {changes.FinalPageCount}.", Invalid, Format);
+            Check(basic + "/PdfAnnotationOverlap", !changes.AnnotationsOverlap, "No annotation added after the signature overlaps another one.",
+                "An annotation added after the signature overlaps another one.", Invalid, Format);
+
+            var docMdp = changes.DocMdpViolations;
+            Check(basic + "/DocMDP", docMdp.Count == 0,
+                changes.DocMdpLevel == 0 ? "The document is not certified (DocMDP)." : $"The later changes are allowed by the certification (DocMDP P={changes.DocMdpLevel}).",
+                $"The certification (DocMDP P={changes.DocMdpLevel}) does not allow: {Summary(docMdp)}", Invalid, Format);
+            CheckLock(basic + "/FieldMDP", changes.FieldMdp, changes.ChangedFields, "FieldMDP transform");
+            CheckLock(basic + "/SigFieldLock", changes.SigFieldLock, changes.ChangedFields, "signature field lock");
+            Check(basic + "/FormFillChanges", changes.FormFills.Count == 0, "No form field was filled after the signature.",
+                $"Form fields changed after the signature: {Summary(changes.FormFills)}", Invalid, Format);
+            Check(basic + "/AnnotationChanges", changes.Annotations.Count == 0, "No annotation changed after the signature.",
+                $"Annotations changed after the signature: {Summary(changes.Annotations)}", Invalid, Format);
+            Check(basic + "/UndefinedChanges", changes.Undefined.Count == 0, "No other change was made after the signature.",
+                $"Other changes after the signature: {Summary(changes.Undefined)}", Invalid, Format);
+
+            void CheckLock(string id, PdfFieldLock? fieldLock, IReadOnlyList<string> changed, string what)
+            {
+                var locked = fieldLock?.Violations(changed) ?? [];
+                Check(id, locked.Count == 0,
+                    fieldLock is null ? $"The signature has no {what}." : $"No field locked by the {what} changed.",
+                    $"Fields locked by the {what} changed: {string.Join(", ", locked)}.", Invalid, Format);
+            }
+
+            static string Summary(IReadOnlyList<string> items) =>
+                string.Join(" ", items.Take(5)) + (items.Count > 5 ? $" (and {items.Count - 5} more)" : "");
+        }
+
         private void EvaluateChain(string basic)
         {
             if (facts.Chain is not { Count: > 1 } chain)

@@ -33,6 +33,8 @@ public static class PolicyCoverage
         "ReferenceDataExistence", "ReferenceDataIntact", "SignatureIntact", "SignatureValid", "SignatureDuplicated",
         "ProspectiveCertificateChain", "SignerInformationStore", "ByteRange", "ByteRangeCollision", "ByteRangeAllDocument",
         "TrustServiceTypeIdentifier", "TrustServiceStatus", "PdfSignatureDictionary",
+        "PdfPageDifference", "PdfAnnotationOverlap", "DocMDP", "FieldMDP", "SigFieldLock", "FormFillChanges", "AnnotationChanges",
+        "UndefinedChanges",
     };
 
     private static readonly HashSet<string> s_certificate = new(StringComparer.Ordinal)
@@ -81,9 +83,7 @@ public static class PolicyCoverage
     /// <summary>Kept constraints that need new work (the last segment of the path).</summary>
     private static readonly HashSet<string> s_toImplement = new(StringComparer.Ordinal)
     {
-        "StructuralValidation", "DocMDP", "FieldMDP", "SigFieldLock", "FormFillChanges", "AnnotationChanges", "UndefinedChanges",
-        "PdfPageDifference", "PdfAnnotationOverlap",
-        "TLStructure",
+        "StructuralValidation", "TLStructure",
     };
 
     /// <summary>What SimpleSign does with the constraint at <paramref name="path"/> of a validation policy.</summary>

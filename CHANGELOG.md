@@ -55,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   counts only with expiredCertsOnCRL or archiveCutoff from before the expiry); `ContentTimeStamp` and
   `ContentTimeStampMessageImprint` (CAdES content-time-stamp, XAdES data objects timestamps), the content timestamp
   being judged in the Timestamp context and ordered before the signature timestamps (`Coherence`).
+- Validation policy, PAdES: the revision a signature (or document timestamp) covers is compared with the final one.
+  `PdfPageDifference`, `PdfAnnotationOverlap`, `DocMDP` (the changes the certification's P forbids), `FieldMDP` and
+  `SigFieldLock` (locked fields whose value changed), `FormFillChanges`, `AnnotationChanges` and `UndefinedChanges`
+  (page content, resources, the catalog, fields added or removed) are evaluated; the messages name the changes.
+  Validation data (DSS) and document timestamps added later are not changes (ETSI EN 319 142-1).
 - `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
   policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,

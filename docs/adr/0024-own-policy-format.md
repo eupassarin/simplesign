@@ -32,10 +32,11 @@ certificate checks, subject attributes, PDF ByteRange and signature dictionary, 
 formats); timestamps and revocation data evaluated as tokens in their own contexts (a timestamp that fails is not a
 proof of existence, revocation data that fails is not acceptable; online data included); countersignatures in their
 context and trusted lists for CAdES and XAdES (with the type and status of the trust service). `PolicyCoverage` is the
-single source of what is evaluated; a test keeps `docs/policies/compatibility.md` in step with it. What remains is "to
-implement": PDF revision comparison (DocMDP, FieldMDP, SigFieldLock, form fill, annotation and undefined changes, page
-differences, annotation overlap), XML schema validation (XAdES, trusted lists), the content timestamp and
-`RevocationHasInformationAboutCertificate`.
+single source of what is evaluated; a test keeps `docs/policies/compatibility.md` in step with it. Then the "to implement"
+ones: `RevocationHasInformationAboutCertificate`, the content timestamp, and the PDF revision comparison (DocMDP,
+FieldMDP, SigFieldLock, form fill, annotation and undefined changes, page differences, annotation overlap: the
+signed revision against the final one, DSS and document timestamps not counting as changes). What remains is XML
+schema validation (`StructuralValidation` for XAdES, `TLStructure`).
 
 **Consequences:**
 - A policy file written for ADR 0023 must be updated: rename the root to `ValidationConstraints` and `eIDAS` to
