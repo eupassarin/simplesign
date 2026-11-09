@@ -23,7 +23,7 @@ const settingBlocks = [
 ] as const
 
 const sectionsKey = "val.sections"
-const openByDefault: Record<string, boolean> = { file: true, samples: true, trust: true, policy: true, revocation: false }
+const openByDefault: Record<string, boolean> = { file: true, "samples.pades": true, trust: true, policy: true, revocation: false }
 
 function loadOpen(): Record<string, boolean> {
   try {
@@ -165,29 +165,44 @@ export function ValidatePage() {
                   <span className="text-muted-foreground text-xs">{validateTarget.dataName ?? t("val.dataHint")}</span>
                 </div>
               )}
+              {groups.length > 0 && (
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-sm font-medium">{t("val.samples")}</p>
+                    <p className="text-muted-foreground text-xs">{t("val.samplesHint")}</p>
+                  </div>
+                  {groups.map((group) => {
+                    const id = "samples." + group.format.id
+                    const isOpen = open[id] ?? false
+                    return (
+                      <Collapsible key={group.format.id} open={isOpen} onOpenChange={(v) => toggle(id, v)} className="rounded-md border">
+                        <CollapsibleTrigger className="hover:bg-accent/40 flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors">
+                          <ChevronRight className={cn("text-muted-foreground size-4 shrink-0 transition-transform", isOpen && "rotate-90")} />
+                          <span className="flex-1 text-sm font-semibold">{group.format.title}</span>
+                          <span className="text-muted-foreground text-xs tabular-nums">{group.samples.length}</span>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <ul className="border-t py-1">
+                            {group.samples.map((s) => (
+                              <li key={s.format + s.id}>
+                                <button type="button" onClick={() => choose({ fileId: s.fileId, name: s.fileName, dataId: s.dataId })}
+                                  className={cn("hover:bg-accent/50 flex w-full items-start gap-2 px-2.5 py-1.5 text-left", validateTarget?.fileId === s.fileId && (validateTarget.dataId ?? null) === (s.dataId ?? null) && "bg-accent/60")}>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block text-sm">{s.title}</span>
+                                    <span className="text-muted-foreground block text-xs leading-snug">{s.description}</span>
+                                  </span>
+                                  {s.expectedIndication && <Indication value={s.expectedIndication as "Valid"} />}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          </Block>
-
-          <Block id="samples" title={t("val.samples")} summary={t("val.samplesHint")} count={samples.length} open={open} toggle={toggle}>
-            {groups.map((group) => (
-              <div key={group.format.id} className="py-1">
-                <p className="text-muted-foreground pt-2 text-[10px] font-semibold tracking-wide uppercase">{group.format.title}</p>
-                <ul className="-mx-3">
-                  {group.samples.map((s) => (
-                    <li key={s.format + s.id}>
-                      <button type="button" onClick={() => choose({ fileId: s.fileId, name: s.fileName, dataId: s.dataId })}
-                        className={cn("hover:bg-accent/50 flex w-full items-start gap-2 px-3 py-1.5 text-left", validateTarget?.fileId === s.fileId && (validateTarget.dataId ?? null) === (s.dataId ?? null) && "bg-accent/60")}>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm">{s.title}</span>
-                          <span className="text-muted-foreground block text-xs leading-snug">{s.description}</span>
-                        </span>
-                        {s.expectedIndication && <Indication value={s.expectedIndication as "Valid"} />}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
           </Block>
 
           <OptionScope.Provider value={{ options: validateOptions, set: setValidateOption }}>
