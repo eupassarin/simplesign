@@ -53,6 +53,8 @@ public sealed class SoftHsmFixture : IDisposable
         var caRequest = new CertificateRequest("CN=SoftHSM Test CA, O=SimpleSign Tests", caKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         caRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
         caRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+        // A CA certificate carries a Subject Key Identifier (RFC 5280; the default validation policy checks it).
+        caRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(caRequest.PublicKey, false));
         X509Certificate2 ca = caRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(5));
         CaCertificate = ca;
 
