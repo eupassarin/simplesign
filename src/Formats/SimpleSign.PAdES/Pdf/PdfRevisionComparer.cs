@@ -26,22 +26,28 @@ internal sealed class PdfObjectIndex
     {
         var index = new PdfObjectIndex(pdf.Length);
         string text = Encoding.Latin1.GetString(pdf);
-        foreach (Match header in Regex.Matches(text, @"(?<![0-9])(\d{1,9})\s+(\d{1,5})\s+obj\b", RegexOptions.None, s_timeout))
+        for (int keyword = text.IndexOf("obj", StringComparison.Ordinal); keyword >= 0; keyword = text.IndexOf("obj", keyword + 3, StringComparison.Ordinal))
         {
-            int bodyStart = header.Index + header.Length;
+            if (!TryReadHeader(text, keyword, out int headerStart, out int number))
+            {
+                continue;
+            }
+
+            int bodyStart = keyword + 3;
             int end = text.IndexOf("endobj", bodyStart, StringComparison.Ordinal);
             if (end < 0)
             {
                 break;
             }
 
-            int number = int.Parse(header.Groups[1].ValueSpan, System.Globalization.CultureInfo.InvariantCulture);
             string body = text[bodyStart..end].Trim();
-            index._entries.Add((number, header.Index, body));
+            index._entries.Add((number, headerStart, body));
             if (Regex.IsMatch(PdfDictionary.Head(body), @"/Type\s*/ObjStm\b", RegexOptions.None, s_timeout))
             {
-                index.AddObjectStream(pdf, header.Index, body);
+                index.AddObjectStream(pdf, headerStart, body);
             }
+
+            keyword = end + 3;
         }
 
         return index;
@@ -60,6 +66,46 @@ internal sealed class PdfObjectIndex
         }
 
         return objects;
+    }
+
+    /// <summary>Reads "N G" before the <c>obj</c> keyword at <paramref name="keyword"/>: where the header starts and the object number.</summary>
+    private static bool TryReadHeader(string text, int keyword, out int headerStart, out int number)
+    {
+        headerStart = -1;
+        number = 0;
+        if (keyword + 3 < text.Length && (char.IsAsciiLetterOrDigit(text[keyword + 3]) || text[keyword + 3] == '_'))
+        {
+            return false;
+        }
+
+        int pos = keyword;
+        if (!SkipBack(text, ref pos, char.IsWhiteSpace, 1, int.MaxValue) || !SkipBack(text, ref pos, char.IsAsciiDigit, 1, 5)
+            || !SkipBack(text, ref pos, char.IsWhiteSpace, 1, int.MaxValue))
+        {
+            return false;
+        }
+
+        int numberEnd = pos;
+        if (!SkipBack(text, ref pos, char.IsAsciiDigit, 1, 9) || (pos > 0 && char.IsAsciiDigit(text[pos - 1])))
+        {
+            return false;
+        }
+
+        headerStart = pos;
+        return int.TryParse(text.AsSpan(pos, numberEnd - pos), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out number);
+    }
+
+    /// <summary>Moves <paramref name="pos"/> back over between <paramref name="min"/> and <paramref name="max"/> characters of a kind.</summary>
+    private static bool SkipBack(string text, ref int pos, Func<char, bool> kind, int min, int max)
+    {
+        int count = 0;
+        while (pos > 0 && count < max && kind(text[pos - 1]))
+        {
+            pos--;
+            count++;
+        }
+
+        return count >= min && (count < max || pos == 0 || !kind(text[pos - 1]));
     }
 
     private void AddObjectStream(byte[] pdf, int objStart, string body)
@@ -160,22 +206,92 @@ internal static class PdfDictionary
     }
 
     /// <summary>The object numbers referenced (<c>N G R</c>) in the text.</summary>
-    public static IReadOnlyList<int> References(string? text) => text is null ? [] :
-        [.. Regex.Matches(text, @"(?<![0-9])(\d{1,9})\s+\d{1,5}\s+R\b", RegexOptions.None, TimeSpan.FromSeconds(1))
-            .Select(m => int.Parse(m.Groups[1].ValueSpan, System.Globalization.CultureInfo.InvariantCulture))];
+    public static IReadOnlyList<int> References(string? text)
+    {
+        var references = new List<int>();
+        for (int pos = 0; text is not null && pos < text.Length; pos++)
+        {
+            if (char.IsAsciiDigit(text[pos]) && (pos == 0 || !char.IsAsciiDigit(text[pos - 1])) && TryReadReference(text, pos, out int number, out int end))
+            {
+                references.Add(number);
+                pos = end - 1;
+            }
+        }
+
+        return references;
+    }
+
+    /// <summary>Reads an indirect reference <c>N G R</c> starting at <paramref name="pos"/>.</summary>
+    private static bool TryReadReference(string text, int pos, out int number, out int end)
+    {
+        number = 0;
+        end = pos;
+        int digits = Run(text, pos, char.IsAsciiDigit);
+        if (digits is < 1 or > 9)
+        {
+            return false;
+        }
+
+        int afterNumber = pos + digits;
+        int space = Run(text, afterNumber, char.IsWhiteSpace);
+        int generation = Run(text, afterNumber + space, char.IsAsciiDigit);
+        int afterGeneration = afterNumber + space + generation;
+        int space2 = Run(text, afterGeneration, char.IsWhiteSpace);
+        int r = afterGeneration + space2;
+        if (space < 1 || generation is < 1 or > 5 || space2 < 1 || r >= text.Length || text[r] != 'R'
+            || (r + 1 < text.Length && (char.IsAsciiLetterOrDigit(text[r + 1]) || text[r + 1] == '_')))
+        {
+            return false;
+        }
+
+        end = r + 1;
+        return int.TryParse(text.AsSpan(pos, digits), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out number);
+    }
+
+    private static int Run(string text, int pos, Func<char, bool> kind)
+    {
+        int end = pos;
+        while (end < text.Length && kind(text[end]))
+        {
+            end++;
+        }
+
+        return end - pos;
+    }
 
     /// <summary>The object number of a single reference value; 0 when the value is not one.</summary>
-    public static int Reference(string? value)
-    {
-        var match = value is null ? null : Regex.Match(value, @"^(\d{1,9})\s+\d{1,5}\s+R$", RegexOptions.None, TimeSpan.FromSeconds(1));
-        return match is { Success: true } ? int.Parse(match.Groups[1].ValueSpan, System.Globalization.CultureInfo.InvariantCulture) : 0;
-    }
+    public static int Reference(string? value) =>
+        value is not null && TryReadReference(value, 0, out int number, out int end) && end == value.Length ? number : 0;
 
     /// <summary>A value with its white space collapsed, to compare two revisions.</summary>
     public static string Normalize(string value) =>
-        Regex.Replace(value, @"\s+", " ", RegexOptions.None, TimeSpan.FromSeconds(1))
+        CollapseWhiteSpace(value)
             .Replace("[ ", "[", StringComparison.Ordinal).Replace(" ]", "]", StringComparison.Ordinal)
             .Replace("<< ", "<<", StringComparison.Ordinal).Replace(" >>", ">>", StringComparison.Ordinal);
+
+    private static string CollapseWhiteSpace(string value)
+    {
+        var text = new StringBuilder(value.Length);
+        bool space = false;
+        foreach (char c in value)
+        {
+            if (char.IsWhiteSpace(c))
+            {
+                space = true;
+                continue;
+            }
+
+            if (space)
+            {
+                text.Append(' ');
+                space = false;
+            }
+
+            text.Append(c);
+        }
+
+        return text.Append(space ? " " : "").ToString();
+    }
 
     /// <summary>The text of a PDF string value (literal or hexadecimal).</summary>
     public static string Text(string? value)
@@ -270,10 +386,9 @@ internal static class PdfDictionary
                 return close < 0 ? text.Length : close + 1;
             default:
                 // A number, a keyword, or an indirect reference "N G R".
-                var reference = Regex.Match(text[pos..], @"^\d{1,9}\s+\d{1,5}\s+R\b", RegexOptions.None, TimeSpan.FromSeconds(1));
-                if (reference.Success)
+                if (TryReadReference(text, pos, out _, out int referenceEnd))
                 {
-                    return pos + reference.Length;
+                    return referenceEnd;
                 }
 
                 int end = pos;
@@ -657,8 +772,19 @@ internal static class PdfRevisionComparer
         return new PdfFieldLock(action.Groups[1].Value, names);
     }
 
-    private static bool Modified(string before, string after) =>
-        !string.Equals(PdfDictionary.Normalize(before), PdfDictionary.Normalize(after), StringComparison.Ordinal);
+    private static bool Modified(string before, string after)
+    {
+        if (string.Equals(before, after, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Only the dictionary is normalized; stream data must be the same byte for byte.
+        string headBefore = PdfDictionary.Head(before);
+        string headAfter = PdfDictionary.Head(after);
+        return !before.AsSpan(headBefore.Length).SequenceEqual(after.AsSpan(headAfter.Length))
+            || !string.Equals(PdfDictionary.Normalize(headBefore), PdfDictionary.Normalize(headAfter), StringComparison.Ordinal);
+    }
 
     /// <summary>Whether two dictionaries differ in any entry but the ignored ones.</summary>
     private static bool Differs(Dictionary<string, string> before, Dictionary<string, string> after, IReadOnlySet<string> ignored) =>
