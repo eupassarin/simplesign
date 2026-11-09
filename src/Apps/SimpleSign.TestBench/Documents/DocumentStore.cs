@@ -27,11 +27,17 @@ public sealed record DocumentFacts(
 /// <summary>A stored file: a document to sign, a signature, data or a PFX.</summary>
 internal sealed record StoredFile(string Id, string FileName, byte[] Content, DateTimeOffset Created, bool Pinned = false);
 
-/// <summary>In-memory store for samples, uploads and signed outputs (never written to disk).</summary>
+/// <summary>
+/// In-memory store for samples, uploads and signed outputs (never written to disk). Past
+/// <see cref="MaxUploads"/> files it forgets the least recently used ones, so an upload that runs
+/// keep reading (a policy, a PFX) stays however many outputs are added after it.
+/// </summary>
 internal sealed partial class DocumentStore
 {
     private const int MaxUploads = 200;
     private readonly ConcurrentDictionary<string, StoredFile> _files = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, long> _lastUsed = new(StringComparer.Ordinal);
+    private long _clock;
     private readonly ConcurrentDictionary<string, DocumentFacts> _facts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SampleDocument> _samples = new(StringComparer.Ordinal);
 
@@ -61,23 +67,38 @@ internal sealed partial class DocumentStore
     {
         if (_files.Count(f => !f.Value.Pinned) > MaxUploads)
         {
-            foreach (var old in _files.Values.Where(f => !f.Pinned && !f.Id.StartsWith("sample:", StringComparison.Ordinal)).OrderBy(f => f.Created).Take(50))
+            var evictable = _files.Values.Where(f => !f.Pinned && !f.Id.StartsWith("sample:", StringComparison.Ordinal));
+            foreach (var old in evictable.OrderBy(f => _lastUsed.TryGetValue(f.Id, out long used) ? used : 0).Take(50).ToList())
             {
                 _files.TryRemove(old.Id, out _);
                 _facts.TryRemove(old.Id, out _);
+                _lastUsed.TryRemove(old.Id, out _);
             }
         }
 
         string id = Guid.NewGuid().ToString("N")[..12];
         var file = new StoredFile(id, Path.GetFileName(fileName), content, DateTimeOffset.UtcNow);
         _files[id] = file;
+        Touch(id);
         return file;
     }
 
     public StoredFile Get(string id) =>
-        _files.TryGetValue(id, out var file) ? file : throw new KeyNotFoundException($"No document or upload '{id}' (uploads are kept in memory only).");
+        TryGet(id, out var file) ? file! : throw new KeyNotFoundException($"No document or upload '{id}' (uploads are kept in memory only).");
 
-    public bool TryGet(string id, out StoredFile? file) => _files.TryGetValue(id, out file);
+    public bool TryGet(string id, out StoredFile? file)
+    {
+        if (!_files.TryGetValue(id, out file))
+        {
+            return false;
+        }
+
+        Touch(id);
+        return true;
+    }
+
+    /// <summary>Marks a file as just used: the eviction forgets the least recently used first.</summary>
+    private void Touch(string id) => _lastUsed[id] = Interlocked.Increment(ref _clock);
 
     public async Task<DocumentFacts> FactsAsync(string id, CancellationToken cancellationToken = default)
     {

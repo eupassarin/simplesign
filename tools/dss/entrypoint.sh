@@ -7,6 +7,10 @@
 #   - the SimpleSign Sandbox's root, fetched from $SANDBOX_URL when it is set and reachable
 #     (or, failing that, the root of the Sandbox connected to the TestBench at $TESTBENCH_URL),
 # and tells DSS to trust it (trusted.source.keystore.* in dss-custom.properties).
+# The Sandbox root is also added to the JVM's TLS trust store, so DSS can fetch CRLs over HTTPS.
+# It also forwards the Sandbox ports ($SANDBOX_FORWARD_PORTS) from the container's localhost to
+# $SANDBOX_FORWARD_HOST (forward.pl) and, when $DSS_REVOCATION_CACHE is "false", keeps no
+# revocation data between requests.
 set -eu
 
 LIB=/opt/tomcat/lib
@@ -127,7 +131,13 @@ fi
 # The SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox): its root, served at /root.pem.
 sandbox_trusted=false
 if [ -n "${SANDBOX_URL:-}" ]; then
-  if curl -fsS -m 5 "${SANDBOX_URL%/}/root.pem" -o /tmp/sandbox-root.pem; then
+  # Tomcat may still be the only thing up when the Sandbox starts with it: retry for a while.
+  tries=${SANDBOX_WAIT_SECONDS:-20}
+  until curl -fsS -m 5 "${SANDBOX_URL%/}/root.pem" -o /tmp/sandbox-root.pem 2>/dev/null || [ "$tries" -le 0 ]; do
+    tries=$((tries - 1))
+    sleep 1
+  done
+  if [ -s /tmp/sandbox-root.pem ]; then
     trust sandbox-root /tmp/sandbox-root.pem
     sandbox_trusted=true
   else
@@ -140,6 +150,15 @@ if [ "$sandbox_trusted" = false ] && [ -n "${TESTBENCH_URL:-}" ]; then
     sandbox_trusted=true
   else
     echo "[dss] the TestBench (or its connected Sandbox) is not reachable at $TESTBENCH_URL."
+  fi
+fi
+if [ "$sandbox_trusted" = true ]; then
+  # The Sandbox's HTTPS endpoint (CRLs over HTTPS) has a certificate under the same root.
+  keytool -delete -cacerts -storepass changeit -alias simplesign-sandbox-root >/dev/null 2>&1 || true
+  if keytool -importcert -noprompt -cacerts -storepass changeit -alias simplesign-sandbox-root -file /tmp/sandbox-root.pem >/dev/null 2>&1; then
+    echo "[dss] trusting the Sandbox root for TLS too (CRLs over HTTPS)"
+  else
+    echo "[dss] could not add the Sandbox root to the JVM trust store; CRLs over HTTPS will fail"
   fi
 fi
 if [ "$sandbox_trusted" = false ] && { [ -n "${SANDBOX_URL:-}" ] || [ -n "${TESTBENCH_URL:-}" ]; }; then
@@ -170,8 +189,25 @@ case "$EU_TL" in
     exit 1 ;;
 esac
 
+# The Sandbox's certificates name http://localhost:5300 (HTTP), :5301 (HTTPS) and :5302 (LDAP).
+# Inside the container that is the container itself: forward those ports to the host.
+FORWARD_HOST=${SANDBOX_FORWARD_HOST:-host.docker.internal}
+for port in ${SANDBOX_FORWARD_PORTS-5300 5301 5302}; do
+  perl /forward.pl "$port" "$FORWARD_HOST" &
+  echo "[dss] forwarding localhost:$port to $FORWARD_HOST:$port"
+done
+
 {
   echo "cron.tl.loader.enable = $online"
+  # DSS keeps CRLs and OCSP responses (up to 3 h) and answers from them when the server is down.
+  # SimpleSign fetches every time, so for a comparison DSS must too (the default here).
+  if [ "${DSS_REVOCATION_CACHE:-false}" = "false" ]; then
+    echo "cache.expiration = 0"
+    echo "cache.crl.default.next.update = 0"
+    echo "cache.crl.max.next.update = 0"
+    echo "cache.ocsp.default.next.update = 0"
+    echo "cache.ocsp.max.next.update = 0"
+  fi
   if [ "$count" -gt 0 ]; then
     echo "trusted.source.keystore.type = PKCS12"
     echo "trusted.source.keystore.filename = extra-trust.p12"
@@ -179,5 +215,5 @@ esac
   fi
 } > "$LIB/dss-custom.properties"
 
-echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; Peru: ${DSS_TRUST_PERU:-true}; EU trusted lists: $EU_TL"
+echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; Peru: ${DSS_TRUST_PERU:-true}; EU trusted lists: $EU_TL; revocation cache: ${DSS_REVOCATION_CACHE:-false}"
 exec /opt/tomcat/bin/catalina.sh run

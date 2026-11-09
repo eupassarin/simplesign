@@ -101,7 +101,8 @@ public sealed class SandboxFaultTests(TestBenchFixture fixture) : IDisposable
         await fixture.Sandbox.RevokeAsync("no-nonrepudiation");
         var revoked = await ValidateAsync(signed.OutputId!);
 
-        revoked.Overall.ShouldBe("Invalid");
+        // No proof of existence before the revocation: INDETERMINATE / REVOKED_NO_POE (EN 319 102-1 §5.2.6).
+        revoked.Overall.ShouldBe("Indeterminate");
 
         await fixture.Sandbox.ResetAsync();
         (await ValidateAsync(signed.OutputId!)).Overall.ShouldBe("Valid");

@@ -25,6 +25,8 @@ public static class SignatureSubIndicationExtensions
         SignatureSubIndication.TimestampOrderFailure => "TIMESTAMP_ORDER_FAILURE",
         SignatureSubIndication.SignedDataNotFound => "SIGNED_DATA_NOT_FOUND",
         SignatureSubIndication.SignaturePolicyNotAvailable => "SIGNATURE_POLICY_NOT_AVAILABLE",
+        SignatureSubIndication.CertificateChainGeneralFailure => "CERTIFICATE_CHAIN_GENERAL_FAILURE",
+        SignatureSubIndication.RevokedCaNoPoe => "REVOKED_CA_NO_POE",
         _ => subIndication.ToString(),
     };
 }

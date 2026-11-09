@@ -388,7 +388,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         // The enveloped transform should remove Signature elements from the node set
         // but doesn't in current .NET. At signing time, tempSig was in the document.
         // We rebuild the signing-time document structure for CheckSignature to work.
-        bool sigValid = VerifyWithSignedXml(doc, sigElement, ns, errors, originalData);
+        // The references (HASH_FAILURE when one does not match) and the SignatureValue (SIG_CRYPTO_FAILURE) apart.
+        bool referencesValid = VerifyWithSignedXml(doc, sigElement, ns, errors, out bool signatureValueValid, originalData);
+        bool sigValid = referencesValid && signatureValueValid;
 
         if (!sigValid)
         {
@@ -494,7 +496,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         var (claimedRoles, attributeCertificates, signedAssertions) = ReadSignerRoles(sigElement, ns, warnings);
         var facts = new ValidationFacts
         {
-            IsIntegrityValid = sigValid,
+            IsIntegrityValid = referencesValid,
             IsSignatureValid = sigValid,
             SignerCertificate = signerCert,
             IsCertificateChainValid = chainValid,
@@ -549,7 +551,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             SignatureTimestampToken = SignatureTimeStampToken(sigElement, ns),
             SignatureId = extraction.SignatureId,
             IsSignatureValid = sigValid,
-            IsIntegrityValid = sigValid,
+            IsIntegrityValid = referencesValid,
             IsCertificateChainValid = chainValid,
             HasValidSignatureTimeStamp = tsValid,
             HasValidDataObjectsTimeStamp = dataTsValid,
@@ -805,13 +807,19 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         return certificates;
     }
 
+    /// <summary>
+    /// Verifies the references of SignedInfo (returned) and the SignatureValue over SignedInfo
+    /// (<paramref name="signatureValueValid"/>). A structural problem fails both.
+    /// </summary>
     private static bool VerifyWithSignedXml(
         XmlDocument doc,
         XmlElement sigElement,
         XmlNamespaceManager ns,
         List<string> errors,
+        out bool signatureValueValid,
         XadesDetachedData? originalData = null)
     {
+        signatureValueValid = false;
         try
         {
             if (sigElement.SelectSingleNode("ds:SignedInfo", ns) is not XmlElement signedInfoEl)
@@ -900,21 +908,15 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             if (rsa is not null)
             {
                 var padding = isRsaPss ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1;
-                if (!rsa.VerifyHash(signedInfoHash, signatureValue, sigHashAlg, padding))
-                {
-                    return false;
-                }
+                signatureValueValid = rsa.VerifyHash(signedInfoHash, signatureValue, sigHashAlg, padding);
             }
             else
             {
                 using ECDsa? ecdsa = signerCert.GetECDsaPublicKey();
-                if (ecdsa is null || !ecdsa.VerifyHash(signedInfoHash, signatureValue))
-                {
-                    return false;
-                }
+                signatureValueValid = ecdsa is not null && ecdsa.VerifyHash(signedInfoHash, signatureValue);
             }
 
-            // Step 2: Verify reference digests
+            // Step 2: Verify reference digests, whatever the signature value gave.
             return VerifyReferenceDigests(doc, sigElement, signedInfoEl, ns, errors, originalData);
         }
         // S2221: intentional -- validation pipeline converts exceptions to error messages

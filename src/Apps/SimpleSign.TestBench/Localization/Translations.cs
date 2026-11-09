@@ -267,7 +267,7 @@ internal static class Translations
         ["Bytes appended after signing"] = "Bytes acrescentados após assinar",
         ["The file grew after the signature with no new revision: the signature still verifies, and the validator reports that the ByteRange does not cover the whole file."] = "O arquivo cresceu depois da assinatura sem nova revisão: a assinatura ainda confere, e o validador informa que o ByteRange não cobre o arquivo inteiro.",
         ["Revoked signer"] = "Signatário revogado",
-        ["The signer is in the intermediate CA's CRL, fetched by the validator. (The library refuses to build B-LT for a revoked signer.)"] = "O signatário está na LCR da AC intermediária, buscada pelo validador. (A biblioteca se recusa a montar B-LT para um signatário revogado.)",
+        ["The signer is in the intermediate CA's CRL, fetched by the validator. Nothing proves the signature was made before the revocation, so the result is INDETERMINATE / REVOKED_NO_POE (EN 319 102-1 §5.2.6). (The library refuses to build B-LT for a revoked signer.)"] = "O signatário está na LCR da AC intermediária, buscada pelo validador. Nada prova que a assinatura foi feita antes da revogação, então o resultado é INDETERMINATE / REVOKED_NO_POE (EN 319 102-1 §5.2.6). (A biblioteca se recusa a montar B-LT para um signatário revogado.)",
         ["Expired signer"] = "Signatário expirado",
         ["Signed while the certificate was valid; it has expired since, and a B-B signature has no timestamp to prove when it was made."] = "Assinada enquanto o certificado valia; ele já expirou, e uma assinatura B-B não tem carimbo do tempo para provar quando foi feita.",
         ["Root outside the trust anchors"] = "Raiz fora das âncoras de confiança",

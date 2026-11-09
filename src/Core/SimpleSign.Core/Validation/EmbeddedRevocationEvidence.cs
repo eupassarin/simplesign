@@ -89,7 +89,8 @@ public static class EmbeddedRevocationEvidence
         return hasRequiredCertificate;
     }
 
-    private static bool IsNoCheckResponder(X509Certificate2 certificate)
+    /// <summary>An OCSP responder certificate with id-pkix-ocsp-nocheck: it needs no revocation data (RFC 6960 §4.2.2.2.1).</summary>
+    internal static bool IsNoCheckResponder(X509Certificate2 certificate)
     {
         if (certificate.Extensions[Oids.OcspNoCheck] is null)
         {

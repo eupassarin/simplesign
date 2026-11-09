@@ -15,7 +15,10 @@ public enum SignatureSubIndication
     /// <summary>SIG_CRYPTO_FAILURE: the signature value does not verify with the signing certificate's public key.</summary>
     SigCryptoFailure,
 
-    /// <summary>REVOKED: the signing certificate is revoked.</summary>
+    /// <summary>
+    /// REVOKED: the signing certificate is revoked. Without a proof that the signature existed before the
+    /// revocation, a revoked certificate gives <see cref="RevokedNoPoe"/> (EN 319 102-1 §5.2.6) instead.
+    /// </summary>
     Revoked,
 
     /// <summary>NOT_YET_VALID: the signing certificate was not yet valid at the signing time.</summary>
@@ -45,7 +48,7 @@ public enum SignatureSubIndication
     /// <summary>REVOKED_NO_POE: a certificate is revoked and nothing proves the signature existed before the revocation.</summary>
     RevokedNoPoe,
 
-    /// <summary>TRY_LATER: the revocation status could not be established now.</summary>
+    /// <summary>TRY_LATER: the revocation data is not fresh enough (or the certificate is on hold); newer data may settle it later.</summary>
     TryLater,
 
     /// <summary>TIMESTAMP_ORDER_FAILURE: the timestamps are not in the order the format requires.</summary>
@@ -56,4 +59,13 @@ public enum SignatureSubIndication
 
     /// <summary>SIGNATURE_POLICY_NOT_AVAILABLE: the signature policy document cannot be obtained.</summary>
     SignaturePolicyNotAvailable,
+
+    /// <summary>
+    /// CERTIFICATE_CHAIN_GENERAL_FAILURE: the chain could not be validated for a reason no other sub-indication
+    /// names, such as no acceptable revocation data for a certificate of the chain.
+    /// </summary>
+    CertificateChainGeneralFailure,
+
+    /// <summary>REVOKED_CA_NO_POE: a CA certificate of the chain is revoked and nothing proves the signature existed before the revocation.</summary>
+    RevokedCaNoPoe,
 }

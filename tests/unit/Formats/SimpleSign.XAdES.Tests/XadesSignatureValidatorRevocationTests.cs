@@ -30,7 +30,7 @@ public sealed class XadesSignatureValidatorRevocationTests
     }
 
     [Fact]
-    public async Task ValidateAsync_SignerRevoked_InvalidRevoked()
+    public async Task ValidateAsync_SignerRevoked_IndeterminateRevokedNoPoe()
     {
         using var pki = NewPki();
         byte[] cms = await Sign(pki);
@@ -38,13 +38,14 @@ public sealed class XadesSignatureValidatorRevocationTests
 
         var result = await Validator(http).ValidateAsync(cms, [pki.RootCa]);
 
-        result.Indication.ShouldBe(SignatureIndication.Invalid);
-        result.SubIndication.ShouldBe(SignatureSubIndication.Revoked);
+        // Nothing proves the signature existed before the revocation (EN 319 102-1 §5.2.6).
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        result.SubIndication.ShouldBe(SignatureSubIndication.RevokedNoPoe);
         result.IsValid.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task ValidateAsync_StatusUnknown_IndeterminateTryLater()
+    public async Task ValidateAsync_StatusUnknown_IndeterminateCertificateChainGeneralFailure()
     {
         using var pki = NewPki();
         byte[] cms = await Sign(pki);
@@ -53,7 +54,7 @@ public sealed class XadesSignatureValidatorRevocationTests
         var result = await Validator(http).ValidateAsync(cms, [pki.RootCa]);
 
         result.Indication.ShouldBe(SignatureIndication.Indeterminate);
-        result.SubIndication.ShouldBe(SignatureSubIndication.TryLater);
+        result.SubIndication.ShouldBe(SignatureSubIndication.CertificateChainGeneralFailure);
     }
 
     [Fact]

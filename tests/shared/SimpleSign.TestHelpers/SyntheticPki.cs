@@ -251,6 +251,14 @@ public sealed class SyntheticPki : IDisposable
     /// <summary>Builds a DER-encoded CRL signed by the root CA covering the intermediate CA.</summary>
     public byte[] BuildIntermediateCrl() => BuildCrl(RootCa, _rootKey);
 
+    /// <summary>Builds a root-signed CRL that revokes the intermediate CA (revoked an hour ago).</summary>
+    public byte[] BuildRevokedIntermediateCrl()
+    {
+        byte[] serial = IntermediateCa.GetSerialNumber();
+        Array.Reverse(serial);
+        return BuildCrl(RootCa, _rootKey, serial);
+    }
+
     /// <summary>Builds an intermediate-signed CRL that revokes <paramref name="certificate"/> (issued by the intermediate).</summary>
     public byte[] BuildCrlRevoking(X509Certificate2 certificate)
     {
