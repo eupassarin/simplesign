@@ -68,7 +68,7 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
     {
         var sample = fixture.ValidationSamples.Single(s => s.Id == "valid");
 
-        var report = await fixture.Validation.ReportAsync(sample.FileId, new ValidationSettings { Trust = [], CheckRevocation = false }, default);
+        var report = await fixture.Validation.ReportAsync(sample.FileId, new ValidationSettings { Trust = [], Level = SimpleSign.Core.Validation.ValidationLevel.BasicSignatures }, default);
 
         report.Signatures.Single().Report.Indication.ShouldNotBe("Valid");
     }

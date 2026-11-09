@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react"
-import { Check, FileUp, ListChecks, Loader2, ShieldCheck, TriangleAlert } from "lucide-react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { Check, ChevronRight, FileUp, ListChecks, Loader2, ShieldCheck, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useT } from "@/i18n"
 import { api } from "@/lib/api"
@@ -13,6 +14,52 @@ import { ResultPanel } from "../workbench/ResultPanel"
 import type { RunView, ValidationSampleView } from "../workbench/schema"
 import { useWorkbench } from "../workbench/state"
 import { DssControl, HistoryDrawer } from "../workbench/WorkbenchPage"
+
+/** The settings of a validation, in the order a validator uses them: whom to trust, what to check, where to look. */
+const settingBlocks = [
+  { id: "trust", title: "val.trust", summary: "val.trustHint", ids: ["common.validation.trust"] },
+  { id: "policy", title: "val.policy", summary: "val.policyHint", ids: ["common.validation.policy", "common.validation.level"] },
+  { id: "revocation", title: "val.revocation", summary: "val.revocationHint", ids: ["common.validation.revocationStrategy"] },
+] as const
+
+const sectionsKey = "val.sections"
+const openByDefault: Record<string, boolean> = { file: true, samples: true, trust: true, policy: true, revocation: false }
+
+function loadOpen(): Record<string, boolean> {
+  try {
+    return { ...openByDefault, ...(JSON.parse(localStorage.getItem(sectionsKey) ?? "{}") as Record<string, boolean>) }
+  } catch {
+    return openByDefault
+  }
+}
+
+/** A collapsible block, as in the Sign tab: title, one-line summary and how many options it holds. */
+function Block({ id, title, summary, count, open, toggle, children }: {
+  id: string
+  title: string
+  summary: string
+  count?: number
+  open: Record<string, boolean>
+  toggle: (id: string, value: boolean) => void
+  children: ReactNode
+}) {
+  const isOpen = open[id] ?? false
+  return (
+    <Collapsible open={isOpen} onOpenChange={(v) => toggle(id, v)} className="bg-card rounded-lg border">
+      <CollapsibleTrigger className="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors">
+        <ChevronRight className={cn("text-muted-foreground size-4 shrink-0 transition-transform", isOpen && "rotate-90")} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">{title}</span>
+          <span className="text-muted-foreground block truncate text-xs">{summary}</span>
+        </span>
+        {count !== undefined && <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{count}</span>}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="divide-y border-t px-3">{children}</div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
 
 interface ConformanceRow {
   sample: ValidationSampleView
@@ -73,7 +120,12 @@ export function ValidatePage() {
     }
   }
 
-  const trust = schema.options.filter((o) => o.id.startsWith("common.validation."))
+  const [open, setOpen] = useState<Record<string, boolean>>(loadOpen)
+  const toggle = (id: string, value: boolean) => {
+    const next = { ...open, [id]: value }
+    try { localStorage.setItem(sectionsKey, JSON.stringify(next)) } catch { /* the choice is only kept for this page */ }
+    setOpen(next)
+  }
   const groups = schema.formats.map((f) => ({ format: f, samples: samples.filter((s) => s.format === f.id) })).filter((g) => g.samples.length > 0)
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -97,36 +149,30 @@ export function ValidatePage() {
       </div>
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(400px,5fr)_7fr]">
         <div className="min-h-0 space-y-3 overflow-y-auto border-r p-4">
-          <section className="bg-card space-y-3 rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-semibold">{t("val.file")}</p>
-              <p className="text-muted-foreground text-xs">{t("val.fileHint")}</p>
-            </div>
-            <div className="hover:border-foreground/30 hover:bg-accent/30 flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed p-5 text-center transition-colors"
-              onClick={() => input.current?.click()} onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); const file = e.dataTransfer.files[0]; if (file) void upload(file) }}>
-              <FileUp className="text-muted-foreground size-5" />
-              <p className="text-sm font-medium">{t("val.drop")}</p>
-              <p className="text-muted-foreground text-xs">PDF · .p7s · .p7m · XML</p>
-              <input ref={input} type="file" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = "" }} />
-            </div>
-            {validateTarget && (
-              <div className="flex flex-wrap items-center gap-2">
-                <UploadButton label={t("val.data")} accept="*/*" onUploaded={(f) => choose({ ...validateTarget, dataId: f.id, dataName: f.fileName })} />
-                <span className="text-muted-foreground text-xs">{validateTarget.dataName ?? t("val.dataHint")}</span>
+          <Block id="file" title={t("val.file")} summary={t("val.fileHint")} open={open} toggle={toggle}>
+            <div className="space-y-3 py-3">
+              <div className="hover:border-foreground/30 hover:bg-accent/30 flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed p-5 text-center transition-colors"
+                onClick={() => input.current?.click()} onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); const file = e.dataTransfer.files[0]; if (file) void upload(file) }}>
+                <FileUp className="text-muted-foreground size-5" />
+                <p className="text-sm font-medium">{t("val.drop")}</p>
+                <p className="text-muted-foreground text-xs">PDF · .p7s · .p7m · XML</p>
+                <input ref={input} type="file" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = "" }} />
               </div>
-            )}
-          </section>
-
-          <section className="bg-card rounded-lg border">
-            <div className="px-3 py-2.5">
-              <p className="text-sm font-semibold">{t("val.samples")}</p>
-              <p className="text-muted-foreground text-xs">{t("val.samplesHint")}</p>
+              {validateTarget && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <UploadButton label={t("val.data")} accept="*/*" onUploaded={(f) => choose({ ...validateTarget, dataId: f.id, dataName: f.fileName })} />
+                  <span className="text-muted-foreground text-xs">{validateTarget.dataName ?? t("val.dataHint")}</span>
+                </div>
+              )}
             </div>
+          </Block>
+
+          <Block id="samples" title={t("val.samples")} summary={t("val.samplesHint")} count={samples.length} open={open} toggle={toggle}>
             {groups.map((group) => (
-              <div key={group.format.id} className="border-t">
-                <p className="text-muted-foreground px-3 pt-2 text-[10px] font-semibold tracking-wide uppercase">{group.format.title}</p>
-                <ul className="pb-1">
+              <div key={group.format.id} className="py-1">
+                <p className="text-muted-foreground pt-2 text-[10px] font-semibold tracking-wide uppercase">{group.format.title}</p>
+                <ul className="-mx-3">
                   {group.samples.map((s) => (
                     <li key={s.format + s.id}>
                       <button type="button" onClick={() => choose({ fileId: s.fileId, name: s.fileName, dataId: s.dataId })}
@@ -142,19 +188,18 @@ export function ValidatePage() {
                 </ul>
               </div>
             ))}
-          </section>
+          </Block>
 
-          <section className="bg-card rounded-lg border">
-            <div className="px-3 py-2.5">
-              <p className="text-sm font-semibold">{t("val.trust")}</p>
-              <p className="text-muted-foreground text-xs">{t("val.trustHint")}</p>
-            </div>
-            <div className="divide-y border-t px-3">
-              <OptionScope.Provider value={{ options: validateOptions, set: setValidateOption }}>
-                {trust.map((o) => <OptionField key={o.id} option={o} />)}
-              </OptionScope.Provider>
-            </div>
-          </section>
+          <OptionScope.Provider value={{ options: validateOptions, set: setValidateOption }}>
+            {settingBlocks.map((block) => {
+              const options = block.ids.map((id) => schema.options.find((o) => o.id === id)).filter((o) => o !== undefined)
+              return options.length === 0 ? null : (
+                <Block key={block.id} id={block.id} title={t(block.title)} summary={t(block.summary)} count={options.length} open={open} toggle={toggle}>
+                  {options.map((o) => <OptionField key={o.id} option={o} />)}
+                </Block>
+              )
+            })}
+          </OptionScope.Provider>
         </div>
         <div className="min-h-0 overflow-y-auto p-4">
           <ResultPanel extra={rows ? {

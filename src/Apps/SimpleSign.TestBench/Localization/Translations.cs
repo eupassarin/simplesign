@@ -648,8 +648,6 @@ internal static class Translations
         ["The root of the sandbox PKI."] = "A raiz da PKI do sandbox.",
         ["Operating system roots"] = "Raízes do sistema operacional",
         ["The roots the operating system trusts."] = "As raízes em que o sistema operacional confia.",
-        ["Check revocation"] = "Verificar revogação",
-        ["Looks the certificates up in the embedded or online CRLs and OCSP responses."] = "Procura os certificados nas LCRs e respostas OCSP embutidas ou online.",
 
         // ── TestBench ETSI only ────────────────────────────────────────
         ["The certificate lacks the nonRepudiation key usage: some validation policies warn about it."] = "O certificado não tem o uso de chave nonRepudiation: algumas políticas de validação alertam sobre isso.",

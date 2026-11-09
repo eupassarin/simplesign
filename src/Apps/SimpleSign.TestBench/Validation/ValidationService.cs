@@ -32,8 +32,6 @@ public sealed record ValidationSettings
     /// <summary>Uploaded root certificates (DER or PEM) to trust as well.</summary>
     public IReadOnlyList<string> CustomRootUploadIds { get; init; } = [];
 
-    public bool CheckRevocation { get; init; } = true;
-
     public int TimeoutSeconds { get; init; } = 10;
 
     /// <summary>The uploaded validation policy (JSON, root ValidationConstraints); null: <c>ValidationPolicy.Default</c>.</summary>
@@ -201,7 +199,6 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         {
             TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),
             TrustedRoots = roots.Count > 0 ? roots : null,
-            CheckRevocation = settings.CheckRevocation,
             NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 120)),
             Policy = PolicyUploads.Validation(settings.PolicyId, documents),
             Level = settings.Level,
@@ -351,11 +348,6 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             options.Add("TrustedRoots = [root] // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")");
         }
 
-        if (!s.CheckRevocation)
-        {
-            options.Add("CheckRevocation = false");
-        }
-
         if (s.TimeoutSeconds != 10)
         {
             options.Add($"NetworkTimeout = TimeSpan.FromSeconds({s.TimeoutSeconds})");
@@ -370,7 +362,6 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         sb.Append("    foreach (var error in r.Errors) Console.WriteLine($\"  ✕ {error}\");\n}\n");
         string cli = "simplesign validate signed.pdf"
             + (s.Trust.Contains(TrustChoice.Sandbox) || s.CustomRootUploadIds.Count > 0 ? " --trust root.cer" : "")
-            + (s.CheckRevocation ? "" : " --no-revocation")
             + string.Concat(PolicyCliArgs(s).Select(a => " " + a));
         var notes = new List<string>
         {

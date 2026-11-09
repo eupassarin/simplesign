@@ -267,11 +267,6 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             sb.Append("    TrustedRoots = [root], // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")\n");
         }
 
-        if (!settings.CheckRevocation)
-        {
-            sb.Append("    CheckRevocation = false,\n");
-        }
-
         foreach (string option in ValidationService.PolicyOptionsCode(settings))
         {
             sb.Append("    ").Append(option).Append(",\n");
@@ -291,7 +286,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             args.Add("--trust root.cer");
         }
 
-        if (settings.CheckRevocation)
+        if (settings.Level >= SimpleSign.Core.Validation.ValidationLevel.LongTermData)
         {
             args.Add("--check-revocation");
         }
