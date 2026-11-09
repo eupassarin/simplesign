@@ -33,6 +33,9 @@ internal sealed record RevocationTokenFacts
     /// <summary>The certificate the token is about.</summary>
     public required X509Certificate2 Certificate { get; init; }
 
+    /// <summary>The CRL or OCSP response as read.</summary>
+    public required byte[] Data { get; init; }
+
     /// <summary>Who signed the token (the CRL issuer, the OCSP responder); null when it was not found.</summary>
     public X509Certificate2? Issuer { get; init; }
 
@@ -159,6 +162,7 @@ internal static class RevocationTokenReader
             {
                 Kind = RevocationTokenKind.Crl,
                 Certificate = certificate,
+                Data = data,
                 Issuer = issuer,
                 IssuerChain = issuerChain,
                 Status = status,
@@ -260,6 +264,7 @@ internal static class RevocationTokenReader
                 {
                     Kind = RevocationTokenKind.Ocsp,
                     Certificate = certificate,
+                    Data = data,
                     Issuer = responder,
                     IssuerChain = chain,
                     Status = status,

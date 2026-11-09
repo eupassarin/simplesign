@@ -168,8 +168,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            ValidationObjects = evaluation.ValidationObjects,
             AppliedPolicy = evaluation.Policy,
-            BestSignatureTime = facts.ProofOfExistence,
+            BestSignatureTime = evaluation.BestSignatureTime,
             Facts = facts,
             IsNotRevoked = facts.IsNotRevoked,
             RevocationSource = facts.RevocationSource,
@@ -527,9 +528,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             TrustedLists = _options.TrustedLists,
             EmbeddedCrls = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "CRLValues", "EncapsulatedCRLValue") : null,
             EmbeddedOcsps = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "OCSPValues", "EncapsulatedOCSPValue") : null,
-            Timestamps = tsValid is not null && SignatureTimeStampToken(sigElement, ns) is { } signatureToken
-                ? [new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted)]
-                : null,
+            Timestamps = XadesTimestampTokens(sigElement, ns, tsValid, tsaTrusted, archiveTsValid, trustAnchors),
         };
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -539,8 +538,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
             Constraints = evaluation.Constraints,
+            ValidationObjects = evaluation.ValidationObjects,
             AppliedPolicy = evaluation.Policy,
-            BestSignatureTime = facts.ProofOfExistence,
+            BestSignatureTime = evaluation.BestSignatureTime,
             Facts = facts,
             ChainCandidates = [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
             EmbeddedCrls = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "CRLValues", "EncapsulatedCRLValue") : [],
@@ -586,6 +586,38 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             TLevelTimeStampValid = signatureTimeStamp ? tsValid : false,
             LtaLevelTimeStampValid = archiveTimeStamp ? archiveValid : false,
         };
+    }
+
+    /// <summary>The signature and archive timestamps of a signature, for the Timestamp context of the policy.</summary>
+    private IReadOnlyList<TimestampTokenFacts>? XadesTimestampTokens(
+        XmlElement sigElement, XmlNamespaceManager ns, bool? tsValid, bool? tsaTrusted, bool? archiveValid, IEnumerable<X509Certificate2>? trustAnchors)
+    {
+        var tokens = new List<TimestampTokenFacts>();
+        if (tsValid is not null && SignatureTimeStampToken(sigElement, ns) is { } signatureToken)
+        {
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted));
+        }
+
+        const string Unsigned = "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties/";
+        if (archiveValid is not null
+            && sigElement.SelectSingleNode(Unsigned + "xades141:ArchiveTimeStamp/xades:EncapsulatedTimeStamp | " + Unsigned + "xades141:ArchiveTimeStamp/xades141:EncapsulatedTimeStamp | "
+                + Unsigned + "xades:ArchiveTimeStamp/xades:EncapsulatedTimeStamp", ns) is { } encapsulated)
+        {
+            try
+            {
+                byte[] archiveToken = Convert.FromBase64String(encapsulated.InnerText.Trim());
+                if (TimestampTrust.ChainsTo(archiveToken, trustAnchors ?? _options.TrustedRoots) is { } trusted)
+                {
+                    tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Archive, archiveToken, archiveValid, trusted));
+                }
+            }
+            catch (FormatException)
+            {
+                // An unreadable archive timestamp is reported by its own validation.
+            }
+        }
+
+        return tokens.Count == 0 ? null : tokens;
     }
 
     /// <summary>How many elements of the document have the Id <paramref name="id"/>.</summary>

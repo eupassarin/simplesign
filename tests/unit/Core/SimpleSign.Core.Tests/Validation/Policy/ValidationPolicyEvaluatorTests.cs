@@ -146,7 +146,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
 
-        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/PdfSignatureDictionary" && c.Status == ConstraintStatus.NotChecked);
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/DocMDP" && c.Status == ConstraintStatus.NotChecked);
     }
 
     [Fact]
@@ -453,6 +453,31 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
         // The failed token does not decide the signature, and gives it no best signature time.
         evaluation.Constraints.ShouldNotContain(c => c.Id == "Timestamp/BestSignatureTimeBeforeExpirationDateOfSigningCertificate");
         evaluation.Indication.ShouldBe(SignatureIndication.Valid);
+    }
+
+    [Fact]
+    public void Evaluate_TrustServiceOfTheAnchor_TypeAndStatusAreChecked()
+    {
+        var list = new SimpleSign.Core.Extensions.TrustedListInfo("PT", null, "5", null, null, DateTimeOffset.UtcNow, IsWellSigned: true, [_pki.RootCa])
+        {
+            Services = [new("http://uri.etsi.org/TrstSvc/Svctype/CA/QC", "http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/withdrawn", [_pki.RootCa])],
+        };
+        var policy = ValidationPolicy.Default
+            .With(Basic + "/TrustServiceTypeIdentifier", new PolicyConstraint(ConstraintLevel.Fail) { Ids = ["/CA/QC"] })
+            .With(Basic + "/TrustServiceStatus", new PolicyConstraint(ConstraintLevel.Fail) { Ids = ["/granted"] });
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { TrustedLists = [list] }, policy);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/TrustServiceTypeIdentifier" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/TrustServiceStatus" && c.Status == ConstraintStatus.Failed);
+    }
+
+    [Fact]
+    public void Evaluate_EmbeddedCrl_IsAValidationObject()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { EmbeddedCrls = [_pki.BuildLeafCrl()] }, ValidationPolicy.Default);
+
+        evaluation.ValidationObjects.ShouldContain(o => o.Type == ValidationObjectType.Crl && o.Indication == SignatureIndication.Valid);
     }
 
     [Fact]

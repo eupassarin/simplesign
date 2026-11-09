@@ -22,6 +22,7 @@ public static class CadesValidationReportExtensions
             SignerCertificate = result.SignerCertificate,
             ClaimedSigningTime = result.SigningTime,
             BestSignatureTime = result.BestSignatureTime,
+            ValidationObjects = result.ValidationObjects,
             Policy = result.AppliedPolicy,
             Errors = result.Errors,
             Warnings = result.Warnings,

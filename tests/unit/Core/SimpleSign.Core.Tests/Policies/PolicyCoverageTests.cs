@@ -18,12 +18,13 @@ public sealed class PolicyCoverageTests
     [InlineData("TrustedLists/TLVersion", ConstraintCoverage.Evaluated)]
     [InlineData("SignatureConstraints/BasicSignatureConstraints/DocMDP", ConstraintCoverage.ToImplement)]
     [InlineData("TrustedLists/TLStructure", ConstraintCoverage.ToImplement)]
-    [InlineData("SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary", ConstraintCoverage.ToConnect)]
+    [InlineData("SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary", ConstraintCoverage.Evaluated)]
+    [InlineData("SignatureConstraints/BasicSignatureConstraints/FieldMDP", ConstraintCoverage.ToImplement)]
     [InlineData("Revocation/UnknownStatus", ConstraintCoverage.Evaluated)]
-    [InlineData("Timestamp/Coherence", ConstraintCoverage.ToConnect)]
+    [InlineData("Timestamp/Coherence", ConstraintCoverage.Evaluated)]
     [InlineData("CounterSignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage", ConstraintCoverage.Evaluated)]
     [InlineData("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/AcceptableRevocationDataFound", ConstraintCoverage.Evaluated)]
-    [InlineData("SignatureConstraints/BasicSignatureConstraints/TrustServiceStatus", ConstraintCoverage.ToConnect)]
+    [InlineData("SignatureConstraints/BasicSignatureConstraints/TrustServiceStatus", ConstraintCoverage.Evaluated)]
     public void Validation_Path_GivesItsCoverage(string path, ConstraintCoverage expected) =>
         PolicyCoverage.Validation(path).ShouldBe(expected);
 

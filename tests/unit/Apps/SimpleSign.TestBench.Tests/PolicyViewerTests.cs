@@ -42,10 +42,10 @@ public sealed class PolicyViewerTests(TestBenchFixture fixture)
         keyUsage.Evaluation.ShouldBe("evaluated");
         keyUsage.Standard.ShouldNotBeNull();
         nodes["SignatureConstraints/BasicSignatureConstraints/ByteRange"].Evaluation.ShouldBe("evaluated");
-        nodes["SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary"].Evaluation.ShouldBe("toConnect");
+        nodes["SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary"].Evaluation.ShouldBe("evaluated");
         nodes["SignatureConstraints/BasicSignatureConstraints/DocMDP"].Evaluation.ShouldBe("toImplement");
         nodes["Revocation/UnknownStatus"].Evaluation.ShouldBe("evaluated");
-        nodes["Timestamp/Coherence"].Evaluation.ShouldBe("toConnect");
+        nodes["Timestamp/Coherence"].Evaluation.ShouldBe("evaluated");
         nodes["TrustedLists/TLVersion"].Evaluation.ShouldBe("evaluated");
         nodes.Keys.ShouldNotContain("ContainerConstraints");
         nodes.Keys.ShouldNotContain("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/SunsetDate");
@@ -55,7 +55,7 @@ public sealed class PolicyViewerTests(TestBenchFixture fixture)
         expiration.Algorithms.ShouldContain(a => a.Name == "SHA1" && a.Date == "2012-08-01");
         expiration.Algorithms.ShouldContain(a => a.Name == "RSA" && a.Size == 3000);
         view.Counts!.Evaluated.ShouldBeGreaterThan(0);
-        view.Counts.ToConnect.ShouldBeGreaterThan(0);
+        view.Counts.ToConnect.ShouldBe(0); // Every kept constraint of the default policy is wired; only "to implement" remain.
         view.Counts.ToImplement.ShouldBeGreaterThan(0);
     }
 

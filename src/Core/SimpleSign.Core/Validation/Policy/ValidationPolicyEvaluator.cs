@@ -96,6 +96,9 @@ internal sealed record ValidationFacts
     /// <summary>Whether the ByteRange collides with another signature's (the same ranges, or overlapping /Contents); null for other formats.</summary>
     public bool? ByteRangeCollides { get; init; }
 
+    /// <summary>Whether no later PDF revision redefines the signature dictionary with another ByteRange or Contents; null for other formats.</summary>
+    public bool? SignatureDictionaryConsistent { get; init; }
+
     /// <summary>Whether no other element of the document has the signature's Id (XAdES); null for other formats.</summary>
     public bool? SignatureIdUnique { get; init; }
 
@@ -143,6 +146,12 @@ internal sealed record ValidationEvaluation(
 {
     /// <summary>The policy the evaluation applied.</summary>
     public AppliedPolicy? Policy { get; init; }
+
+    /// <summary>The timestamps and revocation data evaluated as tokens, with their outcome.</summary>
+    public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];
+
+    /// <summary>The best signature time: the earliest accepted signature timestamp, or null.</summary>
+    public DateTimeOffset? BestSignatureTime { get; init; }
 }
 
 /// <summary>
@@ -178,6 +187,7 @@ internal static class ValidationPolicyEvaluator
         private readonly List<string> _warnings = [];
         private readonly HashSet<string> _evaluated = new(StringComparer.Ordinal);
         private readonly List<(RevocationTokenFacts Token, bool Accepted)> _revocationTokens = [];
+        private readonly List<ValidationObjectEntry> _objects = [];
         private (SignatureIndication Indication, SignatureSubIndication? Sub)? _decided;
         private DateTimeOffset? _proofOfExistence = facts.ProofOfExistence;
 
@@ -222,6 +232,7 @@ internal static class ValidationPolicyEvaluator
                 EvaluateBestSignatureTime();
             }
 
+            EvaluateTrustService(basic);
             ReportNotEvaluated(context);
             if (!Nested && EvaluateTrustedList())
             {
@@ -229,7 +240,11 @@ internal static class ValidationPolicyEvaluator
             }
 
             var outcome = _decided ?? (SignatureIndication.Valid, null);
-            return new ValidationEvaluation(outcome.Indication, outcome.Sub, _constraints, _warnings);
+            return new ValidationEvaluation(outcome.Indication, outcome.Sub, _constraints, _warnings)
+            {
+                ValidationObjects = _objects,
+                BestSignatureTime = _proofOfExistence,
+            };
         }
 
         // ── Tokens: timestamps and revocation data, each in its own context ───────────────
@@ -271,7 +286,9 @@ internal static class ValidationPolicyEvaluator
                     ProofOfExistence = info.GenTime,
                     ValidationTime = facts.ValidationTime,
                 }.WithCms(cms);
-                var nested = Merge(new Evaluation(tokenFacts, tree, Timestamp, token.Label, timestampToken: token, tstInfo: info).Run());
+                var evaluation = new Evaluation(tokenFacts, tree, Timestamp, token.Label, timestampToken: token, tstInfo: info).Run();
+                var nested = Merge(evaluation);
+                _objects.Add(ObjectOf(ValidationObjectType.Timestamp, token.Token, evaluation) with { Time = info.GenTime });
                 if (info.GenTime is { } time)
                 {
                     all.Add((token.Kind, time));
@@ -320,10 +337,18 @@ internal static class ValidationPolicyEvaluator
                     ProofOfExistence = token.ProducedAt,
                     ValidationTime = facts.ValidationTime,
                 };
-                bool failed = Merge(new Evaluation(tokenFacts, tree, Revocation, token.Label, revocationToken: token).Run());
+                var evaluation = new Evaluation(tokenFacts, tree, Revocation, token.Label, revocationToken: token).Run();
+                bool failed = Merge(evaluation);
+                _objects.Add(ObjectOf(token.Kind == RevocationTokenKind.Crl ? ValidationObjectType.Crl : ValidationObjectType.OcspResponse, token.Data, evaluation));
                 _revocationTokens.Add((token, !failed && token.Status != RevocationTokenStatus.Unknown));
             }
         }
+
+        /// <summary>A token as a validation object: usable (valid) unless one of its constraints failed.</summary>
+        private static ValidationObjectEntry ObjectOf(ValidationObjectType type, byte[] data, ValidationEvaluation evaluation) =>
+            evaluation.Constraints.Any(c => c.Status == ConstraintStatus.Failed)
+                ? new(type, data, evaluation.Indication == SignatureIndication.Valid ? SignatureIndication.Indeterminate : evaluation.Indication, evaluation.SubIndication)
+                : new(type, data, SignatureIndication.Valid, null);
 
         /// <summary>Adds a nested evaluation's results; true when one of its constraints failed.</summary>
         private bool Merge(ValidationEvaluation nested)
@@ -507,6 +532,8 @@ internal static class ValidationPolicyEvaluator
             Fact(basic + "/ByteRangeCollision", facts.ByteRangeCollides is { } collides ? !collides : null,
                 "The ByteRange does not collide with another signature's.", "The ByteRange collides with another signature's.",
                 SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
+            Fact(basic + "/PdfSignatureDictionary", facts.SignatureDictionaryConsistent, "The signature dictionary is the same in every later revision.",
+                "A later revision redefines the signature dictionary with another ByteRange or Contents.", SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
             Fact(basic + "/SignatureDuplicated", facts.SignatureIdUnique, "The signature's Id is unique.",
                 "Another element of the document has the signature's Id.", SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
 
@@ -1058,6 +1085,34 @@ internal static class ValidationPolicyEvaluator
                     $"The signature timestamp is within {delay} of the claimed signing time.",
                     $"The signature timestamp is more than {delay} after the claimed signing time.",
                     SignatureIndication.Indeterminate, SignatureSubIndication.SigConstraintsFailure);
+            }
+        }
+
+        /// <summary>The type and status, in its trusted list, of the trust service the chain's anchor belongs to.</summary>
+        private void EvaluateTrustService(string basic)
+        {
+            var service = facts.Chain is { Count: > 0 } chain && facts.TrustedLists is { } lists
+                ? lists.SelectMany(l => l.Services).FirstOrDefault(s => s.Certificates.Any(a => chain.Any(c => c.RawData.AsSpan().SequenceEqual(a.RawData))))
+                : null;
+            if (service is null)
+            {
+                NotApplicable(basic + "/TrustServiceTypeIdentifier");
+                NotApplicable(basic + "/TrustServiceStatus");
+                return;
+            }
+
+            static bool Matches(IReadOnlyList<string> accepted, string uri) =>
+                accepted.Count == 0 || accepted.Any(a => uri == a || uri.EndsWith(a, StringComparison.Ordinal));
+            if (tree.Find(basic + "/TrustServiceTypeIdentifier") is { } types)
+            {
+                Check(basic + "/TrustServiceTypeIdentifier", Matches(types.Ids, service.ServiceType), $"The trust service type {service.ServiceType} is accepted.",
+                    $"The trust service type {service.ServiceType} is not accepted.", SignatureIndication.Indeterminate, SignatureSubIndication.ChainConstraintsFailure);
+            }
+
+            if (tree.Find(basic + "/TrustServiceStatus") is { } statuses)
+            {
+                Check(basic + "/TrustServiceStatus", Matches(statuses.Ids, service.Status), $"The trust service status {service.Status} is accepted.",
+                    $"The trust service status {service.Status} is not accepted.", SignatureIndication.Indeterminate, SignatureSubIndication.ChainConstraintsFailure);
             }
         }
 

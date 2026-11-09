@@ -121,7 +121,10 @@ public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
 
     /// <inheritdoc />
     public IReadOnlyList<TrustedListInfo> TrustedLists =>
-        [new TrustedListInfo(Territory, Location, Version, IssueDate, NextUpdate, LoadedAt, IsWellSigned: true, _anchors)];
+        [new TrustedListInfo(Territory, Location, Version, IssueDate, NextUpdate, LoadedAt, IsWellSigned: true, _anchors)
+        {
+            Services = [.. Services.Select(s => new TrustedServiceInfo(s.ServiceType, s.Status, s.Certificates))],
+        }];
 
     /// <summary>A copy that records where and when the list was read.</summary>
     internal TrustedList WithOrigin(Uri? location, DateTimeOffset loadedAt) => new(this) { Location = location, LoadedAt = loadedAt };

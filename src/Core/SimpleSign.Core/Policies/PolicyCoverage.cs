@@ -32,6 +32,7 @@ public static class PolicyCoverage
     {
         "ReferenceDataExistence", "ReferenceDataIntact", "SignatureIntact", "SignatureValid", "SignatureDuplicated",
         "ProspectiveCertificateChain", "SignerInformationStore", "ByteRange", "ByteRangeCollision", "ByteRangeAllDocument",
+        "TrustServiceTypeIdentifier", "TrustServiceStatus", "PdfSignatureDictionary",
     };
 
     private static readonly HashSet<string> s_certificate = new(StringComparer.Ordinal)
@@ -67,7 +68,7 @@ public static class PolicyCoverage
 
     private static readonly HashSet<string> s_direct = new(StringComparer.Ordinal)
     {
-        "Model", "Timestamp/TimestampDelay", "Timestamp/TimestampValid",
+        "Model", "Timestamp/TimestampDelay", "Timestamp/TimestampValid", "Timestamp/Coherence", "Timestamp/AtsHashIndex",
         "Timestamp/RevocationTimeAgainstBestSignatureTime", "Timestamp/BestSignatureTimeBeforeExpirationDateOfSigningCertificate",
         "Timestamp/TSAGeneralNamePresent", "Timestamp/TSAGeneralNameContentMatch", "Timestamp/TSAGeneralNameOrderMatch",
         "Revocation/UnknownStatus", "Revocation/ThisUpdatePresent", "Revocation/RevocationIssuerKnown",

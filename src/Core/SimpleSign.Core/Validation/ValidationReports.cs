@@ -43,6 +43,9 @@ public sealed record SignatureReportEntry
 
     /// <summary>The warnings.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
+
+    /// <summary>The timestamps and revocation data the validation used, with their own outcome.</summary>
+    public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];
 }
 
 /// <summary>
@@ -68,6 +71,7 @@ public static class ValidationReports
         var list = signatures.ToList();
         var time = (validationTime ?? DateTimeOffset.UtcNow).ToUniversalTime();
         var certificates = new Dictionary<string, X509Certificate2>(StringComparer.Ordinal);
+        var objects = new Dictionary<string, ValidationObjectEntry>(StringComparer.Ordinal);
 
         using var stream = new MemoryStream();
         var settings = new XmlWriterSettings { Indent = true, Encoding = new UTF8Encoding(false) };
@@ -78,9 +82,13 @@ public static class ValidationReports
             foreach (var signature in list)
             {
                 WriteSignature(writer, signature, level, time, certificates);
+                foreach (var entry in signature.ValidationObjects)
+                {
+                    objects.TryAdd("O-" + Convert.ToHexString(SHA256.HashData(entry.Data.Span)), entry);
+                }
             }
 
-            if (certificates.Count > 0)
+            if (certificates.Count > 0 || objects.Count > 0)
             {
                 writer.WriteStartElement("SignatureValidationObjects", EtsiNamespace);
                 foreach (var (id, certificate) in certificates)
@@ -94,6 +102,11 @@ public static class ValidationReports
                     writer.WriteEndElement();
                 }
 
+                foreach (var (id, entry) in objects)
+                {
+                    WriteObject(writer, id, entry);
+                }
+
                 writer.WriteEndElement();
             }
 
@@ -102,6 +115,46 @@ public static class ValidationReports
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>A timestamp, CRL or OCSP response with its POE (timestamps) and its own validation status.</summary>
+    private static void WriteObject(XmlWriter writer, string id, ValidationObjectEntry entry)
+    {
+        writer.WriteStartElement("ValidationObject", EtsiNamespace);
+        writer.WriteAttributeString("id", id);
+        writer.WriteElementString("ObjectType", EtsiNamespace, Etsi + "validationObject:" + entry.Type switch
+        {
+            ValidationObjectType.Timestamp => "timestamp",
+            ValidationObjectType.Crl => "CRL",
+            _ => "OCSPResponse",
+        });
+        writer.WriteStartElement("ValidationObjectRepresentation", EtsiNamespace);
+        writer.WriteElementString("base64", EtsiNamespace, Convert.ToBase64String(entry.Data.Span));
+        writer.WriteEndElement();
+        if (entry.Time is { } time)
+        {
+            writer.WriteStartElement("POE", EtsiNamespace);
+            writer.WriteElementString("POETime", EtsiNamespace, DateTime(time.ToUniversalTime()));
+            writer.WriteElementString("TypeOfProof", EtsiNamespace, Etsi + "poetype:validation");
+            writer.WriteEndElement();
+        }
+
+        writer.WriteStartElement("ValidationReport", EtsiNamespace);
+        writer.WriteStartElement("SignatureValidationStatus", EtsiNamespace);
+        writer.WriteElementString("MainIndication", EtsiNamespace, Etsi + "mainindication:" + entry.Indication switch
+        {
+            SignatureIndication.Valid => "total-passed",
+            SignatureIndication.Invalid => "total-failed",
+            _ => "indeterminate",
+        });
+        if (entry.SubIndication is { } sub)
+        {
+            writer.WriteElementString("SubIndication", EtsiNamespace, Etsi + "subindication:" + sub.ToEtsiName());
+        }
+
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndElement();
     }
 
     private static void WriteSignature(

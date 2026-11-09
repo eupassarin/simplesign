@@ -22,6 +22,12 @@ internal sealed class RevocationChecker : IRevocationChecker
     /// <summary>Which online source is asked first. Default: OCSP.</summary>
     internal RevocationStrategy Strategy { get; init; } = RevocationStrategy.OcspFirst;
 
+    /// <summary>
+    /// When set (by a validator, around a call), the OCSP responses fetched online are added to it, so the policy can
+    /// evaluate them as revocation tokens.
+    /// </summary>
+    internal static readonly AsyncLocal<List<byte[]>?> FetchedOcsps = new();
+
     /// <summary>Whether the other online source is asked when the first gives no answer.</summary>
     internal bool Fallback { get; init; } = true;
 
@@ -157,6 +163,13 @@ internal sealed class RevocationChecker : IRevocationChecker
         _logger.TryingOcsp(cert.Subject, ocspUrl);
         try
         {
+            if (FetchedOcsps.Value is { } fetched)
+            {
+                var response = await _ocspClient.FetchOcspResponseAsync(cert, chain.FindIssuerOf(cert), ocspUrl, ct).ConfigureAwait(false);
+                fetched.Add(response.ResponseBytes);
+                return (response.IsValid, RevocationSource.OnlineOcsp);
+            }
+
             bool ok = await _ocspClient.CheckOcspWithChainAsync(cert, chain, ocspUrl, ct).ConfigureAwait(false);
             return (ok, RevocationSource.OnlineOcsp);
         }

@@ -59,9 +59,9 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | `ReferenceDataIntact`, `SignatureIntact`, `ProspectiveCertificateChain` | same | evaluated |  |
 | `ReferenceDataExistence`, `SignatureValid`, `SignerInformationStore` | same | evaluated | The validators already know. |
 | `ByteRange`, `ByteRangeAllDocument`, `ByteRangeCollision` | same | evaluated | `IntegrityVerifier`, the coverage and the ranges of every field. |
-| `PdfSignatureDictionary` | same | to connect | Needs the signature dictionary of every revision. |
+| `PdfSignatureDictionary` | same | evaluated | A later revision that redefines the signature dictionary must keep its ByteRange and Contents. |
 | `SignatureDuplicated` | same | evaluated | Id uniqueness in XAdES. |
-| `TrustServiceTypeIdentifier`, `TrustServiceStatus` | same | to connect | `TrustedList` already reads the service type and status. |
+| `TrustServiceTypeIdentifier`, `TrustServiceStatus` | same | evaluated | `TrustedList` already reads the service type and status. |
 | `DocMDP`, `FieldMDP`, `SigFieldLock`, `FormFillChanges`, `AnnotationChanges`, `UndefinedChanges`, `PdfPageDifference`, `PdfAnnotationOverlap` | same | to implement | Compare PDF revisions (protection against shadow attacks). |
 | `ReferenceDataNameMatch`, `ManifestEntryObjectExistence`, `ManifestEntryObjectGroup`, `ManifestEntryObjectIntact`, `ManifestEntryNameMatch` | same | removed | ASiC-E and `ds:Manifest`, not supported. |
 | `PdfVisualDifference` | same | removed | Needs rendering the pages; SimpleSign has no PDF renderer. |
@@ -74,7 +74,7 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | `MaxPathLength`, `NameConstraints`, `PolicyTree`, `SupportedCriticalExtensions`, `IssuerName` | same | evaluated | The status of the X509Chain. |
 | AuthorityInfoAccessPresent, RevocationInfoAccessPresent, AuthorityKeyIdentifierPresent, SubjectKeyIdentifierPresent, ForbiddenExtensions, SerialNumberPresent, NoRevAvail, RevocationDataSkip (CertificateExtensions, CertificatePolicies) | same | evaluated | RFC 5280 extensions and attributes; `ocsp-nocheck`. |
 | `NotOnHold` | same | evaluated | From the reason code of the CRLs and OCSP responses the signature carries. |
-| `AcceptableRevocationDataFound`, `CRLNextUpdatePresent`, `OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` | same | evaluated | From the CRLs and OCSP responses the signature carries (DSS, revocation values); revocation data fetched online only gives `AcceptableRevocationDataFound` of the signing certificate. |
+| `AcceptableRevocationDataFound`, `CRLNextUpdatePresent`, `OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` | same | evaluated | From the CRLs and OCSP responses the signature carries (DSS, revocation values) and those fetched online (CAdES, XAdES; PAdES: OCSP responses — a CRL downloaded by the PAdES validator only gives `AcceptableRevocationDataFound` of the signing certificate). |
 | `CommonName`, `Surname`, `GivenName`, `Pseudonym`, `Title`, `Email`, `OrganizationName`, `OrganizationUnit`, `OrganizationIdentifier`, `Country`, `Locality`, `State`, `UsePseudonym` | same | evaluated | Subject name attributes. |
 | `PolicyQualificationIds`, `PolicySupportedByQSCDIds`, `QcType`, `QcLegislationCountryCodes`, `QcEuPDSLocation`, `QcEuLimitValueCurrency`, `MinQcEuLimitValue`, `MinQcEuRetentionPeriod`, `QcQSCDLegislation`, `QcIdentificationMethod`, `QcPSBCountryOfLegislation`, `QcPSBAuthSourceIdentification`, `QcPSBLegislationIdentification`, `IssuedToNaturalPerson`, `IssuedToLegalPerson`, `SemanticsIdentifier` | same | removed | EU qualification decision; SimpleSign does not make it (a European framework package is only planned). |
 | `PSD2QcTypeRolesOfPSP`, `PSD2QcCompetentAuthorityName`, `PSD2QcCompetentAuthorityId` | same | removed | Payment service providers (EU banking). |
@@ -102,10 +102,10 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 |---|---|---|---|
 | `TimestampDelay` | same | evaluated |  |
 | `TimestampValid`, `RevocationTimeAgainstBestSignatureTime`, `BestSignatureTimeBeforeExpirationDateOfSigningCertificate` | same | evaluated | Signature timestamps; a signature timestamp that fails in this context is not a proof of existence. |
-| `Coherence` | same | to connect | Needs the archive timestamps evaluated as tokens. |
+| `Coherence` | same | evaluated | Signature timestamps before archive timestamps. |
 | `TSAGeneralNamePresent`, `TSAGeneralNameContentMatch`, `TSAGeneralNameOrderMatch` | same | evaluated | TSTInfo.tsa. |
-| `AtsHashIndex` | same | to connect | CAdES creates archive-time-stamp-v3; needs the archive timestamps evaluated as tokens. |
-| BasicSignatureConstraints, SignedAttributes (context) | same | evaluated | Signature timestamps and PAdES document timestamps: the token, the TSA certificate (at the timestamp's time) and its chain. Archive timestamps: to connect. |
+| `AtsHashIndex` | same | evaluated | The CAdES archive-time-stamp-v3 and its ats-hash-index. |
+| BasicSignatureConstraints, SignedAttributes (context) | same | evaluated | Signature and archive timestamps (an archive timestamp whose TSA cannot be judged against anchors is left out) and PAdES document timestamps: the token, the TSA certificate (at the timestamp's time) and its chain. |
 | `ContainerSignedAndTimestampedFilesCovered` | same | removed | ASiC. |
 
 ### Revocation

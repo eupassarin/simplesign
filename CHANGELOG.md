@@ -42,6 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validation policy: each countersignature (CAdES, XAdES) is evaluated in the `CounterSignatureConstraints`
   context, with its own result. `ValidationOptions.TrustedLists` gives the CAdES and XAdES validators the trusted lists
   the anchors come from, for the `TrustedLists` constraints (the CLI passes those of `--tsl` and `--lotl`).
+- Validation policy: archive timestamps are evaluated as tokens too (`Coherence`, `AtsHashIndex`); the CRLs and OCSP
+  responses fetched online are kept and evaluated like the ones the signature carries (CAdES, XAdES; PAdES: OCSP
+  responses); `TrustServiceTypeIdentifier`/`TrustServiceStatus` read the service of the anchor in its trusted list
+  (`TrustedListInfo.Services`); `PdfSignatureDictionary` checks that later PDF revisions keep the signature dictionary's
+  ByteRange and Contents. `ChainRevocationResult` gains `Crls`/`Ocsps` (the data the statuses came from).
+- Validation results (`SignatureValidationResult`, `CadesValidationResult`, `XadesValidationResult`) gain
+  `ValidationObjects`: the timestamps and revocation data used, each with the outcome of its own evaluation; the ETSI
+  TS 119 102-2 report lists them as validation objects (with the POE of each timestamp). `BestSignatureTime` is the
+  earliest accepted signature timestamp.
 - `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
   policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,

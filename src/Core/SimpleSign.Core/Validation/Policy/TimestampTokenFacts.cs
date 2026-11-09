@@ -94,3 +94,43 @@ internal static class TstInfoReader
         }
     }
 }
+
+/// <summary>Whether the TSA of a timestamp token chains to trust anchors, at the token's time.</summary>
+internal static class TimestampTrust
+{
+    /// <summary>True or false; null when there are no anchors to judge with or the token cannot be read.</summary>
+    public static bool? ChainsTo(byte[] token, IEnumerable<X509Certificate2>? anchors)
+    {
+        var roots = anchors?.ToList();
+        if (roots is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var certificates = TimestampValidator.ReadTokenCertificates(token);
+        if (certificates.Count == 0)
+        {
+            return null;
+        }
+
+        using var chain = new X509Chain();
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.DisableCertificateDownloads = true;
+        if (TstInfoReader.FromToken(token).GenTime is { } genTime)
+        {
+            chain.ChainPolicy.VerificationTime = genTime.UtcDateTime;
+        }
+
+        chain.ChainPolicy.CustomTrustStore.AddRange(roots.ToArray());
+        chain.ChainPolicy.ExtraStore.AddRange(certificates.Skip(1).Concat(roots).ToArray());
+        try
+        {
+            return chain.Build(certificates[0]);
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return false;
+        }
+    }
+}

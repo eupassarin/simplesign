@@ -27,6 +27,16 @@ is part of SimpleSign's public contract, so it should describe what SimpleSign d
 - The comparison with other validators lives only in `docs/policies/compatibility.md`; the format, the code and the
   other documents describe SimpleSign's policies on their own.
 
+**Delivery:** the constraints kept as "to connect" were wired in four steps: the signature context (RFC 5280
+certificate checks, subject attributes, PDF ByteRange and signature dictionary, signed and unsigned attributes,
+formats); timestamps and revocation data evaluated as tokens in their own contexts (a timestamp that fails is not a
+proof of existence, revocation data that fails is not acceptable; online data included); countersignatures in their
+context and trusted lists for CAdES and XAdES (with the type and status of the trust service). `PolicyCoverage` is the
+single source of what is evaluated; a test keeps `docs/policies/compatibility.md` in step with it. What remains is "to
+implement": PDF revision comparison (DocMDP, FieldMDP, SigFieldLock, form fill, annotation and undefined changes, page
+differences, annotation overlap), XML schema validation (XAdES, trusted lists), the content timestamp and
+`RevocationHasInformationAboutCertificate`.
+
 **Consequences:**
 - A policy file written for ADR 0023 must be updated: rename the root to `ValidationConstraints` and `eIDAS` to
   `TrustedLists`, and drop the removed elements (the reader names each one).

@@ -51,4 +51,10 @@ public sealed record ChainRevocationResult(ChainRevocationStatus Status, IReadOn
     /// (<c>RevocationFreshness</c>).
     /// </summary>
     public DateTimeOffset? IssuedAt { get; init; }
+
+    /// <summary>The CRLs the statuses came from (carried by the signature or downloaded).</summary>
+    public IReadOnlyList<byte[]> Crls { get; init; } = [];
+
+    /// <summary>The OCSP responses the statuses came from (carried by the signature or fetched).</summary>
+    public IReadOnlyList<byte[]> Ocsps { get; init; } = [];
 }

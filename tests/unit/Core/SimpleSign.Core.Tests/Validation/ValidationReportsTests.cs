@@ -47,6 +47,27 @@ public sealed class ValidationReportsTests : IDisposable
     }
 
     [Fact]
+    public void ToEtsiXml_ValidationObjects_AreListedWithTheirStatus()
+    {
+        var entry = Entry("Signature1") with
+        {
+            ValidationObjects =
+            [
+                new ValidationObjectEntry(ValidationObjectType.Timestamp, new byte[] { 1, 2, 3 }, SignatureIndication.Valid, null) { Time = DateTimeOffset.UtcNow },
+                new ValidationObjectEntry(ValidationObjectType.OcspResponse, new byte[] { 4, 5 }, SignatureIndication.Indeterminate, SignatureSubIndication.TryLater),
+            ],
+        };
+
+        var xml = XDocument.Parse(ValidationReports.ToEtsiXml([entry]));
+        XNamespace ns = ValidationReports.EtsiNamespace;
+
+        var objects = xml.Descendants(ns + "ValidationObject").ToList();
+        objects.ShouldContain(o => o.Element(ns + "ObjectType")!.Value.EndsWith(":timestamp", StringComparison.Ordinal) && o.Element(ns + "POE") != null);
+        objects.ShouldContain(o => o.Element(ns + "ObjectType")!.Value.EndsWith(":OCSPResponse", StringComparison.Ordinal)
+            && o.Descendants(ns + "SubIndication").Single().Value.EndsWith("TRY_LATER", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ToSimpleJson_CountsTheValidSignatures()
     {
         using var json = JsonDocument.Parse(ValidationReports.ToSimpleJson([Entry("a"), Entry("b", invalid: true)]));
@@ -71,7 +92,7 @@ public sealed class ValidationReportsTests : IDisposable
         [
             new("SignatureConstraints/BasicSignatureConstraints/ReferenceDataIntact",
                 invalid ? ConstraintStatus.Failed : ConstraintStatus.Passed, invalid ? SignatureSubIndication.HashFailure : null, "integrity"),
-            new("SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary", ConstraintStatus.NotChecked, null, "not evaluated"),
+            new("SignatureConstraints/BasicSignatureConstraints/DocMDP", ConstraintStatus.NotChecked, null, "not evaluated"),
         ],
         SignerCertificate = _pki.Leaf,
         ClaimedSigningTime = DateTimeOffset.UtcNow.AddMinutes(-5),
@@ -120,6 +141,11 @@ public sealed class ValidationReportsSchemaTests
                 SignerCertificate = pki.Leaf,
                 ClaimedSigningTime = DateTimeOffset.UtcNow,
                 Policy = AppliedPolicy.Of(ValidationPolicy.Default),
+                ValidationObjects =
+                [
+                    new ValidationObjectEntry(ValidationObjectType.Timestamp, new byte[] { 1, 2, 3 }, SignatureIndication.Valid, null) { Time = DateTimeOffset.UtcNow },
+                    new ValidationObjectEntry(ValidationObjectType.Crl, pki.BuildLeafCrl(), SignatureIndication.Indeterminate, SignatureSubIndication.TryLater),
+                ],
             },
         ]);
         var errors = new List<string>();
