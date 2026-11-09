@@ -126,6 +126,27 @@ public sealed class XadesDataObjectsTimeStampTests : IDisposable
     }
 
     [Fact]
+    public void Validate_PolicyAsksForTheContentTimestamp_ReportsItAndItsImprint()
+    {
+        byte[] strayToken = TimestampTestResponseBuilder.CreateTokenForData("something else"u8, HashAlgorithmName.SHA256);
+        byte[] signed = XadesSignatureBuilder.BuildSignature(
+            s_xml, s_cert, HashAlgorithmName.SHA256, DateTimeOffset.UtcNow, extraCertificates: null, commitmentType: null,
+            signaturePolicy: null, XadesSigningCertificateForm.V2, "1.2.840.113549.1.1.11", XadesForm.Enveloped,
+            signerRoles: null, dataObjectFormat: null, productionPlace: null,
+            new XadesDataObjectsTimeStamp(strayToken, DataObjectId: null), additionalReferences: null, NullLogger.Instance);
+        var policy = SimpleSign.Core.Policies.ValidationPolicy.Default
+            .With("SignatureConstraints/SignedAttributes/ContentTimeStamp", new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Fail))
+            .With("SignatureConstraints/SignedAttributes/ContentTimeStampMessageImprint", new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Fail));
+
+        var result = new XadesSignatureValidator(new SimpleSign.Core.Validation.ValidationOptions { Policy = policy, CheckRevocation = false })
+            .Validate(signed, [s_cert]);
+
+        result.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/ContentTimeStamp" && c.Status == SimpleSign.Core.Validation.ConstraintStatus.Passed);
+        result.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/ContentTimeStampMessageImprint"
+            && c.Status == SimpleSign.Core.Validation.ConstraintStatus.Failed);
+    }
+
+    [Fact]
     public async Task Validate_SignatureWithoutTheProperty_ReportsNull()
     {
         byte[] signed = await Builder(XadesForm.Enveloped).SignAsync();

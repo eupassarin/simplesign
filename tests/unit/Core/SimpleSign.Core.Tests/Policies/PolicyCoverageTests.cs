@@ -17,6 +17,7 @@ public sealed class PolicyCoverageTests
     [InlineData("Cryptographic/AlgoExpirationDate", ConstraintCoverage.Evaluated)]
     [InlineData("TrustedLists/TLVersion", ConstraintCoverage.Evaluated)]
     [InlineData("SignatureConstraints/BasicSignatureConstraints/DocMDP", ConstraintCoverage.ToImplement)]
+    [InlineData("SignatureConstraints/SignedAttributes/ContentTimeStamp", ConstraintCoverage.Evaluated)]
     [InlineData("TrustedLists/TLStructure", ConstraintCoverage.ToImplement)]
     [InlineData("SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary", ConstraintCoverage.Evaluated)]
     [InlineData("SignatureConstraints/BasicSignatureConstraints/FieldMDP", ConstraintCoverage.ToImplement)]

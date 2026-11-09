@@ -388,6 +388,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
 
         evaluation.Constraints.ShouldContain(c => c.Id == "Revocation/ThisUpdatePresent" && c.Status == ConstraintStatus.Passed && c.Message.StartsWith("[CRL of", StringComparison.Ordinal));
         evaluation.Constraints.ShouldContain(c => c.Id == "Revocation/BasicSignatureConstraints/SignatureIntact" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == "Revocation/RevocationHasInformationAboutCertificate" && c.Status == ConstraintStatus.Passed);
         evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/AcceptableRevocationDataFound" && c.Status == ConstraintStatus.Passed);
         evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/CRLNextUpdatePresent" && c.Status == ConstraintStatus.Passed);
         evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/CACertificate/AcceptableRevocationDataFound" && c.Status == ConstraintStatus.Passed);

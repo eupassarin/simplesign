@@ -53,6 +53,12 @@ internal sealed record RevocationTokenFacts
 
     public DateTimeOffset? NextUpdate { get; init; }
 
+    /// <summary>
+    /// From when the token keeps the status of expired certificates: the CRL's expiredCertsOnCRL or the OCSP response's
+    /// archiveCutoff; null when it says nothing.
+    /// </summary>
+    public DateTimeOffset? ExpiredCertificatesSince { get; init; }
+
     /// <summary>The OCSP producedAt; for a CRL, its thisUpdate.</summary>
     public DateTimeOffset? ProducedAt { get; init; }
 
@@ -73,6 +79,8 @@ internal sealed record RevocationTokenFacts
 internal static class RevocationTokenReader
 {
     private const string ReasonCode = "2.5.29.21";
+    private const string ExpiredCertsOnCrl = "2.5.29.60";
+    private const string ArchiveCutoff = "1.3.6.1.5.5.7.48.1.6";
 
     /// <summary>
     /// The tokens among <paramref name="crls"/> and <paramref name="ocsps"/> that are about a certificate of the chain
@@ -142,7 +150,7 @@ internal static class RevocationTokenReader
                 while (entries.HasData)
                 {
                     var entry = entries.ReadSequence();
-                    if (entry.ReadInteger() != serial)
+                    if (status == RevocationTokenStatus.Revoked || entry.ReadInteger() != serial)
                     {
                         continue;
                     }
@@ -153,9 +161,13 @@ internal static class RevocationTokenReader
                     {
                         reason = ReadReason(entry.ReadSequence());
                     }
-
-                    break;
                 }
+            }
+
+            DateTimeOffset? expiredSince = null;
+            if (tbs.HasData && tbs.PeekTag().HasSameClassAndValue(new Asn1Tag(TagClass.ContextSpecific, 0)))
+            {
+                expiredSince = ExtensionTime(tbs.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true)).ReadSequence(), ExpiredCertsOnCrl);
             }
 
             return new RevocationTokenFacts
@@ -171,6 +183,7 @@ internal static class RevocationTokenReader
                 ThisUpdate = thisUpdate,
                 NextUpdate = nextUpdate,
                 ProducedAt = thisUpdate,
+                ExpiredCertificatesSince = expiredSince,
                 SignatureValid = CrlClient.VerifyCrlSignature(issuer, tbsRaw, signature, algorithmOid, parameters),
                 SignatureAlgorithmOid = algorithmOid,
             };
@@ -211,6 +224,12 @@ internal static class RevocationTokenReader
             tbs.ReadEncodedValue(); // responderID
             var producedAt = tbs.ReadGeneralizedTime();
             var responses = tbs.ReadSequence();
+            DateTimeOffset? archiveCutoff = null;
+            if (tbs.HasData && tbs.PeekTag().HasSameClassAndValue(new Asn1Tag(TagClass.ContextSpecific, 1)))
+            {
+                archiveCutoff = ExtensionTime(tbs.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 1, isConstructed: true)).ReadSequence(), ArchiveCutoff);
+            }
+
 #pragma warning disable CA5350 // CertID hashes are SHA-1 in practice (RFC 6960)
             byte[] nameHash = SHA1.HashData(certificate.IssuerName.RawData);
 #pragma warning restore CA5350
@@ -273,6 +292,7 @@ internal static class RevocationTokenReader
                     ThisUpdate = thisUpdate,
                     NextUpdate = nextUpdate,
                     ProducedAt = producedAt,
+                    ExpiredCertificatesSince = archiveCutoff,
                     SignatureValid = responder is not null && OcspClient.VerifyOcspSignature(responder, tbsRaw, signature, algorithmOid, parameters),
                     ResponderIdMatches = responder is not null,
                     SignatureAlgorithmOid = algorithmOid,
@@ -318,6 +338,28 @@ internal static class RevocationTokenReader
             }
 
             return new AsnReader(extension.ReadOctetString(), AsnEncodingRules.DER).ReadEnumeratedBytes().Span[^1];
+        }
+
+        return null;
+    }
+
+    /// <summary>The time value of the extension <paramref name="oid"/> (GeneralizedTime), or null.</summary>
+    private static DateTimeOffset? ExtensionTime(AsnReader extensions, string oid)
+    {
+        while (extensions.HasData)
+        {
+            var extension = extensions.ReadSequence();
+            if (extension.ReadObjectIdentifier() != oid)
+            {
+                continue;
+            }
+
+            if (extension.PeekTag() == Asn1Tag.Boolean)
+            {
+                extension.ReadBoolean();
+            }
+
+            return new AsnReader(extension.ReadOctetString(), AsnEncodingRules.DER).ReadGeneralizedTime();
         }
 
         return null;

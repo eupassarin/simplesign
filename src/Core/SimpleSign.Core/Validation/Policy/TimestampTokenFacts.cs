@@ -11,6 +11,9 @@ internal enum TimestampTokenKind
 
     /// <summary>An archive timestamp (level LTA) over the signature and its validation data.</summary>
     Archive,
+
+    /// <summary>A content timestamp: taken over the signed data before the signature.</summary>
+    Content,
 }
 
 /// <summary>A timestamp token of a signature, with what the format validator established about it.</summary>
@@ -22,7 +25,12 @@ internal enum TimestampTokenKind
 internal sealed record TimestampTokenFacts(TimestampTokenKind Kind, byte[] Token, bool? ImprintValid, bool? Trusted, bool? AtsHashIndexValid = null)
 {
     /// <summary>A short name for the messages.</summary>
-    public string Label => Kind == TimestampTokenKind.Signature ? "signature timestamp" : "archive timestamp";
+    public string Label => Kind switch
+    {
+        TimestampTokenKind.Signature => "signature timestamp",
+        TimestampTokenKind.Archive => "archive timestamp",
+        _ => "content timestamp",
+    };
 }
 
 /// <summary>Reads the TSTInfo of a timestamp token.</summary>

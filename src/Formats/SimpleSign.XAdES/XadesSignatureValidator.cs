@@ -528,7 +528,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             TrustedLists = _options.TrustedLists,
             EmbeddedCrls = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "CRLValues", "EncapsulatedCRLValue") : null,
             EmbeddedOcsps = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "OCSPValues", "EncapsulatedOCSPValue") : null,
-            Timestamps = XadesTimestampTokens(sigElement, ns, tsValid, tsaTrusted, archiveTsValid, trustAnchors),
+            Timestamps = XadesTimestampTokens(sigElement, ns, tsValid, tsaTrusted, archiveTsValid, trustAnchors, dataTsValid),
         };
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -590,9 +590,26 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
     /// <summary>The signature and archive timestamps of a signature, for the Timestamp context of the policy.</summary>
     private IReadOnlyList<TimestampTokenFacts>? XadesTimestampTokens(
-        XmlElement sigElement, XmlNamespaceManager ns, bool? tsValid, bool? tsaTrusted, bool? archiveValid, IEnumerable<X509Certificate2>? trustAnchors)
+        XmlElement sigElement, XmlNamespaceManager ns, bool? tsValid, bool? tsaTrusted, bool? archiveValid, IEnumerable<X509Certificate2>? trustAnchors,
+        bool? contentValid)
     {
         var tokens = new List<TimestampTokenFacts>();
+        if (contentValid is not null && sigElement.SelectSingleNode(
+                "ds:Object/xades:QualifyingProperties/xades:SignedProperties/xades:SignedDataObjectProperties/xades:AllDataObjectsTimeStamp/xades:EncapsulatedTimeStamp",
+                ns) is { } content)
+        {
+            try
+            {
+                byte[] contentToken = Convert.FromBase64String(content.InnerText.Trim());
+                tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Content, contentToken, contentValid,
+                    TimestampTrust.ChainsTo(contentToken, trustAnchors ?? _options.TrustedRoots)));
+            }
+            catch (FormatException)
+            {
+                // Reported by the data objects timestamp validation.
+            }
+        }
+
         if (tsValid is not null && SignatureTimeStampToken(sigElement, ns) is { } signatureToken)
         {
             tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted));

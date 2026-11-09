@@ -83,6 +83,9 @@ internal sealed record SignedAttributeFacts
     /// <summary>How many certified roles (attribute certificates) the signature carries.</summary>
     public int CertifiedRoles { get; init; }
 
+    /// <summary>Whether a content timestamp (CAdES content-time-stamp, XAdES data objects timestamp) is present.</summary>
+    public bool ContentTimestamp { get; init; }
+
     /// <summary>The facts of CMS signed attributes (the DER SET of a SignerInfo); null when the signer info has none.</summary>
     public static SignedAttributeFacts? FromCms(byte[]? signedAttributes)
     {
@@ -97,6 +100,7 @@ internal sealed record SignedAttributeFacts
         string? contentType = null, contentHints = null, contentIdentifier = null;
         var commitments = new List<string>();
         bool location = false;
+        bool contentTimestamp = false;
         var claimed = new List<string>();
         int certified = 0;
         try
@@ -113,6 +117,12 @@ internal sealed record SignedAttributeFacts
                     if (type == Oids.MessageDigest)
                     {
                         messageDigest = true;
+                        continue;
+                    }
+
+                    if (type == Oids.ContentTimestamp)
+                    {
+                        contentTimestamp = true;
                         continue;
                     }
 
@@ -178,6 +188,7 @@ internal sealed record SignedAttributeFacts
             SignerLocation = location,
             ClaimedRoles = claimed,
             CertifiedRoles = certified,
+            ContentTimestamp = contentTimestamp,
         };
     }
 

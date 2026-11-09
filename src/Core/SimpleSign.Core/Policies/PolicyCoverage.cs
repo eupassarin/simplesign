@@ -57,7 +57,8 @@ public static class PolicyCoverage
         "SigningCertificatePresent", "UnicitySigningCertificate", "SigningCertificateRefersCertificateChain",
         "ReferencesToAllCertificateChainPresent", "SigningCertificateDigestAlgorithm", "CertDigestPresent", "CertDigestMatch",
         "IssuerSerialMatch", "SigningTime", "SigningTimeInCertRange", "ContentType", "ContentHints", "ContentIdentifier",
-        "MessageDigestOrSignedPropertiesPresent", "CommitmentTypeIndication", "SignerLocation", "ClaimedRoles", "CertifiedRoles",
+        "MessageDigestOrSignedPropertiesPresent", "CommitmentTypeIndication", "SignerLocation", "ClaimedRoles", "CertifiedRoles", "ContentTimeStamp",
+        "ContentTimeStampMessageImprint",
     };
 
     private static readonly HashSet<string> s_unsignedAttributes = new(StringComparer.Ordinal)
@@ -73,7 +74,7 @@ public static class PolicyCoverage
         "Timestamp/TSAGeneralNamePresent", "Timestamp/TSAGeneralNameContentMatch", "Timestamp/TSAGeneralNameOrderMatch",
         "Revocation/UnknownStatus", "Revocation/ThisUpdatePresent", "Revocation/RevocationIssuerKnown",
         "Revocation/RevocationIssuerValidAtProductionTime", "Revocation/RevocationAfterCertificateIssuance",
-        "Revocation/OCSPResponderIdMatch", "Revocation/SelfIssuedOCSP", "TrustedLists/TLFreshness", "TrustedLists/TLNotExpired", "TrustedLists/TLWellSigned",
+        "Revocation/OCSPResponderIdMatch", "Revocation/SelfIssuedOCSP", "Revocation/RevocationHasInformationAboutCertificate", "TrustedLists/TLFreshness", "TrustedLists/TLNotExpired", "TrustedLists/TLWellSigned",
         "TrustedLists/TLVersion",
     };
 
@@ -81,8 +82,8 @@ public static class PolicyCoverage
     private static readonly HashSet<string> s_toImplement = new(StringComparer.Ordinal)
     {
         "StructuralValidation", "DocMDP", "FieldMDP", "SigFieldLock", "FormFillChanges", "AnnotationChanges", "UndefinedChanges",
-        "PdfPageDifference", "PdfAnnotationOverlap", "ContentTimeStamp", "ContentTimeStampMessageImprint",
-        "RevocationHasInformationAboutCertificate", "TLStructure",
+        "PdfPageDifference", "PdfAnnotationOverlap",
+        "TLStructure",
     };
 
     /// <summary>What SimpleSign does with the constraint at <paramref name="path"/> of a validation policy.</summary>

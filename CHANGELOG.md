@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ValidationObjects`: the timestamps and revocation data used, each with the outcome of its own evaluation; the ETSI
   TS 119 102-2 report lists them as validation objects (with the POE of each timestamp). `BestSignatureTime` is the
   earliest accepted signature timestamp.
+- Validation policy: `RevocationHasInformationAboutCertificate` (revocation data issued after the certificate expired
+  counts only with expiredCertsOnCRL or archiveCutoff from before the expiry); `ContentTimeStamp` and
+  `ContentTimeStampMessageImprint` (CAdES content-time-stamp, XAdES data objects timestamps), the content timestamp
+  being judged in the Timestamp context and ordered before the signature timestamps (`Coherence`).
 - `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
   policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,

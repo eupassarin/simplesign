@@ -47,6 +47,9 @@ internal static class XadesSignedAttributeFacts
                 + Signed + "xades:SignedSignatureProperties/xades:SignatureProductionPlace", ns) is not null,
             ClaimedRoles = claimedRoles,
             CertifiedRoles = attributeCertificates,
+            ContentTimestamp = signature.SelectSingleNode(
+                Signed + "xades:SignedDataObjectProperties/xades:AllDataObjectsTimeStamp | "
+                + Signed + "xades:SignedDataObjectProperties/xades:IndividualDataObjectsTimeStamp", ns) is not null,
         };
     }
 

@@ -264,6 +264,11 @@ internal static class ValidationPolicyEvaluator
             var all = new List<(TimestampTokenKind Kind, DateTimeOffset Time)>();
             foreach (var token in timestamps)
             {
+                if (token.Trusted is null)
+                {
+                    continue; // A TSA no one could judge is not evaluated: it would only show as an untrusted chain.
+                }
+
                 Crypto.CmsSignedData cms;
                 try
                 {
@@ -303,14 +308,19 @@ internal static class ValidationPolicyEvaluator
             var signatureTimes = accepted.Where(t => t.Kind == TimestampTokenKind.Signature).Select(t => t.Time).ToList();
             _proofOfExistence = signatureTimes.Count > 0 ? signatureTimes.Min() : null;
 
+            var contents = all.Where(t => t.Kind == TimestampTokenKind.Content).Select(t => t.Time).ToList();
             var signatures = all.Where(t => t.Kind == TimestampTokenKind.Signature).Select(t => t.Time).ToList();
             var archives = all.Where(t => t.Kind == TimestampTokenKind.Archive).Select(t => t.Time).ToList();
-            if (signatures.Count > 0 && archives.Count > 0)
+            // Content timestamps, then signature timestamps, then archive timestamps (EN 319 102-1 §5.6.2.1).
+            if ((contents.Count > 0 && (signatures.Count > 0 || archives.Count > 0)) || (signatures.Count > 0 && archives.Count > 0))
             {
-                Check(Timestamp + "/Coherence", signatures.Max() <= archives.Min(),
-                    "The archive timestamps come after the signature timestamps.",
-                    "An archive timestamp is earlier than a signature timestamp.", SignatureIndication.Indeterminate, SignatureSubIndication.TimestampOrderFailure);
+                bool ordered = (contents.Count == 0 || contents.Max() <= signatures.Concat(archives).Min())
+                    && (signatures.Count == 0 || archives.Count == 0 || signatures.Max() <= archives.Min());
+                Check(Timestamp + "/Coherence", ordered,
+                    "The timestamps are in order: content, signature, archive.",
+                    "The timestamps are out of order (a later kind is earlier than an earlier one).", SignatureIndication.Indeterminate, SignatureSubIndication.TimestampOrderFailure);
             }
+
         }
 
         /// <summary>Evaluates each CRL and OCSP response the signature carries in the Revocation context.</summary>
@@ -387,6 +397,17 @@ internal static class ValidationPolicyEvaluator
             {
                 Check(Revocation + "/RevocationAfterCertificateIssuance", thisUpdate >= token.Certificate.NotBefore.ToUniversalTime(),
                     "It was issued after the certificate.", "It was issued before the certificate.", I, S);
+            }
+
+            if (token.ThisUpdate is { } issued)
+            {
+                var notAfter = token.Certificate.NotAfter.ToUniversalTime();
+                // RFC 5280 §3.3 / RFC 6960: once a certificate expired, the data says something about it only when it
+                // keeps expired certificates (expiredCertsOnCRL, archiveCutoff) from before the expiry.
+                Check(Revocation + "/RevocationHasInformationAboutCertificate",
+                    notAfter >= issued || token.ExpiredCertificatesSince is { } since && since <= notAfter,
+                    "It covers the certificate.",
+                    "It was issued after the certificate expired and keeps no status of expired certificates (expiredCertsOnCRL, archiveCutoff).", I, S);
             }
 
             Fact(Revocation + "/OCSPResponderIdMatch", token.ResponderIdMatches, "The ResponderID designates the responder.",
@@ -1003,6 +1024,18 @@ internal static class ValidationPolicyEvaluator
             CheckValues(path + "/CommitmentTypeIndication", attributes.CommitmentTypes, "commitment type");
             CheckValues(path + "/ClaimedRoles", attributes.ClaimedRoles, "claimed role");
             Check(path + "/SignerLocation", attributes.SignerLocation, "The signature has a signer location.", "The signature has no signer location.", I, S);
+            Check(path + "/ContentTimeStamp", attributes.ContentTimestamp, "The signature has a content timestamp.", "The signature has no content timestamp.", I, S);
+            if (attributes.ContentTimestamp)
+            {
+                var content = facts.Timestamps?.FirstOrDefault(t => t.Kind == TimestampTokenKind.Content);
+                Fact(path + "/ContentTimeStampMessageImprint", content?.ImprintValid, "The content timestamp covers the signed data.",
+                    "The content timestamp does not cover the signed data.", SignatureIndication.Invalid, SignatureSubIndication.HashFailure);
+            }
+            else
+            {
+                NotApplicable(path + "/ContentTimeStampMessageImprint");
+            }
+
             // Certified roles are matched by presence: the role names inside attribute certificates are not read.
             Check(path + "/CertifiedRoles", attributes.CertifiedRoles > 0, $"The signature has {attributes.CertifiedRoles} certified role(s).",
                 "The signature has no certified role.", I, S);

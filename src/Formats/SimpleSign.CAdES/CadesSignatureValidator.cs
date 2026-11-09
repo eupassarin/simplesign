@@ -412,9 +412,15 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     /// <summary>The signature and archive timestamps of a signer, for the Timestamp context of the policy.</summary>
     private IReadOnlyList<TimestampTokenFacts>? TimestampTokens(
         CmsSignedData cmsData, bool? tsValid, bool? tsaTrusted, byte[]? archiveToken, bool? archiveTsValid, bool archiveV3,
-        IEnumerable<X509Certificate2>? trustAnchors)
+        IEnumerable<X509Certificate2>? trustAnchors, byte[]? contentToken, bool? contentValid)
     {
         var tokens = new List<TimestampTokenFacts>();
+        if (contentToken is not null && contentValid is not null)
+        {
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Content, contentToken, contentValid,
+                TimestampTrust.ChainsTo(contentToken, trustAnchors ?? _options.TrustedRoots)));
+        }
+
         if (cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps)
         {
             tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted));
@@ -515,7 +521,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         // 6a. content-time-stamp: a signed attribute whose token covers the content itself
         bool? contentTsValid = null;
         DateTimeOffset? contentTsTime = null;
-        if (ReadSignedAttribute(cmsData.SignedAttrs, Oids.ContentTimestamp) is { } contentToken)
+        byte[]? contentTimestampToken = ReadSignedAttribute(cmsData.SignedAttrs, Oids.ContentTimestamp);
+        if (contentTimestampToken is { } contentToken)
         {
             if (content is null)
             {
@@ -609,7 +616,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             EmbeddedOcsps = embedded.Ocsps,
             IsCounterSignature = isCounterSignature,
             TrustedLists = _options.TrustedLists,
-            Timestamps = TimestampTokens(cmsData, tsValid, tsaTrusted, archiveToken, archiveTsValid, archiveV3, trustAnchors),
+            Timestamps = TimestampTokens(cmsData, tsValid, tsaTrusted, archiveToken, archiveTsValid, archiveV3, trustAnchors, contentTimestampToken, contentTsValid),
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);

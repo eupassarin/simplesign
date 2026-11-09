@@ -87,7 +87,7 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | `SigningCertificatePresent`, `CertDigestPresent`, `CertDigestMatch`, `SigningTime`, `SigningTimeInCertRange` | same | evaluated |  |
 | `UnicitySigningCertificate`, `SigningCertificateRefersCertificateChain`, `ReferencesToAllCertificateChainPresent`, `SigningCertificateDigestAlgorithm`, `IssuerSerialMatch`, `MessageDigestOrSignedPropertiesPresent` | same | evaluated | ESSCertIDv2 and SigningCertificateV2 are already read. |
 | `ContentType`, `ContentHints`, `ContentIdentifier`, `CommitmentTypeIndication`, `SignerLocation`, `ClaimedRoles`, `CertifiedRoles` | same | evaluated | `CertifiedRoles` by presence: the role names inside attribute certificates are not read. |
-| `ContentTimeStamp`, `ContentTimeStampMessageImprint` | same | to implement | XAdES creates data object timestamps; validation does not check them yet. |
+| `ContentTimeStamp`, `ContentTimeStampMessageImprint` | same | evaluated | CAdES content-time-stamp, XAdES AllDataObjectsTimeStamp (IndividualDataObjectsTimeStamp: presence only); the token is also judged in the Timestamp context and ordered before the signature timestamps. |
 | `KeyIdentifierPresent`, `KeyIdentifierMatch`, `X509UrlPresent`, `X509UrlMatch`, `SignatureType`, `EllipticCurveKeySize` | same | removed | JSON signature headers (kid, x5u, typ, RFC 7518 curves): no JSON signatures. |
 
 ### UnsignedAttributes
@@ -113,7 +113,7 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
 | `UnknownStatus`, `ThisUpdatePresent`, `RevocationIssuerKnown`, `RevocationIssuerValidAtProductionTime`, `RevocationAfterCertificateIssuance`, `OCSPResponderIdMatch`, `SelfIssuedOCSP` | same | evaluated | Each CRL and OCSP response the signature carries; one that fails here is not acceptable revocation data. |
-| `RevocationHasInformationAboutCertificate` | same | to implement | Read expiredCertsOnCRL and archiveCutoff. |
+| `RevocationHasInformationAboutCertificate` | same | evaluated | The certificate was valid when the data was issued, or the data keeps expired certificates (expiredCertsOnCRL, archiveCutoff) from before its expiry. |
 | BasicSignatureConstraints (context) | same | evaluated | The signature of the CRL or OCSP response and the issuer or responder certificate, at the time it was produced. |
 | `OCSPCertHashPresent`, `OCSPCertHashMatch` | same | removed | The certHash extension of a national PKI profile, not RFC 6960. |
 
