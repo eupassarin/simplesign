@@ -107,7 +107,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
             new ValidationOptions
             {
                 CheckRevocation = settings.CheckRevocation,
-                TrustSystemRoots = trustAnchors is null,
+                TrustSystemRoots = trustAnchors is null && !settings.NoSystemRoots,
                 Policy = policy,
                 Level = settings.ValidationLevel,
                 Verifier = settings.Verifier,

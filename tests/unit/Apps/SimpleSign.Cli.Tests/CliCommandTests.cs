@@ -1111,6 +1111,60 @@ public sealed class CliCommandTests : IDisposable
         output.ShouldContain(expected);
     }
 
+    [Fact]
+    public async Task Sign_PadesExtraOptions_AreInTheSignature()
+    {
+        string signed = Path.Combine(_tempDir, "extras-signed.pdf");
+        string policyHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData("policy"u8));
+
+        var (exit, output) = await RunAsync("sign", WritePdf("extras.pdf"), "-o", signed, "--cert", _pfxPath, "--password", Password,
+            "--signing-time", "2026-01-02T03:04:05Z",
+            "--doc-info", "Title=Contrato de teste",
+            "--contents-size", "32768",
+            "--signer-id", "12345678909", "--signer-id-type", "CPF", "--legal-basis", "Lei 14.063", "--commitment", "origin",
+            "--policy-oid", "1.2.3.4.5", "--policy-hash", policyHash);
+
+        exit.ShouldBe(0, output);
+        byte[] pdf = await File.ReadAllBytesAsync(signed);
+        Encoding.Latin1.GetString(pdf).ShouldContain("/Title (Contrato de teste)");
+        await using var stream = new MemoryStream(pdf);
+        var signature = (await SimpleSign.PAdES.Inspection.PdfSignatureInspector.InspectAsync(stream)).Signatures.ShouldHaveSingleItem();
+        signature.PdfDeclaredSigningTime.ShouldBe(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        signature.ContactInfo.ShouldNotBeNull().ShouldContain("CPF: 12345678909");
+        signature.CommitmentTypeOid.ShouldBe("1.2.840.113549.1.9.16.6.1");
+        signature.SignaturePolicyOid.ShouldBe("1.2.3.4.5");
+        (signature.ByteRange.Offset2 - signature.ByteRange.Length1).ShouldBe(32768 * 2 + 2);
+    }
+
+    [Theory]
+    [InlineData("--archive-tsa", "https://tsa.example.com", "requires --archival")]
+    [InlineData("--return-lower-level", null, "requires --tsa")]
+    [InlineData("--policy-hash", "00FF", "requires --policy-oid")]
+    [InlineData("--signing-time", "tomorrow", "ISO 8601")]
+    [InlineData("--doc-info", "Title", "KEY=VALUE")]
+    [InlineData("--contents-size", "10", "between")]
+    [InlineData("--tsa-user", "alice", "require --tsa")]
+    public async Task Sign_InconsistentExtraOption_ReturnsError(string option, string? value, string expected)
+    {
+        string[] extra = value is null ? [option] : [option, value];
+
+        var (exit, output) = await RunAsync(["sign", WritePdf("bad-extra.pdf"), "--cert", _pfxPath, "--password", Password, .. extra]);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain(expected);
+    }
+
+    [Fact]
+    public async Task Validate_NoSystemRootsWithTrust_IsValid()
+    {
+        string signed = Path.Combine(_tempDir, "roots-signed.pdf");
+        (await RunAsync("sign", WritePdf("roots.pdf"), "-o", signed, "--cert", _pfxPath, "--password", Password)).Exit.ShouldBe(0);
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-system-roots", "--trust", _cerPath, "--no-revocation", "--json");
+
+        exit.ShouldBe(0, output);
+    }
+
     private static async Task<(int Exit, string Output)> RunAsync(params string[] args)
     {
         var services = new ServiceCollection();
