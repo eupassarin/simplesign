@@ -38,17 +38,28 @@ public sealed class ValidationPolicyTests : IDisposable
     [Fact]
     public void FromJson_NameOutsideTheSchema_ThrowsWithThePath()
     {
-        const string json = """{ "ConstraintsParameters": { "SignatureConstraints": { "Typo": { "Level": "FAIL" } } } }""";
+        const string json = """{ "ValidationConstraints": { "SignatureConstraints": { "Typo": { "Level": "FAIL" } } } }""";
 
         var ex = Should.Throw<InvalidDataException>(() => ValidationPolicy.FromJson(json));
 
-        ex.Message.ShouldContain("$.ConstraintsParameters.SignatureConstraints.Typo");
+        ex.Message.ShouldContain("$.ValidationConstraints.SignatureConstraints.Typo");
+    }
+
+    [Theory]
+    [InlineData("""{ "ConstraintsParameters": { "Model": { "Value": "SHELL" } } }""")]
+    [InlineData("""{ "ValidationConstraints": { "ContainerConstraints": { "AllFilesSigned": { "Level": "FAIL" } } } }""")]
+    [InlineData("""{ "ValidationConstraints": { "eIDAS": { "TLNotExpired": { "Level": "WARN" } } } }""")]
+    public void FromJson_PolicyOfAnotherValidator_PointsToTheCompatibilityTable(string json)
+    {
+        var ex = Should.Throw<InvalidDataException>(() => ValidationPolicy.FromJson(json));
+
+        ex.Message.ShouldContain("docs/policies/compatibility.md");
     }
 
     [Fact]
     public void FromJson_UnknownLevel_Throws() =>
         Should.Throw<InvalidDataException>(() => ValidationPolicy.FromJson(
-            """{ "ConstraintsParameters": { "Model": { "Value": "SHELL" }, "Cryptographic": { "Level": "STRICT" } } }"""));
+            """{ "ValidationConstraints": { "Model": { "Value": "SHELL" }, "Cryptographic": { "Level": "STRICT" } } }"""));
 
     [Fact]
     public void FromJson_OtherRoot_Throws() =>
@@ -61,7 +72,7 @@ public sealed class ValidationPolicyTests : IDisposable
             {
               "$schema": "validation-policy.schema.json",
               // A comment.
-              "ConstraintsParameters": { "Name": "mine", "Description": "d", "Model": { "Value": "chain" } }
+              "ValidationConstraints": { "Name": "mine", "Description": "d", "Model": { "Value": "chain" } }
             }
             """);
 
@@ -89,7 +100,7 @@ public sealed class ValidationPolicyTests : IDisposable
     [Fact]
     public void With_MissingSections_AreCreated()
     {
-        var policy = ValidationPolicy.FromJson("""{ "ConstraintsParameters": { "Description": "" } }""")
+        var policy = ValidationPolicy.FromJson("""{ "ValidationConstraints": { "Description": "" } }""")
             .With("Timestamp/TimestampDelay", new PolicyConstraint(ConstraintLevel.Fail) { Unit = PolicyTimeUnit.Hours, IntValue = 2 });
 
         policy.Find("Timestamp/TimestampDelay")!.Duration.ShouldBe(TimeSpan.FromHours(2));
@@ -100,7 +111,7 @@ public sealed class ValidationPolicyTests : IDisposable
     public void LoadSigned_SignedByTheTrustedCertificate_Loads()
     {
         using var signer = Signer();
-        string path = Write("""{ "ConstraintsParameters": { "Name": "signed", "Description": "" } }""", signer, signedAttributes: true);
+        string path = Write("""{ "ValidationConstraints": { "Name": "signed", "Description": "" } }""", signer, signedAttributes: true);
 
         ValidationPolicy.LoadSigned(path, path + ".p7s", signer).Name.ShouldBe("signed");
     }
@@ -109,8 +120,8 @@ public sealed class ValidationPolicyTests : IDisposable
     public void LoadSigned_FileChangedAfterSigning_Throws()
     {
         using var signer = Signer();
-        string path = Write("""{ "ConstraintsParameters": { "Name": "signed", "Description": "" } }""", signer);
-        File.WriteAllText(path, """{ "ConstraintsParameters": { "Name": "changed", "Description": "" } }""");
+        string path = Write("""{ "ValidationConstraints": { "Name": "signed", "Description": "" } }""", signer);
+        File.WriteAllText(path, """{ "ValidationConstraints": { "Name": "changed", "Description": "" } }""");
 
         Should.Throw<CryptographicException>(() => ValidationPolicy.LoadSigned(path, path + ".p7s", signer));
     }
@@ -120,7 +131,7 @@ public sealed class ValidationPolicyTests : IDisposable
     {
         using var signer = Signer();
         using var other = Signer();
-        string path = Write("""{ "ConstraintsParameters": { "Name": "signed", "Description": "" } }""", signer);
+        string path = Write("""{ "ValidationConstraints": { "Name": "signed", "Description": "" } }""", signer);
 
         Should.Throw<CryptographicException>(() => ValidationPolicy.LoadSigned(path, path + ".p7s", other));
     }

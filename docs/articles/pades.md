@@ -82,8 +82,8 @@ Set `SignedByLabel = ""` to hide the first line, `SignerDisplayName` to show a n
 ## Signing Policy
 
 Before anything is signed, the builder checks the certificate, its chain and the algorithms with a `SigningPolicy`,
-a JSON document in the style of the EU DSS validation policy (root `SigningConstraints`, levels FAIL, WARN, INFORM,
-IGNORE — see [ADR 0023](../adr/0023-policies-in-the-dss-structure.md)). A FAIL constraint refuses the signature with a
+a JSON document with the certificate and cryptographic constraints of the validation policy (root
+`SigningConstraints`, levels FAIL, WARN, INFORM, IGNORE — see [ADR 0024](../adr/0024-own-policy-format.md)). A FAIL constraint refuses the signature with a
 `SigningException` and its `Reason`; a WARN one adds a `SigningWarning` (`PolicyConstraint`); an INFORM one is logged.
 
 | Constraint | Checks | Reason |

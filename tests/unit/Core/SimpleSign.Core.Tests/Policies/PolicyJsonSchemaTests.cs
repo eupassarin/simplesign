@@ -33,7 +33,7 @@ public sealed class PolicyJsonSchemaTests
         var definitions = schema.RootElement.GetProperty("$defs");
         using var policy = JsonDocument.Parse(ValidationPolicy.Default.ToJson());
 
-        Check(policy.RootElement.GetProperty("ConstraintsParameters"), definitions.GetProperty("ConstraintsParameters"), definitions);
+        Check(policy.RootElement.GetProperty("ValidationConstraints"), definitions.GetProperty("ValidationConstraints"), definitions);
     }
 
     [Fact]

@@ -12,7 +12,7 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy (JSON in the structure of the EU DSS constraint.xml, root ConstraintsParameters). Write the default with 'simplesign policy export validation'")]
+    [Description("Validation policy (JSON, root ValidationConstraints). Write the default with 'simplesign policy export validation'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>
@@ -27,7 +27,7 @@ internal class TrustedValidationSettings : CommonSettings
 
     /// <summary>Which revocation source is asked first.</summary>
     [CommandOption("--revocation-strategy <STRATEGY>")]
-    [Description("ocsp-first (the default, as the EU DSS) or crl-first")]
+    [Description("ocsp-first (the default) or crl-first")]
     public string? RevocationStrategy { get; init; }
 
     /// <summary>Check the revocation of chains that do not reach a trust anchor.</summary>

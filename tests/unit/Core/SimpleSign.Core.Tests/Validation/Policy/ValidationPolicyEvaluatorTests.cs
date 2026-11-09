@@ -145,7 +145,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
 
-        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/SunsetDate" && c.Status == ConstraintStatus.NotChecked);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/AuthorityInfoAccessPresent" && c.Status == ConstraintStatus.NotChecked);
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     }
 
     [Fact]
-    public void Evaluate_TrustedListOfTheAnchor_ChecksTheEidasConstraints()
+    public void Evaluate_TrustedListOfTheAnchor_ChecksTheTrustedListConstraints()
     {
         var list = new SimpleSign.Core.Extensions.TrustedListInfo(
             "PT", null, "4", DateTimeOffset.UtcNow.AddDays(-40), DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow,
@@ -230,10 +230,10 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { TrustedLists = [list] }, ValidationPolicy.Default);
 
-        // DSS default: TLNotExpired WARN, TLVersion FAIL (5 or 6).
-        evaluation.Constraints.ShouldContain(c => c.Id == "eIDAS/TLNotExpired" && c.Status == ConstraintStatus.Warning);
-        evaluation.Constraints.ShouldContain(c => c.Id == "eIDAS/TLVersion" && c.Status == ConstraintStatus.Failed);
-        evaluation.Constraints.ShouldContain(c => c.Id == "eIDAS/TLWellSigned" && c.Status == ConstraintStatus.Passed);
+        // Default policy: TLNotExpired WARN, TLVersion FAIL (5 or 6).
+        evaluation.Constraints.ShouldContain(c => c.Id == "TrustedLists/TLNotExpired" && c.Status == ConstraintStatus.Warning);
+        evaluation.Constraints.ShouldContain(c => c.Id == "TrustedLists/TLVersion" && c.Status == ConstraintStatus.Failed);
+        evaluation.Constraints.ShouldContain(c => c.Id == "TrustedLists/TLWellSigned" && c.Status == ConstraintStatus.Passed);
         evaluation.SubIndication.ShouldBe(SignatureSubIndication.NoCertificateChainFound);
     }
 
@@ -246,7 +246,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { TrustedLists = [list] }, ValidationPolicy.Default);
 
-        evaluation.Constraints.ShouldNotContain(c => c.Id.StartsWith("eIDAS/", StringComparison.Ordinal));
+        evaluation.Constraints.ShouldNotContain(c => c.Id.StartsWith("TrustedLists/", StringComparison.Ordinal));
     }
 
     public void Dispose() => _pki.Dispose();

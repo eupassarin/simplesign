@@ -77,9 +77,9 @@ var signedPdf = await PadesSigner
 
 Before anything is signed, the default `SigningPolicy` refuses a certificate without the digitalSignature or
 nonRepudiation key usage, an RSA key under 2048 bits, an expired certificate in the chain and SHA-1/MD5.
-Policies are JSON files in the structure of the EU DSS policies (`SigningPolicy.Load`, `ValidationPolicy.Load`):
-a signing policy with `NotRevoked` and `RevocationDataAvailable` at FAIL also checks the revocation of the whole chain, and
-`ValidationPolicy.Default` has the constraints of the DSS default validation policy (ADR 0023).
+Policies are JSON files (`SigningPolicy.Load`, `ValidationPolicy.Load`) with a level per constraint (FAIL, WARN,
+INFORM, IGNORE): a signing policy with `NotRevoked` and `RevocationDataAvailable` at FAIL also checks the revocation of
+the whole chain, and `ValidationPolicy.Default` is the validation policy SimpleSign recommends (ADR 0024).
 
 Validate:
 

@@ -60,7 +60,7 @@ internal sealed record ValidationFacts
     /// <summary>Whether the policy document's hash matches the one in the signature; null: not established.</summary>
     public bool? PolicyHashMatches { get; init; }
 
-    /// <summary>The trusted lists the trust anchors come from, for the eIDAS constraints; null when none.</summary>
+    /// <summary>The trusted lists the trust anchors come from, for the TrustedLists constraints; null when none.</summary>
     public IReadOnlyList<Extensions.TrustedListInfo>? TrustedLists { get; init; }
 }
 
@@ -76,9 +76,8 @@ internal sealed record ValidationEvaluation(
 }
 
 /// <summary>
-/// Turns the facts of a validation into an ETSI EN 319 102-1 outcome under a <see cref="ValidationPolicy"/> in the
-/// structure of the EU DSS policy: each constraint of the policy that applies is evaluated with its level and reported
-/// with its path as id; the first FAIL decides the indication and sub-indication. Constraints of the policy that
+/// Turns the facts of a validation into an ETSI EN 319 102-1 outcome under a <see cref="ValidationPolicy"/>: each
+/// constraint of the policy that applies is evaluated with its level and reported with its path as id; the first FAIL decides the indication and sub-indication. Constraints of the policy that
 /// SimpleSign does not evaluate are reported as not checked.
 /// </summary>
 internal static class ValidationPolicyEvaluator
@@ -119,7 +118,7 @@ internal static class ValidationPolicyEvaluator
             ReportNotEvaluated(context);
             if (EvaluateTrustedList())
             {
-                ReportNotEvaluated("eIDAS");
+                ReportNotEvaluated("TrustedLists");
             }
 
             var outcome = _decided ?? (SignatureIndication.Valid, null);
@@ -465,9 +464,9 @@ internal static class ValidationPolicyEvaluator
             }
         }
 
-        // ── eIDAS: the trusted list the chain's anchor comes from ─────────────────────────
+        // ── TrustedLists: the trusted list the chain's anchor comes from ─────────────────────────
 
-        /// <summary>Evaluates the eIDAS constraints for the trusted list that holds a certificate of the chain; false when none does.</summary>
+        /// <summary>Evaluates the TrustedLists constraints for the trusted list that holds a certificate of the chain; false when none does.</summary>
         private bool EvaluateTrustedList()
         {
             if (facts.TrustedLists is not { Count: > 0 } lists || facts.Chain is not { Count: > 0 } chain)
@@ -483,20 +482,20 @@ internal static class ValidationPolicyEvaluator
 
             const SignatureIndication I = SignatureIndication.Indeterminate;
             string name = $"The trusted list {list.Territory}";
-            if (tree.Find("eIDAS/TLFreshness") is { Duration: { } freshness })
+            if (tree.Find("TrustedLists/TLFreshness") is { Duration: { } freshness })
             {
-                Check("eIDAS/TLFreshness", facts.ValidationTime - list.LoadedAt <= freshness,
+                Check("TrustedLists/TLFreshness", facts.ValidationTime - list.LoadedAt <= freshness,
                     $"{name} was loaded {list.LoadedAt:yyyy-MM-dd HH:mm} UTC, within {freshness}.",
                     $"{name} was loaded {list.LoadedAt:yyyy-MM-dd HH:mm} UTC, more than {freshness} ago.", I, SignatureSubIndication.TryLater);
             }
 
-            Check("eIDAS/TLNotExpired", list.NextUpdate is not { } next || next >= facts.ValidationTime,
+            Check("TrustedLists/TLNotExpired", list.NextUpdate is not { } next || next >= facts.ValidationTime,
                 $"{name} has not expired.", $"{name} expired: its NextUpdate was {list.NextUpdate:yyyy-MM-dd HH:mm} UTC.", I, SignatureSubIndication.TryLater);
-            Check("eIDAS/TLWellSigned", list.IsWellSigned, $"{name} is signed by its scheme operator.",
+            Check("TrustedLists/TLWellSigned", list.IsWellSigned, $"{name} is signed by its scheme operator.",
                 $"{name} is not signed by its scheme operator.", I, SignatureSubIndication.NoCertificateChainFound);
-            if (tree.Find("eIDAS/TLVersion") is { } version)
+            if (tree.Find("TrustedLists/TLVersion") is { } version)
             {
-                Check("eIDAS/TLVersion", version.Ids.Count == 0 || (list.Version is not null && version.Ids.Contains(list.Version)),
+                Check("TrustedLists/TLVersion", version.Ids.Count == 0 || (list.Version is not null && version.Ids.Contains(list.Version)),
                     $"{name} has version {list.Version}.", $"{name} has version {list.Version ?? "(none)"}; the policy accepts {string.Join(", ", version.Ids)}.",
                     I, SignatureSubIndication.NoCertificateChainFound);
             }
@@ -595,7 +594,7 @@ internal static class ValidationPolicyEvaluator
         private static string Name(X509Certificate2 certificate) => certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
     }
 
-    /// <summary>The EU DSS name of a digest algorithm OID.</summary>
+    /// <summary>The policy name of a digest algorithm OID.</summary>
     internal static string DigestName(string oid) => CryptographicRules.DigestName(oid);
 }
 

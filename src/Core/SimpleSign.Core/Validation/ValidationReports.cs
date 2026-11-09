@@ -47,8 +47,8 @@ public sealed record SignatureReportEntry
 
 /// <summary>
 /// Writes the reports of a validation: the signature validation report of ETSI TS 119 102-2 (XML, namespace
-/// <c>http://uri.etsi.org/19102/v1.2.1#</c>, with the URIs the EU DSS uses), and a simple report (JSON) with the content
-/// of the DSS simple report.
+/// <c>http://uri.etsi.org/19102/v1.2.1#</c>, with the ETSI indication URIs), and a simple report (JSON) with one
+/// entry per signature.
 /// </summary>
 public static class ValidationReports
 {
@@ -211,7 +211,7 @@ public static class ValidationReports
     }
 
     /// <summary>
-    /// A simple report (JSON) of <paramref name="signatures"/>, with the content of the EU DSS simple report: per
+    /// A simple report (JSON) of <paramref name="signatures"/>, with, per
     /// signature its indication, sub-indication, signer, times, policy, errors and warnings, and the counts.
     /// </summary>
     /// <param name="signatures">The signatures.</param>

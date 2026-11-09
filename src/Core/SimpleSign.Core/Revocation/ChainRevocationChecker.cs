@@ -37,7 +37,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         _ocspClient = new OcspClient(httpClient, logger) { OutboundPolicy = _outboundPolicy };
     }
 
-    /// <summary>Which source is asked first, embedded and online. Default: <see cref="Validation.RevocationStrategy.OcspFirst"/>, as in the EU DSS.</summary>
+    /// <summary>Which source is asked first, embedded and online. Default: <see cref="Validation.RevocationStrategy.OcspFirst"/>.</summary>
     public Validation.RevocationStrategy Strategy { get; init; } = Validation.RevocationStrategy.OcspFirst;
 
     /// <summary>Whether the other online source is asked when the first gives no answer. Default: <see langword="true"/>.</summary>

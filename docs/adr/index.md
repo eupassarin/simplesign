@@ -25,4 +25,5 @@ SimpleSign, including their rationale, consequences, and alternatives.
 - [ADR 0020: Outbound HTTP — Retries and SSRF Guard](0020-outbound-http-resilience-and-ssrf-guard.md)
 - [ADR 0021: Signing Policy, LDAP CRLs and the Revocation Cache](0021-signing-policy-ldap-crl-and-revocation-cache.md)
 - [ADR 0022: Validation Policy and ETSI Sub-Indications](0022-validation-policy-and-etsi-report.md)
-- [ADR 0023: Signing and Validation Policies in the Structure of the EU DSS](0023-policies-in-the-dss-structure.md)
+- [ADR 0023: Signing and Validation Policies in the Structure of the EU DSS](0023-policies-in-the-dss-structure.md) (superseded in part by 0024)
+- [ADR 0024: SimpleSign's Own Policy Format](0024-own-policy-format.md)

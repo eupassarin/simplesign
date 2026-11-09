@@ -255,7 +255,7 @@ public sealed class CliCommandTests : IDisposable
 
     /// <summary>A validation policy that asks for RSA keys of 8192 bits.</summary>
     private const string LargeKeysPolicy = """
-        { "ConstraintsParameters": { "Description": "large keys",
+        { "ValidationConstraints": { "Description": "large keys",
           "Cryptographic": { "Level": "FAIL", "MiniPublicKeySize": { "Algo": [ { "Value": "RSA", "Size": 8192 } ] } } } }
         """;
 
@@ -324,7 +324,7 @@ public sealed class CliCommandTests : IDisposable
         var (exit, output) = await RunAsync("policy", "export", "validation");
 
         exit.ShouldBe(0);
-        output.ShouldContain("ConstraintsParameters");
+        output.ShouldContain("ValidationConstraints");
     }
 
     [Fact]

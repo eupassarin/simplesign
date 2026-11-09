@@ -17,7 +17,7 @@ public sealed class ValidationOptions
 
     /// <summary>
     /// The validation policy: accepted algorithms and key sizes, constraints on the signing certificate.
-    /// Default: <see cref="Policies.ValidationPolicy.Default"/> (the EU DSS default constraints). Load one with <see cref="Policies.ValidationPolicy.Load"/>.
+    /// Default: <see cref="Policies.ValidationPolicy.Default"/> (the policy embedded in SimpleSign). Load one with <see cref="Policies.ValidationPolicy.Load"/>.
     /// </summary>
     public Policies.ValidationPolicy Policy { get; init; } = Policies.ValidationPolicy.Default;
 

@@ -4,7 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace SimpleSign.Core.Policies;
 
-/// <summary>Reads what the certificate constraints of a policy ask about, with the EU DSS names for the values.</summary>
+/// <summary>Reads what the certificate constraints of a policy ask about, with the policy names for the values.</summary>
 internal static class CertificateFacts
 {
     private static readonly Dictionary<string, X509KeyUsageFlags> KeyUsages = new(StringComparer.OrdinalIgnoreCase)
@@ -43,7 +43,7 @@ internal static class CertificateFacts
             && ids.Any(id => KeyUsages.TryGetValue(id, out var flag) && (extension.KeyUsages & flag) != 0);
     }
 
-    /// <summary>Whether the extended key usage has one of <paramref name="ids"/> (DSS names or OIDs).</summary>
+    /// <summary>Whether the extended key usage has one of <paramref name="ids"/> (policy names or OIDs).</summary>
     public static bool HasAnyExtendedKeyUsage(X509Certificate2 certificate, IReadOnlyList<string> ids)
     {
         if (ids.Count == 0)

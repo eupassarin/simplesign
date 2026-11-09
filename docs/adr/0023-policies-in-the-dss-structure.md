@@ -1,6 +1,6 @@
 # ADR 0023: Signing and Validation Policies in the Structure of the EU DSS
 
-**Status:** Accepted (first delivery; see "Not yet done")
+**Status:** Superseded in part by [ADR 0024](0024-own-policy-format.md) (the validation policy structure); the rest stands.
 
 **Context:**
 ADR 0021 introduced a `SigningPolicy` with three fixed presets (`Default`, `Strict`, `Minimal`): combinations of

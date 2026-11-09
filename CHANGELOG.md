@@ -7,15 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed — policies in the structure of the EU DSS (ADR 0023)
+### Changed — configurable signing and validation policies (ADR 0023, ADR 0024)
 
-- `ValidationPolicy` (now `SimpleSign.Core.Policies`) reads and writes JSON in the structure of the EU DSS validation
-  policy (`ConstraintsParameters`, the elements, names and FAIL/WARN/INFORM/IGNORE levels of `constraint.xml`). Names
-  outside the schema are refused. `ValidationPolicy.Default` carries the values of the DSS default policy.
-  Constraints SimpleSign does not evaluate are reported as `NotChecked`; INFORM gives `ConstraintStatus.Information`.
-  Constraint ids are DSS paths (`SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage`).
-- `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the DSS names for the
-  signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
+- **Migration of validation policy files:** rename the root `ConstraintsParameters` to `ValidationConstraints` and
+  `eIDAS` to `TrustedLists`, and drop the elements SimpleSign's format no longer has (ASiC containers, PDF/A,
+  evidence records, attestations and key binding signatures, JSON-signature headers, EU qualification and PSD2
+  statements, `OCSPCertHash*`, lists of trusted entities, `SunsetDate`, `ManifestEntry*`, `PdfVisualDifference`). The
+  reader names each one; `docs/policies/compatibility.md` lists them with the reason.
+- `ValidationPolicy` (now `SimpleSign.Core.Policies`) reads and writes JSON in SimpleSign's own format (root
+  `ValidationConstraints`; contexts `SignatureConstraints`, `CounterSignatureConstraints`, `Timestamp`, `Revocation`,
+  `Cryptographic`, `Model`, `TrustedLists`), one FAIL/WARN/INFORM/IGNORE level per constraint. Names outside the
+  format are refused, with a pointer to `docs/policies/compatibility.md` (how the names correspond to other
+  validators' policies). Constraints SimpleSign does not evaluate yet are reported as `NotChecked`; INFORM gives
+  `ConstraintStatus.Information`. Constraint ids are paths
+  (`SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage`).
+- `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
+  policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,
   or the constraints to IGNORE. `SigningPolicy.Evaluate` gives the local checks of a certificate.
 - `CryptographicSuite`: ETSI TS 119 322 cryptographic suites (JSON), globally or per context
@@ -26,15 +33,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ValidationOptions.PolicyProvider`, DI (`SimpleSignOptions.SigningPolicy`), `AppliedPolicy` on the results.
 - `ChainRevocationResult.IssuedAt`, `CrlEvaluator.ReadThisUpdate`, `OcspClient.ReadProducedAt`: the freshness of
   revocation data (`RevocationFreshness`).
-- TestBench: DSS validates with the same policy, sent as `constraint.xml`.
+- TestBench: a policy viewer (**Policies** in the top bar) shows the signing and validation policies as an explained
+  tree — what each constraint checks, its clause, its level, and whether SimpleSign evaluates it — lets the levels be
+  changed, and downloads the result or uses it in the next runs (`POST /api/policies/view`).
+- TestBench: the signing and validation policies are uploaded as JSON files (the Default/Strict/Minimal choice is
+  gone), with a download of each default; the validation options gain the validation level and the revocation
+  strategy. The option check evaluates the signer against the chosen signing policy, and DSS validates with the
+  chosen validation policy, translated to its format. The generated CLI passes the policy files
+  (`--signing-policy signing-policy.json`, `--policy validation-policy.json`) instead of `--signing-policy strict`,
+  which the CLI no longer reads.
 - `ValidationOptions.Verifier` (`VerifierOptions`: revocation strategy, now OCSP first everywhere, fallback, AIA,
-  revocation of untrusted chains — off) and `ValidationOptions.Level` (`ValidationLevel`), as the EU DSS
-  `CertificateVerifier` and validation level; CLI `--level`, `--revocation-strategy`, `--revocation-for-untrusted`.
+  revocation of untrusted chains — off) and `ValidationOptions.Level` (`ValidationLevel`); CLI `--level`, `--revocation-strategy`, `--revocation-for-untrusted`.
 - `ValidationReports`: the ETSI TS 119 102-2 validation report (XML) and a simple report (JSON);
   `ToReportEntry()` on the PAdES, CAdES and XAdES results, `BestSignatureTime` on them; CLI `--etsi-report`,
   `--simple-report`.
 - `TrustedListSet`: trusted lists loaded from a LOTL (EU or other), with per-list problems and a disk cache;
-  `TrustedList.Version`/`Pointers`; `TrustedListInfo`/`ITrustedListInfoProvider` and the `eIDAS` constraints
+  `TrustedList.Version`/`Pointers`; `TrustedListInfo`/`ITrustedListInfoProvider` and the `TrustedLists` constraints
   (`TLFreshness`, `TLNotExpired`, `TLWellSigned`, `TLVersion`); CLI `--lotl`, `--lotl-signer`, `--lotl-territory`.
 - CAdES and XAdES revocation uses the CRLs and OCSP responses the signature carries.
 - `DeferredSigningPrepareResult.Warnings`. CLI: `--signing-policy` takes a JSON file; `policy export validation|signing` writes the defaults. `IofePolicies` derive from the

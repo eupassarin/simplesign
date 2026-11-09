@@ -27,7 +27,7 @@ public static class IofePolicies
         .With("CACertificate/RevocationDataAvailable", Fail);
 
     /// <summary>
-    /// Validation: the EU DSS default constraints of <see cref="ValidationPolicy.Default"/> — obsolete algorithms fail
+    /// Validation: the constraints of <see cref="ValidationPolicy.Default"/> — obsolete algorithms fail
     /// unless an older proof of existence covers them — and a signing certificate without digitalSignature or
     /// nonRepudiation fails (Req. 23, 26).
     /// </summary>

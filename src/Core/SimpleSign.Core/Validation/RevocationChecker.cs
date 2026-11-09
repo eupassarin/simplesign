@@ -19,7 +19,7 @@ internal sealed class RevocationChecker : IRevocationChecker
     private readonly ICrlClient _crlClient;
     private readonly ILogger _logger;
 
-    /// <summary>Which online source is asked first. Default: OCSP, as in the EU DSS.</summary>
+    /// <summary>Which online source is asked first. Default: OCSP.</summary>
     internal RevocationStrategy Strategy { get; init; } = RevocationStrategy.OcspFirst;
 
     /// <summary>Whether the other online source is asked when the first gives no answer.</summary>

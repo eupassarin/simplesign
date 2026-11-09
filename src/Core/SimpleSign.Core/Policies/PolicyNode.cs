@@ -173,12 +173,16 @@ internal sealed class PolicyNode
 }
 
 /// <summary>
-/// Reads and writes a policy tree as JSON. The JSON mirrors the EU DSS XML: one property per element, attributes as
+/// Reads and writes a policy tree as JSON. One JSON property per element, attributes as
 /// properties of the element's object, the <c>Id</c> and <c>Algo</c> lists as arrays and the text of an
 /// <c>Algo</c> as <c>Value</c>. Names outside the schema are refused with their JSON path.
 /// </summary>
 internal static class PolicyJson
 {
+    /// <summary>Where a policy written for another validator is told how its names correspond to these.</summary>
+    private const string CompatibilityHint =
+        " A policy written for another validator must be translated first: see docs/policies/compatibility.md.";
+
     internal static PolicyNode Read(string json, string rootName)
     {
         using var document = JsonDocument.Parse(json, new JsonDocumentOptions
@@ -198,7 +202,7 @@ internal static class PolicyJson
 
             if (property.Name != rootName || node is not null)
             {
-                throw new FormatException($"$.{property.Name}: expected a single '{rootName}' object.");
+                throw new FormatException($"$.{property.Name}: expected a single '{rootName}' object.{CompatibilityHint}");
             }
 
             node = ReadNode(property.Value, rootName, rootName, "$." + rootName);
@@ -248,7 +252,7 @@ internal static class PolicyJson
             }
             else
             {
-                throw new FormatException($"{at}: '{property.Name}' is not part of {typeName} in the policy schema.");
+                throw new FormatException($"{at}: '{property.Name}' is not part of {typeName} in the policy schema.{CompatibilityHint}");
             }
         }
 
