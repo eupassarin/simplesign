@@ -142,11 +142,11 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     }
 
     [Fact]
-    public void Evaluate_ConstraintSimpleSignDoesNotEvaluate_IsReportedNotChecked()
+    public void Evaluate_FactNotEstablished_IsReportedNotChecked()
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
 
-        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/StructuralValidation" && c.Status == ConstraintStatus.NotChecked);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/NotRevoked" && c.Status == ConstraintStatus.NotChecked);
     }
 
     [Fact]
@@ -439,15 +439,6 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
         evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/IssuerSerialMatch" && c.Status == ConstraintStatus.Warning);
         evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/UnicitySigningCertificate" && c.Status == ConstraintStatus.Passed);
         evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/SignedAttributes/SigningCertificateRefersCertificateChain" && c.Status == ConstraintStatus.Passed);
-    }
-
-    [Fact]
-    public void Evaluate_ConstraintToImplement_SaysSo()
-    {
-        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
-
-        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/StructuralValidation" && c.Status == ConstraintStatus.NotChecked
-            && c.Message.Contains("needs work", StringComparison.Ordinal));
     }
 
     [Fact]

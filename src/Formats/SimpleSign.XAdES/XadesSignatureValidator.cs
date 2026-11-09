@@ -525,6 +525,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             PolicyStorePresent = ReadSignaturePolicy(sigElement, ns) is null ? null : XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null,
             PolicyDocumentAvailable = XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null ? true : null,
             IsCounterSignature = depth > 0,
+            StructureErrors = Internal.XmlSchemas.Validate(sigElement),
             TrustedLists = _options.TrustedLists,
             EmbeddedCrls = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "CRLValues", "EncapsulatedCRLValue") : null,
             EmbeddedOcsps = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "OCSPValues", "EncapsulatedOCSPValue") : null,

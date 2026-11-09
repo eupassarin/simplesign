@@ -23,6 +23,9 @@ public sealed record TrustedListInfo(
 {
     /// <summary>The trust services of the list, for the <c>TrustServiceTypeIdentifier</c> and <c>TrustServiceStatus</c> constraints.</summary>
     public IReadOnlyList<TrustedServiceInfo> Services { get; init; } = [];
+
+    /// <summary>Whether the list is valid against the ETSI TS 119 612 XML schema, for the <c>TLStructure</c> constraint; null when not checked.</summary>
+    public bool? IsStructureValid { get; init; }
 }
 
 /// <summary>A trust service of a trusted list: its type, its status and its digital identity.</summary>

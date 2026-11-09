@@ -51,7 +51,7 @@ public static class PolicyCoverage
 
     private static readonly HashSet<string> s_signature = new(StringComparer.Ordinal)
     {
-        "AcceptablePolicies", "PolicyHashMatch", "PolicyAvailable", "SignaturePolicyStorePresent", "AcceptableFormats", "FullScope",
+        "AcceptablePolicies", "PolicyHashMatch", "PolicyAvailable", "SignaturePolicyStorePresent", "AcceptableFormats", "FullScope", "StructuralValidation",
     };
 
     private static readonly HashSet<string> s_signedAttributes = new(StringComparer.Ordinal)
@@ -76,14 +76,13 @@ public static class PolicyCoverage
         "Timestamp/TSAGeneralNamePresent", "Timestamp/TSAGeneralNameContentMatch", "Timestamp/TSAGeneralNameOrderMatch",
         "Revocation/UnknownStatus", "Revocation/ThisUpdatePresent", "Revocation/RevocationIssuerKnown",
         "Revocation/RevocationIssuerValidAtProductionTime", "Revocation/RevocationAfterCertificateIssuance",
-        "Revocation/OCSPResponderIdMatch", "Revocation/SelfIssuedOCSP", "Revocation/RevocationHasInformationAboutCertificate", "TrustedLists/TLFreshness", "TrustedLists/TLNotExpired", "TrustedLists/TLWellSigned",
+        "Revocation/OCSPResponderIdMatch", "Revocation/SelfIssuedOCSP", "Revocation/RevocationHasInformationAboutCertificate", "TrustedLists/TLFreshness", "TrustedLists/TLNotExpired", "TrustedLists/TLWellSigned", "TrustedLists/TLStructure",
         "TrustedLists/TLVersion",
     };
 
     /// <summary>Kept constraints that need new work (the last segment of the path).</summary>
     private static readonly HashSet<string> s_toImplement = new(StringComparer.Ordinal)
     {
-        "StructuralValidation", "TLStructure",
     };
 
     /// <summary>What SimpleSign does with the constraint at <paramref name="path"/> of a validation policy.</summary>

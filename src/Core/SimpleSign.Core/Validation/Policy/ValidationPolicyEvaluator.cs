@@ -99,6 +99,12 @@ internal sealed record ValidationFacts
     /// <summary>Whether no later PDF revision redefines the signature dictionary with another ByteRange or Contents; null for other formats.</summary>
     public bool? SignatureDictionaryConsistent { get; init; }
 
+    /// <summary>
+    /// The errors of the signature's structure: the CMS decoded (CAdES, PAdES), the XML Signature and XAdES schemas
+    /// (XAdES); empty when it is valid, null when not checked.
+    /// </summary>
+    public IReadOnlyList<string>? StructureErrors { get; init; }
+
     /// <summary>What the PDF revisions after the signature changed; null for other formats.</summary>
     public PdfChangeFacts? PdfChanges { get; init; }
 
@@ -985,6 +991,10 @@ internal static class ValidationPolicyEvaluator
                 }
             }
 
+            Fact(SignatureContext + "/StructuralValidation", facts.StructureErrors is { } structure ? structure.Count == 0 : null,
+                "The signature's structure is valid.",
+                $"The signature's structure is not valid: {string.Join(" ", facts.StructureErrors?.Take(3) ?? [])}",
+                SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
             Fact(SignatureContext + "/FullScope", facts.CoversWholeDocument, "The signature covers the whole document.",
                 "The signature covers only part of the document (later changes are not signed).", I, S);
             Fact(SignatureContext + "/SignaturePolicyStorePresent", facts.PolicyStorePresent, "The signature carries its signature policy document.",
@@ -1229,6 +1239,8 @@ internal static class ValidationPolicyEvaluator
                 $"{name} has not expired.", $"{name} expired: its NextUpdate was {list.NextUpdate:yyyy-MM-dd HH:mm} UTC.", I, SignatureSubIndication.TryLater);
             Check("TrustedLists/TLWellSigned", list.IsWellSigned, $"{name} is signed by its scheme operator.",
                 $"{name} is not signed by its scheme operator.", I, SignatureSubIndication.NoCertificateChainFound);
+            Fact("TrustedLists/TLStructure", list.IsStructureValid, $"{name} is valid against the TS 119 612 schema.",
+                $"{name} is not valid against the TS 119 612 schema.", I, SignatureSubIndication.NoCertificateChainFound);
             if (tree.Find("TrustedLists/TLVersion") is { } version)
             {
                 Check("TrustedLists/TLVersion", version.Ids.Count == 0 || (list.Version is not null && version.Ids.Contains(list.Version)),
@@ -1400,6 +1412,8 @@ internal static class CmsValidationFacts
 
         return facts with
         {
+            // The CMS was decoded (ASN.1 well formed, SignedData read): its structure is valid.
+            StructureErrors = facts.StructureErrors ?? [],
             Chain = chain,
             SignatureAlgorithmOid = cms.SignatureAlgorithmOid,
             ClaimedSigningTime = cms.SigningTime ?? fallbackSigningTime,

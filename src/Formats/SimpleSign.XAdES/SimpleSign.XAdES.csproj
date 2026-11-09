@@ -28,4 +28,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Schemas\*.xsd" LogicalName="SimpleSign.XAdES.Schemas.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

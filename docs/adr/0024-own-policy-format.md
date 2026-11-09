@@ -35,8 +35,10 @@ context and trusted lists for CAdES and XAdES (with the type and status of the t
 single source of what is evaluated; a test keeps `docs/policies/compatibility.md` in step with it. Then the "to implement"
 ones: `RevocationHasInformationAboutCertificate`, the content timestamp, and the PDF revision comparison (DocMDP,
 FieldMDP, SigFieldLock, form fill, annotation and undefined changes, page differences, annotation overlap: the
-signed revision against the final one, DSS and document timestamps not counting as changes). What remains is XML
-schema validation (`StructuralValidation` for XAdES, `TLStructure`).
+signed revision against the final one, DSS and document timestamps not counting as changes). Last, XML schema
+validation: `StructuralValidation` (XAdES) and `TLStructure` use the XML Signature, XAdES and TS 119 612 schemas
+embedded in SimpleSign.XAdES (W3C and ETSI files, unmodified; nothing is fetched). Every constraint of the format is
+now evaluated.
 
 **Consequences:**
 - A policy file written for ADR 0023 must be updated: rename the root to `ValidationConstraints` and `eIDAS` to

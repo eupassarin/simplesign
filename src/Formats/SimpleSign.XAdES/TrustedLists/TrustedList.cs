@@ -123,6 +123,7 @@ public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
     public IReadOnlyList<TrustedListInfo> TrustedLists =>
         [new TrustedListInfo(Territory, Location, Version, IssueDate, NextUpdate, LoadedAt, IsWellSigned: true, _anchors)
         {
+            IsStructureValid = StructureErrors.Count == 0,
             Services = [.. Services.Select(s => new TrustedServiceInfo(s.ServiceType, s.Status, s.Certificates))],
         }];
 
@@ -139,9 +140,13 @@ public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
         Services = other.Services;
         Version = other.Version;
         Pointers = other.Pointers;
+        StructureErrors = other.StructureErrors;
         _anchors = other._anchors;
         _intermediates = other._intermediates;
     }
+
+    /// <summary>The errors of the list against the ETSI TS 119 612 XML schema; empty when it is valid.</summary>
+    public IReadOnlyList<string> StructureErrors { get; private init; } = [];
 
     /// <summary>Every service of the list, whatever its type and status.</summary>
     public IReadOnlyList<TrustedListService> Services { get; }
@@ -239,7 +244,10 @@ public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
             services,
             options,
             scheme.SelectSingleNode("tsl:TSLVersionIdentifier", ns)?.InnerText.Trim(),
-            ReadPointers(scheme, ns));
+            ReadPointers(scheme, ns))
+        {
+            StructureErrors = Internal.XmlSchemas.Validate(root),
+        };
     }
 
     /// <summary>

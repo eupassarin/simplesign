@@ -44,7 +44,7 @@ public sealed class PolicyViewerTests(TestBenchFixture fixture)
         nodes["SignatureConstraints/BasicSignatureConstraints/ByteRange"].Evaluation.ShouldBe("evaluated");
         nodes["SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary"].Evaluation.ShouldBe("evaluated");
         nodes["SignatureConstraints/BasicSignatureConstraints/DocMDP"].Evaluation.ShouldBe("evaluated");
-        nodes["SignatureConstraints/StructuralValidation"].Evaluation.ShouldBe("toImplement");
+        nodes["SignatureConstraints/StructuralValidation"].Evaluation.ShouldBe("evaluated");
         nodes["Revocation/UnknownStatus"].Evaluation.ShouldBe("evaluated");
         nodes["Timestamp/Coherence"].Evaluation.ShouldBe("evaluated");
         nodes["TrustedLists/TLVersion"].Evaluation.ShouldBe("evaluated");
@@ -57,7 +57,7 @@ public sealed class PolicyViewerTests(TestBenchFixture fixture)
         expiration.Algorithms.ShouldContain(a => a.Name == "RSA" && a.Size == 3000);
         view.Counts!.Evaluated.ShouldBeGreaterThan(0);
         view.Counts.ToConnect.ShouldBe(0); // Every kept constraint of the default policy is wired; only "to implement" remain.
-        view.Counts.ToImplement.ShouldBeGreaterThan(0);
+        view.Counts.ToImplement.ShouldBe(0);
     }
 
     [SkippableFact]

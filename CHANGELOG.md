@@ -60,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SigFieldLock` (locked fields whose value changed), `FormFillChanges`, `AnnotationChanges` and `UndefinedChanges`
   (page content, resources, the catalog, fields added or removed) are evaluated; the messages name the changes.
   Validation data (DSS) and document timestamps added later are not changes (ETSI EN 319 142-1).
+- Validation policy: `StructuralValidation` (XAdES: the signature against the XML Signature and XAdES schemas;
+  CAdES/PAdES: the CMS decoded) and `TLStructure` (`TrustedList.StructureErrors`, `TrustedListInfo.IsStructureValid`:
+  the list against the ETSI TS 119 612 schema). The schemas are embedded in SimpleSign.XAdES; nothing is fetched.
+  Every constraint of the validation policy format is now evaluated.
 - `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
   policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,
