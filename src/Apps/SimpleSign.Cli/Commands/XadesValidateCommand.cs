@@ -111,6 +111,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 Policy = policy,
                 Level = settings.ValidationLevel,
                 Verifier = settings.Verifier,
+                TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
             },
             logger: null,
             chainRevocationChecker: settings.RevocationCheckerFor(_httpClientProvider));

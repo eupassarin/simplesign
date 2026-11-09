@@ -21,7 +21,7 @@ public sealed class PolicyCoverageTests
     [InlineData("SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary", ConstraintCoverage.ToConnect)]
     [InlineData("Revocation/UnknownStatus", ConstraintCoverage.Evaluated)]
     [InlineData("Timestamp/Coherence", ConstraintCoverage.ToConnect)]
-    [InlineData("CounterSignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage", ConstraintCoverage.ToConnect)]
+    [InlineData("CounterSignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage", ConstraintCoverage.Evaluated)]
     [InlineData("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/AcceptableRevocationDataFound", ConstraintCoverage.Evaluated)]
     [InlineData("SignatureConstraints/BasicSignatureConstraints/TrustServiceStatus", ConstraintCoverage.ToConnect)]
     public void Validation_Path_GivesItsCoverage(string path, ConstraintCoverage expected) =>

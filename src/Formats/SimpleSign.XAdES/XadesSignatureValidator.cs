@@ -523,6 +523,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             CoversWholeDocument = sigElement.SelectSingleNode("ds:SignedInfo/ds:Reference[@URI='']", ns) is not null ? true : null,
             PolicyStorePresent = ReadSignaturePolicy(sigElement, ns) is null ? null : XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null,
             PolicyDocumentAvailable = XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null ? true : null,
+            IsCounterSignature = depth > 0,
+            TrustedLists = _options.TrustedLists,
             EmbeddedCrls = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "CRLValues", "EncapsulatedCRLValue") : null,
             EmbeddedOcsps = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "OCSPValues", "EncapsulatedOCSPValue") : null,
             Timestamps = tsValid is not null && SignatureTimeStampToken(sigElement, ns) is { } signatureToken

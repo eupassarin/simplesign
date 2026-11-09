@@ -455,6 +455,15 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
         evaluation.Indication.ShouldBe(SignatureIndication.Valid);
     }
 
+    [Fact]
+    public void Evaluate_CounterSignature_UsesItsOwnContext()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { IsCounterSignature = true }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "CounterSignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage");
+        evaluation.Constraints.ShouldNotContain(c => c.Id.StartsWith("SignatureConstraints/", StringComparison.Ordinal));
+    }
+
     public void Dispose() => _pki.Dispose();
 
     private ValidationFacts Facts() => new()

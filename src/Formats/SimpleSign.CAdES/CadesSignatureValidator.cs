@@ -374,7 +374,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         {
             var counter = parent.CounterSignatures[i];
             byte[] parentSignature = parent.Signature;
-            var result = ValidateSigner(null, counter, null, (data, errors) => VerifyContentHash(parentSignature, data, errors), trustAnchors, isFirstSigner: false);
+            var result = ValidateSigner(null, counter, null, (data, errors) => VerifyContentHash(parentSignature, data, errors), trustAnchors, isFirstSigner: false, isCounterSignature: true);
             results.Add(new CadesSignerValidationResult
             {
                 Index = i,
@@ -423,7 +423,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         byte[]? content,
         Func<CmsSignedData, List<string>, bool> verifyIntegrity,
         IEnumerable<X509Certificate2>? trustAnchors,
-        bool isFirstSigner)
+        bool isFirstSigner,
+        bool isCounterSignature = false)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -575,6 +576,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             },
             EmbeddedCrls = embedded.Crls,
             EmbeddedOcsps = embedded.Ocsps,
+            IsCounterSignature = isCounterSignature,
+            TrustedLists = _options.TrustedLists,
             Timestamps = cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps
                 ? [new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted)]
                 : null,

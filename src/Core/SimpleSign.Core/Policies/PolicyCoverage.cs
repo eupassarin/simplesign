@@ -26,7 +26,7 @@ public static class PolicyCoverage
     private const string Basic = "BasicSignatureConstraints";
 
     /// <summary>The contexts whose token (signature or timestamp) SimpleSign evaluates with the basic constraints.</summary>
-    private static readonly string[] s_tokenContexts = ["SignatureConstraints", "Timestamp", "Revocation"];
+    private static readonly string[] s_tokenContexts = ["SignatureConstraints", "CounterSignatureConstraints", "Timestamp", "Revocation"];
 
     private static readonly HashSet<string> s_basic = new(StringComparer.Ordinal)
     {
@@ -125,7 +125,7 @@ public static class PolicyCoverage
             return parts.Length == 3 && s_signedAttributes.Contains(parts[2]);
         }
 
-        if (parts[0] == "SignatureConstraints")
+        if (parts[0] is "SignatureConstraints" or "CounterSignatureConstraints")
         {
             switch (parts[1])
             {

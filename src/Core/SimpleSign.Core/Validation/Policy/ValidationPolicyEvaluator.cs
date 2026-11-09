@@ -107,6 +107,9 @@ internal sealed record ValidationFacts
 
     /// <summary>The signature and archive timestamps, evaluated in the Timestamp context; null when not looked at.</summary>
     public IReadOnlyList<TimestampTokenFacts>? Timestamps { get; init; }
+
+    /// <summary>Whether the signature is a countersignature: it is evaluated in the CounterSignatureConstraints context.</summary>
+    public bool IsCounterSignature { get; init; }
 }
 
 /// <summary>The unsigned attributes of a signature, in the terms of the <c>UnsignedAttributes</c> constraints.</summary>
@@ -182,10 +185,13 @@ internal static class ValidationPolicyEvaluator
 
         private bool Nested => tokenContext is not null;
 
+        /// <summary>The context of the signature's own constraints: a countersignature has its own.</summary>
+        private string SignatureContext => facts.IsCounterSignature ? "CounterSignatureConstraints" : Signature;
+
         public ValidationEvaluation Run()
         {
             // A document timestamp is a timestamp token: the Timestamp constraints apply to it.
-            string context = tokenContext ?? (facts.IsDocumentTimestamp ? Timestamp : Signature);
+            string context = tokenContext ?? (facts.IsDocumentTimestamp ? Timestamp : SignatureContext);
             string basic = context + "/BasicSignatureConstraints";
             if (!Nested)
             {
@@ -210,8 +216,8 @@ internal static class ValidationPolicyEvaluator
             else if (!facts.IsDocumentTimestamp)
             {
                 EvaluateSignatureConstraints();
-                EvaluateSignedAttributes(Signature + "/SignedAttributes");
-                EvaluateUnsignedAttributes(Signature + "/UnsignedAttributes");
+                EvaluateSignedAttributes(SignatureContext + "/SignedAttributes");
+                EvaluateUnsignedAttributes(SignatureContext + "/UnsignedAttributes");
                 EvaluateTimestampDelay();
                 EvaluateBestSignatureTime();
             }
@@ -867,30 +873,30 @@ internal static class ValidationPolicyEvaluator
         {
             const SignatureIndication I = SignatureIndication.Indeterminate;
             const SignatureSubIndication S = SignatureSubIndication.SigConstraintsFailure;
-            if (tree.Find(Signature + "/AcceptableFormats") is { } formats)
+            if (tree.Find(SignatureContext + "/AcceptableFormats") is { } formats)
             {
                 if (facts.SignatureFormat is { } format)
                 {
-                    Check(Signature + "/AcceptableFormats", formats.Ids.Count == 0 || formats.Ids.Contains("*") || formats.Ids.Contains(format),
+                    Check(SignatureContext + "/AcceptableFormats", formats.Ids.Count == 0 || formats.Ids.Contains("*") || formats.Ids.Contains(format),
                         $"The format {format} is accepted.", $"The format {format} is not accepted ({string.Join(", ", formats.Ids)}).", I, SignatureSubIndication.FormatFailure);
                 }
                 else
                 {
-                    NotApplicable(Signature + "/AcceptableFormats");
+                    NotApplicable(SignatureContext + "/AcceptableFormats");
                 }
             }
 
-            Fact(Signature + "/FullScope", facts.CoversWholeDocument, "The signature covers the whole document.",
+            Fact(SignatureContext + "/FullScope", facts.CoversWholeDocument, "The signature covers the whole document.",
                 "The signature covers only part of the document (later changes are not signed).", I, S);
-            Fact(Signature + "/SignaturePolicyStorePresent", facts.PolicyStorePresent, "The signature carries its signature policy document.",
+            Fact(SignatureContext + "/SignaturePolicyStorePresent", facts.PolicyStorePresent, "The signature carries its signature policy document.",
                 "The signature does not carry its signature policy document.", I, S);
             if (facts.SignaturePolicyOid is null)
             {
-                NotApplicable(Signature + "/PolicyAvailable");
+                NotApplicable(SignatureContext + "/PolicyAvailable");
             }
             else
             {
-                Fact(Signature + "/PolicyAvailable", facts.PolicyDocumentAvailable, "The signature policy document was obtained.",
+                Fact(SignatureContext + "/PolicyAvailable", facts.PolicyDocumentAvailable, "The signature policy document was obtained.",
                     "The signature policy document could not be obtained.", I, SignatureSubIndication.SignaturePolicyNotAvailable);
             }
 
@@ -899,13 +905,13 @@ internal static class ValidationPolicyEvaluator
                 return;
             }
 
-            if (tree.Find(Signature + "/AcceptablePolicies") is { } acceptable)
+            if (tree.Find(SignatureContext + "/AcceptablePolicies") is { } acceptable)
             {
                 string? oid = facts.SignaturePolicyOid;
                 bool accepted = oid is null
                     ? acceptable.Ids.Contains("NO_POLICY")
                     : acceptable.Ids.Contains("ANY_POLICY") || acceptable.Ids.Contains(oid);
-                Check(Signature + "/AcceptablePolicies", accepted,
+                Check(SignatureContext + "/AcceptablePolicies", accepted,
                     oid is null ? "The signature names no signature policy, which is accepted." : $"The signature policy {oid} is accepted.",
                     oid is null ? "The signature names no signature policy, and the policy requires one." : $"The signature policy {oid} is not accepted.",
                     SignatureIndication.Indeterminate, SignatureSubIndication.SigConstraintsFailure);
@@ -913,7 +919,7 @@ internal static class ValidationPolicyEvaluator
 
             if (facts.PolicyHashMatches is { } matches)
             {
-                Check(Signature + "/PolicyHashMatch", matches, "The signature policy's hash matches.", "The signature policy's hash does not match.",
+                Check(SignatureContext + "/PolicyHashMatch", matches, "The signature policy's hash matches.", "The signature policy's hash does not match.",
                     SignatureIndication.Indeterminate, SignatureSubIndication.SigConstraintsFailure);
             }
         }

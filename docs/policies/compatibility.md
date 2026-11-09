@@ -50,7 +50,7 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | `AcceptableFormats` | same | evaluated | Detected level (e.g. require B-LT for archiving). |
 | `FullScope` | same | evaluated | PAdES coverage; CAdES and enveloped XAdES cover the whole content. |
 | `StructuralValidation` | same | to implement | CAdES/PAdES: the ASN.1 decoded; XAdES: validate against the XSD. |
-| CounterSignatureConstraints (context) | same | to connect | Countersignatures exist in CAdES and XAdES; evaluate each one in this context (today fixed rules). |
+| CounterSignatureConstraints (context) | same | evaluated | Each countersignature (CAdES, XAdES) is evaluated in this context, with the rows below; its result is its own and does not change the signature's. |
 
 ### BasicSignatureConstraints (signature, countersignature, timestamp and revocation tokens)
 
@@ -128,6 +128,6 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
-| `TLFreshness`, `TLNotExpired`, `TLWellSigned`, `TLVersion` | same | evaluated | Evaluated in PAdES; to connect in CAdES and XAdES. |
+| `TLFreshness`, `TLNotExpired`, `TLWellSigned`, `TLVersion` | same | evaluated | PAdES reads the lists from its trust anchor providers; CAdES and XAdES from `ValidationOptions.TrustedLists`. |
 | `TLStructure` | same | to implement | Validate the list against the TS 119 612 XSD. |
 | `LoTEFreshness`, `LoTENotExpired`, `LoTEWellSigned`, `LoTEVersion`, `LoTEStructure` | same | removed | Lists of trusted entities (TS 119 602) of the EU identity wallet. |

@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CRL/OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` and `NotOnHold`, and the
   signature `BestSignatureTimeBeforeExpirationDateOfSigningCertificate` and `RevocationTimeAgainstBestSignatureTime`.
   Messages of a token name it (`[OCSP of 'Leaf'] …`).
+- Validation policy: each countersignature (CAdES, XAdES) is evaluated in the `CounterSignatureConstraints`
+  context, with its own result. `ValidationOptions.TrustedLists` gives the CAdES and XAdES validators the trusted lists
+  the anchors come from, for the `TrustedLists` constraints (the CLI passes those of `--tsl` and `--lotl`).
 - `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
   policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,

@@ -113,6 +113,39 @@ public sealed class CadesMultiSignerTests : IDisposable
     }
 
     [Fact]
+    public async Task CounterSign_IsEvaluatedInTheCounterSignatureContext()
+    {
+        byte[] one = await CadesSigner.Document(_data).WithCertificate(_alice).SignAsync();
+        byte[] countersigned = await CadesSigner.CounterSign(one).WithCertificate(_carol).SignAsync();
+
+        var report = Validator().ValidateAll(countersigned, _data);
+
+        var counter = Assert.Single(report.Signers[0].CounterSignatures);
+        Assert.Contains(counter.Result.Constraints, c => c.Id == "CounterSignatureConstraints/BasicSignatureConstraints/SignatureIntact" && c.Status == ConstraintStatus.Passed);
+        Assert.DoesNotContain(counter.Result.Constraints, c => c.Id.StartsWith("SignatureConstraints/", StringComparison.Ordinal));
+        Assert.DoesNotContain(report.Signers[0].Result.Constraints, c => c.Id.StartsWith("CounterSignatureConstraints/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Validate_TrustedListsInTheOptions_AreEvaluated()
+    {
+        byte[] one = await CadesSigner.Document(_data).WithCertificate(_alice).SignAsync();
+        var list = new SimpleSign.Core.Extensions.TrustedListInfo(
+            "BR", null, "5", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30), DateTimeOffset.UtcNow, IsWellSigned: true, [_alice]);
+        var validator = new CadesSignatureValidator(new ValidationOptions
+        {
+            CheckRevocation = false,
+            TrustSystemRoots = false,
+            TrustedRoots = [_alice],
+            TrustedLists = [list],
+        });
+
+        var report = validator.ValidateAll(one, _data);
+
+        Assert.Contains(report.Signers[0].Result.Constraints, c => c.Id == "TrustedLists/TLWellSigned" && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
     public async Task CounterSign_Twice_AccumulatesCounterSignatures()
     {
         byte[] one = await CadesSigner.Document(_data).WithCertificate(_alice).SignAsync();
