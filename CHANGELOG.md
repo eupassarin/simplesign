@@ -127,6 +127,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/articles/playbook.md`; tests in `tests/unit/Apps/SimpleSign.Playbook.Tests`, including the sample run with the
   real CLI against a running Sandbox.
 
+### Added — CLI: the signing options the library has
+- `sign` (PAdES) gains the options it lacked:
+  - `--signing-time`;
+  - `--doc-info KEY=VALUE` (repeatable);
+  - `--contents-size`;
+  - `--archive-tsa`, a separate archive TSA;
+  - `--return-lower-level`;
+  - `--policy-hash` (and `--policy-hash-algorithm`), for an explicit signature policy;
+  - structured signer metadata without `--brasil`: `--signer-id`, `--signer-id-type`, `--ip-address`,
+    `--institution-id`, `--institution-id-type`, `--legal-basis`, plus `--signer-email`, `--institution`,
+    `--auth-method` and `--commitment` (origin, receipt, delivery, sender, approval, creation).
+- `sign`, `cades sign` and `xades sign` reach a TSA that asks for credentials, through `--tsa-user`/`--tsa-password`
+  (HTTP Basic), `--tsa-token` (bearer) or `--tsa-cert`/`--tsa-cert-password` (TLS client certificate). Secrets
+  accept `env:NAME`.
+- `validate`, `validate-dir`, `cades validate` and `xades validate --no-system-roots`: trust only `--trust`,
+  `--trust-dir` and the trusted lists.
+
 ### Added — CLI: network options and JSON result for signing
 
 - Every command accepts `--allow-origin <URL>` (repeatable), `--allow-ldap` and `--tls-trust <PEM>` (also

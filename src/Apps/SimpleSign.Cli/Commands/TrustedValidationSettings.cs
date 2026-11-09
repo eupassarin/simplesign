@@ -30,6 +30,11 @@ internal class TrustedValidationSettings : CommonSettings
     [Description("ocsp-first (the default) or crl-first")]
     public string? RevocationStrategy { get; init; }
 
+    /// <summary>Do not trust the operating system's roots.</summary>
+    [CommandOption("--no-system-roots")]
+    [Description("Do not trust the operating system's roots: only --trust, --trust-dir and the trusted lists")]
+    public bool NoSystemRoots { get; init; }
+
     /// <summary>Check the revocation of chains that do not reach a trust anchor.</summary>
     [CommandOption("--revocation-for-untrusted")]
     [Description("Also check the revocation of chains that do not reach a trust anchor (off by default)")]

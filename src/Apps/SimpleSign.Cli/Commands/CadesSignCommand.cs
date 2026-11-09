@@ -171,6 +171,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
                 return ValidationResult.Error("--content-timestamp requires --tsa");
             }
 
+            if (ValidateTsaCredentials(TsaUrl) is { } tsaError)
+            {
+                return ValidationResult.Error(tsaError);
+            }
+
             string? extrasError = AdesOptionSupport.ValidateRevocationPreference(RevocationPreference)
                 ?? AdesOptionSupport.ValidatePolicyDocument(PolicyOid, PolicyDocumentPath, PolicySpecification)
                 ?? AdesOptionSupport.ValidateFiles("--attribute-certificate", AttributeCertificates)
@@ -238,7 +243,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 
         if (settings.TsaUrl is not null && level >= AdesBaselineLevel.Timestamped)
         {
-            var profile = BuildBaselineProfile(settings.TsaUrl, level, settings.RevocationPreference);
+            var profile = BuildBaselineProfile(settings.Timestamp(settings.TsaUrl), level, settings.RevocationPreference);
             builder = builder.WithLevel(profile);
         }
         if (commitment.HasValue)
@@ -329,7 +334,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
 
         if (settings.ContentTimestamp)
         {
-            builder = builder.WithContentTimestamp(new TimestampOptions(new Uri(settings.TsaUrl!), CliNetwork.Provider));
+            builder = builder.WithContentTimestamp(settings.Timestamp(settings.TsaUrl!));
         }
 
         return builder;
@@ -364,9 +369,8 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         return certs.ToList().AsReadOnly();
     }
 
-    private static AdesBaselineProfile BuildBaselineProfile(string tsaUrl, AdesBaselineLevel level, string? revocationPreference)
+    private static AdesBaselineProfile BuildBaselineProfile(TimestampOptions timestampOptions, AdesBaselineLevel level, string? revocationPreference)
     {
-        var timestampOptions = new TimestampOptions(new Uri(tsaUrl), CliNetwork.Provider);
         return level switch
         {
             AdesBaselineLevel.Basic => AdesBaselineProfile.Basic(),

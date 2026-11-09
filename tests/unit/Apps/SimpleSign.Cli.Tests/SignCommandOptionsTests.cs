@@ -1,5 +1,7 @@
 using Shouldly;
 using SimpleSign.Cli.Rendering;
+using SimpleSign.Core.Constants;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 
 namespace SimpleSign.Cli.Tests;
@@ -45,4 +47,52 @@ public sealed class SignCommandOptionsTests
     [InlineData("unknown", null)]
     public void ParseSignatureAlgorithm_ReturnsExpected(string input, string? expected) =>
         SignCommandOptions.ParseSignatureAlgorithm(input).ShouldBe(expected);
+
+    [Fact]
+    public void ParseSigningTime_IsoWithOffset_KeepsTheInstant() =>
+        SignCommandOptions.ParseSigningTime("2026-11-09T10:00:00-03:00").ShouldBe(new DateTimeOffset(2026, 11, 9, 13, 0, 0, TimeSpan.Zero));
+
+    [Theory]
+    [InlineData("tomorrow")]
+    [InlineData(null)]
+    public void ParseSigningTime_NotADate_IsNull(string? value) =>
+        SignCommandOptions.ParseSigningTime(value).ShouldBeNull();
+
+    [Fact]
+    public void SplitDocumentInfo_KeyAndValue_SplitsAtTheFirstEquals() =>
+        SignCommandOptions.SplitDocumentInfo("Title=a=b").ShouldBe(("Title", "a=b"));
+
+    [Theory]
+    [InlineData("Title")]
+    [InlineData("=value")]
+    public void SplitDocumentInfo_NoKey_IsNull(string entry) =>
+        SignCommandOptions.SplitDocumentInfo(entry).ShouldBeNull();
+
+    [Theory]
+    [InlineData("0A:FF", new byte[] { 0x0A, 0xFF })]
+    [InlineData("0a ff", new byte[] { 0x0A, 0xFF })]
+    public void ParseHex_HexWithSeparators_ReturnsTheBytes(string value, byte[] expected) =>
+        SignCommandOptions.ParseHex(value).ShouldBe(expected);
+
+    [Theory]
+    [InlineData("xyz")]
+    [InlineData("ABC")]
+    [InlineData("")]
+    public void ParseHex_NotHex_IsNull(string value) =>
+        SignCommandOptions.ParseHex(value).ShouldBeNull();
+
+    [Theory]
+    [InlineData("SHA256", Oids.Sha256)]
+    [InlineData("sha-384", Oids.Sha384)]
+    [InlineData("SHA512", Oids.Sha512)]
+    [InlineData("MD5", null)]
+    public void PolicyHashOid_ReturnsTheDigestOid(string name, string? expected) =>
+        SignCommandOptions.PolicyHashOid(name).ShouldBe(expected);
+
+    [Theory]
+    [InlineData("origin", CommitmentType.ProofOfOrigin)]
+    [InlineData("Creation", CommitmentType.ProofOfCreation)]
+    [InlineData("other", null)]
+    public void ParseCommitment_ReturnsTheType(string value, CommitmentType? expected) =>
+        SignCommandOptions.ParseCommitment(value).ShouldBe(expected);
 }

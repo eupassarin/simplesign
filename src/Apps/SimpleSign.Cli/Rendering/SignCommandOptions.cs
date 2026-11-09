@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Security.Cryptography;
+using SimpleSign.Core.Constants;
+using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 
 namespace SimpleSign.Cli.Rendering;
@@ -38,5 +41,53 @@ internal static class SignCommandOptions
         "rsa-pkcs1" or "rsa" or "1.2.840.113549.1.1.1" => null,
         "rsassa-pss" or "pss" or "1.2.840.113549.1.1.10" => "1.2.840.113549.1.1.10",
         _ => null
+    };
+
+    /// <summary>An ISO 8601 date and time, or null when <paramref name="value"/> is null or not one.</summary>
+    internal static DateTimeOffset? ParseSigningTime(string? value) =>
+        value is not null && DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var time)
+            ? time
+            : null;
+
+    /// <summary>Splits <c>KEY=VALUE</c>; null when there is no <c>=</c> or the key is empty.</summary>
+    internal static (string Key, string Value)? SplitDocumentInfo(string entry)
+    {
+        int equals = entry.IndexOf('=', StringComparison.Ordinal);
+        return equals <= 0 ? null : (entry[..equals].Trim(), entry[(equals + 1)..]);
+    }
+
+    /// <summary>The bytes of a hex string (spaces and colons allowed), or null when it is not hex.</summary>
+    internal static byte[]? ParseHex(string value)
+    {
+        string hex = value.Replace(" ", "", StringComparison.Ordinal).Replace(":", "", StringComparison.Ordinal);
+        try
+        {
+            return hex.Length == 0 ? null : Convert.FromHexString(hex);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The digest OID of a policy hash algorithm name: SHA256, SHA384 or SHA512.</summary>
+    internal static string? PolicyHashOid(string name) => name.ToUpperInvariant().Replace("-", "", StringComparison.Ordinal) switch
+    {
+        "SHA256" => Oids.Sha256,
+        "SHA384" => Oids.Sha384,
+        "SHA512" => Oids.Sha512,
+        _ => null,
+    };
+
+    /// <summary>A commitment type by name (origin, receipt, delivery, sender, approval, creation), or null.</summary>
+    internal static CommitmentType? ParseCommitment(string? value) => value?.ToLowerInvariant() switch
+    {
+        "origin" => CommitmentType.ProofOfOrigin,
+        "receipt" => CommitmentType.ProofOfReceipt,
+        "delivery" => CommitmentType.ProofOfDelivery,
+        "sender" => CommitmentType.ProofOfSender,
+        "approval" => CommitmentType.ProofOfApproval,
+        "creation" => CommitmentType.ProofOfCreation,
+        _ => null,
     };
 }
