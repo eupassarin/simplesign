@@ -202,11 +202,6 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             sb.Append("    TrustedRoots = [root], // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")\n");
         }
 
-        if (!settings.CheckRevocation)
-        {
-            sb.Append("    CheckRevocation = false,\n");
-        }
-
         foreach (string option in ValidationService.PolicyOptionsCode(settings))
         {
             sb.Append("    ").Append(option).Append(",\n");
@@ -234,9 +229,9 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         }
 
         args.AddRange(ValidationService.PolicyCliArgs(settings));
-        if (!settings.CheckRevocation || !settings.Trust.Contains(TrustChoice.System))
+        if (!settings.Trust.Contains(TrustChoice.System))
         {
-            notes.Add("The CLI validates against the OS roots plus --trust; turning revocation or the OS roots off needs the library.");
+            notes.Add("The CLI validates against the OS roots plus --trust; turning the OS roots off needs the library.");
         }
 
         return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), notes);
