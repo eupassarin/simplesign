@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   evidence records, attestations and key binding signatures, JSON-signature headers, EU qualification and PSD2
   statements, `OCSPCertHash*`, lists of trusted entities, `SunsetDate`, `ManifestEntry*`, `PdfVisualDifference`). The
   reader names each one; `docs/policies/compatibility.md` lists them with the reason.
+- **Stricter default validation policy:** the certificate checks now follow the policy's levels, and some are FAIL by
+  default. Notably, a chain whose CA certificate has no Subject Key Identifier
+  (`CACertificate/SubjectKeyIdentifierPresent`, FAIL in every context: signature, timestamp, revocation,
+  countersignature) now makes the signature INDETERMINATE; a missing Authority Key Identifier is only a warning.
+  Signatures from test or private PKIs that validated before may not validate now. A policy can lower these checks
+  to WARN.
 - `ValidationPolicy` (now `SimpleSign.Core.Policies`) reads and writes JSON in SimpleSign's own format (root
   `ValidationConstraints`; contexts `SignatureConstraints`, `CounterSignatureConstraints`, `Timestamp`, `Revocation`,
   `Cryptographic`, `Model`, `TrustedLists`), one FAIL/WARN/INFORM/IGNORE level per constraint. Names outside the
@@ -49,8 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ByteRange and Contents. `ChainRevocationResult` gains `Crls`/`Ocsps` (the data the statuses came from).
 - Validation results (`SignatureValidationResult`, `CadesValidationResult`, `XadesValidationResult`) gain
   `ValidationObjects`: the timestamps and revocation data used, each with the outcome of its own evaluation; the ETSI
-  TS 119 102-2 report lists them as validation objects (with the POE of each timestamp). `BestSignatureTime` is the
-  earliest accepted signature timestamp.
+  TS 119 102-2 report lists them as validation objects (with the POE of each timestamp), the simple report as
+  `timestamps` and `revocationData` with their own indication. `BestSignatureTime` is the earliest accepted
+  signature timestamp.
 - Validation policy: `RevocationHasInformationAboutCertificate` (revocation data issued after the certificate expired
   counts only with expiredCertsOnCRL or archiveCutoff from before the expiry); `ContentTimeStamp` and
   `ContentTimeStampMessageImprint` (CAdES content-time-stamp, XAdES data objects timestamps), the content timestamp

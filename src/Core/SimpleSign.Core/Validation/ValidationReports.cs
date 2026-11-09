@@ -265,7 +265,8 @@ public static class ValidationReports
 
     /// <summary>
     /// A simple report (JSON) of <paramref name="signatures"/>, with, per
-    /// signature its indication, sub-indication, signer, times, policy, errors and warnings, and the counts.
+    /// signature its indication, sub-indication, signer, times, policy, errors and warnings, its timestamps and
+    /// revocation data with their own indication, and the counts.
     /// </summary>
     /// <param name="signatures">The signatures.</param>
     /// <param name="validationTime">The validation time; now when null.</param>
@@ -332,6 +333,7 @@ public static class ValidationReports
                 WriteStrings(writer, "errors", signature.Errors);
                 WriteStrings(writer, "warnings", signature.Warnings);
                 WriteStrings(writer, "infos", [.. signature.Constraints.Where(c => c.Status == ConstraintStatus.Information).Select(c => c.Message)]);
+                WriteObjects(writer, signature.ValidationObjects);
                 writer.WriteEndObject();
             }
 
@@ -340,6 +342,49 @@ public static class ValidationReports
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>The timestamps and the revocation data of a signature, each with its own indication.</summary>
+    private static void WriteObjects(Utf8JsonWriter writer, IReadOnlyList<ValidationObjectEntry> objects)
+    {
+        writer.WriteStartArray("timestamps");
+        foreach (var entry in objects.Where(o => o.Type == ValidationObjectType.Timestamp))
+        {
+            writer.WriteStartObject();
+            if (entry.Time is { } time)
+            {
+                writer.WriteString("time", time.ToUniversalTime());
+            }
+
+            WriteIndication(writer, entry);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+        writer.WriteStartArray("revocationData");
+        foreach (var entry in objects.Where(o => o.Type != ValidationObjectType.Timestamp))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", entry.Type == ValidationObjectType.Crl ? "CRL" : "OCSP");
+            WriteIndication(writer, entry);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+    }
+
+    private static void WriteIndication(Utf8JsonWriter writer, ValidationObjectEntry entry)
+    {
+        writer.WriteString("indication", entry.Indication switch
+        {
+            SignatureIndication.Valid => "PASSED",
+            SignatureIndication.Invalid => "FAILED",
+            _ => "INDETERMINATE",
+        });
+        if (entry.SubIndication is { } sub)
+        {
+            writer.WriteString("subIndication", sub.ToEtsiName());
+        }
     }
 
     private static void WriteStrings(Utf8JsonWriter writer, string name, IReadOnlyList<string> values)
