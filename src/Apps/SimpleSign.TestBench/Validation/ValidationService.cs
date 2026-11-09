@@ -35,6 +35,15 @@ public sealed record ValidationSettings
     public bool CheckRevocation { get; init; } = true;
 
     public int TimeoutSeconds { get; init; } = 10;
+
+    /// <summary>The uploaded validation policy (JSON, root ValidationConstraints); null: <c>ValidationPolicy.Default</c>.</summary>
+    public string? PolicyId { get; init; }
+
+    /// <summary>How much of each signature is validated (default: everything).</summary>
+    public ValidationLevel Level { get; init; } = ValidationLevel.ArchivalData;
+
+    /// <summary>Which revocation source is asked first.</summary>
+    public RevocationStrategy RevocationStrategy { get; init; } = RevocationStrategy.OcspFirst;
 }
 
 public sealed record CertificateView(string Subject, string Issuer, string SerialNumber, string NotBefore, string NotAfter, string KeyAlgorithm, int? KeySize, bool HasNonRepudiation, string Thumbprint);
@@ -194,6 +203,9 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             TrustedRoots = roots.Count > 0 ? roots : null,
             CheckRevocation = settings.CheckRevocation,
             NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 120)),
+            Policy = PolicyUploads.Validation(settings.PolicyId, documents),
+            Level = settings.Level,
+            Verifier = VerifierOptions.Default with { RevocationStrategy = settings.RevocationStrategy },
         };
         return new ValidationTrust(options);
     }
@@ -280,10 +292,54 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             : X509CertificateLoader.LoadCertificate(content);
     }
 
+    /// <summary>The <c>ValidationOptions</c> initializers for the policy, level and revocation strategy that differ from the defaults.</summary>
+    internal static IEnumerable<string> PolicyOptionsCode(ValidationSettings s)
+    {
+        if (s.PolicyId is not null)
+        {
+            yield return $"Policy = ValidationPolicy.Load(\"{PolicyUploads.ValidationFileName}\")";
+        }
+
+        if (s.Level != ValidationLevel.ArchivalData)
+        {
+            yield return $"Level = ValidationLevel.{s.Level}";
+        }
+
+        if (s.RevocationStrategy != RevocationStrategy.OcspFirst)
+        {
+            yield return $"Verifier = new VerifierOptions {{ RevocationStrategy = RevocationStrategy.{s.RevocationStrategy} }}";
+        }
+    }
+
+    /// <summary>The CLI options for the policy, level and revocation strategy that differ from the defaults.</summary>
+    internal static IEnumerable<string> PolicyCliArgs(ValidationSettings s)
+    {
+        if (s.PolicyId is not null)
+        {
+            yield return "--policy " + PolicyUploads.ValidationFileName;
+        }
+
+        if (s.Level != ValidationLevel.ArchivalData)
+        {
+            yield return "--level " + s.Level switch
+            {
+                ValidationLevel.BasicSignatures => "basic",
+                ValidationLevel.Timestamps => "timestamps",
+                _ => "lt",
+            };
+        }
+
+        if (s.RevocationStrategy != RevocationStrategy.OcspFirst)
+        {
+            yield return "--revocation-strategy crl-first";
+        }
+    }
+
     private static CodeSnippets ValidationCode(ValidationSettings s)
     {
         var sb = new StringBuilder();
-        sb.Append("using SimpleSign.PAdES.Validation;\nusing SimpleSign.Core.Validation;\n\n");
+        sb.Append("using SimpleSign.PAdES.Validation;\nusing SimpleSign.Core.Validation;\n");
+        sb.Append(s.PolicyId is null ? "\n" : "using SimpleSign.Core.Policies;\n\n");
         var options = new List<string>();
         if (!s.Trust.Contains(TrustChoice.System))
         {
@@ -305,6 +361,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             options.Add($"NetworkTimeout = TimeSpan.FromSeconds({s.TimeoutSeconds})");
         }
 
+        options.AddRange(PolicyOptionsCode(s));
         string optionsCode = options.Count == 0 ? "ValidationOptions.Default" : "new ValidationOptions\n{\n    " + string.Join(",\n    ", options) + ",\n}";
         sb.Append("var options = ").Append(optionsCode).Append(";\n");
         sb.Append("var validator = new PdfSignatureValidator(options);\n");
@@ -313,7 +370,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         sb.Append("    foreach (var error in r.Errors) Console.WriteLine($\"  ✕ {error}\");\n}\n");
         string cli = "simplesign validate signed.pdf"
             + (s.Trust.Contains(TrustChoice.Sandbox) || s.CustomRootUploadIds.Count > 0 ? " --trust root.cer" : "")
-            + (s.CheckRevocation ? "" : " --no-revocation");
+            + (s.CheckRevocation ? "" : " --no-revocation")
+            + string.Concat(PolicyCliArgs(s).Select(a => " " + a));
         var notes = new List<string>
         {
             L.T("The CLI trusts the operating system's roots too; --trust adds roots."),

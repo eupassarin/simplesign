@@ -14,6 +14,8 @@ import type {
   CadesSample,
   CmsFacts,
   XmlSample,
+  PolicyKind,
+  PolicyView,
 } from "./types"
 
 import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
@@ -56,6 +58,9 @@ export const api = {
   catalog: () => request<Record<string, OptionInfo>>("GET", "/api/catalog"),
   samples: () => request<SampleDocument[]>("GET", "/api/documents/samples"),
   uploadDocument: (file: File) => request<DocumentFacts>("POST", "/api/documents", upload(file)),
+  policies: {
+    view: (body: { kind: PolicyKind; json?: string | null; uploadId?: string | null }) => request<PolicyView>("POST", "/api/policies/view", body),
+  },
   uploadFile: (file: File) => request<{ id: string; fileName: string; size: number }>("POST", "/api/uploads", upload(file)),
   fileUrl: (id: string, download = false) => `/api/files/${encodeURIComponent(id)}${download ? "?download=true" : ""}`,
   validation: {
@@ -107,6 +112,6 @@ export const api = {
     settings: () => request<DssSettings>("GET", "/api/dss/settings"),
     save: (settings: DssSettings) => request<DssSettings>("PUT", "/api/dss/settings", settings),
     status: () => request<DssStatus>("GET", "/api/dss/status"),
-    validate: (fileId: string, dataId?: string | null) => request<DssComparison>("POST", "/api/dss/validate", { fileId, dataId }),
+    validate: (fileId: string, dataId?: string | null, policyId?: string | null) => request<DssComparison>("POST", "/api/dss/validate", { fileId, dataId, policyId }),
   },
 }

@@ -7,7 +7,7 @@ using SimpleSign.TestBench.Signing;
 namespace SimpleSign.TestBench.Tests;
 
 /// <summary>
-/// The Strict signing policy end to end against a running SimpleSign Sandbox: CRLs over HTTP, HTTPS
+/// A strict signing policy (the default plus NotRevoked and RevocationDataAvailable at FAIL), uploaded as JSON, end to end against a running SimpleSign Sandbox: CRLs over HTTP, HTTPS
 /// and LDAP, OCSP, revoked and expired CAs, and failures of the services. Each case must sign, or be
 /// refused with the right <see cref="SigningErrorReason"/>.
 /// </summary>
@@ -25,7 +25,7 @@ public sealed class SandboxScenarioTests(TestBenchFixture fixture) : IDisposable
     }
 
     private Task<SigningResult> SignStrictAsync(string signer) =>
-        fixture.Runner.RunAsync(fixture.Options(signer: signer) with { Level = BaselineLevel.BB, SigningPolicy = SigningPolicyChoice.Strict }, default);
+        fixture.Runner.RunAsync(fixture.Options(signer: signer) with { Level = BaselineLevel.BB, SigningPolicyId = fixture.UploadStrictSigningPolicy() }, default);
 
     /// <summary>Signs the contract sample with the library itself, with a Sandbox signer and its chain.</summary>
     private Task<byte[]> LibrarySignAsync(string signer)

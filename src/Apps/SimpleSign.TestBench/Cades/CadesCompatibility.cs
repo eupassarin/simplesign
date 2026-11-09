@@ -32,7 +32,7 @@ public static class CadesCompatibility
     public const string StepCrypto = "crypto";
     public const string StepDetails = "details";
 
-    public static CadesOptionsReport Evaluate(CadesOptions options, CadesInputs inputs, CredentialFacts? credential, bool sandboxConnected = true)
+    public static CadesOptionsReport Evaluate(CadesOptions options, CadesInputs inputs, CredentialFacts? credential, bool sandboxConnected = true, SigningPolicyInput? signingPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(inputs);
@@ -200,7 +200,7 @@ public static class CadesCompatibility
 
         // ── 2. Signer ──────────────────────────────────────────────────
         Set("signingPolicy", OptionState.Shown);
-        SharedRules.Signer(credential, Error, Warn, StepSigner, o.SigningPolicy);
+        SharedRules.Signer(credential, Error, Warn, StepSigner, signingPolicy);
         var effective = o with
         {
             Padding = padding,

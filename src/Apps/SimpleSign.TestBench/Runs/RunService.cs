@@ -223,7 +223,11 @@ internal sealed class RunService(
                 };
                 if (crossValidate && view.Success && view.OutputId is not null && view.Validation.Count > 0)
                 {
-                    view = view with { CrossValidation = await dss.CompareAsync(run.Format, view, DetachedDataId(run), DetachedDataName(run, view), logger, CancellationToken.None) };
+                    view = view with
+                    {
+                        CrossValidation = await dss.CompareAsync(run.Format, view, DetachedDataId(run), DetachedDataName(run, view), logger, CancellationToken.None,
+                            PolicyUploads.Validation(ValidationSettingsOf(run).PolicyId, documents)),
+                    };
                 }
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException or KeyNotFoundException)
@@ -240,6 +244,14 @@ internal sealed class RunService(
         };
         run.Add(new RunEvent("result", null, view));
     }
+
+    /// <summary>The validation settings of a run: the settings of a validation run, or the validation step of a signing run.</summary>
+    private static Validation.ValidationSettings ValidationSettingsOf(Run run) =>
+        run.Kind == RunKinds.Validate
+            ? Options<ValidateOptions>(run).Settings ?? new Validation.ValidationSettings()
+            : run.Options.TryGetProperty("validation", out var settings) && settings.ValueKind == JsonValueKind.Object
+                ? settings.Deserialize<Validation.ValidationSettings>(WorkbenchJson.Options) ?? new Validation.ValidationSettings()
+                : new Validation.ValidationSettings();
 
     private static T Options<T>(Run run) =>
         run.Options.Deserialize<T>(WorkbenchJson.Options) ?? throw new JsonException(L.T("The run has no options."));

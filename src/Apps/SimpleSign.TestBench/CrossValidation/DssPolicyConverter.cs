@@ -8,14 +8,47 @@ using System.Xml.Linq;
 namespace SimpleSign.TestBench.CrossValidation;
 
 /// <summary>
-/// Converts a SimpleSign validation policy (JSON in the structure of the EU DSS policy) to the DSS
-/// <c>constraint.xml</c> and back, so DSS validates with the same policy. The mapping is mechanical: an object is an
-/// element, a string or number property an attribute (except <c>Description</c>, the root's text element), the
-/// <c>Id</c> and <c>Algo</c> arrays repeated elements, the <c>Value</c> of an <c>Algo</c> its text.
+/// Converts a SimpleSign validation policy (JSON) to the DSS <c>constraint.xml</c> and back, following
+/// docs/policies/compatibility.md, so DSS validates with the same policy. The names are the same except the root
+/// (<c>ValidationConstraints</c> ↔ <c>ConstraintsParameters</c>) and the trusted lists (<c>TrustedLists</c> ↔
+/// <c>eIDAS</c>). The mapping is mechanical: an object is an element, a string or number property an attribute (except
+/// <c>Description</c>, the root's text element), the <c>Id</c> and <c>Algo</c> arrays repeated elements, the
+/// <c>Value</c> of an <c>Algo</c> its text. Elements SimpleSign's format does not have are dropped on the way in.
 /// </summary>
 internal static class DssPolicyConverter
 {
     internal static readonly XNamespace Namespace = "http://dss.esig.europa.eu/validation/policy";
+
+    private const string Root = "ValidationConstraints";
+    private const string DssRoot = "ConstraintsParameters";
+
+    /// <summary>SimpleSign names that DSS writes differently.</summary>
+    private static readonly Dictionary<string, string> s_toDss = new(StringComparer.Ordinal)
+    {
+        [Root] = DssRoot,
+        ["TrustedLists"] = "eIDAS",
+    };
+
+    private static readonly Dictionary<string, string> s_fromDss = s_toDss.ToDictionary(p => p.Value, p => p.Key, StringComparer.Ordinal);
+
+    /// <summary>
+    /// DSS elements that are not in SimpleSign's format (docs/policies/compatibility.md, state "removed"): dropped when a
+    /// DSS policy is read.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> NotInSimpleSign = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "ContainerConstraints", "PDFAConstraints", "KeyBindingSignatureConstraints", "EvidenceRecord", "Attestation",
+        "AttestationRevocation", "KeyIdentifierPresent", "KeyIdentifierMatch", "X509UrlPresent", "X509UrlMatch",
+        "SignatureType", "EllipticCurveKeySize", "ContainerSignedAndTimestampedFilesCovered", "OCSPCertHashPresent",
+        "OCSPCertHashMatch", "ReferenceDataNameMatch", "ManifestEntryObjectExistence", "ManifestEntryObjectGroup",
+        "ManifestEntryObjectIntact", "ManifestEntryNameMatch", "PdfVisualDifference", "SunsetDate",
+        "PolicyQualificationIds", "PolicySupportedByQSCDIds", "QcEuLimitValueCurrency", "MinQcEuLimitValue",
+        "MinQcEuRetentionPeriod", "QcEuPDSLocation", "QcType", "QcLegislationCountryCodes", "IssuedToNaturalPerson",
+        "IssuedToLegalPerson", "SemanticsIdentifier", "PSD2QcTypeRolesOfPSP", "PSD2QcCompetentAuthorityName",
+        "PSD2QcCompetentAuthorityId", "QcQSCDLegislation", "QcIdentificationMethod", "QcPSBCountryOfLegislation",
+        "QcPSBAuthSourceIdentification", "QcPSBLegislationIdentification", "LoTEFreshness", "LoTENotExpired",
+        "LoTEWellSigned", "LoTEVersion", "LoTEStructure",
+    };
 
     /// <summary>
     /// Elements of the current DSS policy schema that DSS 6.3 (the version of <c>tools/dss</c>) does not know: DSS
@@ -23,19 +56,15 @@ internal static class DssPolicyConverter
     /// </summary>
     internal static readonly IReadOnlySet<string> NotInDss63 = new HashSet<string>(StringComparer.Ordinal)
     {
-        "AuthorityKeyIdentifierPresent", "SubjectKeyIdentifierPresent", "SigningTimeInCertRange", "SignatureType",
-        "X509UrlPresent", "X509UrlMatch", "KeyBindingSignatureConstraints", "Attestation", "AttestationRevocation",
-        "LoTEFreshness", "LoTENotExpired", "LoTEWellSigned", "LoTEVersion", "LoTEStructure",
-        "QcIdentificationMethod", "QcPSBAuthSourceIdentification", "QcPSBCountryOfLegislation",
-        "QcPSBLegislationIdentification", "QcQSCDLegislation",
+        "AuthorityKeyIdentifierPresent", "SubjectKeyIdentifierPresent", "SigningTimeInCertRange",
     };
 
     /// <summary>The DSS <c>constraint.xml</c> of a SimpleSign validation policy, for the current DSS schema or, with <paramref name="omit"/>, an older one.</summary>
     internal static string ToConstraintXml(string json, IReadOnlySet<string>? omit = null)
     {
         using var document = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
-        var root = document.RootElement.GetProperty("ConstraintsParameters");
-        var xml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), Element("ConstraintsParameters", root, omit));
+        var root = document.RootElement.GetProperty(Root);
+        var xml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), Element(Root, root, omit));
         // Written as UTF-8 bytes, so the declaration says UTF-8 (a StringBuilder would declare UTF-16).
         using var stream = new MemoryStream();
         using (var writer = XmlWriter.Create(stream, new XmlWriterSettings { Indent = true, Encoding = new UTF8Encoding(false) }))
@@ -46,18 +75,21 @@ internal static class DssPolicyConverter
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>A SimpleSign validation policy (JSON) from a DSS <c>constraint.xml</c>.</summary>
-    internal static string FromConstraintXml(string xml)
+    /// <summary>
+    /// A SimpleSign validation policy (JSON) from a DSS <c>constraint.xml</c>. Elements SimpleSign's format does not
+    /// have are left out and, when <paramref name="dropped"/> is given, added to it with their path.
+    /// </summary>
+    internal static string FromConstraintXml(string xml, ICollection<string>? dropped = null)
     {
         var document = XDocument.Parse(xml);
         var root = document.Root ?? throw new InvalidDataException("The policy has no root element.");
-        var json = new JsonObject { ["ConstraintsParameters"] = Object(root) };
+        var json = new JsonObject { [Root] = Object(root, "", dropped) };
         return json.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
     }
 
     private static XElement Element(string name, JsonElement value, IReadOnlySet<string>? omit)
     {
-        var element = new XElement(Namespace + name);
+        var element = new XElement(Namespace + s_toDss.GetValueOrDefault(name, name));
         foreach (var property in value.EnumerateObject())
         {
             if (omit?.Contains(property.Name) == true)
@@ -119,7 +151,7 @@ internal static class DssPolicyConverter
         return element;
     }
 
-    private static JsonObject Object(XElement element)
+    private static JsonObject Object(XElement element, string path, ICollection<string>? dropped)
     {
         var json = new JsonObject();
         foreach (var attribute in element.Attributes().Where(a => !a.IsNamespaceDeclaration))
@@ -145,7 +177,16 @@ internal static class DssPolicyConverter
 
         foreach (var child in element.Elements().Where(e => e.Name.LocalName is not ("Id" or "Algo")))
         {
-            json[child.Name.LocalName] = child.Name.LocalName == "Description" ? JsonValue.Create(child.Value) : Object(child);
+            string dssName = child.Name.LocalName;
+            string childPath = path.Length == 0 ? dssName : path + "/" + dssName;
+            if (NotInSimpleSign.Contains(dssName))
+            {
+                dropped?.Add(childPath);
+                continue;
+            }
+
+            string name = s_fromDss.GetValueOrDefault(dssName, dssName);
+            json[name] = name == "Description" ? JsonValue.Create(child.Value) : Object(child, childPath, dropped);
         }
 
         return json;

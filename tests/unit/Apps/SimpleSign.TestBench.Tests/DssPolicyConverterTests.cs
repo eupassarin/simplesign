@@ -20,6 +20,8 @@ public sealed class DssPolicyConverterTests
         xml.Root!.Name.ShouldBe(ns + "ConstraintsParameters");
         xml.Root.Attribute("Name")!.Value.ShouldBe("SimpleSign default");
         xml.Root.Elements().First().Name.LocalName.ShouldBe("Description");
+        xml.Root.Element(ns + "eIDAS").ShouldNotBeNull();
+        xml.Root.Element(ns + "TrustedLists").ShouldBeNull();
         var keyUsage = xml.Root.Element(ns + "SignatureConstraints")!.Element(ns + "BasicSignatureConstraints")!
             .Element(ns + "SigningCertificate")!.Element(ns + "KeyUsage")!;
         keyUsage.Attribute("Level")!.Value.ShouldBe("WARN");
@@ -54,7 +56,13 @@ public sealed class DssPolicyCompatibilityTests
             return; // Offline: nothing to compare against.
         }
 
-        var dss = ValidationPolicy.FromJson(DssPolicyConverter.FromConstraintXml(xml));
+        var dropped = new List<string>();
+        var dss = ValidationPolicy.FromJson(DssPolicyConverter.FromConstraintXml(xml, dropped));
+
+        // What SimpleSign's format does not have is dropped and listed (docs/policies/compatibility.md).
+        dropped.ShouldContain("ContainerConstraints");
+        dropped.ShouldContain("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/SunsetDate");
+        dropped.Select(path => path[(path.LastIndexOf('/') + 1)..]).ShouldAllBe(name => DssPolicyConverter.NotInSimpleSign.Contains(name));
 
         foreach (string path in new[]
         {

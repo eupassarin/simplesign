@@ -79,7 +79,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     public CadesOptionsReport Evaluate(CadesOptions o)
     {
         credentials.TryGet(o.CredentialId, out var credential);
-        return CadesCompatibility.Evaluate(o, Inputs(o), credential?.Facts, sandbox.IsConnected);
+        return CadesCompatibility.Evaluate(o, Inputs(o), credential?.Facts, sandbox.IsConnected, PolicyUploads.Signing(o.SigningPolicyId, documents));
     }
 
     public async Task<CadesSignResult> RunAsync(CadesOptions options, CancellationToken cancellationToken)
@@ -194,7 +194,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     private static CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool sandboxRoot = settings.Trust.Contains(TrustChoice.Sandbox);
-        var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n");
+        var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null ? "" : "using SimpleSign.Core.Policies;\n"));
         sb.Append("\nvar validator = new CadesSignatureValidator(new ValidationOptions\n{\n");
         sb.Append(CultureInfo.InvariantCulture, $"    TrustSystemRoots = {(settings.Trust.Contains(TrustChoice.System) ? "true" : "false")},\n");
         if (sandboxRoot || settings.CustomRootUploadIds.Count > 0)
@@ -205,6 +205,11 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         if (!settings.CheckRevocation)
         {
             sb.Append("    CheckRevocation = false,\n");
+        }
+
+        foreach (string option in ValidationService.PolicyOptionsCode(settings))
+        {
+            sb.Append("    ").Append(option).Append(",\n");
         }
 
         sb.Append("});\n");
@@ -228,6 +233,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             args.Add("--trust root.cer");
         }
 
+        args.AddRange(ValidationService.PolicyCliArgs(settings));
         if (!settings.CheckRevocation || !settings.Trust.Contains(TrustChoice.System))
         {
             notes.Add("The CLI validates against the OS roots plus --trust; turning revocation or the OS roots off needs the library.");
@@ -284,10 +290,15 @@ internal sealed class CadesPlan
             _steps.Add(($".WithHashAlgorithm(HashAlgorithmName.{hash.Name})", b => b.WithHashAlgorithm(hash)));
         }
 
-        if (o.SigningPolicy != SigningPolicyChoice.Default)
+        var signingPolicy = PolicyUploads.Signing(o.SigningPolicyId, context.Documents);
+        if (signingPolicy.Error is { } policyError)
         {
-            var signingPolicy = SigningPlan.ToSigningPolicy(o.SigningPolicy);
-            _steps.Add((SigningPlan.SigningPolicyCode(o.SigningPolicy), b => b.WithSigningPolicy(signingPolicy)));
+            throw new ArgumentException(L.T("The signing policy cannot be read: {0}", policyError));
+        }
+
+        if (signingPolicy.Uploaded)
+        {
+            _steps.Add((PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
         }
 
         if (credential.Facts.KeyAlgorithm == "RSA" && o.Padding == RsaPadding.Pss)
@@ -492,9 +503,9 @@ internal sealed class CadesPlan
             args.Add("--hash " + SigningPlan.HashName(_o.Hash));
         }
 
-        if (_o.SigningPolicy != SigningPolicyChoice.Default)
+        if (_o.SigningPolicyId is not null)
         {
-            args.Add("--signing-policy " + _o.SigningPolicy.ToString().ToLowerInvariant());
+            args.Add("--signing-policy " + PolicyUploads.SigningFileName);
         }
 
         CodeGenerator.AddIf(args, "--commitment", _o.Commitment);

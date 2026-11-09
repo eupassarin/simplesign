@@ -7,7 +7,6 @@ export type TsaAuth = "None" | "Basic" | "Bearer"
 export type HashChoice = "Sha256" | "Sha384" | "Sha512" | "Sha3_256" | "Sha3_384" | "Sha3_512"
 export type RsaPadding = "Pkcs1" | "Pss"
 export type RevocationPreference = "OcspFirst" | "CrlFirst"
-export type SigningPolicyChoice = "Default" | "Strict" | "Minimal"
 export type XadesCanonicalization = "Exclusive" | "Inclusive"
 export type SubFilterChoice = "EtsiCadesDetached" | "AdbePkcs7Detached"
 export type FieldMode = "New" | "Existing"
@@ -53,7 +52,8 @@ export interface SigningOptions {
   archiveTimestamp: TimestampChoice
   returnLowerLevel: boolean
   revocationPreference: RevocationPreference
-  signingPolicy: SigningPolicyChoice
+  /** Uploaded signing policy (JSON); null: the library's default. */
+  signingPolicyId?: string | null
   hash: HashChoice
   padding: RsaPadding
   subFilter: SubFilterChoice
@@ -332,7 +332,14 @@ export interface ValidationSettings {
   customRootUploadIds: string[]
   checkRevocation: boolean
   timeoutSeconds: number
+  /** Uploaded validation policy (JSON); null: the library's default. */
+  policyId?: string | null
+  level?: ValidationLevel
+  revocationStrategy?: RevocationStrategy
 }
+
+export type ValidationLevel = "BasicSignatures" | "Timestamps" | "LongTermData" | "ArchivalData"
+export type RevocationStrategy = "OcspFirst" | "CrlFirst"
 
 export interface ValidationSample {
   id: string
@@ -436,7 +443,8 @@ export interface CadesOptions {
   commitment?: string | null
   contentTimestamp: boolean
   revocationPreference: RevocationPreference
-  signingPolicy: SigningPolicyChoice
+  /** Uploaded signing policy (JSON); null: the library's default. */
+  signingPolicyId?: string | null
   signerCountry?: string | null
   signerLocality?: string | null
   signerPostalAddress: string[]
@@ -586,7 +594,8 @@ export interface XmlOptions {
   placePostalCode?: string | null
   placeCountry?: string | null
   revocationPreference: RevocationPreference
-  signingPolicy: SigningPolicyChoice
+  /** Uploaded signing policy (JSON); null: the library's default. */
+  signingPolicyId?: string | null
   commitment?: string | null
   signingTime?: string | null
   operationId?: string | null
@@ -666,4 +675,34 @@ export interface XmlSample {
   description: string
   expectedIndication?: string | null
   expectedCheck?: string | null
+}
+
+// ── Policy viewer ───────────────────────────────────────────────────
+export type PolicyKind = "signing" | "validation"
+export type PolicyLevel = "FAIL" | "WARN" | "INFORM" | "IGNORE"
+
+export interface PolicyNodeView {
+  name: string
+  path: string
+  kind: "section" | "crypto" | "constraint"
+  level?: PolicyLevel | null
+  explanation: string
+  standard?: string | null
+  evaluation: "evaluated" | "toConnect" | "toImplement" | "none"
+  ids: string[]
+  algorithms: { name: string; size?: number | null; date?: string | null }[]
+  attributes: Record<string, string>
+  children: PolicyNodeView[]
+}
+
+export interface PolicyView {
+  kind: PolicyKind
+  name?: string | null
+  description?: string | null
+  digest?: string | null
+  json: string
+  error?: string | null
+  root?: PolicyNodeView | null
+  counts?: { fail: number; warn: number; inform: number; ignore: number; evaluated: number; toConnect: number; toImplement: number } | null
+  levels: Record<PolicyLevel, string>
 }

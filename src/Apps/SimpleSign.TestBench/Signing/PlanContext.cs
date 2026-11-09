@@ -26,8 +26,12 @@ internal sealed class PlanContext
 
     private readonly SandboxEnvironment _sandbox;
 
+    /// <summary>The uploads and documents of the workbench.</summary>
+    public DocumentStore Documents { get; }
+
     public PlanContext(CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents)
     {
+        Documents = documents;
         Credential = credential;
         _documents = documents;
         _sandbox = sandbox;

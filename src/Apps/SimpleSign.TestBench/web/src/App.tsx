@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react"
-import { BookOpen, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
+import { BookOpen, FileSliders, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Toaster } from "@/components/ui/sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { RealEnvironment } from "@/features/environment/RealEnvironment"
+import { PoliciesPage } from "@/features/policies/PoliciesPage"
 import { SandboxPage } from "@/features/sandbox/SandboxPage"
 import { CatalogProvider } from "@/features/shared/catalog"
 import { CoveragePage } from "@/features/standards/CoveragePage"
@@ -79,6 +80,7 @@ function Shell() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Panel icon={<FileSliders />} label={t("policies.title")} hint={t("policies.hint")}><PoliciesPage /></Panel>
           <Panel icon={<BookOpen />} label={t("app.reference")} hint={t("app.referenceHint")}><CoveragePage /></Panel>
           <Panel icon={<FlaskConical />} label={sandbox ? t("app.sandboxConnected", { name: sandbox.name }) : t("app.sandboxNone")} hint={t("app.sandboxHint")}>
             <SandboxPage />

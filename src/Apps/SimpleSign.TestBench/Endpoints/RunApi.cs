@@ -28,7 +28,8 @@ public sealed record WorkbenchOptionsResponse(
 
 public sealed record RunStarted(string Id);
 
-public sealed record DssValidateRequest(string FileId, string? DataId);
+/// <summary>A file to validate with DSS, with the data of a detached signature and the uploaded validation policy (null: the default).</summary>
+public sealed record DssValidateRequest(string FileId, string? DataId, string? PolicyId = null);
 
 /// <summary>A file to try validation with, and the indication it should get (null: no expectation).</summary>
 public sealed record SampleView(string Format, string Id, string FileId, string FileName, string? DataId, string Title, string Description, string? ExpectedIndication);
@@ -133,7 +134,7 @@ internal static class RunApi
         dss.MapGet("/status", async (DssClient client, CancellationToken ct) => await client.StatusAsync(ct));
         dss.MapPost("/validate", async (DssValidateRequest body, DssClient client, DocumentStore documents, CancellationToken ct) =>
             documents.TryGet(body.FileId, out _)
-                ? Results.Ok(await client.ValidateAsync(body.FileId, body.DataId, null, ct))
+                ? Results.Ok(await client.ValidateAsync(body.FileId, body.DataId, null, ct, policy: PolicyUploads.Validation(body.PolicyId, documents)))
                 : Results.NotFound());
     }
 
@@ -148,7 +149,7 @@ internal static class RunApi
                     var options = body.Options.Deserialize<CadesOptions>(json) ?? new CadesOptions();
                     credentials.TryGet(options.CredentialId, out var credential);
                     var inputs = cades.Inputs(options);
-                    var report = CadesCompatibility.Evaluate(options, inputs, credential?.Facts, cades.SandboxConnected);
+                    var report = CadesCompatibility.Evaluate(options, inputs, credential?.Facts, cades.SandboxConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
                     return new(body.Format, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, null, credential?.Facts, inputs);
                 }
 
@@ -157,7 +158,7 @@ internal static class RunApi
                     var options = body.Options.Deserialize<XmlOptions>(json) ?? new XmlOptions();
                     credentials.TryGet(options.CredentialId, out var credential);
                     var facts = xml.Facts(options.DataId);
-                    var report = XmlCompatibility.Evaluate(options, facts, credential?.Facts, xml.SandboxConnected);
+                    var report = XmlCompatibility.Evaluate(options, facts, credential?.Facts, xml.SandboxConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
                     return new(body.Format, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, null, credential?.Facts, facts);
                 }
 
@@ -166,7 +167,7 @@ internal static class RunApi
                     var options = body.Options.Deserialize<SigningOptions>(json) ?? new SigningOptions();
                     DocumentFacts? document = options.DocumentId is { } id && documents.TryGet(id, out _) ? await documents.FactsAsync(id, cancellationToken) : null;
                     credentials.TryGet(options.CredentialId, out var credential);
-                    var report = Compatibility.Evaluate(options, document, credential?.Facts, xml.SandboxConnected);
+                    var report = Compatibility.Evaluate(options, document, credential?.Facts, xml.SandboxConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
                     return new(RunFormats.Pades, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, document, credential?.Facts, null);
                 }
         }

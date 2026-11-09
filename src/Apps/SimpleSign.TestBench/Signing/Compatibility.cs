@@ -56,7 +56,8 @@ public static class Compatibility
     /// <param name="document">Facts of the chosen document (null: none chosen yet).</param>
     /// <param name="credential">Facts of the chosen credential (null: none chosen yet).</param>
     /// <param name="sandboxConnected">Whether a Sandbox is connected (its TSAs can be chosen).</param>
-    public static OptionsReport Evaluate(SigningOptions options, DocumentFacts? document, CredentialFacts? credential, bool sandboxConnected = true)
+    /// <param name="signingPolicy">The signing policy the signer is checked against (null: the library's default).</param>
+    public static OptionsReport Evaluate(SigningOptions options, DocumentFacts? document, CredentialFacts? credential, bool sandboxConnected = true, SigningPolicyInput? signingPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         var state = new Dictionary<string, OptionState>(StringComparer.Ordinal);
@@ -268,7 +269,7 @@ public static class Compatibility
 
         // ── 2. Signer ──────────────────────────────────────────────────
         Set("signingPolicy", OptionState.Shown);
-        SharedRules.Signer(credential, Error, Warn, StepSigner, o.SigningPolicy);
+        SharedRules.Signer(credential, Error, Warn, StepSigner, signingPolicy);
         return new OptionsReport(state, issues, effective, LevelName(effective));
     }
 

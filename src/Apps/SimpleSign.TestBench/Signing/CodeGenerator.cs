@@ -189,9 +189,9 @@ internal static class CodeGenerator
             args.Add("--hash " + SigningPlan.HashName(o.Hash));
         }
 
-        if (o.SigningPolicy != SigningPolicyChoice.Default)
+        if (o.SigningPolicyId is not null)
         {
-            args.Add("--signing-policy " + o.SigningPolicy.ToString().ToLowerInvariant());
+            args.Add("--signing-policy " + PolicyUploads.SigningFileName);
         }
 
         if (o.Padding == RsaPadding.Pss && credential.KeyAlgorithm == "RSA")
