@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   T/LTA timestamp) and `AcceptableFormats`, `FullScope`, `PolicyAvailable`, `SignaturePolicyStorePresent`. A check
   that does not apply to the format is not reported. `PolicyCoverage` says what SimpleSign evaluates, by path;
   `SignatureSubIndication` gains `SignedDataNotFound` and `SignaturePolicyNotAvailable`.
+- Validation policy, timestamp and revocation contexts: each signature timestamp is evaluated in the `Timestamp`
+  context (the token, the TSA certificate at the timestamp's time and its chain, the signed attributes,
+  `TimestampValid`, `TSAGeneralName*`); one that fails there is not a proof of existence. Each CRL and OCSP response
+  the signature carries is evaluated in the `Revocation` context (`UnknownStatus`, `ThisUpdatePresent`, issuer known
+  and valid when it produced it, `OCSPResponderIdMatch`, `SelfIssuedOCSP`, the issuer certificate); one that fails
+  there is not acceptable revocation data. The certificates gain `AcceptableRevocationDataFound`,
+  `CRL/OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` and `NotOnHold`, and the
+  signature `BestSignatureTimeBeforeExpirationDateOfSigningCertificate` and `RevocationTimeAgainstBestSignatureTime`.
+  Messages of a token name it (`[OCSP of 'Leaf'] …`).
 - `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
   policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
   `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,

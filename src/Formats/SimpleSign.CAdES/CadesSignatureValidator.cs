@@ -573,6 +573,11 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
                 TLevelTimeStampValid = provenTime is not null,
                 LtaLevelTimeStampValid = archiveTsValid,
             },
+            EmbeddedCrls = embedded.Crls,
+            EmbeddedOcsps = embedded.Ocsps,
+            Timestamps = cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps
+                ? [new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted)]
+                : null,
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);

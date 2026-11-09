@@ -146,7 +146,7 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts(), ValidationPolicy.Default);
 
-        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/AcceptableRevocationDataFound" && c.Status == ConstraintStatus.NotChecked);
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/PdfSignatureDictionary" && c.Status == ConstraintStatus.NotChecked);
     }
 
     [Fact]
@@ -378,6 +378,81 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
 
         evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/DocMDP" && c.Status == ConstraintStatus.NotChecked
             && c.Message.Contains("needs work", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Evaluate_EmbeddedCrls_RevocationContextAndQualityPass()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with { EmbeddedCrls = [_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl()], EmbeddedOcsps = [] }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "Revocation/ThisUpdatePresent" && c.Status == ConstraintStatus.Passed && c.Message.StartsWith("[CRL of", StringComparison.Ordinal));
+        evaluation.Constraints.ShouldContain(c => c.Id == "Revocation/BasicSignatureConstraints/SignatureIntact" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/AcceptableRevocationDataFound" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/CRLNextUpdatePresent" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == Basic + "/CACertificate/AcceptableRevocationDataFound" && c.Status == ConstraintStatus.Passed);
+        evaluation.Indication.ShouldBe(SignatureIndication.Valid);
+    }
+
+    [Fact]
+    public void Evaluate_CrlSignedByAnotherKey_IsNotAcceptable()
+    {
+        using var other = new SyntheticPki();
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { EmbeddedCrls = [other.BuildLeafCrl()] }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "Revocation/BasicSignatureConstraints/SignatureIntact" && c.Status == ConstraintStatus.Failed);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/AcceptableRevocationDataFound" && c.Status == ConstraintStatus.Failed);
+    }
+
+    [Fact]
+    public void Evaluate_SignatureTimestamp_IsEvaluatedInTheTimestampContext()
+    {
+        using var tsa = _pki.IssueTimestampingCertificate();
+        var genTime = DateTimeOffset.UtcNow.AddHours(-1);
+        byte[] token = TimestampTestResponseBuilder.CreateTokenForData([1, 2, 3], new TimestampTokenOptions
+        {
+            TsaCertificate = tsa,
+            ExtraCertificates = [_pki.IntermediateCa, _pki.RootCa],
+            TsaName = tsa.SubjectName,
+            GenTime = genTime,
+        });
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with
+        {
+            ProofOfExistence = genTime,
+            Timestamps = [new TimestampTokenFacts(TimestampTokenKind.Signature, token, ImprintValid: true, Trusted: true)],
+        }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/BasicSignatureConstraints/SignatureIntact" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/TSAGeneralNameContentMatch" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/BasicSignatureConstraints/SigningCertificate/ExtendedKeyUsage" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/BestSignatureTimeBeforeExpirationDateOfSigningCertificate" && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
+    public void Evaluate_TamperedSignatureTimestamp_IsNotAProofOfExistence()
+    {
+        using var tsa = _pki.IssueTimestampingCertificate();
+        var genTime = DateTimeOffset.UtcNow.AddHours(-1);
+        byte[] token = TimestampTestResponseBuilder.CreateTokenForData([1, 2, 3], new TimestampTokenOptions
+        {
+            TsaCertificate = tsa,
+            ExtraCertificates = [_pki.IntermediateCa, _pki.RootCa],
+            GenTime = genTime,
+            TamperSignature = true,
+        });
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with
+        {
+            ProofOfExistence = genTime,
+            Timestamps = [new TimestampTokenFacts(TimestampTokenKind.Signature, token, ImprintValid: true, Trusted: true)],
+        }, ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/BasicSignatureConstraints/SignatureIntact" && c.Status == ConstraintStatus.Failed);
+        // The failed token does not decide the signature, and gives it no best signature time.
+        evaluation.Constraints.ShouldNotContain(c => c.Id == "Timestamp/BestSignatureTimeBeforeExpirationDateOfSigningCertificate");
+        evaluation.Indication.ShouldBe(SignatureIndication.Valid);
     }
 
     public void Dispose() => _pki.Dispose();

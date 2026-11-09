@@ -19,9 +19,11 @@ public sealed class PolicyCoverageTests
     [InlineData("SignatureConstraints/BasicSignatureConstraints/DocMDP", ConstraintCoverage.ToImplement)]
     [InlineData("TrustedLists/TLStructure", ConstraintCoverage.ToImplement)]
     [InlineData("SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary", ConstraintCoverage.ToConnect)]
-    [InlineData("Revocation/UnknownStatus", ConstraintCoverage.ToConnect)]
+    [InlineData("Revocation/UnknownStatus", ConstraintCoverage.Evaluated)]
+    [InlineData("Timestamp/Coherence", ConstraintCoverage.ToConnect)]
     [InlineData("CounterSignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage", ConstraintCoverage.ToConnect)]
-    [InlineData("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/AcceptableRevocationDataFound", ConstraintCoverage.ToConnect)]
+    [InlineData("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/AcceptableRevocationDataFound", ConstraintCoverage.Evaluated)]
+    [InlineData("SignatureConstraints/BasicSignatureConstraints/TrustServiceStatus", ConstraintCoverage.ToConnect)]
     public void Validation_Path_GivesItsCoverage(string path, ConstraintCoverage expected) =>
         PolicyCoverage.Validation(path).ShouldBe(expected);
 
@@ -61,7 +63,7 @@ public sealed class PolicyCoverageTests
             }
 
             string[] cells = line.Split('|', StringSplitOptions.TrimEntries);
-            if (prefix is null || cells.Length < 5 || !states.TryGetValue(cells[3], out var expected))
+            if (prefix is null || cells.Length < 5 || cells[1].Contains("(context)", StringComparison.Ordinal) || !states.TryGetValue(cells[3], out var expected))
             {
                 continue;
             }

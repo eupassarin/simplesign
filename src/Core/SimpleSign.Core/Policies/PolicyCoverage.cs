@@ -26,7 +26,7 @@ public static class PolicyCoverage
     private const string Basic = "BasicSignatureConstraints";
 
     /// <summary>The contexts whose token (signature or timestamp) SimpleSign evaluates with the basic constraints.</summary>
-    private static readonly string[] s_tokenContexts = ["SignatureConstraints", "Timestamp"];
+    private static readonly string[] s_tokenContexts = ["SignatureConstraints", "Timestamp", "Revocation"];
 
     private static readonly HashSet<string> s_basic = new(StringComparer.Ordinal)
     {
@@ -41,7 +41,8 @@ public static class PolicyCoverage
         "MaxPathLength", "NameConstraints", "PolicyTree", "SupportedCriticalExtensions", "IssuerName",
         "AuthorityInfoAccessPresent", "RevocationInfoAccessPresent", "AuthorityKeyIdentifierPresent",
         "SubjectKeyIdentifierPresent", "ForbiddenExtensions", "SerialNumberPresent", "NoRevAvail", "RevocationDataSkip",
-        "CertificateExtensions", "CertificatePolicies", "CommonName", "Surname", "GivenName", "Pseudonym", "Title", "Email",
+        "CertificateExtensions", "CertificatePolicies", "AcceptableRevocationDataFound", "CRLNextUpdatePresent",
+        "OCSPNextUpdatePresent", "RevocationFreshnessNextUpdate", "RevocationIssuerNotExpired", "NotOnHold", "CommonName", "Surname", "GivenName", "Pseudonym", "Title", "Email",
         "OrganizationName", "OrganizationUnit", "OrganizationIdentifier", "Country", "Locality", "State", "UsePseudonym",
     };
 
@@ -66,7 +67,12 @@ public static class PolicyCoverage
 
     private static readonly HashSet<string> s_direct = new(StringComparer.Ordinal)
     {
-        "Model", "Timestamp/TimestampDelay", "TrustedLists/TLFreshness", "TrustedLists/TLNotExpired", "TrustedLists/TLWellSigned",
+        "Model", "Timestamp/TimestampDelay", "Timestamp/TimestampValid",
+        "Timestamp/RevocationTimeAgainstBestSignatureTime", "Timestamp/BestSignatureTimeBeforeExpirationDateOfSigningCertificate",
+        "Timestamp/TSAGeneralNamePresent", "Timestamp/TSAGeneralNameContentMatch", "Timestamp/TSAGeneralNameOrderMatch",
+        "Revocation/UnknownStatus", "Revocation/ThisUpdatePresent", "Revocation/RevocationIssuerKnown",
+        "Revocation/RevocationIssuerValidAtProductionTime", "Revocation/RevocationAfterCertificateIssuance",
+        "Revocation/OCSPResponderIdMatch", "Revocation/SelfIssuedOCSP", "TrustedLists/TLFreshness", "TrustedLists/TLNotExpired", "TrustedLists/TLWellSigned",
         "TrustedLists/TLVersion",
     };
 
@@ -112,6 +118,11 @@ public static class PolicyCoverage
         if (parts.Length < 2)
         {
             return false;
+        }
+
+        if (parts[0] == "Timestamp" && parts[1] == "SignedAttributes")
+        {
+            return parts.Length == 3 && s_signedAttributes.Contains(parts[2]);
         }
 
         if (parts[0] == "SignatureConstraints")

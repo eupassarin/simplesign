@@ -254,6 +254,12 @@ internal sealed class CryptographicRules
         }
     }
 
+    /// <summary>The digest OID of a signature algorithm OID (sha256WithRSAEncryption → SHA-256…); null when unknown or RSASSA-PSS.</summary>
+    internal static string? DigestOidOf(string signatureAlgorithmOid) =>
+        SignatureDigests.TryGetValue(signatureAlgorithmOid, out string? digest)
+            ? DigestNames.FirstOrDefault(p => p.Value == digest).Key
+            : null;
+
     /// <summary>The digest of a certificate's signature algorithm and whether it is RSASSA-PSS; null when unknown.</summary>
     public static (string Digest, bool Pss)? SignatureAlgorithmOf(X509Certificate2 certificate) =>
         certificate.SignatureAlgorithm.Value is { } oid && SignatureDigests.TryGetValue(oid, out string? digest)

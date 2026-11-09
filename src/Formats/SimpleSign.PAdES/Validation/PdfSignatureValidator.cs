@@ -487,6 +487,11 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
                 DocumentTimeStamp = pdfFacts?.HasLaterDocumentTimestamp == true,
                 TLevelTimeStampValid = provenTime is not null,
             },
+            EmbeddedCrls = embeddedCrls,
+            EmbeddedOcsps = embeddedOcsps,
+            Timestamps = cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps
+                ? [new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, timestamp.IsIntegrityValid, timestamp.IsTsaTrusted)]
+                : null,
         }.WithCms(cmsData, _options.TrustedRoots, field.PdfSigningTime), _options.PolicyFor(cmsData.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
 

@@ -73,8 +73,8 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | `Recognition`, `Signature`, `NotExpired`, `RevocationDataAvailable`, `RevocationFreshness`, `CA`, `KeyUsage`, `ExtendedKeyUsage`, `NotRevoked`, `SelfSigned`, `NotSelfSigned`, `PolicyIds`, `QcCompliance`, `QcSSCD` | same | evaluated |  |
 | `MaxPathLength`, `NameConstraints`, `PolicyTree`, `SupportedCriticalExtensions`, `IssuerName` | same | evaluated | The status of the X509Chain. |
 | AuthorityInfoAccessPresent, RevocationInfoAccessPresent, AuthorityKeyIdentifierPresent, SubjectKeyIdentifierPresent, ForbiddenExtensions, SerialNumberPresent, NoRevAvail, RevocationDataSkip (CertificateExtensions, CertificatePolicies) | same | evaluated | RFC 5280 extensions and attributes; `ocsp-nocheck`. |
-| `NotOnHold` | same | to connect | Needs the revocation reason of the revocation data. |
-| `AcceptableRevocationDataFound`, `CRLNextUpdatePresent`, `OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` | same | to connect | The revocation checkers read thisUpdate, nextUpdate and the issuer. |
+| `NotOnHold` | same | evaluated | From the reason code of the CRLs and OCSP responses the signature carries. |
+| `AcceptableRevocationDataFound`, `CRLNextUpdatePresent`, `OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` | same | evaluated | From the CRLs and OCSP responses the signature carries (DSS, revocation values); revocation data fetched online only gives `AcceptableRevocationDataFound` of the signing certificate. |
 | `CommonName`, `Surname`, `GivenName`, `Pseudonym`, `Title`, `Email`, `OrganizationName`, `OrganizationUnit`, `OrganizationIdentifier`, `Country`, `Locality`, `State`, `UsePseudonym` | same | evaluated | Subject name attributes. |
 | `PolicyQualificationIds`, `PolicySupportedByQSCDIds`, `QcType`, `QcLegislationCountryCodes`, `QcEuPDSLocation`, `QcEuLimitValueCurrency`, `MinQcEuLimitValue`, `MinQcEuRetentionPeriod`, `QcQSCDLegislation`, `QcIdentificationMethod`, `QcPSBCountryOfLegislation`, `QcPSBAuthSourceIdentification`, `QcPSBLegislationIdentification`, `IssuedToNaturalPerson`, `IssuedToLegalPerson`, `SemanticsIdentifier` | same | removed | EU qualification decision; SimpleSign does not make it (a European framework package is only planned). |
 | `PSD2QcTypeRolesOfPSP`, `PSD2QcCompetentAuthorityName`, `PSD2QcCompetentAuthorityId` | same | removed | Payment service providers (EU banking). |
@@ -101,19 +101,20 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
 | `TimestampDelay` | same | evaluated |  |
-| `TimestampValid`, `Coherence`, `RevocationTimeAgainstBestSignatureTime`, `BestSignatureTimeBeforeExpirationDateOfSigningCertificate` | same | to connect | Timestamps are validated; the proof of existence is known. |
-| `TSAGeneralNamePresent`, `TSAGeneralNameContentMatch`, `TSAGeneralNameOrderMatch` | same | to connect | TSTInfo.tsa. |
-| `AtsHashIndex` | same | to connect | CAdES creates archive-time-stamp-v3. |
-| BasicSignatureConstraints, SignedAttributes (context) | same | to connect | Evaluate every timestamp: the token, the TSA certificate and its chain (today only PAdES document timestamps). |
+| `TimestampValid`, `RevocationTimeAgainstBestSignatureTime`, `BestSignatureTimeBeforeExpirationDateOfSigningCertificate` | same | evaluated | Signature timestamps; a signature timestamp that fails in this context is not a proof of existence. |
+| `Coherence` | same | to connect | Needs the archive timestamps evaluated as tokens. |
+| `TSAGeneralNamePresent`, `TSAGeneralNameContentMatch`, `TSAGeneralNameOrderMatch` | same | evaluated | TSTInfo.tsa. |
+| `AtsHashIndex` | same | to connect | CAdES creates archive-time-stamp-v3; needs the archive timestamps evaluated as tokens. |
+| BasicSignatureConstraints, SignedAttributes (context) | same | evaluated | Signature timestamps and PAdES document timestamps: the token, the TSA certificate (at the timestamp's time) and its chain. Archive timestamps: to connect. |
 | `ContainerSignedAndTimestampedFilesCovered` | same | removed | ASiC. |
 
 ### Revocation
 
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
-| `UnknownStatus`, `ThisUpdatePresent`, `RevocationIssuerKnown`, `RevocationIssuerValidAtProductionTime`, `RevocationAfterCertificateIssuance`, `OCSPResponderIdMatch`, `SelfIssuedOCSP` | same | to connect | `OcspClient` and the revocation checkers already do or have the data. |
+| `UnknownStatus`, `ThisUpdatePresent`, `RevocationIssuerKnown`, `RevocationIssuerValidAtProductionTime`, `RevocationAfterCertificateIssuance`, `OCSPResponderIdMatch`, `SelfIssuedOCSP` | same | evaluated | Each CRL and OCSP response the signature carries; one that fails here is not acceptable revocation data. |
 | `RevocationHasInformationAboutCertificate` | same | to implement | Read expiredCertsOnCRL and archiveCutoff. |
-| BasicSignatureConstraints (context) | same | to connect | Evaluate the OCSP response or CRL signature and the responder or issuer certificate. |
+| BasicSignatureConstraints (context) | same | evaluated | The signature of the CRL or OCSP response and the issuer or responder certificate, at the time it was produced. |
 | `OCSPCertHashPresent`, `OCSPCertHashMatch` | same | removed | The certHash extension of a national PKI profile, not RFC 6960. |
 
 ### Cryptographic, Model

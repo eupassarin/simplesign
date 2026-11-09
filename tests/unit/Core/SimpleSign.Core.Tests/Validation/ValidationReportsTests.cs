@@ -71,7 +71,7 @@ public sealed class ValidationReportsTests : IDisposable
         [
             new("SignatureConstraints/BasicSignatureConstraints/ReferenceDataIntact",
                 invalid ? ConstraintStatus.Failed : ConstraintStatus.Passed, invalid ? SignatureSubIndication.HashFailure : null, "integrity"),
-            new("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/AcceptableRevocationDataFound", ConstraintStatus.NotChecked, null, "not evaluated"),
+            new("SignatureConstraints/BasicSignatureConstraints/PdfSignatureDictionary", ConstraintStatus.NotChecked, null, "not evaluated"),
         ],
         SignerCertificate = _pki.Leaf,
         ClaimedSigningTime = DateTimeOffset.UtcNow.AddMinutes(-5),

@@ -98,6 +98,15 @@ internal sealed record ValidationFacts
 
     /// <summary>Whether no other element of the document has the signature's Id (XAdES); null for other formats.</summary>
     public bool? SignatureIdUnique { get; init; }
+
+    /// <summary>The CRLs the signature carries (DSS, revocation values); their facts are evaluated in the Revocation context.</summary>
+    public IReadOnlyList<byte[]>? EmbeddedCrls { get; init; }
+
+    /// <summary>The OCSP responses the signature carries.</summary>
+    public IReadOnlyList<byte[]>? EmbeddedOcsps { get; init; }
+
+    /// <summary>The signature and archive timestamps, evaluated in the Timestamp context; null when not looked at.</summary>
+    public IReadOnlyList<TimestampTokenFacts>? Timestamps { get; init; }
 }
 
 /// <summary>The unsigned attributes of a signature, in the terms of the <c>UnsignedAttributes</c> constraints.</summary>
@@ -143,46 +152,318 @@ internal static class ValidationPolicyEvaluator
     private const string Signature = "SignatureConstraints";
     private const string Timestamp = "Timestamp";
 
+    private const string Revocation = "Revocation";
+
     internal static ValidationEvaluation Evaluate(ValidationFacts facts, ValidationPolicy policy) =>
         new Evaluation(facts, policy.Tree).Run() with { Policy = AppliedPolicy.Of(policy) };
 
-    /// <summary>One evaluation: the facts, the policy and what was found so far.</summary>
-    private sealed class Evaluation(ValidationFacts facts, PolicyTree tree)
+    /// <summary>
+    /// One evaluation: the facts, the policy and what was found so far. A nested evaluation judges a token of the
+    /// signature (a timestamp, a CRL or OCSP response) in its own context: its FAILs make the token unusable, they do not
+    /// decide the signature's indication.
+    /// </summary>
+    private sealed class Evaluation(
+        ValidationFacts facts,
+        PolicyTree tree,
+        string? tokenContext = null,
+        string? label = null,
+        RevocationTokenFacts? revocationToken = null,
+        TimestampTokenFacts? timestampToken = null,
+        (DateTimeOffset? GenTime, X500DistinguishedName? Tsa, bool TsaPresent) tstInfo = default)
     {
         private readonly List<ValidationConstraintResult> _constraints = [];
         private readonly List<string> _warnings = [];
         private readonly HashSet<string> _evaluated = new(StringComparer.Ordinal);
+        private readonly List<(RevocationTokenFacts Token, bool Accepted)> _revocationTokens = [];
         private (SignatureIndication Indication, SignatureSubIndication? Sub)? _decided;
+        private DateTimeOffset? _proofOfExistence = facts.ProofOfExistence;
 
-        private DateTimeOffset ReferenceTime => facts.ProofOfExistence ?? facts.ValidationTime;
+        private DateTimeOffset ReferenceTime => _proofOfExistence ?? facts.ValidationTime;
+
+        private bool Nested => tokenContext is not null;
 
         public ValidationEvaluation Run()
         {
             // A document timestamp is a timestamp token: the Timestamp constraints apply to it.
-            string context = facts.IsDocumentTimestamp ? Timestamp : Signature;
+            string context = tokenContext ?? (facts.IsDocumentTimestamp ? Timestamp : Signature);
             string basic = context + "/BasicSignatureConstraints";
+            if (!Nested)
+            {
+                EvaluateTimestampTokens();
+                EvaluateRevocationTokens();
+            }
 
             EvaluateBasic(basic);
             EvaluateSigningCertificate(basic + "/SigningCertificate");
             EvaluateCaCertificates(basic + "/CACertificate");
             EvaluateSignatureCrypto(basic);
             EvaluateChain(basic);
-            if (!facts.IsDocumentTimestamp)
+            if (revocationToken is not null)
+            {
+                EvaluateRevocationToken(revocationToken);
+            }
+            else if (timestampToken is not null)
+            {
+                EvaluateSignedAttributes(Timestamp + "/SignedAttributes");
+                EvaluateTimestampToken(timestampToken);
+            }
+            else if (!facts.IsDocumentTimestamp)
             {
                 EvaluateSignatureConstraints();
                 EvaluateSignedAttributes(Signature + "/SignedAttributes");
                 EvaluateUnsignedAttributes(Signature + "/UnsignedAttributes");
                 EvaluateTimestampDelay();
+                EvaluateBestSignatureTime();
             }
 
             ReportNotEvaluated(context);
-            if (EvaluateTrustedList())
+            if (!Nested && EvaluateTrustedList())
             {
                 ReportNotEvaluated("TrustedLists");
             }
 
             var outcome = _decided ?? (SignatureIndication.Valid, null);
             return new ValidationEvaluation(outcome.Indication, outcome.Sub, _constraints, _warnings);
+        }
+
+        // ── Tokens: timestamps and revocation data, each in its own context ───────────────
+
+        /// <summary>
+        /// Evaluates each timestamp in the Timestamp context. A signature timestamp that fails there is not a proof of
+        /// existence; the earliest one that passes is.
+        /// </summary>
+        private void EvaluateTimestampTokens()
+        {
+            if (facts.Timestamps is not { Count: > 0 } timestamps)
+            {
+                return;
+            }
+
+            var accepted = new List<(TimestampTokenKind Kind, DateTimeOffset Time)>();
+            var all = new List<(TimestampTokenKind Kind, DateTimeOffset Time)>();
+            foreach (var token in timestamps)
+            {
+                Crypto.CmsSignedData cms;
+                try
+                {
+                    cms = Crypto.CmsParser.Parse(token.Token);
+                }
+                catch (Exception ex) when (ex is System.Formats.Asn1.AsnContentException or InvalidDataException or System.Security.Cryptography.CryptographicException)
+                {
+                    continue;
+                }
+
+                var info = TstInfoReader.FromToken(token.Token);
+                var tokenFacts = new ValidationFacts
+                {
+                    IsIntegrityValid = token.ImprintValid ?? false,
+                    IsSignatureValid = TimestampValidator.VerifyTokenSignature(token.Token),
+                    SignerCertificate = cms.SignerCertificate,
+                    IsCertificateChainValid = token.Trusted == true,
+                    ChainReachesAnchor = token.Trusted,
+                    DigestAlgorithmOid = cms.DigestAlgorithmOid,
+                    ProofOfExistence = info.GenTime,
+                    ValidationTime = facts.ValidationTime,
+                }.WithCms(cms);
+                var nested = Merge(new Evaluation(tokenFacts, tree, Timestamp, token.Label, timestampToken: token, tstInfo: info).Run());
+                if (info.GenTime is { } time)
+                {
+                    all.Add((token.Kind, time));
+                    if (!nested && token.ImprintValid == true && token.Trusted == true)
+                    {
+                        accepted.Add((token.Kind, time));
+                    }
+                }
+            }
+
+            // The best signature time: the earliest accepted signature timestamp (EN 319 102-1 §5.6.2.4).
+            var signatureTimes = accepted.Where(t => t.Kind == TimestampTokenKind.Signature).Select(t => t.Time).ToList();
+            _proofOfExistence = signatureTimes.Count > 0 ? signatureTimes.Min() : null;
+
+            var signatures = all.Where(t => t.Kind == TimestampTokenKind.Signature).Select(t => t.Time).ToList();
+            var archives = all.Where(t => t.Kind == TimestampTokenKind.Archive).Select(t => t.Time).ToList();
+            if (signatures.Count > 0 && archives.Count > 0)
+            {
+                Check(Timestamp + "/Coherence", signatures.Max() <= archives.Min(),
+                    "The archive timestamps come after the signature timestamps.",
+                    "An archive timestamp is earlier than a signature timestamp.", SignatureIndication.Indeterminate, SignatureSubIndication.TimestampOrderFailure);
+            }
+        }
+
+        /// <summary>Evaluates each CRL and OCSP response the signature carries in the Revocation context.</summary>
+        private void EvaluateRevocationTokens()
+        {
+            if (facts.Chain is not { Count: > 1 } chain || (facts.EmbeddedCrls is null && facts.EmbeddedOcsps is null))
+            {
+                return;
+            }
+
+            foreach (var token in RevocationTokenReader.Read(chain, facts.EmbeddedCrls ?? [], facts.EmbeddedOcsps ?? []))
+            {
+                var tokenFacts = new ValidationFacts
+                {
+                    IsIntegrityValid = true,
+                    IsSignatureValid = token.SignatureValid,
+                    SignerCertificate = token.Issuer,
+                    Chain = token.IssuerChain.Count > 0 ? token.IssuerChain : null,
+                    IsCertificateChainValid = token.Issuer is not null && facts.IsCertificateChainValid,
+                    ChainReachesAnchor = token.Issuer is null ? false : facts.ChainReachesAnchor,
+                    SignatureAlgorithmOid = token.SignatureAlgorithmOid,
+                    DigestAlgorithmOid = token.SignatureAlgorithmOid is { } oid ? CryptographicRules.DigestOidOf(oid) : null,
+                    // The issuer of revocation data is judged when it produced it.
+                    ProofOfExistence = token.ProducedAt,
+                    ValidationTime = facts.ValidationTime,
+                };
+                bool failed = Merge(new Evaluation(tokenFacts, tree, Revocation, token.Label, revocationToken: token).Run());
+                _revocationTokens.Add((token, !failed && token.Status != RevocationTokenStatus.Unknown));
+            }
+        }
+
+        /// <summary>Adds a nested evaluation's results; true when one of its constraints failed.</summary>
+        private bool Merge(ValidationEvaluation nested)
+        {
+            foreach (var constraint in nested.Constraints)
+            {
+                if (constraint.Status == ConstraintStatus.NotChecked && !_evaluated.Add(constraint.Id))
+                {
+                    continue;
+                }
+
+                _evaluated.Add(constraint.Id);
+                _constraints.Add(constraint);
+            }
+
+            _warnings.AddRange(nested.Warnings);
+            return nested.Constraints.Any(c => c.Status == ConstraintStatus.Failed);
+        }
+
+        /// <summary>The constraints of the Revocation context that read the CRL or OCSP response itself.</summary>
+        private void EvaluateRevocationToken(RevocationTokenFacts token)
+        {
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.TryLater;
+            Check(Revocation + "/UnknownStatus", token.Status != RevocationTokenStatus.Unknown, "The status is known.", "The status is unknown.", I, S);
+            Check(Revocation + "/ThisUpdatePresent", token.ThisUpdate is not null, "thisUpdate is present.", "thisUpdate is missing.", I, S);
+            Check(Revocation + "/RevocationIssuerKnown", token.Issuer is not null, "Its issuer is known.", "Its issuer was not found.", I, S);
+            if (token.Issuer is { } issuer && token.ProducedAt is { } produced)
+            {
+                Check(Revocation + "/RevocationIssuerValidAtProductionTime",
+                    issuer.NotBefore.ToUniversalTime() <= produced && issuer.NotAfter.ToUniversalTime() >= produced,
+                    "Its issuer was valid when it produced it.", $"Its issuer was not valid at {produced:yyyy-MM-dd HH:mm} UTC.", I, S);
+            }
+
+            if (token.ThisUpdate is { } thisUpdate)
+            {
+                Check(Revocation + "/RevocationAfterCertificateIssuance", thisUpdate >= token.Certificate.NotBefore.ToUniversalTime(),
+                    "It was issued after the certificate.", "It was issued before the certificate.", I, S);
+            }
+
+            Fact(Revocation + "/OCSPResponderIdMatch", token.ResponderIdMatches, "The ResponderID designates the responder.",
+                "The ResponderID designates no certificate of the response.", I, S);
+            if (token.Kind == RevocationTokenKind.Ocsp)
+            {
+                Check(Revocation + "/SelfIssuedOCSP", token.IssuerChain.All(c => !c.RawData.AsSpan().SequenceEqual(token.Certificate.RawData)),
+                    "It is not signed by the certificate it is about.", "It is signed by the certificate it is about.", I, S);
+            }
+            else
+            {
+                NotApplicable(Revocation + "/SelfIssuedOCSP");
+            }
+        }
+
+        /// <summary>The constraints of the Timestamp context that read the token itself.</summary>
+        private void EvaluateTimestampToken(TimestampTokenFacts token)
+        {
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.SigConstraintsFailure;
+            Check(Timestamp + "/TimestampValid", token.ImprintValid == true && facts.IsSignatureValid && token.Trusted == true,
+                "The timestamp is valid.", "The timestamp is not valid (its imprint, signature or TSA).", I, S);
+            Check(Timestamp + "/TSAGeneralNamePresent", tstInfo.TsaPresent, "The timestamp names its TSA.", "The timestamp does not name its TSA.", I, S);
+            if (tstInfo.Tsa is { } tsa && facts.SignerCertificate is { } tsaCertificate)
+            {
+                static IEnumerable<string> Parts(X500DistinguishedName name) =>
+                    name.EnumerateRelativeDistinguishedNames().Select(r => r.GetSingleElementType().Value + "=" + r.GetSingleElementValue()).Order(StringComparer.Ordinal);
+                Check(Timestamp + "/TSAGeneralNameContentMatch", Parts(tsa).SequenceEqual(Parts(tsaCertificate.SubjectName)),
+                    "The TSA name matches the TSA certificate.", "The TSA name does not match the TSA certificate.", I, S);
+                Check(Timestamp + "/TSAGeneralNameOrderMatch", tsa.RawData.AsSpan().SequenceEqual(tsaCertificate.SubjectName.RawData),
+                    "The TSA name matches the TSA certificate, in order.", "The TSA name does not match the TSA certificate in order.", I, S);
+            }
+            else
+            {
+                NotApplicable(Timestamp + "/TSAGeneralNameContentMatch");
+                NotApplicable(Timestamp + "/TSAGeneralNameOrderMatch");
+            }
+
+            Fact(Timestamp + "/AtsHashIndex", token.AtsHashIndexValid, "The ats-hash-index is right.", "The ats-hash-index is missing or wrong.", I, S);
+
+            // These are the signature's, evaluated with all its timestamps, not with one token.
+            foreach (string signatureLevel in new[] { "TimestampDelay", "Coherence", "RevocationTimeAgainstBestSignatureTime", "BestSignatureTimeBeforeExpirationDateOfSigningCertificate" })
+            {
+                NotApplicable(Timestamp + "/" + signatureLevel);
+            }
+        }
+
+        /// <summary>The best signature time against the signing certificate's expiry and revocation.</summary>
+        private void EvaluateBestSignatureTime()
+        {
+            if (_proofOfExistence is not { } best || facts.SignerCertificate is not { } signer)
+            {
+                return;
+            }
+
+            Check(Timestamp + "/BestSignatureTimeBeforeExpirationDateOfSigningCertificate", best <= signer.NotAfter.ToUniversalTime(),
+                "The signature existed before the signing certificate expired.",
+                $"The best signature time {best:yyyy-MM-dd HH:mm} UTC is after the signing certificate expired.",
+                SignatureIndication.Indeterminate, SignatureSubIndication.OutOfBoundsNoPoe);
+            if (_revocationTokens.Where(t => t.Accepted && t.Token.Status == RevocationTokenStatus.Revoked
+                    && t.Token.Certificate.RawData.AsSpan().SequenceEqual(signer.RawData)).Select(t => t.Token.RevocationTime).FirstOrDefault() is { } revoked)
+            {
+                Check(Timestamp + "/RevocationTimeAgainstBestSignatureTime", revoked > best,
+                    "The signing certificate was revoked after the signature was proven to exist.",
+                    "The signing certificate was revoked before the signature was proven to exist.",
+                    SignatureIndication.Indeterminate, SignatureSubIndication.RevokedNoPoe);
+            }
+        }
+
+        /// <summary>The revocation quality constraints of a certificate, from the tokens about it.</summary>
+        private void EvaluateRevocationQuality(string path, X509Certificate2 certificate)
+        {
+            const SignatureIndication I = SignatureIndication.Indeterminate;
+            const SignatureSubIndication S = SignatureSubIndication.TryLater;
+            var tokens = _revocationTokens.Where(t => t.Token.Certificate.RawData.AsSpan().SequenceEqual(certificate.RawData)).ToList();
+            if (tokens.Count == 0)
+            {
+                // Online revocation data is not kept: only what the checker concluded is known (the signing certificate).
+                Fact(path + "/AcceptableRevocationDataFound",
+                    path.EndsWith("/SigningCertificate", StringComparison.Ordinal) && facts.IsNotRevoked is not null
+                        ? facts.RevocationSource is not (RevocationSource.None or RevocationSource.Indeterminate)
+                        : null,
+                    "Acceptable revocation data was found.", "No acceptable revocation data was found.", I, S);
+                return;
+            }
+
+            string name = Name(certificate);
+            Check(path + "/AcceptableRevocationDataFound", tokens.Any(t => t.Accepted),
+                $"Acceptable revocation data was found for '{name}'.", $"No acceptable revocation data was found for '{name}'.", I, S);
+            var crls = tokens.Where(t => t.Token.Kind == RevocationTokenKind.Crl).ToList();
+            var ocsps = tokens.Where(t => t.Token.Kind == RevocationTokenKind.Ocsp).ToList();
+            Fact(path + "/CRLNextUpdatePresent", crls.Count == 0 ? null : crls.All(t => t.Token.NextUpdate is not null),
+                $"The CRLs of '{name}' have nextUpdate.", $"A CRL of '{name}' has no nextUpdate.", I, S);
+            Fact(path + "/OCSPNextUpdatePresent", ocsps.Count == 0 ? null : ocsps.All(t => t.Token.NextUpdate is not null),
+                $"The OCSP responses of '{name}' have nextUpdate.", $"An OCSP response of '{name}' has no nextUpdate.", I, S);
+            var accepted = tokens.Where(t => t.Accepted).Select(t => t.Token).ToList();
+            if (accepted.Count > 0)
+            {
+                Check(path + "/RevocationFreshnessNextUpdate", accepted.Any(t => t.NextUpdate is null || t.NextUpdate >= ReferenceTime || t.ThisUpdate >= ReferenceTime),
+                    $"The revocation data of '{name}' is current.", $"The revocation data of '{name}' expired (nextUpdate) before {ReferenceTime:yyyy-MM-dd HH:mm} UTC.", I, S);
+                Check(path + "/RevocationIssuerNotExpired", accepted.Any(t => t.Issuer is { } issuer
+                        && issuer.NotBefore.ToUniversalTime() <= ReferenceTime && issuer.NotAfter.ToUniversalTime() >= ReferenceTime),
+                    $"The issuer of the revocation data of '{name}' is within its validity.",
+                    $"The issuer of the revocation data of '{name}' is not valid at {ReferenceTime:yyyy-MM-dd HH:mm} UTC.", I, S);
+            }
+
+            Check(path + "/NotOnHold", !tokens.Any(t => t.Token.Reason == 6), $"'{name}' is not on hold.", $"'{name}' is on hold (certificateHold).",
+                SignatureIndication.Indeterminate, SignatureSubIndication.TryLater);
         }
 
         // ── Basic signature constraints ─────────────────────────────────────────────
@@ -288,6 +569,7 @@ internal static class ValidationPolicyEvaluator
             else
             {
                 EvaluateRevocation(path);
+                EvaluateRevocationQuality(path, certificate);
             }
 
             EvaluateCertificateCrypto(path, 0);
@@ -501,6 +783,10 @@ internal static class ValidationPolicyEvaluator
                 }
 
                 CheckCertificateRules(path, ca, i + 1 < chain.Count ? chain[i + 1] : null);
+                if (i + 1 < chain.Count)
+                {
+                    EvaluateRevocationQuality(path, ca);
+                }
                 EvaluateCertificateCrypto(path, i);
             }
         }
@@ -564,7 +850,7 @@ internal static class ValidationPolicyEvaluator
             _evaluated.Add(id);
             if (findings.Count == 0)
             {
-                _constraints.Add(new(id, ConstraintStatus.Passed, null, passed));
+                _constraints.Add(new(id, ConstraintStatus.Passed, null, Labeled(passed)));
                 return;
             }
 
@@ -759,7 +1045,7 @@ internal static class ValidationPolicyEvaluator
 
         private void EvaluateTimestampDelay()
         {
-            if (facts.ClaimedSigningTime is { } claimed && facts.ProofOfExistence is { } timestamp
+            if (facts.ClaimedSigningTime is { } claimed && _proofOfExistence is { } timestamp
                 && tree.Find(Timestamp + "/TimestampDelay") is { Duration: { } delay })
             {
                 Check(Timestamp + "/TimestampDelay", timestamp - claimed <= delay,
@@ -821,9 +1107,9 @@ internal static class ValidationPolicyEvaluator
 
             if (passed)
             {
-                if (_evaluated.Add(id))
+                if (_evaluated.Add(id) || Nested)
                 {
-                    _constraints.Add(new(id, ConstraintStatus.Passed, null, passedMessage));
+                    _constraints.Add(new(id, ConstraintStatus.Passed, null, Labeled(passedMessage)));
                 }
 
                 return;
@@ -848,9 +1134,13 @@ internal static class ValidationPolicyEvaluator
         /// <summary>A constraint that does not apply to this signature (a PDF check on a CMS file, say): not reported, not "not checked".</summary>
         private void NotApplicable(string id) => _evaluated.Add(id);
 
+        /// <summary>A message of a nested evaluation names its token.</summary>
+        private string Labeled(string message) => label is null ? message : $"[{label}] {message}";
+
         private void Record(string id, ConstraintLevel level, string message, SignatureIndication indication, SignatureSubIndication sub)
         {
             _evaluated.Add(id);
+            message = Labeled(message);
             switch (level)
             {
                 case ConstraintLevel.Fail:
