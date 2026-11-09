@@ -162,6 +162,57 @@ internal sealed class PlanContext
         };
     }
 
+    /// <summary>
+    /// The network flags a CLI command needs to reach the connected Sandbox: its HTTP loopback origins
+    /// (<c>--allow-origin</c>) and LDAP. Nothing without a Sandbox.
+    /// </summary>
+    public void CliNetwork(CliLine line) => SandboxNetwork(line, _sandbox);
+
+    /// <summary>The <c>--allow-origin</c> flags for the HTTP origins of the connected Sandbox, if any.</summary>
+    internal static void SandboxNetwork(CliLine line, SandboxEnvironment sandbox)
+    {
+        if (sandbox.Current is not { } connection)
+        {
+            return;
+        }
+
+        foreach (var origin in connection.Info.LoopbackOrigins.Where(o => o.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
+        {
+            line.Add("--allow-origin", origin);
+        }
+    }
+
+    /// <summary>
+    /// The CLI flags of a TSA choice: <c>--tsa</c> (or <c>--archive-tsa</c>) and, for the signature TSA, its
+    /// credentials. Secrets appear as variables, except the Sandbox's own published test password.
+    /// </summary>
+    public void CliTimestamp(CliLine line, TimestampChoice choice, bool archive = false)
+    {
+        line.Add(archive ? "--archive-tsa" : "--tsa", CliUrl(choice));
+        if (archive)
+        {
+            return;
+        }
+
+        if (choice.Provider == TsaProvider.SandboxAuthenticated && _sandbox.Current is { } connection)
+        {
+            line.Add("--tsa-user", connection.Info.Tsa.User).Add("--tsa-password", connection.Info.Tsa.Password);
+        }
+        else if (choice.Auth == TsaAuth.Basic)
+        {
+            line.Add("--tsa-user", choice.User ?? "").Add("--tsa-password", CliLine.Placeholders.TsaPassword);
+        }
+        else if (choice.Auth == TsaAuth.Bearer)
+        {
+            line.Add("--tsa-token", CliLine.Placeholders.TsaToken);
+        }
+
+        if (!string.IsNullOrEmpty(choice.ClientCertificateUploadId))
+        {
+            line.Add("--tsa-cert", CliLine.Placeholders.TsaClientPfx).Add("--tsa-cert-password", CliLine.Placeholders.TsaClientPassword);
+        }
+    }
+
     /// <summary>The URL of a TSA choice, as the CLI's <c>--tsa</c> takes it.</summary>
     public string CliUrl(TimestampChoice choice) => choice.Provider switch
     {

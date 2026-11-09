@@ -364,11 +364,16 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         builder = await ApplyExtrasAsync(builder, settings, cancellationToken);
         builder = ApplySigningOptions(builder, settings);
 
-        if (settings.ChainPath is not null)
+        // The chain: the other certificates of the PFX (as sign does) plus --chain.
+        List<X509Certificate2> pfxChain = token is null ? PfxChain(settings, cert) : [];
+        IReadOnlyList<X509Certificate2> extraChain = settings.ChainPath is null ? [] : LoadChainCertificates(settings.ChainPath);
+        if (token is null && pfxChain.Count + extraChain.Count > 0)
         {
-            builder = token is null
-                ? builder.WithCertificate(cert, LoadChainCertificates(settings.ChainPath))
-                : builder.WithExternalSigner(token.Certificate, token.Signer, [.. token.Chain, .. LoadChainCertificates(settings.ChainPath)]);
+            builder = builder.WithCertificate(cert, [.. pfxChain, .. extraChain]);
+        }
+        else if (token is not null && extraChain.Count > 0)
+        {
+            builder = builder.WithExternalSigner(token.Certificate, token.Signer, [.. token.Chain, .. extraChain]);
         }
 
         if (settings.OperationId is not null)
@@ -490,6 +495,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         {
             string? password = settings.Password;
             password ??= await PasswordResolver.ResolveAsync(password, isInteractive: true);
+            _pfxPassword = password;
 
             return _certChainService.LoadPkcs12FromFile(settings.CertPath, password);
         }
@@ -503,6 +509,34 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         return certs.Count > 0
             ? certs[0]
             : throw new InvalidOperationException("No certificate found. Use --cert to specify a PFX file.");
+    }
+
+    /// <summary>The password the PFX was opened with, so the chain is read without asking again.</summary>
+    private string? _pfxPassword;
+
+    /// <summary>The other certificates of the --cert PFX (its chain, as <c>sign</c> uses it); none without --cert.</summary>
+    private List<X509Certificate2> PfxChain(Settings settings, X509Certificate2 signer)
+    {
+        if (settings.CertPath is null)
+        {
+            return [];
+        }
+
+        var collection = _certChainService.LoadPkcs12CollectionFromFile(settings.CertPath, _pfxPassword ?? settings.Password);
+        List<X509Certificate2> chain = [];
+        foreach (var certificate in collection)
+        {
+            if (certificate.Thumbprint == signer.Thumbprint)
+            {
+                certificate.Dispose();
+            }
+            else
+            {
+                chain.Add(certificate);
+            }
+        }
+
+        return chain;
     }
 
     private IReadOnlyList<X509Certificate2> LoadChainCertificates(string chainPath)

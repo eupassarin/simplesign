@@ -50,7 +50,7 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
 
         result.Success.ShouldBeTrue(result.Error);
         result.Code.CSharp.ShouldContain("ExistingFieldName = \"Assinatura\"", Case.Sensitive, result.Code.CSharp);
-        result.Code.Cli.ShouldContain("--existing-field \"Assinatura\"");
+        result.Code.Cli.ShouldContain("--existing-field Assinatura");
     }
 
     [SkippableFact]
