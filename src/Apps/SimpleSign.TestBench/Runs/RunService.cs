@@ -20,7 +20,12 @@ public static class RunFormats
 }
 
 /// <summary>A request to sign: the format and that format's options (SigningOptions, CadesOptions or XmlOptions).</summary>
-public sealed record RunRequest(string Format, JsonElement Options, bool CrossValidate = false, string Kind = RunKinds.Sign);
+/// <param name="Format">pades, cades or xades (ignored for a validation run).</param>
+/// <param name="Options">The format's options.</param>
+/// <param name="CrossValidate">Whether DSS validates the output too.</param>
+/// <param name="Kind">Sign or validate.</param>
+/// <param name="Engine">How the signature is made: <see cref="RunEngines.Library"/> (default) or <see cref="RunEngines.Cli"/>.</param>
+public sealed record RunRequest(string Format, JsonElement Options, bool CrossValidate = false, string Kind = RunKinds.Sign, string Engine = RunEngines.Library);
 
 /// <summary>What a run does: make a signature, or validate a file that already exists.</summary>
 public static class RunKinds
@@ -87,18 +92,23 @@ public sealed record RunView(
     object? CrossValidation,
     IReadOnlyList<RunLogEntry> Logs,
     string Kind = RunKinds.Sign,
-    string? ReportId = null);
+    string? ReportId = null,
+    string Engine = RunEngines.Library,
+    IReadOnlyList<CliStep>? Cli = null);
 
 /// <summary>A row of the run history.</summary>
-public sealed record RunSummary(string Id, string Format, string Status, DateTimeOffset StartedAt, long TotalMs, bool Success, string? RequestedLevel, string? AchievedLevel, string? Overall, string? FileName, string? Error, string Kind = RunKinds.Sign);
+public sealed record RunSummary(string Id, string Format, string Status, DateTimeOffset StartedAt, long TotalMs, bool Success, string? RequestedLevel, string? AchievedLevel, string? Overall, string? FileName, string? Error, string Kind = RunKinds.Sign, string Engine = RunEngines.Library);
 
 /// <summary>What the events stream sends: a log line while the run is going, then the finished run.</summary>
 public sealed record RunEvent(string Type, RunLogEntry? Log, RunView? Run);
 
 /// <summary>One run: its log and, when finished, its result. Readers follow it with <see cref="Read"/>.</summary>
-internal sealed class Run(string id, string format, JsonElement options, string kind = RunKinds.Sign)
+internal sealed class Run(string id, string format, JsonElement options, string kind = RunKinds.Sign, string engine = RunEngines.Library)
 {
     public string Kind { get; } = kind;
+
+    /// <summary>How the signature is made: through the library or the CLI.</summary>
+    public string Engine { get; } = engine;
 
     private readonly Lock _gate = new();
     private readonly List<RunEvent> _events = [];
@@ -187,7 +197,14 @@ internal sealed class RunService(
             throw new ArgumentException(L.T("Unknown format: {0}. Use pades, cades or xades.", request.Format), nameof(request));
         }
 
-        var run = new Run(Guid.NewGuid().ToString("N")[..12], format, request.Options.Clone(), request.Kind);
+        string engine = request.Engine ?? RunEngines.Library;
+        if (!RunEngines.All.Contains(engine))
+        {
+            throw new ArgumentException(L.T("Unknown engine: {0}. Use library or cli.", engine), nameof(request));
+        }
+
+        // Validation runs through the library: the engine chooses how a signature is made.
+        var run = new Run(Guid.NewGuid().ToString("N")[..12], format, request.Options.Clone(), request.Kind, request.Kind == RunKinds.Validate ? RunEngines.Library : engine);
         _runs[run.Id] = run;
         _order.Enqueue(run.Id);
         while (_order.Count > MaxRuns && _order.TryDequeue(out string? old))
@@ -233,9 +250,9 @@ internal sealed class RunService(
             {
                 view = run.Kind == RunKinds.Validate ? await ValidateAsync(run) : run.Format switch
                 {
-                    RunFormats.Cades => FromCades(run, await cades.RunAsync(Options<CadesOptions>(run), CancellationToken.None)),
-                    RunFormats.Xades => FromXml(run, await xml.RunAsync(Options<XmlOptions>(run), CancellationToken.None)),
-                    _ => FromPades(run, await pades.RunAsync(Options<SigningOptions>(run), CancellationToken.None)),
+                    RunFormats.Cades => FromCades(run, await cades.RunAsync(Options<CadesOptions>(run), run.Engine, CancellationToken.None)),
+                    RunFormats.Xades => FromXml(run, await xml.RunAsync(Options<XmlOptions>(run), run.Engine, CancellationToken.None)),
+                    _ => FromPades(run, await pades.RunAsync(Options<SigningOptions>(run), run.Engine, CancellationToken.None)),
                 };
                 view = view with { ReportId = StoreReport(view) };
                 if (crossValidate && view.Success && view.OutputId is not null && view.Validation.Count > 0)
@@ -394,11 +411,11 @@ internal sealed class RunService(
 
     private static RunView Empty(Run run) => new(
         run.Id, run.Format, "running", run.StartedAt, 0, run.Options, false, null, null, null, null, 0, null, null,
-        [], 0, 0, null, [], null, [], null, null, [], run.Kind);
+        [], 0, 0, null, [], null, [], null, null, [], run.Kind, Engine: run.Engine);
 
     private static RunSummary Summary(Run run) => run.Result is { } r
-        ? new RunSummary(run.Id, run.Format, r.Status, run.StartedAt, r.TotalMs, r.Success, r.RequestedLevel, r.AchievedLevel, r.Overall, r.FileName, r.Error, run.Kind)
-        : new RunSummary(run.Id, run.Format, "running", run.StartedAt, 0, false, null, null, null, null, null, run.Kind);
+        ? new RunSummary(run.Id, run.Format, r.Status, run.StartedAt, r.TotalMs, r.Success, r.RequestedLevel, r.AchievedLevel, r.Overall, r.FileName, r.Error, run.Kind, run.Engine)
+        : new RunSummary(run.Id, run.Format, "running", run.StartedAt, 0, false, null, null, null, null, null, run.Kind, run.Engine);
 
     private static RunView FromPades(Run run, SigningResult r) => Empty(run) with
     {
@@ -418,6 +435,7 @@ internal sealed class RunService(
         Overall = Overall(r.Validation.Select(v => v.Indication)),
         Validation = [.. r.Validation.Select(Verdict)],
         Detail = r,
+        Cli = r.Cli,
     };
 
     private static RunView FromCades(Run run, CadesSignResult r) => Empty(run) with
@@ -438,6 +456,7 @@ internal sealed class RunService(
         Overall = r.Validation?.Overall,
         Validation = [.. (r.Validation?.Signers ?? []).Select(Verdict)],
         Detail = r,
+        Cli = r.Cli,
     };
 
     private static RunVerdict Verdict(CadesSignerReport s) => new(
@@ -465,6 +484,7 @@ internal sealed class RunService(
         Overall = r.Validation?.Overall,
         Validation = [.. (r.Validation?.Signatures ?? []).Select(Verdict)],
         Detail = r,
+        Cli = r.Cli,
     };
 
     private static string? Overall(IEnumerable<string> indications)

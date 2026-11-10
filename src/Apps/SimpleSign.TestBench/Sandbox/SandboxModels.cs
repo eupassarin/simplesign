@@ -56,7 +56,11 @@ internal sealed record SandboxSigner(
     X509Certificate2 Certificate,
     IReadOnlyList<X509Certificate2> Chain,
     bool IsUsable,
-    string? Problem);
+    string? Problem)
+{
+    /// <summary>The PKCS#12 the Sandbox served (its password is the Sandbox's PfxPassword), for the CLI.</summary>
+    public byte[]? Pfx { get; init; }
+}
 
 [JsonConverter(typeof(JsonStringEnumConverter<TsaFault>))]
 public enum TsaFault

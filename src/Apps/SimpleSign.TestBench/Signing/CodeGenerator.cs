@@ -338,6 +338,13 @@ internal static class CodeGenerator
     internal static string Commitment(string commitmentType) =>
         commitmentType.StartsWith("ProofOf", StringComparison.Ordinal) ? commitmentType["ProofOf".Length..].ToLowerInvariant() : commitmentType.ToLowerInvariant();
 
+    /// <summary>The thumbprint of the credential's certificate, as <c>--thumbprint</c> takes it.</summary>
+    private static string Thumbprint(CredentialFacts credential)
+    {
+        using var certificate = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificate(Convert.FromBase64String(credential.CertificateBase64));
+        return certificate.Thumbprint;
+    }
+
     /// <summary>The CLI flags that pick the signer (shared by <c>sign</c>, <c>sign-dir</c>, <c>cades sign</c> and <c>xades sign</c>).</summary>
     internal static void CliCredential(CredentialFacts credential, CliLine line, List<string> notes)
     {
@@ -353,7 +360,7 @@ internal static class CodeGenerator
 
                 break;
             case CredentialKind.OsStore:
-                line.Add("--thumbprint", credential.Id);
+                line.Add("--thumbprint", Thumbprint(credential));
                 break;
             case CredentialKind.Pkcs11:
                 line.Add("--pkcs11-lib", "auto");

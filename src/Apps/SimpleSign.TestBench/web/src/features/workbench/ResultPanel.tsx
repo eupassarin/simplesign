@@ -18,7 +18,7 @@ import { IssueList, KeyValue, Pill } from "../shared/ui"
 import { XmlViews } from "../xml/XmlViews"
 import { LogView } from "./LogView"
 import { StandardBadge } from "./parts"
-import type { DssComparison, DssComparisonRow, Finding, RunVerdict, RunView } from "./schema"
+import type { CliStep, DssComparison, DssComparisonRow, Finding, RunVerdict, RunView } from "./schema"
 import { useWorkbench, type VariantRow } from "./state"
 
 /** Everything a run produced: the result, what is inside the file, the verdicts (SimpleSign and DSS), the log and the code. */
@@ -83,6 +83,29 @@ function Signing() {
   return <div className="text-muted-foreground flex items-center gap-2 py-10 text-sm"><Loader2 className="size-4 animate-spin" /> {t("result.signing")}</div>
 }
 
+/** The commands a run through the CLI executed: each line, its exit code and time, and what it printed (open on click). */
+function CliSteps({ steps }: { steps: CliStep[] }) {
+  const t = useT()
+  return (
+    <div className="space-y-2 rounded-lg border p-4">
+      <p className="text-sm font-medium">{t("wb.result.cliCommands")}</p>
+      <p className="text-muted-foreground text-xs">{t("wb.result.cliHint")}</p>
+      {steps.map((step, i) => (
+        <Collapsible key={i}>
+          <CollapsibleTrigger className="group flex w-full items-start gap-2 text-left">
+            <ChevronRight className="mt-1 size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+            <code className="min-w-0 flex-1 font-mono text-[11px] break-all">{step.command}</code>
+            <Pill tone={step.exitCode === 0 ? "success" : "danger"}>{t("wb.result.exitCode", { code: step.exitCode, ms: step.ms })}</Pill>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <pre className="bg-muted mt-2 max-h-72 overflow-auto rounded-md p-2 font-mono text-[11px] whitespace-pre-wrap">{step.output || "—"}</pre>
+          </CollapsibleContent>
+        </Collapsible>
+      ))}
+    </div>
+  )
+}
+
 function Summary({ run }: { run: RunView }) {
   const { t, number } = useI18n()
   const { reuse, schema, openInValidate } = useWorkbench()
@@ -97,6 +120,7 @@ function Summary({ run }: { run: RunView }) {
           <AlertDescription className="break-words">{run.error}</AlertDescription>
         </Alert>
         <IssueList issues={run.issues} />
+        {run.cli && run.cli.length > 0 && <CliSteps steps={run.cli} />}
         <p className="text-muted-foreground text-xs">{t("wb.result.failedHint")}</p>
       </div>
     )
@@ -107,7 +131,10 @@ function Summary({ run }: { run: RunView }) {
       <div className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
         <ShieldCheck className="text-success size-6" />
         <div className="min-w-0 flex-1">
-          <p className="font-medium">{formatTitle} · {validating ? run.fileName : run.achievedLevel ?? run.requestedLevel}</p>
+          <p className="font-medium">
+            {formatTitle} · {validating ? run.fileName : run.achievedLevel ?? run.requestedLevel}
+            {run.engine === "cli" && <span className="ml-2"><Pill tone="info">{t("wb.engine.cli")}</Pill></span>}
+          </p>
           <p className="text-muted-foreground text-xs">
             {validating
               ? t("val.summary", { size: number(run.bytes / 1024, 1), validate: run.validateMs, total: run.totalMs })
@@ -137,6 +164,7 @@ function Summary({ run }: { run: RunView }) {
         </Alert>
       )}
       <IssueList issues={run.issues} />
+      {run.cli && run.cli.length > 0 && <CliSteps steps={run.cli} />}
       <div className="space-y-2">{run.validation.map((v, i) => <VerdictCard key={i} verdict={v} compact />)}</div>
       {!validating && <Button variant="ghost" size="sm" onClick={() => reuse(run)}><RefreshCw /> {t("wb.result.reuse")}</Button>}
     </div>

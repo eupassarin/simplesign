@@ -262,6 +262,9 @@ export const ptBR: Messages = {
       emptyTitle: "Nada assinado ainda",
       emptyHint: "Escolha as opções à esquerda e clique em Assinar. O resultado, os vereditos, o log de cada etapa e o código correspondente aparecem aqui.",
       failedHint: "A aba Logs mostra até onde a assinatura chegou.",
+      cliCommands: "Comandos executados pelo CLI",
+      cliHint: "Os segredos aparecem como $NOMES aqui; o TestBench passou os valores ao simplesign.",
+      exitCode: "saída {code} · {ms} ms",
       summary: "{name} · {size} KB · assinado em {sign} ms, validado em {validate} ms, {total} ms no total",
       requested: "Nível pedido",
       achieved: "Nível alcançado",
@@ -287,6 +290,13 @@ export const ptBR: Messages = {
       filter: "Filtrar texto ou EventId",
       count: "{n} de {total} linhas",
       stageSpan: "{n} linhas · aos {at} ms · {ms} ms",
+    },
+    engine: {
+      title: "Executar via",
+      library: "Biblioteca",
+      cli: "CLI",
+      libraryAbout: "Assina com a biblioteca SimpleSign no próprio processo do TestBench.",
+      cliAbout: "Executa o comando da aba Código pelo CLI simplesign (um processo separado) e valida a saída como numa execução pela biblioteca. Credenciais PKCS#11 e em nuvem precisam da biblioteca.",
     },
     dss: {
       title: "Validação cruzada com o DSS",

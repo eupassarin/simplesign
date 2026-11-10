@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { CircleAlert, History, Loader2, PenTool, RotateCcw, ShieldCheck, Shuffle } from "lucide-react"
+import { CircleAlert, History, Library, Loader2, PenTool, RotateCcw, ShieldCheck, Shuffle, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -66,6 +66,7 @@ function TopBar() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <VaryControl />
+          <EngineControl />
           <DssControl />
           <HistoryDrawer />
           <Tooltip>
@@ -157,6 +158,27 @@ function VaryControl() {
         </Button>
       </PopoverContent>
     </Popover>
+  )
+}
+
+/** How a signing run makes the signature: through the library, or by running the generated command through the simplesign CLI. */
+export function EngineControl() {
+  const { engine, setEngine } = useWorkbench()
+  const t = useT()
+  return (
+    <div className="flex items-center rounded-md border p-0.5" role="radiogroup" aria-label={t("wb.engine.title")}>
+      {(["library", "cli"] as const).map((id) => (
+        <Tooltip key={id}>
+          <TooltipTrigger asChild>
+            <Button role="radio" aria-checked={engine === id} variant={engine === id ? "secondary" : "ghost"} size="sm" className="h-7 px-2.5 text-xs"
+              onClick={() => setEngine(id)}>
+              {id === "cli" ? <Terminal /> : <Library />} {t(id === "cli" ? "wb.engine.cli" : "wb.engine.library")}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-72">{t(id === "cli" ? "wb.engine.cliAbout" : "wb.engine.libraryAbout")}</TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
   )
 }
 

@@ -263,6 +263,9 @@ export const en = {
       emptyTitle: "Nothing signed yet",
       emptyHint: "Choose the options on the left and press Sign. The result, the verdicts, the log of every step and the matching code appear here.",
       failedHint: "The Logs tab shows how far the signature went.",
+      cliCommands: "Commands run by the CLI",
+      cliHint: "Secrets stay as their $NAMES here; the TestBench passed their values to simplesign.",
+      exitCode: "exit {code} · {ms} ms",
       summary: "{name} · {size} KB · signed in {sign} ms, validated in {validate} ms, {total} ms in all",
       requested: "Requested level",
       achieved: "Achieved level",
@@ -288,6 +291,13 @@ export const en = {
       filter: "Filter text or EventId",
       count: "{n} of {total} lines",
       stageSpan: "{n} lines · at {at} ms · {ms} ms",
+    },
+    engine: {
+      title: "Run through",
+      library: "Library",
+      cli: "CLI",
+      libraryAbout: "Signs with the SimpleSign library in the TestBench's own process.",
+      cliAbout: "Runs the command the Code tab shows through the simplesign CLI (a separate process), then validates its output like a library run. PKCS#11 and cloud credentials need the library.",
     },
     dss: {
       title: "Cross-validation with DSS",

@@ -57,7 +57,11 @@ public sealed record XmlSignResult(
     long SignMs,
     XmlValidationView? Validation,
     CodeSnippets Code,
-    IReadOnlyList<OptionIssue> Issues);
+    IReadOnlyList<OptionIssue> Issues)
+{
+    /// <summary>The commands a run through the CLI executed, with their exit codes and output; null for a library run.</summary>
+    public IReadOnlyList<CliStep>? Cli { get; init; }
+}
 
 /// <summary>Signs with <c>XadesSigner</c> and validates the result.</summary>
 internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, ValidationService validation)
@@ -74,7 +78,13 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         return XmlCompatibility.Evaluate(o, Facts(o.DataId), credential?.Facts, sandbox.IsConnected, PolicyUploads.Signing(o.SigningPolicyId, documents));
     }
 
-    public async Task<XmlSignResult> RunAsync(XmlOptions options, CancellationToken cancellationToken)
+    private readonly CliExecutor _cli = new();
+
+    public Task<XmlSignResult> RunAsync(XmlOptions options, CancellationToken cancellationToken) =>
+        RunAsync(options, RunEngines.Library, cancellationToken);
+
+    /// <summary>Signs through the library or, with <see cref="RunEngines.Cli"/>, by running the generated command through the CLI.</summary>
+    public async Task<XmlSignResult> RunAsync(XmlOptions options, string engine, CancellationToken cancellationToken)
     {
         var report = Evaluate(options);
         var o = report.Effective;
@@ -92,27 +102,51 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         string? achieved;
         var warnings = new List<string>();
         CodeSnippets code;
+        IReadOnlyList<CliStep>? cliSteps = null;
         try
         {
             var plan = new XadesPlan(o, context);
             code = plan.Code(credential.Facts);
-            var builder = (o.CounterSign ? XadesSigner.CounterSign(data.Content, o.CounterSignatureId) : XadesSigner.Document(data.Content))
-                .WithLogger(RunLog.Logger);
-            foreach (var (_, apply) in plan.Steps)
+            if (engine == RunEngines.Cli)
             {
-                builder = apply(builder);
-            }
+                if (CliJobs.Unsupported(credential) is { } unsupported)
+                {
+                    return Failure(report, unsupported, "CliUnsupported", code);
+                }
 
-            var result = await builder.SignWithDetailsAsync(cancellationToken);
-            signed = result.SignedArtifact;
-            achieved = result.AchievedLevel switch
+                var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents)
+                    .File(o.CounterSign ? SignedFile : DataFile, data.Content);
+                var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands), cancellationToken);
+                if (!outcome.Success)
+                {
+                    return Failure(report, outcome.Error!, outcome.Json?.ErrorType ?? "Cli", code) with { Cli = outcome.Steps };
+                }
+
+                signed = outcome.Output!;
+                achieved = outcome.Json?.AchievedLevel ?? report.EffectiveLevel;
+                warnings.AddRange(outcome.Json?.Warnings ?? []);
+                cliSteps = outcome.Steps;
+            }
+            else
             {
-                AdesBaselineLevel.Basic => "B-B",
-                AdesBaselineLevel.Timestamped => "B-T",
-                AdesBaselineLevel.LongTerm => "B-LT",
-                _ => "B-LTA",
-            };
-            warnings.AddRange(result.Warnings.Select(w => w.Message));
+                var builder = (o.CounterSign ? XadesSigner.CounterSign(data.Content, o.CounterSignatureId) : XadesSigner.Document(data.Content))
+                    .WithLogger(RunLog.Logger);
+                foreach (var (_, apply) in plan.Steps)
+                {
+                    builder = apply(builder);
+                }
+
+                var result = await builder.SignWithDetailsAsync(cancellationToken);
+                signed = result.SignedArtifact;
+                achieved = result.AchievedLevel switch
+                {
+                    AdesBaselineLevel.Basic => "B-B",
+                    AdesBaselineLevel.Timestamped => "B-T",
+                    AdesBaselineLevel.LongTerm => "B-LT",
+                    _ => "B-LTA",
+                };
+                warnings.AddRange(result.Warnings.Select(w => w.Message));
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -126,7 +160,10 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             ? await ValidateAsync(output.Id, o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? new ValidationSettings(),
                 report.Effective.ExternalObjectId, cancellationToken)
             : null;
-        return new XmlSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved, warnings, signMs, view, code, report.Issues);
+        return new XmlSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved, warnings, signMs, view, code, report.Issues)
+        {
+            Cli = cliSteps,
+        };
     }
 
     /// <summary>

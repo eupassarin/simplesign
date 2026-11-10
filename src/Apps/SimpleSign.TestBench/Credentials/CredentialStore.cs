@@ -57,6 +57,9 @@ public sealed record Note(string English, params object?[] Args)
     public override string ToString() => Localization.L.T(English, Args);
 }
 
+/// <summary>A credential as the CLI takes it: a PKCS#12 file and its password (kept in memory only).</summary>
+internal sealed record CliSigner(byte[] Pfx, string Password);
+
 /// <summary>An opened signing credential: a local key, or an <see cref="IExternalSigner"/> (token, CSC).</summary>
 internal sealed class CredentialHandle : IDisposable
 {
@@ -86,6 +89,9 @@ internal sealed class CredentialHandle : IDisposable
     public IReadOnlyList<X509Certificate2> Chain { get; }
 
     public IExternalSigner? External { get; }
+
+    /// <summary>The PKCS#12 and password a CLI run passes to <c>simplesign</c>; null when the CLI cannot use this credential.</summary>
+    public CliSigner? Cli { get; init; }
 
     /// <summary>The notes in English (for the localization tests).</summary>
     internal IReadOnlyList<Note> Notes { get; }

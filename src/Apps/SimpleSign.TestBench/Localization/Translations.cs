@@ -42,7 +42,7 @@ internal static class Translations
         ["Certificate not found in the user store, or it has no private key."] = "Certificado não encontrado no repositório do usuário, ou sem chave privada.",
         ["{0} must be an absolute https:// URL."] = "{0} deve ser uma URL https:// absoluta.",
         ["{0} is required."] = "{0} é obrigatório.",
-        ["The password is used once to open the file and is not stored."] = "A senha é usada uma vez para abrir o arquivo e não é guardada.",
+        ["The password is kept in memory only while the credential is open (a CLI run passes it to simplesign), never on disk."] = "A senha fica só na memória enquanto a credencial está aberta (uma execução pelo CLI a passa ao simplesign), nunca em disco.",
         ["The OS may show its own prompt (keychain password, smartcard PIN) when signing."] = "O sistema pode mostrar o próprio pedido (senha das Chaves, PIN do cartão) ao assinar.",
         ["The token session stays open (logged in) until you close this credential or the TestBench stops."] = "A sessão do token fica aberta (logada) até você fechar esta credencial ou o TestBench parar.",
         ["Issued by the sandbox PKI (AC Raiz Sandbox SimpleSign). Validation in the TestBench trusts this root; real validators will not."] = "Emitido pela PKI do sandbox (AC Raiz Sandbox SimpleSign). A validação no TestBench confia nesta raiz; validadores reais não.",
@@ -366,6 +366,16 @@ internal static class Translations
         ["DSS is not reachable at {0} ({1}). Start it with: docker compose -f tools/dss/docker-compose.yml up"] = "O DSS não responde em {0} ({1}). Inicie com: docker compose -f tools/dss/docker-compose.yml up",
         ["The DSS address must be an http or https URL."] = "O endereço do DSS deve ser uma URL http ou https.",
         ["Unknown format: {0}. Use pades, cades or xades."] = "Formato desconhecido: {0}. Use pades, cades ou xades.",
+        ["Unknown engine: {0}. Use library or cli."] = "Motor desconhecido: {0}. Use library ou cli.",
+        // ── Runs through the CLI ───────────────────────────────────────
+        ["The CLI ended with exit code {0}: {1}"] = "O CLI terminou com código de saída {0}: {1}",
+        ["The CLI wrote no output file."] = "O CLI não gravou nenhum arquivo de saída.",
+        ["The simplesign CLI was not found next to the TestBench (cli/simplesign.dll). Build the TestBench again, or set SIMPLESIGN_CLI."] = "O CLI simplesign não foi encontrado ao lado do TestBench (cli/simplesign.dll). Compile o TestBench de novo ou defina SIMPLESIGN_CLI.",
+        ["simplesign ended with exit code {0} in {1} ms."] = "simplesign terminou com código de saída {0} em {1} ms.",
+        ["The CLI took longer than {0} minutes and was stopped."] = "O CLI levou mais de {0} minutos e foi interrompido.",
+        ["The simplesign CLI could not be started."] = "Não foi possível iniciar o CLI simplesign.",
+        ["A run through the CLI needs a PFX, a Sandbox certificate or a certificate of the OS store; this credential ({0}) can only be used through the library."] = "Uma execução pelo CLI precisa de um PFX, de um certificado da Sandbox ou de um certificado do repositório do sistema; esta credencial ({0}) só pode ser usada pela biblioteca.",
+        ["Batch through the CLI: the report below validates the first document."] = "Lote pelo CLI: o relatório abaixo valida o primeiro documento.",
         ["The run has no options."] = "A execução não tem opções.",
 
         // ── Workbench: option schema ──────────────────────────────────
