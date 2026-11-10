@@ -25,8 +25,22 @@ public sealed record DssSignature(
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings);
 
-/// <summary>One line of the comparison: what SimpleSign says, what DSS says, and whether they agree.</summary>
-public sealed record DssComparisonRow(string Label, string Topic, string? Library, string? Dss, bool Agree, string? Note);
+/// <summary>
+/// One line of the comparison: what SimpleSign says, what DSS says, and whether they agree. For a difference,
+/// <paramref name="Reason"/> says in plain words what DSS concluded, <paramref name="Cause"/> whether it comes from
+/// how DSS is set up (<c>setup</c>), from a real disagreement between the validators (<c>disagreement</c>) or is
+/// unknown, and <paramref name="Action"/> what to do. <paramref name="Note"/> keeps DSS's own messages.
+/// </summary>
+public sealed record DssComparisonRow(
+    string Label,
+    string Topic,
+    string? Library,
+    string? Dss,
+    bool Agree,
+    string? Note,
+    string? Reason = null,
+    string? Cause = null,
+    string? Action = null);
 
 /// <summary>The DSS verdict for a run, next to SimpleSign's.</summary>
 public sealed record DssComparison(
@@ -38,7 +52,8 @@ public sealed record DssComparison(
     IReadOnlyList<DssSignature> Signatures,
     IReadOnlyList<DssComparisonRow> Rows,
     IReadOnlyList<string> Notes,
-    string? ReportId);
+    string? ReportId,
+    string? Summary = null);
 
 /// <summary>
 /// Validates signatures with the EU DSS (https://github.com/esig/dss) through the REST service of
@@ -174,32 +189,87 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
             string? oursIndication = ours?.Indication;
             string? theirsIndication = theirs is null ? null : theirs.SubIndication is null ? theirs.Indication : $"{theirs.Indication} / {theirs.SubIndication}";
             bool indicationAgrees = ours is not null && theirs is not null && SameIndication(ours.Indication, theirs.Indication);
+            var (reason, cause, action) = indicationAgrees ? (null, null, null) : Classify(theirs);
             rows.Add(new DssComparisonRow(label, "indication", oursIndication, theirsIndication, indicationAgrees,
-                indicationAgrees ? null : Explain(theirs)));
+                indicationAgrees ? null : Explain(theirs), reason, cause, action));
             if (theirs?.Format is not null)
             {
                 // The run's achieved level is the level of the signature it just made: the last one.
                 string? oursLevel = i == library.Count - 1 ? run.AchievedLevel : ours?.Level;
                 bool levelAgrees = oursLevel is null || SameLevel(oursLevel, theirs.Format);
-                rows.Add(new DssComparisonRow(label, "level", oursLevel, theirs.Format, levelAgrees,
-                    levelAgrees ? null : L.T("DSS detects a different level than the one SimpleSign reports for this signature.")));
+                rows.Add(new DssComparisonRow(label, "level", oursLevel, theirs.Format, levelAgrees, null,
+                    levelAgrees ? null : L.T("DSS detects a different level than the one SimpleSign reports for this signature."),
+                    levelAgrees ? null : Causes.Disagreement,
+                    levelAgrees ? null : L.T("Check which attributes each validator found (timestamps, DSS dictionary, archive timestamp): one of them reads the file differently.")));
             }
         }
 
-        if (dss.Signatures.Any(s => string.Equals(s.SubIndication, "NO_CERTIFICATE_CHAIN_FOUND", StringComparison.OrdinalIgnoreCase)))
-        {
-            notes.Add(L.T("DSS does not trust the signer's root. For sandbox certificates, mount the sandbox root into DSS (see tools/dss/README.md)."));
-        }
-
-        if (dss.Signatures.Any(s => s.Indication == "INDETERMINATE"
-            && ((s.SubIndication is { } sub && (sub.Contains("REVOCATION", StringComparison.OrdinalIgnoreCase) || sub.Contains("TRY_LATER", StringComparison.OrdinalIgnoreCase)))
-                || s.Errors.Any(e => e.Contains("revocation", StringComparison.OrdinalIgnoreCase)))))
-        {
-            notes.Add(L.T("DSS could not get revocation data. The sandbox CRL and OCSP addresses only exist inside the TestBench; sign at B-LT or B-LTA so the data is embedded."));
-        }
-
         _ = format;
-        return dss with { Rows = rows, Notes = notes, Agree = rows.All(r => r.Agree) };
+        return dss with { Rows = rows, Notes = notes, Agree = rows.All(r => r.Agree), Summary = Summarize(rows) };
+    }
+
+    /// <summary>The causes of a difference.</summary>
+    internal static class Causes
+    {
+        public const string Setup = "setup";
+        public const string Disagreement = "disagreement";
+        public const string Unknown = "unknown";
+    }
+
+    /// <summary>
+    /// Why DSS's indication differs: what it concluded in plain words, whether that comes from how DSS is set up
+    /// (it does not trust the Sandbox root, it cannot reach the Sandbox's CRL and OCSP) or is a real disagreement,
+    /// and what to do.
+    /// </summary>
+    internal static (string? Reason, string Cause, string Action) Classify(DssSignature? theirs)
+    {
+        if (theirs is null)
+        {
+            return (L.T("DSS did not report this signature."), Causes.Unknown,
+                L.T("Open the DSS report (JSON): DSS may have read the file as something else."));
+        }
+
+        string? reason = SubIndications.Explain(theirs.SubIndication) ?? theirs.Errors.FirstOrDefault();
+        if (string.Equals(theirs.SubIndication, "NO_CERTIFICATE_CHAIN_FOUND", StringComparison.OrdinalIgnoreCase))
+        {
+            return (L.T("DSS does not trust the root of the signer's chain, so it cannot reach a conclusion."), Causes.Setup,
+                L.T("This is how DSS is set up, not a problem of the signature: give DSS the Sandbox root (see tools/dss/README.md)."));
+        }
+
+        bool revocation = theirs.SubIndication is { } sub
+                && (sub.Contains("REVOCATION", StringComparison.OrdinalIgnoreCase) || sub.Contains("TRY_LATER", StringComparison.OrdinalIgnoreCase))
+            || theirs.Errors.Any(e => e.Contains("revocation", StringComparison.OrdinalIgnoreCase));
+        if (theirs.Indication == "INDETERMINATE" && revocation)
+        {
+            return (L.T("DSS could not get revocation data for the chain."), Causes.Setup,
+                L.T("The Sandbox's CRL and OCSP addresses are on this machine and DSS may not reach them: sign at B-LT or B-LTA so the data is embedded."));
+        }
+
+        return (reason, Causes.Disagreement,
+            L.T("The validators disagree on this file: compare SimpleSign's checks with DSS's messages; one of them may be wrong."));
+    }
+
+    /// <summary>One sentence: whether they agree, and on what they differ.</summary>
+    internal static string Summarize(IReadOnlyList<DssComparisonRow> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return L.T("DSS reported no signature to compare.");
+        }
+
+        var differences = rows.Where(r => !r.Agree).ToList();
+        if (differences.Count == 0)
+        {
+            return L.T("SimpleSign and DSS agree on every signature.");
+        }
+
+        string topics = string.Join(", ", differences.Select(r => r.Topic == "level"
+            ? L.T("the level of {0}", r.Label)
+            : L.T("the verdict on {0}", r.Label)).Distinct());
+        bool allSetup = differences.All(r => r.Cause == Causes.Setup);
+        return allSetup
+            ? L.T("They differ on {0}, because of how DSS is set up, not because of the signature.", topics)
+            : L.T("They differ on {0}.", topics);
     }
 
     private static IEnumerable<RunVerdict> Flatten(IEnumerable<RunVerdict> verdicts) =>

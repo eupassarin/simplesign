@@ -119,6 +119,16 @@ export interface RunVerdict {
   children: RunVerdict[]
   isTimestamp?: boolean
   subIndication?: string | null
+  /** The policy constraints that failed, warned or informed, one per constraint with all its messages. */
+  findings?: Finding[] | null
+}
+
+export interface Finding {
+  constraint: string
+  title: string
+  standard?: string | null
+  status: "fail" | "warn" | "info"
+  messages: string[]
 }
 
 export interface DssSignature {
@@ -139,6 +149,10 @@ export interface DssComparisonRow {
   dss?: string | null
   agree: boolean
   note?: string | null
+  /** For a difference: what DSS concluded, in plain words. */
+  reason?: string | null
+  cause?: "setup" | "disagreement" | "unknown" | null
+  action?: string | null
 }
 
 export interface DssComparison {
@@ -151,6 +165,8 @@ export interface DssComparison {
   rows: DssComparisonRow[]
   notes: string[]
   reportId?: string | null
+  /** One sentence: whether they agree, and on what they differ. */
+  summary?: string | null
 }
 
 export interface DssSettings {

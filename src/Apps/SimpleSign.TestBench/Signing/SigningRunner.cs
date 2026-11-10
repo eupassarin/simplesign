@@ -29,7 +29,14 @@ public sealed record SignatureReport(
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
     IReadOnlyDictionary<string, string>? Metadata,
-    string? SubIndication = null);
+    string? SubIndication = null,
+    IReadOnlyList<FindingView>? Findings = null);
+
+/// <summary>
+/// A constraint of the validation policy that failed, warned or informed on a signature, with every message it gave
+/// (one per certificate or token it applied to): <paramref name="Title"/> says in plain words what it checks.
+/// </summary>
+public sealed record FindingView(string Constraint, string Title, string? Standard, string Status, IReadOnlyList<string> Messages);
 
 /// <summary>What the signed PDF contains, read back with the inspector.</summary>
 public sealed record OutputFacts(
