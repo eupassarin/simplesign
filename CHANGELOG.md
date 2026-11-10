@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — the Sandbox as a trust scheme (trusted list + LOTL)
+
+- **Sandbox endpoints:**
+  - `/tl/lotl.xml` and `/tl/tl.xml` publish a list of trusted lists and a trusted list (ETSI TS 119 612 v5, territory
+    `ZZ`), each signed by its own scheme operator. The trusted list's services are the root CA (CA/QC, granted), the TSA
+    (TSA/QTST, granted) and the revoked TSA (withdrawn). The operators' certificates are `/tl/lotl-signer.pem` and
+    `/tl/tl-signer.pem`; `/api/info` lists the URLs (`trustedLists`).
+  - The signatures follow TS 119 612 §5.7.1: enveloped, whose only transforms are the enveloped one and exclusive
+    canonicalization.
+- **New Sandbox failure `TlFault`:** an expired list, a list signed by a certificate the LOTL does not name, or a list
+  changed after signing. It is in the Sandbox UI and the Playbook (`faults.trustedList`).
+- **TestBench:** new trust choice "Sandbox trusted list", now the default. The validators trust the Sandbox through its
+  LOTL (`TrustedListSet`), so the `TrustedLists` constraints are evaluated. "Sandbox root" (a bare anchor) is still
+  there.
+- **`tools/dss`:** DSS trusts the Sandbox through its LOTL by default (`DSS_SANDBOX_TRUST=list`, or `anchor` for the
+  root alone). With the EU lists off it uses the EU slot; with them on, the second slot. The lists are downloaded again
+  every `DSS_TL_REFRESH_SECONDS` (10 s with the Sandbox's list alone). A list whose signature fails is not used
+  (TS 119 615, as in SimpleSign): a Spring component compiled into the image sets the TL job's
+  `ExpirationAndSignatureCheckStrategy`; `DSS_ACCEPT_INVALID_TRUSTED_LISTS=true` restores the demo's default.
+- **`DssScenarioCrossValidationTests`:** the trusted-list failures are compared too, and the test waits for DSS to load
+  the Sandbox's list.
+
 ### Changed — TestBench: a readable Validation tab
 
 - The tab opens with a summary per signature: SimpleSign's verdict and DSS's side by side. Each difference says:

@@ -82,12 +82,12 @@ public sealed class PolicyUploadsTests(TestBenchFixture fixture)
     }
 
     [SkippableFact]
-    public void Validation_UploadedPolicyLevelAndStrategy_ReachTheValidatorOptions()
+    public async Task Validation_UploadedPolicyLevelAndStrategy_ReachTheValidatorOptions()
     {
         string id = fixture.UploadPolicy(ValidationPolicy.Default.WithName("Uploaded validation").ToJson());
         var settings = new ValidationSettings { PolicyId = id, Level = ValidationLevel.BasicSignatures, RevocationStrategy = RevocationStrategy.CrlFirst };
 
-        var options = fixture.Validation.Trust(settings).Options;
+        var options = (await fixture.Validation.TrustAsync(settings)).Options;
 
         options.Policy.Name.ShouldBe("Uploaded validation");
         options.Level.ShouldBe(ValidationLevel.BasicSignatures);

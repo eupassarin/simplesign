@@ -15,6 +15,14 @@ services:
     environment:
       # Where the SimpleSign Sandbox is, to trust its root at start (Docker Desktop reaches the host this way).
       SANDBOX_URL: ${SANDBOX_URL:-http://host.docker.internal:5300}
+      # "list" (default): trust the Sandbox through its list of trusted lists (/tl/lotl.xml), as DSS trusts the EU's.
+      # "anchor": trust its root alone, as a bare trust anchor.
+      DSS_SANDBOX_TRUST: ${DSS_SANDBOX_TRUST:-list}
+      # How often the trusted lists are downloaded again (seconds). Empty: 10 with the Sandbox's list alone, 3600 with the EU lists.
+      DSS_TL_REFRESH_SECONDS: ${DSS_TL_REFRESH_SECONDS:-}
+      # "false" (default): a trusted list or LOTL whose signature fails is not used (TS 119 615), as in SimpleSign.
+      # "true": the DSS demo's default, which keeps its trust anchors and only reports it.
+      DSS_ACCEPT_INVALID_TRUSTED_LISTS: ${DSS_ACCEPT_INVALID_TRUSTED_LISTS:-false}
       # The ports the Sandbox's certificates name on localhost (HTTP, HTTPS, LDAP), forwarded from
       # the container's localhost to SANDBOX_FORWARD_HOST, so a default Sandbox works as is. "" turns it off.
       SANDBOX_FORWARD_PORTS: ${SANDBOX_FORWARD_PORTS-5300 5301 5302}

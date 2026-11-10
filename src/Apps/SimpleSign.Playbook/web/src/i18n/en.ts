@@ -121,6 +121,7 @@ export const en = {
     ocsp: "OCSP",
     tsa: "TSA",
     ocspSigner: "OCSP signer",
+    trustedList: "Trusted list",
     unchanged: "unchanged",
   },
   assets: {

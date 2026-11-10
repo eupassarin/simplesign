@@ -81,6 +81,7 @@ export const ptBR: Messages = {
     tsa: "ACT",
     crl: "Servidor de LCR (HTTP, HTTPS, LDAP)",
     ocsp: "Respondedor OCSP",
+    trustedList: "O trusted list (/tl/tl.xml)",
     ocspSigner: "Quem assina as respostas OCSP",
     delay: "Atraso (ms)",
     saved: "Falhas salvas.",
@@ -111,6 +112,12 @@ export const ptBR: Messages = {
     signerValues: {
       Issuer: { title: "A própria AC", hint: "Cada AC assina as próprias respostas." },
       Delegated: { title: "Respondedor delegado", hint: "As respostas da AC intermediária são assinadas por um certificado emitido por ela com a EKU OCSPSigning e id-pkix-ocsp-nocheck." },
+    },
+    tlValues: {
+      None: { title: "Normal", hint: "Lista atual, assinada pelo operador que o LOTL indica." },
+      Expired: { title: "Expirado", hint: "O NextUpdate já passou: um validador que confere (TLNotExpired) avisa ou recusa." },
+      WrongSigner: { title: "Assinante errado", hint: "Assinado por um certificado que o LOTL não indica: a lista é recusada e as ACs dela deixam de ser confiáveis." },
+      Tampered: { title: "Adulterado", hint: "Alterado depois de assinado: a assinatura não confere e a lista é recusada." },
     },
   },
   log: {

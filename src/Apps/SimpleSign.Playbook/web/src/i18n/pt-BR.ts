@@ -123,6 +123,7 @@ export const ptBR: Messages = {
     ocsp: "OCSP",
     tsa: "ACT",
     ocspSigner: "Assinante OCSP",
+    trustedList: "Trusted list",
     unchanged: "sem mudança",
   },
   assets: {

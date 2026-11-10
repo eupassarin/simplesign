@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Inspection;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
@@ -16,18 +17,24 @@ namespace SimpleSign.TestBench.Validation;
 /// <summary>Which roots the validator trusts.</summary>
 public enum TrustChoice
 {
-    /// <summary>The root of the connected SimpleSign Sandbox.</summary>
+    /// <summary>The root of the connected SimpleSign Sandbox, as a bare trust anchor.</summary>
     Sandbox,
 
     /// <summary>The operating system's trusted roots.</summary>
     System,
+
+    /// <summary>
+    /// The connected Sandbox's trusted list, read through its list of trusted lists (/tl/lotl.xml): its CAs with their
+    /// service types and statuses, so the TrustedLists constraints are evaluated. A Sandbox without one: its root.
+    /// </summary>
+    SandboxTrustedList,
 }
 
 /// <summary>How to validate.</summary>
 public sealed record ValidationSettings
 {
-    /// <summary>The roots to trust. Default: the connected Sandbox's root and the operating system's.</summary>
-    public IReadOnlyList<TrustChoice> Trust { get; init; } = [TrustChoice.Sandbox, TrustChoice.System];
+    /// <summary>The roots to trust. Default: the connected Sandbox's trusted list and the operating system's roots.</summary>
+    public IReadOnlyList<TrustChoice> Trust { get; init; } = [TrustChoice.SandboxTrustedList, TrustChoice.System];
 
     /// <summary>Uploaded root certificates (DER or PEM) to trust as well.</summary>
     public IReadOnlyList<string> CustomRootUploadIds { get; init; } = [];
@@ -68,7 +75,11 @@ public sealed record DetailedSignature(
     string? ContactInfo);
 
 /// <summary>Trust settings turned into library objects.</summary>
-internal sealed record ValidationTrust(ValidationOptions Options);
+internal sealed record ValidationTrust(ValidationOptions Options)
+{
+    /// <summary>The trust anchor providers (the Sandbox's trusted lists), for the PAdES validator.</summary>
+    public IReadOnlyList<ITrustAnchorProvider> Providers { get; init; } = [];
+}
 
 public sealed record DssView(int Certificates, int Crls, int Ocsps, bool HasVri, int VriEntries, IReadOnlyList<string> Warnings);
 
@@ -143,15 +154,15 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
 
     internal async Task<IReadOnlyList<SignatureValidationResult>> RunValidatorAsync(byte[] pdf, ValidationSettings settings, CancellationToken cancellationToken)
     {
-        var validator = CreateValidator(settings);
+        var validator = await CreateValidatorAsync(settings, cancellationToken);
         using var stream = new MemoryStream(pdf, writable: false);
         return await validator.ValidateAsync(stream, cancellationToken: cancellationToken);
     }
 
-    internal PdfSignatureValidator CreateValidator(ValidationSettings settings)
+    internal async Task<PdfSignatureValidator> CreateValidatorAsync(ValidationSettings settings, CancellationToken cancellationToken = default)
     {
-        var trust = Trust(settings);
-        return new PdfSignatureValidator(sandbox, trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), [], []);
+        var trust = await TrustAsync(settings, cancellationToken);
+        return new PdfSignatureValidator(sandbox, trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), trust.Providers, []);
     }
 
     /// <summary>The chain revocation checker of the CAdES and XAdES validators, on the TestBench's network.</summary>
@@ -198,12 +209,27 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             notRevoked is null ? null : source.ToString());
 
     /// <summary>The trust settings as library objects, shared by the PAdES, CAdES and XAdES validators.</summary>
-    internal ValidationTrust Trust(ValidationSettings settings)
+    internal async Task<ValidationTrust> TrustAsync(ValidationSettings settings, CancellationToken cancellationToken = default)
     {
         var roots = new List<X509Certificate2>();
-        if (settings.Trust.Contains(TrustChoice.Sandbox) && sandbox.Current is { } connection)
+        var providers = new List<ITrustAnchorProvider>();
+        IReadOnlyList<Core.Extensions.TrustedListInfo>? trustedLists = null;
+        if (sandbox.Current is { } connection)
         {
-            roots.Add(connection.Root);
+            bool viaList = settings.Trust.Contains(TrustChoice.SandboxTrustedList) && connection.LotlUri is not null && connection.LotlSigner is not null;
+            if (viaList && await SandboxTrustedListsAsync(connection, cancellationToken) is { } set)
+            {
+                providers.Add(set);
+                roots.AddRange(set.GetTrustAnchors());
+                trustedLists = set.TrustedLists;
+            }
+
+            // The root as a bare anchor: asked for, or the trusted list asked of a Sandbox that has none.
+            if (settings.Trust.Contains(TrustChoice.Sandbox)
+                || (settings.Trust.Contains(TrustChoice.SandboxTrustedList) && connection.LotlUri is null))
+            {
+                roots.Add(connection.Root);
+            }
         }
 
         foreach (string id in settings.CustomRootUploadIds)
@@ -215,12 +241,41 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         {
             TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),
             TrustedRoots = roots.Count > 0 ? roots : null,
+            TrustedLists = trustedLists,
             NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 120)),
             Policy = PolicyUploads.Validation(settings.PolicyId, documents),
             Level = settings.Level,
             Verifier = VerifierOptions.Default with { RevocationStrategy = settings.RevocationStrategy },
         };
-        return new ValidationTrust(options);
+        return new ValidationTrust(options) { Providers = providers };
+    }
+
+    /// <summary>
+    /// The Sandbox's trusted lists, read again for each validation so its trusted-list failures show at once. An expired
+    /// list is kept: the TLNotExpired constraint of the policy judges it. A list that cannot be read gives no anchors.
+    /// </summary>
+    private async Task<XAdES.TrustedLists.TrustedListSet?> SandboxTrustedListsAsync(SandboxConnection connection, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var set = await XAdES.TrustedLists.TrustedListSet.LoadAsync(new XAdES.TrustedLists.TrustedListSetOptions
+            {
+                LotlLocation = connection.LotlUri!,
+                LotlSignerCertificates = [connection.LotlSigner!],
+                Services = new XAdES.TrustedLists.TrustedListOptions { RejectExpired = false },
+            }, sandbox, cancellationToken);
+            foreach (var problem in set.Problems)
+            {
+                RunLog.Logger.LogWarning("The Sandbox's trusted list {Location} was not loaded: {Reason}", problem.Location, problem.Reason);
+            }
+
+            return set;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Security.Cryptography.CryptographicException or InvalidDataException or System.Xml.XmlException)
+        {
+            RunLog.Logger.LogWarning("The Sandbox's list of trusted lists could not be read: {Reason}", ex.Message);
+            return null;
+        }
     }
 
     internal static SignatureReport ToReport(SignatureValidationResult r)
@@ -335,6 +390,12 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             line.Add("--trust", RootFile);
         }
 
+        if (UsesSandboxTrustedList(s))
+        {
+            string lotl = sandbox.Current?.LotlUri?.AbsoluteUri ?? "http://localhost:5300/tl/lotl.xml";
+            line.Add("--lotl", lotl, "--lotl-signer", LotlSignerFile);
+        }
+
         if (!s.Trust.Contains(TrustChoice.System))
         {
             line.Add("--no-system-roots");
@@ -366,6 +427,22 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     /// <summary>The trusted root a generated <c>validate</c> command reads.</summary>
     internal const string RootFile = "root.cer";
 
+    /// <summary>The LOTL signer certificate a generated <c>validate</c> command reads.</summary>
+    internal const string LotlSignerFile = "lotl-signer.pem";
+
+    /// <summary>Whether the settings read the Sandbox's trusted list (the snippets then load it).</summary>
+    internal static bool UsesSandboxTrustedList(ValidationSettings s) => s.Trust.Contains(TrustChoice.SandboxTrustedList);
+
+    /// <summary>The ValidationOptions lines that trust the Sandbox through its trusted list, for the code snippets.</summary>
+    internal static IEnumerable<string> TrustedListOptionsCode(ValidationSettings s) => UsesSandboxTrustedList(s)
+        ?
+        [
+            "// var lists = await TrustedListSet.LoadAsync(new() { LotlLocation = new Uri(\"http://localhost:5300/tl/lotl.xml\"), LotlSignerCertificates = [lotlSigner] });",
+            "TrustedRoots = [.. lists.GetTrustAnchors()]",
+            "TrustedLists = lists.TrustedLists",
+        ]
+        : [];
+
     private CodeSnippets ValidationCode(ValidationSettings s)
     {
         var sb = new StringBuilder();
@@ -381,6 +458,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         {
             options.Add("TrustedRoots = [root] // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")");
         }
+
+        options.AddRange(TrustedListOptionsCode(s));
 
         if (s.TimeoutSeconds != 10)
         {

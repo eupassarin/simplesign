@@ -296,6 +296,11 @@ public sealed partial class CliEquivalenceTests(TestBenchFixture fixture) : IDis
         await File.WriteAllBytesAsync(Path.Combine(_dir, CliLine.Placeholders.SignerPfx), pfx);
         await File.WriteAllBytesAsync(Path.Combine(_dir, CliLine.Placeholders.SignerCertificate), signer.Export(X509ContentType.Cert));
         await File.WriteAllBytesAsync(Path.Combine(_dir, ValidationService.RootFile), fixture.Sandbox.Connection.Root.Export(X509ContentType.Cert));
+        if (fixture.Sandbox.Connection.LotlSigner is { } lotlSigner)
+        {
+            await File.WriteAllTextAsync(Path.Combine(_dir, ValidationService.LotlSignerFile), lotlSigner.ExportCertificatePem());
+        }
+
         await File.WriteAllTextAsync(Path.Combine(_dir, CliLine.Placeholders.Chain),
             string.Concat(fixture.Sandbox.Connection.Chain.Select(c => c.ExportCertificatePem() + "\n")));
     }

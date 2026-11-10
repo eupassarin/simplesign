@@ -22,10 +22,21 @@ RUN --mount=type=cache,target=/var/cache/dss \
  && mv /tmp/dss/dss-demo-bundle-${DSS_VERSION}/apache-tomcat-* /opt/tomcat \
  && rm -rf /tmp/dss
 
+# A Spring component that makes the trusted-list job refuse lists whose signature fails (TS 119 615),
+# compiled against the web application's own jars and added to its WAR.
+FROM eclipse-temurin:21-jdk AS patch
+COPY --from=bundle /opt/tomcat/webapps/ROOT.war /war/ROOT.war
+COPY SimpleSignTlSynchronization.java /src/
+RUN cd /war && mkdir lib && cd lib && jar xf ../ROOT.war WEB-INF/lib \
+ && javac -proc:none -cp "/war/lib/WEB-INF/lib/*" -d /war/classes /src/SimpleSignTlSynchronization.java \
+ && mkdir -p /war/add/WEB-INF && mv /war/classes /war/add/WEB-INF/classes \
+ && cd /war/add && jar uf /war/ROOT.war WEB-INF/classes
+
 FROM eclipse-temurin:21-jre
 # xmlstarlet reads the certificates out of the Peruvian trusted list (entrypoint.sh).
 RUN apt-get update && apt-get install -y --no-install-recommends curl xmlstarlet && rm -rf /var/lib/apt/lists/*
 COPY --from=bundle /opt/tomcat /opt/tomcat
+COPY --from=patch /war/ROOT.war /opt/tomcat/webapps/ROOT.war
 COPY entrypoint.sh /entrypoint.sh
 COPY forward.pl /forward.pl
 RUN chmod +x /opt/tomcat/bin/*.sh /entrypoint.sh

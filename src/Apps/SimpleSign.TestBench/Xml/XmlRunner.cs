@@ -146,7 +146,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             return new XmlValidationView("Invalid", [], [L.T("The file is not well-formed XML: {0}", ex.Message)], null, preview, 0, new CodeSnippets("", "", []));
         }
 
-        var trust = validation.Trust(settings);
+        var trust = await validation.TrustAsync(settings, cancellationToken);
         var signatures = await ValidateXadesAsync(file.Content, data, externalObject, trust, settings, cancellationToken);
         string overall = signatures.Count == 0 ? "Invalid"
             : signatures.All(s => s.Indication == "Valid") ? "Valid"
@@ -271,6 +271,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         if (customRoot)
         {
             sb.Append("    TrustedRoots = [root], // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")\n");
+        }
+
+        foreach (string option in ValidationService.TrustedListOptionsCode(settings))
+        {
+            sb.Append("    ").Append(option).Append(option.StartsWith("//", StringComparison.Ordinal) ? "\n" : ",\n");
         }
 
         foreach (string option in ValidationService.PolicyOptionsCode(settings))

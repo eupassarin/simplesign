@@ -79,6 +79,22 @@ public enum OcspSigner
     Delegated,
 }
 
+/// <summary>What the trusted list (/tl/tl.xml) looks like.</summary>
+public enum TlFault
+{
+    /// <summary>A current list, signed by the operator its LOTL pointer names.</summary>
+    None,
+
+    /// <summary>A list whose NextUpdate has passed.</summary>
+    Expired,
+
+    /// <summary>A list signed by a certificate the LOTL pointer does not name.</summary>
+    WrongSigner,
+
+    /// <summary>A list changed after it was signed: its signature no longer verifies.</summary>
+    Tampered,
+}
+
 /// <summary>Failures switched on, to see how a client reacts. Kept with the environment.</summary>
 public sealed record SandboxFaults(
     TsaFault Tsa = TsaFault.None,
@@ -87,10 +103,11 @@ public sealed record SandboxFaults(
     int CrlDelayMs = 3000,
     OcspFault Ocsp = OcspFault.None,
     int OcspDelayMs = 3000,
-    OcspSigner OcspSigner = OcspSigner.Issuer)
+    OcspSigner OcspSigner = OcspSigner.Issuer,
+    TlFault TrustedList = TlFault.None)
 {
     /// <summary>Whether any failure is on.</summary>
-    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None;
+    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None;
 
     /// <summary>The same failures with the delays kept within 0–60 s.</summary>
     public SandboxFaults Clamped() => this with

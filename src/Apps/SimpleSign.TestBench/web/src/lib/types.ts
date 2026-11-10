@@ -325,7 +325,7 @@ export interface MatrixRunResult {
 }
 
 // ── Validation area ─────────────────────────────────────────────────
-export type TrustChoice = "Sandbox" | "System"
+export type TrustChoice = "Sandbox" | "System" | "SandboxTrustedList"
 
 export interface ValidationSettings {
   trust: TrustChoice[]

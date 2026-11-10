@@ -42,21 +42,46 @@ its trust store (below) and how it fetches revocation data.
 
 ## Trusting the Sandbox certificates
 
-DSS only knows the roots it is given. The test certificates come from the SimpleSign Sandbox
-(`src/Apps/SimpleSign.Sandbox`, see [docs/articles/sandbox.md](../../docs/articles/sandbox.md)): they
-chain to the root of its environment, served at `/root.pem`. The root is kept with the
-environment, so DSS keeps trusting it until the environment is deleted.
+DSS only knows the trust anchors it is given. The test certificates come from the SimpleSign
+Sandbox (`src/Apps/SimpleSign.Sandbox`, see [docs/articles/sandbox.md](../../docs/articles/sandbox.md)). There are
+two ways to trust them, chosen with `DSS_SANDBOX_TRUST`:
 
-- **Docker Desktop (macOS, Windows):** start the Sandbox first. The container fetches the root
-  from `http://host.docker.internal:5300/root.pem` when it starts (`SANDBOX_URL`; it waits up to
-  `SANDBOX_WAIT_SECONDS`, 20 by default). The root is also added to the JVM's TLS trust store, so
-  DSS can download the CRLs the Sandbox publishes over HTTPS.
-- **Linux, or when the Sandbox was not running:** save the root to this folder and restart the
-  container:
+- **`list` (default): through the Sandbox's trusted list.**
+  - The Sandbox publishes a list of trusted lists (`/tl/lotl.xml`, signed by `/tl/lotl-signer.pem`), and a trusted list
+    with its root CA and TSA as services (`/tl/tl.xml`).
+  - The container puts the LOTL operator's certificate in `sandbox-lotl.p12`, and points DSS's LOTL loader at the
+    Sandbox's LOTL.
+  - DSS then trusts the Sandbox as it trusts the EU: it reports the trusted list, the service type and status, and the
+    TL checks (well signed, not expired, version, structure). It no longer says "Unable to build a certificate chain up
+    to a trusted list!".
+  - With the EU lists off (`DSS_LOAD_EU_TRUSTED_LISTS=false`), the Sandbox's LOTL takes the EU slot (`current.lotl.url`,
+    `oj.content.keystore.*`).
+  - With the EU lists on, it takes the second slot (`tl.loader.ades.*`), and both are loaded.
+  - The loader downloads the lists again every `DSS_TL_REFRESH_SECONDS`: 10 s with the Sandbox's list alone (so a
+    trusted-list failure switched on in the Sandbox shows within seconds), one hour with the EU lists.
+  - A Sandbox that publishes no trusted list (an older one) falls back to `anchor`.
+  - A trusted list or LOTL whose signature fails is not used, as ETSI TS 119 615 asks and as SimpleSign does. The demo
+    keeps such a list (its default `AcceptAllStrategy`) and only reports it in the qualification checks, so the image
+    adds a small Spring component (`SimpleSignTlSynchronization.java`, compiled into the WAR) that sets the job's
+    `ExpirationAndSignatureCheckStrategy`. Expired lists are kept: the policy's `TLNotExpired` judges them.
+    `DSS_ACCEPT_INVALID_TRUSTED_LISTS=true` restores the demo's behaviour.
+- **`anchor`: the Sandbox root alone, as a bare trust anchor** (`trusted.source.keystore`). DSS validates the chain but
+  reports no trusted list.
+
+Either way the container fetches the Sandbox's files when it starts, so start the Sandbox first:
+
+- **Docker Desktop (macOS, Windows):** the root and the LOTL come from `SANDBOX_URL` (default
+  `http://host.docker.internal:5300`). The container waits up to `SANDBOX_WAIT_SECONDS` (20 by default) for it. The
+  root is also added to the JVM's TLS trust store, so DSS can download the CRLs the Sandbox publishes over HTTPS.
+- **Linux, or when the Sandbox was not running:** save the root to this folder and restart the container. This gives
+  the `anchor` mode:
 
   ```bash
   curl http://127.0.0.1:5300/root.pem > tools/dss/trust/sandbox-root.pem
   ```
+
+A new `--ephemeral` Sandbox has a new root and new operators, so start DSS again after it (`docker compose up -d`
+recreates the container).
 
 ### Letting DSS reach the Sandbox's CRLs, OCSP and LDAP
 
@@ -166,17 +191,18 @@ goes stale, so run with `true` from time to time. The **Trusted Lists Summary** 
 
 ## Other trusted lists
 
-The DSS demo application only loads trusted lists through a LOTL: the EU one (above) and the
-AdES MRA one. It cannot load a single ETSI trusted
-list (a TSL XML) on its own. To trust the services of such a list, put their certificates in
-`trust/`; DSS then validates the chain but cannot say whether the signature is qualified.
+The DSS demo application only loads trusted lists through a LOTL, and it has two slots: the EU
+one and the AdES MRA one. When the Sandbox's LOTL is loaded (`DSS_SANDBOX_TRUST=list`), it takes one of them (see
+"Trusting the Sandbox certificates"). The demo cannot load a single ETSI trusted list (a TSL XML) on its own. To trust
+the services of another list, put their certificates in `trust/`; DSS then validates the chain but cannot say whether
+the signature is qualified.
 
 ## What to expect
 
 | Signature | DSS says | Why |
 |---|---|---|
 | Any Sandbox scenario, any level | the same indication and sub-indication as SimpleSign | DSS fetches the CRLs and OCSP responses itself (forwarded ports, no cache). `DssScenarioCrossValidationTests` checks it, scenario by scenario. |
-| Any level, Sandbox root not trusted | INDETERMINATE / NO_CERTIFICATE_CHAIN_FOUND | See "Trusting the Sandbox certificates". |
+| Any level, Sandbox not trusted (no LOTL loaded, no root) | INDETERMINATE / NO_CERTIFICATE_CHAIN_FOUND | See "Trusting the Sandbox certificates". The **Trusted Lists Summary** page (`http://localhost:8080/tl-info`) shows whether the Sandbox's list loaded. |
 | Real ICP-Brasil or Gov.br certificates | validated against their roots | See "ICP-Brasil and Gov.br roots". |
 | Real Peruvian certificates | validated against the CAs of the Peruvian trusted list | See "Peru trusted list". |
 | Other real certificates | depends on the roots DSS trusts | Add your roots to `trust/`, or load the EU trusted lists (above). |
@@ -191,6 +217,9 @@ list (a TSL XML) on its own. To trust the services of such a list, put their cer
 | `SANDBOX_FORWARD_PORTS` | `5300 5301 5302` | The Sandbox ports forwarded from the container's localhost (HTTP, HTTPS, LDAP); empty turns it off. |
 | `SANDBOX_FORWARD_HOST` | `host.docker.internal` | Where they are forwarded to. |
 | `DSS_REVOCATION_CACHE` | `false` | `true` keeps the DSS demo's revocation cache (CRLs up to 3 h). |
+| `DSS_SANDBOX_TRUST` | `list` | `list` trusts the Sandbox through its trusted list (LOTL); `anchor` trusts its root alone. |
+| `DSS_ACCEPT_INVALID_TRUSTED_LISTS` | `false` | `true` keeps the trust anchors of a list whose signature fails (the DSS demo's default). |
+| `DSS_TL_REFRESH_SECONDS` | `10` (Sandbox list alone), `3600` (with the EU lists) | How often the trusted lists are downloaded again. |
 | `TESTBENCH_URL` | (none) | A TestBench whose connected Sandbox's root is used when `SANDBOX_URL` does not answer. |
 | `DSS_LOAD_EU_TRUSTED_LISTS` | `false` | `true` downloads the EU trusted lists; `cached` only uses the copy kept from an earlier run. See "EU trusted lists". |
 | `DSS_TRUST_ICP_BRASIL` | `true` | `true` trusts the ICP-Brasil roots (all but v4, v7 and v13; see above). |

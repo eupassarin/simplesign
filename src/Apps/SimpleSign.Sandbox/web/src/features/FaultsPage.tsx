@@ -4,15 +4,16 @@ import { Input } from "@/components/ui/input"
 import { Section } from "@/components/parts"
 import { useI18n, type MessageKey } from "@/i18n"
 import { api } from "@/lib/api"
-import type { CrlFault, OcspFault, OcspSigner, SandboxFaults, TsaFault } from "@/lib/types"
+import type { CrlFault, OcspFault, OcspSigner, SandboxFaults, TlFault, TsaFault } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const tsaValues: TsaFault[] = ["None", "Down", "Slow", "InvalidToken", "Untrusted"]
 const crlValues: CrlFault[] = ["None", "Down", "Slow", "Expired", "WrongKey", "Stale"]
 const ocspValues: OcspFault[] = ["None", "Down", "Slow", "TryLater", "Expired", "Unauthorized", "Unknown"]
 const signerValues: OcspSigner[] = ["Issuer", "Delegated"]
+const tlValues: TlFault[] = ["None", "Expired", "WrongSigner", "Tampered"]
 
-/** Switch failures of the TSA, the CRL server (HTTP, HTTPS, LDAP) and the OCSP responder on and off. */
+/** Switch failures of the TSA, the CRL server (HTTP, HTTPS, LDAP), the OCSP responder and the trusted list on and off. */
 export function FaultsPage({ onChanged }: { onChanged: (faults: SandboxFaults) => void }) {
   const { t } = useI18n()
   const [faults, setFaults] = useState<SandboxFaults | null>(null)
@@ -43,8 +44,12 @@ export function FaultsPage({ onChanged }: { onChanged: (faults: SandboxFaults) =
           <Group title={t("faults.ocspSigner")} values={signerValues} current={faults.ocspSigner} prefix="faults.signerValues" neutral
             onChoose={(v) => save({ ...faults, ocspSigner: v as OcspSigner })} delay={null} onDelay={() => {}} />
         </div>
-        <Group title={t("faults.tsa")} values={tsaValues} current={faults.tsa} prefix="faults.tsaValues" onChoose={(v) => save({ ...faults, tsa: v as TsaFault })}
-          delay={faults.tsa === "Slow" ? faults.tsaDelayMs : null} onDelay={(ms) => save({ ...faults, tsaDelayMs: ms })} />
+        <div className="space-y-8">
+          <Group title={t("faults.tsa")} values={tsaValues} current={faults.tsa} prefix="faults.tsaValues" onChoose={(v) => save({ ...faults, tsa: v as TsaFault })}
+            delay={faults.tsa === "Slow" ? faults.tsaDelayMs : null} onDelay={(ms) => save({ ...faults, tsaDelayMs: ms })} />
+          <Group title={t("faults.trustedList")} values={tlValues} current={faults.trustedList ?? "None"} prefix="faults.tlValues"
+            onChoose={(v) => save({ ...faults, trustedList: v as TlFault })} delay={null} onDelay={() => {}} />
+        </div>
       </div>
     </div>
   )
@@ -54,7 +59,7 @@ function Group({ title, values, current, prefix, onChoose, delay, onDelay, neutr
   title: string
   values: string[]
   current: string
-  prefix: "faults.tsaValues" | "faults.crlValues" | "faults.ocspValues" | "faults.signerValues"
+  prefix: "faults.tsaValues" | "faults.crlValues" | "faults.ocspValues" | "faults.signerValues" | "faults.tlValues"
   onChoose: (value: string) => void
   delay: number | null
   onDelay: (ms: number) => void

@@ -149,7 +149,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             return new CadesValidationView("Indeterminate", [], [L.T("The signature is detached: choose the data it signed to check its integrity.")], structure, 0, code);
         }
 
-        var trust = validation.Trust(settings);
+        var trust = await validation.TrustAsync(settings, cancellationToken);
         var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger, chainRevocationChecker: validation.RevocationChecker());
         var result = await validator.ValidateAllAsync(signature.Content, structure.IsDetached ? data : null, null, cancellationToken);
         var signers = result.Signers.Select(Signer).ToList();
@@ -206,6 +206,11 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         if (sandboxRoot || settings.CustomRootUploadIds.Count > 0)
         {
             sb.Append("    TrustedRoots = [root], // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")\n");
+        }
+
+        foreach (string option in ValidationService.TrustedListOptionsCode(settings))
+        {
+            sb.Append("    ").Append(option).Append(option.StartsWith("//", StringComparison.Ordinal) ? "\n" : ",\n");
         }
 
         foreach (string option in ValidationService.PolicyOptionsCode(settings))

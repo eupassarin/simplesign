@@ -359,10 +359,11 @@ public static partial class OptionSchema
         O("common.validate", "run", s_all, "toggle", "validate", "Validate after signing", "Validates the produced file with SimpleSign's own validator.",
             standards: R("ETSI EN 319 102-1|§5 Validation process"), api: "PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator"),
         O("common.validation.trust", "run", s_all, "trust", "validation.trust", "Trusted roots", "Which roots the validator trusts.",
-            standards: R("ETSI EN 319 102-1|§5.2.6 X.509 certificate validation", "RFC 5280|§6.1 Basic path validation"), api: "ValidationOptions.TrustedRoots / TrustSystemRoots",
+            standards: R("ETSI EN 319 102-1|§5.2.6 X.509 certificate validation", "RFC 5280|§6.1 Basic path validation"), api: "ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots",
             values:
             [
-                V("Sandbox", "Sandbox root", "The root of the sandbox PKI."),
+                V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, read through its list of trusted lists: its CAs with their service type and status, as DSS trusts them."),
+                V("Sandbox", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("System", "Operating system roots", "The roots the operating system trusts."),
             ], when: When("validate", "true")),
         O("common.validation.policy", "run", s_all, "upload", "validation.policyId", "Validation policy (JSON)",
