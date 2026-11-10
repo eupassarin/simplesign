@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tools/dss`:** DSS trusts the same roots at start (`DSS_TRUST_TSA_ROOTS`, default `true`; the folder is mounted),
   so it no longer reports "The certificate chain for time-stamp is not trusted" for these TSAs.
 
+### Added — Windows versions of the TestBench scripts
+
+- `tools/stack/up.ps1`, `down.ps1`, `testbench.ps1`, `softhsm-provision.ps1` and `scripts/tests/pkcs11.ps1`
+  (PowerShell 7.2+): the same options, environment variables and `.softhsm/` files as the bash scripts.
+- `softhsm-provision.ps1` reads the PFX files with .NET, so it needs neither OpenSSL nor jq. It finds SoftHSM2 for
+  Windows (`C:\SoftHSM2`) and OpenSC.
+- On Windows the token is optional: without SoftHSM2 and OpenSC, `up.ps1` starts the Sandbox and DSS and warns.
+- New CI job `windows-scripts`: lints every script and fills a token on `windows-latest`.
+
 ### Added — `tools/stack/down.sh`
 
 - Stops the stack `up.sh` started, with the same project name: `down.sh` keeps the Sandbox's PKI and the DSS download

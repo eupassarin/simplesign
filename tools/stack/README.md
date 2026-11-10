@@ -24,6 +24,48 @@ In the TestBench:
 Requirements: Docker, the .NET SDK, and on the host `softhsm2-util`, `pkcs11-tool`, OpenSSL 3+, `curl`, `jq`
 (macOS: `brew install softhsm opensc openssl@3 jq`).
 
+## Windows (PowerShell)
+
+Each script has a PowerShell version beside it, with the same options, environment variables and files:
+
+| bash | PowerShell |
+|---|---|
+| `tools/stack/up.sh [--fresh] [--no-dss]` | `pwsh -File tools/stack/up.ps1 [-Fresh] [-NoDss]` |
+| `tools/stack/down.sh [--drop-pki] [--volumes]` | `pwsh -File tools/stack/down.ps1 [-DropPki] [-Volumes]` |
+| `tools/stack/testbench.sh [args]` | `pwsh -File tools/stack/testbench.ps1 [args]` |
+| `tools/stack/softhsm-provision.sh [--force]` | `pwsh -File tools/stack/softhsm-provision.ps1 [-Force]` |
+| `scripts/tests/pkcs11.sh` | `pwsh -File scripts/tests/pkcs11.ps1` |
+
+```powershell
+pwsh -File tools/stack/up.ps1
+pwsh -File tools/stack/testbench.ps1
+pwsh -File tools/stack/down.ps1
+```
+
+Requirements:
+
+- Docker Desktop with Linux containers.
+- The .NET SDK.
+- PowerShell 7.2 or later (`winget install Microsoft.PowerShell`). The built-in Windows PowerShell 5.1 does not run
+  them. `pwsh -File` also avoids the execution-policy prompt.
+- For the token (optional on Windows):
+  - [SoftHSM2 for Windows](https://github.com/disig/SoftHSM2-for-Windows/releases): the portable zip, extracted
+    into `C:\`, so that `C:\SoftHSM2\lib\softhsm2-x64.dll` exists (or the MSI).
+  - OpenSC: `winget install OpenSC.OpenSC`.
+
+  Without them, `up.ps1` warns, skips the token and starts the Sandbox and DSS. The TestBench then has no PKCS#11
+  credential. OpenSSL and jq are not needed: the PFX files are read with .NET.
+
+The PowerShell scripts run on macOS and Linux too. On those, `up.ps1` requires the token, as `up.sh` does.
+
+What is tested:
+
+- **On macOS:** every script, including Docker and SoftHSM. The `.ps1` and `.sh` tokens hold the same objects, and
+  each script sees the other's token as current.
+- **On Windows, in CI (`windows-scripts` job):** the token step (`softhsm-provision.ps1`) and a lint of every script.
+  GitHub's Windows runners cannot run Linux containers, so `up.ps1`, `down.ps1` and `pkcs11.ps1` have not run against
+  Docker Desktop on Windows.
+
 ## Why the token is not in a container
 
 A PKCS#11 module is a native library loaded *inside* the process that signs. The TestBench runs

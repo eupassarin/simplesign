@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Windows: pwsh -File tools/stack/softhsm-provision.ps1 (the same options, as PowerShell switches).
 # Fills a local SoftHSM token with the signing certificates of a running SimpleSign Sandbox, so the
 # TestBench (and the CLI) can sign with them through PKCS#11. Runs on the host (macOS or Linux):
 # a PKCS#11 module is loaded inside the process that signs, so the token lives where the TestBench runs.
@@ -30,7 +31,7 @@ FORCE=false
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=true ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Windows: pwsh -File tools/stack/up.ps1 (the same options, as PowerShell switches).
 # Starts the TestBench's test stack, in order:
 #   1. the SimpleSign Sandbox (Docker), and waits until it answers;
 #   2. a local SoftHSM token with the Sandbox's signing certificates (softhsm-provision.sh, on the host);
@@ -30,7 +31,7 @@ for arg in "$@"; do
   case "$arg" in
     --fresh) FRESH=true ;;
     --no-dss) DSS=false ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done
