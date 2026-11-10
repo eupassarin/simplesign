@@ -20,11 +20,14 @@ COPY src/ src/
 COPY --from=web /web/dist src/Apps/SimpleSign.Sandbox/web/dist
 # No .git in the context: no SourceLink.
 RUN dotnet publish src/Apps/SimpleSign.Sandbox -c Release -o /app \
-      -p:SkipWeb=true -p:EnableSourceLink=false -p:PublishRepositoryUrl=false
+      -p:SkipWeb=true -p:EnableSourceLink=false -p:PublishRepositoryUrl=false \
+ && rm -rf /app/web
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app /app
+# The Sandbox serves its UI from wwwroot next to the binary (SandboxApp.MapUi).
+COPY --from=web /web/dist /app/wwwroot
 WORKDIR /app
 # The environment (PKI, keys, state) lives in /data: mount a volume to keep it between runs.
 VOLUME /data
