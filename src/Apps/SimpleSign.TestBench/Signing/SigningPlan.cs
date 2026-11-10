@@ -26,22 +26,21 @@ internal sealed class SigningPlan
 {
     private readonly SigningOptions _o;
     private readonly CredentialHandle _credential;
-    private readonly PlanContext _context;
     private readonly SigningPolicyInput _signingPolicy;
 
     public SigningPlan(SigningOptions effective, CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents)
     {
         _o = effective;
         _credential = credential;
-        _context = new PlanContext(credential, sandbox, documents);
+        Context = new PlanContext(credential, sandbox, documents);
         _signingPolicy = PolicyUploads.Signing(effective.SigningPolicyId, documents);
         if (_signingPolicy.Error is { } error)
         {
             throw new ArgumentException(L.T("The signing policy cannot be read: {0}", error));
         }
 
-        IsSandbox = _context.IsSandbox;
-        Http = _context.Http;
+        IsSandbox = Context.IsSandbox;
+        Http = Context.Http;
         HashAlgorithm = ToHash(effective.Hash);
         SignatureAlgorithmOid = _credential.Facts.KeyAlgorithm == "RSA" && effective.Padding == RsaPadding.Pss ? Oids.RsaPss : null;
         Field = BuildField();
@@ -49,6 +48,9 @@ internal sealed class SigningPlan
     }
 
     public bool IsSandbox { get; }
+
+    /// <summary>The Sandbox, TSA and credential context the plan was built in.</summary>
+    internal PlanContext Context { get; }
 
     public IHttpClientProvider Http { get; }
 
@@ -66,7 +68,7 @@ internal sealed class SigningPlan
     public ArchiveTimestampOptions? ArchiveTimestamp { get; private set; }
 
     /// <summary>Statements that must run before the builder chain (variables, clients).</summary>
-    public IReadOnlyList<string> Setup => _context.Setup;
+    public IReadOnlyList<string> Setup => Context.Setup;
 
     /// <summary>The builder steps after <c>PadesSigner.Document(pdf)</c>, in order.</summary>
     public IReadOnlyList<PlanStep> SignSteps()
@@ -75,7 +77,7 @@ internal sealed class SigningPlan
         steps.Add(CredentialStep());
         if (IsSandbox)
         {
-            steps.Add(new(_context.HttpCode,
+            steps.Add(new(Context.HttpCode,
                 b => b.WithHttpClientProvider(Http)));
         }
 
@@ -143,7 +145,7 @@ internal sealed class SigningPlan
 
     private PlanStep CredentialStep()
     {
-        string code = _context.CredentialCode();
+        string code = Context.CredentialCode();
         return _credential.External is { } external
             ? new(code, b => b.WithExternalSigner(_credential.Certificate, external, _credential.Chain))
             : new(code, b => b.WithCertificate(_credential.Certificate, _credential.Chain));
@@ -205,18 +207,18 @@ internal sealed class SigningPlan
                 return AdesBaselineProfile.Timestamped(Timestamp, failure);
             case BaselineLevel.BLT:
                 Timestamp = BuildTimestamp(_o.Timestamp, "tsa");
-                return AdesBaselineProfile.LongTerm(Timestamp, _context.BuildLongTerm(_o.RevocationPreference), failure);
+                return AdesBaselineProfile.LongTerm(Timestamp, Context.BuildLongTerm(_o.RevocationPreference), failure);
             default:
                 Timestamp = BuildTimestamp(_o.Timestamp, "tsa");
                 ArchiveTimestamp = _o.SeparateArchiveTsa ? BuildArchive(_o.ArchiveTimestamp) : null;
-                return AdesBaselineProfile.Archive(Timestamp, _context.BuildLongTerm(_o.RevocationPreference), ArchiveTimestamp, failure);
+                return AdesBaselineProfile.Archive(Timestamp, Context.BuildLongTerm(_o.RevocationPreference), ArchiveTimestamp, failure);
         }
     }
 
     public string ProfileCode()
     {
         string failure = _o.ReturnLowerLevel && _o.Mode == RunMode.Sign ? ", SigningLevelFailureBehavior.ReturnLowerLevel" : "";
-        string ltv = _context.LongTermCode(_o.RevocationPreference);
+        string ltv = Context.LongTermCode(_o.RevocationPreference);
         return _o.Level switch
         {
             BaselineLevel.BB => "AdesBaselineProfile.Basic()",
@@ -226,9 +228,9 @@ internal sealed class SigningPlan
         };
     }
 
-    private TimestampOptions BuildTimestamp(TimestampChoice choice, string variable) => _context.BuildTimestamp(choice, variable);
+    private TimestampOptions BuildTimestamp(TimestampChoice choice, string variable) => Context.BuildTimestamp(choice, variable);
 
-    private ArchiveTimestampOptions BuildArchive(TimestampChoice choice) => _context.BuildArchive(choice);
+    private ArchiveTimestampOptions BuildArchive(TimestampChoice choice) => Context.BuildArchive(choice);
 
     private SignatureFieldOptions BuildField()
     {

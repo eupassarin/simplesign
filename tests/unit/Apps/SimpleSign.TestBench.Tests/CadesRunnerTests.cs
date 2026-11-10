@@ -115,10 +115,10 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithSignerRoles([\"Diretor\"])");
         result.Code.CSharp.ShouldContain(".WithMimeType(\"text/plain\")");
         result.Code.CSharp.ShouldContain(".WithContentHints(new CadesContentHints { Description = \"Texto de exemplo\" })");
-        result.Code.Cli.ShouldContain("--signer-country \"BR\"");
+        result.Code.Cli.ShouldContain("--signer-country BR");
         result.Code.Cli.ShouldContain("--signer-postal-address \"Av. Paulista, 1000\"");
-        result.Code.Cli.ShouldContain("--signer-role \"Diretor\"");
-        result.Code.Cli.ShouldContain("--mime-type \"text/plain\"");
+        result.Code.Cli.ShouldContain("--signer-role Diretor");
+        result.Code.Cli.ShouldContain("--mime-type text/plain");
         result.Code.Cli.ShouldContain("--content-description \"Texto de exemplo\"");
         result.Code.CliNotes.ShouldNotContain(n => n.Contains("no cades flag", StringComparison.Ordinal));
     }
@@ -171,8 +171,8 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Validation!.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
         result.Validation.Structure.Signers[0].UnsignedAttributes.ShouldContain(a => a.Name == "signature-policy-store");
         result.Code.CSharp.ShouldContain("byte[] policyDocument = File.ReadAllBytes(\"policy.der\");");
-        result.Code.Cli.ShouldContain("--policy-document \"policy.der\"");
-        result.Code.Cli.ShouldContain("--policy-specification \"1.2.3.4.5.1\"");
+        result.Code.Cli.ShouldContain("--policy-document policy.der");
+        result.Code.Cli.ShouldContain("--policy-specification 1.2.3.4.5.1");
         result.Code.CSharp.ShouldContain(".WithSignaturePolicy(new SignaturePolicyReference(\"1.2.3.4.5\", Oids.Sha256, SHA256.HashData(policyDocument)))");
         result.Code.CSharp.ShouldContain(".WithSignaturePolicyStore(SignaturePolicyStore.FromDocument(\"1.2.3.4.5.1\", policyDocument))");
     }
@@ -230,7 +230,7 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain(".WithHashAlgorithm(HashAlgorithmName.SHA512)");
         result.Code.CSharp.ShouldContain("Oids.RsaPss");
         result.Code.Cli.ShouldContain("--hash SHA512");
-        result.Code.Cli.ShouldContain("--commitment \"ProofOfOrigin\"");
+        result.Code.Cli.ShouldContain("--commitment ProofOfOrigin");
     }
 
     [SkippableTheory]

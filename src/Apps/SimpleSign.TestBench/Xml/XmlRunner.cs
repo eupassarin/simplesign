@@ -257,7 +257,12 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         }
     }
 
-    private static CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
+    /// <summary>The XML a generated command signs, and the signed XML it writes, countersigns or validates.</summary>
+    internal const string DataFile = "document.xml";
+
+    internal const string SignedFile = "signed.xml";
+
+    private CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool customRoot = settings.Trust.Contains(TrustChoice.Sandbox) || settings.CustomRootUploadIds.Count > 0;
         var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null ? "" : "using SimpleSign.Core.Policies;\n") + "\nvar validator = new XadesSignatureValidator(new ValidationOptions\n{\n");
@@ -275,25 +280,19 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         sb.Append("});\n\nIReadOnlyList<XadesValidationResult> results = validator.ValidateAll(\n    File.ReadAllBytes(\"signed.xml\")");
         sb.Append(detached ? ",\n    trustAnchors: null,\n    originalData: File.ReadAllBytes(\"document.xml\")); // detached\n" : ");\n");
         sb.Append("foreach (var r in results) Console.WriteLine($\"{r.SignatureId}: {(r.IsValid ? \"valid\" : string.Join(\"; \", r.Errors))} ({r.DetectedLevel})\");\n");
-        var args = new List<string> { "simplesign xades validate signed.xml" };
+        var line = new CliLine("xades", "validate", SignedFile);
         if (detached)
         {
-            args.Add("--data document.xml");
-        }
-
-        if (customRoot)
-        {
-            args.Add("--trust root.cer");
+            line.Add("--data", DataFile);
         }
 
         if (settings.Level >= SimpleSign.Core.Validation.ValidationLevel.LongTermData)
         {
-            args.Add("--check-revocation");
+            line.Add("--check-revocation");
         }
 
-        args.AddRange(ValidationService.PolicyCliArgs(settings));
-
-        return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), []);
+        ValidationService.ValidationCli(line, settings, sandbox);
+        return new CodeSnippets(sb.ToString(), line.ToString(), []) { CliCommands = [line] };
     }
 
     private static XmlSignResult Failure(XmlOptionsReport report, string error, string type, CodeSnippets code) =>
@@ -518,115 +517,125 @@ internal sealed class XadesPlan
         sb.Append("File.WriteAllBytes(\"signed.xml\", result.SignedArtifact);\n");
         sb.Append("Console.WriteLine($\"Requested {result.RequestedLevel}, achieved {result.AchievedLevel}\");\n");
 
-        var args = _o.CounterSign
-            ? new List<string> { "simplesign xades sign signed.xml", "--countersign", "--output countersigned.xml" }
-            : new List<string> { "simplesign xades sign document.xml", "--output signed.xml" };
+        var cli = _o.CounterSign
+            ? new CliLine("xades", "sign", XmlRunner.SignedFile).Add("--countersign").Add("--output", "countersigned.xml")
+            : new CliLine("xades", "sign", XmlRunner.DataFile).Add("--output", XmlRunner.SignedFile);
         var notes = new List<string>();
-        CodeGenerator.CliCredential(credential, args, notes);
+        CodeGenerator.CliCredential(credential, cli, notes);
         if (_o.CounterSign)
         {
-            CodeGenerator.AddIf(args, "--countersign-id", _o.CounterSignatureId);
+            cli.AddIf("--countersign-id", _o.CounterSignatureId);
         }
         else if (_o.Form != XadesFormChoice.Enveloped)
         {
-            args.Add("--form " + _o.Form.ToString().ToLowerInvariant());
+            cli.Add("--form", _o.Form.ToString().ToLowerInvariant());
         }
 
         if (_o.Form == XadesFormChoice.Detached && !_o.CounterSign)
         {
-            args.Add($"--data-uri {_o.DataUri}");
+            cli.Add("--data-uri", _o.DataUri ?? "");
         }
 
         if (_o.Level != BaselineLevel.BB)
         {
-            args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
-            args.Add("--level " + _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
+            _context.CliTimestamp(cli, _o.Timestamp);
+            cli.Add("--level", _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
+            if (_o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
+            {
+                cli.Add("--revocation-preference", "crl");
+            }
+        }
+        else if (_o.DataObjectsTimestamp)
+        {
+            _context.CliTimestamp(cli, _o.Timestamp);
         }
 
         if (_o.Kind == XadesKind.CustomPolicy)
         {
-            args.Add($"--policy-oid {_o.PolicyOid}");
-            CodeGenerator.AddIf(args, "--policy-uri", SigningPlan.Blank(_o.PolicyUri));
+            cli.Add("--policy-oid", _o.PolicyOid ?? "").AddIf("--policy-uri", SigningPlan.Blank(_o.PolicyUri));
             if (!string.IsNullOrEmpty(_o.PolicyDocumentId))
             {
-                CodeGenerator.AddIf(args, "--policy-document", _context.FileName(_o.PolicyDocumentId));
-                CodeGenerator.AddIf(args, "--policy-specification", _o.PolicySpecification);
+                cli.AddIf("--policy-document", _context.FileName(_o.PolicyDocumentId)).AddIf("--policy-specification", _o.PolicySpecification);
             }
-        }
-
-        if (_o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
-        {
-            args.Add("--revocation-preference crl");
         }
 
         if (_o.Hash != HashChoice.Sha256)
         {
-            args.Add("--hash " + SigningPlan.HashName(_o.Hash));
+            cli.Add("--hash", SigningPlan.HashName(_o.Hash));
         }
 
+        if (_o.Padding == RsaPadding.Pss && credential.KeyAlgorithm == "RSA")
+        {
+            cli.Add("--signature-algorithm", "rsassa-pss");
+        }
+
+        if (_o.SigningTime is { } time)
+        {
+            cli.Add("--signing-time", time.ToString("O", CultureInfo.InvariantCulture));
+        }
+
+        if (_o.ExtendedForm != XadesExtendedChoice.None)
+        {
+            cli.Add("--extended-form", CodeGenerator.ExtendedForm(_o.ExtendedForm.ToString()));
+        }
+
+        if (_o.SigningCertificateV1)
+        {
+            cli.Add("--signing-certificate-v1");
+        }
+
+        cli.AddIf("--data-mime-type", _o.MimeType?.Trim());
         if (_o.SigningPolicyId is not null)
         {
-            args.Add("--signing-policy " + PolicyUploads.SigningFileName);
+            cli.Add("--signing-policy", PolicyUploads.SigningFileName);
         }
 
-        CodeGenerator.AddIf(args, "--commitment", _o.Commitment);
+        cli.AddIf("--commitment", _o.Commitment);
         foreach (string role in _o.SignerRoles)
         {
-            CodeGenerator.AddIf(args, "--signer-role", role);
+            cli.AddIf("--signer-role", role);
         }
 
-        if (_o.ExtendedForm != XadesExtendedChoice.None || _o.SigningCertificateV1 || !string.IsNullOrWhiteSpace(_o.MimeType)
-            || _o.Padding == RsaPadding.Pss && credential.KeyAlgorithm == "RSA" || _o.SigningTime is not null || _o.Timestamp.Auth != TsaAuth.None)
-        {
-            notes.Add("Extended forms, SigningCertificate V1, DataObjectFormat, RSASSA-PSS, a claimed signing time and TSA authentication have no xades flag: use the library.");
-        }
-
-        AddPropertyAndDataObjectArgs(args);
-        return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), notes);
+        AddPropertyAndDataObjectArgs(cli);
+        cli.AddIf("--operation-id", _o.OperationId);
+        _context.CliNetwork(cli);
+        return new CodeSnippets(sb.ToString(), cli.ToString(), notes) { CliCommands = [cli] };
     }
 
     /// <summary>The flags of the properties beyond the baseline: place, canonicalization, data timestamp, certified roles, more data objects.</summary>
-    private void AddPropertyAndDataObjectArgs(List<string> args)
+    private void AddPropertyAndDataObjectArgs(CliLine line)
     {
-        CodeGenerator.AddIf(args, "--place-city", _o.PlaceCity);
-        CodeGenerator.AddIf(args, "--place-street", _o.PlaceStreet);
-        CodeGenerator.AddIf(args, "--place-state", _o.PlaceState);
-        CodeGenerator.AddIf(args, "--place-postal-code", _o.PlacePostalCode);
-        CodeGenerator.AddIf(args, "--place-country", _o.PlaceCountry);
+        line.AddIf("--place-city", _o.PlaceCity).AddIf("--place-street", _o.PlaceStreet).AddIf("--place-state", _o.PlaceState)
+            .AddIf("--place-postal-code", _o.PlacePostalCode).AddIf("--place-country", _o.PlaceCountry);
         if (_o.Canonicalization == XadesCanonicalization.Inclusive)
         {
-            args.Add("--canonicalization inclusive");
+            line.Add("--canonicalization", "inclusive");
         }
 
         if (_o.DataObjectsTimestamp)
         {
-            if (_o.Level == BaselineLevel.BB)
-            {
-                args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
-            }
-
-            args.Add("--data-objects-timestamp");
+            line.Add("--data-objects-timestamp");
         }
 
         if (_o.AttributeCertificateId is not null)
         {
-            CodeGenerator.AddIf(args, "--attribute-certificate", _context.FileName(_o.AttributeCertificateId));
+            line.AddIf("--attribute-certificate", _context.FileName(_o.AttributeCertificateId));
         }
 
         if (_o.SignedAssertionId is not null)
         {
-            CodeGenerator.AddIf(args, "--signed-assertion", _context.FileName(_o.SignedAssertionId));
+            line.AddIf("--signed-assertion", _context.FileName(_o.SignedAssertionId));
         }
 
         if (_o.EmbeddedObjectId is not null)
         {
-            CodeGenerator.AddIf(args, "--embed-object", _context.FileName(_o.EmbeddedObjectId));
+            line.AddIf("--embed-object", _context.FileName(_o.EmbeddedObjectId));
         }
 
         if (_o.ExternalObjectId is not null)
         {
             string name = _context.FileName(_o.ExternalObjectId);
-            CodeGenerator.AddIf(args, "--external-object", name + "=" + name);
+            line.AddIf("--external-object", name + "=" + name);
         }
     }
 }
