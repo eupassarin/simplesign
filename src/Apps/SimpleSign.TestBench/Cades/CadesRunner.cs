@@ -57,7 +57,11 @@ public sealed record CadesSignResult(
     long SignMs,
     CadesValidationView? Validation,
     CodeSnippets Code,
-    IReadOnlyList<OptionIssue> Issues);
+    IReadOnlyList<OptionIssue> Issues)
+{
+    /// <summary>The commands a run through the CLI executed, with their exit codes and output; null for a library run.</summary>
+    public IReadOnlyList<CliStep>? Cli { get; init; }
+}
 
 /// <summary>Signs with <c>CadesSigner</c> and validates with <c>CadesSignatureValidator.ValidateAll</c>.</summary>
 internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, ValidationService validation)
@@ -88,7 +92,13 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         return CadesCompatibility.Evaluate(o, Inputs(o), credential?.Facts, sandbox.IsConnected, PolicyUploads.Signing(o.SigningPolicyId, documents));
     }
 
-    public async Task<CadesSignResult> RunAsync(CadesOptions options, CancellationToken cancellationToken)
+    private readonly CliExecutor _cli = new();
+
+    public Task<CadesSignResult> RunAsync(CadesOptions options, CancellationToken cancellationToken) =>
+        RunAsync(options, RunEngines.Library, cancellationToken);
+
+    /// <summary>Signs through the library or, with <see cref="RunEngines.Cli"/>, by running the generated command through the CLI.</summary>
+    public async Task<CadesSignResult> RunAsync(CadesOptions options, string engine, CancellationToken cancellationToken)
     {
         var report = Evaluate(options);
         var o = report.Effective;
@@ -105,6 +115,36 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         byte[]? existing = o.ExistingSignatureId is { } existingId && report.Options["existing"].Visible ? documents.Get(existingId).Content : null;
         var code = plan.Code(credential.Facts);
         var watch = Stopwatch.StartNew();
+        if (engine == RunEngines.Cli)
+        {
+            if (CliJobs.Unsupported(credential) is { } unsupported)
+            {
+                return Failure(o, report, unsupported, "CliUnsupported", code);
+            }
+
+            var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents);
+            if (data is not null)
+            {
+                jobs.File(DataFile, data);
+            }
+
+            if (existing is not null)
+            {
+                jobs.File(SignatureFile, existing);
+            }
+
+            var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands), cancellationToken);
+            if (!outcome.Success)
+            {
+                return Failure(o, report, outcome.Error!, outcome.Json?.ErrorType ?? "Cli", code) with { Cli = outcome.Steps };
+            }
+
+            string achieved = outcome.Json?.AchievedLevel ?? report.EffectiveLevel;
+            var result = await FinishAsync(o, report, code, outcome.Output!, achieved, achieved is not "B-B", achieved is "B-LT" or "B-LTA", achieved is "B-LTA",
+                outcome.Json?.Warnings ?? [], watch.ElapsedMilliseconds, cancellationToken);
+            return result with { Cli = outcome.Steps };
+        }
+
         CAdES.CadesSigningResult signed;
         try
         {
@@ -127,18 +167,25 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             return Failure(o, report, ex.Message, SigningRunner.ErrorTypeOf(ex), code);
         }
 
-        long signMs = watch.ElapsedMilliseconds;
+        return await FinishAsync(o, report, code, signed.SignedArtifact, LevelName(signed.AchievedLevel),
+            signed.HasSignatureTimestamp, signed.HasLongTermValidationMaterial, signed.HasArchiveTimestamp,
+            [.. signed.Warnings.Select(w => w.Message)], watch.ElapsedMilliseconds, cancellationToken);
+    }
+
+    /// <summary>Stores the signature and validates it.</summary>
+    private async Task<CadesSignResult> FinishAsync(CadesOptions o, CadesOptionsReport report, CodeSnippets code, byte[] signed, string achieved,
+        bool hasTimestamp, bool hasLtv, bool hasArchive, IReadOnlyList<string> warnings, long signMs, CancellationToken cancellationToken)
+    {
         string fileName = OutputName(o);
-        var output = documents.Add(fileName, signed.SignedArtifact);
+        var output = documents.Add(fileName, signed);
 
         // Detached signatures validate against the data; enveloped ones carry it.
         string? contentId = o.ContentType == CadesContentChoice.Detached && report.Options["data"].Visible ? o.DataId : null;
         var view = o.Validate
             ? await ValidateAsync(output.Id, contentId, o.Validation ?? new ValidationSettings(), cancellationToken)
             : null;
-        return new CadesSignResult(true, null, null, output.Id, fileName, signed.SignedArtifact.LongLength, report.EffectiveLevel, LevelName(signed.AchievedLevel),
-            signed.HasSignatureTimestamp, signed.HasLongTermValidationMaterial, signed.HasArchiveTimestamp,
-            [.. signed.Warnings.Select(w => w.Message)], signMs, view, code, report.Issues);
+        return new CadesSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved,
+            hasTimestamp, hasLtv, hasArchive, warnings, signMs, view, code, report.Issues);
     }
 
     /// <summary>Validates every signer (and countersigner) of a stored signature.</summary>

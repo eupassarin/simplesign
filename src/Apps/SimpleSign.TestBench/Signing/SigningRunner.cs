@@ -85,14 +85,23 @@ public sealed record SigningResult(
     DeferredInfo? Deferred,
     IReadOnlyList<BatchItem> Batch,
     CodeSnippets Code,
-    IReadOnlyList<OptionIssue> Issues);
+    IReadOnlyList<OptionIssue> Issues)
+{
+    /// <summary>The commands a run through the CLI executed, with their exit codes and output; null for a library run.</summary>
+    public IReadOnlyList<CliStep>? Cli { get; init; }
+}
 
 /// <summary>Signs with the effective options, validates the output and produces the matching code.</summary>
 internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials)
 {
     private readonly ValidationService _validation = new(sandbox, documents);
+    private readonly CliExecutor _cli = new();
 
-    public async Task<SigningResult> RunAsync(SigningOptions options, CancellationToken cancellationToken)
+    public Task<SigningResult> RunAsync(SigningOptions options, CancellationToken cancellationToken) =>
+        RunAsync(options, RunEngines.Library, cancellationToken);
+
+    /// <summary>Signs through the library or, with <see cref="RunEngines.Cli"/>, by running the generated commands through the CLI.</summary>
+    public async Task<SigningResult> RunAsync(SigningOptions options, string engine, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);
         DocumentFacts? document = options.DocumentId is { } id ? await documents.FactsAsync(id, cancellationToken) : null;
@@ -113,6 +122,11 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
             plan = new SigningPlan(effective, credential!, sandbox, documents);
             var steps = plan.SignSteps();
             code = CodeGenerator.Generate(effective, plan, steps, credential!.Facts);
+            if (engine == RunEngines.Cli)
+            {
+                return await CliAsync(effective, plan, credential!, pdf, report, code, cancellationToken);
+            }
+
             var watch = Stopwatch.StartNew();
             return effective.Mode switch
             {
@@ -244,6 +258,59 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         }
     }
 
+    /// <summary>Runs the generated commands through the CLI; the signer of a deferred signature is the TestBench, between the two commands.</summary>
+    private async Task<SigningResult> CliAsync(SigningOptions o, SigningPlan plan, CredentialHandle credential, byte[] pdf,
+        OptionsReport report, CodeSnippets code, CancellationToken cancellationToken)
+    {
+        if (CliJobs.Unsupported(credential) is { } unsupported)
+        {
+            return Failure(report, unsupported, "CliUnsupported", code);
+        }
+
+        var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents)
+            .File(CliLine.Placeholders.Input, pdf);
+        if (o.Mode == RunMode.Batch)
+        {
+            for (int i = 1; i <= o.BatchCopies; i++)
+            {
+                jobs.File($"{CliLine.Placeholders.InputFolder}document-{i}.pdf", pdf);
+            }
+        }
+
+        var job = jobs.Build(code.CliCommands, o.Mode == RunMode.Deferred ? SignOutsideAsync : null);
+        var watch = Stopwatch.StartNew();
+        var outcome = await _cli.RunAsync(job, cancellationToken);
+        long signMs = watch.ElapsedMilliseconds;
+        if (!outcome.Success)
+        {
+            return Failure(report, outcome.Error!, outcome.Json?.ErrorType ?? "Cli", code) with { Cli = outcome.Steps };
+        }
+
+        string achieved = outcome.Json?.AchievedLevel ?? Compatibility.LevelName(o);
+        var warnings = new List<string>(outcome.Json?.Warnings ?? []);
+        if (o.Mode == RunMode.Batch)
+        {
+            warnings.Add(L.T("Batch through the CLI: the report below validates the first document."));
+        }
+
+        var result = await FinishAsync(o, report, code, outcome.Output!, achieved, achieved is not "B-B", achieved is "B-LT" or "B-LTA", achieved is "B-LTA",
+            warnings, signMs, null, [], cancellationToken);
+        return result with { Cli = outcome.Steps };
+
+        // The signer that is elsewhere: before deferred complete, signs the data to sign that deferred prepare wrote.
+        async Task SignOutsideAsync(CliLine command, string dir, CancellationToken ct)
+        {
+            if (command.Args is not ["deferred", "complete", ..])
+            {
+                return;
+            }
+
+            byte[] toSign = await File.ReadAllBytesAsync(Path.Combine(dir, CliLine.Placeholders.Input + ".tbs"), ct);
+            byte[] raw = await SignToBeSignedAsync(credential, toSign, plan.SignatureAlgorithmOid ?? "", plan, ct);
+            await File.WriteAllBytesAsync(Path.Combine(dir, CliLine.Placeholders.Signature), raw, ct);
+        }
+    }
+
     private async Task<SigningResult> FinishAsync(SigningOptions o, OptionsReport report, CodeSnippets code, byte[] signed, string achieved,
         bool hasTimestamp, bool hasLtv, bool hasArchive, IReadOnlyList<string> warnings, long signMs, DeferredInfo? deferred,
         IReadOnlyList<BatchItem> batch, CancellationToken cancellationToken)
@@ -281,12 +348,16 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
     /// Phase 2 of a deferred signature: what the browser + local agent, the token or the cloud
     /// service does with <see cref="DeferredSigningPrepareResult.HashToSign"/> (DER signed attributes).
     /// </summary>
-    internal static async Task<byte[]> SignPreparedAsync(CredentialHandle credential, DeferredSigningPrepareResult prepared, SigningPlan plan, CancellationToken cancellationToken)
+    internal static Task<byte[]> SignPreparedAsync(CredentialHandle credential, DeferredSigningPrepareResult prepared, SigningPlan plan, CancellationToken cancellationToken) =>
+        SignToBeSignedAsync(credential, prepared.HashToSign, prepared.SignatureAlgorithmOid, plan, cancellationToken);
+
+    /// <summary>Signs DER signed attributes (the signer hashes them) with the credential: its local key or its external signer.</summary>
+    internal static async Task<byte[]> SignToBeSignedAsync(CredentialHandle credential, byte[] toSign, string signatureAlgorithmOid, SigningPlan plan, CancellationToken cancellationToken)
     {
         bool pss = plan.SignatureAlgorithmOid is not null;
         if (credential.External is { } external)
         {
-            var request = new ExternalSigningRequest(prepared.HashToSign, plan.HashAlgorithm, prepared.SignatureAlgorithmOid,
+            var request = new ExternalSigningRequest(toSign, plan.HashAlgorithm, signatureAlgorithmOid,
                 ExternalSigningPayloadKind.CmsSignedAttributes, null,
                 pss ? new RsaPssParameters(plan.HashAlgorithm, plan.HashAlgorithm, HashLength(plan.HashAlgorithm)) : null);
             return (await external.SignAsync(request, cancellationToken)).ToArray();
@@ -297,12 +368,12 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         {
             using (rsa)
             {
-                return rsa.SignData(prepared.HashToSign, plan.HashAlgorithm, pss ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1);
+                return rsa.SignData(toSign, plan.HashAlgorithm, pss ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1);
             }
         }
 
         using var ec = certificate.GetECDsaPrivateKey() ?? throw new CryptographicException("The certificate has no usable private key.");
-        return ec.SignData(prepared.HashToSign, plan.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence);
+        return ec.SignData(toSign, plan.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence);
     }
 
     private static int HashLength(HashAlgorithmName hash) =>

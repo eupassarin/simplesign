@@ -73,7 +73,10 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
             notes.Add(new Note("{0}", signer.Description));
         }
 
-        return new CredentialHandle(CredentialKind.SandboxA1, "Sandbox · " + signer.Title, signer.Certificate, signer.Chain, null, null, notes: notes);
+        return new CredentialHandle(CredentialKind.SandboxA1, "Sandbox · " + signer.Title, signer.Certificate, signer.Chain, null, null, notes: notes)
+        {
+            Cli = signer.Pfx is { } pfx ? new CliSigner(pfx, connection.Info.PfxPassword) : null,
+        };
     }
 
     public CredentialHandle OpenPfx(PfxCredentialRequest request)
@@ -84,7 +87,10 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
             ?? throw new CryptographicException(L.T("The PFX has no certificate with a private key."));
         var chain = collection.Where(c => !ReferenceEquals(c, leaf)).ToList();
         return new CredentialHandle(CredentialKind.Pfx, "PFX · " + file.FileName, leaf, chain, null, new Owned(collection),
-            notes: ["The password is used once to open the file and is not stored."]);
+            notes: ["The password is kept in memory only while the credential is open (a CLI run passes it to simplesign), never on disk."])
+        {
+            Cli = new CliSigner(file.Content, request.Password ?? ""),
+        };
     }
 
     public static IReadOnlyList<StoreCertificate> ListStore()

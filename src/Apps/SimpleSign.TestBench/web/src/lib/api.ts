@@ -18,7 +18,7 @@ import type {
   PolicyView,
 } from "./types"
 
-import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, ReportView, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
+import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, ReportView, RunEngine, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -92,8 +92,8 @@ export const api = {
   workbench: {
     schema: () => request<WorkbenchSchema>("GET", "/api/schema"),
     evaluate: (format: Format, options: Options) => request<Evaluation>("POST", "/api/workbench/options", { format, options }),
-    start: (format: Format | "", options: Options, crossValidate: boolean, kind: "sign" | "validate" = "sign") =>
-      request<{ id: string }>("POST", "/api/runs", { format, options, crossValidate, kind }),
+    start: (format: Format | "", options: Options, crossValidate: boolean, kind: "sign" | "validate" = "sign", engine: RunEngine = "library") =>
+      request<{ id: string }>("POST", "/api/runs", { format, options, crossValidate, kind, engine }),
     samples: () => request<ValidationSampleView[]>("GET", "/api/validation/samples/all"),
     run: (id: string) => request<RunView | undefined>("GET", `/api/runs/${id}`),
     eventsUrl: (id: string) => `/api/runs/${id}/events`,

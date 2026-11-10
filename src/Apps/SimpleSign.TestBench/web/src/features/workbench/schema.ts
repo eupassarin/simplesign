@@ -184,9 +184,23 @@ export interface DssStatus extends DssSettings {
 
 export type RunKind = "sign" | "validate"
 
+/** How a run makes the signature: through the library, or by running the generated command through the simplesign CLI. */
+export type RunEngine = "library" | "cli"
+
+/** One command a CLI run executed (secrets kept as their $NAMES), its exit code and what it printed. */
+export interface CliStep {
+  command: string
+  exitCode: number
+  output: string
+  ms: number
+}
+
 export interface RunView {
   id: string
   kind: RunKind
+  engine?: RunEngine
+  /** The commands of a run through the CLI. */
+  cli?: CliStep[] | null
   format: Format
   status: "running" | "done" | "failed"
   startedAt: string
@@ -304,6 +318,7 @@ export interface ValidationSampleView {
 export interface RunSummary {
   id: string
   kind: RunKind
+  engine?: RunEngine
   format: Format
   status: "running" | "done" | "failed"
   startedAt: string

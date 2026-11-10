@@ -37,6 +37,48 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         string.Join("; ", run.Issues.Select(i => i.Message).Concat(run.Validation.SelectMany(v => v.Errors)).Append(run.Error ?? ""));
 
     [SkippableTheory]
+    [InlineData(RunFormats.Pades, "sign")]
+    [InlineData(RunFormats.Pades, "deferred")]
+    [InlineData(RunFormats.Pades, "batch")]
+    [InlineData(RunFormats.Cades, "sign")]
+    [InlineData(RunFormats.Xades, "sign")]
+    public async Task RunAsync_CliEngine_SignsThroughTheCliLikeTheLibrary(string format, string mode)
+    {
+        var library = format switch
+        {
+            RunFormats.Cades => Cades(BaselineLevel.BLT),
+            RunFormats.Xades => Xades(BaselineLevel.BLT),
+            _ => Request(RunFormats.Pades, fixture.Options() with
+            {
+                Level = BaselineLevel.BLT,
+                Mode = mode switch { "deferred" => RunMode.Deferred, "batch" => RunMode.Batch, _ => RunMode.Sign },
+                BatchCopies = 2,
+            }),
+        };
+
+        var expected = await fixture.Runs().RunAsync(library, default);
+        var run = await fixture.Runs().RunAsync(library with { Engine = RunEngines.Cli }, default);
+
+        expected.Success.ShouldBeTrue(Problems(expected));
+        run.Success.ShouldBeTrue(Problems(run) + "\n" + string.Join("\n", (run.Cli ?? []).Select(c => $"{c.Command}\n{c.Output}")));
+        run.Engine.ShouldBe(RunEngines.Cli);
+        run.Cli.ShouldNotBeNull().ShouldNotBeEmpty();
+        run.Cli!.ShouldAllBe(c => c.ExitCode == 0);
+        run.Cli!.ShouldAllBe(c => !c.Command.Contains(fixture.Sandbox.Connection.Info.PfxPassword, StringComparison.Ordinal));
+        run.Overall.ShouldBe(expected.Overall, Problems(run));
+        run.Validation.Select(v => v.Indication).ShouldBe(expected.Validation.Select(v => v.Indication));
+        run.AchievedLevel.ShouldBe(expected.AchievedLevel);
+    }
+
+    [Fact]
+    public void Start_UnknownEngine_Throws()
+    {
+        var request = new RunRequest(RunFormats.Pades, JsonSerializer.SerializeToElement(new SigningOptions(), WorkbenchJson.Options), Engine: "python");
+
+        Should.Throw<ArgumentException>(() => fixture.Runs().Start(request));
+    }
+
+    [SkippableTheory]
     [InlineData(RunFormats.Pades)]
     [InlineData(RunFormats.Cades)]
     [InlineData(RunFormats.Xades)]

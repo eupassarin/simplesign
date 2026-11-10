@@ -7,7 +7,7 @@ import type { CredentialFacts, EnvironmentInfo, OptionState } from "@/lib/types"
 import {
   asText, getPath, hasPath, setPath,
   type DssSettings, type DssStatus, type Evaluation, type Format, type Options, type RunEvent, type RunKind, type RunLogEntry, type RunSummary,
-  type RunView, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
+  type RunEngine, type RunView, type SchemaOption, type SchemaPreset, type SchemaValue, type WorkbenchSchema,
 } from "./schema"
 
 const shown: OptionState = { visible: true }
@@ -76,6 +76,9 @@ interface WorkbenchValue {
   stopVariants: () => void
   /** Opens a sandbox signer and makes it the signer of the three formats. */
   signWithSandbox: (id: string) => Promise<void>
+  /** How a signing run makes the signature: the library or the simplesign CLI (remembered in this browser). */
+  engine: RunEngine
+  setEngine: (engine: RunEngine) => void
   // DSS
   dss: DssSettings
   dssStatus: DssStatus | null
@@ -149,6 +152,11 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
   }, [])
   const setValidateOption = useCallback((path: string, value: unknown) => setValidateOptions((o) => setPath(o, path, value)), [])
   const [history, setHistory] = useState<RunSummary[]>([])
+  const [engine, setEngineState] = useState<RunEngine>(() => load<RunEngine>("wb.engine", "library") === "cli" ? "cli" : "library")
+  const setEngine = useCallback((next: RunEngine) => {
+    setEngineState(next)
+    try { localStorage.setItem("wb.engine", JSON.stringify(next)) } catch { /* private window: not remembered */ }
+  }, [])
   const [dss, setDss] = useState<DssSettings>({ enabled: false, url: "http://localhost:8080" })
   const [dssStatus, setDssStatus] = useState<DssStatus | null>(null)
   const options = byFormat[format]
@@ -232,7 +240,7 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
       api.workbench.history().then(setHistory).catch(() => {})
       resolve(result)
     }
-    api.workbench.start(runFormat, runOptions, dss.enabled, kind)
+    api.workbench.start(runFormat, runOptions, dss.enabled, kind, engine)
       .then(({ id }) => {
         const source = new EventSource(api.workbench.eventsUrl(id))
         stream.current = source
@@ -255,7 +263,7 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
         toast.error(t("wb.run.failedToStart"), { description: e.message })
         finish(null)
       })
-  }), [dss.enabled, patchSlot, t])
+  }), [dss.enabled, engine, patchSlot, t])
 
   const sign = useCallback((overrides?: Options) => startRun("sign", format, overrides ?? options), [startRun, format, options])
 
@@ -322,7 +330,7 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
           update(row.key, { status: "skipped", reason: rules.issues.find((i) => i.severity === "Error")?.message })
           continue
         }
-        const { id } = await api.workbench.start(format, candidate, dss.enabled)
+        const { id } = await api.workbench.start(format, candidate, dss.enabled, "sign", engine)
         let result: RunView | undefined
         while (!result) {
           await new Promise((resolve) => setTimeout(resolve, 250))
@@ -336,7 +344,7 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
       setVariantsRunning(false)
       api.workbench.history().then(setHistory).catch(() => {})
     }
-  }, [variantValues, options, format, dss.enabled, t])
+  }, [variantValues, options, format, dss.enabled, engine, t])
 
   const signWithSandbox = useCallback(async (id: string) => {
     try {
@@ -366,9 +374,9 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
     signWithSandbox, mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, openInValidate,
     schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, credential: evaluation?.credential ?? null, isVisible, visibleValues,
-    run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, variantValues, runVariants, stopVariants, dss, dssStatus, saveDss, checkDss,
+    run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, variantValues, runVariants, stopVariants, engine, setEngine, dss, dssStatus, saveDss, checkDss,
   }), [variantValues, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
-    evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, dss, dssStatus, saveDss, checkDss])
+    evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, engine, setEngine, dss, dssStatus, saveDss, checkDss])
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
