@@ -9,8 +9,8 @@ namespace SimpleSign.Sandbox.Endpoints;
 
 /// <summary>
 /// The network services a client reaches through the URLs in the certificates and the settings
-/// the Sandbox publishes: AIA (issuer certificates), CRLs, OCSP, the RFC 3161 TSA and the CSC v2
-/// API. They answer on the HTTP port and, the same, on the HTTPS port.
+/// the Sandbox publishes: AIA (issuer certificates), CRLs, OCSP, the RFC 3161 TSA, the CSC v2
+/// API and the trusted list (TS 119 612) with its list of trusted lists. They answer on the HTTP port and, the same, on the HTTPS port.
 /// </summary>
 internal static class ServiceEndpoints
 {
@@ -24,7 +24,7 @@ internal static class ServiceEndpoints
 
     internal const string FaultItem = "sandbox.fault";
 
-    private static readonly string[] s_prefixes = ["/aia/", "/crl/", "/ocsp/", "/tsa/", "/csc/", "/root.pem", "/chain.pem"];
+    private static readonly string[] s_prefixes = ["/aia/", "/crl/", "/ocsp/", "/tsa/", "/csc/", "/tl/", "/root.pem", "/chain.pem"];
 
     public static void Map(WebApplication app)
     {
@@ -46,6 +46,7 @@ internal static class ServiceEndpoints
                 _ when path.StartsWith("/ocsp/", StringComparison.Ordinal) => "OCSP",
                 _ when path.StartsWith("/tsa/", StringComparison.Ordinal) => "TSA",
                 _ when path.StartsWith("/csc/", StringComparison.Ordinal) => "CSC",
+                _ when path.StartsWith("/tl/", StringComparison.Ordinal) => "TL",
                 _ => "AIA",
             };
             context.RequestServices.GetRequiredService<RequestLog>().Add(context.Request.Method, path + context.Request.QueryString, context.Response.StatusCode,
@@ -61,6 +62,21 @@ internal static class ServiceEndpoints
         app.MapGet("/root.pem", (SandboxPki pki) => Results.Text(pki.Root.ExportCertificatePem() + "\n", "application/x-pem-file"));
         app.MapGet("/chain.pem", (SandboxPki pki) =>
             Results.Text(pki.Intermediate.ExportCertificatePem() + "\n" + pki.Root.ExportCertificatePem() + "\n", "application/x-pem-file"));
+
+        // The trust scheme: the LOTL, the trusted list it points to, and the operators' certificates.
+        app.MapGet("/tl/lotl.xml", async (SandboxTrustedLists lists, CancellationToken ct) =>
+            Results.Bytes(await lists.LotlAsync(ct), SandboxTrustedLists.MediaType));
+        app.MapGet("/tl/tl.xml", async (SandboxTrustedLists lists, SandboxPki pki, HttpContext context, CancellationToken ct) =>
+        {
+            if (pki.Faults.TrustedList != TlFault.None)
+            {
+                context.Items[FaultItem] = pki.Faults.TrustedList.ToString();
+            }
+
+            return Results.Bytes(await lists.TlAsync(ct), SandboxTrustedLists.MediaType);
+        });
+        app.MapGet("/tl/lotl-signer.pem", (SandboxPki pki) => Results.Text(pki.LotlSigner.ExportCertificatePem() + "\n", "application/x-pem-file"));
+        app.MapGet("/tl/tl-signer.pem", (SandboxPki pki) => Results.Text(pki.TlSigner.ExportCertificatePem() + "\n", "application/x-pem-file"));
 
         // CRLs, one per CA.
         app.MapGet("/crl/{name}", async (string name, SandboxPki pki, HttpContext context, CancellationToken ct) =>

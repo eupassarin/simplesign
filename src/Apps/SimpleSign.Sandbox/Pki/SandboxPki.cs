@@ -108,8 +108,32 @@ internal sealed class SandboxPki : IDisposable
         UntrustedTsaKey = (RSA)untrustedKey;
         RogueOcspResponder = Load(state.RogueOcspResponder, out var rogueKey);
         RogueOcspKey = (RSA)rogueKey;
+        if (state.LotlSigner is null || state.TlSigner is null)
+        {
+            // An environment created before the trusted lists: its scheme operators are created now and kept.
+            _state = _state with
+            {
+                LotlSigner = state.LotlSigner ?? SchemeOperator("SimpleSign Sandbox LOTL Operator", state.Name),
+                TlSigner = state.TlSigner ?? SchemeOperator("SimpleSign Sandbox TL Operator", state.Name),
+            };
+            Save();
+        }
+
+        LotlSigner = WithKey(_state.LotlSigner!);
+        TlSigner = WithKey(_state.TlSigner!);
+        UntrustedSigner = UntrustedTsa.CopyWithPrivateKey(UntrustedTsaKey);
+        _owned.Add(UntrustedSigner);
         LoadAuthorities();
     }
+
+    /// <summary>The scheme operator certificate (with its key) that signs the list of trusted lists.</summary>
+    public X509Certificate2 LotlSigner { get; }
+
+    /// <summary>The scheme operator certificate (with its key) that signs the trusted list.</summary>
+    public X509Certificate2 TlSigner { get; }
+
+    /// <summary>The out-of-chain TSA certificate with its key: signs the trusted list under the "wrong signer" failure.</summary>
+    public X509Certificate2 UntrustedSigner { get; }
 
     public string Name => _state.Name;
 
@@ -863,6 +887,28 @@ internal sealed class SandboxPki : IDisposable
         }
 
         File.Move(temporary, _statePath, overwrite: true);
+    }
+
+    /// <summary>A self-signed scheme operator certificate (RSA 3072, digitalSignature and nonRepudiation) for a trusted list.</summary>
+    private static StoredKeyPair SchemeOperator(string cn, string environment)
+    {
+        using var key = RSA.Create(3072);
+        var request = new CertificateRequest($"CN={cn} ({environment}), O=SimpleSign Sandbox", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, true));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        var now = DateTimeOffset.UtcNow;
+        using var certificate = request.CreateSelfSigned(now.AddDays(-1), now.AddYears(10));
+        return Pair(certificate, key);
+    }
+
+    /// <summary>The certificate of <paramref name="pair"/> with its private key.</summary>
+    private X509Certificate2 WithKey(StoredKeyPair pair)
+    {
+        var certificate = Load(pair, out var key);
+        var withKey = certificate.CopyWithPrivateKey((RSA)key);
+        _owned.Add(withKey);
+        return withKey;
     }
 
     private X509Certificate2 Load(StoredKeyPair pair, out AsymmetricAlgorithm key)

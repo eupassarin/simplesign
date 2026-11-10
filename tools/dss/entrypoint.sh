@@ -7,6 +7,9 @@
 #   - the SimpleSign Sandbox's root, fetched from $SANDBOX_URL when it is set and reachable
 #     (or, failing that, the root of the Sandbox connected to the TestBench at $TESTBENCH_URL),
 # and tells DSS to trust it (trusted.source.keystore.* in dss-custom.properties).
+# With $DSS_SANDBOX_TRUST=list (the default) the Sandbox is trusted through its own list of trusted
+# lists instead (/tl/lotl.xml, signed by /tl/lotl-signer.pem): DSS loads it as a trusted list, with
+# service types and statuses, and its root is not a bare trust anchor. "anchor" trusts the root alone.
 # The Sandbox root is also added to the JVM's TLS trust store, so DSS can fetch CRLs over HTTPS.
 # It also forwards the Sandbox ports ($SANDBOX_FORWARD_PORTS) from the container's localhost to
 # $SANDBOX_FORWARD_HOST (forward.pl) and, when $DSS_REVOCATION_CACHE is "false", keeps no
@@ -130,6 +133,14 @@ fi
 
 # The SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox): its root, served at /root.pem.
 sandbox_trusted=false
+SANDBOX_TRUST=${DSS_SANDBOX_TRUST:-list}
+SANDBOX_LOTL=""
+case "$SANDBOX_TRUST" in
+  list | anchor) ;;
+  *)
+    echo "[dss] DSS_SANDBOX_TRUST must be list or anchor (it is \"$SANDBOX_TRUST\")"
+    exit 1 ;;
+esac
 if [ -n "${SANDBOX_URL:-}" ]; then
   # Tomcat may still be the only thing up when the Sandbox starts with it: retry for a while.
   tries=${SANDBOX_WAIT_SECONDS:-20}
@@ -138,8 +149,22 @@ if [ -n "${SANDBOX_URL:-}" ]; then
     sleep 1
   done
   if [ -s /tmp/sandbox-root.pem ]; then
-    trust sandbox-root /tmp/sandbox-root.pem
     sandbox_trusted=true
+    if [ "$SANDBOX_TRUST" = list ] && curl -fsS -m 5 "${SANDBOX_URL%/}/tl/lotl-signer.pem" -o /tmp/sandbox-lotl-signer.pem 2>/dev/null \
+      && SANDBOX_LOTL=$(curl -fsS -m 5 "${SANDBOX_URL%/}/api/info" | tr ',' '\n' | sed -n 's/.*"lotlUrl":"\([^"]*\)".*/\1/p') \
+      && [ -n "$SANDBOX_LOTL" ]; then
+      rm -f "$LIB/sandbox-lotl.p12"
+      keytool -importcert -noprompt -storetype PKCS12 -keystore "$LIB/sandbox-lotl.p12" -storepass "$PASS" -alias sandbox-lotl-signer \
+        -file /tmp/sandbox-lotl-signer.pem >/dev/null 2>&1
+      echo "[dss] Sandbox trust: list (LOTL $SANDBOX_LOTL)"
+    else
+      if [ "$SANDBOX_TRUST" = list ]; then
+        echo "[dss] the Sandbox publishes no list of trusted lists (/tl/lotl.xml): trusting its root as a bare anchor"
+      fi
+      SANDBOX_LOTL=""
+      trust sandbox-root /tmp/sandbox-root.pem
+      echo "[dss] Sandbox trust: anchor"
+    fi
   else
     echo "[dss] the SimpleSign Sandbox is not reachable at $SANDBOX_URL."
   fi
@@ -197,8 +222,41 @@ for port in ${SANDBOX_FORWARD_PORTS-5300 5301 5302}; do
   echo "[dss] forwarding localhost:$port to $FORWARD_HOST:$port"
 done
 
+# The Sandbox's list of trusted lists: in the EU slot when the EU lists are off, in the second
+# ("AdES MRA") slot when they are on. Either needs the loader's cron, which loads at start.
+if [ -n "$SANDBOX_LOTL" ]; then
+  if [ "$EU_TL" = cached ]; then
+    echo "[dss] the Sandbox list needs the online loader: with DSS_LOAD_EU_TRUSTED_LISTS=cached the EU lists are refreshed online too"
+  fi
+  online=true
+fi
+
+# How often the loader downloads the lists again: every 10 s when the Sandbox's is the only one (so a
+# trusted-list failure switched on in the Sandbox shows within seconds), every hour with the EU lists.
+if [ -n "$SANDBOX_LOTL" ] && [ "$EU_TL" = false ]; then
+  refresh=${DSS_TL_REFRESH_SECONDS:-10}
+else
+  refresh=${DSS_TL_REFRESH_SECONDS:-3600}
+fi
+
 {
   echo "cron.tl.loader.enable = $online"
+  echo "cron.delay.tl.loader = $((refresh * 1000))"
+  if [ -n "$SANDBOX_LOTL" ] && [ "$EU_TL" = false ]; then
+    echo "current.lotl.url = $SANDBOX_LOTL"
+    echo "oj.content.keystore.type = PKCS12"
+    echo "oj.content.keystore.filename = sandbox-lotl.p12"
+    echo "oj.content.keystore.password = $PASS"
+  elif [ -n "$SANDBOX_LOTL" ]; then
+    echo "tl.loader.ades.enabled = true"
+    echo "tl.loader.ades.lotlUrl = $SANDBOX_LOTL"
+    echo "tl.loader.ades.keystore.type = PKCS12"
+    echo "tl.loader.ades.keystore.filename = sandbox-lotl.p12"
+    echo "tl.loader.ades.keystore.password = $PASS"
+    echo "tl.loader.ades.tsl.type = http://uri.etsi.org/TrstSvc/TrustedList/TSLType/EUlistofthelists"
+    echo "tl.loader.ades.tsl.status.list = http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted,http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/undersupervision"
+    echo "tl.loader.ades.tl.versions = 5,6"
+  fi
   # DSS keeps CRLs and OCSP responses (up to 3 h) and answers from them when the server is down.
   # SimpleSign fetches every time, so for a comparison DSS must too (the default here).
   if [ "${DSS_REVOCATION_CACHE:-false}" = "false" ]; then
@@ -215,5 +273,5 @@ done
   fi
 } > "$LIB/dss-custom.properties"
 
-echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; Peru: ${DSS_TRUST_PERU:-true}; EU trusted lists: $EU_TL; revocation cache: ${DSS_REVOCATION_CACHE:-false}"
+echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; Peru: ${DSS_TRUST_PERU:-true}; EU trusted lists: $EU_TL; revocation cache: ${DSS_REVOCATION_CACHE:-false}; Sandbox: $([ -n "$SANDBOX_LOTL" ] && echo "trusted list" || echo "bare anchor")"
 exec /opt/tomcat/bin/catalina.sh run

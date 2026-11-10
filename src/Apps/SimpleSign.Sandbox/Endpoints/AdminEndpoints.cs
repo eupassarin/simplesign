@@ -20,7 +20,11 @@ public sealed record SandboxInfo(
     TsaInfo Tsa,
     CscInfo Csc,
     string PfxPassword,
-    IReadOnlyList<string> LoopbackOrigins);
+    IReadOnlyList<string> LoopbackOrigins,
+    TrustedListsInfo TrustedLists);
+
+/// <summary>The Sandbox's trust scheme: its list of trusted lists, its trusted list, and the operators' certificates (PEM).</summary>
+public sealed record TrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory);
 
 public sealed record SandboxUrls(string RootCertificate, string IntermediateCertificate, string RootPem, string ChainPem, string RootCrl, string IntermediateCrl);
 
@@ -142,7 +146,8 @@ internal static class AdminEndpoints
                 [.. csc.Credentials.Select(c => new CscCredentialView(c.Id, c.Description, c.CertificateId, c.AuthMode, c.Scal, c.MultiSign))]),
             SandboxPki.PfxPassword,
             // What a client puts in OutboundHttpPolicy.LoopbackOrigins to reach this Sandbox on this machine.
-            [.. new[] { pki.BaseUrl, pki.HttpsBaseUrl, pki.LdapBaseUrl }.Select(u => u.GetLeftPart(UriPartial.Authority))]);
+            [.. new[] { pki.BaseUrl, pki.HttpsBaseUrl, pki.LdapBaseUrl }.Select(u => u.GetLeftPart(UriPartial.Authority))],
+            new TrustedListsInfo(Url("tl/lotl.xml"), Url("tl/tl.xml"), Url("tl/lotl-signer.pem"), Url("tl/tl-signer.pem"), SandboxTrustedLists.Territory));
     }
 
     private static IResult Found(SandboxPki pki, string id, Func<IResult> action) =>

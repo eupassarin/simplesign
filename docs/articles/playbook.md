@@ -64,7 +64,7 @@ validates with a Sandbox's certificates, good and bad).
   `signatures.0.indication`, and the JSON value each must have); `stdoutContains`,
   `stderrContains`, `stdoutMatches` (regular expressions); `files` that must exist;
   `sandboxRequests` (`service` CRL, OCSP, TSA, AIA or CSC, `pathContains`, `min`, `max`).
-- **Sandbox actions** (`setup`, `teardown`): `faults` (`crl`, `ocsp`, `tsa`, `ocspSigner`; the
+- **Sandbox actions** (`setup`, `teardown`): `faults` (`crl`, `ocsp`, `tsa`, `ocspSigner`, `trustedList`; the
   others keep their value), `revoke` (`certificate`, `reason`, `publication` Both, CrlOnly or
   OcspOnly), `unrevoke`, `reset`, `certificate` (`id`; the PKCS#12 is saved in the step's folder as
   `${NAME.path}` with `${NAME.password}`, NAME being `as`, `cert` by default) and `shortLived`

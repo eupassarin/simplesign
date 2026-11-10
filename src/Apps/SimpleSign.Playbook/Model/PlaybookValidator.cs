@@ -16,6 +16,7 @@ public static partial class PlaybookValidator
     private static readonly string[] s_ocspFaults = ["None", "Down", "Slow", "TryLater", "Expired", "Unauthorized", "Unknown"];
     private static readonly string[] s_tsaFaults = ["None", "Down", "Slow", "InvalidToken"];
     private static readonly string[] s_ocspSigners = ["Issuer", "Delegated"];
+    private static readonly string[] s_tlFaults = ["None", "Expired", "WrongSigner", "Tampered"];
     private static readonly string[] s_publications = ["Both", "CrlOnly", "OcspOnly"];
 
     /// <summary>Parses <paramref name="json"/>; a syntax error is one issue at its line and column.</summary>
@@ -214,6 +215,7 @@ public static partial class PlaybookValidator
                     Check(action.Ocsp, s_ocspFaults, $"{at}.ocsp", error);
                     Check(action.Tsa, s_tsaFaults, $"{at}.tsa", error);
                     Check(action.OcspSigner, s_ocspSigners, $"{at}.ocspSigner", error);
+                    Check(action.TrustedList, s_tlFaults, $"{at}.trustedList", error);
                     break;
                 default:
                     break;

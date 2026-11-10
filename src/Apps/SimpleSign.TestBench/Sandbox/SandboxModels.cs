@@ -19,7 +19,11 @@ public sealed record SandboxInfo(
     SandboxTsaInfo Tsa,
     SandboxCscInfo Csc,
     string PfxPassword,
-    IReadOnlyList<string> LoopbackOrigins);
+    IReadOnlyList<string> LoopbackOrigins,
+    SandboxTrustedListsInfo? TrustedLists = null);
+
+/// <summary>The Sandbox's trust scheme: its list of trusted lists, its trusted list and the operators' certificates (PEM). Null for a Sandbox without one.</summary>
+public sealed record SandboxTrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory);
 
 public sealed record SandboxTsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string User, string Password);
 
@@ -98,6 +102,23 @@ public enum OcspSigner
     Delegated,
 }
 
+/// <summary>What the Sandbox's trusted list looks like.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TlFault>))]
+public enum TlFault
+{
+    /// <summary>Current, signed by the operator the LOTL names.</summary>
+    None,
+
+    /// <summary>Its NextUpdate has passed.</summary>
+    Expired,
+
+    /// <summary>Signed by a certificate the LOTL does not name.</summary>
+    WrongSigner,
+
+    /// <summary>Changed after signing.</summary>
+    Tampered,
+}
+
 /// <summary>The failures of a Sandbox (its /api/faults).</summary>
 public sealed record SandboxFaults(
     TsaFault Tsa = TsaFault.None,
@@ -106,10 +127,11 @@ public sealed record SandboxFaults(
     int CrlDelayMs = 3000,
     OcspFault Ocsp = OcspFault.None,
     int OcspDelayMs = 3000,
-    OcspSigner OcspSigner = OcspSigner.Issuer)
+    OcspSigner OcspSigner = OcspSigner.Issuer,
+    TlFault TrustedList = TlFault.None)
 {
     /// <summary>Whether any failure is on.</summary>
-    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None;
+    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None;
 }
 
 /// <summary>No Sandbox is connected, and the option or sample needs one.</summary>

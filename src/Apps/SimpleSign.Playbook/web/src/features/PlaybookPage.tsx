@@ -340,6 +340,7 @@ const faultValues: Record<string, string[]> = {
   ocsp: ["None", "Down", "Slow", "TryLater", "Expired", "Unauthorized", "Unknown"],
   tsa: ["None", "Down", "Slow", "InvalidToken"],
   ocspSigner: ["Issuer", "Delegated"],
+  trustedList: ["None", "Expired", "WrongSigner", "Tampered"],
 }
 
 function ActionsForm({ title, actions, onChange }: { title: string; actions: SandboxAction[]; onChange: (a: SandboxAction[]) => void }) {
@@ -374,7 +375,7 @@ function ActionsForm({ title, actions, onChange }: { title: string; actions: San
             <Input className="w-28 font-mono text-xs" placeholder={`${t("actions.as")}: cert`} value={action.as ?? ""} onChange={(e) => setAction(index, { ...action, as: e.target.value || null })} />
           )}
           {action.sandbox === "faults" && (Object.keys(faultValues) as (keyof typeof faultValues)[]).map((kind) => (
-            <Select key={kind} value={(action[kind as "crl" | "ocsp" | "tsa" | "ocspSigner"]) ?? "-"} onValueChange={(v) => setAction(index, { ...action, [kind]: v === "-" ? null : v })}>
+            <Select key={kind} value={(action[kind as "crl" | "ocsp" | "tsa" | "ocspSigner" | "trustedList"]) ?? "-"} onValueChange={(v) => setAction(index, { ...action, [kind]: v === "-" ? null : v })}>
               <SelectTrigger className="w-40" aria-label={t(`actions.${kind}` as MessageKey)}><span className="text-muted-foreground text-xs">{t(`actions.${kind}` as MessageKey)}:</span> <SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="-">{t("actions.unchanged")}</SelectItem>

@@ -128,6 +128,9 @@ public sealed record SandboxAction
 
     /// <summary>faults: the OCSP signer (Issuer, Delegated).</summary>
     public string? OcspSigner { get; set; }
+
+    /// <summary>faults: the trusted list failure (None, Expired, WrongSigner, Tampered).</summary>
+    public string? TrustedList { get; set; }
 }
 
 /// <summary>The CLI command of a step.</summary>

@@ -51,6 +51,7 @@ public static class SandboxApp
 
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(pki);
+        builder.Services.AddSingleton<SandboxTrustedLists>();
         builder.Services.AddSingleton<SandboxCsc>();
         builder.Services.AddSingleton<OcspResponder>();
         builder.Services.AddSingleton<RequestLog>();

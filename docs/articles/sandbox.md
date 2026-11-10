@@ -31,6 +31,7 @@ used for real signatures.
 | OCSP (RFC 6960) | `POST /ocsp/{ca}` and `GET /ocsp/{ca}/{request}` |
 | TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/wrong-name` |
 | CSC v2 | `/csc/v2/…` (PIN, OTP, SCAL 1/2, OAuth with a login page that approves at once) |
+| Trusted lists (ETSI TS 119 612 v5) | `/tl/lotl.xml` (list of trusted lists), `/tl/tl.xml` (the trusted list), `/tl/lotl-signer.pem`, `/tl/tl-signer.pem` (the operators' certificates) |
 
 The HTTPS endpoint listens on the port after the HTTP one and LDAP on the one after that
 (`--https-port`, `--ldap-port` change them).
@@ -87,11 +88,32 @@ puts every revocation and failure back.
 | CRL (HTTP, HTTPS, LDAP) | down, slow, expired (nextUpdate passed), signed by the wrong key, stale (the CRL published before the last revocation: a copy cached before it) |
 | OCSP | down, slow, tryLater, expired response, signed by an unauthorized responder, unknown for every certificate; delegated responder (OCSPSigning, `id-pkix-ocsp-nocheck`) |
 | TSA | down, slow, invalid token |
+| Trusted list | expired (NextUpdate passed), signed by a certificate the LOTL does not name, changed after signing |
 
 Every request is in the **Log** tab (service, URL, status, the failure applied).
 
 The TestBench signs with each of these certificates and failures under the Strict signing policy
 in `SandboxScenarioTests`.
+
+## The trust scheme
+
+The Sandbox is also a trust scheme, as an EU member state is. `/tl/tl.xml` is a trusted list (territory `ZZ`) with:
+- the root CA (`Svctype/CA/QC`, granted);
+- the TSA (`Svctype/TSA/QTST`, granted);
+- the revoked TSA (withdrawn).
+
+`/tl/lotl.xml` is a list of trusted lists that points to it. Each list is signed by its own scheme operator, as
+TS 119 612 §5.7.1 asks: an enveloped XAdES signature whose only transforms are the enveloped one and exclusive
+canonicalization. The operators' certificates are kept with the environment.
+
+A validator given the LOTL and `/tl/lotl-signer.pem` trusts the Sandbox's chains through the trusted list, and judges the
+service type and status and the `TrustedLists` constraints (TLWellSigned, TLNotExpired…), instead of trusting a bare root:
+
+```bash
+simplesign validate signed.pdf --lotl http://localhost:5300/tl/lotl.xml --lotl-signer lotl-signer.pem
+```
+
+The TestBench does this by default (trust "Sandbox trusted list"), and so does the DSS container in `tools/dss`.
 
 ## Using it from a client
 

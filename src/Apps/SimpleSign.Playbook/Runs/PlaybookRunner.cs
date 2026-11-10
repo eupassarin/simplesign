@@ -313,7 +313,7 @@ public sealed class PlaybookRunner(IProcessRunner processes, Func<Uri, ISandboxC
         byte[]? pfx = await sandbox.ApplyAsync(action, cancellationToken);
         string description = action.Sandbox switch
         {
-            "faults" => "faults " + string.Join(", ", new[] { ("crl", action.Crl), ("ocsp", action.Ocsp), ("tsa", action.Tsa), ("ocspSigner", action.OcspSigner) }
+            "faults" => "faults " + string.Join(", ", new[] { ("crl", action.Crl), ("ocsp", action.Ocsp), ("tsa", action.Tsa), ("ocspSigner", action.OcspSigner), ("trustedList", action.TrustedList) }
                 .Where(f => f.Item2 is not null).Select(f => $"{f.Item1}={f.Item2}")),
             "revoke" => $"revoke {action.Certificate} ({action.Reason ?? "KeyCompromise"}, {action.Publication ?? "Both"})",
             "unrevoke" => $"unrevoke {action.Certificate}",
