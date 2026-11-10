@@ -102,7 +102,7 @@ try {
     $info = Invoke-RestMethod -Uri "$sandboxUrl/api/info" -TimeoutSec 10
 }
 catch {
-    [Console]::Error.WriteLine("No SimpleSign Sandbox at $sandboxUrl (start it first: pwsh -File tools/stack/up.ps1).")
+    [Console]::Error.WriteLine("No SimpleSign Sandbox at $sandboxUrl ($($_.Exception.Message)); start it first: pwsh -File tools/stack/up.ps1.")
     exit 1
 }
 $root = $info.rootThumbprint

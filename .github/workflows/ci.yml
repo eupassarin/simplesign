@@ -320,17 +320,20 @@ jobs:
           $install = Start-Process msiexec.exe -ArgumentList '/i', $opensc, '/qn', '/norestart' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "OpenSC install exited with $($install.ExitCode)." }
 
-      - name: Start the SimpleSign Sandbox
+      # One step: a process started in one step does not outlive it on the Windows runner.
+      - name: Fill a SoftHSM token from a Sandbox (softhsm-provision.ps1)
         run: |
-          Start-Process dotnet -ArgumentList 'run', '--project', 'src/Apps/SimpleSign.Sandbox', '--configuration', 'Release', '--', '--ephemeral', '--no-browser' `
-            -RedirectStandardOutput sandbox.log -RedirectStandardError sandbox.err.log
-          foreach ($i in 1..120) {
-            try { Invoke-RestMethod http://localhost:5300/api/info -TimeoutSec 5 | Out-Null; 'Sandbox is up'; exit 0 } catch { Start-Sleep 3 }
+          dotnet build src/Apps/SimpleSign.Sandbox --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'The Sandbox did not build.' }
+          $sandbox = Start-Process dotnet -ArgumentList 'run', '--project', 'src/Apps/SimpleSign.Sandbox', '--configuration', 'Release', '--no-build', '--', '--ephemeral', '--no-browser' `
+            -RedirectStandardOutput sandbox.log -RedirectStandardError sandbox.err.log -PassThru
+          $up = $false
+          foreach ($i in 1..60) {
+            try { Invoke-RestMethod http://localhost:5300/api/info -TimeoutSec 5 | Out-Null; $up = $true; break } catch { Start-Sleep 3 }
           }
-          Get-Content sandbox.log, sandbox.err.log; throw 'The Sandbox did not answer on http://localhost:5300'
+          if (-not $up) { Get-Content sandbox.log, sandbox.err.log; throw 'The Sandbox did not answer on http://localhost:5300' }
+          'Sandbox is up'
 
-      - name: Fill the SoftHSM token (softhsm-provision.ps1)
-        run: |
           pwsh -NoProfile -File tools/stack/softhsm-provision.ps1
           if ($LASTEXITCODE -ne 0) { throw "softhsm-provision.ps1 exited with $LASTEXITCODE." }
           $env:SOFTHSM2_CONF = "$PWD\.softhsm\softhsm2.conf"
@@ -343,6 +346,8 @@ jobs:
           # A second run finds the token up to date.
           $again = pwsh -NoProfile -File tools/stack/softhsm-provision.ps1
           if (-not ($again -match 'nothing to do')) { throw "The second run rebuilt the token: $again" }
+          $again
+          Stop-Process -Id $sandbox.Id -ErrorAction SilentlyContinue
 
   testbench:
     name: TestBench
