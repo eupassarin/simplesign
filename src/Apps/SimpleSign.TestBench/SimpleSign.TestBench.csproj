@@ -26,7 +26,7 @@
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
     <!-- The CLI a run with engine "cli" starts (cli/simplesign.dll next to the TestBench): built first, not referenced. -->
-    <ProjectReference Include="..\SimpleSign.Cli\SimpleSign.Cli.csproj" ReferenceOutputAssembly="false" Private="false" SkipGetTargetFrameworkProperties="true" SetTargetFramework="TargetFramework=net8.0" />
+    <ProjectReference Include="..\SimpleSign.Cli\SimpleSign.Cli.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <!-- Copies the CLI's build output to cli/ (also into the output of projects that reference the TestBench, like its tests). -->
