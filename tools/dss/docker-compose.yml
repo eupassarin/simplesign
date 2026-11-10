@@ -42,6 +42,8 @@ services:
       # "true" trusts the CAs of the Peruvian trusted list (INDECOPI), downloaded at start.
       DSS_TRUST_PERU: ${DSS_TRUST_PERU:-true}
       DSS_PERU_TSL_URL: ${DSS_PERU_TSL_URL:-https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml}
+      # "true" trusts the roots of the public TSAs the TestBench offers (DigiCert, Sectigo, FreeTSA), as SimpleSign does.
+      DSS_TRUST_TSA_ROOTS: ${DSS_TRUST_TSA_ROOTS:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -50,6 +52,8 @@ services:
       # The library's own copies of the ICP-Brasil and Gov.br roots, so DSS and SimpleSign trust the same ones.
       - ../../src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/Certs:/trust-icp-brasil:ro
       - ../../src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/Certs:/trust-govbr:ro
+      # The TestBench's copies of the public TSAs' roots (its "Public TSA roots" trust choice reads the same files).
+      - ../../src/Apps/SimpleSign.TestBench/TsaRoots:/trust-tsa:ro
       # What is downloaded (EU trusted lists, Peruvian trusted list), kept between runs.
       - tl-cache:/var/cache/dss
 

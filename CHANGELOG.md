@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — the public TSAs' roots are trusted (TestBench and `tools/dss`)
+
+- **TestBench:** new trust choice "Public TSA roots" (`TrustChoice.PublicTsas`), on by default. It trusts the roots of
+  the public TSAs offered (DigiCert Trusted Root G4, Sectigo Public Time Stamping Root R46, FreeTSA Root CA), kept in
+  `src/Apps/SimpleSign.TestBench/TsaRoots`. A FreeTSA timestamp no longer fails with "[signature timestamp] The
+  certificate chain could not be validated to a trust anchor".
+- **`tools/dss`:** DSS trusts the same roots at start (`DSS_TRUST_TSA_ROOTS`, default `true`; the folder is mounted),
+  so it no longer reports "The certificate chain for time-stamp is not trusted" for these TSAs.
+
+### Fixed — CRLs served as PEM
+
+- A CRL downloaded over HTTP that comes PEM-encoded (`-----BEGIN X509 CRL-----`) instead of DER (RFC 5280 §4.2.1.13)
+  is now read: it is turned into DER as it is downloaded (`CrlClient`, `ChainRevocationChecker`, LTV collection in
+  `LtvEvidenceCollector` and `LtvEmbedder`), so what is cached and embedded stays DER. FreeTSA serves its CRL this
+  way; its timestamps were reported as "the revocation status of the TSA certificate chain could not be established".
+
 ### Added — the Sandbox as a trust scheme (trusted list + LOTL)
 
 - **Sandbox endpoints:**

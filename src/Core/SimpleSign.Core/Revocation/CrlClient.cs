@@ -46,7 +46,7 @@ public sealed class CrlClient : ICrlClient
         }
 
         _logger.CrlDownloading(crlUrl);
-        var crlBytes = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: OutboundPolicy, ct: ct).ConfigureAwait(false)
+        var crlBytes = CrlEncoding.ToDer(await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: OutboundPolicy, ct: ct).ConfigureAwait(false))
             ?? throw new HttpRequestException($"CRL download failed after retries: {crlUrl}");
         _logger.CrlDownloaded(crlBytes.Length);
         Cache?.Set(crlUrl, crlBytes, CrlEvaluator.ReadNextUpdate(crlBytes) ?? DateTimeOffset.MaxValue);

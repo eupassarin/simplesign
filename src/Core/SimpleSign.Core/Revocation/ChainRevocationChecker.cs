@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Internal;
 namespace SimpleSign.Core.Revocation;
 
 /// <summary>
@@ -304,7 +305,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         {
             byte[]? bytes = LdapCrlClient.IsLdapUrl(url)
                 ? await LdapCrlClient.GetCrlAsync(url, _outboundPolicy, LdapTimeout, cancellationToken).ConfigureAwait(false)
-                : await ResilientHttp.GetBytesAsync(_httpClient, new Uri(url), _outboundPolicy, _logger, cancellationToken).ConfigureAwait(false);
+                : CrlEncoding.ToDer(await ResilientHttp.GetBytesAsync(_httpClient, new Uri(url), _outboundPolicy, _logger, cancellationToken).ConfigureAwait(false));
             if (bytes is not null)
             {
                 Remember(url, bytes);

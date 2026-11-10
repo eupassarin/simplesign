@@ -13,6 +13,7 @@ using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Internal;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.PAdES.Signing;
 
@@ -298,7 +299,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
                     {
                         try
                         {
-                            var crl = await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false);
+                            var crl = CrlEncoding.ToDer(await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false));
                             if (crl is not null && IsCrlIssuedFor(crl, cert))
                             {
                                 crlBag.Add(crl);

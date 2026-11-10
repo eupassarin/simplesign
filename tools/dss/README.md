@@ -140,6 +140,15 @@ unsupported certificate is skipped instead of keeping DSS from starting.
 Neither ICP-Brasil nor Gov.br publishes an ETSI trusted list, so DSS treats these roots as plain
 trust anchors: it validates the chain but does not report a qualification (QES/QSCD).
 
+## Public TSA roots
+
+The container also trusts the roots of the public TSAs the TestBench offers: DigiCert Trusted Root G4,
+Sectigo Public Time Stamping Root R46 and the FreeTSA Root CA. Without them, DSS reports for any signature
+timestamped by these TSAs "The certificate chain for time-stamp is not trusted, it does not contain a trust
+anchor". It reads them from the TestBench's own copies (`src/Apps/SimpleSign.TestBench/TsaRoots`), which its
+**Public TSA roots** trust choice (on by default) reads too, so DSS and SimpleSign trust the same roots. Set
+`DSS_TRUST_TSA_ROOTS=false` to turn them off.
+
 ## Peru trusted list
 
 The container also trusts the certification authorities of the Peruvian trusted list, published
@@ -207,6 +216,7 @@ the signature is qualified.
 | Any Sandbox scenario, any level | the same indication and sub-indication as SimpleSign | DSS fetches the CRLs and OCSP responses itself (forwarded ports, no cache). `DssScenarioCrossValidationTests` checks it, scenario by scenario. |
 | Any level, Sandbox not trusted (no LOTL loaded, no root) | INDETERMINATE / NO_CERTIFICATE_CHAIN_FOUND | See "Trusting the Sandbox certificates". The **Trusted Lists Summary** page (`http://localhost:8080/tl-info`) shows whether the Sandbox's list loaded. |
 | Real ICP-Brasil or Gov.br certificates | validated against their roots | See "ICP-Brasil and Gov.br roots". |
+| Timestamps of DigiCert, Sectigo or FreeTSA | the TSA chain reaches a trust anchor | See "Public TSA roots". |
 | Real Peruvian certificates | validated against the CAs of the Peruvian trusted list | See "Peru trusted list". |
 | Other real certificates | depends on the roots DSS trusts | Add your roots to `trust/`, or load the EU trusted lists (above). |
 
@@ -227,6 +237,7 @@ the signature is qualified.
 | `DSS_LOAD_EU_TRUSTED_LISTS` | `false` | `true` downloads the EU trusted lists; `cached` only uses the copy kept from an earlier run. See "EU trusted lists". |
 | `DSS_TRUST_ICP_BRASIL` | `true` | `true` trusts the ICP-Brasil roots (all but v4, v7 and v13; see above). |
 | `DSS_TRUST_GOVBR` | `true` | `true` trusts the Gov.br root. |
+| `DSS_TRUST_TSA_ROOTS` | `true` | `true` trusts the roots of the public TSAs (DigiCert, Sectigo, FreeTSA; see above). |
 | `DSS_TRUST_PERU` | `true` | `true` trusts the CAs of the Peruvian trusted list (downloaded at start; see above). |
 | `DSS_PERU_TSL_URL` | INDECOPI's address | Where to download the Peruvian trusted list from. |
 

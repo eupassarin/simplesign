@@ -3,6 +3,7 @@
 #   - every certificate (PEM or DER) mounted in /trust,
 #   - the ICP-Brasil roots mounted in /trust-icp-brasil, when $DSS_TRUST_ICP_BRASIL is "true",
 #   - the Gov.br root mounted in /trust-govbr, when $DSS_TRUST_GOVBR is "true",
+#   - the public TSAs' roots mounted in /trust-tsa (DigiCert, Sectigo, FreeTSA), when $DSS_TRUST_TSA_ROOTS is "true",
 #   - the CAs of the Peruvian trusted list (INDECOPI), when $DSS_TRUST_PERU is "true", and
 #   - the SimpleSign Sandbox's root, fetched from $SANDBOX_URL when it is set and reachable
 #     (or, failing that, the root of the Sandbox connected to the TestBench at $TESTBENCH_URL),
@@ -126,6 +127,9 @@ if [ "${DSS_TRUST_ICP_BRASIL:-true}" = "true" ]; then
 fi
 if [ "${DSS_TRUST_GOVBR:-true}" = "true" ]; then
   trust_bundled Gov.br /trust-govbr/GovBr-ACRaiz-*.crt
+fi
+if [ "${DSS_TRUST_TSA_ROOTS:-true}" = "true" ]; then
+  trust_bundled "public TSA" /trust-tsa/*.crt
 fi
 if [ "${DSS_TRUST_PERU:-true}" = "true" ]; then
   trust_peru
@@ -273,5 +277,5 @@ fi
   fi
 } > "$LIB/dss-custom.properties"
 
-echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; Peru: ${DSS_TRUST_PERU:-true}; EU trusted lists: $EU_TL; revocation cache: ${DSS_REVOCATION_CACHE:-false}; Sandbox: $([ -n "$SANDBOX_LOTL" ] && echo "trusted list" || echo "bare anchor")"
+echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; public TSAs: ${DSS_TRUST_TSA_ROOTS:-true}; Peru: ${DSS_TRUST_PERU:-true}; EU trusted lists: $EU_TL; revocation cache: ${DSS_REVOCATION_CACHE:-false}; Sandbox: $([ -n "$SANDBOX_LOTL" ] && echo "trusted list" || echo "bare anchor")"
 exec /opt/tomcat/bin/catalina.sh run

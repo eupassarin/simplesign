@@ -113,8 +113,8 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
     }
 
     [Fact]
-    public void Defaults_TrustTheSandboxTrustedListAndSystemRoots() =>
-        new ValidationSettings().Trust.ShouldBe([TrustChoice.SandboxTrustedList, TrustChoice.System]);
+    public void Defaults_TrustTheSandboxTrustedListSystemAndPublicTsaRoots() =>
+        new ValidationSettings().Trust.ShouldBe([TrustChoice.SandboxTrustedList, TrustChoice.System, TrustChoice.PublicTsas]);
 
     [Fact]
     public void Findings_SameConstraintForSeveralCertificates_IsOneGroupWithEachMessageOnce()

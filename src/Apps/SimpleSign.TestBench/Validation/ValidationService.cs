@@ -28,13 +28,19 @@ public enum TrustChoice
     /// service types and statuses, so the TrustedLists constraints are evaluated. A Sandbox without one: its root.
     /// </summary>
     SandboxTrustedList,
+
+    /// <summary>
+    /// The roots of the public TSAs the TestBench offers (DigiCert, Sectigo, FreeTSA), so their timestamps reach a
+    /// trust anchor. DSS (tools/dss) trusts the same roots.
+    /// </summary>
+    PublicTsas,
 }
 
 /// <summary>How to validate.</summary>
 public sealed record ValidationSettings
 {
-    /// <summary>The roots to trust. Default: the connected Sandbox's trusted list and the operating system's roots.</summary>
-    public IReadOnlyList<TrustChoice> Trust { get; init; } = [TrustChoice.SandboxTrustedList, TrustChoice.System];
+    /// <summary>The roots to trust. Default: the connected Sandbox's trusted list, the operating system's roots and the public TSAs' roots.</summary>
+    public IReadOnlyList<TrustChoice> Trust { get; init; } = [TrustChoice.SandboxTrustedList, TrustChoice.System, TrustChoice.PublicTsas];
 
     /// <summary>Uploaded root certificates (DER or PEM) to trust as well.</summary>
     public IReadOnlyList<string> CustomRootUploadIds { get; init; } = [];
@@ -238,6 +244,11 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         foreach (string id in settings.CustomRootUploadIds)
         {
             roots.Add(LoadCertificate(documents.Get(id).Content));
+        }
+
+        if (settings.Trust.Contains(TrustChoice.PublicTsas))
+        {
+            roots.AddRange(PublicTsaRoots.Certificates);
         }
 
         var options = new ValidationOptions
@@ -485,6 +496,10 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         {
             L.T("simplesign inspect signed.pdf shows the structure; simplesign validate-dir validates a folder in bulk."),
         };
+        if (s.Trust.Contains(TrustChoice.PublicTsas))
+        {
+            notes.Add(L.T("The public TSA roots are not in these snippets: --trust takes them from src/Apps/SimpleSign.TestBench/TsaRoots (the operating system usually trusts DigiCert's and Sectigo's, never FreeTSA's)."));
+        }
         return new CodeSnippets(sb.ToString(), line.ToString(), notes) { CliCommands = [line] };
     }
 }
