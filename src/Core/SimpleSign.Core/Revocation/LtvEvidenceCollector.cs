@@ -5,6 +5,7 @@ using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
+using SimpleSign.Core.Internal;
 
 namespace SimpleSign.Core.Revocation;
 
@@ -187,8 +188,8 @@ internal static class LtvEvidenceCollector
 
             try
             {
-                byte[]? crlBytes = await ResilientHttp.GetBytesAsync(
-                    httpClient, crlUrl, logger: logger, policy: outboundPolicy, ct: cancellationToken).ConfigureAwait(false);
+                byte[]? crlBytes = CrlEncoding.ToDer(await ResilientHttp.GetBytesAsync(
+                    httpClient, crlUrl, logger: logger, policy: outboundPolicy, ct: cancellationToken).ConfigureAwait(false));
                 // Collection establishes that the embedded CRL is structurally relevant to this
                 // certificate. Trust-policy validation of the CRL signature is deliberately left
                 // to validation time, where the full issuer path and validation time are available.

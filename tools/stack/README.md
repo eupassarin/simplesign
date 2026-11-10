@@ -101,8 +101,11 @@ SANDBOX_URL=http://localhost:5390 tools/stack/testbench.sh
 ## Stop
 
 ```bash
-docker compose -f tools/stack/docker-compose.yml down       # keeps the PKI
-docker compose -f tools/stack/docker-compose.yml down -v    # drops it (and the DSS download cache)
+tools/stack/down.sh               # keeps the PKI and the DSS download cache
+tools/stack/down.sh --drop-pki    # drops the PKI (the next up.sh makes a new one), keeps the DSS cache
+tools/stack/down.sh --volumes     # drops every volume: the PKI and the DSS download cache
 ```
+
+With `COMPOSE_PROJECT_NAME` set for `up.sh`, set it for `down.sh` too.
 
 `tools/dss/docker-compose.yml` on its own still works with a Sandbox started with `dotnet run`.

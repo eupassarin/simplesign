@@ -23,7 +23,7 @@ services:
       - "127.0.0.1:${SANDBOX_PORT:-5300}:${SANDBOX_PORT:-5300}"
       - "127.0.0.1:${SANDBOX_HTTPS_PORT:-5301}:${SANDBOX_HTTPS_PORT:-5301}"
       - "127.0.0.1:${SANDBOX_LDAP_PORT:-5302}:${SANDBOX_LDAP_PORT:-5302}"
-    # The PKI is kept between runs; "docker compose down -v" (or up.sh --fresh) makes a new one.
+    # The PKI is kept between runs; down.sh --drop-pki (or up.sh --fresh) makes a new one.
     volumes:
       - sandbox-data:/data
     healthcheck:

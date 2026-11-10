@@ -365,6 +365,7 @@ public static partial class OptionSchema
                 V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, read through its list of trusted lists: its CAs with their service type and status, as DSS trusts them."),
                 V("Sandbox", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("System", "Operating system roots", "The roots the operating system trusts."),
+                V("PublicTsas", "Public TSA roots", "The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA), so their timestamps reach a trust anchor. DSS trusts the same roots."),
             ], when: When("validate", "true")),
         O("common.validation.policy", "run", s_all, "upload", "validation.policyId", "Validation policy (JSON)",
             "The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on.",

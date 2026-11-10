@@ -652,6 +652,9 @@ internal static class Translations
         ["The sandbox's trusted list, read through its list of trusted lists: its CAs with their service type and status, as DSS trusts them."] = "O trusted list do sandbox, lido pelo LOTL dele: as ACs com o tipo e o status do serviço, como o DSS confia nelas.",
         ["Operating system roots"] = "Raízes do sistema operacional",
         ["The roots the operating system trusts."] = "As raízes em que o sistema operacional confia.",
+        ["Public TSA roots"] = "Raízes dos TSAs públicos",
+        ["The public TSA roots are not in these snippets: --trust takes them from src/Apps/SimpleSign.TestBench/TsaRoots (the operating system usually trusts DigiCert's and Sectigo's, never FreeTSA's)."] = "As raízes dos TSAs públicos não estão nestes trechos: o --trust as lê de src/Apps/SimpleSign.TestBench/TsaRoots (o sistema operacional costuma confiar nas da DigiCert e da Sectigo, nunca na da FreeTSA).",
+        ["The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA), so their timestamps reach a trust anchor. DSS trusts the same roots."] = "As raízes dos TSAs públicos oferecidos (DigiCert, Sectigo, FreeTSA), para que os carimbos deles cheguem a uma âncora de confiança. O DSS confia nas mesmas raízes.",
 
         // ── TestBench ETSI only ────────────────────────────────────────
         ["The certificate lacks the nonRepudiation key usage: some validation policies warn about it."] = "O certificado não tem o uso de chave nonRepudiation: algumas políticas de validação alertam sobre isso.",

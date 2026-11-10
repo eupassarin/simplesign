@@ -29,6 +29,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleSign.TestBench.Tests" />
+    <!-- The roots of the public TSAs (PublicTsaRoots); tools/dss mounts the same folder. -->
+    <EmbeddedResource Include="TsaRoots/*.crt" LogicalName="TsaRoots/%(Filename)%(Extension)" />
     <Content Remove="web/**" />
     <None Remove="web/**" />
     <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Condition="Exists('web/dist')" />

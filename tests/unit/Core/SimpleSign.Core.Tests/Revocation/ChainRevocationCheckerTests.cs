@@ -27,6 +27,31 @@ public sealed class ChainRevocationCheckerTests
     }
 
     [Fact]
+    public async Task CheckAsync_OnlineCrlsServedAsPem_ReadsThemAsDer()
+    {
+        using var pki = NewPki();
+        using var http = CrlServer(Pem(pki.BuildLeafCrl()), Pem(pki.BuildIntermediateCrl()));
+
+        var result = await new ChainRevocationChecker(http).CheckAsync(pki.Chain(), DateTimeOffset.UtcNow, [], [], true, default);
+
+        result.Status.ShouldBe(ChainRevocationStatus.Good);
+    }
+
+    [Fact]
+    public async Task CheckAsync_PemCrlRevokesLeaf_ReturnsRevoked()
+    {
+        using var pki = NewPki();
+        using var http = CrlServer(Pem(pki.BuildRevokedLeafCrl()), Pem(pki.BuildIntermediateCrl()));
+
+        var result = await new ChainRevocationChecker(http).CheckAsync(pki.Chain(), DateTimeOffset.UtcNow, [], [], true, default);
+
+        result.Status.ShouldBe(ChainRevocationStatus.Revoked);
+    }
+
+    private static byte[] Pem(byte[] der) =>
+        System.Text.Encoding.ASCII.GetBytes(new string(System.Security.Cryptography.PemEncoding.Write("X509 CRL", der)) + "\n");
+
+    [Fact]
     public async Task CheckAsync_OnlineCrlRevokesLeaf_ReturnsRevoked()
     {
         using var pki = NewPki();
