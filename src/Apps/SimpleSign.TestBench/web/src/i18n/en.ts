@@ -297,8 +297,8 @@ export const en = {
       title: "Run through",
       library: "Library",
       cli: "CLI",
-      libraryAbout: "Signs with the SimpleSign library in the TestBench's own process.",
-      cliAbout: "Runs the command the Code tab shows through the simplesign CLI (a separate process), then validates its output like a library run. PKCS#11 and cloud credentials need the library.",
+      libraryAbout: "Signs and validates with the SimpleSign library in the TestBench's own process.",
+      cliAbout: "Signs and validates by running the commands the Code tab shows through the simplesign CLI (a separate process): the verdicts and reports are the CLI's. PKCS#11 and cloud credentials need the library.",
     },
     dss: {
       title: "Cross-validation with DSS",
@@ -428,6 +428,7 @@ export const en = {
   report: {
     title: "Validation report",
     simplesign: "SimpleSign report",
+    etsiReport: "ETSI report",
     dss: "DSS report",
     view: "View report",
     viewSimpleSign: "View SimpleSign's report",

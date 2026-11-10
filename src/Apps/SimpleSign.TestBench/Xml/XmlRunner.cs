@@ -35,6 +35,36 @@ public sealed record XmlSignatureReport(
     public Reports.ReportSource? Source { get; init; }
 }
 
+/// <summary>The verdict on one XML signature, from the library's result or from the JSON of <c>simplesign xades validate</c>.</summary>
+internal sealed record XmlVerdict(
+    string? SignatureId,
+    string? Signer,
+    string Indication,
+    string? SubIndication,
+    string? DetectedLevel,
+    DateTimeOffset? SigningTime,
+    bool SignatureValid,
+    bool IntegrityValid,
+    bool ChainValid,
+    bool? HasValidSignatureTimeStamp,
+    bool? TsaTrusted,
+    bool? HasValidDataObjectsTimeStamp,
+    DateTimeOffset? DataObjectsTimeStampTime,
+    bool? HasValidCompleteReferences,
+    bool? HasValidSigAndRefsTimeStamp,
+    bool? LtvDataValid,
+    bool? HasValidArchiveTimeStamp,
+    bool? NotRevoked,
+    string RevocationSource,
+    IReadOnlyList<SimpleSign.Core.Validation.ValidationConstraintResult> Constraints,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<XmlVerdict> CounterSignatures)
+{
+    /// <summary>The library's report entry, for the SimpleSign report; null from the CLI.</summary>
+    public Reports.ReportSource? Source { get; init; }
+}
+
 public sealed record XmlValidationView(
     string Overall,
     IReadOnlyList<XmlSignatureReport> Signatures,
@@ -61,6 +91,9 @@ public sealed record XmlSignResult(
 {
     /// <summary>The commands a run through the CLI executed, with their exit codes and output; null for a library run.</summary>
     public IReadOnlyList<CliStep>? Cli { get; init; }
+
+    /// <summary>The reports the CLI's validation wrote; null for a library run.</summary>
+    public CliReports? Reports { get; init; }
 }
 
 /// <summary>Signs with <c>XadesSigner</c> and validates the result.</summary>
@@ -156,13 +189,24 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         long signMs = watch.ElapsedMilliseconds;
         string fileName = OutputName(o, data.FileName);
         var output = documents.Add(fileName, signed);
-        var view = o.Validate
-            ? await ValidateAsync(output.Id, o.Form == XadesFormChoice.Detached ? o.DataId : null, o.Validation ?? new ValidationSettings(),
-                report.Effective.ExternalObjectId, cancellationToken)
-            : null;
+        // Signed through the CLI, validated through it too.
+        string? detachedId = o.Form == XadesFormChoice.Detached ? o.DataId : null;
+        var settings = o.Validation ?? new ValidationSettings();
+        XmlValidationView? view = null;
+        CliOutcome? checkedByCli = null;
+        if (o.Validate && cliSteps is not null)
+        {
+            (view, checkedByCli) = await ValidateWithCliAsync(output.Id, detachedId, settings, report.Effective.ExternalObjectId, cancellationToken);
+        }
+        else if (o.Validate)
+        {
+            view = await ValidateAsync(output.Id, detachedId, settings, report.Effective.ExternalObjectId, cancellationToken);
+        }
+
         return new XmlSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved, warnings, signMs, view, code, report.Issues)
         {
-            Cli = cliSteps,
+            Cli = cliSteps is null ? null : [.. cliSteps, .. checkedByCli?.Steps ?? []],
+            Reports = checkedByCli is null ? null : CliValidation.Store(checkedByCli, documents, fileName),
         };
     }
 
@@ -189,69 +233,148 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         }
 
         var trust = await validation.TrustAsync(settings, cancellationToken);
-        var signatures = await ValidateXadesAsync(file.Content, data, externalObject, trust, settings, cancellationToken);
+        var signatures = await ValidateXadesAsync(file.Content, data, externalObject, trust, cancellationToken);
+        return View(signatures, signatureXml, preview, watch.ElapsedMilliseconds, ValidationCode(settings, data is not null));
+    }
+
+    /// <summary>
+    /// Validates a signed XML through <c>simplesign xades validate</c>: the verdicts are the CLI's. The detached document
+    /// and the external data object are given to it as <c>--data</c> or <c>--external-object URI=file</c>.
+    /// </summary>
+    public async Task<(XmlValidationView View, CliOutcome? Outcome)> ValidateWithCliAsync(string signatureId, string? dataId, ValidationSettings settings,
+        string? externalObjectId = null, CancellationToken cancellationToken = default)
+    {
+        var file = documents.Get(signatureId);
+        byte[]? data = dataId is null ? null : documents.Get(dataId).Content;
+        var externalObject = externalObjectId is null ? null : documents.Get(externalObjectId);
+        var watch = Stopwatch.StartNew();
+        string preview = XmlInspector.Preview(file.Content);
+        string? signatureXml = XmlInspector.SignatureXml(file.Content);
+        try
+        {
+            XmlInspector.Load(file.Content);
+        }
+        catch (XmlException ex)
+        {
+            return (new XmlValidationView("Invalid", [], [L.T("The file is not well-formed XML: {0}", ex.Message)], null, preview, 0, new CodeSnippets("", "", [])), null);
+        }
+
+        var code = ValidationCode(settings, data is not null);
+        var command = code.CliCommands[0];
+        var inputs = new Dictionary<string, byte[]> { [SignedFile] = file.Content };
+        if (externalObject is not null)
+        {
+            // Every external reference by URI, as files next to the signature: --external-object replaces --data.
+            command = new CliLine([.. command.Args.Where((a, i) => !(a == "--data" || (i > 0 && command.Args[i - 1] == "--data")))]);
+            int n = 0;
+            foreach (var (uri, content) in ExternalData(file.Content, data, externalObject))
+            {
+                string name = $"external-{++n}";
+                inputs[name] = content;
+                command.Add("--external-object", $"{uri}={name}");
+            }
+        }
+        else if (data is not null)
+        {
+            inputs[DataFile] = data;
+        }
+
+        var outcome = await CliValidation.RunAsync(command, inputs, validation.CliFiles(settings), cancellationToken);
+        if (!outcome.Success || CliValidation.Parse<CliXadesOutput>(outcome.ValidationJson) is not { } output)
+        {
+            return (new XmlValidationView("Invalid", [], [outcome.Error ?? L.T("The CLI printed no validation result.")], signatureXml, preview, watch.ElapsedMilliseconds, code), outcome);
+        }
+
+        return (View(Reports(output.Signatures.Select(Verdict)), signatureXml, preview, watch.ElapsedMilliseconds, code), outcome);
+    }
+
+    private static XmlValidationView View(List<XmlSignatureReport> signatures, string? signatureXml, string preview, long ms, CodeSnippets code)
+    {
         string overall = signatures.Count == 0 ? "Invalid"
             : signatures.All(s => s.Indication == "Valid") ? "Valid"
             : signatures.Any(s => s.Indication == "Invalid") ? "Invalid"
             : "Indeterminate";
         var errors = signatures.Count == 0 ? new List<string> { L.T("No ds:Signature in this XML.") } : [];
-        return new XmlValidationView(overall, signatures, errors, signatureXml, preview, watch.ElapsedMilliseconds, ValidationCode(settings, data is not null));
+        return new XmlValidationView(overall, signatures, errors, signatureXml, preview, ms, code);
     }
 
     private async Task<List<XmlSignatureReport>> ValidateXadesAsync(byte[] xml, byte[]? data, StoredFile? externalObject, ValidationTrust trust,
-        ValidationSettings settings, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
         var validator = new XadesSignatureValidator(trust.Options, logger: RunLog.Logger, chainRevocationChecker: validation.RevocationChecker());
         // An external additional data object is found by the URI of its reference, which is its file name.
         var results = externalObject is null
             ? await validator.ValidateAllAsync(xml, null, data, cancellationToken)
             : await validator.ValidateAllAsync(xml, null, ExternalData(xml, data, externalObject), cancellationToken);
+        return Reports(results.Select(Verdict));
+    }
+
+    /// <summary>The verdict on a signature the library validated, with its countersignatures.</summary>
+    private static XmlVerdict Verdict(XadesValidationResult r) => new(
+        r.SignatureId, CadesInspector.SimpleName(r.SignerCertificate), r.Indication.ToString(), ValidationService.SubIndicationName(r.SubIndication),
+        r.DetectedLevel.ToString(), r.SigningTime, r.IsSignatureValid, r.IsIntegrityValid, r.IsCertificateChainValid, r.HasValidSignatureTimeStamp, r.IsTsaTrusted,
+        r.HasValidDataObjectsTimeStamp, r.DataObjectsTimeStampTime, r.HasValidCompleteReferences, r.HasValidSigAndRefsTimeStamp, r.IsLtvDataValid,
+        r.HasValidArchiveTimeStamp, r.IsNotRevoked, r.RevocationSource.ToString(), r.Constraints, r.Errors, r.Warnings,
+        [.. r.CounterSignatures.Select(Verdict)])
+    {
+        Source = new Reports.ReportSource(r.ToReportEntry(), []),
+    };
+
+    /// <summary>The verdict on a signature the CLI validated, with its countersignatures.</summary>
+    private static XmlVerdict Verdict(CliXadesSignature s) => new(
+        s.Id, s.Signer, s.Indication, s.SubIndication, s.DetectedLevel, s.SigningTime, s.IsSignatureValid, s.IsIntegrityValid, s.IsCertificateChainValid,
+        s.HasValidSignatureTimeStamp, s.IsTsaTrusted, s.HasValidDataObjectsTimeStamp, s.DataObjectsTimeStampTime, s.HasValidCompleteReferences,
+        s.HasValidSigAndRefsTimeStamp, s.IsLtvDataValid, s.HasValidArchiveTimeStamp, s.NotRevoked, s.RevocationSource ?? "",
+        CliValidation.Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [], [.. (s.CounterSignatures ?? []).Select(Verdict)]);
+
+    /// <summary>The reports of the signatures, whichever validated them: a countersignature right after the signature it signs, saying so.</summary>
+    private static List<XmlSignatureReport> Reports(IEnumerable<XmlVerdict> verdicts)
+    {
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
         var reports = new List<XmlSignatureReport>();
-        foreach (var result in results)
+        foreach (var verdict in verdicts)
         {
-            Report(result, countersigned: null);
+            Report(verdict, countersigned: null);
         }
 
-        // A countersignature is listed right after the signature it signs, and says so.
-        void Report(XadesValidationResult r, string? countersigned)
+        void Report(XmlVerdict v, string? countersigned)
         {
             int i = reports.Count;
             var checks = new List<CheckRow>
             {
-                new("signature", L.T("Signature value and references"), Status(r.IsSignatureValid && r.IsIntegrityValid), null),
-                new("chain", L.T("Certificate chain"), Status(r.IsCertificateChainValid), null),
-                new("timestamp", L.T("Signature timestamp"), Status(r.HasValidSignatureTimeStamp), r.IsTsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
-                new("dataObjectsTimestamp", L.T("Data objects timestamp"), Status(r.HasValidDataObjectsTimeStamp),
-                    r.DataObjectsTimeStampTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)),
-                new("references", L.T("Complete references (XAdES-C)"), Status(r.HasValidCompleteReferences), null),
-                new("sigAndRefs", L.T("SigAndRefsTimeStamp (XAdES-X)"), Status(r.HasValidSigAndRefsTimeStamp), null),
-                new("ltv", L.T("Validation data (certificate and revocation values)"), Status(r.IsLtvDataValid), null),
-                new("archive", L.T("Archive timestamp"), Status(r.HasValidArchiveTimeStamp), null),
-                ValidationService.RevocationRow(r.IsNotRevoked, r.RevocationSource),
+                new("signature", L.T("Signature value and references"), Status(v.SignatureValid && v.IntegrityValid), null),
+                new("chain", L.T("Certificate chain"), Status(v.ChainValid), null),
+                new("timestamp", L.T("Signature timestamp"), Status(v.HasValidSignatureTimeStamp), v.TsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
+                new("dataObjectsTimestamp", L.T("Data objects timestamp"), Status(v.HasValidDataObjectsTimeStamp),
+                    v.DataObjectsTimeStampTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)),
+                new("references", L.T("Complete references (XAdES-C)"), Status(v.HasValidCompleteReferences), null),
+                new("sigAndRefs", L.T("SigAndRefsTimeStamp (XAdES-X)"), Status(v.HasValidSigAndRefsTimeStamp), null),
+                new("ltv", L.T("Validation data (certificate and revocation values)"), Status(v.LtvDataValid), null),
+                new("archive", L.T("Archive timestamp"), Status(v.HasValidArchiveTimeStamp), null),
+                ValidationService.RevocationRow(v.NotRevoked, v.RevocationSource),
             };
-            checks.AddRange(ValidationService.PolicyRows(r.Constraints));
-            bool invalid = !r.IsSignatureValid || !r.IsIntegrityValid || r.HasValidSignatureTimeStamp == false || r.HasValidArchiveTimeStamp == false
-                || r.HasValidSigAndRefsTimeStamp == false || r.HasValidCompleteReferences == false || r.HasValidDataObjectsTimeStamp == false;
-            string indication = invalid ? "Invalid" : r.Indication.ToString();
-            string? reference = countersigned is null ? r.SignatureId : L.T("{0} (countersignature of {1})", r.SignatureId ?? "-", countersigned);
-            reports.Add(new XmlSignatureReport(i, reference, CadesInspector.SimpleName(r.SignerCertificate), indication,
-                r.DetectedLevel switch
+            checks.AddRange(ValidationService.PolicyRows(v.Constraints));
+            bool invalid = !v.SignatureValid || !v.IntegrityValid || v.HasValidSignatureTimeStamp == false || v.HasValidArchiveTimeStamp == false
+                || v.HasValidSigAndRefsTimeStamp == false || v.HasValidCompleteReferences == false || v.HasValidDataObjectsTimeStamp == false;
+            string indication = invalid ? "Invalid" : v.Indication;
+            string? reference = countersigned is null ? v.SignatureId : L.T("{0} (countersignature of {1})", v.SignatureId ?? "-", countersigned);
+            reports.Add(new XmlSignatureReport(i, reference, v.Signer, indication,
+                v.DetectedLevel switch
                 {
-                    AdesBaselineLevel.Basic => "B-B",
-                    AdesBaselineLevel.Timestamped => "B-T",
-                    AdesBaselineLevel.LongTerm => "B-LT",
+                    nameof(AdesBaselineLevel.Basic) => "B-B",
+                    nameof(AdesBaselineLevel.Timestamped) => "B-T",
+                    nameof(AdesBaselineLevel.LongTerm) => "B-LT",
                     _ => "B-LTA",
                 },
-                r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
-                [.. checks.Where(c => c.Status != "n/a" || c.Id is "signature" or "chain")], r.Errors, r.Warnings,
-                ValidationService.SubIndicationName(r.SubIndication), ValidationService.Findings(r.Constraints))
+                v.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
+                [.. checks.Where(c => c.Status != "n/a" || c.Id is "signature" or "chain")], v.Errors, v.Warnings,
+                v.SubIndication, ValidationService.Findings(v.Constraints))
             {
-                Source = new Reports.ReportSource(r.ToReportEntry(), []),
+                Source = v.Source,
             });
-            foreach (var counter in r.CounterSignatures)
+            foreach (var counter in v.CounterSignatures)
             {
-                Report(counter, r.SignatureId ?? "-");
+                Report(counter, v.SignatureId ?? "-");
             }
         }
 

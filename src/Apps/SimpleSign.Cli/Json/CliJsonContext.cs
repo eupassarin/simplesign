@@ -67,6 +67,15 @@ internal sealed class ValidateSignatureDto
     public PublicKeyDto? PublicKey { get; init; }
     public List<ConstraintDto> Constraints { get; init; } = [];
     public List<string> Errors { get; init; } = [];
+    public List<string> Warnings { get; init; } = [];
+    public string? SubFilter { get; init; }
+    public bool NotRevoked { get; init; }
+    public string RevocationSource { get; init; } = string.Empty;
+    public bool? HasValidTimestamp { get; init; }
+    public bool? IsTsaTrusted { get; init; }
+    public bool ChainTrustWarning { get; init; }
+    public string? ChainRegion { get; init; }
+    public Dictionary<string, string>? ChainMetadata { get; init; }
 }
 
 internal sealed class ConstraintDto
@@ -257,6 +266,44 @@ internal sealed class CadesValidateOutput
     public DateTimeOffset? SigningTime { get; init; }
     public List<string> Errors { get; init; } = [];
     public List<string> Warnings { get; init; } = [];
+
+    /// <summary>Errors of the whole signature (a CMS that cannot be read, no signer…).</summary>
+    public List<string> ReportErrors { get; init; } = [];
+
+    /// <summary>Every signer, each with its countersignatures; the fields above are those of the first.</summary>
+    public List<CadesSignerDto> Signatures { get; init; } = [];
+}
+
+/// <summary>One signer of a CAdES signature, or one of its countersignatures.</summary>
+internal sealed class CadesSignerDto
+{
+    public string Id { get; init; } = string.Empty;
+    public int Index { get; init; }
+    public bool IsValid { get; init; }
+    public string Indication { get; init; } = "Indeterminate";
+    public string? SubIndication { get; init; }
+    public List<ConstraintDto> Constraints { get; init; } = [];
+    public bool IsSignatureValid { get; init; }
+    public bool IsIntegrityValid { get; init; }
+    public bool IsCertificateChainValid { get; init; }
+    public bool? HasValidTimestamp { get; init; }
+    public bool? IsTsaTrusted { get; init; }
+    public bool? HasValidContentTimestamp { get; init; }
+    public DateTimeOffset? ContentTimestampTime { get; init; }
+    public bool? IsLtvDataValid { get; init; }
+    public bool? HasValidEscTimestamp { get; init; }
+    public bool? HasValidArchiveTimestamp { get; init; }
+    public bool? NotRevoked { get; init; }
+    public string RevocationSource { get; init; } = string.Empty;
+    public string? Signer { get; init; }
+    public string? Subject { get; init; }
+    public string? Issuer { get; init; }
+    public string? Serial { get; init; }
+    public string? Thumbprint { get; init; }
+    public DateTimeOffset? SigningTime { get; init; }
+    public List<string> Errors { get; init; } = [];
+    public List<string> Warnings { get; init; } = [];
+    public List<CadesSignerDto> CounterSignatures { get; init; } = [];
 }
 
 // ─── XAdES Validate DTO ───────────────────────────────────────────────
@@ -284,4 +331,40 @@ internal sealed class XadesValidateOutput
     public string? DetectedLevel { get; init; }
     public List<string> Errors { get; init; } = [];
     public List<string> Warnings { get; init; } = [];
+
+    /// <summary>Every ds:Signature of the document, each with its countersignatures; the fields above are those of the first.</summary>
+    public List<XadesSignatureDto> Signatures { get; init; } = [];
+}
+
+/// <summary>One XAdES signature, or one of its countersignatures.</summary>
+internal sealed class XadesSignatureDto
+{
+    public string? Id { get; init; }
+    public bool IsValid { get; init; }
+    public string Indication { get; init; } = "Indeterminate";
+    public string? SubIndication { get; init; }
+    public List<ConstraintDto> Constraints { get; init; } = [];
+    public bool IsSignatureValid { get; init; }
+    public bool IsIntegrityValid { get; init; }
+    public bool IsCertificateChainValid { get; init; }
+    public bool? HasValidSignatureTimeStamp { get; init; }
+    public bool? IsTsaTrusted { get; init; }
+    public bool? HasValidDataObjectsTimeStamp { get; init; }
+    public DateTimeOffset? DataObjectsTimeStampTime { get; init; }
+    public bool? HasValidCompleteReferences { get; init; }
+    public bool? HasValidSigAndRefsTimeStamp { get; init; }
+    public bool? IsLtvDataValid { get; init; }
+    public bool? HasValidArchiveTimeStamp { get; init; }
+    public bool? NotRevoked { get; init; }
+    public string RevocationSource { get; init; } = string.Empty;
+    public string? DetectedLevel { get; init; }
+    public string? Signer { get; init; }
+    public string? Subject { get; init; }
+    public string? Issuer { get; init; }
+    public string? Serial { get; init; }
+    public string? Thumbprint { get; init; }
+    public DateTimeOffset? SigningTime { get; init; }
+    public List<string> Errors { get; init; } = [];
+    public List<string> Warnings { get; init; } = [];
+    public List<XadesSignatureDto> CounterSignatures { get; init; } = [];
 }

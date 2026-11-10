@@ -77,7 +77,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             originalData = await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
         }
 
-        var (policy, extraAnchors) = await settings.LoadTrustAsync(cancellationToken);
+        var (policy, extraAnchors) = await settings.LoadTrustAsync(_httpClientProvider, cancellationToken);
         List<X509Certificate2>? trustAnchors = [.. LoadTrustAnchors(settings.TrustPath) ?? [], .. extraAnchors];
         if (trustAnchors.Count == 0)
         {
@@ -88,7 +88,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             new ValidationOptions
             {
                 CheckRevocation = settings.CheckRevocation,
-                TrustSystemRoots = trustAnchors is null && !settings.NoSystemRoots,
+                TrustSystemRoots = !settings.NoSystemRoots,
                 Policy = policy,
                 Level = settings.ValidationLevel,
                 Verifier = settings.Verifier,
@@ -96,43 +96,79 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             },
             chainRevocationChecker: settings.RevocationCheckerFor(_httpClientProvider));
 
-        var result = await validator.ValidateAsync(
-            cmsBytes,
-            originalData ?? throw new InvalidOperationException("Original data file is required. Use --data <path>."),
-            trustAnchors,
-            cancellationToken);
-        settings.WriteReports([result.ToReportEntry()]);
+        // Every signer and countersignature; an attached signature carries its content (no --data).
+        var report = await validator.ValidateAllAsync(cmsBytes, originalData, trustAnchors, cancellationToken);
+        var signers = Flatten(report.Signers, "signer").ToList();
+        settings.WriteReports([.. signers.Select(s => s.Signer.Result.ToReportEntry(s.Id))]);
 
         if (settings.Json)
         {
-            var report = ValidationReportRenderer.ToDto(result.SubIndication, result.Constraints, result.SignerCertificate);
+            var dtos = report.Signers.Select((s, i) => JsonMapper.MapCadesSigner(s, $"signer-{i + 1}")).ToList();
+            var first = report.Signers.FirstOrDefault()?.Result;
+            var firstReport = first is null ? default : ValidationReportRenderer.ToDto(first.SubIndication, first.Constraints, first.SignerCertificate);
             var output = new CadesValidateOutput
             {
                 File = settings.SignaturePath,
-                IsValid = result.IsValid,
-                Indication = result.Indication.ToString(),
-                SubIndication = report.SubIndication,
-                NotRevoked = result.IsNotRevoked,
-                PublicKey = report.PublicKey,
-                Constraints = report.Constraints,
-                IsSignatureValid = result.IsSignatureValid,
-                IsIntegrityValid = result.IsIntegrityValid,
-                IsCertificateChainValid = result.IsCertificateChainValid,
-                HasValidTimestamp = result.HasValidTimestamp,
-                IsLtvDataValid = result.IsLtvDataValid,
-                HasValidArchiveTimestamp = result.HasValidArchiveTimestamp,
-                Signer = result.SignerCertificate?.Subject,
-                Issuer = result.SignerCertificate?.Issuer,
-                Serial = result.SignerCertificate?.SerialNumber,
-                Thumbprint = result.SignerCertificate?.Thumbprint,
-                SigningTime = result.SigningTime,
-                Errors = [.. result.Errors],
-                Warnings = [.. result.Warnings],
+                IsValid = report.IsValid,
+                Indication = first?.Indication.ToString() ?? SignatureIndication.Invalid.ToString(),
+                SubIndication = firstReport.SubIndication,
+                NotRevoked = first?.IsNotRevoked,
+                PublicKey = firstReport.PublicKey,
+                Constraints = firstReport.Constraints ?? [],
+                IsSignatureValid = first?.IsSignatureValid ?? false,
+                IsIntegrityValid = first?.IsIntegrityValid ?? false,
+                IsCertificateChainValid = first?.IsCertificateChainValid ?? false,
+                HasValidTimestamp = first?.HasValidTimestamp,
+                IsLtvDataValid = first?.IsLtvDataValid,
+                HasValidArchiveTimestamp = first?.HasValidArchiveTimestamp,
+                Signer = first?.SignerCertificate?.Subject,
+                Issuer = first?.SignerCertificate?.Issuer,
+                Serial = first?.SignerCertificate?.SerialNumber,
+                Thumbprint = first?.SignerCertificate?.Thumbprint,
+                SigningTime = first?.SigningTime,
+                Errors = first is null ? [.. report.Errors] : [.. first.Errors],
+                Warnings = first is null ? [] : [.. first.Warnings],
+                ReportErrors = [.. report.Errors],
+                Signatures = dtos,
             };
             Console.WriteLine(JsonSerializer.Serialize(output, CliJsonContext.Default.CadesValidateOutput));
-            return result.IsValid ? 0 : 1;
+            return report.IsValid ? 0 : 1;
         }
 
+        foreach (string error in report.Errors)
+        {
+            AnsiConsole.MarkupLine($"[red]✗[/] {error.EscapeMarkup()}");
+        }
+
+        foreach (var (id, signer) in signers)
+        {
+            if (signers.Count > 1)
+            {
+                AnsiConsole.MarkupLine($"\n[bold]{id.EscapeMarkup()}[/]");
+            }
+
+            WriteText(signer.Result, settings.Spanish);
+        }
+
+        return report.IsValid ? 0 : 1;
+    }
+
+    /// <summary>The signers in order, each followed by its countersignatures: <c>signer-1</c>, <c>signer-1.1</c>…</summary>
+    private static IEnumerable<(string Id, CadesSignerValidationResult Signer)> Flatten(IReadOnlyList<CadesSignerValidationResult> signers, string prefix)
+    {
+        for (int i = 0; i < signers.Count; i++)
+        {
+            string id = prefix == "signer" ? $"signer-{i + 1}" : $"{prefix}.{i + 1}";
+            yield return (id, signers[i]);
+            foreach (var counter in Flatten(signers[i].CounterSignatures, id))
+            {
+                yield return counter;
+            }
+        }
+    }
+
+    private static void WriteText(CadesValidationResult result, bool spanish)
+    {
         var table = new Table();
         table.AddColumn("Check");
         table.AddColumn("Result");
@@ -185,8 +221,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             }
         }
 
-        ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, settings.Spanish);
-        var isValid = result.IsValid;
+        ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, spanish);
         AnsiConsole.MarkupLine(result.Indication switch
         {
             SignatureIndication.Valid => "\n[green]✓ Signature is VALID[/]",
@@ -194,8 +229,6 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             _ => "\n[yellow]? Signature is INDETERMINATE[/]"
                 + (result.SubIndication is { } sub ? $" ({sub.ToEtsiName()})" : string.Empty),
         });
-
-        return isValid ? 0 : 1;
     }
 
     private List<X509Certificate2>? LoadTrustAnchors(string? trustPath)

@@ -296,8 +296,8 @@ export const ptBR: Messages = {
       title: "Executar via",
       library: "Biblioteca",
       cli: "CLI",
-      libraryAbout: "Assina com a biblioteca SimpleSign no próprio processo do TestBench.",
-      cliAbout: "Executa o comando da aba Código pelo CLI simplesign (um processo separado) e valida a saída como numa execução pela biblioteca. Credenciais PKCS#11 e em nuvem precisam da biblioteca.",
+      libraryAbout: "Assina e valida com a biblioteca SimpleSign no próprio processo do TestBench.",
+      cliAbout: "Assina e valida executando os comandos da aba Código pelo CLI simplesign (um processo separado): os vereditos e relatórios são os do CLI. Credenciais PKCS#11 e em nuvem precisam da biblioteca.",
     },
     dss: {
       title: "Validação cruzada com o DSS",
@@ -427,6 +427,7 @@ export const ptBR: Messages = {
   report: {
     title: "Relatório de validação",
     simplesign: "Relatório do SimpleSign",
+    etsiReport: "Relatório ETSI",
     dss: "Relatório do DSS",
     view: "Ver relatório",
     viewSimpleSign: "Ver o relatório do SimpleSign",

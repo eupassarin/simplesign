@@ -395,6 +395,7 @@ function Validation({ run }: { run: RunView }) {
             <span className={cn("flex items-center gap-2", !run.overall && "ml-auto")}>
               <ReportButtons source="simplesign" reportId={run.reportId} />
               <Button variant="outline" size="sm" asChild><a href={api.fileUrl(run.reportId, true)}><Download /> {t("report.simplesign")} (JSON)</a></Button>
+              {run.etsiReportId && <Button variant="outline" size="sm" asChild><a href={api.fileUrl(run.etsiReportId, true)}><Download /> {t("report.etsiReport")} (XML)</a></Button>}
             </span>
           )}
         </div>

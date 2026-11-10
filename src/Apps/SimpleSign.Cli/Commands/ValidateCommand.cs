@@ -103,7 +103,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var loggerFactory = settings.CreateLoggerFactory();
-        var (policy, extraAnchors) = await settings.LoadTrustAsync(cancellationToken);
+        var (policy, extraAnchors) = await settings.LoadTrustAsync(_httpClientProvider, cancellationToken);
         List<System.Security.Cryptography.X509Certificates.X509Certificate2> roots =
         [
             .. settings.TrustPath is null

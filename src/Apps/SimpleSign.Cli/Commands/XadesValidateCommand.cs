@@ -96,7 +96,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
     {
         byte[] signedXml = await CommonSettings.ReadInputBytesAsync(settings.SignaturePath, cancellationToken);
 
-        var (policy, extraAnchors) = await settings.LoadTrustAsync(cancellationToken);
+        var (policy, extraAnchors) = await settings.LoadTrustAsync(_httpClientProvider, cancellationToken);
         List<X509Certificate2>? trustAnchors = [.. LoadTrustAnchors(settings.TrustPath) ?? [], .. extraAnchors];
         if (trustAnchors.Count == 0)
         {
@@ -107,7 +107,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
             new ValidationOptions
             {
                 CheckRevocation = settings.CheckRevocation,
-                TrustSystemRoots = trustAnchors is null && !settings.NoSystemRoots,
+                TrustSystemRoots = !settings.NoSystemRoots,
                 Policy = policy,
                 Level = settings.ValidationLevel,
                 Verifier = settings.Verifier,
@@ -118,7 +118,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
         byte[]? originalData = settings.DataPath is null
             ? null
             : await CommonSettings.ReadInputBytesAsync(settings.DataPath, cancellationToken);
-        XadesValidationResult result;
+        IReadOnlyList<XadesValidationResult> results;
         if (settings.ExternalObjects is { Length: > 0 })
         {
             var externalData = new Dictionary<string, byte[]>(StringComparer.Ordinal);
@@ -128,15 +128,26 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 externalData[uri] = await File.ReadAllBytesAsync(path, cancellationToken);
             }
 
-            result = await validator.ValidateAsync(signedXml, trustAnchors, externalData, cancellationToken);
+            results = await validator.ValidateAllAsync(signedXml, trustAnchors, externalData, cancellationToken);
+            if (results.Count == 0)
+            {
+                results = [await validator.ValidateAsync(signedXml, trustAnchors, externalData, cancellationToken)];
+            }
         }
         else
         {
-            result = await validator.ValidateAsync(signedXml, trustAnchors, originalData, cancellationToken);
+            // Every ds:Signature; a document without one gets the single result that says so.
+            results = await validator.ValidateAllAsync(signedXml, trustAnchors, originalData, cancellationToken);
+            if (results.Count == 0)
+            {
+                results = [await validator.ValidateAsync(signedXml, trustAnchors, originalData, cancellationToken)];
+            }
         }
 
-        settings.WriteReports([result.ToReportEntry()]);
-
+        var all = Flatten(results).ToList();
+        bool allValid = all.All(r => r.IsValid);
+        var result = results[0];
+        settings.WriteReports([.. all.Select(r => r.ToReportEntry())]);
 
         if (settings.Json)
         {
@@ -164,10 +175,31 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 DetectedLevel = result.DetectedLevel.ToString(),
                 Errors = [.. result.Errors],
                 Warnings = [.. result.Warnings],
+                Signatures = [.. results.Select(JsonMapper.MapXadesSignature)],
             };
             Console.WriteLine(JsonSerializer.Serialize(output, CliJsonContext.Default.XadesValidateOutput));
-            return result.IsValid ? 0 : 1;
+            return allValid ? 0 : 1;
         }
+
+        foreach (var signature in all)
+        {
+            if (all.Count > 1)
+            {
+                AnsiConsole.MarkupLine($"\n[bold]{(signature.SignatureId ?? "Signature").EscapeMarkup()}[/]");
+            }
+
+            WriteText(signature, settings.Spanish);
+        }
+
+        return allValid ? 0 : 1;
+    }
+
+    /// <summary>The signatures in order, each followed by its countersignatures.</summary>
+    private static IEnumerable<XadesValidationResult> Flatten(IEnumerable<XadesValidationResult> results) =>
+        results.SelectMany(r => new[] { r }.Concat(Flatten(r.CounterSignatures)));
+
+    private static void WriteText(XadesValidationResult result, bool spanish)
+    {
 
         var table = new Table();
         table.AddColumn("Check");
@@ -234,8 +266,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
             }
         }
 
-        ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, settings.Spanish);
-        var isValid = result.IsValid;
+        ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, spanish);
         AnsiConsole.MarkupLine(result.Indication switch
         {
             SignatureIndication.Valid => "\n[green]✓ Signature is VALID[/]",
@@ -243,8 +274,6 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
             _ => "\n[yellow]? Signature is INDETERMINATE[/]"
                 + (result.SubIndication is { } sub ? $" ({sub.ToEtsiName()})" : string.Empty),
         });
-
-        return isValid ? 0 : 1;
     }
 
     private List<X509Certificate2>? LoadTrustAnchors(string? trustPath)

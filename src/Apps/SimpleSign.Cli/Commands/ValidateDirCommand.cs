@@ -120,7 +120,7 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
         }
 
         using var loggerFactory = settings.CreateLoggerFactory();
-        var (policy, extraAnchors) = await settings.LoadTrustAsync(cancellationToken);
+        var (policy, extraAnchors) = await settings.LoadTrustAsync(_httpClientProvider, cancellationToken);
         List<System.Security.Cryptography.X509Certificates.X509Certificate2> roots =
         [
             .. settings.TrustPath is null

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — `cades validate` and `xades validate` check every signature
+
+- **Every signature:** both commands validate every signer, co-signer and countersignature (`ValidateAllAsync`), not
+  only the first. `--json` adds `signatures`, one entry per signature with its `counterSignatures` and every check
+  (timestamps, LTV data, revocation source…). The top-level fields stay those of the first signature. The exit code
+  is 0 only when all are valid.
+- **System roots:** with `--trust`, the operating system's roots stay trusted, as in `validate`; `--no-system-roots`
+  turns them off. Before, `--trust` replaced them.
+- **Attached CAdES:** `cades validate` no longer requires `--data`; the signed content is read from the signature.
+- **Trusted lists on the CLI's network:** `--lotl` and `--tsl` are downloaded through the CLI's HTTP client, so
+  `--allow-origin` and the proxy apply to them. Before, a list on `localhost` (the Sandbox's) was refused.
+- **`validate --json`:** each signature also has `warnings`, `subFilter`, `notRevoked`, `revocationSource`,
+  `hasValidTimestamp`, `isTsaTrusted`, `chainTrustWarning`, `chainRegion` and `chainMetadata`.
+
+### Added — TestBench: validate through the CLI
+
+- **The engine for the whole app:** the Library / CLI selector moved to the top bar and applies to signing and
+  validating, in PAdES, CAdES and XAdES.
+- **Validation through the CLI:** with CLI selected, a validation runs `simplesign validate`, `cades validate` or
+  `xades validate` with `--json`, and the verdicts shown are the CLI's.
+- **Reports:** the ETSI and simple reports are the ones the CLI wrote.
+- **Signing through the CLI:** the signed file is validated through the CLI too.
+
 ### Added — the public TSAs' roots are trusted (TestBench and `tools/dss`)
 
 - **TestBench:** new trust choice "Public TSA roots" (`TrustChoice.PublicTsas`), on by default. It trusts the roots of
