@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { CmsStructure } from "../cades/CmsViews"
 import { PdfPreview } from "../shared/PdfPreview"
 import { DetailedCard, InspectView } from "../validate/pdf"
+import { ReportButtons } from "../shared/ReportViewer"
 import { CodeTabs, Indication } from "../shared/results"
 import { IssueList, KeyValue, Pill } from "../shared/ui"
 import { XmlViews } from "../xml/XmlViews"
@@ -362,6 +363,12 @@ function Validation({ run }: { run: RunView }) {
           <h3 className="text-sm font-semibold">SimpleSign</h3>
           {stage && <StandardBadge explanation={{ title: stage.title, summary: stage.summary, standards: stage.standards[run.format], api: schema.formats.find((f) => f.id === run.format)?.validatorApi }} />}
           {run.overall && <span className="ml-auto"><Indication value={run.overall} /></span>}
+          {run.reportId && (
+            <span className={cn("flex items-center gap-2", !run.overall && "ml-auto")}>
+              <ReportButtons source="simplesign" reportId={run.reportId} />
+              <Button variant="outline" size="sm" asChild><a href={api.fileUrl(run.reportId, true)}><Download /> {t("report.simplesign")} (JSON)</a></Button>
+            </span>
+          )}
         </div>
         {run.validation.length === 0 && <p className="text-muted-foreground text-sm">{t("result.validationOff")}</p>}
         {run.validation.map((v, i) => <VerdictCard key={i} verdict={v} />)}
@@ -393,7 +400,12 @@ function DssReport({ comparison }: { comparison: DssComparison }) {
       <div className={cn("flex flex-wrap items-center gap-2 rounded-lg border px-4 py-2.5 text-sm", comparison.agree ? "border-success/40 bg-success/5" : "border-warning/50 bg-warning/5")}>
         <Pill tone={comparison.agree ? "success" : "warning"}>{t(comparison.agree ? "wb.dss.agrees" : "wb.dss.differs")}</Pill>
         <span className="text-muted-foreground text-xs">{t("wb.dss.answered", { url: comparison.url, ms: comparison.ms })}</span>
-        {comparison.reportId && <Button variant="outline" size="sm" className="ml-auto" asChild><a href={api.fileUrl(comparison.reportId, true)}><Download /> {t("wb.dss.report")}</a></Button>}
+        {comparison.reportId && (
+          <span className="ml-auto flex items-center gap-2">
+            <ReportButtons source="dss" reportId={comparison.reportId} />
+            <Button variant="outline" size="sm" asChild><a href={api.fileUrl(comparison.reportId, true)}><Download /> {t("wb.dss.report")}</a></Button>
+          </span>
+        )}
       </div>
       {comparison.rows.filter((r) => r.agree).length > 0 && (
         <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">

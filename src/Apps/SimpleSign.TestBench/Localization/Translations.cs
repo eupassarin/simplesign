@@ -728,5 +728,13 @@ internal static class Translations
         ["The signature policy could not be processed."] = "A política de assinatura não pôde ser processada.",
         ["The certificate chain could not be validated (for example, missing revocation data)."] = "A cadeia de certificados não pôde ser validada (por exemplo, faltam dados de revogação).",
         ["Nothing proves the signature existed at the time it needs to."] = "Nada prova que a assinatura existia no momento necessário.",
+
+        // ── Report viewer ─────────────────────────────────────────────
+        ["This file is not a SimpleSign or DSS validation report."] = "Este arquivo não é um relatório de validação do SimpleSign nem do DSS.",
+        ["Not valid: {0}"] = "Inválida: {0}",
+        ["No conclusion: {0}"] = "Sem conclusão: {0}",
+        ["Valid: the signed content is intact, the signature verifies and the signer's chain reaches a trusted root."] = "Válida: o conteúdo assinado está íntegro, a assinatura confere e a cadeia do signatário chega a uma raiz confiável.",
+        ["Not valid: a check that decides the result failed."] = "Inválida: uma verificação que decide o resultado falhou.",
+        ["No conclusion: the validator lacks something to decide (trust, revocation data or a proof of time)."] = "Sem conclusão: falta algo ao validador para decidir (confiança, dados de revogação ou uma prova de tempo).",
     };
 }

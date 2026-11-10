@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Signing;
@@ -44,7 +45,20 @@ public sealed record RunVerdict(
     IReadOnlyList<RunVerdict> Children,
     bool IsTimestamp = false,
     string? SubIndication = null,
-    IReadOnlyList<FindingView>? Findings = null);
+    IReadOnlyList<FindingView>? Findings = null)
+{
+    /// <summary>The ETSI indication (EN 319 102-1 §5.1.3): TOTAL_PASSED, TOTAL_FAILED or INDETERMINATE.</summary>
+    public string EtsiIndication => Indication switch
+    {
+        "Valid" => "TOTAL_PASSED",
+        "Invalid" => "TOTAL_FAILED",
+        _ => "INDETERMINATE",
+    };
+
+    /// <summary>The library's report entry of this signature, for the SimpleSign report (not sent to the UI).</summary>
+    [JsonIgnore]
+    public Reports.ReportSource? Source { get; init; }
+}
 
 /// <summary>Everything about one run: what was asked, what came out, the verdicts, the code and the log.</summary>
 public sealed record RunView(
@@ -72,7 +86,8 @@ public sealed record RunView(
     object? Detail,
     object? CrossValidation,
     IReadOnlyList<RunLogEntry> Logs,
-    string Kind = RunKinds.Sign);
+    string Kind = RunKinds.Sign,
+    string? ReportId = null);
 
 /// <summary>A row of the run history.</summary>
 public sealed record RunSummary(string Id, string Format, string Status, DateTimeOffset StartedAt, long TotalMs, bool Success, string? RequestedLevel, string? AchievedLevel, string? Overall, string? FileName, string? Error, string Kind = RunKinds.Sign);
@@ -222,6 +237,7 @@ internal sealed class RunService(
                     RunFormats.Xades => FromXml(run, await xml.RunAsync(Options<XmlOptions>(run), CancellationToken.None)),
                     _ => FromPades(run, await pades.RunAsync(Options<SigningOptions>(run), CancellationToken.None)),
                 };
+                view = view with { ReportId = StoreReport(view) };
                 if (crossValidate && view.Success && view.OutputId is not null && view.Validation.Count > 0)
                 {
                     view = view with
@@ -245,6 +261,36 @@ internal sealed class RunService(
         };
         run.Add(new RunEvent("result", null, view));
     }
+
+    /// <summary>
+    /// Writes SimpleSign's JSON report of the run's verdicts (the library's simple report, with each signature's chain and
+    /// constraints) next to the output, and returns its id; null when nothing was validated.
+    /// </summary>
+    private string? StoreReport(RunView view)
+    {
+        var sources = Flatten(view.Validation).Select(v => v.Source).OfType<Reports.ReportSource>().ToList();
+        if (sources.Count == 0)
+        {
+            return null;
+        }
+
+        var pool = new List<System.Security.Cryptography.X509Certificates.X509Certificate2>();
+        if (view.OutputId is { } id && documents.TryGet(id, out var output))
+        {
+            pool.AddRange(Reports.SimpleSignReport.CertificatesIn(output!.Content));
+        }
+
+        if (validation.SandboxRoot is { } root)
+        {
+            pool.Add(root);
+        }
+
+        string json = Reports.SimpleSignReport.Build(sources, view.FileName, pool);
+        return documents.Add(Reports.SimpleSignReport.FileName(view.FileName), System.Text.Encoding.UTF8.GetBytes(json)).Id;
+    }
+
+    private static IEnumerable<RunVerdict> Flatten(IEnumerable<RunVerdict> verdicts) =>
+        verdicts.SelectMany(v => new[] { v }.Concat(Flatten(v.Children)));
 
     /// <summary>The validation settings of a run: the settings of a validation run, or the validation step of a signing run.</summary>
     private static Validation.ValidationSettings ValidationSettingsOf(Run run) =>
@@ -334,11 +380,17 @@ internal sealed class RunService(
     }
 
     private static RunVerdict Verdict(SignatureReport v) =>
-        new(v.FieldName, v.Signer, v.Indication, null, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp, v.SubIndication, v.Findings);
+        new(v.FieldName, v.Signer, v.Indication, null, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp, v.SubIndication, v.Findings)
+        {
+            Source = v.Source,
+        };
 
     private static RunVerdict Verdict(XmlSignatureReport s) => new(
         s.Reference ?? L.T("Signature {0}", s.Index + 1), s.Signer, s.Indication, s.Level, s.SigningTime, s.Checks, s.Errors, s.Warnings, [],
-        SubIndication: s.SubIndication, Findings: s.Findings);
+        SubIndication: s.SubIndication, Findings: s.Findings)
+    {
+        Source = s.Source,
+    };
 
     private static RunView Empty(Run run) => new(
         run.Id, run.Format, "running", run.StartedAt, 0, run.Options, false, null, null, null, null, 0, null, null,
@@ -390,7 +442,10 @@ internal sealed class RunService(
 
     private static RunVerdict Verdict(CadesSignerReport s) => new(
         L.T("Signer {0}", s.Index + 1), s.Signer, s.Indication, null, s.SigningTime, s.Checks, s.Errors, s.Warnings,
-        [.. s.CounterSignatures.Select(Verdict)], SubIndication: s.SubIndication, Findings: s.Findings);
+        [.. s.CounterSignatures.Select(Verdict)], SubIndication: s.SubIndication, Findings: s.Findings)
+    {
+        Source = s.Source,
+    };
 
     private static RunView FromXml(Run run, XmlSignResult r) => Empty(run) with
     {

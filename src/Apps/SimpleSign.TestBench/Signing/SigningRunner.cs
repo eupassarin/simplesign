@@ -30,7 +30,12 @@ public sealed record SignatureReport(
     IReadOnlyList<string> Warnings,
     IReadOnlyDictionary<string, string>? Metadata,
     string? SubIndication = null,
-    IReadOnlyList<FindingView>? Findings = null);
+    IReadOnlyList<FindingView>? Findings = null)
+{
+    /// <summary>The library's report entry of this signature and the certificates next to it, for the SimpleSign report (not sent to the UI).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Reports.ReportSource? Source { get; init; }
+}
 
 /// <summary>
 /// A constraint of the validation policy that failed, warned or informed on a signature, with every message it gave

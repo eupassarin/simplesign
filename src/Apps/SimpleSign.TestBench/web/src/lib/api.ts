@@ -18,7 +18,7 @@ import type {
   PolicyView,
 } from "./types"
 
-import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
+import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, ReportView, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -98,6 +98,8 @@ export const api = {
     run: (id: string) => request<RunView | undefined>("GET", `/api/runs/${id}`),
     eventsUrl: (id: string) => `/api/runs/${id}/events`,
     history: () => request<RunSummary[]>("GET", "/api/runs"),
+    /** A stored validation report (SimpleSign's or DSS's JSON), read for the report viewer. */
+    report: (id: string) => request<ReportView>("GET", `/api/reports/${encodeURIComponent(id)}`),
   },
   environment: {
     real: () => request<RealEnvironment>("GET", "/api/environment/real"),
