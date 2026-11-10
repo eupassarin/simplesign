@@ -24,7 +24,8 @@ public sealed record CadesSignerReport(
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
     IReadOnlyList<CadesSignerReport> CounterSignatures,
-    string? SubIndication = null);
+    string? SubIndication = null,
+    IReadOnlyList<FindingView>? Findings = null);
 
 /// <summary>The result of <c>CadesSignatureValidator.ValidateAll</c>, for the UI.</summary>
 public sealed record CadesValidationView(
@@ -188,7 +189,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         return new CadesSignerReport(s.Index, CadesInspector.SimpleName(r.SignerCertificate), indication,
             r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
             [.. checks.Where(c => c.Status != "n/a" || c.Id is "integrity" or "signature" or "chain")], r.Errors, r.Warnings,
-            [.. s.CounterSignatures.Select(Signer)], ValidationService.SubIndicationName(r.SubIndication));
+            [.. s.CounterSignatures.Select(Signer)], ValidationService.SubIndicationName(r.SubIndication), ValidationService.Findings(r.Constraints));
     }
 
     /// <summary>The data file a generated command signs, and the existing signature it co-signs or countersigns.</summary>

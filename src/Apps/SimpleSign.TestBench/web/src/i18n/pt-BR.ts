@@ -274,6 +274,10 @@ export const ptBR: Messages = {
     },
     validation: {
       counterSignatures: "Contra-assinaturas",
+      failed: "Verificação falhou",
+      warning: "Verificação não atendida (aviso)",
+      info: "Nota",
+      other: "Outras mensagens",
     },
     log: {
       empty: "Esta execução não registrou nada.",
@@ -301,6 +305,12 @@ export const ptBR: Messages = {
       signature: "Assinatura",
       indication: "Indicação",
       level: "Nível",
+      diffIndication: "Veredito diferente",
+      diffLevel: "Nível diferente",
+      cause: { setup: "Configuração do DSS", disagreement: "Divergência real", unknown: "Causa desconhecida" },
+      agreeOn: "Concordam em:",
+      seeSummary: "As diferenças, com a causa e o que fazer, estão no topo desta aba.",
+      messages: "Mensagens do DSS",
     },
     variants: {
       title: "Combinações",

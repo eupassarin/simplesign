@@ -115,4 +115,29 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
     [Fact]
     public void Defaults_TrustTheSandboxAndSystemRoots() =>
         new ValidationSettings().Trust.ShouldBe([TrustChoice.Sandbox, TrustChoice.System]);
+
+    [Fact]
+    public void Findings_SameConstraintForSeveralCertificates_IsOneGroupWithEachMessageOnce()
+    {
+        const string Aki = "SignatureConstraints/BasicSignatureConstraints/CACertificate/AuthorityKeyIdentifierPresent";
+        const string TimestampAki = "Timestamp/BasicSignatureConstraints/CACertificate/AuthorityKeyIdentifierPresent";
+        SimpleSign.Core.Validation.ValidationConstraintResult[] constraints =
+        [
+            new(Aki, SimpleSign.Core.Validation.ConstraintStatus.Warning, null, "'Root' has no Authority Key Identifier extension."),
+            new(TimestampAki, SimpleSign.Core.Validation.ConstraintStatus.Warning, null, "[signature timestamp] 'Root' has no Authority Key Identifier extension."),
+            new(Aki, SimpleSign.Core.Validation.ConstraintStatus.Warning, null, "'Root' has no Authority Key Identifier extension."),
+            new("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/NotRevoked", SimpleSign.Core.Validation.ConstraintStatus.Failed, null, "'Maria' is revoked."),
+            new("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/NotExpired", SimpleSign.Core.Validation.ConstraintStatus.Passed, null, "'Maria' is valid."),
+        ];
+
+        var findings = ValidationService.Findings(constraints);
+
+        findings.Count.ShouldBe(2);
+        findings[0].Status.ShouldBe("fail");
+        findings[0].Constraint.ShouldBe("NotRevoked");
+        var aki = findings[1];
+        aki.Status.ShouldBe("warn");
+        aki.Standard.ShouldBe("RFC 5280 §4.2.1.1");
+        aki.Messages.Count.ShouldBe(2);
+    }
 }

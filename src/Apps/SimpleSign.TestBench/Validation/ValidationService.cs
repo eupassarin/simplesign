@@ -176,6 +176,22 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
                 _ => "n/a",
             }, c.Message));
 
+    /// <summary>
+    /// The constraints that failed, warned or informed, one finding per constraint and outcome with all its messages
+    /// (a check repeated for each certificate of each token shows once), failures first.
+    /// </summary>
+    internal static IReadOnlyList<FindingView> Findings(IReadOnlyList<ValidationConstraintResult> constraints) =>
+        [.. constraints
+            .Where(c => c.Status is ConstraintStatus.Failed or ConstraintStatus.Warning or ConstraintStatus.Information)
+            .GroupBy(c => (Name: c.Id.Split('/')[^1], c.Status))
+            .OrderBy(g => g.Key.Status switch { ConstraintStatus.Failed => 0, ConstraintStatus.Warning => 1, _ => 2 })
+            .Select(g =>
+            {
+                var guide = Policies.PolicyGuide.Of(g.Key.Name);
+                string status = g.Key.Status switch { ConstraintStatus.Failed => "fail", ConstraintStatus.Warning => "warn", _ => "info" };
+                return new FindingView(g.Key.Name, guide?.Text ?? g.Key.Name, guide?.Standard, status, [.. g.Select(c => c.Message).Distinct()]);
+            })];
+
     /// <summary>The revocation row of a CAdES or XAdES result.</summary>
     internal static CheckRow RevocationRow(bool? notRevoked, RevocationSource source) =>
         new("revocation", L.T("Revocation"), notRevoked switch { true => "pass", false => "fail", null => "n/a" },
@@ -226,7 +242,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             r.SignerName ?? r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false),
             r.SubFilter, r.DigestAlgorithmName,
             r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
-            checks, r.Errors, r.Warnings, r.ChainValidationMetadata, SubIndicationName(r.SubIndication));
+            checks, r.Errors, r.Warnings, r.ChainValidationMetadata, SubIndicationName(r.SubIndication), Findings(r.Constraints));
     }
 
     private static DetailedSignature Detail(SignatureValidationResult result, SignatureFieldInfo? info, string? level, long fileSize, int revisions)

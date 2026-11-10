@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — TestBench: a readable Validation tab
+
+- The tab opens with a summary per signature: SimpleSign's verdict and DSS's side by side. Each difference says:
+  - what DSS concluded, in plain words (the ETSI sub-indications, in English and Portuguese);
+  - whether the cause is DSS's setup (it does not trust the Sandbox root, it cannot reach the Sandbox's CRL/OCSP)
+    or a real disagreement;
+  - what to do.
+- The points where they agree fit on one line, and DSS's raw messages are folded away.
+- SimpleSign's warnings are grouped by constraint of the validation policy, with its name in plain words and a
+  count. A check repeated for each certificate or token shows once.
+
 ### Fixed — validation against DSS 6.3 (every Sandbox scenario cross-validated)
 
 - **PAdES no longer accepts a signature under a revoked CA.** The validator checked online revocation for the

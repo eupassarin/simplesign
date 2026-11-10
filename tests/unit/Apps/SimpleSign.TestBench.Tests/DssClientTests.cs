@@ -75,7 +75,25 @@ public sealed class DssClientTests
         indication.Dss.ShouldBe("INDETERMINATE / NO_CERTIFICATE_CHAIN_FOUND");
         indication.Note.ShouldBe("Unable to build a certificate chain up to a trusted list!");
         comparison.Rows.Single(r => r.Topic == "level").Agree.ShouldBeTrue();
-        comparison.Notes.ShouldHaveSingleItem().ShouldContain("root");
+        indication.Cause.ShouldBe(DssClient.Causes.Setup);
+        indication.Reason.ShouldNotBeNull().ShouldContain("root");
+        indication.Action.ShouldNotBeNull().ShouldContain("tools/dss/README.md");
+        comparison.Summary.ShouldNotBeNull().ShouldContain("how DSS is set up");
+    }
+
+    [Fact]
+    public void Compare_HashFailureOnlyInDss_IsARealDisagreement()
+    {
+        string failed = Report.Replace("\"INDETERMINATE\"", "\"TOTAL_FAILED\"", StringComparison.Ordinal)
+            .Replace("NO_CERTIFICATE_CHAIN_FOUND", "HASH_FAILURE", StringComparison.Ordinal);
+
+        var comparison = DssClient.Compare(RunFormats.Pades, Run("Valid", "B-LT"), Dss(failed));
+
+        var indication = comparison.Rows.Single(r => r.Topic == "indication");
+        indication.Agree.ShouldBeFalse();
+        indication.Cause.ShouldBe(DssClient.Causes.Disagreement);
+        indication.Reason.ShouldNotBeNull().ShouldContain("changed after signing");
+        comparison.Summary.ShouldBe("They differ on the verdict on Signature1.");
     }
 
     [Fact]
@@ -88,6 +106,8 @@ public sealed class DssClientTests
 
         comparison.Agree.ShouldBeTrue();
         comparison.Notes.ShouldBeEmpty();
+        comparison.Summary.ShouldBe("SimpleSign and DSS agree on every signature.");
+        comparison.Rows.ShouldAllBe(r => r.Cause == null);
     }
 
     [Fact]
@@ -115,7 +135,10 @@ public sealed class DssClientTests
         var comparison = DssClient.Compare(RunFormats.Pades, Run("Valid", "B-B"), Dss(noRevocation));
 
         comparison.Agree.ShouldBeFalse();
-        comparison.Notes.ShouldHaveSingleItem().ShouldContain("revocation");
+        var indication = comparison.Rows.Single(r => r.Topic == "indication");
+        indication.Cause.ShouldBe(DssClient.Causes.Setup);
+        indication.Reason.ShouldNotBeNull().ShouldContain("revocation");
+        indication.Action.ShouldNotBeNull().ShouldContain("B-LT");
     }
 
     [Theory]
