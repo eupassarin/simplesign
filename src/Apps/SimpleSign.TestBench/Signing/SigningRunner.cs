@@ -46,7 +46,12 @@ public sealed record DeferredInfo(string HashToSignHex, string DigestAlgorithm, 
 
 public sealed record BatchItem(string Id, bool Ok, string? Error, string? OutputId, long Bytes);
 
-public sealed record CodeSnippets(string CSharp, string Cli, IReadOnlyList<string> CliNotes);
+public sealed record CodeSnippets(string CSharp, string Cli, IReadOnlyList<string> CliNotes)
+{
+    /// <summary>The CLI commands of <see cref="Cli"/>, token by token, for the equivalence test.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<CliLine> CliCommands { get; init; } = [];
+}
 
 public sealed record SigningResult(
     bool Success,

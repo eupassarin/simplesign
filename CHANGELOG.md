@@ -169,6 +169,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accept `env:NAME`.
 - `validate`, `validate-dir`, `cades validate` and `xades validate --no-system-roots`: trust only `--trust`,
   `--trust-dir` and the trusted lists.
+- `sign-dir`: signs every PDF of a directory with one certificate (`BatchSigner`). It takes `--max-concurrency`,
+  `--recursive`, the level, TSA and field options, a PFX or an external credential.
+- `deferred prepare` / `deferred complete`: deferred signing (`DeferredSigner`).
+  - `prepare` writes the session and the data to sign; the session is protected by `--session-key`.
+  - `complete` embeds the signature made elsewhere.
+- `cades sign --cosign [--data]` and `--countersign [--signer-index]` add a signer to an existing signature, or
+  countersign one of its signers.
+- `cades sign` and `xades sign` take `--signing-time`, `--signature-algorithm rsassa-pss` and
+  `--extended-form complete-references|extended-long|archive`.
+- `xades sign` gains:
+  - `--signing-certificate-v1` and `--data-mime-type` (DataObjectFormat);
+  - the external credentials of `sign` and `cades sign`: PKCS#11, PSC and CSC.
+- `sign`, `cades sign` and `xades sign` take `--operation-id`.
+- `cades sign` and `xades sign` with `--cert` now embed the other certificates of the PFX as the chain, as `sign`
+  already did. Before, the chain came only from `--chain`, and without it a signature that is valid with the library
+  validated as INDETERMINATE.
+- TestBench: the CLI line in the Code tab now covers every option the CLI has:
+  - the new flags;
+  - the Sandbox's `--allow-origin`;
+  - `deferred prepare`/`complete` and `sign-dir` for the deferred and batch modes;
+  - `--check-revocation` for CAdES and XAdES validation.
+
+  It also fixes `--sub-filter`, `--signature-algorithm`, `--certify` and `--thumbprint`, which the CLI did not accept
+  as written. `CliEquivalenceTests` runs the generated lines through the CLI against the Sandbox and checks that their
+  signatures validate like the library's (25 PAdES, CAdES and XAdES cases).
 
 ### Added — CLI: network options and JSON result for signing
 

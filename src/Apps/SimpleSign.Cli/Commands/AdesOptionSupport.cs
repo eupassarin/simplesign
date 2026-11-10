@@ -103,4 +103,44 @@ internal static class AdesOptionSupport
         var (path, mimeType) = SplitPathAndMimeType(value[(equals + 1)..]);
         return (value[..equals], path, mimeType);
     }
+
+    /// <summary>The extended form names of <c>--extended-form</c>.</summary>
+    internal const string ExtendedForms = "complete-references, extended-long or archive";
+
+    /// <summary>
+    /// The extended form (CAdES/XAdES-C, -X-L, -A) of an <c>--extended-form</c> value, as the name of the
+    /// <c>CadesExtendedForm</c> and <c>XadesExtendedForm</c> members; null when the text is none of them.
+    /// </summary>
+    internal static string? ParseExtendedForm(string? value) => value?.ToLowerInvariant() switch
+    {
+        "complete-references" or "c" => "CompleteReferences",
+        "extended-long" or "x-l" or "xl" => "ExtendedLong",
+        "archive" or "a" => "Archive",
+        _ => null,
+    };
+
+    /// <summary>
+    /// The error for the options <c>cades sign</c> and <c>xades sign</c> share with <c>sign</c>:
+    /// <c>--signing-time</c>, <c>--signature-algorithm</c> and <c>--extended-form</c>; null when they are valid.
+    /// </summary>
+    internal static string? ValidateSigningOptions(string? signingTime, string? signatureAlgorithm, string? extendedForm)
+    {
+        if (signingTime is not null && Rendering.SignCommandOptions.ParseSigningTime(signingTime) is null)
+        {
+            return "--signing-time must be an ISO 8601 date and time, e.g. 2026-11-09T10:00:00-03:00.";
+        }
+
+        if (signatureAlgorithm is not null && !IsKnownSignatureAlgorithm(signatureAlgorithm))
+        {
+            return "--signature-algorithm must be rsa-pkcs1 or rsassa-pss.";
+        }
+
+        return extendedForm is not null && ParseExtendedForm(extendedForm) is null
+            ? $"--extended-form must be {ExtendedForms}."
+            : null;
+    }
+
+    private static bool IsKnownSignatureAlgorithm(string value) =>
+        Rendering.SignCommandOptions.ParseSignatureAlgorithm(value) is not null
+        || value.ToLowerInvariant() is "rsa-pkcs1" or "rsa" or "1.2.840.113549.1.1.1";
 }

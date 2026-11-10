@@ -58,4 +58,23 @@ public sealed class AdesOptionSupportTests
     [InlineData("uri=")]
     public void SplitUriAndPath_WithoutBothSides_IsNull(string value) =>
         AdesOptionSupport.SplitUriAndPath(value).ShouldBeNull();
+
+    [Theory]
+    [InlineData("complete-references", "CompleteReferences")]
+    [InlineData("X-L", "ExtendedLong")]
+    [InlineData("archive", "Archive")]
+    [InlineData("other", null)]
+    public void ParseExtendedForm_ReturnsTheMemberName(string value, string? expected) =>
+        AdesOptionSupport.ParseExtendedForm(value).ShouldBe(expected);
+
+    [Theory]
+    [InlineData("soon", null, null, "ISO 8601")]
+    [InlineData(null, "md5-rsa", null, "--signature-algorithm")]
+    [InlineData(null, null, "x", "--extended-form")]
+    public void ValidateSigningOptions_Invalid_IsAnError(string? time, string? algorithm, string? form, string expected) =>
+        AdesOptionSupport.ValidateSigningOptions(time, algorithm, form).ShouldNotBeNull().ShouldContain(expected);
+
+    [Fact]
+    public void ValidateSigningOptions_Valid_IsNull() =>
+        AdesOptionSupport.ValidateSigningOptions("2026-01-02T03:04:05Z", "rsa-pkcs1", "archive").ShouldBeNull();
 }

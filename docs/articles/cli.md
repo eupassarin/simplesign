@@ -29,6 +29,14 @@ simplesign sign contract.pdf --cert mycert.pfx --password secret --tsa https://t
 simplesign validate signed.pdf
 simplesign validate signed.pdf --trust my-root-ca.pem --json
 
+# Sign every PDF of a folder (BatchSigner), four at a time, into folder/signed
+simplesign sign-dir contracts/ --cert mycert.pfx --password secret --tsa http://timestamp.digicert.com --max-concurrency 4
+
+# Deferred signing: the key is elsewhere (browser, token, remote service)
+simplesign deferred prepare contract.pdf --cert signer.cer --session-key env:SESSION_KEY   # writes .session and .tbs
+#   ...the signer hashes contract.pdf.tbs with SHA-256 and signs it (RSA PKCS#1 v1.5, or ECDSA in DER)...
+simplesign deferred complete contract.pdf.session --session-key env:SESSION_KEY --signature contract.sig -o signed.pdf
+
 # Validate a directory of signed PDFs
 simplesign validate-dir ./documents/
 
@@ -93,6 +101,14 @@ simplesign cades sign document.pdf --cert mycert.pfx \
 simplesign cades sign document.pdf --cert mycert.pfx \
     --tsa http://timestamp.digicert.com --level longterm --revocation-preference crl
 
+# Add a second signer of the same content, or countersign the first signer
+simplesign cades sign document.pdf.p7s --cosign --data document.pdf --cert second.pfx --password secret
+simplesign cades sign document.pdf.p7s --countersign --signer-index 0 --cert notary.pfx --password secret
+
+# Claimed signing time, RSASSA-PSS and an extended form (-C, -X-L or -A; also on xades sign)
+simplesign cades sign document.pdf --cert mycert.pfx --password secret --signing-time 2026-11-09T10:00:00Z \
+    --signature-algorithm rsassa-pss --tsa http://timestamp.digicert.com --level longterm --extended-form extended-long
+
 # Validate a CAdES signature
 simplesign cades validate document.pdf.p7s --data document.pdf
 
@@ -135,6 +151,9 @@ simplesign xades sign invoice.xml --cert mycert.pfx \
 
 # Countersign a signature of an already signed document (--countersign-id picks one of several)
 simplesign xades sign signed.xml --cert witness.pfx --countersign --output countersigned.xml
+
+# SigningCertificate V1 for older validators, the data's MIME type, and a PKCS#11 token as the key
+simplesign xades sign invoice.xml --pkcs11-lib auto --signing-certificate-v1 --data-mime-type application/xml
 
 # Validate a XAdES signature
 simplesign xades validate signed.xml

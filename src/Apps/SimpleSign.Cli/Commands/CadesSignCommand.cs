@@ -154,6 +154,79 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         [Description("OID or URI of the specification that defines the policy document's syntax (with --policy-document)")]
         public string? PolicySpecification { get; init; }
 
+        /// <summary>The input is an existing signature: add a parallel signer (co-signature).</summary>
+        [CommandOption("--cosign")]
+        [Description("The input is an existing CMS signature: add another signer of the same content (RFC 5652 §5.1); a detached .p7s also needs --data")]
+        public bool CoSign { get; init; }
+
+        /// <summary>The input is an existing signature: countersign one of its signers.</summary>
+        [CommandOption("--countersign")]
+        [Description("The input is an existing CMS signature: countersign the signature value of one signer (RFC 5652 §11.4); pick it with --signer-index")]
+        public bool CounterSign { get; init; }
+
+        /// <summary>The signer to countersign, in the order of the SignerInfos (default 0).</summary>
+        [CommandOption("--signer-index <N>")]
+        [Description("The signer to countersign, in the order of the SignerInfos (default 0). Requires --countersign.")]
+        public int? SignerIndex { get; init; }
+
+        /// <summary>The signed content of a detached signature, for --cosign.</summary>
+        [CommandOption("--data <PATH>")]
+        [Description("The content signed by a detached signature, for --cosign")]
+        public string? DataPath { get; init; }
+
+        /// <summary>Correlation id for the logs.</summary>
+        [CommandOption("--operation-id <ID>")]
+        [Description("Correlation id written in the logs of this signature")]
+        public string? OperationId { get; init; }
+
+        /// <summary>The claimed signing time (ISO 8601) instead of now.</summary>
+        [CommandOption("--signing-time <TIME>")]
+        [Description("Claimed signing time, ISO 8601 (e.g. 2026-11-09T10:00:00-03:00), instead of now")]
+        public string? SigningTime { get; init; }
+
+        /// <summary>RSA signature scheme: rsa-pkcs1 (default) or rsassa-pss.</summary>
+        [CommandOption("--signature-algorithm <ALGO>")]
+        [Description("RSA signature scheme: rsa-pkcs1 (default) or rsassa-pss")]
+        public string? SignatureAlgorithm { get; init; }
+
+        /// <summary>Extended form: complete-references, extended-long or archive.</summary>
+        [CommandOption("--extended-form <FORM>")]
+        [Description("CAdES extended form (EN 319 122-2): complete-references (-C), extended-long (-X-L) or archive (-A)")]
+        public string? ExtendedForm { get; init; }
+
+        /// <summary>The error for --cosign, --countersign and their companions, or null.</summary>
+        private string? ValidateOperation()
+        {
+            if (CoSign && CounterSign)
+            {
+                return "--cosign and --countersign are mutually exclusive.";
+            }
+
+            if (SignerIndex is not null && !CounterSign)
+            {
+                return "--signer-index requires --countersign.";
+            }
+
+            if (SignerIndex is < 0)
+            {
+                return "--signer-index must be 0 or more.";
+            }
+
+            if (DataPath is not null && !CoSign)
+            {
+                return "--data is the content of a detached signature for --cosign.";
+            }
+
+            if (DataPath is not null && !File.Exists(DataPath))
+            {
+                return $"File not found: {DataPath}";
+            }
+
+            return (CoSign || CounterSign) && ContentType is not null
+                ? "--content-type comes from the existing signature with --cosign or --countersign."
+                : AdesOptionSupport.ValidateSigningOptions(SigningTime, SignatureAlgorithm, ExtendedForm);
+        }
+
         public override ValidationResult Validate()
         {
             if (!SigningPolicyOption.IsValid(SigningPolicy))
@@ -176,7 +249,8 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
                 return ValidationResult.Error(tsaError);
             }
 
-            string? extrasError = AdesOptionSupport.ValidateRevocationPreference(RevocationPreference)
+            string? extrasError = ValidateOperation()
+                ?? AdesOptionSupport.ValidateRevocationPreference(RevocationPreference)
                 ?? AdesOptionSupport.ValidatePolicyDocument(PolicyOid, PolicyDocumentPath, PolicySpecification)
                 ?? AdesOptionSupport.ValidateFiles("--attribute-certificate", AttributeCertificates)
                 ?? AdesOptionSupport.ValidateFiles("--signed-assertion", SignedAssertions);
@@ -230,11 +304,23 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         var contentType = ParseContentType(settings.ContentType) ?? CadesContentType.Detached;
 
         var logger = settings.CreateLogger<CadesSignCommand>();
+        CadesSignerBuilder start;
+        if (settings.CoSign)
+        {
+            byte[]? content = settings.DataPath is null ? null : await File.ReadAllBytesAsync(settings.DataPath, cancellationToken);
+            start = CadesSigner.CoSign(data, content);
+        }
+        else
+        {
+            start = settings.CounterSign
+                ? CadesSigner.CounterSign(data, settings.SignerIndex ?? 0)
+                : CadesSigner.Document(data).WithContentType(contentType);
+        }
+
         var builder = (token is null
-                ? CadesSigner.Document(data).WithCertificate(cert)
-                : CadesSigner.Document(data).WithExternalSigner(token.Certificate, token.Signer, token.Chain))
-            .WithHashAlgorithm(hashAlg)
-            .WithContentType(contentType);
+                ? start.WithCertificate(cert)
+                : start.WithExternalSigner(token.Certificate, token.Signer, token.Chain))
+            .WithHashAlgorithm(hashAlg);
 
         if (logger is not null)
         {
@@ -262,11 +348,22 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         }
 
         builder = await ApplyExtrasAsync(builder, settings, cancellationToken);
-        if (settings.ChainPath is not null)
+        builder = ApplySigningOptions(builder, settings);
+        // The chain: the other certificates of the PFX (as sign does) plus --chain.
+        List<X509Certificate2> pfxChain = token is null ? PfxChain(settings, cert) : [];
+        IReadOnlyList<X509Certificate2> extraChain = settings.ChainPath is null ? [] : LoadChainCertificates(settings.ChainPath);
+        if (token is null && pfxChain.Count + extraChain.Count > 0)
         {
-            builder = token is null
-                ? builder.WithCertificate(cert, LoadChainCertificates(settings.ChainPath))
-                : builder.WithExternalSigner(token.Certificate, token.Signer, [.. token.Chain, .. LoadChainCertificates(settings.ChainPath)]);
+            builder = builder.WithCertificate(cert, [.. pfxChain, .. extraChain]);
+        }
+        else if (token is not null && extraChain.Count > 0)
+        {
+            builder = builder.WithExternalSigner(token.Certificate, token.Signer, [.. token.Chain, .. extraChain]);
+        }
+
+        if (settings.OperationId is not null)
+        {
+            builder = builder.WithOperationId(settings.OperationId);
         }
 
         builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
@@ -278,8 +375,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         var result = await builder.SignWithDetailsAsync(cancellationToken);
         byte[] cms = result.SignedArtifact;
 
-        string outputPath = settings.OutputPath
-            ?? settings.InputPath + (contentType == CadesContentType.Enveloped ? ".p7m" : ".p7s");
+        string outputPath = settings.OutputPath ?? DefaultOutput(settings, contentType);
         await File.WriteAllBytesAsync(outputPath, cms, cancellationToken);
         if (settings.Json)
         {
@@ -290,6 +386,40 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         AnsiConsole.MarkupLine($"[green]CAdES signature saved to:[/] {outputPath}");
 
         return 0;
+    }
+
+    /// <summary>
+    /// The output when none is given: beside the input, <c>.p7s</c>/<c>.p7m</c> for a new signature, and
+    /// <c>-cosigned</c>/<c>-countersigned</c> before the extension of an existing one.
+    /// </summary>
+    internal static string DefaultOutput(Settings settings, CadesContentType contentType)
+    {
+        if (!settings.CoSign && !settings.CounterSign)
+        {
+            return settings.InputPath + (contentType == CadesContentType.Enveloped ? ".p7m" : ".p7s");
+        }
+
+        string suffix = settings.CoSign ? "-cosigned" : "-countersigned";
+        string directory = Path.GetDirectoryName(settings.InputPath) ?? ".";
+        return Path.Combine(directory, Path.GetFileNameWithoutExtension(settings.InputPath) + suffix + Path.GetExtension(settings.InputPath));
+    }
+
+    /// <summary>Signing time, RSA scheme and extended form.</summary>
+    private static CadesSignerBuilder ApplySigningOptions(CadesSignerBuilder builder, Settings settings)
+    {
+        if (Rendering.SignCommandOptions.ParseSigningTime(settings.SigningTime) is { } signingTime)
+        {
+            builder = builder.WithSigningTime(signingTime);
+        }
+
+        if (settings.SignatureAlgorithm is not null && Rendering.SignCommandOptions.ParseSignatureAlgorithm(settings.SignatureAlgorithm) is { } oid)
+        {
+            builder = builder.WithSignatureAlgorithm(oid);
+        }
+
+        return AdesOptionSupport.ParseExtendedForm(settings.ExtendedForm) is { } extendedForm
+            ? builder.WithExtendedValidationData(Enum.Parse<CadesExtendedForm>(extendedForm))
+            : builder;
     }
 
     /// <summary>The signed attributes beyond the baseline: location, roles, content description and timestamp.</summary>
@@ -340,12 +470,13 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         return builder;
     }
 
-    private static async Task<X509Certificate2> LoadCertificateAsync(Settings settings, CancellationToken ct)
+    private async Task<X509Certificate2> LoadCertificateAsync(Settings settings, CancellationToken ct)
     {
         if (settings.CertPath is not null)
         {
             string? password = settings.Password;
             password ??= await PasswordResolver.ResolveAsync(password, isInteractive: true);
+            _pfxPassword = password;
 
             return new X509Certificate2(settings.CertPath, password, X509KeyStorageFlags.Exportable);
         }
@@ -360,6 +491,34 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         return certs.Count > 0
             ? certs[0]
             : throw new InvalidOperationException("No certificate found. Use --cert to specify a PFX file.");
+    }
+
+    /// <summary>The password the PFX was opened with, so the chain is read without asking again.</summary>
+    private string? _pfxPassword;
+
+    /// <summary>The other certificates of the --cert PFX (its chain, as <c>sign</c> uses it); none without --cert.</summary>
+    private List<X509Certificate2> PfxChain(Settings settings, X509Certificate2 signer)
+    {
+        if (settings.CertPath is null)
+        {
+            return [];
+        }
+
+        var collection = _certChainService.LoadPkcs12CollectionFromFile(settings.CertPath, _pfxPassword ?? settings.Password);
+        List<X509Certificate2> chain = [];
+        foreach (var certificate in collection)
+        {
+            if (certificate.Thumbprint == signer.Thumbprint)
+            {
+                certificate.Dispose();
+            }
+            else
+            {
+                chain.Add(certificate);
+            }
+        }
+
+        return chain;
     }
 
     private IReadOnlyList<X509Certificate2> LoadChainCertificates(string chainPath)

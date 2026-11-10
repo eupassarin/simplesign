@@ -44,8 +44,8 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         signatureXml.ShouldContain("Recife");
         signatureXml.ShouldNotContain("StreetAddress");
         result.Code.CSharp.ShouldContain(".WithSignatureProductionPlace(new SignatureProductionPlace { City = \"Recife\", StateOrProvince = \"PE\", CountryName = \"BR\" })");
-        result.Code.Cli.ShouldContain("--place-city \"Recife\"");
-        result.Code.Cli.ShouldContain("--place-state \"PE\"");
+        result.Code.Cli.ShouldContain("--place-city Recife");
+        result.Code.Cli.ShouldContain("--place-state PE");
         result.Code.Cli.ShouldNotContain("--place-street");
     }
 
@@ -96,8 +96,8 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         signatureXml.ShouldContain("SignaturePolicyStore");
         signatureXml.ShouldContain("https://example.com/policy-syntax");
         result.Code.CSharp.ShouldContain(".WithSignaturePolicyStore(SignaturePolicyStore.FromDocument(\"https://example.com/policy-syntax\", policyDocument))");
-        result.Code.Cli.ShouldContain("--policy-document \"policy.xml\"");
-        result.Code.Cli.ShouldContain("--policy-specification \"https://example.com/policy-syntax\"");
+        result.Code.Cli.ShouldContain("--policy-document policy.xml");
+        result.Code.Cli.ShouldContain("--policy-specification https://example.com/policy-syntax");
     }
 
     [SkippableTheory]
@@ -167,8 +167,8 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         signatureXml.ShouldContain("http://www.w3.org/2000/09/xmldsig#base64");
         result.Code.CSharp.ShouldContain(".WithAdditionalDataObject(XadesDataObject.Embedded(attachment))");
         result.Code.CSharp.ShouldContain(".WithAdditionalDataObject(XadesDataObject.External(\"termos.txt\", externalFile))");
-        result.Code.Cli.ShouldContain("--embed-object \"anexo.bin\"");
-        result.Code.Cli.ShouldContain("--external-object \"termos.txt=termos.txt\"");
+        result.Code.Cli.ShouldContain("--embed-object anexo.bin");
+        result.Code.Cli.ShouldContain("--external-object termos.txt=termos.txt");
         result.Code.Cli.ShouldContain("--data-objects-timestamp");
         // Without the external file the same signature cannot be verified.
         (await fixture.Xml.ValidateAsync(result.OutputId!, form == XadesFormChoice.Detached ? options.DataId : null, new SimpleSign.TestBench.Validation.ValidationSettings()))
