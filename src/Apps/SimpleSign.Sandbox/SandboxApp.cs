@@ -108,8 +108,19 @@ public static class SandboxApp
         var files = new PhysicalFileProvider(ui);
         app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = files });
         app.UseStaticFiles(new StaticFileOptions { FileProvider = files });
+        // An API route that does not exist (or a method it does not take) answers JSON, never the page:
+        // a client sees "404" instead of failing to parse HTML.
+        app.MapFallback("/api/{**rest}", (HttpContext context) =>
+            Results.Json(new { error = $"No route {context.Request.Method} {context.Request.Path}." }, statusCode: StatusCodes.Status404NotFound));
+        // The page only for a browser navigating (GET), so a PATCH or POST to an unknown path is not answered 200 with HTML.
         app.MapFallback(async context =>
         {
+            if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method))
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
             context.Response.ContentType = "text/html; charset=utf-8";
             await context.Response.SendFileAsync(Path.Combine(ui, "index.html"));
         });
