@@ -91,6 +91,14 @@ $missing = @()
 if (-not $softhsmUtil) { $missing += 'softhsm2-util (SoftHSM2)' }
 if (-not $pkcs11Tool) { $missing += 'pkcs11-tool (OpenSC)' }
 if (-not $module -or -not (Test-Path -LiteralPath $module)) { $missing += 'the SoftHSM2 PKCS#11 module (set SOFTHSM2_MODULE)' }
+# SoftHSM2 for Windows ships a 32-bit softhsm2-util.exe, which can only load the 32-bit module (softhsm2.dll) and
+# does not find it on its own; pkcs11-tool (64-bit OpenSC) loads softhsm2-x64.dll. Both read the same token folder.
+$utilModule = @()
+if ($IsWindows -and $module -and (Test-Path -LiteralPath $module)) {
+    $module32 = [IO.Path]::Combine((Split-Path $module), 'softhsm2.dll')
+    if (Test-Path -LiteralPath $module32) { $utilModule = @('--module', $module32) }
+}
+
 if ($missing) {
     [Console]::Error.WriteLine("Missing: $($missing -join ', ').")
     [Console]::Error.WriteLine('  Windows: SoftHSM2 for Windows (https://github.com/disig/SoftHSM2-for-Windows/releases, into C:\SoftHSM2) and winget install OpenSC.OpenSC')
@@ -118,7 +126,7 @@ Set-Content -LiteralPath $conf -Encoding ascii -Value @(
 $env:SOFTHSM2_CONF = $conf
 
 if (-not $Force -and (Test-Path -LiteralPath $marker) -and (Get-Content -LiteralPath $marker -Raw).Trim() -eq $root) {
-    $slots = & $softhsmUtil --show-slots 2>$null
+    $slots = & $softhsmUtil @utilModule --show-slots 2>$null
     if ($LASTEXITCODE -eq 0 -and ($slots | Select-String -SimpleMatch "Label:" | Where-Object { $_ -match [regex]::Escape($tokenLabel) })) {
         Write-Host "SoftHSM token `"$tokenLabel`" already holds the certificates of the Sandbox root $root; nothing to do (-Force rebuilds it)."
         Write-Host "`$env:SOFTHSM2_CONF = `"$conf`""
@@ -130,7 +138,7 @@ Write-Host "-> SoftHSM token `"$tokenLabel`" for the Sandbox at $sandboxUrl (roo
 Remove-Item -LiteralPath $tokens -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $tokens | Out-Null
-Invoke-Native $softhsmUtil @('--init-token', '--free', '--label', $tokenLabel, '--so-pin', $soPin, '--pin', $pin) | Out-Null
+Invoke-Native $softhsmUtil ($utilModule + @('--init-token', '--free', '--label', $tokenLabel, '--so-pin', $soPin, '--pin', $pin)) | Out-Null
 
 $work = Join-Path ([IO.Path]::GetTempPath()) "simplesign-softhsm-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $work | Out-Null
