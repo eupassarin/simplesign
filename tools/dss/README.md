@@ -60,6 +60,11 @@ two ways to trust them, chosen with `DSS_SANDBOX_TRUST`:
   - The loader downloads the lists again every `DSS_TL_REFRESH_SECONDS`: 10 s with the Sandbox's list alone (so a
     trusted-list failure switched on in the Sandbox shows within seconds), one hour with the EU lists.
   - A Sandbox that publishes no trusted list (an older one) falls back to `anchor`.
+  - A trusted list or LOTL whose signature fails is not used, as ETSI TS 119 615 asks and as SimpleSign does. The demo
+    keeps such a list (its default `AcceptAllStrategy`) and only reports it in the qualification checks, so the image
+    adds a small Spring component (`SimpleSignTlSynchronization.java`, compiled into the WAR) that sets the job's
+    `ExpirationAndSignatureCheckStrategy`. Expired lists are kept: the policy's `TLNotExpired` judges them.
+    `DSS_ACCEPT_INVALID_TRUSTED_LISTS=true` restores the demo's behaviour.
 - **`anchor`: the Sandbox root alone, as a bare trust anchor** (`trusted.source.keystore`). DSS validates the chain but
   reports no trusted list.
 
@@ -213,6 +218,7 @@ the signature is qualified.
 | `SANDBOX_FORWARD_HOST` | `host.docker.internal` | Where they are forwarded to. |
 | `DSS_REVOCATION_CACHE` | `false` | `true` keeps the DSS demo's revocation cache (CRLs up to 3 h). |
 | `DSS_SANDBOX_TRUST` | `list` | `list` trusts the Sandbox through its trusted list (LOTL); `anchor` trusts its root alone. |
+| `DSS_ACCEPT_INVALID_TRUSTED_LISTS` | `false` | `true` keeps the trust anchors of a list whose signature fails (the DSS demo's default). |
 | `DSS_TL_REFRESH_SECONDS` | `10` (Sandbox list alone), `3600` (with the EU lists) | How often the trusted lists are downloaded again. |
 | `TESTBENCH_URL` | (none) | A TestBench whose connected Sandbox's root is used when `SANDBOX_URL` does not answer. |
 | `DSS_LOAD_EU_TRUSTED_LISTS` | `false` | `true` downloads the EU trusted lists; `cached` only uses the copy kept from an earlier run. See "EU trusted lists". |

@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   there.
 - **`tools/dss`:** DSS trusts the Sandbox through its LOTL by default (`DSS_SANDBOX_TRUST=list`, or `anchor` for the
   root alone). With the EU lists off it uses the EU slot; with them on, the second slot. The lists are downloaded again
-  every `DSS_TL_REFRESH_SECONDS` (10 s with the Sandbox's list alone).
+  every `DSS_TL_REFRESH_SECONDS` (10 s with the Sandbox's list alone). A list whose signature fails is not used
+  (TS 119 615, as in SimpleSign): a Spring component compiled into the image sets the TL job's
+  `ExpirationAndSignatureCheckStrategy`; `DSS_ACCEPT_INVALID_TRUSTED_LISTS=true` restores the demo's default.
 - **`DssScenarioCrossValidationTests`:** the trusted-list failures are compared too, and the test waits for DSS to load
   the Sandbox's list.
 

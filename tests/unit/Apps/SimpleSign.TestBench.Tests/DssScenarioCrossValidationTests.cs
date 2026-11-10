@@ -47,13 +47,6 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
         // EN 319 102-1 §5.2.6: an expired signing certificate with no proof of existence is OUT_OF_BOUNDS_NO_POE,
         // which SimpleSign gives; DSS looks at the revocation data first (CERTIFICATE_CHAIN_GENERAL_FAILURE).
         ["sample:expired"] = "SimpleSign reports the expiry (OUT_OF_BOUNDS_NO_POE); DSS the unknown OCSP status",
-
-        // A trusted list whose signature does not verify (signed by a certificate its LOTL pointer does not name, or
-        // changed after signing). ETSI TS 119 615 says such a list is not used: SimpleSign's reader refuses it, so its CAs
-        // are not trust anchors (NO_CERTIFICATE_CHAIN_FOUND). DSS keeps its anchors and leaves the signature to the
-        // TLWellSigned constraint, a WARN in the default policy (TOTAL_PASSED with a warning).
-        ["tl:WrongSigner"] = "SimpleSign does not use a trusted list whose signature fails (TS 119 615); DSS warns (TLWellSigned)",
-        ["tl:Tampered"] = "SimpleSign does not use a trusted list whose signature fails (TS 119 615); DSS warns (TLWellSigned)",
     };
 
     private static readonly string[] Signers =
@@ -166,7 +159,8 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
 
     /// <summary>
     /// A failure of the Sandbox's trusted list (expired, signed by a certificate its LOTL does not name, changed after
-    /// signing), seen by both validators: DSS downloads the list again within seconds (DSS_TL_REFRESH_SECONDS).
+    /// signing), seen by both validators: DSS downloads the list again within seconds (DSS_TL_REFRESH_SECONDS). Neither
+    /// uses a list whose signature fails (TS 119 615); an expired list is left to TLNotExpired, a WARN.
     /// </summary>
     [SkippableTheory]
     [InlineData(TlFault.Expired)]
