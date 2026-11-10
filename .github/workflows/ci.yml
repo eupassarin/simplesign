@@ -286,20 +286,26 @@ jobs:
 
       - name: Lint (PSScriptAnalyzer)
         run: |
+          "PowerShell $($PSVersionTable.PSVersion) on $([Environment]::OSVersion.VersionString)"
           Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
           $scripts = Get-ChildItem tools/stack/*.ps1, scripts/tests/*.ps1
           # Write-Host is what these scripts are for: messages to whoever runs them.
           $findings = $scripts | ForEach-Object { Invoke-ScriptAnalyzer -Path $_.FullName -Severity Warning, Error -ExcludeRule PSAvoidUsingWriteHost }
           $findings | Format-Table ScriptName, Line, RuleName, Message -AutoSize -Wrap
           if ($findings) { throw "$(@($findings).Count) PSScriptAnalyzer finding(s)." }
+          # The runner's 'stop' would turn the child's stderr (the expected "Unknown option") into a silent failure.
+          $ErrorActionPreference = 'Continue'
           foreach ($script in $scripts) {
             & pwsh -NoProfile -File $script.FullName -Help | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "$($script.Name) -Help exited with $LASTEXITCODE." }
             # testbench.ps1 hands every other argument to the TestBench.
-            if ($script.Name -eq 'testbench.ps1') { continue }
-            & pwsh -NoProfile -File $script.FullName -NoSuchOption 2>$null
-            if ($LASTEXITCODE -ne 2) { throw "$($script.Name) -NoSuchOption exited with $LASTEXITCODE, not 2." }
+            if ($script.Name -eq 'testbench.ps1') { "$($script.Name): -Help ok"; continue }
+            $message = (& pwsh -NoProfile -File $script.FullName -NoSuchOption 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 2) { throw "$($script.Name) -NoSuchOption exited with $LASTEXITCODE, not 2: $message" }
+            "$($script.Name): -Help ok, -NoSuchOption exits 2 ($message)"
           }
+          # The last check leaves $LASTEXITCODE at 2, which the runner would report as the step's exit code.
+          exit 0
 
       - name: Install SoftHSM2 for Windows and OpenSC
         run: |
