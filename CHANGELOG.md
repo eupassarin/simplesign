@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tools/dss`:** DSS trusts the same roots at start (`DSS_TRUST_TSA_ROOTS`, default `true`; the folder is mounted),
   so it no longer reports "The certificate chain for time-stamp is not trusted" for these TSAs.
 
+### Added — `tools/stack/down.sh`
+
+- Stops the stack `up.sh` started, with the same project name: `down.sh` keeps the Sandbox's PKI and the DSS download
+  cache, `--drop-pki` drops the PKI only, `--volumes` drops every volume.
+
 ### Fixed — CRLs served as PEM
 
 - A CRL downloaded over HTTP that comes PEM-encoded (`-----BEGIN X509 CRL-----`) instead of DER (RFC 5280 §4.2.1.13)

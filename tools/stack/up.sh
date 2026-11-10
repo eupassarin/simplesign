@@ -8,7 +8,7 @@
 #   tools/stack/up.sh             keep the Sandbox's PKI from the last run (a volume)
 #   tools/stack/up.sh --fresh     a new PKI: new root, new certificates, token and DSS rebuilt
 #   tools/stack/up.sh --no-dss    the Sandbox and the token only
-# Stop: docker compose -f tools/stack/docker-compose.yml down
+# Stop: tools/stack/down.sh (--drop-pki, --volumes; see its -h)
 # Ports: SANDBOX_PORT (5300; HTTPS and LDAP on the next two unless SANDBOX_HTTPS_PORT / SANDBOX_LDAP_PORT),
 # DSS_PORT (8080). The project name (COMPOSE_PROJECT_NAME, default simplesign-stack) separates two stacks.
 set -euo pipefail
