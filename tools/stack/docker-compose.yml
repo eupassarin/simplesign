@@ -1,0 +1,58 @@
+# The test stack for the TestBench: the SimpleSign Sandbox and the EU DSS validation service.
+# Start it with tools/stack/up.sh, which also fills a local SoftHSM token with the Sandbox's
+# certificates between the two (see tools/stack/README.md). By hand:
+#   docker compose -f tools/stack/docker-compose.yml up -d --build --wait sandbox
+#   tools/stack/softhsm-provision.sh
+#   docker compose -f tools/stack/docker-compose.yml up -d --wait dss
+# Ports: SANDBOX_PORT (5300), SANDBOX_HTTPS_PORT (5301), SANDBOX_LDAP_PORT (5302), DSS_PORT (8080).
+name: simplesign-stack
+
+services:
+  sandbox:
+    build:
+      context: ../..
+      dockerfile: src/Apps/SimpleSign.Sandbox/Dockerfile
+    image: simplesign-sandbox:local
+    pull_policy: build
+    # HTTP (services, admin API, UI), HTTPS (CRLs over TLS), LDAP (CRLs over LDAP). The certificates name
+    # http://localhost:5300, so the ports are the same on the host. 127.0.0.1 only: the admin API is open
+    # to the Docker bridge (--allow-remote-admin) and hands out private keys.
+    # SANDBOX_PORT (and the two after it) to run next to another Sandbox: inside and outside are the same.
+    command: ["--port", "${SANDBOX_PORT:-5300}", "--https-port", "${SANDBOX_HTTPS_PORT:-5301}", "--ldap-port", "${SANDBOX_LDAP_PORT:-5302}"]
+    ports:
+      - "127.0.0.1:${SANDBOX_PORT:-5300}:${SANDBOX_PORT:-5300}"
+      - "127.0.0.1:${SANDBOX_HTTPS_PORT:-5301}:${SANDBOX_HTTPS_PORT:-5301}"
+      - "127.0.0.1:${SANDBOX_LDAP_PORT:-5302}:${SANDBOX_LDAP_PORT:-5302}"
+    # The PKI is kept between runs; "docker compose down -v" (or up.sh --fresh) makes a new one.
+    volumes:
+      - sandbox-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:${SANDBOX_PORT:-5300}/api/info"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 12
+
+  dss:
+    extends:
+      file: ../dss/docker-compose.yml
+      service: dss
+    environment:
+      # The Sandbox on the compose network instead of the host.
+      SANDBOX_URL: http://sandbox:${SANDBOX_PORT:-5300}
+      SANDBOX_FORWARD_HOST: sandbox
+      SANDBOX_FORWARD_PORTS: ${SANDBOX_PORT:-5300} ${SANDBOX_HTTPS_PORT:-5301} ${SANDBOX_LDAP_PORT:-5302}
+      SANDBOX_WAIT_SECONDS: "60"
+    depends_on:
+      sandbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/"]
+      interval: 5s
+      timeout: 5s
+      start_period: 300s
+      retries: 60
+
+volumes:
+  sandbox-data:
+  tl-cache:

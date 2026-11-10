@@ -1,0 +1,14 @@
+# Docker build context (the repository root): only sources reach the images.
+.git
+.github
+.claude
+.softhsm
+**/bin
+**/obj
+**/node_modules
+**/web/dist
+**/*.tsbuildinfo
+docs
+tests
+artifacts
+TestResults
