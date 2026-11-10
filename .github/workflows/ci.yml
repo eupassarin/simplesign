@@ -267,6 +267,88 @@ jobs:
       - name: Run PKCS#11 tests and AOT smoke test
         run: scripts/tests/pkcs11-run.sh
 
+  # The PowerShell versions of the stack scripts (tools/stack/*.ps1, scripts/tests/pkcs11.ps1) on Windows. GitHub's
+  # Windows runners cannot run Linux containers, so up.ps1 / down.ps1 / pkcs11.ps1 are only linted here; the token
+  # step (softhsm-provision.ps1) runs for real, against a Sandbox started with dotnet run.
+  windows-scripts:
+    name: Windows scripts (PowerShell)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Lint (PSScriptAnalyzer)
+        run: |
+          "PowerShell $($PSVersionTable.PSVersion) on $([Environment]::OSVersion.VersionString)"
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $scripts = Get-ChildItem tools/stack/*.ps1, scripts/tests/*.ps1
+          # Write-Host is what these scripts are for: messages to whoever runs them.
+          $findings = $scripts | ForEach-Object { Invoke-ScriptAnalyzer -Path $_.FullName -Severity Warning, Error -ExcludeRule PSAvoidUsingWriteHost }
+          $findings | Format-Table ScriptName, Line, RuleName, Message -AutoSize -Wrap
+          if ($findings) { throw "$(@($findings).Count) PSScriptAnalyzer finding(s)." }
+          # The runner's 'stop' would turn the child's stderr (the expected "Unknown option") into a silent failure.
+          $ErrorActionPreference = 'Continue'
+          foreach ($script in $scripts) {
+            & pwsh -NoProfile -File $script.FullName -Help | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "$($script.Name) -Help exited with $LASTEXITCODE." }
+            # testbench.ps1 hands every other argument to the TestBench.
+            if ($script.Name -eq 'testbench.ps1') { "$($script.Name): -Help ok"; continue }
+            $message = (& pwsh -NoProfile -File $script.FullName -NoSuchOption 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 2) { throw "$($script.Name) -NoSuchOption exited with $LASTEXITCODE, not 2: $message" }
+            "$($script.Name): -Help ok, -NoSuchOption exits 2 ($message)"
+          }
+          # The last check leaves $LASTEXITCODE at 2, which the runner would report as the step's exit code.
+          exit 0
+
+      - name: Install SoftHSM2 for Windows and OpenSC
+        run: |
+          # Pinned downloads: SoftHSM2 for Windows 2.5.0 (portable, into C:\SoftHSM2) and OpenSC 0.27.1.
+          $softhsm = "$env:RUNNER_TEMP\softhsm2.zip"
+          Invoke-WebRequest https://github.com/disig/SoftHSM2-for-Windows/releases/download/v2.5.0/SoftHSM2-2.5.0-portable.zip -OutFile $softhsm
+          if ((Get-FileHash $softhsm -Algorithm SHA256).Hash -ne '85273BCC1A6B90E877F7BB4F7E90221D57103D8F5241D154A79DD730A135B910') { throw 'SoftHSM2 download: unexpected SHA-256.' }
+          Expand-Archive $softhsm -DestinationPath C:\
+          $opensc = "$env:RUNNER_TEMP\opensc.msi"
+          Invoke-WebRequest https://github.com/OpenSC/OpenSC/releases/download/0.27.1/OpenSC-0.27.1_x64.msi -OutFile $opensc
+          if ((Get-FileHash $opensc -Algorithm SHA256).Hash -ne '88EA45E848063FF5F3594A457B7F023223472EAE9C9C543F8035F7689BB7B319') { throw 'OpenSC download: unexpected SHA-256.' }
+          $install = Start-Process msiexec.exe -ArgumentList '/i', $opensc, '/qn', '/norestart' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "OpenSC install exited with $($install.ExitCode)." }
+
+      # One step: a process started in one step does not outlive it on the Windows runner.
+      - name: Fill a SoftHSM token from a Sandbox (softhsm-provision.ps1)
+        run: |
+          dotnet build src/Apps/SimpleSign.Sandbox --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'The Sandbox did not build.' }
+          $sandbox = Start-Process dotnet -ArgumentList 'run', '--project', 'src/Apps/SimpleSign.Sandbox', '--configuration', 'Release', '--no-build', '--', '--ephemeral', '--no-browser' `
+            -RedirectStandardOutput sandbox.log -RedirectStandardError sandbox.err.log -PassThru
+          $up = $false
+          foreach ($i in 1..60) {
+            try { Invoke-RestMethod http://localhost:5300/api/info -TimeoutSec 5 | Out-Null; $up = $true; break } catch { Start-Sleep 3 }
+          }
+          if (-not $up) { Get-Content sandbox.log, sandbox.err.log; throw 'The Sandbox did not answer on http://localhost:5300' }
+          'Sandbox is up'
+
+          pwsh -NoProfile -File tools/stack/softhsm-provision.ps1
+          if ($LASTEXITCODE -ne 0) { throw "softhsm-provision.ps1 exited with $LASTEXITCODE." }
+          $env:SOFTHSM2_CONF = "$PWD\.softhsm\softhsm2.conf"
+          $objects = & "$env:ProgramFiles\OpenSC Project\OpenSC\tools\pkcs11-tool.exe" --module C:\SoftHSM2\lib\softhsm2-x64.dll `
+            --token-label 'SimpleSign Sandbox' --login --pin 1234 --list-objects
+          $keys = @($objects | Select-String 'Private Key Object').Count
+          $certificates = @($objects | Select-String 'Certificate Object').Count
+          "$keys private key(s), $certificates certificate(s)"
+          if ($keys -lt 1 -or $keys -ne $certificates) { throw 'The token does not hold one key per certificate.' }
+          # A second run finds the token up to date.
+          $again = pwsh -NoProfile -File tools/stack/softhsm-provision.ps1
+          if (-not ($again -match 'nothing to do')) { throw "The second run rebuilt the token: $again" }
+          $again
+          Stop-Process -Id $sandbox.Id -ErrorAction SilentlyContinue
+
   testbench:
     name: TestBench
     runs-on: ubuntu-latest

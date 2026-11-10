@@ -134,7 +134,8 @@ Without `--pin` the CLI asks for the PIN; leave it blank to use the reader's PIN
 ## Testing without a token
 
 The package is tested against [SoftHSM2](https://github.com/softhsm/SoftHSMv2), a software token.
-`scripts/tests/pkcs11.sh` runs the token tests and a Native AOT smoke test in Docker; on Linux with
+`scripts/tests/pkcs11.sh` (on Windows: `pwsh -File scripts/tests/pkcs11.ps1`) runs the token tests and a Native AOT
+smoke test in Docker; on Linux with
 `softhsm2` and `opensc` installed, `scripts/tests/pkcs11-run.sh` runs them directly.
 
 `Pkcs11RealDeviceTests` sign in the three formats on a real token or HSM: set `SIMPLESIGN_PKCS11_MODULE` (the

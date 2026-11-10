@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Windows: pwsh -File scripts/tests/pkcs11.ps1 (the same options, as PowerShell switches).
 # SimpleSign - PKCS#11 tests in Docker (SoftHSM2), for machines without SoftHSM
 # Usage: ./pkcs11.sh
 # Builds tests/docker/pkcs11, copies the repository into the container (without bin/obj) and

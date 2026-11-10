@@ -1,6 +1,9 @@
 # Ensure shell scripts always use LF line endings (required for Linux containers)
 *.sh text eol=lf
 
+# PowerShell scripts (tools/stack/*.ps1, scripts/tests/pkcs11.ps1) are for Windows first: CRLF in the working tree
+*.ps1 text eol=crlf
+
 # Ensure C# source files always use LF (required by .editorconfig for IDE0055)
 *.cs text eol=lf
 *.csproj text eol=lf
