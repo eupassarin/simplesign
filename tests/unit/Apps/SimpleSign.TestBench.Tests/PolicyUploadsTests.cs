@@ -106,7 +106,10 @@ public sealed class PolicyUploadsTests(TestBenchFixture fixture)
     public void Validation_DefaultsLeaveTheCodeAlone()
     {
         ValidationService.PolicyOptionsCode(new ValidationSettings()).ShouldBeEmpty();
-        ValidationService.PolicyCliArgs(new ValidationSettings()).ShouldBeEmpty();
+        using var sandbox = new SimpleSign.TestBench.Sandbox.SandboxEnvironment();
+        var line = new CliLine("validate", "signed.pdf");
+        ValidationService.ValidationCli(line, new ValidationSettings { Trust = [TrustChoice.System] }, sandbox);
+        line.Args.ShouldBe(["validate", "signed.pdf"]);
     }
 
     [SkippableFact]
@@ -120,6 +123,9 @@ public sealed class PolicyUploadsTests(TestBenchFixture fixture)
             "Level = ValidationLevel.LongTermData",
             "Verifier = new VerifierOptions { RevocationStrategy = RevocationStrategy.CrlFirst }",
         ]);
-        ValidationService.PolicyCliArgs(settings).ShouldBe([$"--policy {PolicyUploads.ValidationFileName}", "--level lt", "--revocation-strategy crl-first"]);
+        using var sandbox = new SimpleSign.TestBench.Sandbox.SandboxEnvironment();
+        var line = new CliLine("validate", "signed.pdf");
+        ValidationService.ValidationCli(line, settings with { Trust = [] }, sandbox);
+        line.Args.ShouldBe(["validate", "signed.pdf", "--no-system-roots", "--policy", PolicyUploads.ValidationFileName, "--level", "lt", "--revocation-strategy", "crl-first"]);
     }
 }

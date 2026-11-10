@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using SimpleSign.TestBench.Credentials;
+using SimpleSign.TestBench.Localization;
 
 namespace SimpleSign.TestBench.Signing;
 
@@ -12,8 +13,8 @@ internal static class CodeGenerator
 {
     public static CodeSnippets Generate(SigningOptions o, SigningPlan plan, IReadOnlyList<PlanStep> steps, CredentialFacts credential)
     {
-        var (cli, notes) = Cli(o, credential);
-        return new CodeSnippets(CSharp(o, plan, steps), cli, notes);
+        var (commands, notes) = Cli(o, plan, credential);
+        return new CodeSnippets(CSharp(o, plan, steps), CliLine.Join(commands), notes) { CliCommands = commands };
     }
 
     private static string CSharp(SigningOptions o, SigningPlan plan, IReadOnlyList<PlanStep> steps)
@@ -130,148 +131,236 @@ internal static class CodeGenerator
         sb.Append("    Console.WriteLine(r.IsSuccess ? $\"{r.Id}: {r.SignedPdf!.Length} bytes\" : $\"{r.Id}: {r.Error!.Message}\");\n}\n");
     }
 
-    private static (string Command, IReadOnlyList<string> Notes) Cli(SigningOptions o, CredentialFacts credential)
+    private static (IReadOnlyList<CliLine> Commands, IReadOnlyList<string> Notes) Cli(SigningOptions o, SigningPlan plan, CredentialFacts credential)
     {
-        var args = new List<string> { "simplesign sign document.pdf", "--output signed.pdf" };
         var notes = new List<string>();
-        CliCredential(credential, args, notes);
-
-        bool needsTsa = o.Level != BaselineLevel.BB;
-        if (needsTsa)
+        var context = plan.Context;
+        switch (o.Mode)
         {
-            args.Add("--tsa " + (o.Timestamp.Provider switch
-            {
-                TsaProvider.DigiCert => "http://timestamp.digicert.com",
-                TsaProvider.Sectigo => "http://timestamp.sectigo.com",
-                TsaProvider.FreeTsa => "https://freetsa.org/tsr",
-                TsaProvider.Custom => o.Timestamp.Url,
-                _ => "<tsa-url>",
-            }));
-            if (o.Timestamp.Auth != TsaAuth.None)
-            {
-                notes.Add("The CLI has no TSA authentication flags: use the library for authenticated TSAs.");
-            }
+            case RunMode.Deferred:
+                {
+                    var prepare = new CliLine("deferred", "prepare", CliLine.Placeholders.Input)
+                        .Add("--cert", CliLine.Placeholders.SignerCertificate)
+                        .Add("--chain", CliLine.Placeholders.Chain)
+                        .Add("--session-key", CliLine.Placeholders.SessionKey);
+                    Level(prepare, o, context);
+                    Crypto(prepare, o, credential);
+                    Field(prepare, o);
+                    context.CliNetwork(prepare);
+                    var complete = new CliLine("deferred", "complete", CliLine.Placeholders.Input + ".session")
+                        .Add("--session-key", CliLine.Placeholders.SessionKey)
+                        .Add("--signature", CliLine.Placeholders.Signature)
+                        .Add("--output", CliLine.Placeholders.Output);
+                    if (o.Level != BaselineLevel.BB && HasTsaCredentials(o.Timestamp))
+                    {
+                        context.CliTimestamp(complete, o.Timestamp);
+                    }
+
+                    context.CliNetwork(complete);
+                    notes.Add(L.T("Between the two commands, the signer hashes document.pdf.tbs and signs it; signature.bin is the raw signature."));
+                    return ([prepare, complete], notes);
+                }
+
+            case RunMode.Batch:
+                {
+                    var batch = new CliLine("sign-dir", CliLine.Placeholders.InputFolder)
+                        .Add("--output-dir", CliLine.Placeholders.OutputFolder)
+                        .Add("--max-concurrency", o.MaxConcurrency.ToString(CultureInfo.InvariantCulture));
+                    CliCredential(credential, batch, notes);
+                    Level(batch, o, context);
+                    Crypto(batch, o, credential);
+                    Field(batch, o);
+                    batch.AddIf("--operation-id", o.OperationId);
+                    context.CliNetwork(batch);
+                    return ([batch], notes);
+                }
+
+            default:
+                {
+                    var sign = new CliLine("sign", CliLine.Placeholders.Input).Add("--output", CliLine.Placeholders.Output);
+                    CliCredential(credential, sign, notes);
+                    Level(sign, o, context);
+                    if (o.Level != BaselineLevel.BB && o.ReturnLowerLevel)
+                    {
+                        sign.Add("--return-lower-level");
+                    }
+
+                    Crypto(sign, o, credential);
+                    Policy(sign, o);
+                    Field(sign, o);
+                    Document(sign, o);
+                    sign.AddIf("--operation-id", o.OperationId);
+                    context.CliNetwork(sign);
+                    return ([sign], notes);
+                }
+        }
+    }
+
+    private static bool HasTsaCredentials(TimestampChoice choice) =>
+        choice.Provider == TsaProvider.SandboxAuthenticated || choice.Auth != TsaAuth.None || !string.IsNullOrEmpty(choice.ClientCertificateUploadId);
+
+    /// <summary>The level: the TSA (and its credentials), --ltv, --archival, a separate archive TSA, the revocation source.</summary>
+    private static void Level(CliLine line, SigningOptions o, PlanContext context)
+    {
+        if (o.Level == BaselineLevel.BB)
+        {
+            return;
         }
 
+        context.CliTimestamp(line, o.Timestamp);
         if (o.Level >= BaselineLevel.BLT)
         {
-            args.Add("--ltv");
-        }
-
-        if (o.Level == BaselineLevel.BLTA)
-        {
-            args.Add("--archival");
-        }
-
-        if (o.Level >= BaselineLevel.BLT && o.RevocationPreference == Core.Signing.RevocationPreference.CrlFirst)
-        {
-            args.Add("--revocation-preference crl");
-        }
-
-        if (o.Kind == SignatureKind.CustomPolicy)
-        {
-            args.Add($"--policy-oid {o.CustomPolicy.Oid}");
-            if (!string.IsNullOrWhiteSpace(o.CustomPolicy.Uri))
+            line.Add(o.Level == BaselineLevel.BLTA ? "--archival" : "--ltv");
+            if (o.RevocationPreference == Core.Signing.RevocationPreference.CrlFirst)
             {
-                args.Add($"--policy-uri {o.CustomPolicy.Uri}");
+                line.Add("--revocation-preference", "crl");
             }
-
-            notes.Add("The CLI's --policy-oid writes the policy through the metadata; the policy hash needs the library.");
         }
 
-        if (o.SubFilter == SubFilterChoice.AdbePkcs7Detached)
+        if (o.Level == BaselineLevel.BLTA && o.SeparateArchiveTsa)
         {
-            args.Add("--sub-filter adbe.pkcs7.detached");
+            context.CliTimestamp(line, o.ArchiveTimestamp, archive: true);
         }
+    }
 
+    /// <summary>The hash, the RSA scheme and the reserved /Contents.</summary>
+    private static void Crypto(CliLine line, SigningOptions o, CredentialFacts credential)
+    {
         if (o.Hash != HashChoice.Sha256)
         {
-            args.Add("--hash " + SigningPlan.HashName(o.Hash));
-        }
-
-        if (o.SigningPolicyId is not null)
-        {
-            args.Add("--signing-policy " + PolicyUploads.SigningFileName);
+            line.Add("--hash", SigningPlan.HashName(o.Hash));
         }
 
         if (o.Padding == RsaPadding.Pss && credential.KeyAlgorithm == "RSA")
         {
-            args.Add("--signature-algorithm rsa-pss");
+            line.Add("--signature-algorithm", "rsassa-pss");
         }
 
+        if (o.ContentsReservedBytes is { } size)
+        {
+            line.Add("--contents-size", size.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>The signing policy file and an explicit signature policy.</summary>
+    private static void Policy(CliLine line, SigningOptions o)
+    {
+        if (o.SigningPolicyId is not null)
+        {
+            line.Add("--signing-policy", PolicyUploads.SigningFileName);
+        }
+
+        if (o.Kind == SignatureKind.CustomPolicy)
+        {
+            line.Add("--policy-oid", o.CustomPolicy.Oid).Add("--policy-hash", o.CustomPolicy.HashHex);
+            if (o.CustomPolicy.HashAlgorithm != HashChoice.Sha256)
+            {
+                line.Add("--policy-hash-algorithm", SigningPlan.HashName(o.CustomPolicy.HashAlgorithm));
+            }
+
+            line.AddIf("--policy-uri", o.CustomPolicy.Uri);
+        }
+    }
+
+    /// <summary>The signature field: new or existing, its declared texts.</summary>
+    private static void Field(CliLine line, SigningOptions o)
+    {
         if (o.FieldMode == FieldMode.Existing)
         {
-            args.Add($"--existing-field \"{o.ExistingFieldName}\"");
+            line.Add("--existing-field", o.ExistingFieldName ?? "");
         }
         else if (o.FieldName != "Signature1")
         {
-            args.Add($"--field-name \"{o.FieldName}\"");
+            line.Add("--field-name", o.FieldName);
         }
 
-        AddIf(args, "--reason", o.Reason);
-        AddIf(args, "--location", o.Location);
-        AddIf(args, "--contact", o.ContactInfo);
-        AddIf(args, "--signer-name", o.SignerName);
+        line.AddIf("--reason", o.Reason).AddIf("--location", o.Location).AddIf("--contact", o.ContactInfo);
+        line.AddIf("--signer-name", o.UseSignerDetails ? o.Metadata.SignerName ?? o.SignerName : o.SignerName);
+    }
+
+    /// <summary>What only <c>sign</c> writes: sub-filter, certification, PDF/A, document info, signing time, metadata.</summary>
+    private static void Document(CliLine line, SigningOptions o)
+    {
+        if (o.SubFilter == SubFilterChoice.AdbePkcs7Detached)
+        {
+            line.Add("--sub-filter", "adbe-pkcs7-detached");
+        }
+
         if (o.Certification != CertificationChoice.None)
         {
-            args.Add("--certify " + o.Certification switch
+            line.Add("--certify", o.Certification switch
             {
-                CertificationChoice.NoChanges => "1",
-                CertificationChoice.FormFilling => "2",
-                _ => "3",
+                CertificationChoice.NoChanges => "no-changes",
+                CertificationChoice.FormFilling => "form-filling",
+                _ => "annotations",
             });
         }
 
         if (o.PreservePdfA)
         {
-            args.Add("--pdfa");
+            line.Add("--pdfa");
         }
 
-        if (o.Mode != RunMode.Sign)
+        foreach (var entry in o.DocumentInfo.Where(e => !string.IsNullOrWhiteSpace(e.Key)))
         {
-            notes.Add(o.Mode == RunMode.Deferred ? "Deferred signing is a library API (DeferredSigner); the CLI signs in one step." : "For batches, run the command per file or use BatchSigner.");
+            line.Add("--doc-info", $"{entry.Key}={entry.Value}");
         }
 
-        if (o.DocumentInfo.Count > 0 || o.UseSignerDetails || o.SigningTime is not null || o.ContentsReservedBytes is not null || o.SeparateArchiveTsa || o.ReturnLowerLevel)
+        if (o.SigningTime is { } time)
         {
-            notes.Add("Some options (document info, structured metadata, signing time, /Contents size, separate archive TSA, return-lower-level) have no CLI flag: use the library.");
+            line.Add("--signing-time", time.ToString("O", CultureInfo.InvariantCulture));
         }
 
-        return (string.Join(" \\\n  ", args), notes);
+        if (o.UseSignerDetails)
+        {
+            var m = o.Metadata;
+            line.AddIf("--signer-id", m.SignerId).AddIf("--signer-id-type", m.SignerIdType).AddIf("--signer-email", m.Email)
+                .AddIf("--ip-address", m.IpAddress).AddIf("--auth-method", m.AuthenticationMethod)
+                .AddIf("--institution", m.InstitutionName).AddIf("--institution-id", m.InstitutionId)
+                .AddIf("--institution-id-type", m.InstitutionIdType).AddIf("--legal-basis", m.LegalBasis)
+                .Add("--commitment", Commitment(m.CommitmentType));
+            if (o.Kind == SignatureKind.Baseline)
+            {
+                line.AddIf("--policy-oid", m.PolicyOid).AddIf("--policy-uri", m.PolicyUri);
+            }
+        }
     }
 
-    /// <summary>The CLI flags that pick the signer (shared by <c>sign</c>, <c>cades sign</c> and <c>xades sign</c>).</summary>
-    internal static void CliCredential(CredentialFacts credential, List<string> args, List<string> notes)
+    /// <summary>The CLI name of an extended form (CompleteReferences → complete-references).</summary>
+    internal static string ExtendedForm(string form) => form switch
+    {
+        "CompleteReferences" => "complete-references",
+        "ExtendedLong" => "extended-long",
+        _ => "archive",
+    };
+
+    /// <summary>The CLI name of a commitment type (ProofOfOrigin → origin).</summary>
+    internal static string Commitment(string commitmentType) =>
+        commitmentType.StartsWith("ProofOf", StringComparison.Ordinal) ? commitmentType["ProofOf".Length..].ToLowerInvariant() : commitmentType.ToLowerInvariant();
+
+    /// <summary>The CLI flags that pick the signer (shared by <c>sign</c>, <c>sign-dir</c>, <c>cades sign</c> and <c>xades sign</c>).</summary>
+    internal static void CliCredential(CredentialFacts credential, CliLine line, List<string> notes)
     {
         switch (credential.Kind)
         {
             case CredentialKind.Pfx:
             case CredentialKind.SandboxA1:
-                args.Add("--cert signer.pfx --password \"$PFX_PASSWORD\"");
+                line.Add("--cert", CliLine.Placeholders.SignerPfx).Add("--password", CliLine.Placeholders.PfxPassword);
                 if (credential.Kind == CredentialKind.SandboxA1)
                 {
-                    notes.Add("The sandbox certificate exists only inside the TestBench; export your own PFX to run this.");
+                    notes.Add(L.T("The sandbox certificate exists only inside the TestBench; export your own PFX to run this."));
                 }
 
                 break;
             case CredentialKind.OsStore:
-                args.Add($"--store --thumbprint {credential.Id}");
-                notes.Add("Use the certificate's thumbprint from your OS store.");
+                line.Add("--thumbprint", credential.Id);
                 break;
             case CredentialKind.Pkcs11:
-                args.Add("--pkcs11-lib /path/to/driver --thumbprint <thumbprint>");
+                line.Add("--pkcs11-lib", "auto");
                 break;
             case CredentialKind.Csc:
-                args.Add("--csc-url https://<qtsp>/csc/v2/");
+                line.Add("--csc-url", "https://<qtsp>/csc/v2/");
                 break;
-        }
-    }
-
-    internal static void AddIf(List<string> args, string flag, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            args.Add($"{flag} \"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\"");
         }
     }
 }

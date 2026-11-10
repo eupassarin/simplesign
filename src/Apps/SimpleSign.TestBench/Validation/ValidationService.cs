@@ -363,29 +363,56 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
     }
 
-    /// <summary>The CLI options for the policy, level and revocation strategy that differ from the defaults.</summary>
-    internal static IEnumerable<string> PolicyCliArgs(ValidationSettings s)
+    /// <summary>
+    /// The validation flags of a <c>validate</c> command: the roots (<c>--trust</c>, <c>--no-system-roots</c>), the policy,
+    /// level and revocation strategy that differ from the defaults, and the Sandbox's origins.
+    /// </summary>
+    internal static void ValidationCli(CliLine line, ValidationSettings s, SandboxEnvironment sandbox)
     {
+        if (s.Trust.Contains(TrustChoice.Sandbox) || s.CustomRootUploadIds.Count > 0)
+        {
+            line.Add("--trust", RootFile);
+        }
+
+        if (UsesSandboxTrustedList(s))
+        {
+            string lotl = sandbox.Current?.LotlUri?.AbsoluteUri ?? "http://localhost:5300/tl/lotl.xml";
+            line.Add("--lotl", lotl, "--lotl-signer", LotlSignerFile);
+        }
+
+        if (!s.Trust.Contains(TrustChoice.System))
+        {
+            line.Add("--no-system-roots");
+        }
+
         if (s.PolicyId is not null)
         {
-            yield return "--policy " + PolicyUploads.ValidationFileName;
+            line.Add("--policy", PolicyUploads.ValidationFileName);
         }
 
         if (s.Level != ValidationLevel.ArchivalData)
         {
-            yield return "--level " + s.Level switch
+            line.Add("--level", s.Level switch
             {
                 ValidationLevel.BasicSignatures => "basic",
                 ValidationLevel.Timestamps => "timestamps",
                 _ => "lt",
-            };
+            });
         }
 
         if (s.RevocationStrategy != RevocationStrategy.OcspFirst)
         {
-            yield return "--revocation-strategy crl-first";
+            line.Add("--revocation-strategy", "crl-first");
         }
+
+        PlanContext.SandboxNetwork(line, sandbox);
     }
+
+    /// <summary>The trusted root a generated <c>validate</c> command reads.</summary>
+    internal const string RootFile = "root.cer";
+
+    /// <summary>The LOTL signer certificate a generated <c>validate</c> command reads.</summary>
+    internal const string LotlSignerFile = "lotl-signer.pem";
 
     /// <summary>Whether the settings read the Sandbox's trusted list (the snippets then load it).</summary>
     internal static bool UsesSandboxTrustedList(ValidationSettings s) => s.Trust.Contains(TrustChoice.SandboxTrustedList);
@@ -400,12 +427,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         ]
         : [];
 
-    /// <summary>The CLI arguments that trust the Sandbox through its trusted list.</summary>
-    internal static IEnumerable<string> TrustedListCliArgs(ValidationSettings s) => UsesSandboxTrustedList(s)
-        ? ["--lotl http://localhost:5300/tl/lotl.xml", "--lotl-signer lotl-signer.pem"]
-        : [];
-
-    private static CodeSnippets ValidationCode(ValidationSettings s)
+    private CodeSnippets ValidationCode(ValidationSettings s)
     {
         var sb = new StringBuilder();
         sb.Append("using SimpleSign.PAdES.Validation;\nusing SimpleSign.Core.Validation;\n");
@@ -435,15 +457,12 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         sb.Append("\nIReadOnlyList<SignatureValidationResult> results = await validator.ValidateAsync(File.OpenRead(\"signed.pdf\"));\n");
         sb.Append("foreach (var r in results)\n{\n    Console.WriteLine($\"{r.FieldName}: {r.Indication} — {r.SignerName}\");\n");
         sb.Append("    foreach (var error in r.Errors) Console.WriteLine($\"  ✕ {error}\");\n}\n");
-        string cli = "simplesign validate signed.pdf"
-            + (s.Trust.Contains(TrustChoice.Sandbox) || s.CustomRootUploadIds.Count > 0 ? " --trust root.cer" : "")
-            + string.Concat(TrustedListCliArgs(s).Select(a => " " + a))
-            + string.Concat(PolicyCliArgs(s).Select(a => " " + a));
+        var line = new CliLine("validate", CliLine.Placeholders.Output);
+        ValidationCli(line, s, sandbox);
         var notes = new List<string>
         {
-            L.T("The CLI trusts the operating system's roots too; --trust adds roots."),
             L.T("simplesign inspect signed.pdf shows the structure; simplesign validate-dir validates a folder in bulk."),
         };
-        return new CodeSnippets(sb.ToString(), cli, notes);
+        return new CodeSnippets(sb.ToString(), line.ToString(), notes) { CliCommands = [line] };
     }
 }

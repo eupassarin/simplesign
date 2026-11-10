@@ -1165,6 +1165,158 @@ public sealed class CliCommandTests : IDisposable
         exit.ShouldBe(0, output);
     }
 
+    [Fact]
+    public async Task CadesSign_CoSignDetached_AddsASecondSigner()
+    {
+        string data = Path.Combine(_tempDir, "cosign.txt");
+        await File.WriteAllTextAsync(data, "content signed twice");
+        string first = Path.Combine(_tempDir, "cosign.p7s");
+        (await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--password", Password, "-o", first)).Exit.ShouldBe(0);
+
+        var (exit, output) = await RunAsync("cades", "sign", first, "--cosign", "--data", data, "--cert", WriteSecondPfx(), "--password", Password);
+
+        exit.ShouldBe(0, output);
+        string both = Path.Combine(_tempDir, "cosign-cosigned.p7s");
+        SimpleSign.Core.Crypto.CmsParser.ParseAll(await File.ReadAllBytesAsync(both)).Signers.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task CadesSign_CounterSign_AddsACounterSignatureToTheSigner()
+    {
+        string data = Path.Combine(_tempDir, "counter.txt");
+        await File.WriteAllTextAsync(data, "content");
+        string first = Path.Combine(_tempDir, "counter.p7s");
+        (await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--password", Password, "-o", first)).Exit.ShouldBe(0);
+        string countersigned = Path.Combine(_tempDir, "countersigned.p7s");
+
+        var (exit, output) = await RunAsync("cades", "sign", first, "--countersign", "--signer-index", "0",
+            "--cert", WriteSecondPfx(), "--password", Password, "-o", countersigned);
+
+        exit.ShouldBe(0, output);
+        var signer = SimpleSign.Core.Crypto.CmsParser.ParseAll(await File.ReadAllBytesAsync(countersigned)).Signers.ShouldHaveSingleItem();
+        signer.CounterSignatures.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task CadesSign_SigningTimeAndPss_AreInTheSignerInfo()
+    {
+        string data = Path.Combine(_tempDir, "pss.txt");
+        await File.WriteAllTextAsync(data, "content");
+        string output = Path.Combine(_tempDir, "pss.p7s");
+
+        var (exit, text) = await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--password", Password, "-o", output,
+            "--signing-time", "2026-01-02T03:04:05Z", "--signature-algorithm", "rsassa-pss", "--operation-id", "op-1");
+
+        exit.ShouldBe(0, text);
+        var signer = SimpleSign.Core.Crypto.CmsParser.ParseAll(await File.ReadAllBytesAsync(output)).Signers.ShouldHaveSingleItem();
+        signer.SigningTime.ShouldBe(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        signer.SignatureAlgorithmOid.ShouldBe("1.2.840.113549.1.1.10");
+    }
+
+    [Theory]
+    [InlineData(new[] { "--cosign", "--countersign" }, "mutually exclusive")]
+    [InlineData(new[] { "--signer-index", "1" }, "requires --countersign")]
+    [InlineData(new[] { "--countersign", "--content-type", "enveloped" }, "comes from the existing signature")]
+    [InlineData(new[] { "--extended-form", "x" }, "--extended-form must be")]
+    [InlineData(new[] { "--signing-time", "soon" }, "ISO 8601")]
+    public async Task CadesSign_InconsistentOperation_ReturnsError(string[] options, string expected)
+    {
+        string data = Path.Combine(_tempDir, "bad-op.txt");
+        await File.WriteAllTextAsync(data, "content");
+
+        var (exit, output) = await RunAsync(["cades", "sign", data, "--cert", _pfxPath, "--password", Password, .. options]);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain(expected);
+    }
+
+    [Fact]
+    public async Task XadesSign_SigningOptions_AreWritten()
+    {
+        string xml = Path.Combine(_tempDir, "options.xml");
+        await File.WriteAllTextAsync(xml, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc xmlns=\"urn:test\"><a>1</a></doc>");
+        string signed = Path.Combine(_tempDir, "options.signed.xml");
+
+        var (exit, output) = await RunAsync("xades", "sign", xml, "--cert", _pfxPath, "--password", Password, "-o", signed,
+            "--signing-time", "2026-01-02T03:04:05Z", "--signing-certificate-v1", "--data-mime-type", "application/xml",
+            "--signature-algorithm", "rsassa-pss");
+
+        exit.ShouldBe(0, output);
+        string text = await File.ReadAllTextAsync(signed);
+        text.ShouldContain("2026-01-02T03:04:05");
+        text.ShouldContain("SigningCertificate>");
+        text.ShouldNotContain("SigningCertificateV2");
+        text.ShouldContain("application/xml");
+        text.ShouldContain("MGF1");
+    }
+
+    [Fact]
+    public async Task Deferred_PrepareSignOutsideComplete_ProducesAValidPdf()
+    {
+        string pdf = WritePdf("deferred.pdf");
+        string key = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var (prepareExit, prepareOutput) = await RunAsync("deferred", "prepare", pdf, "--cert", _cerPath, "--session-key", key, "--json");
+        prepareExit.ShouldBe(0, prepareOutput);
+        prepareOutput.ShouldContain("\"toSign\"");
+
+        // The signer is elsewhere: here, the PFX's own key over the data to sign.
+        byte[] toSign = await File.ReadAllBytesAsync(pdf + ".tbs");
+        using (var rsa = _cert.GetRSAPrivateKey()!)
+        {
+            await File.WriteAllBytesAsync(pdf + ".sig", rsa.SignData(toSign,
+                System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1));
+        }
+
+        string signed = Path.Combine(_tempDir, "deferred-signed.pdf");
+        var (completeExit, completeOutput) = await RunAsync("deferred", "complete", pdf + ".session", "--session-key", key,
+            "--signature", pdf + ".sig", "-o", signed);
+
+        completeExit.ShouldBe(0, completeOutput);
+        var (validateExit, validateOutput) = await RunAsync("validate", signed, "--trust", _cerPath, "--no-revocation", "--json");
+        validateExit.ShouldBe(0, validateOutput);
+    }
+
+    [Theory]
+    [InlineData("00", "at least 32 bytes")]
+    [InlineData(null, "--session-key is required")]
+    public async Task DeferredPrepare_BadSessionKey_ReturnsError(string? key, string expected)
+    {
+        string[] keyOption = key is null ? [] : ["--session-key", key];
+
+        var (exit, output) = await RunAsync(["deferred", "prepare", WritePdf("deferred-bad.pdf"), "--cert", _cerPath, .. keyOption]);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain(expected);
+    }
+
+    [Fact]
+    public async Task SignDir_TwoPdfs_SignsBothIntoTheOutput()
+    {
+        string folder = Path.Combine(_tempDir, "batch");
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "a.pdf"), TestPdfFactory.CreateMinimalPdf());
+        File.WriteAllBytes(Path.Combine(folder, "b.pdf"), TestPdfFactory.CreateMinimalPdf());
+        string output = Path.Combine(_tempDir, "batch-out");
+
+        var (exit, text) = await RunAsync("sign-dir", folder, "--cert", _pfxPath, "--password", Password, "-o", output,
+            "--max-concurrency", "2", "--reason", "Batch");
+
+        exit.ShouldBe(0, text);
+        Directory.GetFiles(output, "*.pdf").Select(Path.GetFileName).Order().ShouldBe(["a.pdf", "b.pdf"]);
+    }
+
+    private string WriteSecondPfx()
+    {
+        string path = Path.Combine(_tempDir, "second.pfx");
+        if (!File.Exists(path))
+        {
+            using var second = TestCertificateFactory.CreateSelfSignedCert("CN=Second Signer");
+            File.WriteAllBytes(path, second.Export(X509ContentType.Pfx, Password));
+        }
+
+        return path;
+    }
+
     private static async Task<(int Exit, string Output)> RunAsync(params string[] args)
     {
         var services = new ServiceCollection();

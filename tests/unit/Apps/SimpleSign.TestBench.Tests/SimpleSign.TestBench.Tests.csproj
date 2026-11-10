@@ -27,6 +27,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Apps\SimpleSign.TestBench\SimpleSign.TestBench.csproj" />
+    <!-- The CLI, to run the commands the TestBench generates (CliEquivalenceTests); aliased: both apps have a top-level Program. -->
+    <ProjectReference Include="..\..\..\..\src\Apps\SimpleSign.Cli\SimpleSign.Cli.csproj" Aliases="cli" />
     <ProjectReference Include="..\..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>
 

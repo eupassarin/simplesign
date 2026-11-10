@@ -191,7 +191,12 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             [.. s.CounterSignatures.Select(Signer)], ValidationService.SubIndicationName(r.SubIndication));
     }
 
-    private static CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
+    /// <summary>The data file a generated command signs, and the existing signature it co-signs or countersigns.</summary>
+    internal const string DataFile = "document";
+
+    internal const string SignatureFile = "signature.p7s";
+
+    private CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool sandboxRoot = settings.Trust.Contains(TrustChoice.Sandbox);
         var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null ? "" : "using SimpleSign.Core.Policies;\n"));
@@ -221,27 +226,19 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         sb.Append("    foreach (var error in signer.Result.Errors) Console.WriteLine($\"  ✕ {error}\");\n");
         sb.Append("    foreach (var counter in signer.CounterSignatures) Console.WriteLine($\"  countersignature #{counter.Index}: {counter.IsValid}\");\n}\n");
 
-        var args = new List<string> { "simplesign cades validate signature.p7s" };
-        var notes = new List<string>();
+        var line = new CliLine("cades", "validate", SignatureFile);
         if (detached)
         {
-            args.Add("--data document");
+            line.Add("--data", DataFile);
         }
 
-        if (sandboxRoot || settings.CustomRootUploadIds.Count > 0)
+        if (settings.Level >= SimpleSign.Core.Validation.ValidationLevel.LongTermData)
         {
-            args.Add("--trust root.cer");
+            line.Add("--check-revocation");
         }
 
-        args.AddRange(ValidationService.TrustedListCliArgs(settings));
-
-        args.AddRange(ValidationService.PolicyCliArgs(settings));
-        if (!settings.Trust.Contains(TrustChoice.System))
-        {
-            notes.Add("The CLI validates against the OS roots plus --trust; turning the OS roots off needs the library.");
-        }
-
-        return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), notes);
+        ValidationService.ValidationCli(line, settings, sandbox);
+        return new CodeSnippets(sb.ToString(), line.ToString(), []) { CliCommands = [line] };
     }
 
     internal static string OutputName(CadesOptions o) =>
@@ -465,101 +462,119 @@ internal sealed class CadesPlan
         sb.Append(CultureInfo.InvariantCulture, $"File.WriteAllBytes(\"{OutputName()}\", result.SignedArtifact);\n");
         sb.Append("Console.WriteLine($\"Requested {result.RequestedLevel}, achieved {result.AchievedLevel}\");\n");
 
-        var args = new List<string> { $"simplesign cades sign {(_o.Operation == CadesOperation.Sign ? "document" : "signature.p7s")}", $"--output {OutputName()}" };
+        var cli = new CliLine("cades", "sign", _o.Operation == CadesOperation.Sign ? CadesRunner.DataFile : CadesRunner.SignatureFile).Add("--output", OutputName());
         var notes = new List<string>();
-        CodeGenerator.CliCredential(credential, args, notes);
-        if (_o.Operation != CadesOperation.Sign)
+        CodeGenerator.CliCredential(credential, cli, notes);
+        switch (_o.Operation)
         {
-            notes.Add("Co-signing and countersigning are library APIs (CadesSigner.CoSign / CounterSign); the CLI creates new signatures only.");
-        }
+            case CadesOperation.CoSign:
+                cli.Add("--cosign");
+                if (_o.ContentType == CadesContentChoice.Detached)
+                {
+                    cli.Add("--data", CadesRunner.DataFile);
+                }
 
-        if (_o.ContentType == CadesContentChoice.Enveloped && _o.Operation == CadesOperation.Sign)
-        {
-            args.Add("--content-type enveloped");
+                break;
+            case CadesOperation.CounterSign:
+                cli.Add("--countersign");
+                if (_o.SignerIndex != 0)
+                {
+                    cli.Add("--signer-index", _o.SignerIndex.ToString(CultureInfo.InvariantCulture));
+                }
+
+                break;
+            default:
+                if (_o.ContentType == CadesContentChoice.Enveloped)
+                {
+                    cli.Add("--content-type", "enveloped");
+                }
+
+                break;
         }
 
         if (_o.Level != BaselineLevel.BB)
         {
-            args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
-            args.Add("--level " + _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
+            _context.CliTimestamp(cli, _o.Timestamp);
+            cli.Add("--level", _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
+            if (_o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
+            {
+                cli.Add("--revocation-preference", "crl");
+            }
+        }
+        else if (_o.ContentTimestamp)
+        {
+            _context.CliTimestamp(cli, _o.Timestamp);
         }
 
         if (_o.Kind == CadesKind.CustomPolicy)
         {
-            args.Add($"--policy-oid {_o.PolicyOid}");
-            CodeGenerator.AddIf(args, "--policy-uri", SigningPlan.Blank(_o.PolicyUri));
+            cli.Add("--policy-oid", _o.PolicyOid ?? "").AddIf("--policy-uri", SigningPlan.Blank(_o.PolicyUri));
             if (!string.IsNullOrEmpty(_o.PolicyDocumentId))
             {
-                CodeGenerator.AddIf(args, "--policy-document", _context.FileName(_o.PolicyDocumentId));
-                CodeGenerator.AddIf(args, "--policy-specification", _o.PolicySpecification);
+                cli.AddIf("--policy-document", _context.FileName(_o.PolicyDocumentId)).AddIf("--policy-specification", _o.PolicySpecification);
             }
         }
 
         if (_o.ExtendedForm != CadesExtendedChoice.None)
         {
-            notes.Add("Extended forms (CAdES-X / X Long / A) need the library: WithExtendedValidationData.");
+            cli.Add("--extended-form", CodeGenerator.ExtendedForm(_o.ExtendedForm.ToString()));
         }
 
         if (_o.Hash != HashChoice.Sha256)
         {
-            args.Add("--hash " + SigningPlan.HashName(_o.Hash));
+            cli.Add("--hash", SigningPlan.HashName(_o.Hash));
+        }
+
+        if (_o.Padding == RsaPadding.Pss && credential.KeyAlgorithm == "RSA")
+        {
+            cli.Add("--signature-algorithm", "rsassa-pss");
+        }
+
+        if (_o.SigningTime is { } time)
+        {
+            cli.Add("--signing-time", time.ToString("O", CultureInfo.InvariantCulture));
         }
 
         if (_o.SigningPolicyId is not null)
         {
-            args.Add("--signing-policy " + PolicyUploads.SigningFileName);
+            cli.Add("--signing-policy", PolicyUploads.SigningFileName);
         }
 
-        CodeGenerator.AddIf(args, "--commitment", _o.Commitment);
-        if (_o.Padding == RsaPadding.Pss && credential.KeyAlgorithm == "RSA" || _o.SigningTime is not null || _o.Timestamp.Auth != TsaAuth.None)
-        {
-            notes.Add("RSASSA-PSS, a claimed signing time and TSA authentication have no cades flag: use the library.");
-        }
-
-        AddSignedAttributeArgs(args);
-        if (_o.RevocationPreference == RevocationPreference.CrlFirst && _o.Level >= BaselineLevel.BLT)
-        {
-            args.Add("--revocation-preference crl");
-        }
-
-        return new CodeSnippets(sb.ToString(), string.Join(" \\\n  ", args), notes);
+        cli.AddIf("--commitment", _o.Commitment);
+        AddSignedAttributeArgs(cli);
+        cli.AddIf("--operation-id", _o.OperationId);
+        _context.CliNetwork(cli);
+        return new CodeSnippets(sb.ToString(), cli.ToString(), notes) { CliCommands = [cli] };
     }
 
     /// <summary>The flags of the signed attributes beyond the baseline: location, roles, content description and timestamp.</summary>
-    private void AddSignedAttributeArgs(List<string> args)
+    private void AddSignedAttributeArgs(CliLine cli)
     {
-        CodeGenerator.AddIf(args, "--signer-country", _o.SignerCountry);
-        CodeGenerator.AddIf(args, "--signer-locality", _o.SignerLocality);
-        foreach (string line in _o.SignerPostalAddress)
+        cli.AddIf("--signer-country", _o.SignerCountry).AddIf("--signer-locality", _o.SignerLocality);
+        foreach (string address in _o.SignerPostalAddress)
         {
-            CodeGenerator.AddIf(args, "--signer-postal-address", line);
+            cli.AddIf("--signer-postal-address", address);
         }
 
         foreach (string role in _o.SignerRoles)
         {
-            CodeGenerator.AddIf(args, "--signer-role", role);
+            cli.AddIf("--signer-role", role);
         }
 
         if (!string.IsNullOrEmpty(_o.AttributeCertificateId))
         {
-            CodeGenerator.AddIf(args, "--attribute-certificate", _context.FileName(_o.AttributeCertificateId));
+            cli.AddIf("--attribute-certificate", _context.FileName(_o.AttributeCertificateId));
         }
 
         if (!string.IsNullOrEmpty(_o.SignedAssertionId))
         {
-            CodeGenerator.AddIf(args, "--signed-assertion", _context.FileName(_o.SignedAssertionId));
+            cli.AddIf("--signed-assertion", _context.FileName(_o.SignedAssertionId));
         }
 
-        CodeGenerator.AddIf(args, "--mime-type", _o.MimeType);
-        CodeGenerator.AddIf(args, "--content-description", _o.ContentDescription);
+        cli.AddIf("--mime-type", _o.MimeType).AddIf("--content-description", _o.ContentDescription);
         if (_o.ContentTimestamp)
         {
-            if (_o.Level == BaselineLevel.BB)
-            {
-                args.Add("--tsa " + _context.CliUrl(_o.Timestamp));
-            }
-
-            args.Add("--content-timestamp");
+            cli.Add("--content-timestamp");
         }
     }
 
