@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { Check, CircleSlash, Download, FileCheck2, Loader2, RefreshCw, ShieldCheck, ShieldQuestion, TriangleAlert, XCircle } from "lucide-react"
+import { Check, ChevronRight, CircleSlash, Download, FileCheck2, Info, Loader2, RefreshCw, ShieldCheck, ShieldQuestion, TriangleAlert, XCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n, useT, type MessageKey } from "@/i18n"
@@ -16,7 +17,7 @@ import { IssueList, KeyValue, Pill } from "../shared/ui"
 import { XmlViews } from "../xml/XmlViews"
 import { LogView } from "./LogView"
 import { StandardBadge } from "./parts"
-import type { DssComparison, RunVerdict, RunView } from "./schema"
+import type { DssComparison, DssComparisonRow, Finding, RunVerdict, RunView } from "./schema"
 import { useWorkbench, type VariantRow } from "./state"
 
 /** Everything a run produced: the result, what is inside the file, the verdicts (SimpleSign and DSS), the log and the code. */
@@ -165,18 +166,119 @@ function VerdictCard({ verdict, compact, depth = 0 }: { verdict: RunVerdict; com
           ))}
         </ul>
       )}
-      {(verdict.errors.length > 0 || verdict.warnings.length > 0) && (
-        <ul className="space-y-1 border-t px-4 py-2 text-xs">
-          {verdict.errors.map((e, i) => <li key={`e${i}`} className="text-destructive">✕ {e}</li>)}
-          {verdict.warnings.map((w, i) => <li key={`w${i}`} className="text-muted-foreground">! {w}</li>)}
-        </ul>
-      )}
+      <Findings verdict={verdict} />
       {verdict.children.length > 0 && (
         <div className="space-y-2 border-t p-2">
           <p className="text-muted-foreground px-2 text-xs">{t("wb.validation.counterSignatures")}</p>
           {verdict.children.map((c, i) => <VerdictCard key={i} verdict={c} compact={compact} depth={depth + 1} />)}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * What SimpleSign found beyond the checks: the policy constraints that failed, warned or informed, one line per
+ * constraint (its messages, one per certificate or token, open on click), then the other errors and warnings once each.
+ */
+function Findings({ verdict }: { verdict: RunVerdict }) {
+  const t = useT()
+  const findings = verdict.findings ?? []
+  const covered = new Set(findings.flatMap((f) => f.messages))
+  const errors = [...new Set(verdict.errors)].filter((e) => !covered.has(e))
+  const warnings = [...new Set(verdict.warnings)].filter((w) => !covered.has(w))
+  if (findings.length === 0 && errors.length === 0 && warnings.length === 0) return null
+  return (
+    <div className="space-y-1 border-t px-4 py-2">
+      {findings.map((f) => <FindingRow key={f.status + f.constraint} finding={f} />)}
+      {(errors.length > 0 || warnings.length > 0) && (
+        <ul className="space-y-1 pt-1 text-xs">
+          {findings.length > 0 && <li className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">{t("wb.validation.other")}</li>}
+          {errors.map((e) => <li key={e} className="text-destructive">✕ {e}</li>)}
+          {warnings.map((w) => <li key={w} className="text-muted-foreground">! {w}</li>)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function FindingRow({ finding }: { finding: Finding }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const icon = finding.status === "fail" ? <XCircle className="text-destructive size-4 shrink-0" />
+    : finding.status === "warn" ? <TriangleAlert className="text-warning size-4 shrink-0" /> : <Info className="text-info size-4 shrink-0" />
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="hover:bg-accent/40 -mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1 text-left text-sm">
+        <ChevronRight className={cn("text-muted-foreground size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
+        {icon}
+        <span className="min-w-0 flex-1">
+          <span className="text-muted-foreground mr-1 text-xs">{t(finding.status === "fail" ? "wb.validation.failed" : finding.status === "warn" ? "wb.validation.warning" : "wb.validation.info")}:</span>
+          {finding.title}
+        </span>
+        {finding.standard && <span className="text-muted-foreground hidden font-mono text-[10px] sm:inline">{finding.standard}</span>}
+        <Pill>{finding.messages.length}</Pill>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="text-muted-foreground space-y-0.5 py-1 pl-11 text-xs">
+          {finding.messages.map((m) => <li key={m}>{m}</li>)}
+          <li className="font-mono text-[10px] opacity-70">{finding.constraint}</li>
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+/** DSS's indication as SimpleSign's: TOTAL_PASSED/PASSED → Valid, TOTAL_FAILED/FAILED → Invalid, else Indeterminate. */
+function dssIndication(value?: string | null): RunVerdict["indication"] | null {
+  if (!value) return null
+  const main = value.split("/")[0].trim()
+  return main === "TOTAL_PASSED" || main === "PASSED" ? "Valid" : main === "TOTAL_FAILED" || main === "FAILED" ? "Invalid" : "Indeterminate"
+}
+
+/**
+ * The top of the Validation tab: for each signature, SimpleSign's verdict and DSS's side by side, and for each
+ * difference why (in plain words), whether it is DSS's setup or a real disagreement, and what to do.
+ */
+function ValidationSummary({ run }: { run: RunView }) {
+  const t = useT()
+  const dss = run.crossValidation
+  if (!dss?.available || dss.rows.length === 0) return null
+  const signatures = [...new Set(dss.rows.map((r) => r.label))]
+  return (
+    <section className={cn("space-y-3 rounded-lg border p-4", dss.agree ? "border-success/40 bg-success/5" : "border-warning/50 bg-warning/5")}>
+      <p className="text-sm font-medium">{dss.summary ?? t(dss.agree ? "wb.dss.agrees" : "wb.dss.differs")}</p>
+      {signatures.map((label) => {
+        const rows = dss.rows.filter((r) => r.label === label)
+        const indication = rows.find((r) => r.topic === "indication")
+        const theirs = dssIndication(indication?.dss)
+        return (
+          <div key={label} className="space-y-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="font-medium">{label}</span>
+              <span className="inline-flex items-center gap-1.5 text-xs"><span className="text-muted-foreground">SimpleSign</span>{indication?.library ? <Indication value={indication.library as RunVerdict["indication"]} /> : "—"}</span>
+              <span className="inline-flex items-center gap-1.5 text-xs"><span className="text-muted-foreground">DSS</span>{theirs ? <Indication value={theirs} /> : "—"}</span>
+            </div>
+            {rows.filter((r) => !r.agree).map((r, i) => <Difference key={i} row={r} />)}
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
+/** One difference: what differs, what DSS concluded in plain words, its likely cause and what to do. */
+function Difference({ row }: { row: DssComparisonRow }) {
+  const t = useT()
+  return (
+    <div className="bg-background space-y-1.5 rounded-md border px-3 py-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">{t(row.topic === "indication" ? "wb.dss.diffIndication" : "wb.dss.diffLevel")}</span>
+        <span className="font-mono text-xs">{row.library ?? "—"} × {row.dss ?? "—"}</span>
+        {row.cause && <Pill tone={row.cause === "setup" ? "info" : row.cause === "disagreement" ? "danger" : "default"}>{t(`wb.dss.cause.${row.cause}` as MessageKey)}</Pill>}
+      </div>
+      {row.reason && <p>{row.reason}</p>}
+      {row.action && <p className="text-muted-foreground text-xs">→ {row.action}</p>}
     </div>
   )
 }
@@ -254,6 +356,7 @@ function Validation({ run }: { run: RunView }) {
   const stage = schema.stages.find((s) => s.id === "validation")
   return (
     <div className="space-y-6">
+      <ValidationSummary run={run} />
       <section className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold">SimpleSign</h3>
@@ -292,26 +395,40 @@ function DssReport({ comparison }: { comparison: DssComparison }) {
         <span className="text-muted-foreground text-xs">{t("wb.dss.answered", { url: comparison.url, ms: comparison.ms })}</span>
         {comparison.reportId && <Button variant="outline" size="sm" className="ml-auto" asChild><a href={api.fileUrl(comparison.reportId, true)}><Download /> {t("wb.dss.report")}</a></Button>}
       </div>
-      <Table>
-        <TableHeader><TableRow><TableHead>{t("wb.dss.signature")}</TableHead><TableHead /><TableHead>SimpleSign</TableHead><TableHead>DSS</TableHead><TableHead /></TableRow></TableHeader>
-        <TableBody>
-          {comparison.rows.map((row, i) => (
-            <TableRow key={i}>
-              <TableCell className="text-xs font-medium">{row.label}</TableCell>
-              <TableCell className="text-muted-foreground text-xs">{t(row.topic === "indication" ? "wb.dss.indication" : "wb.dss.level")}</TableCell>
-              <TableCell className="font-mono text-xs">{row.library ?? "—"}</TableCell>
-              <TableCell className="font-mono text-xs">{row.dss ?? "—"}{row.note && <span className="text-muted-foreground block max-w-md font-sans whitespace-normal">{row.note}</span>}</TableCell>
-              <TableCell>{row.agree ? <Check className="text-success size-4" /> : <TriangleAlert className="text-warning size-4" />}</TableCell>
-            </TableRow>
+      {comparison.rows.filter((r) => r.agree).length > 0 && (
+        <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <Check className="text-success size-3.5" />
+          {t("wb.dss.agreeOn")}
+          {comparison.rows.filter((r) => r.agree).map((r, i) => (
+            <span key={i} className="font-mono">{r.label} · {t(r.topic === "indication" ? "wb.dss.indication" : "wb.dss.level")} {r.dss ?? r.library}</span>
           ))}
-        </TableBody>
-      </Table>
+        </p>
+      )}
+      {comparison.rows.some((r) => !r.agree) && <p className="text-muted-foreground text-xs">{t("wb.dss.seeSummary")}</p>}
       {comparison.notes.length > 0 && <ul className="text-muted-foreground space-y-1 text-xs">{comparison.notes.map((n) => <li key={n}>• {n}</li>)}</ul>}
-      {comparison.signatures.some((s) => s.errors.length + s.warnings.length > 0) && (
-        <div className="space-y-2">
-          {comparison.signatures.map((s, i) => (
-            <div key={i} className="rounded-lg border px-4 py-2 text-xs">
-              <p className="font-medium">{s.id ?? `#${i + 1}`} · {s.indication}{s.subIndication ? ` / ${s.subIndication}` : ""}{s.format ? ` · ${s.format}` : ""}</p>
+      <DssMessages comparison={comparison} />
+    </div>
+  )
+}
+
+/** DSS's own messages per signature, as it wrote them: closed by default. */
+function DssMessages({ comparison }: { comparison: DssComparison }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const count = comparison.signatures.reduce((n, s) => n + s.errors.length + s.warnings.length, 0)
+  if (count === 0) return null
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border">
+      <CollapsibleTrigger className="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-4 py-2 text-left text-sm">
+        <ChevronRight className={cn("text-muted-foreground size-4 transition-transform", open && "rotate-90")} />
+        <span className="flex-1">{t("wb.dss.messages")}</span>
+        <Pill>{count}</Pill>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="space-y-2 border-t p-3">
+          {comparison.signatures.filter((s) => s.errors.length + s.warnings.length > 0).map((s, i) => (
+            <div key={i} className="text-xs">
+              <p className="font-medium break-all">{s.id ?? `#${i + 1}`} · {s.indication}{s.subIndication ? ` / ${s.subIndication}` : ""}{s.format ? ` · ${s.format}` : ""}</p>
               <ul className="mt-1 space-y-0.5">
                 {s.errors.map((e) => <li key={e} className="text-destructive">✕ {e}</li>)}
                 {s.warnings.map((w) => <li key={w} className="text-muted-foreground">! {w}</li>)}
@@ -319,8 +436,8 @@ function DssReport({ comparison }: { comparison: DssComparison }) {
             </div>
           ))}
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 

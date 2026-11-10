@@ -275,6 +275,10 @@ export const en = {
     },
     validation: {
       counterSignatures: "Countersignatures",
+      failed: "Check failed",
+      warning: "Check not met (warning)",
+      info: "Note",
+      other: "Other messages",
     },
     log: {
       empty: "This run logged nothing.",
@@ -302,6 +306,12 @@ export const en = {
       signature: "Signature",
       indication: "Indication",
       level: "Level",
+      diffIndication: "Different verdict",
+      diffLevel: "Different level",
+      cause: { setup: "DSS setup", disagreement: "Real disagreement", unknown: "Unknown cause" },
+      agreeOn: "They agree on:",
+      seeSummary: "The differences, with their cause and what to do, are at the top of this tab.",
+      messages: "DSS messages",
     },
     variants: {
       title: "Combinations",
