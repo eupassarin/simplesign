@@ -76,6 +76,22 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_Json_HasWarningsAndTheRevocationFacts()
+    {
+        string signed = await SignAsync("facts.pdf");
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--json");
+
+        exit.ShouldBe(0);
+        using var json = JsonDocument.Parse(output);
+        var signature = json.RootElement.GetProperty("signatures")[0];
+        signature.GetProperty("warnings").ValueKind.ShouldBe(JsonValueKind.Array);
+        signature.GetProperty("revocationSource").GetString().ShouldNotBeNullOrEmpty();
+        signature.GetProperty("subFilter").GetString().ShouldNotBeNullOrEmpty();
+        signature.GetProperty("chainTrustWarning").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Validate_Json_HasConstraintsAndPublicKey()
     {
         string signed = await SignAsync("report.pdf");
@@ -591,6 +607,62 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task CadesValidate_CoSigned_ListsEverySigner()
+    {
+        string data = Path.Combine(_tempDir, "validate-cosign.txt");
+        await File.WriteAllTextAsync(data, "two signers");
+        string first = Path.Combine(_tempDir, "validate-cosign.p7s");
+        (await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--password", Password, "-o", first)).Exit.ShouldBe(0);
+        string both = Path.Combine(_tempDir, "validate-cosign-both.p7s");
+        (await RunAsync("cades", "sign", first, "--cosign", "--data", data, "--cert", WriteSecondPfx(), "--password", Password, "-o", both)).Exit.ShouldBe(0);
+
+        var (exit, output) = await RunAsync("cades", "validate", both, "--data", data, "--trust", _cerPath, "--json");
+
+        exit.ShouldBe(1, "the second signer is not trusted");
+        using var json = JsonDocument.Parse(output);
+        var signatures = json.RootElement.GetProperty("signatures");
+        signatures.EnumerateArray().Select(s => s.GetProperty("id").GetString()).ShouldBe(["signer-1", "signer-2"]);
+        signatures[0].GetProperty("indication").GetString().ShouldBe("Valid");
+        signatures[1].GetProperty("indication").GetString().ShouldNotBe("Valid");
+        json.RootElement.GetProperty("indication").GetString().ShouldBe("Valid", "the top-level fields are those of the first signer");
+    }
+
+    [Fact]
+    public async Task CadesValidate_CounterSigned_NestsTheCounterSignature()
+    {
+        string data = Path.Combine(_tempDir, "validate-counter.txt");
+        await File.WriteAllTextAsync(data, "countersigned");
+        string first = Path.Combine(_tempDir, "validate-counter.p7s");
+        (await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--password", Password, "-o", first)).Exit.ShouldBe(0);
+        string countersigned = Path.Combine(_tempDir, "validate-counter-signed.p7s");
+        (await RunAsync("cades", "sign", first, "--countersign", "--cert", _pfxPath, "--password", Password, "-o", countersigned)).Exit.ShouldBe(0);
+
+        var (exit, output) = await RunAsync("cades", "validate", countersigned, "--data", data, "--trust", _cerPath, "--json");
+
+        exit.ShouldBe(0, output);
+        using var json = JsonDocument.Parse(output);
+        var signer = json.RootElement.GetProperty("signatures").EnumerateArray().ShouldHaveSingleItem();
+        var counter = signer.GetProperty("counterSignatures").EnumerateArray().ShouldHaveSingleItem();
+        counter.GetProperty("id").GetString().ShouldBe("signer-1.1");
+        counter.GetProperty("isSignatureValid").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task CadesValidate_TrustWithoutSystemRoots_TrustsTheAnchor()
+    {
+        string data = Path.Combine(_tempDir, "validate-roots.txt");
+        await File.WriteAllTextAsync(data, "roots");
+        string signature = Path.Combine(_tempDir, "validate-roots.p7s");
+        (await RunAsync("cades", "sign", data, "--cert", _pfxPath, "--password", Password, "-o", signature)).Exit.ShouldBe(0);
+
+        var (exit, output) = await RunAsync("cades", "validate", signature, "--data", data, "--trust", _cerPath, "--no-system-roots", "--json");
+
+        exit.ShouldBe(0, output);
+        using var json = JsonDocument.Parse(output);
+        json.RootElement.GetProperty("isCertificateChainValid").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task CadesSign_SignedAttributeFlags_WriteTheAttributes()
     {
         string data = Path.Combine(_tempDir, "data.txt");
@@ -1092,6 +1164,25 @@ public sealed class CliCommandTests : IDisposable
         var result = new XadesSignatureValidator().Validate(await File.ReadAllBytesAsync(countersigned), [_cert]);
         result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors));
         result.CounterSignatures.ShouldHaveSingleItem().IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task XadesValidate_CounterSigned_ListsTheCounterSignature()
+    {
+        string xml = Path.Combine(_tempDir, "validate-counter.xml");
+        await File.WriteAllTextAsync(xml, "<doc>validate countersign</doc>");
+        string signed = Path.Combine(_tempDir, "validate-counter.signed.xml");
+        string countersigned = Path.Combine(_tempDir, "validate-counter.countersigned.xml");
+        (await RunAsync("xades", "sign", xml, "--cert", _pfxPath, "--password", Password, "-o", signed)).Exit.ShouldBe(0);
+        (await RunAsync("xades", "sign", signed, "--countersign", "--cert", _pfxPath, "--password", Password, "-o", countersigned)).Exit.ShouldBe(0);
+
+        var (exit, output) = await RunAsync("xades", "validate", countersigned, "--trust", _cerPath, "--json");
+
+        exit.ShouldBe(0, output);
+        using var json = JsonDocument.Parse(output);
+        var signature = json.RootElement.GetProperty("signatures").EnumerateArray().ShouldHaveSingleItem();
+        signature.GetProperty("indication").GetString().ShouldBe("Valid");
+        signature.GetProperty("counterSignatures").EnumerateArray().ShouldHaveSingleItem().GetProperty("isSignatureValid").GetBoolean().ShouldBeTrue();
     }
 
     [Theory]

@@ -1,8 +1,11 @@
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Brazil;
 using SimpleSign.Brazil.Signing;
+using System.Security.Cryptography.X509Certificates;
+using SimpleSign.CAdES;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
+using SimpleSign.XAdES;
 
 namespace SimpleSign.Cli.Json;
 
@@ -48,9 +51,92 @@ internal static class JsonMapper
                     SigningTime = r.SigningTime,
                     Lei14063 = Lei14063.Classify(r, manifests?.GetValueOrDefault(r.FieldName))?.ToString(),
                     Brasil = MapBrasil(r),
-                    Errors = [.. r.Errors]
+                    Errors = [.. r.Errors],
+                    Warnings = [.. r.Warnings],
+                    SubFilter = r.SubFilter,
+                    NotRevoked = r.IsNotRevoked,
+                    RevocationSource = r.RevocationSource.ToString(),
+                    HasValidTimestamp = r.HasValidTimestamp,
+                    IsTsaTrusted = r.IsTsaTrusted,
+                    ChainTrustWarning = r.IsChainTrustWarning,
+                    ChainRegion = r.ChainValidationRegion,
+                    ChainMetadata = r.ChainValidationMetadata is null ? null : new Dictionary<string, string>(r.ChainValidationMetadata),
                 };
             })]
+        };
+    }
+
+    /// <summary>One CAdES signer with its countersignatures (<c>signer-1</c>, <c>signer-1.1</c>…).</summary>
+    public static CadesSignerDto MapCadesSigner(CadesSignerValidationResult signer, string id)
+    {
+        var r = signer.Result;
+        var report = ValidationReportRenderer.ToDto(r.SubIndication, r.Constraints, r.SignerCertificate);
+        return new CadesSignerDto
+        {
+            Id = id,
+            Index = signer.Index,
+            IsValid = signer.IsValid,
+            Indication = r.Indication.ToString(),
+            SubIndication = report.SubIndication,
+            Constraints = report.Constraints,
+            IsSignatureValid = r.IsSignatureValid,
+            IsIntegrityValid = r.IsIntegrityValid,
+            IsCertificateChainValid = r.IsCertificateChainValid,
+            HasValidTimestamp = r.HasValidTimestamp,
+            IsTsaTrusted = r.IsTsaTrusted,
+            HasValidContentTimestamp = r.HasValidContentTimestamp,
+            ContentTimestampTime = r.ContentTimestampTime,
+            IsLtvDataValid = r.IsLtvDataValid,
+            HasValidEscTimestamp = r.HasValidEscTimestamp,
+            HasValidArchiveTimestamp = r.HasValidArchiveTimestamp,
+            NotRevoked = r.IsNotRevoked,
+            RevocationSource = r.RevocationSource.ToString(),
+            Signer = r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false),
+            Subject = r.SignerCertificate?.Subject,
+            Issuer = r.SignerCertificate?.Issuer,
+            Serial = r.SignerCertificate?.SerialNumber,
+            Thumbprint = r.SignerCertificate?.Thumbprint,
+            SigningTime = r.SigningTime,
+            Errors = [.. r.Errors],
+            Warnings = [.. r.Warnings],
+            CounterSignatures = [.. signer.CounterSignatures.Select((c, i) => MapCadesSigner(c, $"{id}.{i + 1}"))],
+        };
+    }
+
+    /// <summary>One XAdES signature with its countersignatures.</summary>
+    public static XadesSignatureDto MapXadesSignature(XadesValidationResult r)
+    {
+        var report = ValidationReportRenderer.ToDto(r.SubIndication, r.Constraints, r.SignerCertificate);
+        return new XadesSignatureDto
+        {
+            Id = r.SignatureId,
+            IsValid = r.IsValid,
+            Indication = r.Indication.ToString(),
+            SubIndication = report.SubIndication,
+            Constraints = report.Constraints,
+            IsSignatureValid = r.IsSignatureValid,
+            IsIntegrityValid = r.IsIntegrityValid,
+            IsCertificateChainValid = r.IsCertificateChainValid,
+            HasValidSignatureTimeStamp = r.HasValidSignatureTimeStamp,
+            IsTsaTrusted = r.IsTsaTrusted,
+            HasValidDataObjectsTimeStamp = r.HasValidDataObjectsTimeStamp,
+            DataObjectsTimeStampTime = r.DataObjectsTimeStampTime,
+            HasValidCompleteReferences = r.HasValidCompleteReferences,
+            HasValidSigAndRefsTimeStamp = r.HasValidSigAndRefsTimeStamp,
+            IsLtvDataValid = r.IsLtvDataValid,
+            HasValidArchiveTimeStamp = r.HasValidArchiveTimeStamp,
+            NotRevoked = r.IsNotRevoked,
+            RevocationSource = r.RevocationSource.ToString(),
+            DetectedLevel = r.DetectedLevel.ToString(),
+            Signer = r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false),
+            Subject = r.SignerCertificate?.Subject,
+            Issuer = r.SignerCertificate?.Issuer,
+            Serial = r.SignerCertificate?.SerialNumber,
+            Thumbprint = r.SignerCertificate?.Thumbprint,
+            SigningTime = r.SigningTime,
+            Errors = [.. r.Errors],
+            Warnings = [.. r.Warnings],
+            CounterSignatures = [.. r.CounterSignatures.Select(MapXadesSignature)],
         };
     }
 
