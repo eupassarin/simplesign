@@ -46,3 +46,6 @@ nupkgs/
 
 
 
+
+## Local SoftHSM token of tools/stack (keys of the Sandbox certificates)
+/.softhsm/

@@ -16,6 +16,9 @@ dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral --no-browser
 docker compose -f tools/dss/docker-compose.yml up -d
 ```
 
+Or start both in Docker, with a SoftHSM token holding the Sandbox's certificates, through
+[`tools/stack`](../stack/README.md): `tools/stack/up.sh`.
+
 Nothing else is needed: DSS trusts the Sandbox's root, reaches its CRLs, OCSP responders and LDAP
 server, and fetches revocation data on every request, like SimpleSign. Compose rebuilds the image
 on every `up` (`pull_policy: build`; seconds, from the build cache), so a changed entrypoint is

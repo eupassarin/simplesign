@@ -16,6 +16,10 @@ dotnet run --project src/Apps/SimpleSign.Sandbox                 # http://localh
 dotnet run --project src/Apps/SimpleSign.Sandbox -- --name lab2 --port 5310 --no-browser
 ```
 
+It also runs in Docker (`src/Apps/SimpleSign.Sandbox/Dockerfile`). [`tools/stack`](../../tools/stack/README.md)
+starts it with DSS and fills a local SoftHSM token with its certificates, ready for the TestBench:
+`tools/stack/up.sh`, then `tools/stack/testbench.sh`.
+
 The test certificates and keys are for tests only. Never trust the Sandbox root in a validator
 used for real signatures.
 
