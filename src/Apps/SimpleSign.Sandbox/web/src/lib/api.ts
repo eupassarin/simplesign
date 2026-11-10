@@ -28,6 +28,9 @@ export const api = {
   cerUrl: (id: string) => `/api/certificates/${encodeURIComponent(id)}/cer`,
   faults: () => request<SandboxFaults>("GET", "/api/faults"),
   setFaults: (faults: SandboxFaults) => request<SandboxFaults>("PUT", "/api/faults", faults),
-  log: (after: number) => request<SandboxRequest[]>("GET", `/api/log?after=${after}`),
+  patchFaults: (change: Partial<SandboxFaults>) => request<SandboxFaults>("PATCH", "/api/faults", change),
+  faultsOff: () => request<SandboxFaults>("DELETE", "/api/faults"),
+  log: (after: number, limit?: number) => request<SandboxRequest[]>("GET", `/api/log?after=${after}${limit ? `&limit=${limit}` : ""}`),
+  clearLog: () => request<void>("DELETE", "/api/log"),
   reset: () => request<void>("POST", "/api/reset"),
 }

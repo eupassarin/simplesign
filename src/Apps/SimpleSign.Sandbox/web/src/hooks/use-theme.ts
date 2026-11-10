@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { load, save } from "@/lib/storage"
 
 export type Theme = "light" | "dark" | "system"
 
@@ -9,7 +10,7 @@ function apply(theme: Theme) {
 
 /** Light / dark / system, saved in localStorage (index.html applies it before first paint). */
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => (localStorage.getItem("theme") as Theme | null) ?? "system")
+  const [theme, setThemeState] = useState<Theme>(() => (load("theme") as Theme | null) ?? "system")
   useEffect(() => {
     apply(theme)
     if (theme !== "system") return
@@ -19,7 +20,7 @@ export function useTheme() {
     return () => media.removeEventListener("change", onChange)
   }, [theme])
   const setTheme = useCallback((next: Theme) => {
-    localStorage.setItem("theme", next)
+    save("theme", next)
     setThemeState(next)
   }, [])
   const resolved: "light" | "dark" = theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme

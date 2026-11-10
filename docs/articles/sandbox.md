@@ -94,10 +94,54 @@ puts every revocation and failure back.
 | TSA | down, slow, invalid token |
 | Trusted list | expired (NextUpdate passed), signed by a certificate the LOTL does not name, changed after signing |
 
-Every request is in the **Log** tab (service, URL, status, the failure applied).
+Every request is in the **Requests** tab (service, URL, status, the failure applied). The Sandbox keeps
+the last 500; the tab shows them 50 at a time.
 
 The TestBench signs with each of these certificates and failures under the Strict signing policy
 in `SandboxScenarioTests`.
+
+## Admin API
+
+Everything the UI does goes through this API, so another app (the TestBench, the Playbook, a test
+suite) can drive the Sandbox the same way. JSON is camelCase with enums as names. Every route except
+`GET /api/info` answers loopback only (HTTP 403 otherwise), unless the Sandbox starts with
+`--allow-remote-admin`.
+
+| Route | Does | Body / query | Answers |
+|---|---|---|---|
+| `GET /api/info` | Addresses and test credentials of this Sandbox | | `SandboxInfo` |
+| `GET /api/pki` | The CAs, the TSA outside the chain and every certificate | | `PkiView` |
+| `GET /api/certificates/{id}` | One certificate | | `CertificateView`, 404 if unknown |
+| `GET /api/certificates/{id}/pfx` | Its PKCS#12 (password in `pfxPassword`) | | `application/x-pkcs12` |
+| `GET /api/certificates/{id}/cer` | Its certificate (DER) | | `application/pkix-cert` |
+| `POST /api/certificates/{id}/revoke` | Revokes it now | `{"reason": "KeyCompromise", "publication": "Both" \| "CrlOnly" \| "OcspOnly"}` (both optional) | `CertificateView`, 400 for an unknown reason |
+| `POST /api/certificates/{id}/unrevoke` | Takes the revocation back | | `CertificateView` |
+| `POST /api/certificates/short-lived?seconds=3` | Issues a signer that expires in 1–3600 s | | `application/x-pkcs12` |
+| `GET /api/faults` | The failures | | `SandboxFaults` |
+| `PUT /api/faults` | Replaces every failure | `SandboxFaults` (fields left out take their default) | `SandboxFaults` |
+| `PATCH /api/faults` | Changes only the fields sent | any subset of `SandboxFaults` | `SandboxFaults` |
+| `DELETE /api/faults` | Every failure off (the delays and `ocspSigner` stay) | | `SandboxFaults` |
+| `GET /api/log` | Requests answered, oldest first | `after` (id), `limit` (1–500: the newest N), `service` (`AIA`, `CRL`, `CRL (LDAP)`, `OCSP`, `TSA`, `CSC`, `TL`) | `SandboxRequest[]` |
+| `DELETE /api/log` | Clears the request log | | 204 |
+| `POST /api/reset` | Back to the initial state: revocations, failures off, log cleared | | 204 |
+
+`SandboxFaults` fields: `tsa` (`None`, `Down`, `Slow`, `InvalidToken`, `Untrusted`), `crl` (`None`,
+`Down`, `Slow`, `Expired`, `WrongKey`, `Stale`), `ocsp` (`None`, `Down`, `Slow`, `TryLater`, `Expired`,
+`Unauthorized`, `Unknown`), `ocspSigner` (`Issuer`, `Delegated`), `trustedList` (`None`, `Expired`,
+`WrongSigner`, `Tampered`), and `tsaDelayMs`, `crlDelayMs`, `ocspDelayMs` (0–60000, used when `Slow`).
+
+```bash
+# CRL server down, the other failures as they are
+curl -X PATCH http://localhost:5300/api/faults -H 'Content-Type: application/json' -d '{"crl":"Down"}'
+# OCSP slow, 5 s
+curl -X PATCH http://localhost:5300/api/faults -H 'Content-Type: application/json' -d '{"ocsp":"Slow","ocspDelayMs":5000}'
+# Every failure off
+curl -X DELETE http://localhost:5300/api/faults
+# Revoke a signer in the CRL only
+curl -X POST http://localhost:5300/api/certificates/rsa-2048/revoke -H 'Content-Type: application/json' -d '{"reason":"KeyCompromise","publication":"CrlOnly"}'
+# The last 20 CRL requests
+curl 'http://localhost:5300/api/log?service=CRL&limit=20'
+```
 
 ## The trust scheme
 

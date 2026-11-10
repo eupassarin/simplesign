@@ -1,92 +1,113 @@
 import { useEffect, useState } from "react"
+import { PowerOff } from "lucide-react"
 import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Section } from "@/components/parts"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Pill } from "@/components/parts"
 import { useI18n, type MessageKey } from "@/i18n"
 import { api } from "@/lib/api"
-import type { CrlFault, OcspFault, OcspSigner, SandboxFaults, TlFault, TsaFault } from "@/lib/types"
+import type { SandboxFaults } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-const tsaValues: TsaFault[] = ["None", "Down", "Slow", "InvalidToken", "Untrusted"]
-const crlValues: CrlFault[] = ["None", "Down", "Slow", "Expired", "WrongKey", "Stale"]
-const ocspValues: OcspFault[] = ["None", "Down", "Slow", "TryLater", "Expired", "Unauthorized", "Unknown"]
-const signerValues: OcspSigner[] = ["Issuer", "Delegated"]
-const tlValues: TlFault[] = ["None", "Expired", "WrongSigner", "Tampered"]
+type Prefix = "faults.tsaValues" | "faults.crlValues" | "faults.ocspValues" | "faults.signerValues" | "faults.tlValues"
 
-/** Switch failures of the TSA, the CRL server (HTTP, HTTPS, LDAP), the OCSP responder and the trusted list on and off. */
-export function FaultsPage({ onChanged }: { onChanged: (faults: SandboxFaults) => void }) {
+/** One row: a service, its values, the delay field that applies when it is Slow. */
+interface Row {
+  field: "crl" | "ocsp" | "ocspSigner" | "tsa" | "trustedList"
+  title: MessageKey
+  values: string[]
+  prefix: Prefix
+  delay?: "crlDelayMs" | "ocspDelayMs" | "tsaDelayMs"
+  /** A choice, not a failure: a value other than the first is not shown as one. */
+  neutral?: boolean
+}
+
+const rows: Row[] = [
+  { field: "crl", title: "faults.crl", values: ["None", "Down", "Slow", "Expired", "WrongKey", "Stale"], prefix: "faults.crlValues", delay: "crlDelayMs" },
+  { field: "ocsp", title: "faults.ocsp", values: ["None", "Down", "Slow", "TryLater", "Expired", "Unauthorized", "Unknown"], prefix: "faults.ocspValues", delay: "ocspDelayMs" },
+  { field: "ocspSigner", title: "faults.ocspSigner", values: ["Issuer", "Delegated"], prefix: "faults.signerValues", neutral: true },
+  { field: "tsa", title: "faults.tsa", values: ["None", "Down", "Slow", "InvalidToken", "Untrusted"], prefix: "faults.tsaValues", delay: "tsaDelayMs" },
+  { field: "trustedList", title: "faults.trustedList", values: ["None", "Expired", "WrongSigner", "Tampered"], prefix: "faults.tlValues" },
+]
+
+/** Switch failures of the CRL server (HTTP, HTTPS, LDAP), the OCSP responder, the TSA and the trusted list on and off, one at a time. */
+export function FaultsPage({ initial, onChanged }: { initial: SandboxFaults | null; onChanged: (faults: SandboxFaults) => void }) {
   const { t } = useI18n()
-  const [faults, setFaults] = useState<SandboxFaults | null>(null)
+  const [faults, setFaults] = useState<SandboxFaults | null>(initial)
+  // Fresh on every visit: another app may have switched a failure meanwhile.
   useEffect(() => {
-    api.faults().then(setFaults).catch(() => setFaults(null))
+    api.faults().then(setFaults).catch(() => {})
   }, [])
-  const save = async (next: SandboxFaults) => {
-    setFaults(next)
+  // PATCH sends only the change: another app switching another failure meanwhile is not undone.
+  const apply = async (change: () => Promise<SandboxFaults>, done: string) => {
     try {
-      const saved = await api.setFaults(next)
+      const saved = await change()
       setFaults(saved)
       onChanged(saved)
-      toast.success(t("faults.saved"))
+      toast.success(done)
     } catch (e) {
       toast.error(t("common.error"), { description: (e as Error).message })
     }
   }
   if (!faults) return <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+  const anyOn = rows.some((r) => !r.neutral && (faults[r.field] ?? "None") !== "None")
   return (
-    <div className="space-y-8">
-      <p className="text-muted-foreground max-w-3xl text-sm">{t("faults.intro")}</p>
-      <div className="grid gap-8 lg:grid-cols-3">
-        <Group title={t("faults.crl")} values={crlValues} current={faults.crl} prefix="faults.crlValues" onChoose={(v) => save({ ...faults, crl: v as CrlFault })}
-          delay={faults.crl === "Slow" ? faults.crlDelayMs : null} onDelay={(ms) => save({ ...faults, crlDelayMs: ms })} />
-        <div className="space-y-8">
-          <Group title={t("faults.ocsp")} values={ocspValues} current={faults.ocsp} prefix="faults.ocspValues" onChoose={(v) => save({ ...faults, ocsp: v as OcspFault })}
-            delay={faults.ocsp === "Slow" ? faults.ocspDelayMs : null} onDelay={(ms) => save({ ...faults, ocspDelayMs: ms })} />
-          <Group title={t("faults.ocspSigner")} values={signerValues} current={faults.ocspSigner} prefix="faults.signerValues" neutral
-            onChoose={(v) => save({ ...faults, ocspSigner: v as OcspSigner })} delay={null} onDelay={() => {}} />
-        </div>
-        <div className="space-y-8">
-          <Group title={t("faults.tsa")} values={tsaValues} current={faults.tsa} prefix="faults.tsaValues" onChoose={(v) => save({ ...faults, tsa: v as TsaFault })}
-            delay={faults.tsa === "Slow" ? faults.tsaDelayMs : null} onDelay={(ms) => save({ ...faults, tsaDelayMs: ms })} />
-          <Group title={t("faults.trustedList")} values={tlValues} current={faults.trustedList ?? "None"} prefix="faults.tlValues"
-            onChoose={(v) => save({ ...faults, trustedList: v as TlFault })} delay={null} onDelay={() => {}} />
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-muted-foreground max-w-3xl text-sm">{t("faults.intro")}</p>
+        <Button variant="outline" size="sm" disabled={!anyOn} onClick={() => apply(api.faultsOff, t("faults.allOffDone"))}>
+          <PowerOff /> {t("faults.allOff")}
+        </Button>
+      </div>
+      <div className="divide-y rounded-lg border">
+        {rows.map((row) => {
+          const current = String(faults[row.field] ?? row.values[0])
+          const on = !row.neutral && current !== row.values[0]
+          return (
+            <FaultRow key={row.field} row={row} current={current} on={on} delay={row.delay && current === "Slow" ? faults[row.delay] : null}
+              onChoose={(v) => apply(() => api.patchFaults({ [row.field]: v }), t("faults.saved"))}
+              onDelay={(ms) => { const field = row.delay; if (field) void apply(() => api.patchFaults({ [field]: ms }), t("faults.saved")) }} />
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function Group({ title, values, current, prefix, onChoose, delay, onDelay, neutral }: {
-  title: string
-  values: string[]
+function FaultRow({ row, current, on, delay, onChoose, onDelay }: {
+  row: Row
   current: string
-  prefix: "faults.tsaValues" | "faults.crlValues" | "faults.ocspValues" | "faults.signerValues" | "faults.tlValues"
-  onChoose: (value: string) => void
+  on: boolean
   delay: number | null
+  onChoose: (value: string) => void
   onDelay: (ms: number) => void
-  /** A choice, not a failure: the selected value is not shown as one. */
-  neutral?: boolean
 }) {
   const { t } = useI18n()
   const [ms, setMs] = useState(String(delay ?? 3000))
+  useEffect(() => setMs(String(delay ?? 3000)), [delay])
   return (
-    <Section title={title}>
-      <div className="grid gap-2" role="radiogroup" aria-label={title}>
-        {values.map((v, i) => (
-          <button key={v} type="button" role="radio" aria-checked={current === v} onClick={() => onChoose(v)}
-            className={cn("rounded-lg border p-3 text-left transition-colors", current === v ? "border-primary bg-accent/60 ring-primary/20 ring-1" : "hover:bg-accent/30",
-              current === v && i > 0 && !neutral && "border-destructive/60 bg-destructive/5")}>
-            <span className="block text-sm font-medium">{t(`${prefix}.${v}.title` as MessageKey)}</span>
-            <span className="text-muted-foreground block text-xs">{t(`${prefix}.${v}.hint` as MessageKey)}</span>
-          </button>
-        ))}
-      </div>
-      {delay !== null && (
-        <label className="flex items-center gap-2 text-sm">
-          {t("faults.delay")}
-          <Input className="w-28" type="number" min={0} max={60000} step={500} value={ms} onChange={(e) => setMs(e.target.value)}
-            onBlur={() => onDelay(Math.max(0, Math.min(60000, Number(ms) || 0)))} />
-        </label>
-      )}
-    </Section>
+    <div className={cn("grid items-center gap-x-4 gap-y-1.5 px-4 py-3 md:grid-cols-[14rem_16rem_1fr]", on && "bg-destructive/5")}>
+      <span className="flex items-center gap-2 text-sm font-medium">
+        {t(row.title)}
+        {on && <Pill tone="danger">{t("faults.on")}</Pill>}
+      </span>
+      <Select value={current} onValueChange={onChoose}>
+        <SelectTrigger size="sm" className="w-full" aria-label={t(row.title)}><SelectValue /></SelectTrigger>
+        <SelectContent position="popper">
+          {row.values.map((v) => <SelectItem key={v} value={v}>{t(`${row.prefix}.${v}.title` as MessageKey)}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <span className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs">
+        {t(`${row.prefix}.${current}.hint` as MessageKey)}
+        {delay !== null && (
+          <label className="text-foreground flex items-center gap-2">
+            {t("faults.delay")}
+            <Input className="h-8 w-24" type="number" min={0} max={60000} step={500} value={ms} onChange={(e) => setMs(e.target.value)}
+              onBlur={() => onDelay(Math.max(0, Math.min(60000, Number(ms) || 0)))} />
+          </label>
+        )}
+      </span>
+    </div>
   )
 }
