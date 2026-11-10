@@ -1,9 +1,16 @@
 import type { CertificateView, PkiView, Publication, SandboxFaults, SandboxInfo, SandboxRequest } from "./types"
 
+/** A failed call; `unsupported` when the Sandbox does not know the route (an older version). */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly unsupported = false) {
+    super(message)
+  }
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, {
     method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: body === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (!response.ok) {
@@ -14,9 +21,25 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     } catch {
       // Not JSON: keep the status line.
     }
-    throw new Error(message)
+    throw new ApiError(message, response.status, response.status === 404 || response.status === 405)
   }
-  return response.status === 204 ? (undefined as T) : ((await response.json()) as T)
+  if (response.status === 204) return undefined as T
+  // An older Sandbox answers a route it does not have with the page (200, HTML).
+  if (!(response.headers.get("Content-Type") ?? "").includes("json")) {
+    throw new ApiError(`${method} ${url}: the Sandbox did not answer JSON (an older version without this route?)`, response.status, true)
+  }
+  return (await response.json()) as T
+}
+
+/** PATCH and DELETE on /api/faults, or a read and a PUT on a Sandbox that does not have them. */
+async function changeFaults(method: "PATCH" | "DELETE", change: (current: SandboxFaults) => Partial<SandboxFaults>, body?: Partial<SandboxFaults>): Promise<SandboxFaults> {
+  try {
+    return await request<SandboxFaults>(method, "/api/faults", body)
+  } catch (e) {
+    if (!(e instanceof ApiError) || !e.unsupported) throw e
+    const current = await request<SandboxFaults>("GET", "/api/faults")
+    return request<SandboxFaults>("PUT", "/api/faults", { ...current, ...change(current) })
+  }
 }
 
 export const api = {
@@ -28,8 +51,8 @@ export const api = {
   cerUrl: (id: string) => `/api/certificates/${encodeURIComponent(id)}/cer`,
   faults: () => request<SandboxFaults>("GET", "/api/faults"),
   setFaults: (faults: SandboxFaults) => request<SandboxFaults>("PUT", "/api/faults", faults),
-  patchFaults: (change: Partial<SandboxFaults>) => request<SandboxFaults>("PATCH", "/api/faults", change),
-  faultsOff: () => request<SandboxFaults>("DELETE", "/api/faults"),
+  patchFaults: (change: Partial<SandboxFaults>) => changeFaults("PATCH", () => change, change),
+  faultsOff: () => changeFaults("DELETE", () => ({ tsa: "None", crl: "None", ocsp: "None", trustedList: "None" })),
   log: (after: number, limit?: number) => request<SandboxRequest[]>("GET", `/api/log?after=${after}${limit ? `&limit=${limit}` : ""}`),
   clearLog: () => request<void>("DELETE", "/api/log"),
   reset: () => request<void>("POST", "/api/reset"),
