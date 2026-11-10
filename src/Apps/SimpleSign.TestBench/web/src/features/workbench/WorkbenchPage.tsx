@@ -1,11 +1,9 @@
 import { useState } from "react"
-import { CircleAlert, History, Library, Loader2, PenTool, RotateCcw, ShieldCheck, Shuffle, Terminal } from "lucide-react"
+import { CircleAlert, History, Library, Loader2, PenTool, RotateCcw, Shuffle, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useI18n, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
@@ -67,7 +65,6 @@ function TopBar() {
         <div className="ml-auto flex items-center gap-2">
           <VaryControl />
           <EngineControl />
-          <DssControl />
           <HistoryDrawer />
           <Tooltip>
             <TooltipTrigger asChild><Button variant="ghost" size="icon" aria-label={t("wb.reset")} onClick={reset}><RotateCcw /></Button></TooltipTrigger>
@@ -179,39 +176,6 @@ export function EngineControl() {
         </Tooltip>
       ))}
     </div>
-  )
-}
-
-/** Cross-validation with the EU DSS: on or off, where it is, and whether it answers. */
-export function DssControl() {
-  const { dss, dssStatus, saveDss, checkDss } = useWorkbench()
-  const t = useT()
-  const [url, setUrl] = useState<string | null>(null)
-  return (
-    <Popover onOpenChange={(open) => { if (open) { setUrl(null); void checkDss() } }}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn("h-8", dss.enabled && "border-info/60 bg-info/10")}>
-          <ShieldCheck /> DSS {dss.enabled ? t("wb.dss.on") : t("wb.dss.offShort")}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 space-y-3 text-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="font-medium">{t("wb.dss.title")}</p>
-            <p className="text-muted-foreground text-xs leading-relaxed">{t("wb.dss.about")}</p>
-          </div>
-          <Switch checked={dss.enabled} onCheckedChange={(enabled) => saveDss({ ...dss, enabled })} aria-label={t("wb.dss.title")} />
-        </div>
-        <div className="flex gap-2">
-          <Input className="font-mono text-xs" value={url ?? dss.url} onChange={(e) => setUrl(e.target.value)} />
-          <Button variant="outline" size="sm" className="h-9" onClick={() => saveDss({ ...dss, url: url ?? dss.url })}>{t("wb.dss.check")}</Button>
-        </div>
-        {dssStatus && (dssStatus.reachable
-          ? <Pill tone="success">{t("wb.dss.reachable", { ms: dssStatus.ms })}</Pill>
-          : <p className="text-muted-foreground text-xs leading-relaxed break-words">{dssStatus.error}</p>)}
-        <pre className="bg-muted overflow-x-auto rounded-md p-2 font-mono text-[11px]">docker compose -f tools/dss/docker-compose.yml up</pre>
-      </PopoverContent>
-    </Popover>
   )
 }
 
