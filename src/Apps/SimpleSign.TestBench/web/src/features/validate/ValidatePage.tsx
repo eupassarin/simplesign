@@ -14,7 +14,7 @@ import { OptionField, OptionScope } from "../workbench/fields"
 import { ResultPanel } from "../workbench/ResultPanel"
 import type { DssSignature, RunVerdict, RunView, ValidationSampleView } from "../workbench/schema"
 import { useWorkbench } from "../workbench/state"
-import { DssControl, HistoryDrawer } from "../workbench/WorkbenchPage"
+import { HistoryDrawer } from "../workbench/WorkbenchPage"
 
 /** The settings of a validation, in the order a validator uses them: whom to trust, what to check, where to look. */
 const settingBlocks = [
@@ -141,7 +141,6 @@ export function ValidatePage() {
           <Button variant="outline" size="sm" className="h-8" onClick={checking ? () => { stop.current = true } : checkAll} disabled={samples.length === 0}>
             {checking ? <Loader2 className="animate-spin" /> : <ListChecks />} {t(checking ? "wb.variants.stop" : "val.validateAll")}
           </Button>
-          <DssControl />
           <HistoryDrawer />
           <Button className="min-w-36" disabled={!validateTarget || running} onClick={() => { setShowConformance(false); void validate() }}>
             {running ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {t("val.validate")}

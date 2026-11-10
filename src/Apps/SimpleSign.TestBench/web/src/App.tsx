@@ -9,6 +9,7 @@ import { RealEnvironment } from "@/features/environment/RealEnvironment"
 import { PoliciesPage } from "@/features/policies/PoliciesPage"
 import { SandboxPage } from "@/features/sandbox/SandboxPage"
 import { CatalogProvider } from "@/features/shared/catalog"
+import { DssControl } from "@/features/shared/DssControl"
 import { CoveragePage } from "@/features/standards/CoveragePage"
 import { ValidatePage } from "@/features/validate/ValidatePage"
 import type { RunKind, WorkbenchSchema } from "@/features/workbench/schema"
@@ -54,7 +55,7 @@ const modes: { id: RunKind; icon: typeof PenTool }[] = [
 /**
  * One top bar and one task on screen. There are two tasks, Sign and Validate; Reference (what
  * the library covers of each standard), Sandbox (the connected SimpleSign Sandbox) and Environment
- * (what this machine has) open as panels over either.
+ * (what this machine has) open as panels over either; the DSS switch, which both tasks use, sits beside them.
  */
 function Shell() {
   const { mode, setMode, env } = useWorkbench()
@@ -85,6 +86,7 @@ function Shell() {
           <Panel icon={<FlaskConical />} label={sandbox ? t("app.sandboxConnected", { name: sandbox.name }) : t("app.sandboxNone")} hint={t("app.sandboxHint")}>
             <SandboxPage />
           </Panel>
+          <DssControl />
           <Panel icon={<Globe />} label={t("app.environmentPanel")} hint={t("app.environmentRealHint")}>
             <RealEnvironment />
           </Panel>
@@ -115,7 +117,7 @@ function Panel({ icon, label, hint, children }: { icon: React.ReactNode; label: 
     <Sheet>
       <Tooltip>
         <TooltipTrigger asChild>
-          <SheetTrigger asChild><Button variant="ghost" size="sm" className="h-8">{icon}<span className="max-lg:hidden">{label}</span></Button></SheetTrigger>
+          <SheetTrigger asChild><Button variant="ghost" size="sm" className="h-8">{icon}<span className="max-xl:hidden">{label}</span></Button></SheetTrigger>
         </TooltipTrigger>
         <TooltipContent className="max-w-64">{hint}</TooltipContent>
       </Tooltip>
