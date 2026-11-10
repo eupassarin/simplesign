@@ -99,6 +99,30 @@ public sealed record ValidationReport(
     CodeSnippets Code,
     string? Error);
 
+/// <summary>The verdict on one PDF signature, from the library's result or from the JSON of <c>simplesign validate</c>.</summary>
+internal sealed record PadesVerdict(
+    string FieldName,
+    string Indication,
+    string? SubIndication,
+    bool IsDocumentTimestamp,
+    string? Signer,
+    string? SubFilter,
+    string? Digest,
+    DateTimeOffset? SigningTime,
+    bool IntegrityValid,
+    bool SignatureValid,
+    bool ChainValid,
+    bool ChainTrustWarning,
+    string? ChainRegion,
+    bool NotRevoked,
+    string RevocationSource,
+    bool? HasValidTimestamp,
+    bool? TsaTrusted,
+    IReadOnlyList<ValidationConstraintResult> Constraints,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings,
+    IReadOnlyDictionary<string, string>? ChainMetadata);
+
 /// <summary>Validates PDFs with PdfSignatureValidator and enriches the result with the inspector's facts.</summary>
 internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStore documents)
 {
@@ -109,11 +133,22 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         return [.. results.Select(ToReport)];
     }
 
+    /// <summary>
+    /// The per-signature verdicts through <c>simplesign validate</c> (used by a signing run through the CLI). A CLI that
+    /// prints no verdict gives none; the outcome says why.
+    /// </summary>
+    public async Task<(IReadOnlyList<SignatureReport> Reports, CliOutcome Outcome)> CliValidateAsync(byte[] pdf, ValidationSettings settings, CancellationToken cancellationToken)
+    {
+        var command = ValidationCode(settings).CliCommands[0];
+        var outcome = await CliValidation.RunAsync(command, new Dictionary<string, byte[]> { [CliLine.Placeholders.Output] = pdf }, CliFiles(settings), cancellationToken);
+        var output = outcome.Success ? CliValidation.Parse<CliPadesOutput>(outcome.ValidationJson) : null;
+        return ([.. (output?.Signatures ?? []).Select(s => ToReport(CliValidation.Verdict(s)))], outcome);
+    }
+
     /// <summary>The full report for the Validation page.</summary>
     public async Task<ValidationReport> ReportAsync(string fileId, ValidationSettings settings, CancellationToken cancellationToken)
     {
         var file = documents.Get(fileId);
-        var facts = await documents.FactsAsync(fileId, cancellationToken);
         var code = ValidationCode(settings);
         var watch = Stopwatch.StartNew();
         IReadOnlyList<SignatureValidationResult> results;
@@ -123,10 +158,37 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new ValidationReport(fileId, facts, "Error", [], null, watch.ElapsedMilliseconds, code, ex.Message);
+            return new ValidationReport(fileId, await documents.FactsAsync(fileId, cancellationToken), "Error", [], null, watch.ElapsedMilliseconds, code, ex.Message);
         }
 
-        long ms = watch.ElapsedMilliseconds;
+        return await DescribeAsync(fileId, [.. results.Select(ToReport)], watch.ElapsedMilliseconds, code, cancellationToken);
+    }
+
+    /// <summary>
+    /// The full report for the Validation page through <c>simplesign validate</c>: the verdicts are the CLI's, the
+    /// description of the file (structure, levels, coverage, DSS) the inspector's.
+    /// </summary>
+    public async Task<(ValidationReport Report, CliOutcome? Outcome)> CliReportAsync(string fileId, ValidationSettings settings, CancellationToken cancellationToken)
+    {
+        var file = documents.Get(fileId);
+        var code = ValidationCode(settings);
+        var watch = Stopwatch.StartNew();
+        var outcome = await CliValidation.RunAsync(code.CliCommands[0], new Dictionary<string, byte[]> { [CliLine.Placeholders.Output] = file.Content }, CliFiles(settings), cancellationToken);
+        if (!outcome.Success || CliValidation.Parse<CliPadesOutput>(outcome.ValidationJson) is not { } output)
+        {
+            return (new ValidationReport(fileId, await documents.FactsAsync(fileId, cancellationToken), "Error", [], null, watch.ElapsedMilliseconds, code,
+                outcome.Error ?? L.T("The CLI printed no validation result.")), outcome);
+        }
+
+        var reports = output.Signatures.Select(s => ToReport(CliValidation.Verdict(s))).ToList();
+        return (await DescribeAsync(fileId, reports, watch.ElapsedMilliseconds, code, cancellationToken), outcome);
+    }
+
+    /// <summary>The report of the verdicts on a PDF's signatures, with what the inspector reads of each one and of the file.</summary>
+    private async Task<ValidationReport> DescribeAsync(string fileId, IReadOnlyList<SignatureReport> results, long ms, CodeSnippets code, CancellationToken cancellationToken)
+    {
+        var file = documents.Get(fileId);
+        var facts = await documents.FactsAsync(fileId, cancellationToken);
         PdfInspectionResult? inspection = null;
         try
         {
@@ -152,8 +214,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             ? new DssView(store.CertificateCount, store.CrlCount, store.OcspResponseCount, store.HasVri, store.VriEntryCount, store.VriWarnings)
             : null;
         string overall = results.Count == 0 ? "NoSignatures"
-            : results.All(r => r.Indication == SignatureIndication.Valid) ? "Valid"
-            : results.Any(r => r.Indication == SignatureIndication.Invalid) ? "Invalid"
+            : results.All(r => r.Indication == nameof(SignatureIndication.Valid)) ? "Valid"
+            : results.Any(r => r.Indication == nameof(SignatureIndication.Invalid)) ? "Invalid"
             : "Indeterminate";
         return new ValidationReport(fileId, facts, overall, signatures, dss, ms, code, null);
     }
@@ -213,9 +275,9 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             })];
 
     /// <summary>The revocation row of a CAdES or XAdES result.</summary>
-    internal static CheckRow RevocationRow(bool? notRevoked, RevocationSource source) =>
+    internal static CheckRow RevocationRow(bool? notRevoked, string source) =>
         new("revocation", L.T("Revocation"), notRevoked switch { true => "pass", false => "fail", null => "n/a" },
-            notRevoked is null ? null : source.ToString());
+            notRevoked is null ? null : source);
 
     /// <summary>The trust settings as library objects, shared by the PAdES, CAdES and XAdES validators.</summary>
     internal async Task<ValidationTrust> TrustAsync(ValidationSettings settings, CancellationToken cancellationToken = default)
@@ -292,32 +354,40 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
     }
 
-    internal static SignatureReport ToReport(SignatureValidationResult r)
+    internal static SignatureReport ToReport(SignatureValidationResult r) =>
+        ToReport(new PadesVerdict(
+            r.FieldName, r.Indication.ToString(), SubIndicationName(r.SubIndication), r.IsDocumentTimestamp,
+            r.SignerName ?? r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false), r.SubFilter, r.DigestAlgorithmName, r.SigningTime,
+            r.IsIntegrityValid, r.IsSignatureValid, r.IsCertificateChainValid, r.IsChainTrustWarning, r.ChainValidationRegion,
+            r.IsNotRevoked, r.RevocationSource.ToString(), r.HasValidTimestamp, r.IsTsaTrusted,
+            r.Constraints, r.Errors, r.Warnings, r.ChainValidationMetadata))
+        with
+        {
+            Source = new Reports.ReportSource(r.ToReportEntry(), r.EmbeddedCertificates),
+        };
+
+    /// <summary>The report of one PDF signature from its verdict, whichever validated it (the library or the CLI).</summary>
+    internal static SignatureReport ToReport(PadesVerdict v)
     {
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
         var checks = new List<CheckRow>
         {
-            new("integrity", L.T("Integrity (ByteRange digest)"), Status(r.IsIntegrityValid), r.IsIntegrityValid
+            new("integrity", L.T("Integrity (ByteRange digest)"), Status(v.IntegrityValid), v.IntegrityValid
                 ? L.T("The signed bytes were not changed after signing.")
                 : L.T("The signed bytes were changed after signing: the digest no longer matches.")),
-            new("signature", L.T("Signature value"), Status(r.IsSignatureValid), r.DigestAlgorithmName is { } digest ? L.T("Digest {0}.", digest) : null),
-            new("chain", L.T("Certificate chain"), r.IsChainTrustWarning ? "warn" : Status(r.IsCertificateChainValid), r.ChainValidationRegion),
-            new("revocation", L.T("Revocation"), Status(r.IsNotRevoked), r.RevocationSource.ToString()),
-            new("timestamp", L.T("Signature timestamp"), Status(r.HasValidTimestamp), r.IsTsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
+            new("signature", L.T("Signature value"), Status(v.SignatureValid), v.Digest is { } digest ? L.T("Digest {0}.", digest) : null),
+            new("chain", L.T("Certificate chain"), v.ChainTrustWarning ? "warn" : Status(v.ChainValid), v.ChainRegion),
+            new("revocation", L.T("Revocation"), Status(v.NotRevoked), v.RevocationSource),
+            new("timestamp", L.T("Signature timestamp"), Status(v.HasValidTimestamp), v.TsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
         };
-        checks.AddRange(PolicyRows(r.Constraints));
+        checks.AddRange(PolicyRows(v.Constraints));
         return new SignatureReport(
-            r.FieldName, r.Indication.ToString(), r.IsDocumentTimestamp,
-            r.SignerName ?? r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false),
-            r.SubFilter, r.DigestAlgorithmName,
-            r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
-            checks, r.Errors, r.Warnings, r.ChainValidationMetadata, SubIndicationName(r.SubIndication), Findings(r.Constraints))
-        {
-            Source = new Reports.ReportSource(r.ToReportEntry(), r.EmbeddedCertificates),
-        };
+            v.FieldName, v.Indication, v.IsDocumentTimestamp, v.Signer, v.SubFilter, v.Digest,
+            v.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
+            checks, v.Errors, v.Warnings, v.ChainMetadata, v.SubIndication, Findings(v.Constraints));
     }
 
-    private static DetailedSignature Detail(SignatureValidationResult result, SignatureFieldInfo? info, string? level, long fileSize, int revisions)
+    private static DetailedSignature Detail(SignatureReport report, SignatureFieldInfo? info, string? level, long fileSize, int revisions)
     {
         CoverageView? coverage = null;
         if (info is not null)
@@ -327,7 +397,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         return new DetailedSignature(
-            ToReport(result),
+            report,
             level,
             info?.Signer is { } signer ? View(signer) : null,
             info is null ? [] : [.. info.EmbeddedCertificates.Select(View)],
@@ -402,12 +472,13 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     /// </summary>
     internal static void ValidationCli(CliLine line, ValidationSettings s, SandboxEnvironment sandbox)
     {
-        if (s.Trust.Contains(TrustChoice.Sandbox) || s.CustomRootUploadIds.Count > 0)
+        if (SandboxRootTrusted(s, sandbox) || s.CustomRootUploadIds.Count > 0 || s.Trust.Contains(TrustChoice.PublicTsas))
         {
             line.Add("--trust", RootFile);
         }
 
-        if (UsesSandboxTrustedList(s))
+        // The Sandbox's trusted list: read through its LOTL, when the Sandbox publishes one (the example address without a Sandbox).
+        if (UsesSandboxTrustedList(s) && sandbox.Current is not { LotlUri: null })
         {
             string lotl = sandbox.Current?.LotlUri?.AbsoluteUri ?? "http://localhost:5300/tl/lotl.xml";
             line.Add("--lotl", lotl, "--lotl-signer", LotlSignerFile);
@@ -441,8 +512,53 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         PlanContext.SandboxNetwork(line, sandbox);
     }
 
-    /// <summary>The trusted root a generated <c>validate</c> command reads.</summary>
+    /// <summary>The trusted roots a generated <c>validate</c> command reads (PEM, one or more).</summary>
     internal const string RootFile = "root.cer";
+
+    /// <summary>
+    /// Whether the Sandbox's root is a bare trust anchor: asked for, or the trusted list asked of a connected Sandbox that
+    /// publishes none (as <see cref="TrustAsync"/> does).
+    /// </summary>
+    private static bool SandboxRootTrusted(ValidationSettings s, SandboxEnvironment sandbox) =>
+        s.Trust.Contains(TrustChoice.Sandbox) || (UsesSandboxTrustedList(s) && sandbox.Current is { LotlUri: null });
+
+    /// <summary>
+    /// The files a generated validate command reads, with the same trust as <see cref="TrustAsync"/>: <see cref="RootFile"/>
+    /// (the Sandbox's root when trusted as an anchor, the uploaded roots, the public TSAs' roots), the LOTL signer and the
+    /// validation policy.
+    /// </summary>
+    internal Dictionary<string, byte[]> CliFiles(ValidationSettings settings)
+    {
+        var files = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        var roots = new List<X509Certificate2>();
+        if (SandboxRootTrusted(settings, sandbox) && sandbox.Current is { } connection)
+        {
+            roots.Add(connection.Root);
+        }
+
+        roots.AddRange(settings.CustomRootUploadIds.Select(id => LoadCertificate(documents.Get(id).Content)));
+        if (settings.Trust.Contains(TrustChoice.PublicTsas))
+        {
+            roots.AddRange(PublicTsaRoots.Certificates);
+        }
+
+        if (roots.Count > 0)
+        {
+            files[RootFile] = Encoding.ASCII.GetBytes(string.Concat(roots.Select(r => r.ExportCertificatePem() + "\n")));
+        }
+
+        if (UsesSandboxTrustedList(settings) && sandbox.Current?.LotlSigner is { } signer)
+        {
+            files[LotlSignerFile] = Encoding.ASCII.GetBytes(signer.ExportCertificatePem() + "\n");
+        }
+
+        if (settings.PolicyId is { } policyId && documents.TryGet(policyId, out var policy))
+        {
+            files[PolicyUploads.ValidationFileName] = policy!.Content;
+        }
+
+        return files;
+    }
 
     /// <summary>The LOTL signer certificate a generated <c>validate</c> command reads.</summary>
     internal const string LotlSignerFile = "lotl-signer.pem";
@@ -498,7 +614,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         };
         if (s.Trust.Contains(TrustChoice.PublicTsas))
         {
-            notes.Add(L.T("The public TSA roots are not in these snippets: --trust takes them from src/Apps/SimpleSign.TestBench/TsaRoots (the operating system usually trusts DigiCert's and Sectigo's, never FreeTSA's)."));
+            notes.Add(L.T("root.cer holds the roots to trust, the public TSAs' among them: copy them from src/Apps/SimpleSign.TestBench/TsaRoots (the operating system usually trusts DigiCert's and Sectigo's, never FreeTSA's)."));
         }
         return new CodeSnippets(sb.ToString(), line.ToString(), notes) { CliCommands = [line] };
     }

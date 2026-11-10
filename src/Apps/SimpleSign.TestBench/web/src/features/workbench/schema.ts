@@ -201,6 +201,8 @@ export interface RunView {
   engine?: RunEngine
   /** The commands of a run through the CLI. */
   cli?: CliStep[] | null
+  /** The ETSI TS 119 102-2 report (XML) the CLI wrote, in a run through the CLI. */
+  etsiReportId?: string | null
   format: Format
   status: "running" | "done" | "failed"
   startedAt: string

@@ -94,7 +94,8 @@ public sealed record RunView(
     string Kind = RunKinds.Sign,
     string? ReportId = null,
     string Engine = RunEngines.Library,
-    IReadOnlyList<CliStep>? Cli = null);
+    IReadOnlyList<CliStep>? Cli = null,
+    string? EtsiReportId = null);
 
 /// <summary>A row of the run history.</summary>
 public sealed record RunSummary(string Id, string Format, string Status, DateTimeOffset StartedAt, long TotalMs, bool Success, string? RequestedLevel, string? AchievedLevel, string? Overall, string? FileName, string? Error, string Kind = RunKinds.Sign, string Engine = RunEngines.Library);
@@ -107,7 +108,7 @@ internal sealed class Run(string id, string format, JsonElement options, string 
 {
     public string Kind { get; } = kind;
 
-    /// <summary>How the signature is made: through the library or the CLI.</summary>
+    /// <summary>How the signature is made and validated: through the library or the CLI.</summary>
     public string Engine { get; } = engine;
 
     private readonly Lock _gate = new();
@@ -203,8 +204,8 @@ internal sealed class RunService(
             throw new ArgumentException(L.T("Unknown engine: {0}. Use library or cli.", engine), nameof(request));
         }
 
-        // Validation runs through the library: the engine chooses how a signature is made.
-        var run = new Run(Guid.NewGuid().ToString("N")[..12], format, request.Options.Clone(), request.Kind, request.Kind == RunKinds.Validate ? RunEngines.Library : engine);
+        // The engine makes and validates the signature: the library in this process, or the simplesign CLI.
+        var run = new Run(Guid.NewGuid().ToString("N")[..12], format, request.Options.Clone(), request.Kind, engine);
         _runs[run.Id] = run;
         _order.Enqueue(run.Id);
         while (_order.Count > MaxRuns && _order.TryDequeue(out string? old))
@@ -254,7 +255,7 @@ internal sealed class RunService(
                     RunFormats.Xades => FromXml(run, await xml.RunAsync(Options<XmlOptions>(run), run.Engine, CancellationToken.None)),
                     _ => FromPades(run, await pades.RunAsync(Options<SigningOptions>(run), run.Engine, CancellationToken.None)),
                 };
-                view = view with { ReportId = StoreReport(view) };
+                view = view with { ReportId = view.ReportId ?? StoreReport(view) };
                 if (crossValidate && view.Success && view.OutputId is not null && view.Validation.Count > 0)
                 {
                     view = view with
@@ -343,11 +344,16 @@ internal sealed class RunService(
         var file = documents.Get(options.FileId);
         var settings = options.Settings ?? new Validation.ValidationSettings();
         var view = Empty(run) with { OutputId = options.FileId, FileName = file.FileName, Bytes = file.Content.Length };
+        bool cli = run.Engine == RunEngines.Cli;
         switch (run.Format)
         {
             case RunFormats.Cades:
                 {
-                    var report = await cades.ValidateAsync(options.FileId, options.DataId, settings);
+                    CliOutcome? outcome = null;
+                    var report = cli
+                        ? await Through(cades.ValidateWithCliAsync(options.FileId, options.DataId, settings), o => outcome = o)
+                        : await cades.ValidateAsync(options.FileId, options.DataId, settings);
+                    var reports = Validation.CliValidation.Store(outcome, documents, file.FileName);
                     return view with
                     {
                         Success = true,
@@ -357,12 +363,19 @@ internal sealed class RunService(
                         Warnings = report.Errors,
                         Validation = [.. report.Signers.Select(Verdict)],
                         Detail = report,
+                        Cli = outcome?.Steps,
+                        ReportId = reports.SimpleId,
+                        EtsiReportId = reports.EtsiId,
                     };
                 }
 
             case RunFormats.Xades:
                 {
-                    var report = await xml.ValidateAsync(options.FileId, options.DataId, settings);
+                    CliOutcome? outcome = null;
+                    var report = cli
+                        ? await Through(xml.ValidateWithCliAsync(options.FileId, options.DataId, settings), o => outcome = o)
+                        : await xml.ValidateAsync(options.FileId, options.DataId, settings);
+                    var reports = Validation.CliValidation.Store(outcome, documents, file.FileName);
                     return view with
                     {
                         Success = true,
@@ -373,12 +386,19 @@ internal sealed class RunService(
                         AchievedLevel = report.Signatures.LastOrDefault()?.Level,
                         Validation = [.. report.Signatures.Select(Verdict)],
                         Detail = report,
+                        Cli = outcome?.Steps,
+                        ReportId = reports.SimpleId,
+                        EtsiReportId = reports.EtsiId,
                     };
                 }
 
             default:
                 {
-                    var report = await validation.ReportAsync(options.FileId, settings, CancellationToken.None);
+                    CliOutcome? outcome = null;
+                    var report = cli
+                        ? await Through(validation.CliReportAsync(options.FileId, settings, CancellationToken.None), o => outcome = o)
+                        : await validation.ReportAsync(options.FileId, settings, CancellationToken.None);
+                    var reports = Validation.CliValidation.Store(outcome, documents, file.FileName);
                     return view with
                     {
                         Success = report.Error is null,
@@ -391,9 +411,20 @@ internal sealed class RunService(
                         AchievedLevel = report.Signatures.LastOrDefault(s => !s.Report.IsDocumentTimestamp)?.PadesLevel,
                         Validation = [.. report.Signatures.Select(s => Verdict(s.Report))],
                         Detail = report,
+                        Cli = outcome?.Steps,
+                        ReportId = reports.SimpleId,
+                        EtsiReportId = reports.EtsiId,
                     };
                 }
         }
+    }
+
+    /// <summary>The view of a validation through the CLI, handing its outcome (the commands, the reports) to <paramref name="keep"/>.</summary>
+    private static async Task<T> Through<T>(Task<(T View, CliOutcome? Outcome)> validation, Action<CliOutcome?> keep)
+    {
+        var (view, outcome) = await validation;
+        keep(outcome);
+        return view;
     }
 
     private static RunVerdict Verdict(SignatureReport v) =>
@@ -436,6 +467,8 @@ internal sealed class RunService(
         Validation = [.. r.Validation.Select(Verdict)],
         Detail = r,
         Cli = r.Cli,
+        ReportId = r.Reports?.SimpleId,
+        EtsiReportId = r.Reports?.EtsiId,
     };
 
     private static RunView FromCades(Run run, CadesSignResult r) => Empty(run) with
@@ -457,6 +490,8 @@ internal sealed class RunService(
         Validation = [.. (r.Validation?.Signers ?? []).Select(Verdict)],
         Detail = r,
         Cli = r.Cli,
+        ReportId = r.Reports?.SimpleId,
+        EtsiReportId = r.Reports?.EtsiId,
     };
 
     private static RunVerdict Verdict(CadesSignerReport s) => new(
@@ -485,6 +520,8 @@ internal sealed class RunService(
         Validation = [.. (r.Validation?.Signatures ?? []).Select(Verdict)],
         Detail = r,
         Cli = r.Cli,
+        ReportId = r.Reports?.SimpleId,
+        EtsiReportId = r.Reports?.EtsiId,
     };
 
     private static string? Overall(IEnumerable<string> indications)

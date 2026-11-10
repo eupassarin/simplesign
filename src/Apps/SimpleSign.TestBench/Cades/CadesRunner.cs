@@ -32,6 +32,34 @@ public sealed record CadesSignerReport(
     public Reports.ReportSource? Source { get; init; }
 }
 
+/// <summary>The verdict on one CAdES signer, from the library's result or from the JSON of <c>simplesign cades validate</c>.</summary>
+internal sealed record CadesVerdict(
+    int Index,
+    string? Signer,
+    string Indication,
+    string? SubIndication,
+    DateTimeOffset? SigningTime,
+    bool IntegrityValid,
+    bool SignatureValid,
+    bool ChainValid,
+    bool? HasValidTimestamp,
+    bool? TsaTrusted,
+    bool? HasValidContentTimestamp,
+    DateTimeOffset? ContentTimestampTime,
+    bool? LtvDataValid,
+    bool? HasValidEscTimestamp,
+    bool? HasValidArchiveTimestamp,
+    bool? NotRevoked,
+    string RevocationSource,
+    IReadOnlyList<SimpleSign.Core.Validation.ValidationConstraintResult> Constraints,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<CadesVerdict> CounterSignatures)
+{
+    /// <summary>The library's report entry, for the SimpleSign report; null from the CLI.</summary>
+    public Reports.ReportSource? Source { get; init; }
+}
+
 /// <summary>The result of <c>CadesSignatureValidator.ValidateAll</c>, for the UI.</summary>
 public sealed record CadesValidationView(
     string Overall,
@@ -61,6 +89,9 @@ public sealed record CadesSignResult(
 {
     /// <summary>The commands a run through the CLI executed, with their exit codes and output; null for a library run.</summary>
     public IReadOnlyList<CliStep>? Cli { get; init; }
+
+    /// <summary>The reports the CLI's validation wrote; null for a library run.</summary>
+    public CliReports? Reports { get; init; }
 }
 
 /// <summary>Signs with <c>CadesSigner</c> and validates with <c>CadesSignatureValidator.ValidateAll</c>.</summary>
@@ -141,8 +172,8 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
 
             string achieved = outcome.Json?.AchievedLevel ?? report.EffectiveLevel;
             var result = await FinishAsync(o, report, code, outcome.Output!, achieved, achieved is not "B-B", achieved is "B-LT" or "B-LTA", achieved is "B-LTA",
-                outcome.Json?.Warnings ?? [], watch.ElapsedMilliseconds, cancellationToken);
-            return result with { Cli = outcome.Steps };
+                outcome.Json?.Warnings ?? [], watch.ElapsedMilliseconds, cancellationToken, cli: true);
+            return result with { Cli = [.. outcome.Steps, .. result.Cli ?? []] };
         }
 
         CAdES.CadesSigningResult signed;
@@ -174,18 +205,31 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
 
     /// <summary>Stores the signature and validates it.</summary>
     private async Task<CadesSignResult> FinishAsync(CadesOptions o, CadesOptionsReport report, CodeSnippets code, byte[] signed, string achieved,
-        bool hasTimestamp, bool hasLtv, bool hasArchive, IReadOnlyList<string> warnings, long signMs, CancellationToken cancellationToken)
+        bool hasTimestamp, bool hasLtv, bool hasArchive, IReadOnlyList<string> warnings, long signMs, CancellationToken cancellationToken, bool cli = false)
     {
         string fileName = OutputName(o);
         var output = documents.Add(fileName, signed);
 
-        // Detached signatures validate against the data; enveloped ones carry it.
+        // Detached signatures validate against the data; enveloped ones carry it. Signed through the CLI, validated through it.
         string? contentId = o.ContentType == CadesContentChoice.Detached && report.Options["data"].Visible ? o.DataId : null;
-        var view = o.Validate
-            ? await ValidateAsync(output.Id, contentId, o.Validation ?? new ValidationSettings(), cancellationToken)
-            : null;
+        var settings = o.Validation ?? new ValidationSettings();
+        CadesValidationView? view = null;
+        CliOutcome? outcome = null;
+        if (o.Validate && cli)
+        {
+            (view, outcome) = await ValidateWithCliAsync(output.Id, contentId, settings, cancellationToken);
+        }
+        else if (o.Validate)
+        {
+            view = await ValidateAsync(output.Id, contentId, settings, cancellationToken);
+        }
+
         return new CadesSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, achieved,
-            hasTimestamp, hasLtv, hasArchive, warnings, signMs, view, code, report.Issues);
+            hasTimestamp, hasLtv, hasArchive, warnings, signMs, view, code, report.Issues)
+        {
+            Cli = outcome?.Steps,
+            Reports = outcome is null ? null : CliValidation.Store(outcome, documents, fileName),
+        };
     }
 
     /// <summary>Validates every signer (and countersigner) of a stored signature.</summary>
@@ -204,49 +248,103 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         var trust = await validation.TrustAsync(settings, cancellationToken);
         var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger, chainRevocationChecker: validation.RevocationChecker());
         var result = await validator.ValidateAllAsync(signature.Content, structure.IsDetached ? data : null, null, cancellationToken);
-        var signers = result.Signers.Select(s => Signer(s, $"signer-{s.Index + 1}")).ToList();
-        string overall = result.Errors.Count > 0 || signers.Count == 0 ? "Invalid"
+        var signers = result.Signers.Select(s => Signer(Verdict(s, $"signer-{s.Index + 1}"))).ToList();
+        return new CadesValidationView(Overall(signers, result.Errors), signers, result.Errors, structure, watch.ElapsedMilliseconds, code);
+    }
+
+    /// <summary>
+    /// Validates every signer through <c>simplesign cades validate</c>: the verdicts are the CLI's, the structure the
+    /// inspector's. The outcome holds the command, its output and its reports.
+    /// </summary>
+    public async Task<(CadesValidationView View, CliOutcome? Outcome)> ValidateWithCliAsync(string signatureId, string? dataId, ValidationSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        var signature = documents.Get(signatureId);
+        byte[]? data = dataId is null ? null : documents.Get(dataId).Content;
+        var structure = CadesInspector.Inspect(signatureId, signature.FileName, signature.Content);
+        var code = ValidationCode(settings, structure.IsDetached);
+        var watch = Stopwatch.StartNew();
+        if (structure.IsDetached && data is null && structure.Error is null)
+        {
+            return (new CadesValidationView("Indeterminate", [], [L.T("The signature is detached: choose the data it signed to check its integrity.")], structure, 0, code), null);
+        }
+
+        var inputs = new Dictionary<string, byte[]> { [SignatureFile] = signature.Content };
+        if (structure.IsDetached && data is not null)
+        {
+            inputs[DataFile] = data;
+        }
+
+        var outcome = await CliValidation.RunAsync(code.CliCommands[0], inputs, validation.CliFiles(settings), cancellationToken);
+        if (!outcome.Success || CliValidation.Parse<CliCadesOutput>(outcome.ValidationJson) is not { } output)
+        {
+            return (new CadesValidationView("Invalid", [], [outcome.Error ?? L.T("The CLI printed no validation result.")], structure, watch.ElapsedMilliseconds, code), outcome);
+        }
+
+        var signers = output.Signatures.Select(s => Signer(Verdict(s))).ToList();
+        IReadOnlyList<string> errors = output.ReportErrors ?? [];
+        return (new CadesValidationView(Overall(signers, errors), signers, errors, structure, watch.ElapsedMilliseconds, code), outcome);
+    }
+
+    private static string Overall(IReadOnlyList<CadesSignerReport> signers, IReadOnlyList<string> errors) =>
+        errors.Count > 0 || signers.Count == 0 ? "Invalid"
             : Flatten(signers).All(s => s.Indication == "Valid") ? "Valid"
             : Flatten(signers).Any(s => s.Indication == "Invalid") ? "Invalid"
             : "Indeterminate";
-        return new CadesValidationView(overall, signers, result.Errors, structure, watch.ElapsedMilliseconds, code);
+
+    /// <summary>The verdict on a signer the library validated, with its countersignatures (<c>signer-1.1</c>…).</summary>
+    private static CadesVerdict Verdict(CadesSignerValidationResult s, string id)
+    {
+        var r = s.Result;
+        return new CadesVerdict(s.Index, CadesInspector.SimpleName(r.SignerCertificate), r.Indication.ToString(), ValidationService.SubIndicationName(r.SubIndication),
+            r.SigningTime, r.IsIntegrityValid, r.IsSignatureValid, r.IsCertificateChainValid, r.HasValidTimestamp, r.IsTsaTrusted,
+            r.HasValidContentTimestamp, r.ContentTimestampTime, r.IsLtvDataValid, r.HasValidEscTimestamp, r.HasValidArchiveTimestamp,
+            r.IsNotRevoked, r.RevocationSource.ToString(), r.Constraints, r.Errors, r.Warnings,
+            [.. s.CounterSignatures.Select((c, i) => Verdict(c, $"{id}.{i + 1}"))])
+        {
+            Source = new Reports.ReportSource(r.ToReportEntry(id), []),
+        };
     }
+
+    /// <summary>The verdict on a signer the CLI validated, with its countersignatures.</summary>
+    private static CadesVerdict Verdict(CliCadesSigner s) => new(
+        s.Index, s.Signer, s.Indication, s.SubIndication, s.SigningTime, s.IsIntegrityValid, s.IsSignatureValid, s.IsCertificateChainValid,
+        s.HasValidTimestamp, s.IsTsaTrusted, s.HasValidContentTimestamp, s.ContentTimestampTime, s.IsLtvDataValid, s.HasValidEscTimestamp,
+        s.HasValidArchiveTimestamp, s.NotRevoked, s.RevocationSource ?? "", CliValidation.Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [],
+        [.. (s.CounterSignatures ?? []).Select(Verdict)]);
 
     private static IEnumerable<CadesSignerReport> Flatten(IEnumerable<CadesSignerReport> signers) =>
         signers.SelectMany(s => new[] { s }.Concat(Flatten(s.CounterSignatures)));
 
-    /// <summary>One signer's verdict, with its countersignatures nested.</summary>
-    /// <param name="s">The signer.</param>
-    /// <param name="id">Its identifier in the SimpleSign report: <c>signer-1</c>, <c>signer-1.1</c> for its first countersignature…</param>
-    private static CadesSignerReport Signer(CadesSignerValidationResult s, string id)
+    /// <summary>One signer's report, with its countersignatures nested, whichever validated it (the library or the CLI).</summary>
+    private static CadesSignerReport Signer(CadesVerdict v)
     {
-        var r = s.Result;
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
         var checks = new List<CheckRow>
         {
-            new("integrity", L.T("Integrity (message digest)"), Status(r.IsIntegrityValid), r.IsIntegrityValid
+            new("integrity", L.T("Integrity (message digest)"), Status(v.IntegrityValid), v.IntegrityValid
                 ? L.T("The signed content matches the message-digest attribute.")
                 : L.T("The content does not match the message-digest attribute.")),
-            new("signature", L.T("Signature value"), Status(r.IsSignatureValid), null),
-            new("chain", L.T("Certificate chain"), Status(r.IsCertificateChainValid), null),
-            new("timestamp", L.T("Signature timestamp"), Status(r.HasValidTimestamp), r.IsTsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
-            new("contentTimestamp", L.T("Content timestamp"), Status(r.HasValidContentTimestamp),
-                r.ContentTimestampTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)),
-            new("ltv", L.T("Validation data (certificate and revocation values)"), Status(r.IsLtvDataValid), null),
-            new("escTimestamp", L.T("CAdES-C timestamp (escTimeStamp)"), Status(r.HasValidEscTimestamp), null),
-            new("archive", L.T("Archive timestamp"), Status(r.HasValidArchiveTimestamp), null),
-            ValidationService.RevocationRow(r.IsNotRevoked, r.RevocationSource),
+            new("signature", L.T("Signature value"), Status(v.SignatureValid), null),
+            new("chain", L.T("Certificate chain"), Status(v.ChainValid), null),
+            new("timestamp", L.T("Signature timestamp"), Status(v.HasValidTimestamp), v.TsaTrusted is { } trusted ? (trusted ? L.T("TSA trusted.") : L.T("TSA not trusted.")) : null),
+            new("contentTimestamp", L.T("Content timestamp"), Status(v.HasValidContentTimestamp),
+                v.ContentTimestampTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)),
+            new("ltv", L.T("Validation data (certificate and revocation values)"), Status(v.LtvDataValid), null),
+            new("escTimestamp", L.T("CAdES-C timestamp (escTimeStamp)"), Status(v.HasValidEscTimestamp), null),
+            new("archive", L.T("Archive timestamp"), Status(v.HasValidArchiveTimestamp), null),
+            ValidationService.RevocationRow(v.NotRevoked, v.RevocationSource),
         };
-        checks.AddRange(ValidationService.PolicyRows(r.Constraints));
-        // The library's indication, made INVALID by a timestamp that does not verify (not part of the indication).
-        bool brokenTimestamp = r.HasValidTimestamp == false || r.HasValidArchiveTimestamp == false || r.HasValidEscTimestamp == false || r.HasValidContentTimestamp == false;
-        string indication = brokenTimestamp ? "Invalid" : r.Indication.ToString();
-        return new CadesSignerReport(s.Index, CadesInspector.SimpleName(r.SignerCertificate), indication,
-            r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
-            [.. checks.Where(c => c.Status != "n/a" || c.Id is "integrity" or "signature" or "chain")], r.Errors, r.Warnings,
-            [.. s.CounterSignatures.Select((c, i) => Signer(c, $"{id}.{i + 1}"))], ValidationService.SubIndicationName(r.SubIndication), ValidationService.Findings(r.Constraints))
+        checks.AddRange(ValidationService.PolicyRows(v.Constraints));
+        // The validator's indication, made INVALID by a timestamp that does not verify (not part of the indication).
+        bool brokenTimestamp = v.HasValidTimestamp == false || v.HasValidArchiveTimestamp == false || v.HasValidEscTimestamp == false || v.HasValidContentTimestamp == false;
+        string indication = brokenTimestamp ? "Invalid" : v.Indication;
+        return new CadesSignerReport(v.Index, v.Signer, indication,
+            v.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
+            [.. checks.Where(c => c.Status != "n/a" || c.Id is "integrity" or "signature" or "chain")], v.Errors, v.Warnings,
+            [.. v.CounterSignatures.Select(Signer)], v.SubIndication, ValidationService.Findings(v.Constraints))
         {
-            Source = new Reports.ReportSource(r.ToReportEntry(id), []),
+            Source = v.Source,
         };
     }
 
