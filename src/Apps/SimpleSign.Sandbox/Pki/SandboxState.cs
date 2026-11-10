@@ -140,6 +140,12 @@ internal sealed record SandboxState
     /// <summary>A self-signed OCSP responder no CA authorized (the "unauthorized responder" failure).</summary>
     public required StoredKeyPair RogueOcspResponder { get; init; }
 
+    /// <summary>The scheme operator that signs the Sandbox's list of trusted lists (LOTL); created on first use.</summary>
+    public StoredKeyPair? LotlSigner { get; init; }
+
+    /// <summary>The scheme operator that signs the Sandbox's trusted list (TL); created on first use.</summary>
+    public StoredKeyPair? TlSigner { get; init; }
+
     public List<StoredCertificate> Certificates { get; init; } = [];
 
     public long CrlNumber { get; init; } = 1;

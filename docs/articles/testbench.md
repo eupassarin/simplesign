@@ -46,7 +46,7 @@ is remembered for the next start. While connected:
 | Timestamp | Its TSAs: normal, HTTP Basic (credentials filled in), outside the chain, revoked, wrong TSA name |
 | Cloud | Its CSC v2 service (PIN/OTP, SCAL 1/2, OAuth approved at once) |
 | Revocation | Its CRLs and OCSP, reached through an `OutboundHttpPolicy` that lists its origins (`LoopbackOrigins`, LDAP allowed) |
-| Validation | Its root is trusted next to the OS roots (and for its HTTPS endpoint) |
+| Validation | Its trusted list (read through its LOTL, `/tl/lotl.xml`) is trusted next to the OS roots, so the `TrustedLists` constraints are evaluated; "Sandbox root" trusts its root alone as a bare anchor. Its root is also trusted for its HTTPS endpoint |
 
 Failures, revocations and the request log are in the Sandbox's own UI (**Open the Sandbox**).
 Without a Sandbox, the Sandbox signers and TSAs are disabled and the validation samples that need

@@ -29,6 +29,12 @@ internal sealed class SandboxConnection : IDisposable
     /// <summary>What a client needs to reach the Sandbox on this machine: its loopback origins, LDAP allowed.</summary>
     public required OutboundHttpPolicy Policy { get; init; }
 
+    /// <summary>The certificate the Sandbox's list of trusted lists is signed with; null for a Sandbox without trusted lists.</summary>
+    public X509Certificate2? LotlSigner { get; init; }
+
+    /// <summary>The Sandbox's list of trusted lists; null for a Sandbox without trusted lists.</summary>
+    public Uri? LotlUri => Info.TrustedLists is { } lists ? new Uri(lists.LotlUrl) : null;
+
     public Uri TsaUri => new(Info.Tsa.Url);
 
     public Uri AuthenticatedTsaUri => new(Info.Tsa.AuthenticatedUrl);
@@ -48,6 +54,7 @@ internal sealed class SandboxConnection : IDisposable
     {
         Root.Dispose();
         Intermediate.Dispose();
+        LotlSigner?.Dispose();
         foreach (var signer in Signers)
         {
             signer.Certificate.Dispose();
@@ -139,6 +146,9 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
             ?? throw new HttpRequestException($"{baseUrl}api/pki did not answer.");
         var root = X509CertificateLoader.LoadCertificate(await _admin.GetByteArrayAsync(new Uri(baseUrl, "aia/root.cer"), cancellationToken));
         var intermediate = X509CertificateLoader.LoadCertificate(await _admin.GetByteArrayAsync(new Uri(baseUrl, "aia/intermediate.cer"), cancellationToken));
+        var lotlSigner = info.TrustedLists is { } lists
+            ? X509Certificate2.CreateFromPem(await _admin.GetStringAsync(new Uri(lists.LotlSignerUrl), cancellationToken))
+            : null;
         var signers = new List<SandboxSigner>();
         foreach (var certificate in pki.Certificates.Where(c => c.Usage == "Signing"))
         {
@@ -155,6 +165,7 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
             Signers = signers,
             Certificates = pki.Certificates,
             Policy = PolicyFor(info),
+            LotlSigner = lotlSigner,
         };
         SandboxConnection? previous;
         lock (_gate)

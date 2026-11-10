@@ -47,6 +47,13 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
         // EN 319 102-1 §5.2.6: an expired signing certificate with no proof of existence is OUT_OF_BOUNDS_NO_POE,
         // which SimpleSign gives; DSS looks at the revocation data first (CERTIFICATE_CHAIN_GENERAL_FAILURE).
         ["sample:expired"] = "SimpleSign reports the expiry (OUT_OF_BOUNDS_NO_POE); DSS the unknown OCSP status",
+
+        // A trusted list whose signature does not verify (signed by a certificate its LOTL pointer does not name, or
+        // changed after signing). ETSI TS 119 615 says such a list is not used: SimpleSign's reader refuses it, so its CAs
+        // are not trust anchors (NO_CERTIFICATE_CHAIN_FOUND). DSS keeps its anchors and leaves the signature to the
+        // TLWellSigned constraint, a WARN in the default policy (TOTAL_PASSED with a warning).
+        ["tl:WrongSigner"] = "SimpleSign does not use a trusted list whose signature fails (TS 119 615); DSS warns (TLWellSigned)",
+        ["tl:Tampered"] = "SimpleSign does not use a trusted list whose signature fails (TS 119 615); DSS warns (TLWellSigned)",
     };
 
     private static readonly string[] Signers =
@@ -154,6 +161,47 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
             {
                 await fixture.Sandbox.SetFaultsAsync(new SandboxFaults());
             }
+        }
+    }
+
+    /// <summary>
+    /// A failure of the Sandbox's trusted list (expired, signed by a certificate its LOTL does not name, changed after
+    /// signing), seen by both validators: DSS downloads the list again within seconds (DSS_TL_REFRESH_SECONDS).
+    /// </summary>
+    [SkippableTheory]
+    [InlineData(TlFault.Expired)]
+    [InlineData(TlFault.WrongSigner)]
+    [InlineData(TlFault.Tampered)]
+    public async Task Trust_TrustedListFault_SimpleSignAndDssAgree(TlFault fault)
+    {
+        var dss = await ConnectAsync();
+        Skip.If(fixture.Sandbox.Current?.Info.TrustedLists is null, "The Sandbox publishes no trusted list.");
+        await fixture.Sandbox.SetFaultsAsync(new SandboxFaults(TrustedList: fault));
+        try
+        {
+            await WaitForTrustedListAsync(dss);
+            var failures = new List<string>();
+            foreach (string format in Formats)
+            {
+                string scenario = $"tl:{fault}|{format}|{BaselineLevel.BB}";
+                var run = await fixture.Runs(dss).RunAsync(SignRequest(format, "rsa-2048", BaselineLevel.BB, new TimestampChoice()), default);
+                run.Success.ShouldBeTrue($"{scenario} did not sign: {run.Error}");
+                try
+                {
+                    Compare(scenario, run);
+                }
+                catch (ShouldAssertException ex)
+                {
+                    failures.Add(ex.Message);
+                }
+            }
+
+            failures.ShouldBeEmpty();
+        }
+        finally
+        {
+            await fixture.Sandbox.SetFaultsAsync(new SandboxFaults());
+            await WaitForTrustedListAsync(dss);
         }
     }
 
@@ -267,7 +315,10 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
         var other => other,
     };
 
-    /// <summary>The DSS settings when a DSS answers; skips the test otherwise.</summary>
+    /// <summary>
+    /// The DSS settings when a DSS answers; skips the test otherwise. When the Sandbox publishes a trusted list, waits
+    /// (up to a minute) until DSS has loaded it, so the first validations do not run before DSS trusts the Sandbox.
+    /// </summary>
     private async Task<DssSettings> ConnectAsync()
     {
         fixture.RequireSandbox();
@@ -284,6 +335,51 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
         }
 
         Skip.IfNot(isDss, $"No DSS at {settings.Url}: docker compose -f tools/dss/docker-compose.yml up");
+        if (fixture.Sandbox.Current?.Info.TrustedLists is { } lists)
+        {
+            for (int i = 0; i < 60 && !(await TrustedListSummaryAsync(settings)).Contains(lists.TlUrl, StringComparison.Ordinal); i++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1));
+            }
+        }
+
         return settings;
+    }
+
+    /// <summary>Waits until DSS has downloaded the Sandbox's trusted list again (its "Last download attempt" changes), up to a minute.</summary>
+    private async Task WaitForTrustedListAsync(DssSettings dss)
+    {
+        string before = LastDownload(await TrustedListSummaryAsync(dss));
+        for (int i = 0; i < 60; i++)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            if (LastDownload(await TrustedListSummaryAsync(dss)) != before)
+            {
+                return;
+            }
+        }
+
+        output.WriteLine("DSS did not download the Sandbox's trusted list again within a minute (DSS_TL_REFRESH_SECONDS).");
+    }
+
+    /// <summary>The text of the DSS "Trusted Lists Summary" page (tl-info), tags removed.</summary>
+    private static async Task<string> TrustedListSummaryAsync(DssSettings dss)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+            string page = await http.GetStringAsync(new Uri(dss.Url.TrimEnd('/') + "/tl-info"));
+            return System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(page, "<[^>]+>", " "));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return "";
+        }
+    }
+
+    private static string LastDownload(string summary)
+    {
+        int at = summary.IndexOf("Last download attempt", StringComparison.Ordinal);
+        return at < 0 ? "" : summary.Substring(at, Math.Min(60, summary.Length - at));
     }
 }

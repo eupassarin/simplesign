@@ -106,6 +106,7 @@ public sealed class SandboxClient : ISandboxClient, IDisposable
                     Set("ocsp", action.Ocsp);
                     Set("tsa", action.Tsa);
                     Set("ocspSigner", action.OcspSigner);
+                    Set("trustedList", action.TrustedList);
                     await Send(HttpMethod.Put, "api/faults", JsonContent.Create(faults, SandboxJson.Default.DictionaryStringJsonElement), cancellationToken);
                     return null;
                 }

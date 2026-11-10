@@ -12,6 +12,7 @@ export interface SandboxAction {
   ocsp?: string | null
   tsa?: string | null
   ocspSigner?: string | null
+  trustedList?: string | null
 }
 
 export interface RunDefinition {

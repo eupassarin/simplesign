@@ -113,6 +113,6 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
     }
 
     [Fact]
-    public void Defaults_TrustTheSandboxAndSystemRoots() =>
-        new ValidationSettings().Trust.ShouldBe([TrustChoice.Sandbox, TrustChoice.System]);
+    public void Defaults_TrustTheSandboxTrustedListAndSystemRoots() =>
+        new ValidationSettings().Trust.ShouldBe([TrustChoice.SandboxTrustedList, TrustChoice.System]);
 }

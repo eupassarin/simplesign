@@ -96,7 +96,7 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Concurrency |  | `BatchSigner.WithMaxConcurrency(int)` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
-| Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustSystemRoots` | yes |
+| Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
 | Run and validation | Check revocation | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.3 CRL validation<br>RFC 6960 · OCSP | `ValidationOptions.CheckRevocation` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |
@@ -163,7 +163,7 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signed attributes | Signed assertion (SAML) | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2 | `WithSignedAssertions(…)` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
-| Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustSystemRoots` | yes |
+| Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
 | Run and validation | Check revocation | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.3 CRL validation<br>RFC 6960 · OCSP | `ValidationOptions.CheckRevocation` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |
@@ -238,7 +238,7 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signed attributes | Production place: country | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { CountryName })` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
-| Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustSystemRoots` | yes |
+| Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
 | Run and validation | Check revocation | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.3 CRL validation<br>RFC 6960 · OCSP | `ValidationOptions.CheckRevocation` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |

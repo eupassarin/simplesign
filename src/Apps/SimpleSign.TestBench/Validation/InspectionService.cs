@@ -24,7 +24,7 @@ internal sealed class InspectionService(ValidationService validation, DocumentSt
 {
     public async Task<BulkReport> BulkAsync(BulkRequest request, CancellationToken cancellationToken)
     {
-        var validator = new BulkValidator(validation.CreateValidator(request.Settings), Math.Clamp(request.MaxConcurrency, 1, 16));
+        var validator = new BulkValidator(await validation.CreateValidatorAsync(request.Settings, cancellationToken), Math.Clamp(request.MaxConcurrency, 1, 16));
         var names = request.FileIds.ToDictionary(id => id, id => documents.Get(id).FileName, StringComparer.Ordinal);
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var items = new List<BulkItem>();
