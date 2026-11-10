@@ -1,6 +1,9 @@
 import { useState, type ReactNode } from "react"
-import { Check, Copy } from "lucide-react"
+import { Check, ChevronRight, Copy } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { useI18n } from "@/i18n"
+import { load, save } from "@/lib/storage"
 import { cn } from "@/lib/utils"
 
 /** A titled block of the page. */
@@ -19,15 +22,21 @@ export function Section({ title, description, aside, children }: { title: ReactN
   )
 }
 
-/** A label and its value; `stacked` puts the value under the label (URLs, names), `copy` adds a copy button. */
-export function KeyValue({ label, children, mono, stacked, copy }: { label: string; children: ReactNode; mono?: boolean; stacked?: boolean; copy?: string | null }) {
+/** Copies `value` to the clipboard, with a check mark for a moment. */
+export function CopyButton({ value, label }: { value: string; label: string }) {
+  const { t } = useI18n()
   const [copied, setCopied] = useState(false)
-  const button = copy ? (
-    <button type="button" aria-label={`Copy ${label}`} className="text-muted-foreground hover:text-foreground shrink-0"
-      onClick={() => { void navigator.clipboard.writeText(copy); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>
+  return (
+    <button type="button" aria-label={`${t("common.copy")} ${label}`} title={t("common.copy")} className="text-muted-foreground hover:text-foreground shrink-0"
+      onClick={() => { void navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>
       {copied ? <Check className="text-success size-3.5" /> : <Copy className="size-3.5" />}
     </button>
-  ) : null
+  )
+}
+
+/** A label and its value; `stacked` puts the value under the label (URLs, names), `copy` adds a copy button. */
+export function KeyValue({ label, children, mono, stacked, copy }: { label: string; children: ReactNode; mono?: boolean; stacked?: boolean; copy?: string | null }) {
+  const button = copy ? <CopyButton value={copy} label={label} /> : null
   if (stacked) {
     return (
       <div className="space-y-0.5 py-1.5">
@@ -64,5 +73,38 @@ export function Pill({ children, tone = "default" }: { children: ReactNode; tone
     >
       {children}
     </Badge>
+  )
+}
+
+/**
+ * A section folded under its title and a one-line summary; `id` keeps it open or closed across reloads.
+ * Details (URLs, credentials, raw JSON) go in one, so a page shows the essentials first.
+ */
+export function Fold({ id, title, summary, defaultOpen = false, aside, children }: {
+  id: string
+  title: ReactNode
+  summary?: ReactNode
+  defaultOpen?: boolean
+  aside?: ReactNode
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(() => {
+    const saved = load(`open.${id}`)
+    return saved === null ? defaultOpen : saved === "1"
+  })
+  return (
+    <Collapsible open={open} onOpenChange={(next) => { setOpen(next); save(`open.${id}`, next ? "1" : "0") }} className="rounded-lg border">
+      <div className="flex items-center gap-2 px-4">
+        <CollapsibleTrigger className="hover:text-foreground flex min-w-0 flex-1 items-center gap-2 py-3 text-left">
+          <ChevronRight className={cn("text-muted-foreground size-4 shrink-0 transition-transform", open && "rotate-90")} />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">{title}</span>
+            {summary && !open && <span className="text-muted-foreground block truncate text-xs">{summary}</span>}
+          </span>
+        </CollapsibleTrigger>
+        {aside}
+      </div>
+      <CollapsibleContent className="border-t px-4 py-2">{children}</CollapsibleContent>
+    </Collapsible>
   )
 }

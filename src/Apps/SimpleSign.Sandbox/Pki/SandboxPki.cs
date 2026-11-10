@@ -208,6 +208,17 @@ internal sealed class SandboxPki : IDisposable
         }
     }
 
+    /// <summary>Changes the failures from their current value in one step (no change lost between a read and a write).</summary>
+    public SandboxFaults UpdateFaults(Func<SandboxFaults, SandboxFaults> change)
+    {
+        lock (_gate)
+        {
+            _state = _state with { Faults = change(_state.Faults).Clamped() };
+            Save();
+            return _state.Faults;
+        }
+    }
+
     public Uri CertificateUrl(string caId) => new(BaseUrl, $"aia/{caId}.cer");
 
     public Uri CrlUrl(string caId) => new(BaseUrl, $"crl/{caId}.crl");

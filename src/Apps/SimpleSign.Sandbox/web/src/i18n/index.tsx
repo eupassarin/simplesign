@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { en, type Messages } from "./en"
 import { ptBR } from "./pt-BR"
+import { load, save } from "@/lib/storage"
 
 export type Locale = "en-US" | "pt-BR"
 
@@ -18,7 +19,7 @@ type Leaves<T> = T extends string ? "" : { [K in keyof T]-?: K extends string ? 
 export type MessageKey = Leaves<Messages>
 
 function detect(): Locale {
-  const saved = localStorage.getItem("locale") as Locale | null
+  const saved = load("locale") as Locale | null
   if (saved && saved in dictionaries) return saved
   return (navigator.languages ?? [navigator.language]).some((l) => l.toLowerCase().startsWith("pt")) ? "pt-BR" : "en-US"
 }
@@ -50,7 +51,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = locale
   }, [locale])
   const setLocale = useCallback((next: Locale) => {
-    localStorage.setItem("locale", next)
+    save("locale", next)
     setLocaleState(next)
   }, [])
   const value = useMemo<I18nValue>(() => {

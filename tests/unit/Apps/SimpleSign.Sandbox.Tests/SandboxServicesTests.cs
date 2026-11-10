@@ -102,6 +102,74 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
     }
 
     [Fact]
+    public async Task PatchFaults_OneField_KeepsTheOthers()
+    {
+        var faults = await WithFaultsAsync(new SandboxFaults(Crl: CrlFault.Expired, OcspDelayMs: 1500), async () =>
+        {
+            var response = await Http.PatchAsJsonAsync("api/faults", new { ocsp = "TryLater" });
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<SandboxFaults>(SandboxFixture.Json);
+        });
+
+        faults.ShouldBe(new SandboxFaults(Crl: CrlFault.Expired, Ocsp: OcspFault.TryLater, OcspDelayMs: 1500));
+    }
+
+    [Fact]
+    public async Task DeleteFaults_FailuresOn_TurnsThemOffKeepingTheChoices()
+    {
+        var faults = await WithFaultsAsync(new SandboxFaults(Tsa: TsaFault.Down, Crl: CrlFault.Slow, CrlDelayMs: 500, OcspSigner: OcspSigner.Delegated, TrustedList: TlFault.Expired), async () =>
+        {
+            var response = await Http.DeleteAsync("api/faults");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<SandboxFaults>(SandboxFixture.Json);
+        });
+
+        faults.ShouldNotBeNull();
+        faults.Any.ShouldBeFalse();
+        faults.CrlDelayMs.ShouldBe(500);
+        faults.OcspSigner.ShouldBe(OcspSigner.Delegated);
+    }
+
+    [Fact]
+    public async Task GetCertificate_KnownAndUnknown_ReturnsItsViewOr404()
+    {
+        var view = await Http.GetFromJsonAsync<CertificateView>("api/certificates/rsa-2048", SandboxFixture.Json);
+        var missing = await Http.GetAsync("api/certificates/nope");
+
+        view!.Id.ShouldBe("rsa-2048");
+        missing.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Log_LimitAndService_ReturnsTheNewestOfThatService()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            (await Http.GetAsync("crl/root.crl")).EnsureSuccessStatusCode();
+        }
+
+        (await Http.GetAsync("aia/root.cer")).EnsureSuccessStatusCode();
+        var all = await Http.GetFromJsonAsync<SandboxRequest[]>("api/log?service=CRL", SandboxFixture.Json);
+        var newest = await Http.GetFromJsonAsync<SandboxRequest[]>("api/log?service=crl&limit=2", SandboxFixture.Json);
+
+        newest!.Length.ShouldBe(2);
+        newest.ShouldAllBe(r => r.Service == "CRL");
+        newest.Select(r => r.Id).ShouldBe(all![^2..].Select(r => r.Id));
+    }
+
+    [Fact]
+    public async Task DeleteLog_WithEntries_EmptiesIt()
+    {
+        (await Http.GetAsync("crl/root.crl")).EnsureSuccessStatusCode();
+
+        (await Http.DeleteAsync("api/log")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var log = await Http.GetFromJsonAsync<SandboxRequest[]>("api/log", SandboxFixture.Json);
+        log.ShouldNotBeNull();
+        log.ShouldNotContain(r => r.Path == "/crl/root.crl");
+    }
+
+    [Fact]
     public async Task Tsa_Request_IsGrantedBySandboxTsa()
     {
         byte[] data = Encoding.UTF8.GetBytes("timestamp me");

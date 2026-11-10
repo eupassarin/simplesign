@@ -88,6 +88,8 @@ internal static class AdminEndpoints
             [.. pki.Certificates.Select(View)]));
         admin.MapPost("/certificates/short-lived", (int? seconds, SandboxPki pki) =>
             Results.File(pki.IssueShortLived(TimeSpan.FromSeconds(Math.Clamp(seconds ?? 3, 1, 3600))), "application/x-pkcs12", "short-lived.pfx"));
+        admin.MapGet("/certificates/{id}", (string id, SandboxPki pki) =>
+            Found(pki, id, () => Results.Ok(View(pki.Certificate(id)))));
         admin.MapGet("/certificates/{id}/pfx", (string id, SandboxPki pki) =>
             Found(pki, id, () => Results.File(pki.Pfx(id), "application/x-pkcs12", $"{id}.pfx")));
         admin.MapGet("/certificates/{id}/cer", (string id, SandboxPki pki) =>
@@ -115,7 +117,23 @@ internal static class AdminEndpoints
             pki.Faults = faults;
             return pki.Faults;
         });
-        admin.MapGet("/log", (long? after, RequestLog log) => log.Since(after ?? 0));
+        // One failure at a time: the members left out keep their value.
+        admin.MapMethods("/faults", [HttpMethods.Patch], (SandboxFaultsPatch patch, SandboxPki pki) => pki.UpdateFaults(patch.ApplyTo));
+        // Every failure off; the delays and the OCSP signer (a choice, not a failure) stay.
+        admin.MapDelete("/faults", (SandboxPki pki) => pki.UpdateFaults(f => f with
+        {
+            Tsa = TsaFault.None,
+            Crl = CrlFault.None,
+            Ocsp = OcspFault.None,
+            TrustedList = TlFault.None,
+        }));
+        admin.MapGet("/log", (long? after, int? limit, string? service, RequestLog log) =>
+            log.Since(after ?? 0, limit is { } n ? Math.Clamp(n, 1, RequestLog.Capacity) : null, string.IsNullOrEmpty(service) ? null : service));
+        admin.MapDelete("/log", (RequestLog log) =>
+        {
+            log.Clear();
+            return Results.NoContent();
+        });
         admin.MapPost("/reset", (SandboxPki pki, RequestLog log) =>
         {
             pki.Reset();

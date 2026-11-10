@@ -13,7 +13,12 @@ import { PkiPage } from "@/features/PkiPage"
 import { useTheme } from "@/hooks/use-theme"
 import { locales, useI18n, type Locale } from "@/i18n"
 import { api } from "@/lib/api"
+import { load, save } from "@/lib/storage"
 import type { PkiView, SandboxFaults, SandboxInfo } from "@/lib/types"
+
+const tabs = ["environment", "pki", "faults", "log"] as const
+type Tab = (typeof tabs)[number]
+const savedTab = (): Tab => tabs.find((t) => t === load("tab")) ?? "environment"
 
 export default function App() {
   const { t, locale, setLocale } = useI18n()
@@ -21,7 +26,13 @@ export default function App() {
   const [info, setInfo] = useState<SandboxInfo | null>(null)
   const [pki, setPki] = useState<PkiView | null>(null)
   const [faults, setFaults] = useState<SandboxFaults | null>(null)
-  const [tab, setTab] = useState(() => localStorage.getItem("tab") ?? "environment")
+  const [tab, setTabState] = useState<Tab>(savedTab)
+  const setTab = (next: string) => {
+    const known = tabs.find((t) => t === next)
+    if (!known) return
+    setTabState(known)
+    save("tab", known)
+  }
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(() => {
@@ -31,7 +42,7 @@ export default function App() {
   }, [])
   useEffect(refresh, [refresh])
 
-  const faultsOn = !!faults && (faults.tsa !== "None" || faults.crl !== "None" || faults.ocsp !== "None")
+  const faultsOn = !!faults && (faults.tsa !== "None" || faults.crl !== "None" || faults.ocsp !== "None" || (faults.trustedList ?? "None") !== "None")
   const nextTheme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light"
   return (
     <TooltipProvider delayDuration={200}>
@@ -42,14 +53,14 @@ export default function App() {
           {info && <Pill tone="info">{t("app.environment", { name: info.name })}</Pill>}
           {info && <span className="text-muted-foreground hidden truncate font-mono text-xs md:inline">{t("app.certificatesPointTo", { url: info.baseUrl })}</span>}
           {faultsOn && (
-            <button type="button" onClick={() => { setTab("faults"); localStorage.setItem("tab", "faults") }}>
+            <button type="button" onClick={() => setTab("faults")}>
               <Pill tone="danger"><TriangleAlert className="size-3" /> {t("app.faultsOn")}</Pill>
             </button>
           )}
           <div className="ml-auto flex items-center gap-1">
             <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
               <SelectTrigger size="sm" className="w-auto gap-1.5" aria-label={t("app.language")}><Globe className="size-4" />{locales.find((l) => l.id === locale)?.short}</SelectTrigger>
-              <SelectContent>{locales.map((l) => <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>)}</SelectContent>
+              <SelectContent position="popper" align="end">{locales.map((l) => <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>)}</SelectContent>
             </Select>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -61,21 +72,21 @@ export default function App() {
             </Tooltip>
           </div>
         </header>
-        <main className="flex-1 p-6 lg:p-8">
-          <p className="text-muted-foreground mb-6 max-w-3xl text-sm">{t("app.subtitle")}</p>
+        <main className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6">
+          <p className="text-muted-foreground mb-4 max-w-3xl text-sm">{t("app.subtitle")}</p>
           {error && <p className="text-destructive text-sm">{t("common.error")}: {error}</p>}
           {!info || !pki ? <Loader2 className="text-muted-foreground size-5 animate-spin" /> : (
-            <Tabs value={tab} onValueChange={(v) => { setTab(v); localStorage.setItem("tab", v) }}>
+            <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
                 <TabsTrigger value="environment">{t("tabs.environment")}</TabsTrigger>
                 <TabsTrigger value="pki">{t("tabs.pki")}</TabsTrigger>
                 <TabsTrigger value="faults">{t("tabs.faults")}</TabsTrigger>
                 <TabsTrigger value="log">{t("tabs.log")}</TabsTrigger>
               </TabsList>
-              <div className="pt-6">
+              <div className="pt-4">
                 <TabsContent value="environment"><EnvironmentPage info={info} /></TabsContent>
                 <TabsContent value="pki"><PkiPage info={info} pki={pki} onChanged={refresh} /></TabsContent>
-                <TabsContent value="faults"><FaultsPage key={JSON.stringify(faults)} onChanged={setFaults} /></TabsContent>
+                <TabsContent value="faults"><FaultsPage initial={faults} onChanged={setFaults} /></TabsContent>
                 <TabsContent value="log"><LogPage /></TabsContent>
               </div>
             </Tabs>

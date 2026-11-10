@@ -117,3 +117,28 @@ public sealed record SandboxFaults(
         OcspDelayMs = Math.Clamp(OcspDelayMs, 0, 60_000),
     };
 }
+
+/// <summary>A change to some of the failures (<c>PATCH /api/faults</c>): the members left out (null) keep their value.</summary>
+public sealed record SandboxFaultsPatch(
+    TsaFault? Tsa = null,
+    int? TsaDelayMs = null,
+    CrlFault? Crl = null,
+    int? CrlDelayMs = null,
+    OcspFault? Ocsp = null,
+    int? OcspDelayMs = null,
+    OcspSigner? OcspSigner = null,
+    TlFault? TrustedList = null)
+{
+    /// <summary>The <paramref name="current"/> failures with this change applied.</summary>
+    public SandboxFaults ApplyTo(SandboxFaults current) => current with
+    {
+        Tsa = Tsa ?? current.Tsa,
+        TsaDelayMs = TsaDelayMs ?? current.TsaDelayMs,
+        Crl = Crl ?? current.Crl,
+        CrlDelayMs = CrlDelayMs ?? current.CrlDelayMs,
+        Ocsp = Ocsp ?? current.Ocsp,
+        OcspDelayMs = OcspDelayMs ?? current.OcspDelayMs,
+        OcspSigner = OcspSigner ?? current.OcspSigner,
+        TrustedList = TrustedList ?? current.TrustedList,
+    };
+}
