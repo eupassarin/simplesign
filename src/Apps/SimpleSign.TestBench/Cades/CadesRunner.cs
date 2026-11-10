@@ -25,7 +25,12 @@ public sealed record CadesSignerReport(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<CadesSignerReport> CounterSignatures,
     string? SubIndication = null,
-    IReadOnlyList<FindingView>? Findings = null);
+    IReadOnlyList<FindingView>? Findings = null)
+{
+    /// <summary>The library's report entry of this signature and the certificates next to it, for the SimpleSign report (not sent to the UI).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Reports.ReportSource? Source { get; init; }
+}
 
 /// <summary>The result of <c>CadesSignatureValidator.ValidateAll</c>, for the UI.</summary>
 public sealed record CadesValidationView(
@@ -152,7 +157,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         var trust = await validation.TrustAsync(settings, cancellationToken);
         var validator = new CadesSignatureValidator(trust.Options, RunLog.Logger, chainRevocationChecker: validation.RevocationChecker());
         var result = await validator.ValidateAllAsync(signature.Content, structure.IsDetached ? data : null, null, cancellationToken);
-        var signers = result.Signers.Select(Signer).ToList();
+        var signers = result.Signers.Select(s => Signer(s, $"signer-{s.Index + 1}")).ToList();
         string overall = result.Errors.Count > 0 || signers.Count == 0 ? "Invalid"
             : Flatten(signers).All(s => s.Indication == "Valid") ? "Valid"
             : Flatten(signers).Any(s => s.Indication == "Invalid") ? "Invalid"
@@ -163,7 +168,10 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     private static IEnumerable<CadesSignerReport> Flatten(IEnumerable<CadesSignerReport> signers) =>
         signers.SelectMany(s => new[] { s }.Concat(Flatten(s.CounterSignatures)));
 
-    private static CadesSignerReport Signer(CadesSignerValidationResult s)
+    /// <summary>One signer's verdict, with its countersignatures nested.</summary>
+    /// <param name="s">The signer.</param>
+    /// <param name="id">Its identifier in the SimpleSign report: <c>signer-1</c>, <c>signer-1.1</c> for its first countersignature…</param>
+    private static CadesSignerReport Signer(CadesSignerValidationResult s, string id)
     {
         var r = s.Result;
         static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
@@ -189,7 +197,10 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         return new CadesSignerReport(s.Index, CadesInspector.SimpleName(r.SignerCertificate), indication,
             r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
             [.. checks.Where(c => c.Status != "n/a" || c.Id is "integrity" or "signature" or "chain")], r.Errors, r.Warnings,
-            [.. s.CounterSignatures.Select(Signer)], ValidationService.SubIndicationName(r.SubIndication), ValidationService.Findings(r.Constraints));
+            [.. s.CounterSignatures.Select((c, i) => Signer(c, $"{id}.{i + 1}"))], ValidationService.SubIndicationName(r.SubIndication), ValidationService.Findings(r.Constraints))
+        {
+            Source = new Reports.ReportSource(r.ToReportEntry(id), []),
+        };
     }
 
     /// <summary>The data file a generated command signs, and the existing signature it co-signs or countersigns.</summary>

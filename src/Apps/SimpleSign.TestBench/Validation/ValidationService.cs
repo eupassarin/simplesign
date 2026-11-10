@@ -165,6 +165,9 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         return new PdfSignatureValidator(sandbox, trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), trust.Providers, []);
     }
 
+    /// <summary>The root of the connected Sandbox, to complete the chains of the SimpleSign report; null without a Sandbox.</summary>
+    internal X509Certificate2? SandboxRoot => sandbox.Current?.Root;
+
     /// <summary>The chain revocation checker of the CAdES and XAdES validators, on the TestBench's network.</summary>
     internal Core.Revocation.IChainRevocationChecker RevocationChecker() =>
         new Core.Revocation.ChainRevocationChecker(sandbox.GetClient(), RunLog.Logger, sandbox.OutboundPolicy);
@@ -297,7 +300,10 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             r.SignerName ?? r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false),
             r.SubFilter, r.DigestAlgorithmName,
             r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
-            checks, r.Errors, r.Warnings, r.ChainValidationMetadata, SubIndicationName(r.SubIndication), Findings(r.Constraints));
+            checks, r.Errors, r.Warnings, r.ChainValidationMetadata, SubIndicationName(r.SubIndication), Findings(r.Constraints))
+        {
+            Source = new Reports.ReportSource(r.ToReportEntry(), r.EmbeddedCertificates),
+        };
     }
 
     private static DetailedSignature Detail(SignatureValidationResult result, SignatureFieldInfo? info, string? level, long fileSize, int revisions)

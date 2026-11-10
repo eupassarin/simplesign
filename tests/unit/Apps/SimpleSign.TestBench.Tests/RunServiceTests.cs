@@ -169,6 +169,22 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
     }
 
     [SkippableFact]
+    public async Task RunAsync_ValidateCadesWithACountersignature_StoresSimpleSignsReportWithEverySignature()
+    {
+        var sample = fixture.CadesSamples.Single(s => s.Id == "v-tree");
+
+        var run = await fixture.Runs().RunAsync(Validate(sample.FileId, sample.DataId), default);
+
+        run.ReportId.ShouldNotBeNull();
+        var report = SimpleSign.TestBench.Reports.ReportReader.Read(System.Text.Encoding.UTF8.GetString(fixture.Documents.Get(run.ReportId).Content)).ShouldNotBeNull();
+        report.Source.ShouldBe("simplesign");
+        report.Signatures.Select(s => s.Id).ShouldBe(["signer-1", "signer-1.1", "signer-2"]);
+        report.Signatures.Select(s => s.Kind).ShouldBe(["signature", "counterSignature", "signature"]);
+        report.Signatures.ShouldAllBe(s => s.Indication == "Valid" && s.Chain.Count == 3 && s.Constraints.Count > 0);
+        run.Validation.Select(v => v.EtsiIndication).ShouldAllBe(e => e == "TOTAL_PASSED");
+    }
+
+    [SkippableFact]
     public async Task RunAsync_ValidateAFileJustSigned_IsValidAndIsInTheHistoryAsAValidation()
     {
         var service = fixture.Runs();

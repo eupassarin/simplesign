@@ -28,7 +28,12 @@ public sealed record XmlSignatureReport(
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
     string? SubIndication = null,
-    IReadOnlyList<FindingView>? Findings = null);
+    IReadOnlyList<FindingView>? Findings = null)
+{
+    /// <summary>The library's report entry of this signature and the certificates next to it, for the SimpleSign report (not sent to the UI).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Reports.ReportSource? Source { get; init; }
+}
 
 public sealed record XmlValidationView(
     string Overall,
@@ -203,7 +208,10 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                 },
                 r.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture),
                 [.. checks.Where(c => c.Status != "n/a" || c.Id is "signature" or "chain")], r.Errors, r.Warnings,
-                ValidationService.SubIndicationName(r.SubIndication), ValidationService.Findings(r.Constraints)));
+                ValidationService.SubIndicationName(r.SubIndication), ValidationService.Findings(r.Constraints))
+            {
+                Source = new Reports.ReportSource(r.ToReportEntry(), []),
+            });
             foreach (var counter in r.CounterSignatures)
             {
                 Report(counter, r.SignatureId ?? "-");

@@ -118,6 +118,8 @@ export interface RunVerdict {
   warnings: string[]
   children: RunVerdict[]
   isTimestamp?: boolean
+  /** The ETSI indication (EN 319 102-1 §5.1.3): TOTAL_PASSED, TOTAL_FAILED or INDETERMINATE. */
+  etsiIndication?: string | null
   subIndication?: string | null
   /** The policy constraints that failed, warned or informed, one per constraint with all its messages. */
   findings?: Finding[] | null
@@ -209,6 +211,82 @@ export interface RunView {
   detail?: unknown
   crossValidation?: DssComparison | null
   logs: RunLogEntry[]
+  /** SimpleSign's JSON report of the verdicts (a stored file; open it in the report viewer). */
+  reportId?: string | null
+}
+
+/** A validation report (SimpleSign's or DSS's), read by the server for the report viewer. */
+export interface ReportView {
+  source: "simplesign" | "dss"
+  document?: string | null
+  validationTime?: string | null
+  policy?: string | null
+  signatures: ReportSignature[]
+}
+
+export interface ReportSignature {
+  id: string
+  kind: "signature" | "counterSignature" | "timestamp"
+  format?: string | null
+  indication: "Valid" | "Invalid" | "Indeterminate"
+  etsiIndication: string
+  subIndication?: string | null
+  /** The indication and sub-indication in plain words. */
+  explanation: string
+  signedBy?: string | null
+  signingTime?: string | null
+  bestSignatureTime?: string | null
+  chain: ReportCertificate[]
+  timestamps: ReportTimestamp[]
+  revocation: ReportRevocation[]
+  constraints: ReportConstraint[]
+  errors: string[]
+  warnings: string[]
+  infos: string[]
+}
+
+export interface ReportCertificate {
+  name: string
+  subject?: string | null
+  issuer?: string | null
+  serialNumber?: string | null
+  notBefore?: string | null
+  notAfter?: string | null
+  selfSigned: boolean
+  trusted?: boolean | null
+  revocationStatus?: string | null
+}
+
+export interface ReportTimestamp {
+  time?: string | null
+  type?: string | null
+  producedBy?: string | null
+  indication?: string | null
+  subIndication?: string | null
+}
+
+export interface ReportRevocation {
+  type: string
+  indication?: string | null
+  subIndication?: string | null
+  producedAt?: string | null
+  thisUpdate?: string | null
+  nextUpdate?: string | null
+  origin?: string | null
+  url?: string | null
+  certificate?: string | null
+  status?: string | null
+  /** Who issued it: the CRL issuer or the OCSP responder. */
+  issuer?: string | null
+}
+
+export interface ReportConstraint {
+  key: string
+  title: string
+  standard?: string | null
+  status: "pass" | "warn" | "fail" | "info" | "skip"
+  messages: string[]
+  count: number
 }
 
 /** A file to try validation with, and the indication it should get. */

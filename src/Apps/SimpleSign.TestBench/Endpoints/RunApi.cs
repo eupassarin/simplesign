@@ -119,6 +119,26 @@ internal static class RunApi
                 .Concat(xmlSamples.Samples.Where(s => s.Kind == "validation")
                     .Select(s => new SampleView(RunFormats.Xades, s.Id, s.FileId, s.FileName, s.DataId, L.T(s.Title), L.T(s.Description), s.ExpectedIndication))));
 
+        // A stored validation report (SimpleSign's or DSS's JSON), read for the report viewer.
+        api.MapGet("/reports/{id}", (string id, DocumentStore documents) =>
+        {
+            if (!documents.TryGet(id, out var file))
+            {
+                return Results.NotFound();
+            }
+
+            try
+            {
+                return Reports.ReportReader.Read(System.Text.Encoding.UTF8.GetString(file!.Content)) is { } report
+                    ? Results.Ok(report)
+                    : Results.BadRequest(new { error = L.T("This file is not a SimpleSign or DSS validation report.") });
+            }
+            catch (JsonException ex)
+            {
+                return Results.BadRequest(new { error = L.T("This file is not a SimpleSign or DSS validation report.") + " " + ex.Message });
+            }
+        });
+
         var dss = api.MapGroup("/dss");
         dss.MapGet("/settings", (DssClient client) => client.Settings);
         dss.MapPut("/settings", (DssSettings body, DssClient client) =>

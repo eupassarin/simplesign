@@ -6,12 +6,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useT } from "@/i18n"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { EtsiText, ReportButtons } from "../shared/ReportViewer"
 import { Indication } from "../shared/results"
 import { Pill } from "../shared/ui"
 import { UploadButton } from "../shared/UploadButton"
 import { OptionField, OptionScope } from "../workbench/fields"
 import { ResultPanel } from "../workbench/ResultPanel"
-import type { RunView, ValidationSampleView } from "../workbench/schema"
+import type { DssSignature, RunVerdict, RunView, ValidationSampleView } from "../workbench/schema"
 import { useWorkbench } from "../workbench/state"
 import { DssControl, HistoryDrawer } from "../workbench/WorkbenchPage"
 
@@ -239,12 +240,12 @@ function Conformance({ rows, onOpen }: { rows: ConformanceRow[]; onOpen: (id: st
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Pill tone={done.length > 0 && matching === done.length ? "success" : done.length === 0 ? "default" : "warning"}>{t("val.conformanceSummary", { ok: matching, total: rows.length })}</Pill>
-        <span className="text-muted-foreground text-xs">{t("wb.variants.hint")}</span>
+        <span className="text-muted-foreground text-xs">{t("val.reportsHint")}</span>
       </div>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead /><TableHead>{t("val.sample")}</TableHead><TableHead>{t("val.expected")}</TableHead><TableHead>SimpleSign</TableHead><TableHead>DSS</TableHead><TableHead />
+            <TableHead /><TableHead>{t("val.sample")}</TableHead><TableHead>{t("val.expected")}</TableHead><TableHead>SimpleSign</TableHead><TableHead>DSS</TableHead><TableHead>{t("val.reports")}</TableHead><TableHead />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -257,8 +258,14 @@ function Conformance({ rows, onOpen }: { rows: ConformanceRow[]; onOpen: (id: st
                 <TableCell className="text-muted-foreground text-xs font-semibold">{schema.formats.find((f) => f.id === row.sample.format)?.title}</TableCell>
                 <TableCell className="text-sm whitespace-normal">{row.sample.title}</TableCell>
                 <TableCell>{row.sample.expectedIndication ? <Indication value={row.sample.expectedIndication as "Valid"} /> : "—"}</TableCell>
-                <TableCell>{row.status === "running" ? <Loader2 className="size-4 animate-spin" /> : row.run?.overall ? <Indication value={row.run.overall} /> : row.run ? <span className="text-destructive text-xs">{row.run.error ?? "—"}</span> : "—"}</TableCell>
-                <TableCell className="text-xs">{cross?.available ? cross.signatures.map((s) => s.subIndication ?? s.indication).join(", ") || "—" : "—"}</TableCell>
+                <TableCell className="align-top">{row.status === "running" ? <Loader2 className="size-4 animate-spin" /> : row.run?.overall ? <Verdicts verdicts={flatten(row.run.validation)} /> : row.run ? <span className="text-destructive text-xs whitespace-normal">{row.run.error ?? "—"}</span> : "—"}</TableCell>
+                <TableCell className="align-top">{cross?.available ? <DssVerdicts signatures={cross.signatures.filter((s) => s.format || s.signedBy)} /> : cross ? <span className="text-muted-foreground text-xs" title={cross.error ?? undefined}>—</span> : "—"}</TableCell>
+                <TableCell className="align-top">
+                  <span className="flex flex-col items-start">
+                    <ReportButtons compact source="simplesign" reportId={row.run?.reportId} />
+                    <ReportButtons compact source="dss" reportId={cross?.reportId} />
+                  </span>
+                </TableCell>
                 <TableCell>{row.run && (ok ? <Check className="text-success size-4" /> : <TriangleAlert className="text-warning size-4" />)}</TableCell>
               </TableRow>
             )
@@ -266,5 +273,38 @@ function Conformance({ rows, onOpen }: { rows: ConformanceRow[]; onOpen: (id: st
         </TableBody>
       </Table>
     </div>
+  )
+}
+
+function flatten(verdicts: RunVerdict[]): RunVerdict[] {
+  return verdicts.flatMap((v) => [v, ...flatten(v.children)])
+}
+
+/** One entry per signature: the indication as a badge and, under it, the ETSI indication and sub-indication. */
+function Verdicts({ verdicts }: { verdicts: RunVerdict[] }) {
+  return (
+    <ul className="space-y-1.5">
+      {verdicts.map((v, i) => (
+        <li key={i} className="flex flex-col items-start gap-0.5" title={[v.label, v.signer].filter(Boolean).join(" · ")}>
+          <Indication value={v.indication} />
+          <EtsiText compact indication={v.etsiIndication} subIndication={v.subIndication} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** DSS's verdicts in the same shape: TOTAL_PASSED → Valid, TOTAL_FAILED → Invalid, INDETERMINATE → Indeterminate. */
+function DssVerdicts({ signatures }: { signatures: DssSignature[] }) {
+  if (signatures.length === 0) return <span className="text-muted-foreground text-xs">—</span>
+  return (
+    <ul className="space-y-1.5">
+      {signatures.map((s, i) => (
+        <li key={i} className="flex flex-col items-start gap-0.5" title={[s.signedBy, s.format].filter(Boolean).join(" · ")}>
+          <Indication value={s.indication === "TOTAL_PASSED" || s.indication === "PASSED" ? "Valid" : s.indication === "TOTAL_FAILED" || s.indication === "FAILED" ? "Invalid" : "Indeterminate"} />
+          <EtsiText compact indication={s.indication} subIndication={s.subIndication} />
+        </li>
+      ))}
+    </ul>
   )
 }

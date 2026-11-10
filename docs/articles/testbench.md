@@ -163,6 +163,19 @@ validation service, and the Validation tab lines the two verdicts up: indication
 sub-indication, detected level, and the DSS messages when they differ. The DSS report can be
 downloaded.
 
+**Reports.** Every validation also writes SimpleSign's JSON report: the library's simple report
+(what `simplesign validate --simple-report` writes), plus each signature's certificate chain,
+every constraint result of the policy, and what each timestamp, CRL and OCSP response says (TSA,
+issuer, dates, the certificate it is about and its status). Next to each download, *View report*
+opens either JSON (SimpleSign's or DSS's) in a viewer that explains it, in English or Portuguese:
+the indication and sub-indication in plain words, the signer's chain, the timestamps, the
+revocation data, and the checks grouped by outcome (failed, warnings, passed, not checked), with
+the raw JSON folded below. `GET /api/reports/{id}` returns that reading.
+
+**Samples.** *Validate all samples* (Validate task) runs every Sandbox sample and lines up what each
+should get with what SimpleSign and DSS say: one entry per signature, the indication as a badge
+and the ETSI sub-indication (or `TOTAL_PASSED`) under it, and both reports one click away.
+
 It is off by default. To run DSS locally:
 
 ```bash
