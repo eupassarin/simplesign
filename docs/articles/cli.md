@@ -8,7 +8,24 @@ Install with `dotnet tool install -g SimpleSign.Cli`.
 # Sign a PDF
 simplesign sign contract.pdf --cert mycert.pfx --password secret --tsa http://timestamp.digicert.com
 
-# Validate (add --trust to accept your own root CA, --json for machine-readable output)
+# Claimed signing time, document information, a larger /Contents and structured signer metadata
+simplesign sign contract.pdf --cert mycert.pfx --password secret \
+    --signing-time 2026-11-09T10:00:00-03:00 --doc-info Title=Contract --contents-size 32768 \
+    --signer-id 12345678909 --signer-id-type CPF --legal-basis "Lei 14.063/2020" --commitment origin
+
+# Explicit signature policy (signature-policy-identifier with the document's hash)
+simplesign sign contract.pdf --cert mycert.pfx --password secret \
+    --policy-oid 1.2.3.4.5 --policy-hash 9F86D081884C7D65... --policy-uri https://example.com/policy.der
+
+# B-LTA with a separate archive TSA; accept a lower level when the TSA or revocation data are unreachable
+simplesign sign contract.pdf --cert mycert.pfx --password secret --tsa http://timestamp.digicert.com \
+    --archival --archive-tsa https://tsa.example.com/tsr --return-lower-level
+
+# A TSA that asks for credentials (also on `cades sign` and `xades sign`; secrets accept env:NAME)
+simplesign sign contract.pdf --cert mycert.pfx --password secret --tsa https://tsa.example.com/tsr \
+    --tsa-user alice --tsa-password env:TSA_PASSWORD        # or --tsa-token env:TSA_TOKEN, or --tsa-cert client.pfx
+
+# Validate (add --trust to accept your own root CA, --no-system-roots to trust only it, --json for machine-readable output)
 simplesign validate signed.pdf
 simplesign validate signed.pdf --trust my-root-ca.pem --json
 

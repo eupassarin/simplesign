@@ -330,7 +330,6 @@ export type TrustChoice = "Sandbox" | "System" | "SandboxTrustedList"
 export interface ValidationSettings {
   trust: TrustChoice[]
   customRootUploadIds: string[]
-  checkRevocation: boolean
   timeoutSeconds: number
   /** Uploaded validation policy (JSON); null: the library's default. */
   policyId?: string | null

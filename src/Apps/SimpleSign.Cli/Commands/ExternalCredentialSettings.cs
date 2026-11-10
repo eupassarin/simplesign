@@ -8,7 +8,7 @@ namespace SimpleSign.Cli.Commands;
 /// certificate (PSC) or a CSC v2 remote signing service. Shared by <c>sign</c> and <c>cades sign</c>.
 /// Secret values accept <c>env:NAME</c> to read them from an environment variable.
 /// </summary>
-internal abstract class ExternalCredentialSettings : CommonSettings
+internal abstract class ExternalCredentialSettings : TimestampedSigningSettings
 {
     /// <summary>PKCS#11 library of an A3 token, smartcard or HSM (alternative to --cert).</summary>
     [CommandOption("--pkcs11-lib <PATH>")]

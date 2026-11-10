@@ -272,11 +272,6 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             sb.Append("    ").Append(option).Append(option.StartsWith("//", StringComparison.Ordinal) ? "\n" : ",\n");
         }
 
-        if (!settings.CheckRevocation)
-        {
-            sb.Append("    CheckRevocation = false,\n");
-        }
-
         foreach (string option in ValidationService.PolicyOptionsCode(settings))
         {
             sb.Append("    ").Append(option).Append(",\n");
@@ -298,7 +293,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
 
         args.AddRange(ValidationService.TrustedListCliArgs(settings));
 
-        if (settings.CheckRevocation)
+        if (settings.Level >= SimpleSign.Core.Validation.ValidationLevel.LongTermData)
         {
             args.Add("--check-revocation");
         }

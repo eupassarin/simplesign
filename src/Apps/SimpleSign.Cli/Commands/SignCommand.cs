@@ -5,6 +5,7 @@ using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Brazil.Signing;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
@@ -328,6 +329,76 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Professional registration for --health-document, e.g. crm:123456/SP (repeatable)")]
         public string[]? Registrations { get; init; }
 
+        /// <summary>The claimed signing time (ISO 8601) instead of now.</summary>
+        [CommandOption("--signing-time <TIME>")]
+        [Description("Claimed signing time, ISO 8601 (e.g. 2026-11-09T10:00:00-03:00), instead of now")]
+        public string? SigningTime { get; init; }
+
+        /// <summary>Document information entries, KEY=VALUE.</summary>
+        [CommandOption("--doc-info <KEY=VALUE>")]
+        [Description("Entry of the PDF document information dictionary, e.g. Title=Contract (repeatable)")]
+        public string[]? DocumentInfo { get; init; }
+
+        /// <summary>Bytes reserved for the CMS in /Contents.</summary>
+        [CommandOption("--contents-size <BYTES>")]
+        [Description("Bytes reserved for the signature in /Contents (default 16384); raise it for long chains or many revocation values")]
+        public int? ContentsSize { get; init; }
+
+        /// <summary>A separate TSA for the archive (document) timestamp. Requires --archival.</summary>
+        [CommandOption("--archive-tsa <URL>")]
+        [Description("A separate TSA for the archive (document) timestamp; the TSA credentials apply to it too. Requires --archival.")]
+        public string? ArchiveTsaUrl { get; init; }
+
+        /// <summary>Return the highest level reached instead of failing.</summary>
+        [CommandOption("--return-lower-level")]
+        [Description("When a timestamp or the revocation data cannot be obtained, return the highest level reached instead of failing")]
+        public bool ReturnLowerLevel { get; init; }
+
+        /// <summary>Hash of the signature policy document (hex). Requires --policy-oid.</summary>
+        [CommandOption("--policy-hash <HEX>")]
+        [Description("Hash of the signature policy document, hex: signs with an explicit policy (signature-policy-identifier). Requires --policy-oid.")]
+        public string? PolicyHash { get; init; }
+
+        /// <summary>Hash algorithm of --policy-hash: SHA256 (default), SHA384, SHA512.</summary>
+        [CommandOption("--policy-hash-algorithm <ALGO>")]
+        [Description("Hash algorithm of --policy-hash: SHA256 (default), SHA384 or SHA512")]
+        public string? PolicyHashAlgorithm { get; init; }
+
+        /// <summary>Signer identifier (metadata), e.g. a document number.</summary>
+        [CommandOption("--signer-id <ID>")]
+        [Description("Signer identifier for the signature metadata, e.g. a document number")]
+        public string? SignerId { get; init; }
+
+        /// <summary>Kind of --signer-id, e.g. CPF, passport.</summary>
+        [CommandOption("--signer-id-type <TYPE>")]
+        [Description("Kind of --signer-id, e.g. CPF or passport")]
+        public string? SignerIdType { get; init; }
+
+        /// <summary>IP address the signer signed from (metadata).</summary>
+        [CommandOption("--ip-address <IP>")]
+        [Description("IP address the signer signed from, for the signature metadata")]
+        public string? IpAddress { get; init; }
+
+        /// <summary>Institution identifier (metadata).</summary>
+        [CommandOption("--institution-id <ID>")]
+        [Description("Institution identifier for the signature metadata")]
+        public string? InstitutionId { get; init; }
+
+        /// <summary>Kind of --institution-id.</summary>
+        [CommandOption("--institution-id-type <TYPE>")]
+        [Description("Kind of --institution-id, e.g. CNPJ")]
+        public string? InstitutionIdType { get; init; }
+
+        /// <summary>Legal basis of the signature (metadata).</summary>
+        [CommandOption("--legal-basis <TEXT>")]
+        [Description("Legal basis of the signature, for the signature metadata")]
+        public string? LegalBasis { get; init; }
+
+        /// <summary>Whether a structured-metadata option was given without --brasil.</summary>
+        internal bool HasMetadata => !Brasil && (SignerId ?? SignerIdType ?? IpAddress ?? InstitutionId ?? InstitutionIdType
+            ?? LegalBasis ?? SignerEmail ?? Institution ?? AuthMethod ?? Commitment
+            ?? (PolicyHash is null ? PolicyOid : null)) is not null;
+
         public override ValidationResult Validate()
         {
             if (!SigningPolicyOption.IsValid(SigningPolicy))
@@ -546,6 +617,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 }
             }
 
+            if (ValidateExtras() is { } extrasError)
+            {
+                return ValidationResult.Error(extrasError);
+            }
+
 #pragma warning disable IDE0046 // Convert to conditional expression — readability
             if (Brasil)
             {
@@ -574,6 +650,72 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
 #pragma warning restore IDE0046
 
             return ValidationResult.Success();
+        }
+
+        /// <summary>The error for the signing time, document info, policy hash, metadata and TSA options, or null.</summary>
+        private string? ValidateExtras()
+        {
+            if (ValidateTsaCredentials(TsaUrl) is { } tsaError)
+            {
+                return tsaError;
+            }
+
+            if (SigningTime is not null && SignCommandOptions.ParseSigningTime(SigningTime) is null)
+            {
+                return "--signing-time must be an ISO 8601 date and time, e.g. 2026-11-09T10:00:00-03:00.";
+            }
+
+            if ((DocumentInfo ?? []).FirstOrDefault(e => SignCommandOptions.SplitDocumentInfo(e) is null) is { } badEntry)
+            {
+                return $"--doc-info '{badEntry}' must be KEY=VALUE, e.g. Title=Contract.";
+            }
+
+            if (ContentsSize is < 1024 or > 1_048_576)
+            {
+                return "--contents-size must be between 1024 and 1048576 bytes.";
+            }
+
+            if (ArchiveTsaUrl is not null && !Archival)
+            {
+                return "--archive-tsa requires --archival.";
+            }
+
+            if (ReturnLowerLevel && string.IsNullOrWhiteSpace(TsaUrl))
+            {
+                return "--return-lower-level requires --tsa: only the timestamp and the revocation data can fall short.";
+            }
+
+            if (PolicyHashAlgorithm is not null && PolicyHash is null)
+            {
+                return "--policy-hash-algorithm requires --policy-hash.";
+            }
+
+            if (PolicyHash is not null)
+            {
+                if (PolicyOid is null)
+                {
+                    return "--policy-hash requires --policy-oid.";
+                }
+
+                if (Brasil || IcpPolicy is not null)
+                {
+                    return "--policy-hash is for an explicit policy; --brasil and --icp-policy set their own.";
+                }
+
+                if (SignCommandOptions.ParseHex(PolicyHash) is null)
+                {
+                    return "--policy-hash must be hexadecimal.";
+                }
+
+                if (PolicyHashAlgorithm is not null && SignCommandOptions.PolicyHashOid(PolicyHashAlgorithm) is null)
+                {
+                    return "--policy-hash-algorithm must be SHA256, SHA384 or SHA512.";
+                }
+            }
+
+            return HasMetadata && Commitment is not null && SignCommandOptions.ParseCommitment(Commitment) is null
+                ? "--commitment must be origin, receipt, delivery, sender, approval or creation."
+                : null;
         }
     }
 
@@ -646,21 +788,23 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             return AdesBaselineProfile.Basic();
         }
 
-        var timestampOptions = new TimestampOptions(new Uri(settings.TsaUrl), CliNetwork.Provider);
+        var timestampOptions = settings.Timestamp(settings.TsaUrl);
+        var failure = settings.ReturnLowerLevel ? SigningLevelFailureBehavior.ReturnLowerLevel : SigningLevelFailureBehavior.Throw;
         bool ltv = settings.Ltv || settings.Archival;
 
         if (!ltv)
         {
-            return AdesBaselineProfile.Timestamped(timestampOptions);
+            return AdesBaselineProfile.Timestamped(timestampOptions, failure);
         }
 
         var validationOptions = AdesOptionSupport.LongTermOptions(settings.RevocationPreference);
         if (settings.Archival)
         {
-            return AdesBaselineProfile.Archive(timestampOptions, validationOptions);
+            var archiveTimestamp = settings.ArchiveTsaUrl is null ? null : settings.ArchiveTimestamp(settings.ArchiveTsaUrl);
+            return AdesBaselineProfile.Archive(timestampOptions, validationOptions, archiveTimestamp, failure);
         }
 
-        return AdesBaselineProfile.LongTerm(timestampOptions, validationOptions);
+        return AdesBaselineProfile.LongTerm(timestampOptions, validationOptions, failure);
     }
 
     private async Task<int> ExecuteCertSigningAsync(
@@ -713,15 +857,59 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 // Metadata is applied before partial field configuration so the latter can
                 // retain it through their immutable updates.
                 if (settings.Reason is not null || settings.Location is not null
-                    || settings.Contact is not null || settings.SignerName is not null)
+                    || settings.Contact is not null || settings.SignerName is not null || settings.ContentsSize is not null)
                 {
                     builder = builder.WithFieldOptions(new SignatureFieldOptions
                     {
                         SignerName = settings.SignerName,
                         Reason = settings.Reason,
                         Location = settings.Location,
-                        ContactInfo = settings.Contact
+                        ContactInfo = settings.Contact,
+                        ContentsReservedBytes = settings.ContentsSize ?? PdfSignatureWriter.DefaultContentsReservedBytes,
                     });
+                }
+
+                if (settings.HasMetadata)
+                {
+                    builder = builder.WithMetadata(new SignatureMetadata
+                    {
+                        SignerName = settings.SignerName ?? cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false),
+                        SignerId = settings.SignerId,
+                        SignerIdType = settings.SignerIdType,
+                        Email = settings.SignerEmail,
+                        IpAddress = settings.IpAddress,
+                        AuthenticationMethod = settings.AuthMethod,
+                        InstitutionName = settings.Institution,
+                        InstitutionId = settings.InstitutionId,
+                        InstitutionIdType = settings.InstitutionIdType,
+                        CommitmentType = SignCommandOptions.ParseCommitment(settings.Commitment) ?? CommitmentType.ProofOfApproval,
+                        LegalBasis = settings.LegalBasis,
+                        PolicyOid = settings.PolicyHash is null ? settings.PolicyOid : null,
+                        PolicyUri = settings.PolicyHash is null ? settings.PolicyUri : null,
+                        Reason = settings.Reason,
+                        Location = settings.Location,
+                        ContactInfo = settings.Contact,
+                    });
+                }
+
+                if (settings.PolicyHash is not null)
+                {
+                    builder = builder.WithSignaturePolicy(new SignaturePolicyReference(
+                        settings.PolicyOid!,
+                        SignCommandOptions.PolicyHashOid(settings.PolicyHashAlgorithm ?? "SHA256")!,
+                        SignCommandOptions.ParseHex(settings.PolicyHash)!,
+                        settings.PolicyUri));
+                }
+
+                if (SignCommandOptions.ParseSigningTime(settings.SigningTime) is { } signingTime)
+                {
+                    builder = builder.WithSigningTime(signingTime);
+                }
+
+                foreach (var entry in settings.DocumentInfo ?? [])
+                {
+                    var (key, value) = SignCommandOptions.SplitDocumentInfo(entry)!.Value;
+                    builder = builder.WithDocumentInfo(key, value);
                 }
 
                 if (settings.FieldName is not null)
@@ -826,7 +1014,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
 
                     builder = builder.WithIcpBrasilPolicy(icpPolicy, new IcpBrasilPadesOptions
                     {
-                        Timestamp = settings.TsaUrl is null ? null : new TimestampOptions(new Uri(settings.TsaUrl), CliNetwork.Provider),
+                        Timestamp = settings.TsaUrl is null ? null : settings.Timestamp(settings.TsaUrl),
                         Artifacts = artifacts,
                     });
                 }

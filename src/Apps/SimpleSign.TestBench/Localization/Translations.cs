@@ -650,8 +650,6 @@ internal static class Translations
         ["The sandbox's trusted list, read through its list of trusted lists: its CAs with their service type and status, as DSS trusts them."] = "O trusted list do sandbox, lido pelo LOTL dele: as ACs com o tipo e o status do serviço, como o DSS confia nelas.",
         ["Operating system roots"] = "Raízes do sistema operacional",
         ["The roots the operating system trusts."] = "As raízes em que o sistema operacional confia.",
-        ["Check revocation"] = "Verificar revogação",
-        ["Looks the certificates up in the embedded or online CRLs and OCSP responses."] = "Procura os certificados nas LCRs e respostas OCSP embutidas ou online.",
 
         // ── TestBench ETSI only ────────────────────────────────────────
         ["The certificate lacks the nonRepudiation key usage: some validation policies warn about it."] = "O certificado não tem o uso de chave nonRepudiation: algumas políticas de validação alertam sobre isso.",

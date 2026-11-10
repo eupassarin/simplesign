@@ -366,8 +366,6 @@ public static partial class OptionSchema
                 V("Sandbox", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("System", "Operating system roots", "The roots the operating system trusts."),
             ], when: When("validate", "true")),
-        O("common.validation.checkRevocation", "run", s_all, "toggle", "validation.checkRevocation", "Check revocation", "Looks the certificates up in the embedded or online CRLs and OCSP responses.",
-            standards: R("ETSI EN 319 102-1|§5.2.6 X.509 certificate validation", "RFC 5280|§6.3 CRL validation", "RFC 6960|OCSP"), api: "ValidationOptions.CheckRevocation", when: When("validate", "true")),
         O("common.validation.policy", "run", s_all, "upload", "validation.policyId", "Validation policy (JSON)",
             "The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on.",
             details: "Download the default (GET /api/policies/validation, or simplesign policy export validation), change the levels (FAIL, WARN, INFORM, IGNORE) and upload it. Constraints SimpleSign does not evaluate are reported as not checked.",
