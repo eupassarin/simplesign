@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Windows: pwsh -File tools/stack/testbench.ps1 (the same options, as PowerShell switches).
 # Starts the TestBench connected to the stack's Sandbox, with the SoftHSM token that
 # softhsm-provision.sh filled. SoftHSM reads SOFTHSM2_CONF with getenv(), so it is set here, before
 # the process starts. Extra arguments go to the TestBench (e.g. --port 5200 --no-browser).
