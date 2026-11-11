@@ -41,6 +41,11 @@ function matches(node: PolicyNodeView, query: string): boolean {
 }
 
 /** Whether the node, or one of its descendants, passes the filters. */
+/** Whether a node, or one of its descendants, is left out of what DSS receives. */
+function hasNotSent(node: PolicyNodeView, notSent: ReadonlySet<string>): boolean {
+  return notSent.has(node.name) || node.children.some((c) => hasNotSent(c, notSent))
+}
+
 function visible(node: PolicyNodeView, query: string, hideIgnored: boolean, onlyNotEvaluated: boolean): boolean {
   if (node.children.some((c) => visible(c, query, hideIgnored, onlyNotEvaluated))) return true
   if (node.kind === "section") return false
@@ -56,14 +61,27 @@ export interface PolicyRequest {
 }
 
 /**
+ * What DSS receives (the DSS control): the constraints left out of its constraint.xml (DSS does not know them, so it
+ * does not evaluate them), and that XML itself.
+ */
+export interface DssPolicy {
+  notSent: string[]
+  constraintXml: string
+}
+
+/**
  * The signing and validation policies, element by element: what each constraint checks, the clause
  * that defines it, its level (click to change) and whether SimpleSign evaluates it. The result can be
  * downloaded or used in the next runs.
  */
-export function PoliciesPage({ initial, readOnly = false }: { initial?: PolicyRequest | null; readOnly?: boolean }) {
+export function PoliciesPage({ initial, readOnly: readOnlyProp = false, dss }: { initial?: PolicyRequest | null; readOnly?: boolean; dss?: DssPolicy | null }) {
   const t = useT()
+  // In the DSS control: the validation policy as DSS receives it, read-only, inside the drawer's own layout.
+  const readOnly = readOnlyProp || !!dss
+  const notSent = useMemo(() => new Set(dss?.notSent ?? []), [dss])
+  const [onlyNotSent, setOnlyNotSent] = useState(false)
   const { set, setValidateOption } = useWorkbench()
-  const [kind, setKind] = useState<PolicyKind>(initial?.kind ?? "signing")
+  const [kind, setKind] = useState<PolicyKind>(dss ? "validation" : initial?.kind ?? "signing")
   const [view, setView] = useState<PolicyView | null>(null)
   const [modified, setModified] = useState(false)
   const [tab, setTab] = useState<"tree" | "json">("tree")
@@ -127,15 +145,16 @@ export function PoliciesPage({ initial, readOnly = false }: { initial?: PolicyRe
     if (view?.root) walk(view.root)
     return paths
   }, [view])
-  const filtering = query !== "" || hideIgnored || onlyNotEvaluated
+  const filtering = query !== "" || hideIgnored || onlyNotEvaluated || onlyNotSent
+  const show = (n: PolicyNodeView) => visible(n, query, hideIgnored, onlyNotEvaluated) && (!onlyNotSent || hasNotSent(n, notSent))
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="space-y-5 p-6 lg:p-8">
-        <header className="max-w-3xl space-y-1">
+    <div className={cn(!dss && "min-h-0 flex-1 overflow-y-auto")}>
+      <div className={cn("space-y-5", !dss && "p-6 lg:p-8")}>
+        {!dss && <header className="max-w-3xl space-y-1">
           <h2 className="text-2xl font-semibold tracking-tight">{t(readOnly ? (kind === "signing" ? "policies.signing" : "policies.validation") : "policies.title")}</h2>
           <p className="text-muted-foreground text-sm">{t(readOnly ? "policies.readOnlyIntro" : "policies.intro")}</p>
-        </header>
+        </header>}
 
         {!readOnly && <div className="flex flex-wrap items-center gap-2">
           <div className="bg-muted flex rounded-lg p-0.5" role="radiogroup">
@@ -166,6 +185,7 @@ export function PoliciesPage({ initial, readOnly = false }: { initial?: PolicyRe
                 <span>{t("policies.counts", { fail: view.counts.fail, warn: view.counts.warn, inform: view.counts.inform, ignore: view.counts.ignore })}</span>
                 {view.kind === "validation" && <span className="text-muted-foreground">{t("policies.coverage", { evaluated: view.counts.evaluated, toConnect: view.counts.toConnect, toImplement: view.counts.toImplement })}</span>}
                 <span className="text-muted-foreground font-mono">{t("policies.digest")} {view.digest?.slice(0, 16)}…</span>
+                {dss && <span className="text-warning">{t("policies.notSentCount", { n: dss.notSent.length })}</span>}
               </div>
             )}
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -183,7 +203,7 @@ export function PoliciesPage({ initial, readOnly = false }: { initial?: PolicyRe
           <div className="bg-muted flex rounded-lg p-0.5 text-xs">
             {(["tree", "json"] as const).map((v) => (
               <button key={v} onClick={() => setTab(v)} className={cn("rounded-md px-3 py-1.5 font-medium", tab === v ? "bg-background shadow-sm" : "text-muted-foreground")}>
-                {t(v === "tree" ? "policies.tree" : "policies.json")}
+                {v === "tree" ? t("policies.tree") : dss ? "constraint.xml" : t("policies.json")}
               </button>
             ))}
           </div>
@@ -195,6 +215,7 @@ export function PoliciesPage({ initial, readOnly = false }: { initial?: PolicyRe
               </div>
               <label className="flex items-center gap-2 text-xs"><Switch checked={hideIgnored} onCheckedChange={setHideIgnored} /> {t("policies.hideIgnored")}</label>
               {kind === "validation" && <label className="flex items-center gap-2 text-xs"><Switch checked={onlyNotEvaluated} onCheckedChange={setOnlyNotEvaluated} /> {t("policies.onlyNotEvaluated")}</label>}
+              {dss && <label className="flex items-center gap-2 text-xs"><Switch checked={onlyNotSent} onCheckedChange={setOnlyNotSent} /> {t("policies.onlyNotSent")}</label>}
               <div className="ml-auto flex gap-1">
                 <Button variant="ghost" size="sm" onClick={() => setOpen(new Set(allSections))}>{t("policies.expandAll")}</Button>
                 <Button variant="ghost" size="sm" onClick={() => setOpen(new Set([""]))}>{t("policies.collapseAll")}</Button>
@@ -207,14 +228,14 @@ export function PoliciesPage({ initial, readOnly = false }: { initial?: PolicyRe
 
         {tab === "json" ? (
           <div className="space-y-2">
-            <Textarea className="min-h-[60vh] font-mono text-xs" value={text} readOnly={readOnly} onChange={(e) => setText(e.target.value)} spellCheck={false} />
+            <Textarea className="min-h-[60vh] font-mono text-xs" value={dss ? dss.constraintXml : text} readOnly={readOnly} onChange={(e) => setText(e.target.value)} spellCheck={false} />
             {!readOnly && <Button size="sm" onClick={() => void load({ kind, json: text }, true)}>{t("policies.apply")}</Button>}
           </div>
         ) : view?.root && (
           <div className="rounded-lg border">
-            {view.root.children.filter((c) => visible(c, query, hideIgnored, onlyNotEvaluated)).map((c) => (
+            {view.root.children.filter(show).map((c) => (
               <Node key={c.path} node={c} depth={0} open={open} filtering={filtering} toggle={toggle} onLevel={readOnly ? undefined : changeLevel}
-                show={(n) => visible(n, query, hideIgnored, onlyNotEvaluated)} />
+                show={show} notSent={notSent} />
             ))}
           </div>
         )}
@@ -223,7 +244,7 @@ export function PoliciesPage({ initial, readOnly = false }: { initial?: PolicyRe
   )
 }
 
-function Node({ node, depth, open, filtering, toggle, onLevel, show }: {
+function Node({ node, depth, open, filtering, toggle, onLevel, show, notSent }: {
   node: PolicyNodeView
   depth: number
   open: Set<string>
@@ -231,9 +252,11 @@ function Node({ node, depth, open, filtering, toggle, onLevel, show }: {
   toggle: (path: string) => void
   onLevel?: (path: string, level: PolicyLevel) => void
   show: (node: PolicyNodeView) => boolean
+  notSent: ReadonlySet<string>
 }) {
   const t = useT()
   const hasChildren = node.children.length > 0
+  const leftOut = notSent.has(node.name)
   const expanded = filtering || open.has(node.path)
   const dimmed = node.level === "IGNORE"
   return (
@@ -247,6 +270,12 @@ function Node({ node, depth, open, filtering, toggle, onLevel, show }: {
             <span className={cn("font-mono text-sm", node.kind === "section" && "font-semibold")}>{node.name}</span>
             {node.evaluation !== "none" && <Evaluation node={node} />}
             {node.standard && <span className="text-muted-foreground rounded border px-1.5 text-[10px]">{node.standard}</span>}
+            {leftOut && (
+              <Tooltip>
+                <TooltipTrigger asChild><span><Pill tone="warning">{t("policies.notSent")}</Pill></span></TooltipTrigger>
+                <TooltipContent className="max-w-64">{t("policies.notSentHint")}</TooltipContent>
+              </Tooltip>
+            )}
             {node.level && (onLevel
               ? <LevelPicker level={node.level} onChange={(l) => onLevel(node.path, l)} />
               : <span className={cn("ml-auto rounded px-1.5 py-0.5 text-[10px] font-semibold", levelStyle[node.level].on)}>{node.level}</span>)}
@@ -268,7 +297,7 @@ function Node({ node, depth, open, filtering, toggle, onLevel, show }: {
         </div>
       </div>
       {hasChildren && expanded && node.children.filter(show).map((c) => (
-        <Node key={c.path} node={c} depth={depth + 1} open={open} filtering={filtering} toggle={toggle} onLevel={onLevel} show={show} />
+        <Node key={c.path} node={c} depth={depth + 1} open={open} filtering={filtering} toggle={toggle} onLevel={onLevel} show={show} notSent={notSent} />
       ))}
     </div>
   )

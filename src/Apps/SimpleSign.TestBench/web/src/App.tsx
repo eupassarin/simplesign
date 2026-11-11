@@ -56,9 +56,9 @@ const modes: { id: RunKind; icon: typeof PenTool }[] = [
 
 /**
  * One top bar and one task on screen. There are two tasks, Sign and Validate (the PAdES stamp opens as a drawer from Sign).
- * Everything that applies to both sits right after them, in three groups: the engine (library or CLI); the reference
+ * Everything that applies to both sits on the right, in three groups: the engine (library or CLI); the reference
  * panels (Policies, Reference, and Environment: what this machine has); and the outside services, the SimpleSign
- * Sandbox (one control: connect, or everything about the connected one) and DSS. Language and theme stay on the right.
+ * Sandbox and DSS (each on or off: a popup to turn it on, a drawer with everything once on). Then language and theme.
  */
 function Shell() {
   const { mode, setMode } = useWorkbench()
@@ -82,27 +82,29 @@ function Shell() {
             </button>
           ))}
         </div>
-        <EngineControl />
-        <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
-        <Panel icon={<FileSliders />} label={t("policies.title")} hint={t("policies.hint")} reference><PoliciesPage /></Panel>
-        <Panel icon={<BookOpen />} label={t("app.reference")} hint={t("app.referenceHint")} reference><CoveragePage /></Panel>
-        <Panel icon={<Globe />} label={t("app.environmentPanel")} hint={t("app.environmentRealHint")} reference><RealEnvironment /></Panel>
-        <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
-        <SandboxControl />
-        <DssControl />
-        <div className="ml-auto flex items-center gap-1">
-          <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
-            <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 border-none shadow-none" aria-label={t("app.language")}>
-              <Globe className="size-4" />
-              <span className="text-xs font-medium">{locales.find((l) => l.id === locale)?.short}</span>
-            </SelectTrigger>
-            <SelectContent position="popper" align="end">
-              {locales.map((l) => <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button variant="ghost" size="icon" aria-label={t("app.theme")} onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}>
-            {theme === "light" ? <Sun /> : theme === "dark" ? <Moon /> : <SunMoon />}
-          </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <EngineControl />
+          <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
+          <Panel icon={<FileSliders />} label={t("policies.title")} hint={t("policies.hint")} reference><PoliciesPage /></Panel>
+          <Panel icon={<BookOpen />} label={t("app.reference")} hint={t("app.referenceHint")} reference><CoveragePage /></Panel>
+          <Panel icon={<Globe />} label={t("app.environmentPanel")} hint={t("app.environmentRealHint")} reference><RealEnvironment /></Panel>
+          <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
+          <SandboxControl />
+          <DssControl />
+          <div className="ml-1 flex items-center gap-1">
+            <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
+              <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 border-none shadow-none" aria-label={t("app.language")}>
+                <Globe className="size-4" />
+                <span className="text-xs font-medium">{locales.find((l) => l.id === locale)?.short}</span>
+              </SelectTrigger>
+              <SelectContent position="popper" align="end">
+                {locales.map((l) => <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button variant="ghost" size="icon" aria-label={t("app.theme")} onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}>
+              {theme === "light" ? <Sun /> : theme === "dark" ? <Moon /> : <SunMoon />}
+            </Button>
+          </div>
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col">
@@ -127,7 +129,7 @@ function Panel({ icon, label, hint, active, reference, children }: { icon: React
         </TooltipTrigger>
         <TooltipContent className="max-w-64">{reference ? <><span className="font-medium">{label}</span> · {hint}</> : hint}</TooltipContent>
       </Tooltip>
-      <SheetContent className="flex w-[min(96vw,1200px)] flex-col p-0 sm:max-w-none">
+      <SheetContent className="flex w-[min(96vw,1200px)] flex-col p-0 sm:max-w-none" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader className="sr-only"><SheetTitle>{label}</SheetTitle><SheetDescription>{hint}</SheetDescription></SheetHeader>
         {children}
       </SheetContent>

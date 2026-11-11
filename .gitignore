@@ -49,3 +49,7 @@ nupkgs/
 
 ## Local SoftHSM token of tools/stack (keys of the Sandbox certificates)
 /.softhsm/
+
+# Local settings of the Docker tools (each has a committed .env.example).
+tools/stack/.env
+tools/dss/.env

@@ -330,7 +330,8 @@ mkdir -p "$CONFIG_DIR"
   echo "  \"icpBrasil\": $(bool "${DSS_TRUST_ICP_BRASIL:-true}"),"
   echo "  \"govBr\": $(bool "${DSS_TRUST_GOVBR:-true}"),"
   echo "  \"tsaRoots\": $(bool "${DSS_TRUST_TSA_ROOTS:-true}"),"
-  echo "  \"peru\": { \"enabled\": $(bool "${DSS_TRUST_PERU:-true}"), \"trusted\": $peru_trusted, \"origin\": $(json "$peru_origin"), \"sequence\": $(json "$peru_seq"), \"nextUpdate\": $(json "$peru_next") },"
+  echo "  \"peru\": { \"enabled\": $(bool "${DSS_TRUST_PERU:-true}"), \"trusted\": $peru_trusted, \"origin\": $(json "$peru_origin"), \"sequence\": $(json "$peru_seq"), \"nextUpdate\": $(json "$peru_next"), \"url\": $(json "$PERU_URL") },"
+  echo "  \"forwarding\": { \"host\": $(json "$FORWARD_HOST"), \"ports\": $(json "${SANDBOX_FORWARD_PORTS-5300 5301 5302}") },"
   echo "  \"trusted\": ["
   first=true
   while IFS="$(printf '\t')" read -r g name subject; do

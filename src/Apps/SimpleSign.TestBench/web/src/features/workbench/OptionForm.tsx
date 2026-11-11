@@ -54,7 +54,8 @@ function StampLink() {
       </span>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild><Button variant="outline" size="sm">{t("stamp.edit")}</Button></SheetTrigger>
-        <SheetContent className="flex w-[min(96vw,1400px)] flex-col p-0 sm:max-w-none">
+        {/* No focus on open: the first focusable is an "i" button, and focusing it opens its hover card. */}
+        <SheetContent className="flex w-[min(96vw,1400px)] flex-col p-0 sm:max-w-none" onOpenAutoFocus={(e) => e.preventDefault()}>
           <SheetHeader className="sr-only"><SheetTitle>{t("stamp.title")}</SheetTitle><SheetDescription>{t("stamp.about")}</SheetDescription></SheetHeader>
           <div className="min-h-0 flex-1">{open && <StampPage onClose={() => setOpen(false)} />}</div>
         </SheetContent>

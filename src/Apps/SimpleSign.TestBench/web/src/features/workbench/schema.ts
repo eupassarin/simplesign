@@ -197,8 +197,16 @@ export interface DssServerConfig {
   icpBrasil: boolean
   govBr: boolean
   tsaRoots: boolean
-  peru?: { enabled: boolean; trusted: number; origin?: string | null; sequence?: string | null; nextUpdate?: string | null } | null
+  peru?: { enabled: boolean; trusted: number; origin?: string | null; sequence?: string | null; nextUpdate?: string | null; url?: string | null } | null
   trusted?: { group: string; name: string; subject: string }[] | null
+  forwarding?: { host?: string | null; ports?: string | null } | null
+}
+
+/** The policy DSS is given with every request (DssPolicyView in CrossValidation/DssClient.cs). */
+export interface DssPolicyView {
+  name: string
+  constraintXml: string
+  notInDss: string[]
 }
 
 export type RunKind = "sign" | "validate"

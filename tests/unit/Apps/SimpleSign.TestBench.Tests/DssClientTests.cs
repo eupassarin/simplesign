@@ -197,4 +197,23 @@ public sealed class DssClientTests
     [InlineData("")]
     public void ReadConfig_NotTheFile_IsNull(string text) =>
         DssClient.ReadConfig(text).ShouldBeNull();
+
+    [Fact]
+    public void Policy_Default_IsTheConstraintXmlSentWithoutWhatDss63DoesNotKnow()
+    {
+        var policy = DssClient.Policy();
+
+        policy.Name.ShouldNotBeNullOrEmpty();
+        policy.ConstraintXml.ShouldBe(DssPolicyConverter.ToConstraintXml(SimpleSign.Core.Policies.ValidationPolicy.Default.ToJson(), DssPolicyConverter.NotInDss63));
+        policy.NotInDss.ShouldBe(DssPolicyConverter.NotInDss63.Order(StringComparer.Ordinal));
+        foreach (string element in policy.NotInDss)
+        {
+            policy.ConstraintXml.ShouldNotContain("<" + element);
+        }
+    }
+
+    [Fact]
+    public void ReadConfig_Forwarding_IsRead() =>
+        DssClient.ReadConfig("""{ "forwarding": { "host": "host.docker.internal", "ports": "5300 5301 5302" }, "peru": { "enabled": true, "trusted": 1, "url": "https://x/tsl.xml" } }""")
+            .ShouldNotBeNull().Forwarding.ShouldNotBeNull().Ports.ShouldBe("5300 5301 5302");
 }
