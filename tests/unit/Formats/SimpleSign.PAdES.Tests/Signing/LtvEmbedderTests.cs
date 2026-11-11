@@ -283,6 +283,32 @@ public sealed class LtvEmbedderTests
             $"byte after 'endobj' (offset {afterEndobj}) is 0x{(int)byteAfter:X2}; expected LF or CR. Context: ...{context}...");
     }
 
+    [Fact(DisplayName = "The DSS update rewrites the catalog, not a later object whose number ends with the catalog's")]
+    public async Task EmbedLtvDataAsync_LaterObjectNumberEndsWithCatalogNumber_RewritesTheCatalog()
+    {
+        // A visible stamp appends objects 20+ after catalog 1: a search for "1 0 obj" from the end
+        // used to land on "21 0 obj" and write the font descriptor as the new catalog.
+        using X509Certificate2 cert = CreateCertWithCrlUrl();
+        using HttpClient httpClient = MockHttpHandler.ForGetBytes(BuildFakeCrl(cert.IssuerName.RawData), HttpStatusCode.OK);
+        LtvEmbedder ltvEmbedder = new LtvEmbedder(httpClient);
+        byte[] baseline = TestPdfFactory.CreateMinimalPdf();
+        string update = "\n21 0 obj\n<< /Type /FontDescriptor /FontName /Stamp >>\nendobj\n";
+        int objOffset = baseline.Length + 1;
+        int xrefOffset = baseline.Length + update.Length;
+        byte[] pdf = [.. baseline, .. Encoding.Latin1.GetBytes(update +
+            $"xref\n21 1\n{objOffset:D10} 00000 n \ntrailer\n<< /Size 22 /Root 1 0 R /Prev 110 >>\nstartxref\n{xrefOffset}\n%%EOF")];
+
+        byte[] bytes = await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert]);
+
+        var (start, end) = PdfStructureParser.FindObjectBytes(bytes, 1);
+        start.ShouldBeGreaterThan(pdf.Length, "the DSS update must write a new revision of the catalog");
+        string catalog = Encoding.Latin1.GetString(bytes, start, end - start);
+        catalog.ShouldContain("/Type /Catalog");
+        catalog.ShouldContain("/Pages 2 0 R");
+        catalog.ShouldContain("/DSS ");
+        catalog.ShouldNotContain("FontDescriptor");
+    }
+
     [Fact(DisplayName = "With CRL data, output starts with original PDF")]
     public async Task EmbedLtvDataAsync_WithCrlData_OutputStartsWithOriginalPdf()
     {

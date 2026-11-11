@@ -516,7 +516,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
     {
         int nextObj = FindNextObjectNumber(signedPdf);
         int dssObjNum = nextObj;
-        int catalogObjNum = FindRootObjectNumber(signedPdf);
+        int catalogObjNum = PdfStructureParser.FindRootObjectNumber(signedPdf);
 
         using var result = new MemoryStream();
         result.Write(signedPdf);
@@ -836,48 +836,17 @@ public sealed class LtvEmbedder : ILtvEmbedder
         return merged;
     }
 
-    private static int FindRootObjectNumber(byte[] pdf)
-    {
-        ReadOnlySpan<byte> rootKey = "/Root "u8;
-        var span = pdf.AsSpan();
-        int idx = span.LastIndexOf(rootKey);
-        if (idx < 0)
-        {
-            return 1;
-        }
-
-        int pos = idx + rootKey.Length;
-        int num = 0;
-        while (pos < pdf.Length && pdf[pos] >= '0' && pdf[pos] <= '9')
-        {
-            num = num * 10 + (pdf[pos++] - '0');
-        }
-
-        return num > 0 ? num : 1;
-    }
-
     private static byte[] BuildUpdatedCatalogDss(int catalogObjNum, byte[] pdf, int dssObjNum)
     {
-        string marker = $"{catalogObjNum} 0 obj";
-        byte[] markerBytes = System.Text.Encoding.Latin1.GetBytes(marker);
-        int start = -1;
-        for (int i = pdf.Length - markerBytes.Length; i >= 0; i--)
-        {
-            if (pdf.AsSpan(i, markerBytes.Length).SequenceEqual(markerBytes))
-            {
-                start = i;
-                break;
-            }
-        }
+        // The last "N 0 obj" that is not the tail of a larger number: a plain search for "1 0 obj"
+        // also matches "21 0 obj" (a stamp's font descriptor, say) and would rewrite that object as
+        // the catalog, dropping the AcroForm and the signature field with it.
+        var (start, end) = PdfStructureParser.FindObjectBytes(pdf, catalogObjNum);
         if (start < 0)
         {
             return System.Text.Encoding.Latin1.GetBytes(
                 $"{catalogObjNum} 0 obj\n<< /Type /Catalog /DSS {dssObjNum} 0 R >>\nendobj\n");
         }
-
-        ReadOnlySpan<byte> endobjMarker = "endobj"u8;
-        int endobjIdx = pdf.AsSpan(start).IndexOf(endobjMarker);
-        int end = endobjIdx >= 0 ? start + endobjIdx + 6 : pdf.Length;
 
         string original = System.Text.Encoding.Latin1.GetString(pdf, start, end - start);
 
