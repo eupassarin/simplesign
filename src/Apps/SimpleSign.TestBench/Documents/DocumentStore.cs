@@ -41,6 +41,12 @@ internal sealed partial class DocumentStore
     private readonly ConcurrentDictionary<string, DocumentFacts> _facts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SampleDocument> _samples = new(StringComparer.Ordinal);
 
+    /// <summary>Creates the store with the built-in policies (<see cref="Policies.PolicyPresets"/>) in it.</summary>
+    public DocumentStore()
+    {
+        Policies.PolicyPresets.AddTo(this);
+    }
+
     public IReadOnlyCollection<SampleDocument> Samples => _samples.Values;
 
     public void AddSamples(IEnumerable<SampleDocument> samples)
@@ -53,6 +59,10 @@ internal sealed partial class DocumentStore
     }
 
     public static string SampleKey(string sampleId) => "sample:" + sampleId;
+
+    /// <summary>Adds a file under a fixed id (a built-in policy): never evicted.</summary>
+    public void AddFixed(string id, string fileName, byte[] content) =>
+        _files[id] = new StoredFile(id, fileName, content, DateTimeOffset.UtcNow, Pinned: true);
 
     /// <summary>Adds a file built at startup (validation and CAdES samples): never evicted.</summary>
     public StoredFile AddPinned(string fileName, byte[] content)

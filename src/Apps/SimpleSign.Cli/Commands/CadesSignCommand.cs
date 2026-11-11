@@ -366,7 +366,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
             builder = builder.WithOperationId(settings.OperationId);
         }
 
-        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
+        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
+        if (settings.AuditSink() is { } audit)
+        {
+            builder = builder.WithAuditSink(audit);
+        }
         if (CliNetwork.IsConfigured)
         {
             builder = builder.WithHttpClientProvider(CliNetwork.Provider);

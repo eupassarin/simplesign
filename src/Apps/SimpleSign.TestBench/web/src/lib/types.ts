@@ -2,7 +2,7 @@
 
 export type SignatureKind = "Baseline" | "CustomPolicy"
 export type BaselineLevel = "BB" | "BT" | "BLT" | "BLTA"
-export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "SandboxUntrusted" | "SandboxRevoked" | "SandboxWrongName" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
+export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "SandboxUntrusted" | "SandboxRevoked" | "SandboxExpired" | "SandboxWrongName" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
 export type TsaAuth = "None" | "Basic" | "Bearer"
 export type HashChoice = "Sha256" | "Sha384" | "Sha512" | "Sha3_256" | "Sha3_384" | "Sha3_512"
 export type RsaPadding = "Pkcs1" | "Pss"
@@ -739,6 +739,14 @@ export interface PolicyNodeView {
   algorithms: { name: string; size?: number | null; date?: string | null }[]
   attributes: Record<string, string>
   children: PolicyNodeView[]
+}
+
+/** A built-in policy, offered next to the uploaded files (GET /api/policies/presets). */
+export interface PolicyPreset {
+  id: string
+  kind: PolicyKind
+  name: string
+  title: string
 }
 
 export interface PolicyView {

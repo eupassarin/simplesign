@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Certification scripts in the TestBench (the Playbook app is gone)
+
+- **TestBench → Certification:** loads a certification script (JSON, `docs/schemas/certification-script.schema.json`)
+  written beforehand from an accreditation guide, checks it against the connected Sandbox, runs each step through the
+  library, the CLI or both, waits for the manual steps (note, attachments, passed/failed), and exports the evidence:
+  an HTML page in the script's language (matrix requirement → steps → result) and a zip with the script, the run, and
+  per step the signed file, reports, log and attachments. API under `/api/script`.
+- **Samples:** `docs/certification-scripts/sandbox-basics.json` (the old Playbook sample) and
+  `indecopi-guia-v4.json` (INDECOPI's guide v4.0, Annex B: signing and verification by automated agents, timestamp
+  checks; Spanish). `AUTHORING.md` is the kit to have an LLM write one; `options.md` is generated from the TestBench.
+- **Built-in policies:** `strict`, `minimal`, `iofe` (signing) and `iofe`, `iofe-nonrepudiation` (validation), in the
+  TestBench's policy fields and as names for the CLI's `--signing-policy` / `--policy` and `policy export --preset`.
+- **IOFE:** `IofePolicies.Signing` turns on the trust anchor, CRL nextUpdate, chain cryptography and TSA checks;
+  `IofePolicies.Validation` refuses an expired or badly signed trusted list; new `ValidationNonRepudiation` (Req. 23).
+  Written out in `docs/policies/iofe-*.json`.
+- **CLI sign commands:** `--trust`, `--trust-dir`, `--tsl/--tsl-signer` (trust anchors before signing),
+  `--expected-tsa`, `--audit-log`; `--signing-policy` on `sign-dir` and `deferred`; `simplesign audit verify`.
+- **TestBench options:** trust anchors before signing, expected TSA, audit trail (shown in the log), and *Attempt
+  refused signatures*. CLI runs against the Sandbox now pass `--allow-ldap`, its HTTPS origin and `--tls-trust` with
+  its root, so CRLs over HTTPS and LDAP work through the CLI too.
+- **TestBench and the new Sandbox cases:** the TSA choice *Sandbox, expired TSA* (`SandboxExpired`) and the CRL failure
+  `NoNextUpdate`; the INDECOPI script uses them, the SHA-1 CA and the signer without KeyUsage, so the expired TSA, the
+  SHA-1 chain and the CRL without nextUpdate are automated steps.
+
+### Removed — The Playbook app
+
+- `src/Apps/SimpleSign.Playbook` and its tests: its sample is now a certification script, run by the TestBench.
+
 ### Added — Signing controls you can turn on in the signing policy, an audit trail and a readable report
 
 Every new check is off in `SigningPolicy.Default`, so signing is unchanged until a policy turns it on.

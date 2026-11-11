@@ -66,6 +66,7 @@ public static class OptionCatalog
         ["tsa.SandboxAuthenticated"] = new("Sandbox TSA (Basic auth)", "Same TSA, but it requires HTTP Basic; the Sandbox's test credentials are filled in. Shows TimestampOptions.Authorization."),
         ["tsa.SandboxUntrusted"] = new("Sandbox TSA outside the chain", "A TSA no trust anchor vouches for: the timestamp is not trusted."),
         ["tsa.SandboxRevoked"] = new("Sandbox TSA, revoked", "A TSA whose certificate is revoked: the timestamp must not be trusted."),
+        ["tsa.SandboxExpired"] = new("Sandbox TSA, expired", "A TSA whose certificate has expired: a timestamp it makes now is not valid at its own time."),
         ["tsa.SandboxWrongName"] = new("Sandbox TSA, wrong name", "Its tokens name another TSA in the tsa field: the name check fails."),
         ["tsa.DigiCert"] = new("DigiCert", "Free public TSA, trusted by Adobe and most validators.", null, null, "TimestampOptions.DigiCert"),
         ["tsa.Sectigo"] = new("Sectigo", "Free public TSA.", null, null, "TimestampOptions.Sectigo"),

@@ -39,6 +39,41 @@ internal abstract class TimestampedSigningSettings : CommonSettings
     [Description("Password of --tsa-cert. Accepts env:NAME.")]
     public string? TsaCertificatePassword { get; init; }
 
+    /// <summary>Trust anchor certificate files for the checks made before signing.</summary>
+    [CommandOption("--trust <PATH>")]
+    [Description("Trust anchor certificate (.cer/.crt/.pem), repeatable: the signing certificate and each TSA must chain to an anchor when the signing policy asks (ProspectiveCertificateChain)")]
+    public string[] SigningTrust { get; init; } = [];
+
+    /// <summary>Folder of trust anchor certificates for the checks made before signing.</summary>
+    [CommandOption("--trust-dir <DIR>")]
+    [Description("Folder of trust anchor certificates (.cer, .crt, .der, .pem) for the checks made before signing")]
+    public string? SigningTrustDirectory { get; init; }
+
+    /// <summary>Certificate the trust folder's manifest must be signed with.</summary>
+    [CommandOption("--trust-dir-signer <PATH>")]
+    [Description("Certificate the trust folder's manifest.json must be signed with")]
+    public string? SigningTrustDirectorySigner { get; init; }
+
+    /// <summary>Trusted list (URL or file) whose services are trust anchors before signing.</summary>
+    [CommandOption("--tsl <URL|PATH>")]
+    [Description("Trusted list (ETSI TS 119 612 / TS 102 231), URL or file: its CA and TSA services are the trust anchors before signing. Requires --tsl-signer")]
+    public string? SigningTrustedList { get; init; }
+
+    /// <summary>Certificate the trusted list must be signed with.</summary>
+    [CommandOption("--tsl-signer <PATH>")]
+    [Description("Certificate the trusted list must be signed with (the scheme operator's)")]
+    public string? SigningTrustedListSigner { get; init; }
+
+    /// <summary>The certificate the TSA must sign with.</summary>
+    [CommandOption("--expected-tsa <PATH>")]
+    [Description("Certificate the TSA must sign its timestamps with (.cer/.pem): a timestamp from any other is refused")]
+    public string? ExpectedTsa { get; init; }
+
+    /// <summary>Audit trail file.</summary>
+    [CommandOption("--audit-log <PATH>")]
+    [Description("Append a record of each signature made or refused to this file (JSON lines, hash-chained; check it with 'simplesign audit verify')")]
+    public string? AuditLog { get; init; }
+
     /// <summary>Whether any TSA credential was given.</summary>
     internal bool HasTsaCredentials =>
         TsaUser is not null || TsaPassword is not null || TsaToken is not null || TsaCertificate is not null;
@@ -47,6 +82,11 @@ internal abstract class TimestampedSigningSettings : CommonSettings
     /// <param name="tsaUrl">The <c>--tsa</c> value.</param>
     internal string? ValidateTsaCredentials(string? tsaUrl)
     {
+        if (ValidateSigningTrust() is { } trustError)
+        {
+            return trustError;
+        }
+
         if (!HasTsaCredentials && TsaCertificatePassword is null)
         {
             return null;
@@ -82,6 +122,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
     {
         Authorization = TsaAuthorization(),
         ClientCertificate = TsaClientCertificate(),
+        ExpectedTsaCertificate = ExpectedTsa is null ? null : LoadCertificate(ExpectedTsa),
     };
 
     /// <summary>The options for a separate archive TSA at <paramref name="url"/>, with the same credentials.</summary>
@@ -89,7 +130,78 @@ internal abstract class TimestampedSigningSettings : CommonSettings
     {
         Authorization = TsaAuthorization(),
         ClientCertificate = TsaClientCertificate(),
+        ExpectedTsaCertificate = ExpectedTsa is null ? null : LoadCertificate(ExpectedTsa),
     };
+
+    /// <summary>The error of the trust, expected TSA and audit options, or null.</summary>
+    internal string? ValidateSigningTrust()
+    {
+        foreach (var (path, what) in SigningTrust.Select(p => ((string?)p, "Trust anchor"))
+            .Append((SigningTrustDirectorySigner, "Trust folder signer"))
+            .Append((SigningTrustedListSigner, "Trusted list signer"))
+            .Append((ExpectedTsa, "Expected TSA certificate")))
+        {
+            if (path is not null && !File.Exists(path))
+            {
+                return $"{what} file not found: {path}";
+            }
+        }
+
+        if (SigningTrustDirectory is not null && !Directory.Exists(SigningTrustDirectory))
+        {
+            return $"Trust folder not found: {SigningTrustDirectory}";
+        }
+
+        return SigningTrustedList is not null && SigningTrustedListSigner is null
+            ? "--tsl requires --tsl-signer: the certificate the trusted list must be signed with."
+            : null;
+    }
+
+    /// <summary>The trust anchors of <c>--trust</c>, <c>--trust-dir</c> and <c>--tsl</c>, for the checks made before signing.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    internal async Task<SimpleSign.Core.Extensions.ITrustAnchorProvider[]> SigningTrustAnchorsAsync(CancellationToken cancellationToken)
+    {
+        var providers = new List<SimpleSign.Core.Extensions.ITrustAnchorProvider>();
+        if (SigningTrust.Length > 0)
+        {
+            providers.Add(new CertificateTrustAnchors([.. SigningTrust.Select(LoadCertificate)]));
+        }
+
+        if (SigningTrustDirectory is not null)
+        {
+            providers.Add(new SimpleSign.Core.Extensions.DirectoryTrustAnchorProvider(
+                SigningTrustDirectory, SigningTrustDirectorySigner is null ? null : LoadCertificate(SigningTrustDirectorySigner)));
+        }
+
+        if (SigningTrustedList is not null)
+        {
+            var options = new SimpleSign.XAdES.TrustedLists.TrustedListOptions { SignerCertificates = [LoadCertificate(SigningTrustedListSigner!)] };
+            providers.Add(Uri.TryCreate(SigningTrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"
+                ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, CliNetwork.Provider, cancellationToken: cancellationToken)
+                : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(SigningTrustedList, cancellationToken), options));
+        }
+
+        return [.. providers];
+    }
+
+    /// <summary>The audit sink of <c>--audit-log</c>, or null.</summary>
+    internal ISignatureAuditSink? AuditSink() => AuditLog is null ? null : new JsonLinesAuditSink(AuditLog);
+
+    private static X509Certificate2 LoadCertificate(string path) =>
+        new SimpleSign.Core.Validation.CertificateChainService().LoadCertsFromBytes(File.ReadAllBytes(path)).FirstOrDefault()
+        ?? throw new InvalidDataException($"No certificate in {path}.");
+
+    /// <summary>Trust anchors given as certificate files.</summary>
+    private sealed class CertificateTrustAnchors(IReadOnlyList<X509Certificate2> certificates) : SimpleSign.Core.Extensions.ITrustAnchorProvider
+    {
+        public string RegionCode => "CLI";
+
+        public string DisplayName => "--trust";
+
+        public IReadOnlyList<X509Certificate2> GetTrustAnchors() => [.. certificates.Where(c => c.SubjectName.RawData.AsSpan().SequenceEqual(c.IssuerName.RawData))];
+
+        public IReadOnlyList<X509Certificate2> GetIntermediateCertificates() => [.. certificates.Where(c => !c.SubjectName.RawData.AsSpan().SequenceEqual(c.IssuerName.RawData))];
+    }
 
     private AuthenticationHeaderValue? TsaAuthorization()
     {

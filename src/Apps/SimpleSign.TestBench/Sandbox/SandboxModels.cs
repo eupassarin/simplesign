@@ -25,7 +25,11 @@ public sealed record SandboxInfo(
 /// <summary>The Sandbox's trust scheme: its list of trusted lists, its trusted list and the operators' certificates (PEM). Null for a Sandbox without one.</summary>
 public sealed record SandboxTrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory);
 
-public sealed record SandboxTsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string User, string Password);
+public sealed record SandboxTsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string User, string Password)
+{
+    /// <summary>The TSA whose certificate has expired; null for a Sandbox older than it.</summary>
+    public string? ExpiredUrl { get; init; }
+}
 
 public sealed record SandboxCscInfo(string BaseUrl, string ClientId, string ClientSecret, string ServiceToken, string Pin, string Otp, IReadOnlyList<SandboxCscCredential> Credentials);
 
@@ -81,6 +85,7 @@ public enum CrlFault
     Expired,
     WrongKey,
     Stale,
+    NoNextUpdate,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<OcspFault>))]

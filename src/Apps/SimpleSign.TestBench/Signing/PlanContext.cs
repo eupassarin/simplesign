@@ -50,6 +50,9 @@ internal sealed class PlanContext
 
     public CredentialHandle Credential { get; }
 
+    /// <summary>The trust anchors, expected TSA and audit trail of the run.</summary>
+    public SigningControls Controls { get; init; } = SigningControls.None;
+
     /// <summary>Whether a Sandbox is connected: the generated code then builds the provider that reaches it.</summary>
     public bool IsSandbox { get; }
 
@@ -102,13 +105,15 @@ internal sealed class PlanContext
         {
             Authorization = Authorization(choice),
             ClientCertificate = ClientCertificate(choice),
+            ExpectedTsaCertificate = Controls.ExpectedTsa,
         };
         _setup.Add($"var {variable} = new TimestampOptions(new Uri(\"{endpoint}\"){(IsSandbox ? ", sandboxHttp" : "")})"
-            + (options.Authorization is null && options.ClientCertificate is null ? ";" :
+            + (options.Authorization is null && options.ClientCertificate is null && options.ExpectedTsaCertificate is null ? ";" :
                 "\n{"
                 + (choice.Auth == TsaAuth.Basic ? "\n    Authorization = new AuthenticationHeaderValue(\"Basic\", Convert.ToBase64String(Encoding.UTF8.GetBytes($\"{user}:{password}\"))),"
                     : choice.Auth == TsaAuth.Bearer ? "\n    Authorization = new AuthenticationHeaderValue(\"Bearer\", token)," : "")
                 + (options.ClientCertificate is not null ? "\n    ClientCertificate = X509CertificateLoader.LoadPkcs12FromFile(\"tsa-client.pfx\", pfxPassword)," : "")
+                + (Controls.ExpectedTsaCode() is { } expected ? "\n    " + expected : "")
                 + "\n};"));
         return options;
     }
@@ -159,6 +164,7 @@ internal sealed class PlanContext
         {
             Authorization = Authorization(choice),
             ClientCertificate = ClientCertificate(choice),
+            ExpectedTsaCertificate = Controls.ExpectedTsa,
         };
     }
 
@@ -168,7 +174,7 @@ internal sealed class PlanContext
     /// </summary>
     public void CliNetwork(CliLine line) => SandboxNetwork(line, _sandbox);
 
-    /// <summary>The <c>--allow-origin</c> flags for the HTTP origins of the connected Sandbox, if any.</summary>
+    /// <summary>The flags a CLI command needs for the connected Sandbox, if any: its origins (<c>--allow-origin</c>), LDAP and its root for HTTPS.</summary>
     internal static void SandboxNetwork(CliLine line, SandboxEnvironment sandbox)
     {
         if (sandbox.Current is not { } connection)
@@ -176,10 +182,15 @@ internal sealed class PlanContext
             return;
         }
 
-        foreach (var origin in connection.Info.LoopbackOrigins.Where(o => o.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
+        // Every origin of the Sandbox: HTTP, HTTPS (with its root below) and LDAP.
+        foreach (var origin in connection.Info.LoopbackOrigins)
         {
             line.Add("--allow-origin", origin);
         }
+
+        // Its CRLs over LDAP, and its HTTPS endpoints (CRLs over HTTPS) under its own root.
+        line.Add("--allow-ldap");
+        line.Add("--tls-trust", connection.RootPemFile());
     }
 
     /// <summary>
@@ -193,6 +204,8 @@ internal sealed class PlanContext
         {
             return;
         }
+
+        Controls.CliTimestamp(line);
 
         if (choice.Provider == TsaProvider.SandboxAuthenticated && _sandbox.Current is { } connection)
         {
@@ -232,6 +245,7 @@ internal sealed class PlanContext
         TsaProvider.SandboxAuthenticated => _sandbox.Connection.AuthenticatedTsaUri,
         TsaProvider.SandboxUntrusted => _sandbox.Connection.UntrustedTsaUri,
         TsaProvider.SandboxRevoked => _sandbox.Connection.RevokedTsaUri,
+        TsaProvider.SandboxExpired => _sandbox.Connection.ExpiredTsaUri,
         TsaProvider.SandboxWrongName => _sandbox.Connection.WrongNameTsaUri,
         TsaProvider.DigiCert => TimestampOptions.DigiCert.Endpoint,
         TsaProvider.Sectigo => TimestampOptions.Sectigo.Endpoint,

@@ -134,14 +134,24 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         var report = Evaluate(options);
         var o = report.Effective;
         var empty = new CodeSnippets("", "", []);
-        if (!report.CanSign)
+        if (!report.CanRun)
         {
             return Failure(o, report, L.T("Fix the issues before signing."), "Validation", empty);
         }
 
         var credential = credentials.Get(o.CredentialId!);
         credential.LastUsed = DateTimeOffset.UtcNow;
-        var plan = new CadesPlan(o, new PlanContext(credential, sandbox, documents));
+        SigningControls controls;
+        try
+        {
+            controls = await SigningControls.ResolveAsync(o.SigningControls, sandbox, cancellationToken);
+        }
+        catch (Exception ex) when (ex is SigningException or ArgumentException or HttpRequestException)
+        {
+            return Failure(o, report, ex.Message, SigningRunner.ErrorTypeOf(ex), empty);
+        }
+
+        var plan = new CadesPlan(o, new PlanContext(credential, sandbox, documents) { Controls = controls });
         byte[]? data = o.DataId is { } id && o.Operation != CadesOperation.CounterSign && report.Options["data"].Visible ? documents.Get(id).Content : null;
         byte[]? existing = o.ExistingSignatureId is { } existingId && report.Options["existing"].Visible ? documents.Get(existingId).Content : null;
         var code = plan.Code(credential.Facts);
@@ -154,6 +164,11 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             }
 
             var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents);
+            foreach (var (name, content) in controls.CliFiles())
+            {
+                jobs.File(name, content);
+            }
+
             if (data is not null)
             {
                 jobs.File(DataFile, data);
@@ -165,6 +180,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             }
 
             var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands), cancellationToken);
+            controls.Report(outcome.AuditTrail);
             if (!outcome.Success)
             {
                 return Failure(o, report, outcome.Error!, outcome.Json?.ErrorType ?? "Cli", code) with { Cli = outcome.Steps };
@@ -196,6 +212,10 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Failure(o, report, ex.Message, SigningRunner.ErrorTypeOf(ex), code);
+        }
+        finally
+        {
+            controls.Report(cliTrail: null);
         }
 
         return await FinishAsync(o, report, code, signed.SignedArtifact, LevelName(signed.AchievedLevel),
@@ -457,6 +477,17 @@ internal sealed class CadesPlan
             _steps.Add((PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
         }
 
+        var controls = context.Controls;
+        if (controls.TrustCode() is { } trustCode)
+        {
+            _steps.Add((trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+        }
+
+        if (controls.Audit is { } audit)
+        {
+            _steps.Add((controls.AuditCode()!, b => b.WithAuditSink(audit)));
+        }
+
         if (credential.Facts.KeyAlgorithm == "RSA" && o.Padding == RsaPadding.Pss)
         {
             _steps.Add((".WithSignatureAlgorithm(Oids.RsaPss) // RSASSA-PSS, salt = hash length", b => b.WithSignatureAlgorithm(Oids.RsaPss)));
@@ -696,6 +727,8 @@ internal sealed class CadesPlan
         {
             cli.Add("--signing-policy", PolicyUploads.SigningFileName);
         }
+
+        _context.Controls.Cli(cli);
 
         cli.AddIf("--commitment", _o.Commitment);
         AddSignedAttributeArgs(cli);

@@ -197,6 +197,7 @@ internal static class CodeGenerator
 
                     Crypto(sign, o, credential);
                     Policy(sign, o);
+                    context.Controls.Cli(sign);
                     Field(sign, o);
                     Stamp(sign, o);
                     Document(sign, o);

@@ -21,7 +21,18 @@ public enum IssueSeverity
 }
 
 /// <summary>A problem with the current combination, attached to the step that can fix it.</summary>
-public sealed record OptionIssue(IssueSeverity Severity, string Step, string Message);
+public sealed record OptionIssue(IssueSeverity Severity, string Step, string Message)
+{
+    /// <summary>
+    /// Whether the issue only foresees that the signing policy refuses the signer (the library would throw a
+    /// SigningException): with <c>attemptRefused</c> the run goes on, so the refusal itself is shown.
+    /// </summary>
+    public bool IsPolicyRefusal => Severity == IssueSeverity.Error && Step == "signer" && Message.Contains("SigningException", StringComparison.Ordinal);
+
+    /// <summary>Whether <paramref name="issues"/> stop a run: any error, except foreseen policy refusals when <paramref name="attemptRefused"/>.</summary>
+    public static bool Block(IEnumerable<OptionIssue> issues, bool attemptRefused) =>
+        issues.Any(i => i.Severity == IssueSeverity.Error && !(attemptRefused && i.IsPolicyRefusal));
+}
 
 /// <summary>
 /// The result of the rules: the state of every option key, the issues of the current selection,
@@ -34,6 +45,9 @@ public sealed record OptionsReport(
     string EffectiveLevel)
 {
     public bool CanSign => Issues.All(i => i.Severity != IssueSeverity.Error);
+
+    /// <summary>Whether the run may go on: <see cref="CanSign"/>, or only foreseen policy refusals when the options ask to attempt them.</summary>
+    public bool CanRun => !OptionIssue.Block(Issues, Effective.AttemptRefused);
 }
 
 /// <summary>

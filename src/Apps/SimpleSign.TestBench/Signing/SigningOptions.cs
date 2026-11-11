@@ -36,6 +36,9 @@ public enum TsaProvider
     /// <summary>The connected Sandbox's TSA whose certificate is revoked.</summary>
     SandboxRevoked,
 
+    /// <summary>The connected Sandbox's TSA whose certificate has expired.</summary>
+    SandboxExpired,
+
     /// <summary>The connected Sandbox's TSA whose tokens name another TSA.</summary>
     SandboxWrongName,
 
@@ -259,6 +262,15 @@ public sealed record SigningOptions
 
     /// <summary>The uploaded signing policy (JSON, root SigningConstraints); null: <c>SigningPolicy.Default</c>.</summary>
     public string? SigningPolicyId { get; init; }
+
+    /// <summary>The trust anchors, expected TSA and audit trail of the checks made before signing.</summary>
+    public SigningControlsOptions SigningControls { get; init; } = new();
+
+    /// <summary>
+    /// Whether to run even when the signing policy is foreseen to refuse the signer, to show the library's own refusal
+    /// (a SigningException with its reason) instead of stopping before it.
+    /// </summary>
+    public bool AttemptRefused { get; init; }
 
     public RsaPadding Padding { get; init; } = RsaPadding.Pkcs1;
 

@@ -8,7 +8,7 @@ the CLI, the Agent, your own application, or another validator such as DSS.
 
 It is a service with an API and no page of its own: its UI is the TestBench's **Sandbox** control
 (connect, then the PKI, failures and request log), and every other client drives it through the same
-[admin API](#admin-api), so a Sandbox set up by a playbook, a test suite or `curl` serves any validator
+[admin API](#admin-api), so a Sandbox set up by a certification script, a test suite or `curl` serves any validator
 without the TestBench.
 
 It simulates what a real PKI does, including what goes wrong: a certificate revoked by CRL or
@@ -111,7 +111,7 @@ in `SandboxScenarioTests`.
 ## Admin API
 
 Everything the TestBench's Sandbox control does goes through this API (passed through by the TestBench at
-`/api/sandbox/admin/…`, so the page talks to one origin), so another app (the Playbook, a test suite, `curl`)
+`/api/sandbox/admin/…`, so the page talks to one origin), so another client (a test suite, `curl`, DSS)
 drives the Sandbox the same way, with or without a TestBench, and what one client changes the others see. JSON is camelCase with enums as names. Every route except
 `GET /api/info` answers loopback only (HTTP 403 otherwise), unless the Sandbox starts with
 `--allow-remote-admin`.

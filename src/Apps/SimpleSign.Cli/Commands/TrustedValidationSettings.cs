@@ -12,7 +12,7 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy (JSON, root ValidationConstraints). Write the default with 'simplesign policy export validation'")]
+    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, iofe, iofe-nonrepudiation). Write one with 'simplesign policy export validation [--preset NAME]'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>
@@ -145,7 +145,7 @@ internal class TrustedValidationSettings : CommonSettings
     {
         foreach (var (path, what) in new[]
         {
-            (PolicyPath, "Policy"), (PolicySignerPath, "Policy signer"), (TrustDirectorySignerPath, "Trust folder signer"),
+            (PolicyPath is not null && PolicyPresets.IsPreset(PolicyPresets.Validation, PolicyPath) ? null : PolicyPath, "Policy"), (PolicySignerPath, "Policy signer"), (TrustDirectorySignerPath, "Trust folder signer"),
             (TrustedListSignerPath, "Trusted list signer"),
             (LotlSignerPath, "LOTL signer"),
         })
@@ -195,6 +195,7 @@ internal class TrustedValidationSettings : CommonSettings
     internal async Task<(ValidationPolicy Policy, List<X509Certificate2> Anchors)> LoadTrustAsync(SimpleSign.Core.Http.IHttpClientProvider? http, CancellationToken cancellationToken)
     {
         ValidationPolicy policy = PolicyPath is null ? ValidationPolicy.Default
+            : PolicyPresets.IsPreset(PolicyPresets.Validation, PolicyPath) ? PolicyPresets.Validation[PolicyPath]()
             : PolicySignerPath is null ? ValidationPolicy.Load(PolicyPath)
             : ValidationPolicy.LoadSigned(PolicyPath, PolicyPath + ".p7s", LoadCertificate(PolicySignerPath));
 

@@ -12,9 +12,9 @@ from the published standards; check them against the version you follow before q
 
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
-| PAdES | 111 | 110 | 1 |
-| CAdES | 59 | 58 | 1 |
-| XAdES | 67 | 63 | 4 |
+| PAdES | 115 | 114 | 1 |
+| CAdES | 63 | 62 | 1 |
+| XAdES | 71 | 67 | 4 |
 
 ## PAdES
 
@@ -50,6 +50,9 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Timestamps | Different TSA for the archive timestamp | ETSI EN 319 142-1 · §5.4.3 Document time-stamp | `new ArchiveTimestampOptions(Uri)` | yes |
 | Timestamps | Archive TSA | ETSI EN 319 142-1 · §5.4.3 Document time-stamp<br>RFC 3161 · Time-Stamp Protocol | `new ArchiveTimestampOptions(Uri)` | yes |
 | Cryptography | Signing policy (JSON) | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy.Load(path))` | yes |
+| Cryptography | Trust anchors before signing | RFC 5280 · §6.1 Basic path validation<br>ETSI TS 119 612 · Trusted lists | `WithTrustAnchors(params ITrustAnchorProvider[])` | yes |
+| Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
+| Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
 | Cryptography | Digest algorithm: SHA-256 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
 | Cryptography | Digest algorithm: SHA-384 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
@@ -128,6 +131,7 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Documents in the batch |  | `BatchSigner.SignAllAsync(inputs)` | yes |
 | Run and validation | Concurrency |  | `BatchSigner.WithMaxConcurrency(int)` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
+| Run and validation | Attempt refused signatures |  | `SigningException.Reason` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
@@ -171,6 +175,9 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Timestamps | Time-stamping authority (TSA) | RFC 3161 · Time-Stamp Protocol<br>RFC 5816 · ESSCertIDv2 in timestamps<br>ETSI EN 319 422 · Time-stamping protocol and token profiles | `new TimestampOptions(Uri endpoint) { Authorization, ClientCertificate }` | yes |
 | Timestamps | Content timestamp | ETSI EN 319 122-1 · §5.2.8 content-time-stamp | `WithContentTimestamp(TimestampOptions)` | yes |
 | Cryptography | Signing policy (JSON) | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy.Load(path))` | yes |
+| Cryptography | Trust anchors before signing | RFC 5280 · §6.1 Basic path validation<br>ETSI TS 119 612 · Trusted lists | `WithTrustAnchors(params ITrustAnchorProvider[])` | yes |
+| Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
+| Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
 | Cryptography | Digest algorithm: SHA-256 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
 | Cryptography | Digest algorithm: SHA-384 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
@@ -194,6 +201,7 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signed attributes | Attribute certificate | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2<br>RFC 5755 · Attribute certificate profile | `WithAttributeCertificates(IReadOnlyList<ReadOnlyMemory<byte>>)` | yes |
 | Signed attributes | Signed assertion (SAML) | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2 | `WithSignedAssertions(…)` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
+| Run and validation | Attempt refused signatures |  | `SigningException.Reason` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
@@ -239,6 +247,9 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Timestamps | Data objects timestamp | ETSI EN 319 132-1 · §5.2.8.1 AllDataObjectsTimeStamp | `WithDataObjectsTimestamp(TimestampOptions)` | yes |
 | Timestamps | Individual data objects timestamp | ETSI EN 319 132-1 · §5.2.8.2 IndividualDataObjectsTimeStamp |  | **no** |
 | Cryptography | Signing policy (JSON) | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy.Load(path))` | yes |
+| Cryptography | Trust anchors before signing | RFC 5280 · §6.1 Basic path validation<br>ETSI TS 119 612 · Trusted lists | `WithTrustAnchors(params ITrustAnchorProvider[])` | yes |
+| Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
+| Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
 | Cryptography | Digest algorithm: SHA-256 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
 | Cryptography | Digest algorithm: SHA-384 | FIPS 180-4 · SHA-2<br>ETSI TS 119 312 · Hash functions |  | yes |
@@ -268,6 +279,7 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signed attributes | Production place: postal code | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { PostalCode })` | yes |
 | Signed attributes | Production place: country | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { CountryName })` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
+| Run and validation | Attempt refused signatures |  | `SigningException.Reason` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
@@ -440,6 +452,12 @@ Each clause and the options that implement it.
 | Signature schemes | EdDSA (Ed25519, Ed448) | PAdES, CAdES, XAdES | **no** |
 | Signature schemes | RSA signature scheme | PAdES, CAdES, XAdES | yes |
 
+### ETSI TS 119 612
+
+| Clause | Option | Formats | Implemented |
+|---|---|---|---|
+| Trusted lists | Trust anchors before signing | PAdES, CAdES, XAdES | yes |
+
 ### FIPS 180-4
 
 | Clause | Option | Formats | Implemented |
@@ -557,6 +575,7 @@ Each clause and the options that implement it.
 | Time-Stamp Protocol | Archive TSA | PAdES | yes |
 | Time-Stamp Protocol | Baseline level: B-T (timestamp) | PAdES, CAdES, XAdES | yes |
 | Time-Stamp Protocol | Time-stamping authority (TSA) | PAdES, CAdES, XAdES | yes |
+| §2.4.2 Response format | Expected TSA | PAdES, CAdES, XAdES | yes |
 
 ### RFC 4056
 
@@ -582,6 +601,7 @@ Each clause and the options that implement it.
 | §4.2.1.3 Key usage | Signing policy (JSON) | PAdES, CAdES, XAdES | yes |
 | §5 CRL | Prefer OCSP or CRL | PAdES, CAdES, XAdES | yes |
 | §5 CRL | Revocation strategy | PAdES, CAdES, XAdES | yes |
+| §6.1 Basic path validation | Trust anchors before signing | PAdES, CAdES, XAdES | yes |
 | §6.1 Basic path validation | Trusted roots | PAdES, CAdES, XAdES | yes |
 | §6.3 CRL validation | Signing policy (JSON) | PAdES, CAdES, XAdES | yes |
 

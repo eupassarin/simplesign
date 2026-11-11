@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BookOpen, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
+import { BookOpen, ClipboardCheck, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { RealEnvironment } from "@/features/environment/RealEnvironment"
 import { PoliciesPage } from "@/features/policies/PoliciesPage"
 import { SandboxControl } from "@/features/sandbox/SandboxControl"
+import { ScriptPage } from "@/features/script/ScriptPage"
 import { CatalogProvider } from "@/features/shared/catalog"
 import { DssControl } from "@/features/shared/DssControl"
 import { EngineControl } from "@/features/shared/EngineControl"
@@ -91,6 +92,8 @@ function Shell() {
           <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
           <SandboxControl />
           <DssControl />
+          <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
+          <Panel icon={<ClipboardCheck />} label={t("script.button")} hint={t("script.hint")} full><ScriptPage /></Panel>
           <div className="ml-1 flex items-center gap-1">
             <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
               <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 border-none shadow-none" aria-label={t("app.language")}>
@@ -118,7 +121,7 @@ function Shell() {
  * A reference or control panel that slides over the task without leaving it; `active` highlights a connected service.
  * A `reference` panel (no state to show) keeps its label for wide screens only, so the stateful buttons keep theirs.
  */
-function Panel({ icon, label, hint, active, reference, children }: { icon: React.ReactNode; label: string; hint: string; active?: boolean; reference?: boolean; children: React.ReactNode }) {
+function Panel({ icon, label, hint, active, reference, full, children }: { icon: React.ReactNode; label: string; hint: string; active?: boolean; reference?: boolean; full?: boolean; children: React.ReactNode }) {
   return (
     <Sheet>
       <Tooltip>
@@ -129,7 +132,7 @@ function Panel({ icon, label, hint, active, reference, children }: { icon: React
         </TooltipTrigger>
         <TooltipContent className="max-w-64">{reference ? <><span className="font-medium">{label}</span> · {hint}</> : hint}</TooltipContent>
       </Tooltip>
-      <SheetContent className="flex w-[min(96vw,1200px)] flex-col p-0 sm:max-w-none" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <SheetContent className={cn("flex flex-col p-0 sm:max-w-none", full ? "w-screen" : "w-[min(96vw,1200px)]")} onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader className="sr-only"><SheetTitle>{label}</SheetTitle><SheetDescription>{hint}</SheetDescription></SheetHeader>
         {children}
       </SheetContent>

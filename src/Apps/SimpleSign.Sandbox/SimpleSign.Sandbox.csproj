@@ -3,7 +3,7 @@
   <!--
     SimpleSign Sandbox: a test PKI and its network services (AIA, CRL, RFC 3161 TSA, CSC v2) on
     real HTTP endpoints, and the admin API that drives them. API only: its UI is the TestBench's Sandbox
-    control. Any client can use it: the TestBench, the CLI, the Agent, a playbook, a DSS container.
+    control. Any client can use it: the TestBench, the CLI, the Agent, a test suite, a DSS container.
     Not packaged; listens on localhost by default.
   -->
   <PropertyGroup>

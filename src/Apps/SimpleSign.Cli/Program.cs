@@ -132,6 +132,12 @@ internal static partial class Program
                     .WithDescription("Write the JSON Schema of the validation or signing policy files");
             });
 
+            config.AddBranch("audit", audit =>
+            {
+                audit.AddCommand<AuditVerifyCommand>("verify")
+                    .WithDescription("Check the hash chain of an audit trail written by --audit-log");
+            });
+
             config.AddBranch("fiscal", fiscal =>
             {
                 fiscal.AddCommand<FiscalSignCommand>("sign")

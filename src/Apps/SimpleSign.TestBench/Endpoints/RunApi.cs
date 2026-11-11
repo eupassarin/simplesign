@@ -173,7 +173,7 @@ internal static class RunApi
                     credentials.TryGet(options.CredentialId, out var credential);
                     var inputs = cades.Inputs(options);
                     var report = CadesCompatibility.Evaluate(options, inputs, credential?.Facts, cades.SandboxConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
-                    return new(body.Format, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, null, credential?.Facts, inputs);
+                    return new(body.Format, report.Options, report.Issues, report.CanRun, report.EffectiveLevel, report.Effective, null, credential?.Facts, inputs);
                 }
 
             case RunFormats.Xades:
@@ -182,7 +182,7 @@ internal static class RunApi
                     credentials.TryGet(options.CredentialId, out var credential);
                     var facts = xml.Facts(options.DataId);
                     var report = XmlCompatibility.Evaluate(options, facts, credential?.Facts, xml.SandboxConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
-                    return new(body.Format, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, null, credential?.Facts, facts);
+                    return new(body.Format, report.Options, report.Issues, report.CanRun, report.EffectiveLevel, report.Effective, null, credential?.Facts, facts);
                 }
 
             default:
@@ -191,7 +191,7 @@ internal static class RunApi
                     DocumentFacts? document = options.DocumentId is { } id && documents.TryGet(id, out _) ? await documents.FactsAsync(id, cancellationToken) : null;
                     credentials.TryGet(options.CredentialId, out var credential);
                     var report = Compatibility.Evaluate(options, document, credential?.Facts, xml.SandboxConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
-                    return new(RunFormats.Pades, report.Options, report.Issues, report.CanSign, report.EffectiveLevel, report.Effective, document, credential?.Facts, null);
+                    return new(RunFormats.Pades, report.Options, report.Issues, report.CanRun, report.EffectiveLevel, report.Effective, document, credential?.Facts, null);
                 }
         }
     }

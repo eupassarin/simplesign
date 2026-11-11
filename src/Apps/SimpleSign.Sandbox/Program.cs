@@ -3,7 +3,7 @@ using SimpleSign.Sandbox.Pki;
 
 // SimpleSign Sandbox: a test PKI and its services (AIA, CRL, TSA, CSC) on real HTTP endpoints, and the
 // admin API that drives them (PKI, revocations, failures, request log). No page of its own: any client uses it
-// (the CLI, a playbook, DSS, curl), and the TestBench's Sandbox control is its UI.
+// (the CLI, a test suite, DSS, curl), and the TestBench's Sandbox control is its UI.
 //   dotnet run --project src/Apps/SimpleSign.Sandbox                  (http://localhost:5300)
 //   dotnet run --project src/Apps/SimpleSign.Sandbox -- --name lab2 --port 5301
 //   --public-base-url URL   the URL written into the certificates (fixed when the environment is created)

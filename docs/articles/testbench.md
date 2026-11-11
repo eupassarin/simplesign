@@ -53,7 +53,7 @@ address, **Connect** and how to start one. Connected, it opens everything: an ov
 signers with **Sign with**, its root for Adobe), its environment, its PKI (revoke, take back, download PFX
 and certificates), its failures and its request log. These go through the Sandbox's own admin API, passed
 through by the TestBench (`/api/sandbox/admin/…`): the Sandbox keeps the state, so a failure switched on by
-a playbook or `curl` shows here too. The button turns red while a failure is on.
+a certification script or `curl` shows here too. The button turns red while a failure is on.
 Without a Sandbox, the Sandbox signers and TSAs are disabled and the validation samples that need
 signed files are not built.
 
@@ -230,6 +230,19 @@ or broken in one specific way, each with the verdict it should get:
 **Validate all samples** runs every one and shows a table: expected, SimpleSign, DSS. A row opens
 that run. With DSS on, most of these samples are INDETERMINATE there unless the Sandbox environment
 names an address DSS reaches: they are B-B signatures.
+
+## Certification
+
+**Certification** (top bar) opens a full-screen page that runs a [certification script](certification-script.md): the
+requirements of an accreditation guide and the steps that show each one, against the Sandbox, through the library,
+the CLI or both. It lists every requirement with its result, shows each step's expected and found values per engine,
+waits for the manual steps (note and attachments), and exports the evidence (an HTML page in the script's language
+and a zip with the reports, signed files and logs). Samples: `sandbox-basics` and INDECOPI's guide v4.0.
+
+The options it relies on are on the Sign page too: built-in signing and validation policies (`strict`, `minimal`,
+`iofe`…) next to an uploaded file, the trust anchors and expected TSA of the checks made before signing, the audit
+trail, and **Attempt refused signatures**, which runs even when the signing policy is foreseen to refuse the signer,
+so the result shows the library's own refusal and its reason.
 
 ## Run matrix (CI)
 

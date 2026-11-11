@@ -70,6 +70,11 @@ internal sealed class DeferredPrepareCommand(ICertificateChainService certChainS
     /// <summary>Settings of <c>deferred prepare</c>.</summary>
     internal sealed class Settings : TimestampedSigningSettings
     {
+        /// <summary>Checks run before signing.</summary>
+        [CommandOption("--signing-policy <PATH>")]
+        [Description(SigningPolicyOption.Description)]
+        public string? SigningPolicy { get; init; }
+
         /// <summary>PDF to prepare.</summary>
         [CommandArgument(0, "<input>")]
         [Description("PDF to prepare")]
@@ -197,7 +202,8 @@ internal sealed class DeferredPrepareCommand(ICertificateChainService certChainS
             string? error = DeferredSessionKey.Validate(SessionKey)
                 ?? PadesProfileOptions.Validate(LevelOptions)
                 ?? PadesProfileOptions.ValidateCrypto(Hash, SignatureAlgorithm, ContentsSize)
-                ?? ValidateTsaCredentials(TsaUrl);
+                ?? ValidateTsaCredentials(TsaUrl)
+                ?? (SigningPolicyOption.IsValid(SigningPolicy) ? null : SigningPolicyOption.Error(SigningPolicy));
             return error is null ? ValidationResult.Success() : ValidationResult.Error(error);
         }
     }
@@ -225,6 +231,11 @@ internal sealed class DeferredPrepareCommand(ICertificateChainService certChainS
                 builder = builder.WithSignatureAlgorithm(oid);
             }
 
+            builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
+            if (settings.AuditSink() is { } audit)
+            {
+                builder = builder.WithAuditSink(audit);
+            }
             if (CliNetwork.IsConfigured)
             {
                 builder = builder.WithHttpClientProvider(CliNetwork.Provider);
@@ -282,6 +293,11 @@ internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCom
     /// <summary>Settings of <c>deferred complete</c>.</summary>
     internal sealed class Settings : TimestampedSigningSettings
     {
+        /// <summary>Checks run before signing.</summary>
+        [CommandOption("--signing-policy <PATH>")]
+        [Description(SigningPolicyOption.Description)]
+        public string? SigningPolicy { get; init; }
+
         /// <summary>The session written by deferred prepare.</summary>
         [CommandArgument(0, "<session>")]
         [Description("The session written by 'deferred prepare'")]
@@ -334,7 +350,8 @@ internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCom
                 return ValidationResult.Error("--tsa and --archive-tsa are only needed with TSA credentials: the session keeps the TSA URL.");
             }
 
-            string? error = DeferredSessionKey.Validate(SessionKey) ?? ValidateTsaCredentials(TsaUrl);
+            string? error = DeferredSessionKey.Validate(SessionKey) ?? ValidateTsaCredentials(TsaUrl)
+                ?? (SigningPolicyOption.IsValid(SigningPolicy) ? null : SigningPolicyOption.Error(SigningPolicy));
             return error is null ? ValidationResult.Success() : ValidationResult.Error(error);
         }
     }
@@ -351,6 +368,11 @@ internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCom
                 settings.ArchiveTsaUrl is null ? null : settings.ArchiveTimestamp(settings.ArchiveTsaUrl));
         }
 
+        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
+        if (settings.AuditSink() is { } audit)
+        {
+            builder = builder.WithAuditSink(audit);
+        }
         if (CliNetwork.IsConfigured)
         {
             builder = builder.WithHttpClientProvider(CliNetwork.Provider);

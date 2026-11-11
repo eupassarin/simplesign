@@ -18,6 +18,9 @@ public sealed record CadesOptionsReport(
     string EffectiveLevel)
 {
     public bool CanSign => Issues.All(i => i.Severity != IssueSeverity.Error);
+
+    /// <summary>Whether the run may go on (see <see cref="OptionsReport.CanRun"/>).</summary>
+    public bool CanRun => !OptionIssue.Block(Issues, Effective.AttemptRefused);
 }
 
 /// <summary>
