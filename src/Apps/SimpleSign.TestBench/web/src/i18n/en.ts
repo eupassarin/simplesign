@@ -5,7 +5,7 @@ export const en = {
   app: {
     environmentRealHint: "The real environment: trusted roots, public TSAs, tokens and the OS store on this machine.",
     task: "Task",
-    mode: { sign: "Sign", validate: "Validate", stamp: "Stamp" },
+    mode: { sign: "Sign", validate: "Validate" },
     reference: "Reference",
     referenceHint: "What SimpleSign implements of each standard, option by option.",
     environmentPanel: "Environment",
@@ -172,8 +172,8 @@ export const en = {
   },
   stamp: {
     title: "Visible stamp",
-    about: "The stamp a PAdES signature draws on the page. The PDF on the right is signed with it by the library itself (a throwaway B-B signature) a moment after each change; drag the rectangle to move it and its corner to resize it. The Sign page signs with this stamp.",
-    toSign: "Sign with this stamp",
+    about: "The stamp a PAdES signature draws on the page. The PDF on the right is signed with it by the library itself (a throwaway B-B signature) a moment after each change; drag the rectangle to move it and its corner to resize it. Signing uses this stamp.",
+    toSign: "Done: back to signing",
     existing: "Drawn in the existing field's rectangle",
     drag: "Drag to move · corner to resize · click to place",
     auto: "Placed automatically: the rectangle shows where the library put it",
@@ -181,7 +181,7 @@ export const en = {
     rendered: "drawn by the library in {ms} ms",
     rendering: "Drawing the stamp…",
     noDocument: "Choose a document.",
-    onSummary: "On: drawn on the page. Designed on the Stamp page.",
+    onSummary: "On: drawn on the page.",
     offSummary: "Off: the signature is invisible.",
     edit: "Edit the stamp",
   },

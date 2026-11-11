@@ -14,10 +14,11 @@ import { useWorkbench } from "../workbench/state"
 /**
  * The visible signature of a PAdES signature: its options on the left, the PDF signed with it on the right, drawn by the
  * library itself (a throwaway B-B signature) a moment after each change. The rectangle can be dragged and resized on the
- * page. The stamp is part of the PAdES options: what is set here is what the Sign page signs with.
+ * page. The stamp is part of the PAdES options: what is set here is what the Sign page signs with. It opens as a drawer
+ * from the Sign page ("Edit the stamp"); `onClose` closes it.
  */
-export function StampPage() {
-  const { schema, format, setFormat, options, patch, isVisible, setMode } = useWorkbench()
+export function StampPage({ onClose }: { onClose?: () => void }) {
+  const { schema, format, setFormat, options, patch, isVisible } = useWorkbench()
   const t = useT()
 
   // The stamp is PAdES only.
@@ -56,7 +57,7 @@ export function StampPage() {
           {documentOption && <OptionField option={documentOption} />}
           {fields.map((f) => <OptionField key={f.id} option={f} />)}
         </div>
-        <Button variant="outline" size="sm" onClick={() => setMode("sign")}><PenTool /> {t("stamp.toSign")}</Button>
+        {onClose && <Button variant="outline" size="sm" onClick={onClose}><PenTool /> {t("stamp.toSign")}</Button>}
       </div>
       <div className="min-h-0 space-y-3 overflow-y-auto p-4">
         <div className="flex flex-wrap items-center gap-2 text-xs">

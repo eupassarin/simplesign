@@ -4,7 +4,7 @@ export const ptBR: Messages = {
   app: {
     environmentRealHint: "O ambiente real: raízes confiáveis, ACTs públicas, tokens e o repositório do sistema nesta máquina.",
     task: "Tarefa",
-    mode: { sign: "Assinar", validate: "Validar", stamp: "Carimbo" },
+    mode: { sign: "Assinar", validate: "Validar" },
     reference: "Referência",
     referenceHint: "O que o SimpleSign implementa de cada norma, opção por opção.",
     environmentPanel: "Ambiente",
@@ -171,8 +171,8 @@ export const ptBR: Messages = {
   },
   stamp: {
     title: "Carimbo visível",
-    about: "O carimbo que a assinatura PAdES desenha na página. O PDF à direita é assinado com ele pela própria biblioteca (uma assinatura B-B descartável) logo depois de cada mudança; arraste o retângulo para movê-lo e o canto para redimensionar. A aba Assinar assina com este carimbo.",
-    toSign: "Assinar com este carimbo",
+    about: "O carimbo que a assinatura PAdES desenha na página. O PDF à direita é assinado com ele pela própria biblioteca (uma assinatura B-B descartável) logo depois de cada mudança; arraste o retângulo para movê-lo e o canto para redimensionar. A assinatura usa este carimbo.",
+    toSign: "Pronto: voltar a assinar",
     existing: "Desenhado no retângulo do campo existente",
     drag: "Arraste para mover · canto para redimensionar · clique para posicionar",
     auto: "Posicionado automaticamente: o retângulo mostra onde a biblioteca o colocou",
@@ -180,7 +180,7 @@ export const ptBR: Messages = {
     rendered: "desenhado pela biblioteca em {ms} ms",
     rendering: "Desenhando o carimbo…",
     noDocument: "Escolha um documento.",
-    onSummary: "Ligado: desenhado na página. Desenhe-o na aba Carimbo.",
+    onSummary: "Ligado: desenhado na página.",
     offSummary: "Desligado: a assinatura é invisível.",
     edit: "Editar o carimbo",
   },

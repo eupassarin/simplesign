@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — TestBench: the Stamp page (visible signature with a live preview)
 
-- **Stamp page:** a new task next to Sign and Validate. The stamp's options are on the left. On the right is the PDF,
+- **Stamp page:** a drawer opened from the Sign page ("Edit the stamp"). The stamp's options are on the left. On the right is the PDF,
   signed with the stamp by the library itself (a throwaway B-B signature, `POST /api/stamp/preview`) a moment after
   each change.
 - **Placing it:** drag the rectangle to move it, drag its corner to resize it, or click the page to place it. With

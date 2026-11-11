@@ -30,9 +30,8 @@ export interface ValidateTarget {
 
 interface WorkbenchValue {
   /** The task on screen: make a signature, or validate a file. Each keeps its own result. */
-  /** The task on screen: signing, validating, or designing the stamp. */
-  mode: AppMode
-  setMode: (mode: AppMode) => void
+  mode: RunKind
+  setMode: (mode: RunKind) => void
   validateTarget: ValidateTarget | null
   setValidateTarget: (target: ValidateTarget | null) => void
   /** The trust and revocation settings of the Validate task, shaped like the options ({ validation: … }). */
@@ -107,9 +106,6 @@ export interface Variants {
   rows: VariantRow[]
 }
 
-/** The tasks of the app: the two run kinds, and the Stamp page (the visible signature of PAdES). */
-export type AppMode = RunKind | "stamp"
-
 const Context = createContext<WorkbenchValue | null>(null)
 
 function load<T>(key: string, fallback: T): T {
@@ -144,14 +140,13 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
   }))
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [evaluating, setEvaluating] = useState(false)
-  const [mode, setModeState] = useState<AppMode>(() => load<AppMode>("wb.mode", "sign"))
+  const [mode, setModeState] = useState<RunKind>(() => load<string>("wb.mode", "sign") === "validate" ? "validate" : "sign")
   const [slots, setSlots] = useState<Record<RunKind, Slot>>({ sign: emptySlot, validate: emptySlot })
   const patchSlot = useCallback((kind: RunKind, change: (slot: Slot) => Slot) => setSlots((all) => ({ ...all, [kind]: change(all[kind]) })), [])
-  // The Stamp page has no runs of its own: it shows the signing slot's.
-  const { run, logs, running } = slots[mode === "validate" ? "validate" : "sign"]
+  const { run, logs, running } = slots[mode]
   const [validateTarget, setValidateTarget] = useState<ValidateTarget | null>(null)
   const [validateOptions, setValidateOptions] = useState<Options>(() => ({ validate: true, validation: initial(schema, "pades", connected).validation }))
-  const setMode = useCallback((next: AppMode) => {
+  const setMode = useCallback((next: RunKind) => {
     localStorage.setItem("wb.mode", JSON.stringify(next))
     setModeState(next)
   }, [])
