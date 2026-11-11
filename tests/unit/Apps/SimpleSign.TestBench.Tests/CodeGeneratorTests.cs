@@ -44,6 +44,7 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
         {
             FieldMode = FieldMode.Existing,
             ExistingFieldName = "Assinatura",
+            Appearance = new AppearanceChoice { Visible = true, SignerDisplayName = "Maria" },
         };
 
         var result = await fixture.Runner.RunAsync(options, default);
@@ -51,6 +52,42 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
         result.Success.ShouldBeTrue(result.Error);
         result.Code.CSharp.ShouldContain("ExistingFieldName = \"Assinatura\"", Case.Sensitive, result.Code.CSharp);
         result.Code.Cli.ShouldContain("--existing-field Assinatura");
+    }
+
+    [SkippableFact]
+    public async Task Generate_VisibleStamp_PrintsItInBothSnippets()
+    {
+        var options = fixture.Options() with
+        {
+            Appearance = new AppearanceChoice
+            {
+                Visible = true,
+                Page = 1,
+                X = 100,
+                Y = 120,
+                Width = 200,
+                Height = 60,
+                TextAlignment = "Center",
+                VerticalAlignment = "Middle",
+                ExtraLines = ["CRM 12345"],
+                TextColor = "#ff0000",
+                Culture = "pt-BR",
+                SignerDisplayName = "Dra. Ana",
+            },
+        };
+
+        var result = await fixture.Runner.RunAsync(options, default);
+
+        result.Success.ShouldBeTrue(result.Error);
+        result.Code.CSharp.ShouldContain("VerticalAlignment = SignatureVerticalAlignment.Middle", Case.Sensitive, result.Code.CSharp);
+        result.Code.CSharp.ShouldContain("MaxTextLength = 200", Case.Sensitive, result.Code.CSharp);
+        string cli = string.Join(' ', result.Code.CliCommands.SelectMany(c => c.Args));
+        cli.ShouldContain("--visible --page 1 --pos-x 100 --pos-y 120 --stamp-width 200 --stamp-height 60", Case.Sensitive, cli);
+        cli.ShouldContain("--text-align center --vertical-align middle", Case.Sensitive, cli);
+        cli.ShouldContain("--max-text-length 200", Case.Sensitive, cli);
+        cli.ShouldContain("--extra-line", Case.Sensitive, cli);
+        cli.ShouldContain("--date-culture pt-BR", Case.Sensitive, cli);
+        cli.ShouldContain("--text-color 1,0,0", Case.Sensitive, cli);
     }
 
     [SkippableFact]

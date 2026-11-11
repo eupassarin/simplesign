@@ -12,7 +12,7 @@ from the published standards; check them against the version you follow before q
 
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
-| PAdES | 78 | 77 | 1 |
+| PAdES | 111 | 110 | 1 |
 | CAdES | 59 | 58 | 1 |
 | XAdES | 67 | 63 | 4 |
 
@@ -88,6 +88,39 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | PDF signature field | Contact | ISO 32000-1 · §12.8.1 Table 252 /ContactInfo | `SignatureFieldOptions.ContactInfo` | yes |
 | PDF signature field | Signer name | ISO 32000-1 · §12.8.1 Table 252 /Name | `SignatureFieldOptions.SignerName` | yes |
 | PDF signature field | Document information | ISO 32000-1 · §14.3.3 Document information dictionary | `WithDocumentInfo(key, value)` | yes |
+| Visible stamp | Visible stamp | ISO 32000-1 · §12.7.4.5 Signature fields<br>ISO 32000-1 · §12.5.5 Appearance streams<br>ETSI EN 319 142-1 · §5.2 General syntax | `WithAppearance(new SignatureAppearance { … })` | yes |
+| Visible stamp | Place automatically | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.Auto()` | yes |
+| Visible stamp | Page | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.Page` | yes |
+| Visible stamp | X | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.X` | yes |
+| Visible stamp | Y | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.Y` | yes |
+| Visible stamp | Width | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.Width` | yes |
+| Visible stamp | Height | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.Height` | yes |
+| Visible stamp | Text alignment | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.TextAlignment` | yes |
+| Visible stamp | Vertical alignment | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.VerticalAlignment` | yes |
+| Visible stamp | Shrink text to fit | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.ShrinkToFit` | yes |
+| Visible stamp | Maximum text length | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.MaxTextLength` | yes |
+| Visible stamp | Show the date | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.ShowDate` | yes |
+| Visible stamp | Show the reason | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.ShowReason` | yes |
+| Visible stamp | Show the location | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.ShowLocation` | yes |
+| Visible stamp | Name on the stamp | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.SignerDisplayName` | yes |
+| Visible stamp | "Signed by" label | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.WithLabels(…)` | yes |
+| Visible stamp | Reason label | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.WithLabels(…)` | yes |
+| Visible stamp | Location label | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.WithLabels(…)` | yes |
+| Visible stamp | Date label | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.WithLabels(…)` | yes |
+| Visible stamp | Extra lines | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.WithExtraLines(…)` | yes |
+| Visible stamp | Date format | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.WithDateFormat(…)` | yes |
+| Visible stamp | Time zone | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.TimeZone` | yes |
+| Visible stamp | Culture | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.DateCulture` | yes |
+| Visible stamp | Font | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.BaseFontName` | yes |
+| Visible stamp | Font size | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.CustomFontSize` | yes |
+| Visible stamp | Label font size | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.CustomLabelFontSize` | yes |
+| Visible stamp | Text color | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.TextColor` | yes |
+| Visible stamp | Background color | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.BackgroundColor` | yes |
+| Visible stamp | Border color | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.BorderColor` | yes |
+| Visible stamp | Border width | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.BorderWidth` | yes |
+| Visible stamp | Background image | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.WithBackgroundImagePng(…) / WithBackgroundImageJpeg(…)` | yes |
+| Visible stamp | Image fit | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.BackgroundImageFit` | yes |
+| Visible stamp | QR code | ISO/IEC 18004 · QR Code | `SignatureAppearance.VerificationUrl; ValidarItiQrEndpoint.BuildQrCodeUrl(endpoint, "prescricao")` | yes |
 | Run and validation | How to call the library |  |  | yes |
 | Run and validation | How to call the library: Sign now |  | `SignWithDetailsAsync()` | yes |
 | Run and validation | How to call the library: Deferred (two phases) |  | `DeferredSigner.Document(pdf)…PrepareAsync() → Resume(session, key).CompleteAsync(signature)` | yes |
@@ -343,6 +376,7 @@ Each clause and the options that implement it.
 | §5.2 General syntax | Document | PAdES | yes |
 | §5.2 General syntax | Preserve PDF/A | PAdES | yes |
 | §5.2 General syntax | Sub-filter | PAdES | yes |
+| §5.2 General syntax | Visible stamp | PAdES | yes |
 | §5.4 Document Security Store (PAdES-B-LT) | Baseline level: B-LT (long term) | PAdES | yes |
 | §5.4.3 Document time-stamp | Archive TSA | PAdES | yes |
 | §5.4.3 Document time-stamp | Different TSA for the archive timestamp | PAdES | yes |
@@ -450,9 +484,42 @@ Each clause and the options that implement it.
 
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
+| §12.5.5 Appearance streams | "Signed by" label | PAdES | yes |
+| §12.5.5 Appearance streams | Background color | PAdES | yes |
+| §12.5.5 Appearance streams | Background image | PAdES | yes |
+| §12.5.5 Appearance streams | Border color | PAdES | yes |
+| §12.5.5 Appearance streams | Border width | PAdES | yes |
+| §12.5.5 Appearance streams | Culture | PAdES | yes |
+| §12.5.5 Appearance streams | Date format | PAdES | yes |
+| §12.5.5 Appearance streams | Date label | PAdES | yes |
+| §12.5.5 Appearance streams | Extra lines | PAdES | yes |
+| §12.5.5 Appearance streams | Font | PAdES | yes |
+| §12.5.5 Appearance streams | Font size | PAdES | yes |
+| §12.5.5 Appearance streams | Height | PAdES | yes |
+| §12.5.5 Appearance streams | Image fit | PAdES | yes |
+| §12.5.5 Appearance streams | Label font size | PAdES | yes |
+| §12.5.5 Appearance streams | Location label | PAdES | yes |
+| §12.5.5 Appearance streams | Maximum text length | PAdES | yes |
+| §12.5.5 Appearance streams | Name on the stamp | PAdES | yes |
+| §12.5.5 Appearance streams | Page | PAdES | yes |
+| §12.5.5 Appearance streams | Place automatically | PAdES | yes |
+| §12.5.5 Appearance streams | Reason label | PAdES | yes |
+| §12.5.5 Appearance streams | Show the date | PAdES | yes |
+| §12.5.5 Appearance streams | Show the location | PAdES | yes |
+| §12.5.5 Appearance streams | Show the reason | PAdES | yes |
+| §12.5.5 Appearance streams | Shrink text to fit | PAdES | yes |
+| §12.5.5 Appearance streams | Text alignment | PAdES | yes |
+| §12.5.5 Appearance streams | Text color | PAdES | yes |
+| §12.5.5 Appearance streams | Time zone | PAdES | yes |
+| §12.5.5 Appearance streams | Vertical alignment | PAdES | yes |
+| §12.5.5 Appearance streams | Visible stamp | PAdES | yes |
+| §12.5.5 Appearance streams | Width | PAdES | yes |
+| §12.5.5 Appearance streams | X | PAdES | yes |
+| §12.5.5 Appearance streams | Y | PAdES | yes |
 | §12.7.3.2 Field names | Field name | PAdES | yes |
 | §12.7.4.5 Signature fields | Existing field | PAdES | yes |
 | §12.7.4.5 Signature fields | Signature field | PAdES | yes |
+| §12.7.4.5 Signature fields | Visible stamp | PAdES | yes |
 | §12.8.1 Table 252 /ContactInfo | Contact | PAdES | yes |
 | §12.8.1 Table 252 /Contents | Reserved /Contents size | PAdES | yes |
 | §12.8.1 Table 252 /Location | Location | PAdES | yes |
@@ -470,6 +537,12 @@ Each clause and the options that implement it.
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
 | §12.8.3.4 CAdES signatures | Sub-filter | PAdES | yes |
+
+### ISO/IEC 18004
+
+| Clause | Option | Formats | Implemented |
+|---|---|---|---|
+| QR Code | QR code | PAdES | yes |
 
 ### RFC 2634
 

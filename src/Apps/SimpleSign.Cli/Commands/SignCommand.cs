@@ -264,6 +264,46 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Text alignment in the stamp: left (default), center, right")]
         public string? TextAlign { get; init; }
 
+        /// <summary>Vertical alignment of the text in the stamp.</summary>
+        [CommandOption("--vertical-align <ALIGN>")]
+        [Description("Vertical alignment of the text in the stamp: top (default), middle, bottom")]
+        public string? VerticalAlign { get; init; }
+
+        /// <summary>Clip the text instead of shrinking it to the stamp.</summary>
+        [CommandOption("--no-shrink-to-fit")]
+        [Description("Clip the text instead of shrinking it to fit a fixed stamp size")]
+        public bool NoShrinkToFit { get; init; }
+
+        /// <summary>Longer stamp texts are cut.</summary>
+        [CommandOption("--max-text-length <N>")]
+        [Description("Stamp texts longer than this are cut (default 40)")]
+        public int? MaxTextLength { get; init; }
+
+        /// <summary>Culture of the date on the stamp.</summary>
+        [CommandOption("--date-culture <CULTURE>")]
+        [Description("Culture of the date on the stamp, e.g. pt-BR")]
+        public string? DateCulture { get; init; }
+
+        /// <summary>Name on the stamp instead of the certificate's common name.</summary>
+        [CommandOption("--signer-display-name <NAME>")]
+        [Description("Name on the stamp instead of the certificate's common name")]
+        public string? SignerDisplayName { get; init; }
+
+        /// <summary>More lines of text on the stamp.</summary>
+        [CommandOption("--extra-line <TEXT>")]
+        [Description("One more line of text on the stamp (may be specified multiple times)")]
+        public string[]? ExtraLines { get; init; }
+
+        /// <summary>Keep the reason off the stamp.</summary>
+        [CommandOption("--hide-reason")]
+        [Description("Keep the reason off the stamp (it stays in the signature)")]
+        public bool HideReason { get; init; }
+
+        /// <summary>Keep the location off the stamp.</summary>
+        [CommandOption("--hide-location")]
+        [Description("Keep the location off the stamp (it stays in the signature)")]
+        public bool HideLocation { get; init; }
+
         /// <summary>Hide signing date in visible signature.</summary>
         [CommandOption("--no-date")]
         [Description("Hide signing date in visible signature")]
@@ -605,6 +645,21 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             if (TextAlign is not null && AppearanceBuilder.ParseTextAlignment(TextAlign) is null)
             {
                 return ValidationResult.Error("--text-align must be left, center or right.");
+            }
+
+            if (VerticalAlign is not null && AppearanceBuilder.ParseVerticalAlignment(VerticalAlign) is null)
+            {
+                return ValidationResult.Error("--vertical-align must be top, middle or bottom.");
+            }
+
+            if (MaxTextLength is <= 0)
+            {
+                return ValidationResult.Error("--max-text-length must be greater than 0.");
+            }
+
+            if (DateCulture is not null && !AppearanceBuilder.IsValidCulture(DateCulture))
+            {
+                return ValidationResult.Error($"Unknown --date-culture '{DateCulture}'.");
             }
 
             if (DateFormat is not null && !AppearanceBuilder.IsValidDateFormat(DateFormat))
@@ -952,7 +1007,9 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                             settings.DateLabel, settings.DateFormat, settings.TimeZone),
                         backgroundColor: settings.BackgroundColor,
                         imageFit: settings.ImageFit,
-                        layout: new AppearanceLayoutOptions(settings.StampWidth, settings.StampHeight, settings.TextAlign));
+                        layout: new AppearanceLayoutOptions(settings.StampWidth, settings.StampHeight, settings.TextAlign),
+                        extra: new AppearanceExtraOptions(settings.VerticalAlign, settings.NoShrinkToFit, settings.MaxTextLength, settings.DateCulture,
+                            settings.SignerDisplayName, settings.ExtraLines, settings.HideReason, settings.HideLocation));
 
                     if (settings.Brasil)
                     {

@@ -6,6 +6,8 @@ import type {
   OptionInfo,
   Pkcs11Driver,
   SampleDocument,
+  SigningOptions,
+  StampPreview,
   StoreCertificate,
   BulkReport,
   InspectionReport,
@@ -29,9 +31,9 @@ export function setApiLocale(value: string) {
   locale = value
 }
 
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { "Accept-Language": locale }
-  const init: RequestInit = { method, headers }
+  const init: RequestInit = { method, headers, signal }
   if (body instanceof FormData) {
     init.body = body
   } else if (body !== undefined) {
@@ -63,6 +65,7 @@ export const api = {
   },
   uploadFile: (file: File) => request<{ id: string; fileName: string; size: number }>("POST", "/api/uploads", upload(file)),
   fileUrl: (id: string, download = false) => `/api/files/${encodeURIComponent(id)}${download ? "?download=true" : ""}`,
+  stampPreview: (options: SigningOptions, signal?: AbortSignal) => request<StampPreview>("POST", "/api/stamp/preview", options, signal),
   validation: {
     samples: () => request<ValidationSample[]>("GET", "/api/validation/samples"),
     bulk: (fileIds: string[], settings: ValidationSettings, maxConcurrency: number) => request<BulkReport>("POST", "/api/validation/bulk", { fileIds, settings, maxConcurrency }),

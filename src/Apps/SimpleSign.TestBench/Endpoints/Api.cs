@@ -126,6 +126,18 @@ internal static class Api
             return Results.NoContent();
         });
 
+        // The live stamp preview of the Stamp page (options, rules and signing: RunApi).
+        api.MapPost("/stamp/preview", async (SigningOptions options, StampPreviewService preview, CancellationToken ct) =>
+        {
+            try
+            {
+                return Results.Ok(await preview.RenderAsync(options, ct));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
         // Validation area
         api.MapGet("/validation/samples", (ValidationSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
         api.MapPost("/validation/bulk", async (BulkRequest body, InspectionService inspection, CancellationToken ct) => await inspection.BulkAsync(body, ct));

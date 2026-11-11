@@ -24,7 +24,7 @@ public sealed record DocumentFacts(
     IReadOnlyList<string> EmptyFields,
     string? Error);
 
-/// <summary>A stored file: a document to sign, a signature, data or a PFX.</summary>
+/// <summary>A stored file: a PDF to sign, an image for the stamp, or a PFX.</summary>
 internal sealed record StoredFile(string Id, string FileName, byte[] Content, DateTimeOffset Created, bool Pinned = false);
 
 /// <summary>
@@ -95,6 +95,14 @@ internal sealed partial class DocumentStore
 
         Touch(id);
         return true;
+    }
+
+    /// <summary>Forgets a file (a preview replaced by a newer one).</summary>
+    public void Remove(string id)
+    {
+        _files.TryRemove(id, out _);
+        _lastUsed.TryRemove(id, out _);
+        _facts.TryRemove(id, out _);
     }
 
     /// <summary>Marks a file as just used: the eviction forgets the least recently used first.</summary>

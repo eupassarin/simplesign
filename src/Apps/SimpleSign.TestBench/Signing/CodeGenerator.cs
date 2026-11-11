@@ -158,6 +158,11 @@ internal static class CodeGenerator
 
                     context.CliNetwork(complete);
                     notes.Add(L.T("Between the two commands, the signer hashes document.pdf.tbs and signs it; signature.bin is the raw signature."));
+                    if (o.Appearance.Visible)
+                    {
+                        notes.Add(L.T("simplesign deferred draws no stamp: the CLI's --visible is on sign only."));
+                    }
+
                     return ([prepare, complete], notes);
                 }
 
@@ -170,6 +175,11 @@ internal static class CodeGenerator
                     Level(batch, o, context);
                     Crypto(batch, o, credential);
                     Field(batch, o);
+                    if (o.Appearance.Visible)
+                    {
+                        notes.Add(L.T("simplesign sign-dir draws no stamp: the CLI's --visible is on sign only."));
+                    }
+
                     batch.AddIf("--operation-id", o.OperationId);
                     context.CliNetwork(batch);
                     return ([batch], notes);
@@ -188,6 +198,7 @@ internal static class CodeGenerator
                     Crypto(sign, o, credential);
                     Policy(sign, o);
                     Field(sign, o);
+                    Stamp(sign, o);
                     Document(sign, o);
                     sign.AddIf("--operation-id", o.OperationId);
                     context.CliNetwork(sign);
@@ -277,6 +288,94 @@ internal static class CodeGenerator
         line.AddIf("--reason", o.Reason).AddIf("--location", o.Location).AddIf("--contact", o.ContactInfo);
         line.AddIf("--signer-name", o.UseSignerDetails ? o.Metadata.SignerName ?? o.SignerName : o.SignerName);
     }
+
+    /// <summary>
+    /// The visible stamp: <c>--visible</c>, its place and size (not in an existing field, which has its own), and every
+    /// setting that differs from the CLI's default. The stamp image is written as stamp.png (or .jpg) next to the PDF.
+    /// </summary>
+    internal static void Stamp(CliLine line, SigningOptions o)
+    {
+        var a = o.Appearance;
+        if (!a.Visible)
+        {
+            return;
+        }
+
+        static string N(float v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+        line.Add("--visible");
+        bool existing = o.FieldMode == FieldMode.Existing;
+        if (!existing && !a.AutoPosition)
+        {
+            line.Add("--page", a.Page.ToString(CultureInfo.InvariantCulture)).Add("--pos-x", N(a.X)).Add("--pos-y", N(a.Y));
+        }
+
+        if (!existing)
+        {
+            line.AddIf("--stamp-width", a.Width is { } w ? N(w) : null).AddIf("--stamp-height", a.Height is { } h ? N(h) : null);
+        }
+
+        line.AddIf("--text-align", a.TextAlignment == "Left" ? null : a.TextAlignment.ToLowerInvariant())
+            .AddIf("--vertical-align", a.VerticalAlignment == "Top" ? null : a.VerticalAlignment.ToLowerInvariant());
+        if (!a.ShrinkToFit)
+        {
+            line.Add("--no-shrink-to-fit");
+        }
+
+        if (a.MaxTextLength != new PAdES.Signing.SignatureAppearance().MaxTextLength)
+        {
+            line.Add("--max-text-length", a.MaxTextLength.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (!a.ShowDate)
+        {
+            line.Add("--no-date");
+        }
+
+        // The CLI shows the reason and the location whenever they are given.
+        if (!a.ShowReason && !string.IsNullOrWhiteSpace(o.Reason))
+        {
+            line.Add("--hide-reason");
+        }
+
+        if (!a.ShowLocation && !string.IsNullOrWhiteSpace(o.Location))
+        {
+            line.Add("--hide-location");
+        }
+
+        line.AddIf("--signer-display-name", Blank(a.SignerDisplayName))
+            .AddIf("--signed-by-label", a.SignedByLabel).AddIf("--reason-label", a.ReasonLabel)
+            .AddIf("--location-label", a.LocationLabel).AddIf("--date-label", a.DateLabel);
+        foreach (string extra in a.ExtraLines.Where(l => !string.IsNullOrWhiteSpace(l)))
+        {
+            line.Add("--extra-line", extra);
+        }
+
+        line.AddIf("--date-format", Blank(a.DateFormat)).AddIf("--time-zone", Blank(a.TimeZoneId)).AddIf("--date-culture", Blank(a.Culture))
+            .AddIf("--font", a.BaseFont == "Helvetica" ? null : a.BaseFont)
+            .AddIf("--font-size", a.FontSize?.ToString(CultureInfo.InvariantCulture))
+            .AddIf("--label-font-size", a.LabelFontSize?.ToString(CultureInfo.InvariantCulture))
+            .AddIf("--text-color", Rgb(a.TextColor)).AddIf("--background-color", Rgb(a.BackgroundColor)).AddIf("--border-color", Rgb(a.BorderColor));
+        if (Math.Abs(a.BorderWidth - 0.5f) > 0.001f)
+        {
+            line.Add("--border-width", N(a.BorderWidth));
+        }
+
+        line.AddIf("--qr-url", Blank(a.VerificationUrl));
+        if (!string.IsNullOrEmpty(a.ImageUploadId))
+        {
+            line.Add("--background-image", StampImageFile).Add("--image-fit", a.ImageFit.ToLowerInvariant());
+        }
+    }
+
+    /// <summary>The stamp's background image, as a generated command names it (the CLI reads PNG or JPEG by its extension).</summary>
+    internal const string StampImageFile = "stamp.png";
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <summary>A #rrggbb color as the CLI takes it: R,G,B from 0 to 1.</summary>
+    private static string? Rgb(string? hex) => SigningPlan.Color(hex) is { } c
+        ? string.Create(CultureInfo.InvariantCulture, $"{c.R:0.###},{c.G:0.###},{c.B:0.###}")
+        : null;
 
     /// <summary>What only <c>sign</c> writes: sub-filter, certification, PDF/A, document info, signing time, metadata.</summary>
     private static void Document(CliLine line, SigningOptions o)
