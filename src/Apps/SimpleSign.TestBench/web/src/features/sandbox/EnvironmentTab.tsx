@@ -1,11 +1,11 @@
 import { Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useI18n } from "@/i18n"
-import type { SandboxInfo } from "@/lib/types"
-import { CopyButton, Fold, KeyValue, Section } from "@/components/parts"
+import { useI18n } from "./i18n"
+import type { SandboxInfo } from "./types"
+import { CopyButton, Fold, KeyValue, Section } from "./parts"
 
 /** What a client needs: the essentials first (root, base URL, TSA, CSC), every other address and credential folded. */
-export function EnvironmentPage({ info }: { info: SandboxInfo }) {
+export function EnvironmentTab({ info }: { info: SandboxInfo }) {
   const { t, date } = useI18n()
   const link = (url: string) => <a className="underline underline-offset-2" href={url}>{url}</a>
   return (

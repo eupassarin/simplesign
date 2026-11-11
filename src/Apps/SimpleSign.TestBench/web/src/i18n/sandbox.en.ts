@@ -1,14 +1,8 @@
-// en-US: the source of the keys. pt-BR.ts must have the same shape (checked by tsc).
+// The Sandbox controls (features/sandbox), mounted under "sbx" in en.ts. sandbox.pt-BR.ts must have the same shape (checked by tsc).
 
-export const en = {
+export const sandboxEn = {
   app: {
-    title: "SimpleSign Sandbox",
-    subtitle: "A test PKI and its services on real endpoints: AIA, CRLs over HTTP, HTTPS and LDAP, OCSP, TSA and CSC.",
-    environment: "Environment {name}",
     certificatesPointTo: "Certificates point to {url}",
-    faultsOn: "Failures are on",
-    language: "Language",
-    theme: "Theme",
   },
   tabs: { environment: "Environment", pki: "PKI", faults: "Failures", log: "Requests" },
   common: {
@@ -161,4 +155,4 @@ export const en = {
 }
 
 type Widen<T> = { [K in keyof T]: T[K] extends string ? string : Widen<T[K]> }
-export type Messages = Widen<typeof en>
+export type SandboxMessages = Widen<typeof sandboxEn>

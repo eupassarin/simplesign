@@ -1,3 +1,5 @@
+import { sandboxEn } from "./sandbox.en"
+
 // en-US: the source of the keys. pt-BR.ts must have the same shape (checked by tsc).
 // Library names, OIDs and standard terms (B-LTA, ETSI.CAdES.detached, SHA-256…) are kept as they are.
 
@@ -9,9 +11,6 @@ export const en = {
     reference: "Reference",
     referenceHint: "What SimpleSign implements of each standard, option by option.",
     environmentPanel: "Environment",
-    sandboxConnected: "Sandbox on",
-    sandboxNone: "Sandbox off",
-    sandboxName: "Connected to {name}.",
     sandboxHint: "The SimpleSign Sandbox connected to the TestBench: a test PKI and its services, run as a separate app.",
     language: "Language",
     theme: "Theme",
@@ -338,6 +337,33 @@ export const en = {
       agreeOn: "They agree on:",
       seeSummary: "The differences, with their cause and what to do, are at the top of this tab.",
       messages: "DSS messages",
+      setup: {
+        server: "Server setup",
+        serverAbout: "What tools/dss set up when DSS started (its /simplesign/config.json).",
+        serverUnknown: "Setup unknown: this DSS was not started by tools/dss, or by an older image. Rebuild it to see it here:",
+        sandbox: "Sandbox",
+        sandboxList: "trusted list (LOTL)",
+        sandboxAnchor: "root as a bare anchor",
+        sandboxTestbench: "root, through the TestBench",
+        sandboxNone: "not trusted",
+        sandboxNoneHint: "DSS does not trust the Sandbox: its signatures end INDETERMINATE there. Start the Sandbox, then restart DSS, or save its root:",
+        sandboxTls: "also for TLS (CRLs over HTTPS)",
+        euLists: "EU trusted lists",
+        euListsValues: { "false": "off", "true": "on (downloaded)", cached: "from the cache only" },
+        tlRefresh: "Lists downloaded again every {s} s",
+        acceptInvalid: "Lists with a bad signature are kept (demo behaviour)",
+        icpBrasil: "ICP-Brasil roots",
+        govBr: "Gov.br root",
+        tsaRoots: "Public TSA roots",
+        peru: "Peru (INDECOPI list)",
+        peruCount: "{n} CA(s) · {origin}",
+        revocationCache: "Revocation cache",
+        revocationCacheOff: "off: fetched on every request",
+        revocationCacheOn: "on",
+        trusted: "{n} trusted certificate(s)",
+        version: "DSS {version} · started {time}",
+        policy: "Policy: SimpleSign's, sent as constraint.xml with every request.",
+      },
     },
     variants: {
       title: "Combinations",
@@ -533,9 +559,6 @@ export const en = {
       time: "Without a timestamp (B-B) Adobe shows the time from the signer's clock; with B-T or higher, the TSA's.",
     },
     title: "SimpleSign Sandbox",
-    intro: "A separate app with a test PKI and its services on real endpoints: CRLs over HTTP, HTTPS and LDAP, OCSP, TSAs and a CSC service, with failures to switch on. Connected, its root is trusted, its services can be reached (their origins pass the SSRF guard) and its signers and TSAs can be chosen. Failures, revocations and its request log are in the Sandbox's own page.",
-    connection: "Connection",
-    connectionHint: "The Sandbox's address. The TestBench connects to it again on the next start.",
     url: "Sandbox address",
     connect: "Connect",
     disconnect: "Disconnect",
@@ -543,7 +566,6 @@ export const en = {
     disconnected: "Sandbox disconnected.",
     start: "Start a Sandbox, then connect:",
     connectedHint: "Its root is trusted for TLS and validation; its loopback origins are in the TestBench's outbound policy.",
-    open: "Open the Sandbox",
     samples: "Rebuild the samples",
     samplesDone: "The signed samples were built again with the Sandbox.",
     root: "Root",
@@ -559,7 +581,14 @@ export const en = {
     status: "Status",
     available: "available",
     notAvailable: "not available",
+    button: "Sandbox",
+    about: "A separate app with a test PKI and its services on real endpoints (CRLs over HTTP, HTTPS and LDAP, OCSP, TSAs, CSC), with failures to switch on. Connected, its root is trusted and its signers and TSAs can be chosen; this button then opens its PKI, failures and request log.",
+    docker: "Or in Docker:",
+    faultsOn: "Failures on",
+    overview: "Overview",
+    revoked: "revoked",
   },
+  sbx: sandboxEn,
 }
 
 type Widen<T> = { [K in keyof T]: T[K] extends string ? string : Widen<T[K]> }

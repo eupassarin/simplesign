@@ -48,16 +48,24 @@ is remembered for the next start. While connected:
 | Revocation | Its CRLs and OCSP, reached through an `OutboundHttpPolicy` that lists its origins (`LoopbackOrigins`, LDAP allowed) |
 | Validation | Its trusted list (read through its LOTL, `/tl/lotl.xml`) is trusted next to the OS roots, so the `TrustedLists` constraints are evaluated; "Sandbox root" trusts its root alone as a bare anchor. Its root is also trusted for its HTTPS endpoint |
 
-Failures, revocations and the request log are in the Sandbox's own UI (**Open the Sandbox**).
+The **Sandbox** button in the top bar is the one place for it. Not connected, it opens a popup with the
+address, **Connect** and how to start one. Connected, it opens everything: an overview (its addresses, its
+signers with **Sign with**, its root for Adobe), its environment, its PKI (revoke, take back, download PFX
+and certificates), its failures and its request log. These go through the Sandbox's own admin API, passed
+through by the TestBench (`/api/sandbox/admin/…`): the Sandbox keeps the state, so a failure switched on by
+a playbook or `curl` shows here too. The button turns red while a failure is on.
 Without a Sandbox, the Sandbox signers and TSAs are disabled and the validation samples that need
 signed files are not built.
 
 ## One screen, two tasks
 
 There is no menu. The top bar switches between the two tasks, **Sign** and **Validate**, which
-share the same screen: the input on the left, the result on the right. Three panels open over
-either task: **Reference** (what the library covers of each standard), **Sandbox** (the connected
-Sandbox) and **Environment** (what this machine has). Each task keeps its own result, and both go to the same run history.
+share the same screen: the input on the left, the result on the right. Right after them, in the same bar:
+the engine (**Library** or **CLI**); the panels **Policies**, **Reference** (what the library covers of each
+standard) and **Environment** (what this machine has), which open over either task; and the outside
+services, **Sandbox** and **DSS**. The DSS popup also shows how the DSS of `tools/dss` was set up: how it
+trusts the Sandbox (its trusted list, its root, or not at all), the EU lists, the ICP-Brasil, Gov.br,
+Peruvian and TSA roots, the revocation cache, and every trusted certificate. Each task keeps its own result, and both go to the same run history.
 
 ## The workbench (Sign)
 

@@ -30,7 +30,6 @@ public sealed class SampleEndToEndTests : IAsyncLifetime
             HttpsPort = FreePort(),
             LdapPort = FreePort(),
             Ephemeral = true,
-            OpenBrowser = false,
         });
         await _sandbox.StartAsync();
         _sandboxUrl = new Uri($"http://localhost:{port}/");

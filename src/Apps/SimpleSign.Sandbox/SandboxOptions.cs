@@ -42,9 +42,6 @@ public sealed record SandboxOptions
     /// <summary>Let the admin API (issue, revoke, faults) answer requests from other machines.</summary>
     public bool AllowRemoteAdmin { get; init; }
 
-    /// <summary>Open the UI in the browser once started.</summary>
-    public bool OpenBrowser { get; init; } = true;
-
     /// <summary>The URL written into new certificates.</summary>
     public Uri BaseUrl => PublicBaseUrl ?? new Uri($"http://localhost:{Port}/");
 
@@ -61,7 +58,7 @@ public sealed record SandboxOptions
     /// <summary>Reads the command line.</summary>
     /// <remarks>
     /// --port N, --https-port N, --ldap-port N, --name NAME, --public-base-url URL, --data-dir DIR, --ephemeral, --listen-any,
-    /// --allow-remote-admin, --no-browser.
+    /// --allow-remote-admin. Anything else is ignored (--no-browser, from when the Sandbox had its own page, still works).
     /// </remarks>
     public static SandboxOptions Parse(IReadOnlyList<string> args)
     {
@@ -104,9 +101,6 @@ public sealed record SandboxOptions
                     break;
                 case "--allow-remote-admin":
                     options = options with { AllowRemoteAdmin = true };
-                    break;
-                case "--no-browser":
-                    options = options with { OpenBrowser = false };
                     break;
                 default:
                     break;

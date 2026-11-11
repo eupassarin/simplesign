@@ -6,14 +6,19 @@ cloud-signing service, with failures you can switch on. It runs on its own, apar
 application under test, so any client reaches it the way it reaches a real PKI: the TestBench,
 the CLI, the Agent, your own application, or another validator such as DSS.
 
+It is a service with an API and no page of its own: its UI is the TestBench's **Sandbox** control
+(connect, then the PKI, failures and request log), and every other client drives it through the same
+[admin API](#admin-api), so a Sandbox set up by a playbook, a test suite or `curl` serves any validator
+without the TestBench.
+
 It simulates what a real PKI does, including what goes wrong: a certificate revoked by CRL or
 OCSP, a revoked or expired CA, a CRL that expired, is signed by the wrong key or is stale, a
 responder that is down or not authorized, an expired certificate. Each case is a certificate or
 a failure the Sandbox has ready.
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox                 # http://localhost:5300, opens the browser
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --name lab2 --port 5310 --no-browser
+dotnet run --project src/Apps/SimpleSign.Sandbox                 # http://localhost:5300 (API only)
+dotnet run --project src/Apps/SimpleSign.Sandbox -- --name lab2 --port 5310
 ```
 
 It also runs in Docker (`src/Apps/SimpleSign.Sandbox/Dockerfile`). [`tools/stack`](../../tools/stack/README.md)
@@ -28,7 +33,7 @@ used for real signatures.
 
 | Service | Address (default environment) |
 |---|---|
-| UI and admin API | `http://localhost:5300/`, `/api/…` (admin answers loopback only) |
+| Admin API | `http://localhost:5300/api/…` (admin answers loopback only); `/` says where the API and the UI are |
 | Root and chain | `/root.pem`, `/chain.pem`, AIA `/aia/{ca}.cer` |
 | CRLs over HTTP | `/crl/{ca}.crl` |
 | CRLs over HTTPS | `https://localhost:5301/crl/{ca}.crl` (TLS certificate issued by the Sandbox root) |
@@ -60,7 +65,6 @@ Create another environment to use another address, for instance one a Docker con
 | `--ephemeral` | A new environment in a temporary folder, deleted on exit (CI) |
 | `--listen-any` | Listen on every interface (a lab network); the admin API still answers loopback only |
 | `--allow-remote-admin` | Let the admin API answer other machines too |
-| `--no-browser` | Do not open the UI |
 
 ## The PKI
 
@@ -95,16 +99,17 @@ puts every revocation and failure back.
 | TSA | down, slow, invalid token |
 | Trusted list | expired (NextUpdate passed), signed by a certificate the LOTL does not name, changed after signing |
 
-Every request is in the **Requests** tab (service, URL, status, the failure applied). The Sandbox keeps
-the last 500; the tab shows them 50 at a time.
+Every request is in the request log (`GET /api/log`; the **Requests** tab of the TestBench's Sandbox control):
+service, URL, status, the failure applied. The Sandbox keeps the last 500; the tab shows them 50 at a time.
 
 The TestBench signs with each of these certificates and failures under the Strict signing policy
 in `SandboxScenarioTests`.
 
 ## Admin API
 
-Everything the UI does goes through this API, so another app (the TestBench, the Playbook, a test
-suite) can drive the Sandbox the same way. JSON is camelCase with enums as names. Every route except
+Everything the TestBench's Sandbox control does goes through this API (passed through by the TestBench at
+`/api/sandbox/admin/…`, so the page talks to one origin), so another app (the Playbook, a test suite, `curl`)
+drives the Sandbox the same way, with or without a TestBench, and what one client changes the others see. JSON is camelCase with enums as names. Every route except
 `GET /api/info` answers loopback only (HTTP 403 otherwise), unless the Sandbox starts with
 `--allow-remote-admin`.
 

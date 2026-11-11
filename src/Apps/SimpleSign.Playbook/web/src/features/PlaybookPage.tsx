@@ -185,7 +185,7 @@ function SandboxForm({ playbook, onChange }: { playbook: PlaybookDefinition; onC
           <div className="flex flex-wrap items-end gap-2">
             <div className="min-w-64 flex-1"><Field label={t("playbook.sandboxUrl")}><Input className="font-mono" value={sandbox.url} onChange={(e) => onChange({ ...playbook, sandbox: { ...sandbox, url: e.target.value } })} /></Field></div>
             <Button variant="outline" onClick={() => api.sandbox(sandbox.url).then(setStatus).catch((e: Error) => toast.error(e.message))}>{t("sandbox.check")}</Button>
-            <Button variant="ghost" asChild><a href={sandbox.url} target="_blank" rel="noreferrer"><ExternalLink /> {t("sandbox.open")}</a></Button>
+            <Button variant="ghost" asChild><a href={`${sandbox.url.replace(/\/+$/, "")}/api/info`} target="_blank" rel="noreferrer"><ExternalLink /> {t("sandbox.open")}</a></Button>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <Switch checked={sandbox.resetBeforeRun} onCheckedChange={(on) => onChange({ ...playbook, sandbox: { ...sandbox, resetBeforeRun: on } })} />

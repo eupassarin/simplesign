@@ -8,6 +8,7 @@
 #   docker compose -f tools/dss/docker-compose.yml up --build
 #   http://localhost:8080/                                   the DSS demo pages
 #   http://localhost:8080/services/rest/validation           the REST validation service
+#   http://localhost:8080/simplesign/config.json             what entrypoint.sh set up (trust anchors, lists)
 ARG DSS_VERSION=6.3
 
 FROM alpine:3.21 AS bundle
@@ -33,6 +34,9 @@ RUN cd /war && mkdir lib && cd lib && jar xf ../ROOT.war WEB-INF/lib \
  && cd /war/add && jar uf /war/ROOT.war WEB-INF/classes
 
 FROM eclipse-temurin:21-jre
+ARG DSS_VERSION
+# Written into /simplesign/config.json (entrypoint.sh), which the TestBench shows.
+ENV DSS_VERSION=${DSS_VERSION}
 # xmlstarlet reads the certificates out of the Peruvian trusted list (entrypoint.sh).
 RUN apt-get update && apt-get install -y --no-install-recommends curl xmlstarlet && rm -rf /var/lib/apt/lists/*
 COPY --from=bundle /opt/tomcat /opt/tomcat

@@ -247,6 +247,18 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Sends a request to the connected Sandbox's admin API (<c>api/{path}</c>) as it is, for the TestBench's
+    /// page: the browser then talks to one origin, and the admin API keeps answering this machine only.
+    /// </summary>
+    /// <exception cref="SandboxNotConnectedException">No Sandbox is connected.</exception>
+    public async Task<HttpResponseMessage> ForwardAsync(HttpMethod method, string pathAndQuery, HttpContent? content, CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(method, new Uri(Connection.Url, "api/" + pathAndQuery.TrimStart('/'))) { Content = content };
+        request.Headers.Accept.ParseAdd("application/json");
+        return await _admin.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+    }
+
     /// <summary>Puts the Sandbox's revocations and failures back as in a new environment.</summary>
     public async Task ResetAsync(CancellationToken cancellationToken = default)
     {

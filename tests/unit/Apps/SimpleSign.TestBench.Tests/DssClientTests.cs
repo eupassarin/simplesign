@@ -159,4 +159,42 @@ public sealed class DssClientTests
     [InlineData("XML-DSig", "XML-NOT-ETSI", true)]
     public void SameLevel_ComparesTheBaselineSuffix(string library, string dss, bool expected) =>
         DssClient.SameLevel(library, dss).ShouldBe(expected);
+
+    [Fact]
+    public void ReadConfig_ToolsDssFile_ReadsTheTrust()
+    {
+        const string json = """
+            {
+              "dssVersion": "6.3",
+              "startedAt": "2026-11-11T12:00:00Z",
+              "sandbox": { "url": "http://host.docker.internal:5300", "testBenchUrl": "", "requested": "list", "trust": "list", "lotlUrl": "http://localhost:5300/tl/lotl.xml", "tls": true },
+              "euTrustedLists": "false",
+              "tlLoaderOnline": true,
+              "tlRefreshSeconds": 10,
+              "acceptInvalidTrustedLists": false,
+              "revocationCache": false,
+              "icpBrasil": true,
+              "govBr": false,
+              "tsaRoots": true,
+              "peru": { "enabled": true, "trusted": 3, "origin": "downloaded", "sequence": "12", "nextUpdate": "2027-01-01" },
+              "trusted": [ { "group": "icp-brasil", "name": "ICP-Brasilv5", "subject": "CN=Autoridade Certificadora Raiz Brasileira v5,O=ICP-Brasil,C=BR" } ]
+            }
+            """;
+
+        var config = DssClient.ReadConfig(json).ShouldNotBeNull();
+
+        config.DssVersion.ShouldBe("6.3");
+        config.Sandbox.ShouldNotBeNull().Trust.ShouldBe("list");
+        config.Sandbox.Tls.ShouldBeTrue();
+        config.TlRefreshSeconds.ShouldBe(10);
+        config.GovBr.ShouldBeFalse();
+        config.Peru.ShouldNotBeNull().Trusted.ShouldBe(3);
+        config.Trusted.ShouldNotBeNull().ShouldHaveSingleItem().Group.ShouldBe("icp-brasil");
+    }
+
+    [Theory]
+    [InlineData("<html><body>Not found</body></html>")]
+    [InlineData("")]
+    public void ReadConfig_NotTheFile_IsNull(string text) =>
+        DssClient.ReadConfig(text).ShouldBeNull();
 }

@@ -57,6 +57,55 @@ internal static class SandboxApi
         group.MapGet("/root.cer", (SandboxEnvironment sandbox) => RootCertificate(sandbox) is { } der
             ? Results.File(der, "application/pkix-cert", RootFileName)
             : Results.NotFound(new { error = Localization.L.T("No SimpleSign Sandbox is connected.") }));
+
+        // The Sandbox's admin API (PKI, revocations, failures, request log), passed through as it is: the
+        // Sandbox's controls in the TestBench's page call it here. Nothing is kept: the Sandbox stays the one source.
+        group.Map("/admin/{**path}", Forward);
+    }
+
+    internal static async Task Forward(HttpContext context, string? path, SandboxEnvironment sandbox)
+    {
+        if (sandbox.Current is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            await context.Response.WriteAsJsonAsync(new { error = Localization.L.T("No SimpleSign Sandbox is connected.") }, context.RequestAborted);
+            return;
+        }
+
+        var request = context.Request;
+        using var content = request.ContentLength is > 0 || request.Headers.TransferEncoding.Count > 0 ? new StreamContent(request.Body) : null;
+        if (content is not null && request.ContentType is { } type)
+        {
+            content.Headers.TryAddWithoutValidation("Content-Type", type);
+        }
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await sandbox.ForwardAsync(new HttpMethod(request.Method), (path ?? "") + request.QueryString, content, context.RequestAborted);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            await context.Response.WriteAsJsonAsync(new { error = Localization.L.T("The Sandbox did not answer: {0}", ex.Message) }, context.RequestAborted);
+            return;
+        }
+
+        using (response)
+        {
+            context.Response.StatusCode = (int)response.StatusCode;
+            if (response.Content.Headers.ContentType is { } contentType)
+            {
+                context.Response.ContentType = contentType.ToString();
+            }
+
+            if (response.Content.Headers.ContentDisposition is { } disposition)
+            {
+                context.Response.Headers.ContentDisposition = disposition.ToString();
+            }
+
+            await response.Content.CopyToAsync(context.Response.Body, context.RequestAborted);
+        }
     }
 
     /// <summary>The name of the downloaded root.</summary>

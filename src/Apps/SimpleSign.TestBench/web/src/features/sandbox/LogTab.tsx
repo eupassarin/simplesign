@@ -3,10 +3,10 @@ import { Pause, Play, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Pill } from "@/components/parts"
-import { useI18n } from "@/i18n"
-import { api } from "@/lib/api"
-import type { SandboxRequest } from "@/lib/types"
+import { Pill } from "./parts"
+import { useI18n } from "./i18n"
+import { api } from "./api"
+import type { SandboxRequest } from "./types"
 import { cn } from "@/lib/utils"
 
 const services = ["", "AIA", "CRL", "CRL (LDAP)", "OCSP", "TSA", "CSC", "TL"]
@@ -16,7 +16,7 @@ const kept = 200
 const page = 50
 
 /** The requests the services answered, polled every second and a half: the newest first, in a box of fixed height. */
-export function LogPage() {
+export function LogTab() {
   const { t, time } = useI18n()
   const [entries, setEntries] = useState<SandboxRequest[]>([])
   const [service, setService] = useState("")

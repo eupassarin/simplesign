@@ -1,6 +1,6 @@
-// localStorage is per origin, and other apps have been served on localhost:5300 too: every key is prefixed,
+// localStorage is per origin, and the TestBench keeps its own keys too: every key is prefixed,
 // and every access tolerates a blocked storage (private window, cleared data).
-const prefix = "sandbox."
+const prefix = "sbx."
 
 export function load(key: string): string | null {
   try {

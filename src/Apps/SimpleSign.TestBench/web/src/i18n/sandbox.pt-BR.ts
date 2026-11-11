@@ -1,14 +1,8 @@
-import type { Messages } from "./en"
+import type { SandboxMessages } from "./sandbox.en"
 
-export const ptBR: Messages = {
+export const sandboxPtBR: SandboxMessages = {
   app: {
-    title: "SimpleSign Sandbox",
-    subtitle: "Uma PKI de teste e seus serviços em endereços reais: AIA, LCRs por HTTP, HTTPS e LDAP, OCSP, ACT e CSC.",
-    environment: "Ambiente {name}",
     certificatesPointTo: "Os certificados apontam para {url}",
-    faultsOn: "Há falhas ligadas",
-    language: "Idioma",
-    theme: "Tema",
   },
   tabs: { environment: "Ambiente", pki: "PKI", faults: "Falhas", log: "Requisições" },
   common: {

@@ -180,6 +180,25 @@ export interface DssStatus extends DssSettings {
   reachable: boolean
   error?: string | null
   ms: number
+  /** How tools/dss set the server up (its /simplesign/config.json); null for a DSS started another way. */
+  config?: DssServerConfig | null
+}
+
+/** Mirrors DssServerConfig (CrossValidation/DssClient.cs). */
+export interface DssServerConfig {
+  dssVersion?: string | null
+  startedAt?: string | null
+  sandbox?: { url?: string | null; testBenchUrl?: string | null; requested?: string | null; trust?: "list" | "anchor" | "testbench" | "none" | null; lotlUrl?: string | null; tls: boolean } | null
+  euTrustedLists?: "false" | "true" | "cached" | null
+  tlLoaderOnline: boolean
+  tlRefreshSeconds: number
+  acceptInvalidTrustedLists: boolean
+  revocationCache: boolean
+  icpBrasil: boolean
+  govBr: boolean
+  tsaRoots: boolean
+  peru?: { enabled: boolean; trusted: number; origin?: string | null; sequence?: string | null; nextUpdate?: string | null } | null
+  trusted?: { group: string; name: string; subject: string }[] | null
 }
 
 export type RunKind = "sign" | "validate"

@@ -71,16 +71,15 @@ public sealed class SandboxEnvironmentTests : IDisposable
     }
 
     [Theory]
-    [InlineData(new[] { "--port", "5400", "--name", "lab2", "--ephemeral", "--no-browser" }, 5400, "lab2", true, false)]
-    [InlineData(new string[0], 5300, "default", false, true)]
-    public void Parse_CommandLine_ReadsTheOptions(string[] args, int port, string name, bool ephemeral, bool browser)
+    [InlineData(new[] { "--port", "5400", "--name", "lab2", "--ephemeral", "--no-browser" }, 5400, "lab2", true)]
+    [InlineData(new string[0], 5300, "default", false)]
+    public void Parse_CommandLine_ReadsTheOptions(string[] args, int port, string name, bool ephemeral)
     {
         var options = SandboxOptions.Parse(args);
 
         options.Port.ShouldBe(port);
         options.Name.ShouldBe(name);
         options.Ephemeral.ShouldBe(ephemeral);
-        options.OpenBrowser.ShouldBe(browser);
         options.BaseUrl.ShouldBe(new Uri($"http://localhost:{port}/"));
     }
 

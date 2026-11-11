@@ -1,5 +1,6 @@
 import type { CertificateView, PkiView, Publication, SandboxFaults, SandboxInfo, SandboxRequest } from "./types"
 
+// The connected Sandbox's admin API, passed through by the TestBench (SandboxApi.Forward): one origin for the page.
 /** A failed call; `unsupported` when the Sandbox does not know the route (an older version). */
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly unsupported = false) {
@@ -34,26 +35,26 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 /** PATCH and DELETE on /api/faults, or a read and a PUT on a Sandbox that does not have them. */
 async function changeFaults(method: "PATCH" | "DELETE", change: (current: SandboxFaults) => Partial<SandboxFaults>, body?: Partial<SandboxFaults>): Promise<SandboxFaults> {
   try {
-    return await request<SandboxFaults>(method, "/api/faults", body)
+    return await request<SandboxFaults>(method, "/api/sandbox/admin/faults", body)
   } catch (e) {
     if (!(e instanceof ApiError) || !e.unsupported) throw e
-    const current = await request<SandboxFaults>("GET", "/api/faults")
-    return request<SandboxFaults>("PUT", "/api/faults", { ...current, ...change(current) })
+    const current = await request<SandboxFaults>("GET", "/api/sandbox/admin/faults")
+    return request<SandboxFaults>("PUT", "/api/sandbox/admin/faults", { ...current, ...change(current) })
   }
 }
 
 export const api = {
-  info: () => request<SandboxInfo>("GET", "/api/info"),
-  pki: () => request<PkiView>("GET", "/api/pki"),
-  revoke: (id: string, reason: string, publication: Publication) => request<CertificateView>("POST", `/api/certificates/${encodeURIComponent(id)}/revoke`, { reason, publication }),
-  unrevoke: (id: string) => request<CertificateView>("POST", `/api/certificates/${encodeURIComponent(id)}/unrevoke`),
-  pfxUrl: (id: string) => `/api/certificates/${encodeURIComponent(id)}/pfx`,
-  cerUrl: (id: string) => `/api/certificates/${encodeURIComponent(id)}/cer`,
-  faults: () => request<SandboxFaults>("GET", "/api/faults"),
-  setFaults: (faults: SandboxFaults) => request<SandboxFaults>("PUT", "/api/faults", faults),
+  info: () => request<SandboxInfo>("GET", "/api/sandbox/admin/info"),
+  pki: () => request<PkiView>("GET", "/api/sandbox/admin/pki"),
+  revoke: (id: string, reason: string, publication: Publication) => request<CertificateView>("POST", `/api/sandbox/admin/certificates/${encodeURIComponent(id)}/revoke`, { reason, publication }),
+  unrevoke: (id: string) => request<CertificateView>("POST", `/api/sandbox/admin/certificates/${encodeURIComponent(id)}/unrevoke`),
+  pfxUrl: (id: string) => `/api/sandbox/admin/certificates/${encodeURIComponent(id)}/pfx`,
+  cerUrl: (id: string) => `/api/sandbox/admin/certificates/${encodeURIComponent(id)}/cer`,
+  faults: () => request<SandboxFaults>("GET", "/api/sandbox/admin/faults"),
+  setFaults: (faults: SandboxFaults) => request<SandboxFaults>("PUT", "/api/sandbox/admin/faults", faults),
   patchFaults: (change: Partial<SandboxFaults>) => changeFaults("PATCH", () => change, change),
   faultsOff: () => changeFaults("DELETE", () => ({ tsa: "None", crl: "None", ocsp: "None", trustedList: "None" })),
-  log: (after: number, limit?: number) => request<SandboxRequest[]>("GET", `/api/log?after=${after}${limit ? `&limit=${limit}` : ""}`),
-  clearLog: () => request<void>("DELETE", "/api/log"),
-  reset: () => request<void>("POST", "/api/reset"),
+  log: (after: number, limit?: number) => request<SandboxRequest[]>("GET", `/api/sandbox/admin/log?after=${after}${limit ? `&limit=${limit}` : ""}`),
+  clearLog: () => request<void>("DELETE", "/api/sandbox/admin/log"),
+  reset: () => request<void>("POST", "/api/sandbox/admin/reset"),
 }

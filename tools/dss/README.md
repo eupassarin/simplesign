@@ -12,7 +12,7 @@ This folder runs the DSS demo web application in Docker and exposes its REST val
 Start the Sandbox first (any port), then DSS:
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral --no-browser
+dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral
 docker compose -f tools/dss/docker-compose.yml up -d
 ```
 
@@ -86,6 +86,17 @@ Either way the container fetches the Sandbox's files when it starts, so start th
 A new `--ephemeral` Sandbox has a new root and new operators, so start DSS again after it (`docker compose up -d`
 recreates the container).
 
+### What the TestBench shows: `/simplesign/config.json`
+
+When it starts, the entrypoint writes what it set up to `http://localhost:8080/simplesign/config.json`
+(Tomcat serves the folder `webapps/simplesign` next to the DSS application): the DSS version, how the
+Sandbox is trusted (`list`, `anchor`, `testbench` or `none`, its LOTL, whether its root is trusted for TLS),
+the EU lists (`false`, `true`, `cached`) and the loader's refresh, `DSS_ACCEPT_INVALID_TRUSTED_LISTS`, the
+revocation cache, the ICP-Brasil, Gov.br, public TSA and Peruvian roots (with the Peruvian list's sequence
+and next update), and every certificate in the trust store (group, name, subject). The TestBench's **DSS**
+popup reads it each time it is opened; a DSS without it (another image, an older build) shows "setup
+unknown".
+
 ### Letting DSS reach the Sandbox's CRLs, OCSP and LDAP
 
 The Sandbox writes its own address into the certificates: `http://localhost:5300` (CRLs, OCSP,
@@ -98,7 +109,7 @@ only lets a request to a private address through when it is loopback.
 A Sandbox on another port needs the same ports here:
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral --no-browser --port 5310
+dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral --port 5310
 SANDBOX_URL=http://host.docker.internal:5310 SANDBOX_FORWARD_PORTS="5310 5311 5312" \
   docker compose -f tools/dss/docker-compose.yml up -d
 ```

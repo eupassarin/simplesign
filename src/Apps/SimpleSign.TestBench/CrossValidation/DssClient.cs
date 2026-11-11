@@ -11,8 +11,39 @@ namespace SimpleSign.TestBench.CrossValidation;
 /// <summary>Where the DSS validation service is and whether runs are sent to it.</summary>
 public sealed record DssSettings(bool Enabled, string Url);
 
-/// <summary>Whether the DSS service answers at the configured URL.</summary>
-public sealed record DssStatus(bool Enabled, string Url, bool Reachable, string? Error, long Ms);
+/// <summary>
+/// Whether the DSS service answers at the configured URL, and how it is set up (<paramref name="Config"/>: what
+/// tools/dss/entrypoint.sh wrote to <c>/simplesign/config.json</c>; null for a DSS started some other way).
+/// </summary>
+public sealed record DssStatus(bool Enabled, string Url, bool Reachable, string? Error, long Ms, DssServerConfig? Config = null);
+
+/// <summary>
+/// How the DSS of tools/dss was set up when it started: how it trusts the Sandbox, which roots and trusted lists it
+/// loaded, how it fetches revocation data. Read from its <c>/simplesign/config.json</c>.
+/// </summary>
+public sealed record DssServerConfig(
+    string? DssVersion,
+    string? StartedAt,
+    DssSandboxTrust? Sandbox,
+    string? EuTrustedLists,
+    bool TlLoaderOnline,
+    int TlRefreshSeconds,
+    bool AcceptInvalidTrustedLists,
+    bool RevocationCache,
+    bool IcpBrasil,
+    bool GovBr,
+    bool TsaRoots,
+    DssPeruTrust? Peru,
+    IReadOnlyList<DssTrustedCertificate>? Trusted);
+
+/// <summary>How DSS trusts the Sandbox: <c>list</c> (its trusted list), <c>anchor</c> (its root), <c>testbench</c> (the root through the TestBench) or <c>none</c>.</summary>
+public sealed record DssSandboxTrust(string? Url, string? TestBenchUrl, string? Requested, string? Trust, string? LotlUrl, bool Tls);
+
+/// <summary>The CAs of the Peruvian trusted list DSS trusts.</summary>
+public sealed record DssPeruTrust(bool Enabled, int Trusted, string? Origin, string? Sequence, string? NextUpdate);
+
+/// <summary>A certificate in DSS's trust store: its group (icp-brasil, govbr, tsa, peru, sandbox, mounted), its name and subject.</summary>
+public sealed record DssTrustedCertificate(string Group, string Name, string Subject);
 
 /// <summary>One signature (or timestamp) of the DSS simple report.</summary>
 public sealed record DssSignature(
@@ -65,6 +96,8 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
 {
     public const string DefaultUrl = "http://localhost:8080";
     private const string ValidatePath = "services/rest/validation/validateSignature";
+    private const string ConfigPath = "simplesign/config.json";
+    private static readonly JsonSerializerOptions s_config = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(120) };
 
@@ -84,11 +117,41 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(4));
             using var response = await _http.GetAsync(BaseUri(settings), HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-            return new DssStatus(settings.Enabled, settings.Url, true, null, watch.ElapsedMilliseconds);
+            long ms = watch.ElapsedMilliseconds;
+            return new DssStatus(settings.Enabled, settings.Url, true, null, ms, await ConfigAsync(settings, timeout.Token));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException or InvalidOperationException)
         {
             return new DssStatus(settings.Enabled, settings.Url, false, Unreachable(settings, ex), watch.ElapsedMilliseconds);
+        }
+    }
+
+    /// <summary>The setup tools/dss wrote when DSS started; null when the server has none (a DSS started another way) or it cannot be read.</summary>
+    private async Task<DssServerConfig?> ConfigAsync(DssSettings settings, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _http.GetAsync(new Uri(BaseUri(settings), ConfigPath), cancellationToken);
+            return response.IsSuccessStatusCode
+                ? ReadConfig(await response.Content.ReadAsStringAsync(cancellationToken))
+                : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Reads <c>/simplesign/config.json</c>; null when it is not that file.</summary>
+    internal static DssServerConfig? ReadConfig(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<DssServerConfig>(json, s_config);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
