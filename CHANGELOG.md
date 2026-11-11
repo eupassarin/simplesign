@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Signing controls you can turn on in the signing policy, an audit trail and a readable report
+
+Every new check is off in `SigningPolicy.Default`, so signing is unchanged until a policy turns it on.
+
+- **Trust anchor before signing:** `SigningCertificate/ProspectiveCertificateChain` refuses a signing certificate
+  that does not chain to a given anchor (`SigningErrorReason.UntrustedRoot`). The anchors come from
+  `WithTrustAnchors(...)` on the PAdES, CAdES, XAdES, deferred and batch builders, and on PAdES also from
+  `WithCountryExtension` (stored before but never read). Anchors also complete a chain given without its root for
+  the revocation check.
+- **TSA checked while signing (B-T, B-LT, B-LTA):** a new `Timestamp` section of the signing policy
+  (`ProspectiveCertificateChain`, `NotExpired` at genTime, `NotRevoked`, `RevocationDataAvailable`), and
+  `TimestampOptions.ExpectedTsaCertificate` / `ArchiveTimestampOptions.ExpectedTsaCertificate` to pin the TSA.
+  A refusal (`TimestampUntrusted`, `TimestampCertificateNotValid`, `TimestampCertificateRevoked`,
+  `TimestampRevocationStatusUnknown`) is never downgraded by `SigningLevelFailureBehavior.ReturnLowerLevel`.
+- **CRL without nextUpdate:** `SigningCertificate/CRLNextUpdatePresent` and `CACertificate/CRLNextUpdatePresent`.
+  `ChainRevocationChecker.CheckCurrentAsync` now returns the CRLs and OCSP responses it used.
+- **Audit trail:** `ISignatureAuditSink` gets a `SignatureAuditEvent` for every signature made or refused
+  (certificate, policy, input and output SHA-256, level, reason). Set it with `WithAuditSink(...)`.
+  `JsonLinesAuditSink` writes a hash-chained JSON-lines file, and `JsonLinesAuditSink.Verify` finds a changed,
+  removed or inserted line. The signing start log events (1000, 7000, 7100) now include the certificate serial.
+- **Readable report:** `ValidationReports.ToHtml(entries, language)` returns one HTML page in `en`, `pt` or `es`.
+  The CLI's validate commands take `--html-report <file>` and `--report-language <code>`. `ToSimpleJson` adds
+  `signerPublicKey` (SPKI, base64) and `signerCertificateSha256`.
+
+### Changed — PFX private keys are loaded as non-exportable
+
+- `CertificateLoader` (and so the CLI's `--cert`) no longer sets `X509KeyStorageFlags.Exportable`. Keys are
+  ephemeral except on macOS, whose key store has no ephemeral keys. Nothing in SimpleSign exported them. On Linux,
+  .NET does not enforce non-exportable keys.
+
+### Fixed — CAdES/XAdES synchronous validation says it did not check revocation
+
+- `Validate` / `ValidateAll` never checked revocation, neither of the signer chain nor of the TSA chain, yet a TSA
+  could show as trusted. With `ValidationOptions.CheckRevocation` on, the result now carries a warning saying so;
+  `ValidateAsync` replaces it with the checks' outcome.
+
 ### Fixed — PAdES: the B-LT/B-LTA DSS update no longer overwrites the stamp's font object
 
 - **`LtvEmbedder`:** to add `/DSS` to the catalog it searched backwards for `"N 0 obj"` as plain text, so catalog

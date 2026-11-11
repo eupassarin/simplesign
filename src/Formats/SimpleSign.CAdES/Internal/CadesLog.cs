@@ -9,8 +9,8 @@ namespace SimpleSign.CAdES.Internal;
 internal static partial class CadesLog
 {
     [LoggerMessage(EventId = 7100, Level = LogLevel.Information,
-        Message = "[{OperationId}] Starting CAdES signature: operation={Operation}, content={ContentType}, level={Level}, extended={ExtendedForm}, certificate={Subject} (external={External})")]
-    internal static partial void SigningStarted(this ILogger logger, string operationId, string operation, string contentType, string level, string extendedForm, string subject, bool external);
+        Message = "[{OperationId}] Starting CAdES signature: operation={Operation}, content={ContentType}, level={Level}, extended={ExtendedForm}, certificate={Subject} serial={SerialNumber} (external={External})")]
+    internal static partial void SigningStarted(this ILogger logger, string operationId, string operation, string contentType, string level, string extendedForm, string subject, string serialNumber, bool external);
 
     [LoggerMessage(EventId = 7101, Level = LogLevel.Information,
         Message = "[{OperationId}] CAdES signing completed in {ElapsedMs}ms ({Size} bytes), requested={RequestedLevel}, achieved={AchievedLevel}")]

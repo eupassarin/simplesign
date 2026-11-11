@@ -185,6 +185,22 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_HtmlReport_WritesItInTheLanguageAsked()
+    {
+        string signed = await SignAsync("html-report.pdf");
+        string html = Path.Combine(_tempDir, "report.html");
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath,
+            "--html-report", html, "--report-language", "es");
+
+        exit.ShouldBe(0, output);
+        string text = File.ReadAllText(html);
+        text.ShouldContain("TOTAL_PASSED");
+        text.ShouldContain("-----BEGIN PUBLIC KEY-----");
+        text.ShouldContain("lang=\"es\"");
+    }
+
+    [Fact]
     public async Task Validate_UnknownLevel_IsRefused()
     {
         string signed = await SignAsync("bad-level.pdf");

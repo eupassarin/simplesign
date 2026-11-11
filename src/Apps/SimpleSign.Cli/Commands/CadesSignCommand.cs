@@ -478,7 +478,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
             password ??= await PasswordResolver.ResolveAsync(password, isInteractive: true);
             _pfxPassword = password;
 
-            return new X509Certificate2(settings.CertPath, password, X509KeyStorageFlags.Exportable);
+            return _certChainService.LoadPkcs12FromFile(settings.CertPath, password);
         }
 
         // Fallback: try current user store

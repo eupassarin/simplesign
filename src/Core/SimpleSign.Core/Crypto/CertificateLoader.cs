@@ -10,10 +10,14 @@ namespace SimpleSign.Core.Crypto;
 /// </summary>
 internal static class CertificateLoader
 {
+    /// <summary>
+    /// The private key of a PFX is never exportable: signing only uses it in place, and nothing in SimpleSign copies it.
+    /// It is kept in memory only (ephemeral), except on macOS, whose key store does not support ephemeral keys.
+    /// </summary>
     private static X509KeyStorageFlags Pkcs12KeyStorageFlags =>
         OperatingSystem.IsMacOS()
-            ? X509KeyStorageFlags.Exportable
-            : X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable;
+            ? X509KeyStorageFlags.DefaultKeySet
+            : X509KeyStorageFlags.EphemeralKeySet;
 
     /// <summary>Loads a DER-encoded X.509 certificate from a byte array.</summary>
     internal static X509Certificate2 LoadCertificate(byte[] data) =>

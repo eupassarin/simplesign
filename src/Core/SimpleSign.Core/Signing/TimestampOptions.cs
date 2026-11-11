@@ -27,6 +27,13 @@ public sealed record TimestampOptions
     /// </summary>
     public X509Certificate2? ClientCertificate { get; init; }
 
+    /// <summary>
+    /// The certificate the TSA is expected to sign with. When set, a timestamp signed by any other certificate is
+    /// refused (<see cref="SigningErrorReason.TimestampUntrusted"/>). Null (default) accepts any certificate that
+    /// passes the other checks.
+    /// </summary>
+    public X509Certificate2? ExpectedTsaCertificate { get; init; }
+
     /// <summary>Whether the endpoint uses the RFC 3161 TCP transport.</summary>
     public bool IsTcp => Endpoint.Scheme == "tcp";
 

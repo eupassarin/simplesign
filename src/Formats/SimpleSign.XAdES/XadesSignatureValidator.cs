@@ -175,18 +175,23 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             IsNotRevoked = facts.IsNotRevoked,
             RevocationSource = facts.RevocationSource,
             IsTsaTrusted = facts.IsTsaTrusted,
-            Warnings = [.. result.Warnings, .. revocationWarnings],
+            Warnings = [.. result.Warnings.Where(w => w != RevocationStep.NotCheckedWarning), .. revocationWarnings],
         };
     }
 
     private XadesValidationResult Logged(XadesValidationResult result)
     {
+        if (result.Facts is { } facts && _options.ChecksRevocationFor(facts.IsChainAnchored))
+        {
+            result = result with { Warnings = [.. result.Warnings, RevocationStep.NotCheckedWarning] };
+        }
+
         _logger.SignatureValidated(result.SignatureId ?? "-", result.IsValid,
             result.DetectedLevel.ToString(), result.Errors.Count, result.Warnings.Count);
         return result;
     }
 
-    /// <summary>Validates a signed XAdES XML document against optional trust anchors.</summary>
+    /// <summary>Validates a signed XAdES XML document against optional trust anchors. Revocation is not checked here, of the signer chain nor of the TSA chain: with <see cref="ValidationOptions.CheckRevocation"/> on, the result carries a warning saying so; use <c>ValidateAsync</c> to check it.</summary>
     public XadesValidationResult Validate(
         byte[] signedXml,
         IEnumerable<X509Certificate2>? trustAnchors = null,
@@ -209,7 +214,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         return Logged(ValidateCore(signedXml, trustAnchors, new XadesDetachedData(null, externalData), signatureIndex: null));
     }
 
-    /// <summary>Validates every XMLDSig signature in a signed XAdES XML document.</summary>
+    /// <summary>Validates every XMLDSig signature in a signed XAdES XML document. Revocation is not checked here, of the signer chain nor of the TSA chain: with <see cref="ValidationOptions.CheckRevocation"/> on, the result carries a warning saying so; use <c>ValidateAsync</c> to check it.</summary>
     public IReadOnlyList<XadesValidationResult> ValidateAll(
         byte[] signedXml,
         IEnumerable<X509Certificate2>? trustAnchors = null,

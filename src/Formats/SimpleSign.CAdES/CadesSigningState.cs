@@ -92,6 +92,12 @@ internal sealed record CadesSigningOptions(
     /// <summary>The checks run on the certificate, chain and algorithms before signing.</summary>
     public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
 
+    /// <summary>Where each signing operation is recorded; null for none.</summary>
+    public ISignatureAuditSink? AuditSink { get; init; }
+
+    /// <summary>The trust anchors given with <c>WithTrustAnchors</c>, checked before signing.</summary>
+    public IReadOnlyList<SimpleSign.Core.Extensions.ITrustAnchorProvider> TrustAnchors { get; init; } = [];
+
     /// <summary>Whether this signs a countersignature (no content-type attribute, RFC 5652 §11.4).</summary>
     public bool IsCounterSignature => CounterSignTarget is not null;
 }

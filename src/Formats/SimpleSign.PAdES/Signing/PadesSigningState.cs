@@ -67,4 +67,14 @@ internal sealed record PadesSigningOptions(
 
     /// <summary>The checks run on the certificate, chain and algorithms before signing.</summary>
     public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
+
+    /// <summary>Where each signing operation is recorded; null for none.</summary>
+    public ISignatureAuditSink? AuditSink { get; init; }
+
+    /// <summary>The trust anchors given with <c>WithTrustAnchors</c>, checked before signing.</summary>
+    public IReadOnlyList<ITrustAnchorProvider> TrustAnchors { get; init; } = [];
+
+    /// <summary>The trust anchors of <see cref="TrustAnchors"/> and of the country extensions.</summary>
+    public IReadOnlyList<ITrustAnchorProvider> AllTrustAnchors =>
+        [.. TrustAnchors, .. CountryExtensions.SelectMany(e => e.TrustAnchorProviders)];
 }

@@ -301,6 +301,8 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 | `--revocation-strategy ocsp-first\|crl-first` | Which revocation source is asked first (default `ocsp-first`); the other one answers when the first gives nothing |
 | `--etsi-report <file>` | Write the ETSI TS 119 102-2 signature validation report (XML, namespace `http://uri.etsi.org/19102/v1.2.1#`) |
 | `--simple-report <file>` | Write the simple report (JSON): per signature the indication, sub-indication, signer, times, policy, errors and warnings |
+| `--html-report <file>` | Write a readable report (one self-contained HTML page): per signature the result and its reason, integrity of the signed data, claimed and proved signing time, signer certificate with its public key (PEM) and SHA-256 fingerprint, timestamps, revocation data, policy, errors and warnings |
+| `--report-language <code>` | Language of the HTML report: `en` (default), `pt` or `es` |
 | `--revocation-for-untrusted` | Also check the revocation of chains that do not reach a trust anchor (off by default) |
 
 Every signature gets a verification report: the indication (TOTAL-PASSED, TOTAL-FAILED, INDETERMINATE), the

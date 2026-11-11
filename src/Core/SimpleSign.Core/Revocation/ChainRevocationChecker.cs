@@ -188,12 +188,19 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         var messages = new List<string>();
         var status = ChainRevocationStatus.Good;
         DateTimeOffset? issuedAt = null;
+        var crls = new List<byte[]>();
+        var ocsps = new List<byte[]>();
         for (int i = 0; i < chain.Count - 1; i++)
         {
             var certificate = chain[i];
-            var (certStatus, issued, _) = await OnlineOcspAsync(certificate, chain, now, cancellationToken).ConfigureAwait(false)
+            var (certStatus, issued, data) = await OnlineOcspAsync(certificate, chain, now, cancellationToken).ConfigureAwait(false)
                 ?? await OnlineCrlAsync(certificate, chain[i + 1], now, useCache: false, cancellationToken).ConfigureAwait(false)
                 ?? (ChainRevocationStatus.Unknown, null, null);
+            if (data is not null)
+            {
+                (data.Ocsp ? ocsps : crls).Add(data.Bytes);
+            }
+
             if (i == 0)
             {
                 issuedAt = issued;
@@ -215,7 +222,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             }
         }
 
-        return new ChainRevocationResult(status, messages) { IssuedAt = issuedAt };
+        return new ChainRevocationResult(status, messages) { IssuedAt = issuedAt, Crls = crls, Ocsps = ocsps };
     }
 
     /// <summary>The status from the certificate's CRL distribution point and the CRL's thisUpdate; null when there is no usable CRL.</summary>

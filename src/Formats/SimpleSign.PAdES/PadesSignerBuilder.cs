@@ -235,6 +235,32 @@ public sealed class PadesSignerBuilder
         return With(_options with { SigningPolicy = policy });
     }
 
+    /// <summary>
+    /// Records every signing operation of this builder, signed or refused, with <paramref name="sink"/> (a trail of
+    /// the signatures generated). The record is written before the signer returns; a failing sink fails the operation.
+    /// </summary>
+    /// <param name="sink">The audit sink (e.g. <see cref="JsonLinesAuditSink"/>).</param>
+    /// <returns>A new builder with the sink configured.</returns>
+    public PadesSignerBuilder WithAuditSink(ISignatureAuditSink sink)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        return With(_options with { AuditSink = sink });
+    }
+
+    /// <summary>
+    /// Adds trust anchors for the checks made before signing: the signing certificate must chain to one of them when
+    /// the signing policy's <c>SigningCertificate/ProspectiveCertificateChain</c> is not IGNORE, and they complete a
+    /// chain given without its root for the revocation check. The anchors of the country extensions
+    /// (<see cref="WithCountryExtension(ICountryExtension)"/>) are used too.
+    /// </summary>
+    /// <param name="providers">The trust anchor providers (e.g. <c>DirectoryTrustAnchorProvider</c>, <c>TrustedList</c>).</param>
+    /// <returns>A new builder with the anchors added.</returns>
+    public PadesSignerBuilder WithTrustAnchors(params ITrustAnchorProvider[] providers)
+    {
+        ArgumentNullException.ThrowIfNull(providers);
+        return With(_options with { TrustAnchors = [.. _options.TrustAnchors, .. providers] });
+    }
+
     /// <summary>Sets the checker used for the revocation check of the signing policy (<c>NotRevoked</c>, <c>RevocationDataAvailable</c>).</summary>
     /// <param name="checker">The chain revocation checker.</param>
     /// <returns>A new builder with the checker configured.</returns>
@@ -488,7 +514,8 @@ public sealed class PadesSignerBuilder
 
     /// <summary>
     /// Registers a country/region-specific extension package (e.g., ICP-Brasil, eIDAS).
-    /// Extensions provide trust anchors for validation and chain validation providers
+    /// Extensions provide trust anchors (for validation, and for the trust check made before signing when the
+    /// signing policy asks for it) and chain validation providers
     /// that enrich <see cref="SignatureValidationResult"/> with country-specific
     /// metadata (policy level, signer national ID, etc.).
     /// </summary>
@@ -570,7 +597,7 @@ public sealed class PadesSignerBuilder
         BaselineSigning.EnsureStrictProfile(_options.Profile);
         EnterExecution();
         using var output = new MemoryStream();
-        await SignCoreAsync(output, cancellationToken).ConfigureAwait(false);
+        await SignAuditedAsync(output, cancellationToken).ConfigureAwait(false);
         return output.ToArray();
     }
 
@@ -587,12 +614,22 @@ public sealed class PadesSignerBuilder
     {
         EnterExecution();
         using var output = new MemoryStream();
-        var result = await SignCoreAsync(output, cancellationToken).ConfigureAwait(false);
+        var result = await SignAuditedAsync(output, cancellationToken).ConfigureAwait(false);
         return result with
         {
             SignedArtifact = output.ToArray()
         };
     }
+
+    private Task<PadesSigningResult> SignAuditedAsync(MemoryStream output, CancellationToken cancellationToken) =>
+        SignatureAudit.RunAsync(
+            _options.AuditSink,
+            () => SignatureAuditEvent.Start(
+                "PAdES", _options.OperationId, _options.Profile.Level, SignerCertificate, _options.SigningPolicy,
+                _inputPdf is MemoryStream input && input.TryGetBuffer(out var buffer) ? buffer.AsSpan() : default),
+            () => SignCoreAsync(output, cancellationToken),
+            result => (output.ToArray(), result.AchievedLevel),
+            cancellationToken);
 
     private async Task<PadesSigningResult> SignCoreAsync(
         Stream outputStream,
@@ -620,12 +657,12 @@ public sealed class PadesSignerBuilder
         ValidateSigningPrerequisites(credential, useExternal);
         var warnings = new List<SigningWarning>();
         await SignerAcceptance.EnsureSignerAcceptableAsync(
-            certificate, chain, _options.SigningPolicy, _options.Dependencies.ChainRevocationChecker,
+            certificate, chain, _options.SigningPolicy, _options.AllTrustAnchors, _options.Dependencies.ChainRevocationChecker,
             _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger, warnings, cancellationToken).ConfigureAwait(false);
 
         var logger = _options.Dependencies.Logger;
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        logger.SigningStarted(opId, certificate.Subject, useExternal);
+        logger.SigningStarted(opId, certificate.Subject, certificate.SerialNumber, useExternal);
 
         if (_options.HashAlgorithmExplicitlySet)
         {
@@ -666,6 +703,10 @@ public sealed class PadesSignerBuilder
                 timestampTokenBytes = await ApplyTimestampAsync(cms, effectiveHash, profile.Timestamp, opId, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
             {
                 throw;
             }
@@ -1072,8 +1113,13 @@ public sealed class PadesSignerBuilder
     }
 
     private ITimestampClient CreateTimestampClient(TimestampOptions timestampOptions) =>
-        BaselineSigning.CreateTimestampClient(
-            timestampOptions, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger);
+        new TimestampAcceptance(
+            _options.SigningPolicy, _options.AllTrustAnchors, _options.Dependencies.ChainRevocationChecker,
+            _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger)
+        .Wrap(
+            BaselineSigning.CreateTimestampClient(
+                timestampOptions, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger),
+            timestampOptions);
 
     private async Task<(bool HasLtvMaterial, Stream Output)> ApplyLtvAsync(
         Stream outputStream,
@@ -1178,6 +1224,10 @@ public sealed class PadesSignerBuilder
             return true;
         }
         catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
         {
             throw;
         }

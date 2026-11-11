@@ -50,7 +50,17 @@ internal class TrustedValidationSettings : CommonSettings
     [Description("Write the simple report (JSON: indication, sub-indication, signer, times, policy per signature) to this file")]
     public string? SimpleReportPath { get; init; }
 
-    /// <summary>Writes the reports asked with <see cref="EtsiReportPath"/> and <see cref="SimpleReportPath"/>.</summary>
+    /// <summary>Write the readable report (HTML) to this file.</summary>
+    [CommandOption("--html-report <PATH>")]
+    [Description("Write a readable report (HTML): result, integrity, signing time, signer certificate and public key per signature")]
+    public string? HtmlReportPath { get; init; }
+
+    /// <summary>The language of the HTML report.</summary>
+    [CommandOption("--report-language <CODE>")]
+    [Description("Language of the HTML report: en (default), pt or es")]
+    public string? ReportLanguage { get; init; }
+
+    /// <summary>Writes the reports asked with <see cref="EtsiReportPath"/>, <see cref="SimpleReportPath"/> and <see cref="HtmlReportPath"/>.</summary>
     internal void WriteReports(IReadOnlyList<SimpleSign.Core.Validation.SignatureReportEntry> entries)
     {
         if (EtsiReportPath is not null)
@@ -61,6 +71,11 @@ internal class TrustedValidationSettings : CommonSettings
         if (SimpleReportPath is not null)
         {
             File.WriteAllText(SimpleReportPath, SimpleSign.Core.Validation.ValidationReports.ToSimpleJson(entries));
+        }
+
+        if (HtmlReportPath is not null)
+        {
+            File.WriteAllText(HtmlReportPath, SimpleSign.Core.Validation.ValidationReports.ToHtml(entries, ReportLanguage));
         }
     }
 

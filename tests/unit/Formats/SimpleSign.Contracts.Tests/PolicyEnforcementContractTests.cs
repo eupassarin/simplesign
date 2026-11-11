@@ -5,6 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Shouldly;
 using SimpleSign.CAdES;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
 using SimpleSign.Core.Revocation;
@@ -84,6 +85,33 @@ public sealed class PolicyEnforcementContractTests : IDisposable
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
+    public async Task SignWithCrlWithoutNextUpdate_IsRefusedWhenRequired(string format)
+    {
+        using var http = CrlServer(_pki.BuildLeafCrlWithoutNextUpdate(), _pki.BuildIntermediateCrl());
+
+        var ex = await Should.ThrowAsync<SigningException>(() => Sign(
+            format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocationAndCrlNextUpdate, new ChainRevocationChecker(http)));
+
+        ex.Reason.ShouldBe(SigningErrorReason.RevocationStatusUnknown);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task SignWithCrlWithoutNextUpdate_SucceedsByDefault(string format)
+    {
+        using var http = CrlServer(_pki.BuildLeafCrlWithoutNextUpdate(), _pki.BuildIntermediateCrl());
+
+        var result = await Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, new ChainRevocationChecker(http));
+
+        result.Length.ShouldBeGreaterThan(0);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
     public async Task SignWithGoodChain_Succeeds(string format)
     {
         using var http = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
@@ -135,6 +163,60 @@ public sealed class PolicyEnforcementContractTests : IDisposable
 
             ex.Reason.ShouldBe(SigningErrorReason.ChainCertificateNotValid);
         }
+    }
+
+    // ── Trust of the root before signing ──────────────────────────────────
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task SignWithUntrustedRoot_IsRefused(string format)
+    {
+        using var other = new SyntheticPki();
+
+        var ex = await Should.ThrowAsync<SigningException>(() => Sign(
+            format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithTrustAnchor, anchors: [new InMemoryTrustAnchors(other.RootCa)]));
+
+        ex.Reason.ShouldBe(SigningErrorReason.UntrustedRoot);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task SignWithTrustAnchorRequiredAndNoneGiven_IsRefused(string format)
+    {
+        var ex = await Should.ThrowAsync<SigningException>(
+            () => Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithTrustAnchor));
+
+        ex.Reason.ShouldBe(SigningErrorReason.UntrustedRoot);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task SignWithTrustedRootNotInChain_Succeeds(string format)
+    {
+        var result = await Sign(
+            format, _pki.Leaf, [_pki.IntermediateCa], TestPolicies.SigningWithTrustAnchor, anchors: [new InMemoryTrustAnchors(_pki.RootCa)]);
+
+        result.Length.ShouldBeGreaterThan(0);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task SignWithUntrustedRootUnderDefaultPolicy_Succeeds(string format)
+    {
+        using var other = new SyntheticPki();
+
+        var result = await Sign(
+            format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Default, anchors: [new InMemoryTrustAnchors(other.RootCa)]);
+
+        result.Length.ShouldBeGreaterThan(0);
     }
 
     // ── Purpose of the certificate ────────────────────────────────────────
@@ -233,6 +315,81 @@ public sealed class PolicyEnforcementContractTests : IDisposable
             () => Sign(format, _pki.Leaf, [_pki.IntermediateCa], SigningPolicy.Default, profile: profile));
     }
 
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampFromGoodTrustedTsa_Succeeds(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
+
+        var result = await SignWithTsa(format, tsaCertificate, TestPolicies.SigningWithTimestampChecks, crls);
+
+        result.Length.ShouldBeGreaterThan(0);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampByRevokedTsa_IsRefused(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = CrlServer(_pki.BuildCrlRevoking(tsaCertificate), _pki.BuildIntermediateCrl());
+
+        var ex = await Should.ThrowAsync<SigningException>(
+            () => SignWithTsa(format, tsaCertificate, TestPolicies.SigningWithTimestampChecks, crls));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampCertificateRevoked);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampByTsaNotValidAtGenTime_IsRefused(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
+
+        var ex = await Should.ThrowAsync<SigningException>(() => SignWithTsa(
+            format, tsaCertificate, TestPolicies.SigningWithTimestampChecks, crls, genTime: tsaCertificate.NotBefore.ToUniversalTime().AddHours(-1)));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampCertificateNotValid);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampByUntrustedTsa_IsRefused(string format)
+    {
+        using var other = new SyntheticPki();
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
+
+        var ex = await Should.ThrowAsync<SigningException>(() => SignWithTsa(
+            format, tsaCertificate, TestPolicies.SigningWithTimestampChecks, crls, anchor: other.RootCa));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampUntrusted);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampByUnexpectedTsa_IsRefused(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var expected = _pki.IssueTimestampingCertificate("CN=Expected TSA");
+
+        var ex = await Should.ThrowAsync<SigningException>(
+            () => SignWithTsa(format, tsaCertificate, SigningPolicy.Default, crls: null, expectedTsa: expected));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampUntrusted);
+    }
+
     [Fact]
     public async Task TimestampByRevokedTsa_TsaIsNotTrusted()
     {
@@ -256,6 +413,93 @@ public sealed class PolicyEnforcementContractTests : IDisposable
         result.Warnings.ShouldContain(w => w.Contains("revoked", StringComparison.Ordinal));
     }
 
+    private Task<byte[]> SignWithTsa(
+        string format, X509Certificate2 tsaCertificate, SigningPolicy policy, HttpClient? crls,
+        DateTimeOffset? genTime = null, X509Certificate2? anchor = null, X509Certificate2? expectedTsa = null)
+    {
+        var tsa = TsaClient(new TimestampTokenOptions
+        {
+            TsaCertificate = tsaCertificate,
+            ExtraCertificates = [_pki.IntermediateCa],
+            GenTime = genTime ?? DateTimeOffset.UtcNow,
+        });
+        var profile = AdesBaselineProfile.Timestamped(
+            new TimestampOptions(new Uri(TsaUrl), new SingleClientProvider(tsa)) { ExpectedTsaCertificate = expectedTsa });
+        return Sign(format, _pki.Leaf, [_pki.IntermediateCa], policy, crls is null ? null : new ChainRevocationChecker(crls),
+            profile: profile, anchors: [new InMemoryTrustAnchors(anchor ?? _pki.RootCa)]);
+    }
+
+    [Theory]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task SyncValidationWithRevocationOn_WarnsThatRevocationWasNotChecked(string format)
+    {
+        byte[] signed = await Sign(format, _pki.Leaf, [_pki.IntermediateCa], SigningPolicy.Default);
+        var options = new ValidationOptions { CheckRevocation = true, TrustSystemRoots = false, TrustedRoots = [_pki.RootCa] };
+
+        var warnings = format == "cades"
+            ? new CadesSignatureValidator(options).Validate(signed, ContractFixtures.BinaryContent).Warnings
+            : new XadesSignatureValidator(options).Validate(signed).Warnings;
+
+        warnings.ShouldContain(w => w.Contains("ValidateAsync", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task AsyncValidationWithRevocationOn_HasNoNotCheckedWarning(string format)
+    {
+        byte[] signed = await Sign(format, _pki.Leaf, [_pki.IntermediateCa], SigningPolicy.Default);
+        using var crls = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
+        var options = new ValidationOptions { CheckRevocation = true, TrustSystemRoots = false, TrustedRoots = [_pki.RootCa] };
+        var checker = new ChainRevocationChecker(crls);
+
+        var warnings = format == "cades"
+            ? (await new CadesSignatureValidator(options, chainRevocationChecker: checker).ValidateAsync(signed, ContractFixtures.BinaryContent)).Warnings
+            : (await new XadesSignatureValidator(options, chainRevocationChecker: checker).ValidateAsync(signed)).Warnings;
+
+        warnings.ShouldNotContain(w => w.Contains("ValidateAsync", StringComparison.Ordinal));
+    }
+
+    // ── Audit trail of the signatures generated ───────────────────────────
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task AuditSink_RecordsSignedAndRefused(string format)
+    {
+        var audit = new RecordingAuditSink();
+        using var revoked = CrlServer(_pki.BuildRevokedLeafCrl(), _pki.BuildIntermediateCrl());
+
+        byte[] signed = await Sign(format, _pki.Leaf, _pki.IntermediatesAndRoot(), SigningPolicy.Default, audit: audit);
+        await Should.ThrowAsync<SigningException>(() => Sign(
+            format, _pki.Leaf, _pki.IntermediatesAndRoot(), TestPolicies.SigningWithRevocation, new ChainRevocationChecker(revoked), audit: audit));
+
+        audit.Events.Count.ShouldBe(2);
+        var ok = audit.Events[0];
+        ok.Signed.ShouldBeTrue();
+        ok.CertificateSerialNumber.ShouldBe(_pki.Leaf.SerialNumber);
+        ok.OutputSha256.ShouldBe(Convert.ToHexString(SHA256.HashData(signed)));
+        ok.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        var refused = audit.Events[1];
+        refused.Signed.ShouldBeFalse();
+        refused.Reason.ShouldBe(SigningErrorReason.CertificateRevoked);
+        refused.PolicyName.ShouldBe(TestPolicies.SigningWithRevocation.Name);
+        refused.OutputSha256.ShouldBeNull();
+    }
+
+    private sealed class RecordingAuditSink : ISignatureAuditSink
+    {
+        public List<SignatureAuditEvent> Events { get; } = [];
+
+        public ValueTask RecordAsync(SignatureAuditEvent auditEvent, CancellationToken cancellationToken)
+        {
+            Events.Add(auditEvent);
+            return ValueTask.CompletedTask;
+        }
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────────
 
     private static async Task<byte[]> Sign(
@@ -265,9 +509,12 @@ public sealed class PolicyEnforcementContractTests : IDisposable
         SigningPolicy policy,
         IChainRevocationChecker? checker = null,
         HashAlgorithmName? hash = null,
-        AdesBaselineProfile? profile = null)
+        AdesBaselineProfile? profile = null,
+        ITrustAnchorProvider[]? anchors = null,
+        ISignatureAuditSink? audit = null)
     {
         profile ??= AdesBaselineProfile.Basic();
+        anchors ??= [];
         switch (format)
         {
             case "pades":
@@ -276,6 +523,8 @@ public sealed class PolicyEnforcementContractTests : IDisposable
                         .WithCertificate(certificate, chain).WithSigningPolicy(policy).WithLevel(profile);
                     builder = checker is null ? builder : builder.WithChainRevocationChecker(checker);
                     builder = hash is { } h ? builder.WithHashAlgorithm(h) : builder;
+                    builder = builder.WithTrustAnchors(anchors);
+                    builder = audit is null ? builder : builder.WithAuditSink(audit);
                     return (await builder.SignWithDetailsAsync()).SignedArtifact;
                 }
 
@@ -285,6 +534,8 @@ public sealed class PolicyEnforcementContractTests : IDisposable
                         .WithCertificate(certificate, chain).WithSigningPolicy(policy).WithLevel(profile);
                     builder = checker is null ? builder : builder.WithChainRevocationChecker(checker);
                     builder = hash is { } h ? builder.WithHashAlgorithm(h) : builder;
+                    builder = builder.WithTrustAnchors(anchors);
+                    builder = audit is null ? builder : builder.WithAuditSink(audit);
                     return (await builder.SignWithDetailsAsync()).SignedArtifact;
                 }
 
@@ -294,6 +545,8 @@ public sealed class PolicyEnforcementContractTests : IDisposable
                         .WithCertificate(certificate, chain).WithSigningPolicy(policy).WithLevel(profile);
                     builder = checker is null ? builder : builder.WithChainRevocationChecker(checker);
                     builder = hash is { } h ? builder.WithHashAlgorithm(h) : builder;
+                    builder = builder.WithTrustAnchors(anchors);
+                    builder = audit is null ? builder : builder.WithAuditSink(audit);
                     return (await builder.SignWithDetailsAsync()).SignedArtifact;
                 }
 

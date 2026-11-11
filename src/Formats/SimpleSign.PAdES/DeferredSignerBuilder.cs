@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
@@ -34,6 +35,8 @@ public sealed class DeferredSignerBuilder
     private readonly byte[]? _sessionIntegrityKey;
     private readonly SigningPolicy _signingPolicy = SigningPolicy.Default;
     private readonly SimpleSign.Core.Revocation.IChainRevocationChecker? _chainRevocationChecker;
+    private readonly IReadOnlyList<ITrustAnchorProvider> _trustAnchors = [];
+    private readonly ISignatureAuditSink? _auditSink;
 
     /// <summary>Initializes a deferred builder without credentials.</summary>
     internal DeferredSignerBuilder(byte[] pdfBytes)
@@ -91,9 +94,13 @@ public sealed class DeferredSignerBuilder
         IHttpClientProvider? httpClientProvider,
         byte[]? sessionIntegrityKey,
         SigningPolicy signingPolicy,
-        SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker)
+        SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker,
+        IReadOnlyList<ITrustAnchorProvider> trustAnchors,
+        ISignatureAuditSink? auditSink)
     {
         _signingPolicy = signingPolicy;
+        _trustAnchors = trustAnchors;
+        _auditSink = auditSink;
         _chainRevocationChecker = chainRevocationChecker;
         _pdfBytes = pdfBytes;
         _sessionData = sessionData;
@@ -223,6 +230,32 @@ public sealed class DeferredSignerBuilder
         return With(signingPolicy: policy);
     }
 
+    /// <summary>
+    /// Adds trust anchors for the checks made before the hash is prepared: the signing certificate must chain to one
+    /// of them when the signing policy's <c>SigningCertificate/ProspectiveCertificateChain</c> is not IGNORE, and they
+    /// complete a chain given without its root for the revocation check.
+    /// </summary>
+    /// <param name="providers">The trust anchor providers.</param>
+    /// <returns>A new builder with the anchors added.</returns>
+    public DeferredSignerBuilder WithTrustAnchors(params ITrustAnchorProvider[] providers)
+    {
+        ArgumentNullException.ThrowIfNull(providers);
+        return With(trustAnchors: [.. _trustAnchors, .. providers]);
+    }
+
+    /// <summary>
+    /// Records the operations of this builder with <paramref name="sink"/>: a refusal while preparing, and the outcome of
+    /// the completion (the signature made, or the refusal). Set it on the builder that prepares and on the one returned by
+    /// <see cref="DeferredSigner.Resume(byte[], byte[])"/>.
+    /// </summary>
+    /// <param name="sink">The audit sink.</param>
+    /// <returns>A new builder with the sink configured.</returns>
+    public DeferredSignerBuilder WithAuditSink(ISignatureAuditSink sink)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        return With(auditSink: sink);
+    }
+
     /// <summary>Sets the checker used for the revocation check of the signing policy (<c>NotRevoked</c>, <c>RevocationDataAvailable</c>).</summary>
     public DeferredSignerBuilder WithChainRevocationChecker(SimpleSign.Core.Revocation.IChainRevocationChecker checker)
     {
@@ -308,11 +341,23 @@ public sealed class DeferredSignerBuilder
             Profile = _profile,
             SigningPolicy = _signingPolicy,
             ChainRevocationChecker = _chainRevocationChecker,
+            TrustAnchors = _trustAnchors,
             HttpClientProvider = _httpClientProvider
         };
 
-        return await DeferredSigner.PrepareAsync(
-            _pdfBytes, certificate, sessionIntegrityKey, options, _logger, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await DeferredSigner.PrepareAsync(
+                _pdfBytes, certificate, sessionIntegrityKey, options, _logger, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (_auditSink is not null && ex is not OperationCanceledException)
+        {
+            var refused = SignatureAuditEvent.Start(
+                "PAdES", null, (_profile ?? AdesBaselineProfile.Basic()).Level, certificate, _signingPolicy, _pdfBytes);
+            await _auditSink.RecordAsync(
+                refused with { Reason = (ex as SigningException)?.Reason, Message = ex.Message }, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 
     private async Task<byte[]> CompleteCoreAsync(byte[] sessionData, byte[] rawSignature, CancellationToken cancellationToken)
@@ -333,11 +378,24 @@ public sealed class DeferredSignerBuilder
         var completeOptions = new DeferredSigningCompleteOptions
         {
             Profile = _profile,
-            HttpClientProvider = _httpClientProvider
+            HttpClientProvider = _httpClientProvider,
+            SigningPolicy = _signingPolicy,
+            TrustAnchors = _trustAnchors,
+            ChainRevocationChecker = _chainRevocationChecker,
         };
 
-        return await DeferredSigner.CompleteAsync(
-            sessionData, rawSignature, RequireSessionIntegrityKey(), completeOptions, _logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await SignatureAudit.RunAsync(
+            _auditSink,
+            () =>
+            {
+                using var certificate = SimpleSign.Core.Crypto.CertificateLoader.LoadCertificate(
+                    DeferredSigningSession.Deserialize(sessionData, RequireSessionIntegrityKey()).CertificateDer);
+                return SignatureAuditEvent.Start("PAdES", null, (_profile ?? AdesBaselineProfile.Basic()).Level, certificate, _signingPolicy, default);
+            },
+            () => DeferredSigner.CompleteAsync(
+                sessionData, rawSignature, RequireSessionIntegrityKey(), completeOptions, _logger, cancellationToken: cancellationToken),
+            signed => (signed, (_profile ?? AdesBaselineProfile.Basic()).Level),
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -384,7 +442,9 @@ public sealed class DeferredSignerBuilder
         byte[]? sessionIntegrityKey = null,
         bool replaceSessionIntegrityKey = false,
         SigningPolicy? signingPolicy = null,
-        SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker = null)
+        SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker = null,
+        IReadOnlyList<ITrustAnchorProvider>? trustAnchors = null,
+        ISignatureAuditSink? auditSink = null)
     {
         return new(
             _pdfBytes,
@@ -400,7 +460,9 @@ public sealed class DeferredSignerBuilder
             httpClientProvider ?? _httpClientProvider,
             replaceSessionIntegrityKey ? sessionIntegrityKey : _sessionIntegrityKey,
             signingPolicy ?? _signingPolicy,
-            chainRevocationChecker ?? _chainRevocationChecker);
+            chainRevocationChecker ?? _chainRevocationChecker,
+            trustAnchors ?? _trustAnchors,
+            auditSink ?? _auditSink);
     }
 
     private byte[] RequireSessionIntegrityKey()

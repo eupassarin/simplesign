@@ -84,6 +84,17 @@ internal static class BaselineSigning
     }
 
     /// <summary>
+    /// Whether <paramref name="exception"/> is a refusal of a timestamp by the signing policy (or the expected TSA),
+    /// which is never downgraded to a lower level: the caller asked for the TSA to be checked.
+    /// </summary>
+    internal static bool IsTimestampRefusal(Exception exception) =>
+        exception is SigningException
+        {
+            Reason: SigningErrorReason.TimestampUntrusted or SigningErrorReason.TimestampCertificateNotValid
+                or SigningErrorReason.TimestampCertificateRevoked or SigningErrorReason.TimestampRevocationStatusUnknown,
+        };
+
+    /// <summary>
     /// The client for a TSA: a dedicated one when the options carry credentials, a client certificate
     /// or TCP transport; otherwise the injected factory, or a plain HTTP client.
     /// </summary>

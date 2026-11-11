@@ -67,4 +67,25 @@ public enum SigningErrorReason
 
     /// <summary>The signing key is smaller than the signing policy allows.</summary>
     KeyTooWeak = 20,
+
+    /// <summary>
+    /// The signing certificate does not chain to any of the trust anchors given to the signer
+    /// (<c>SigningCertificate/ProspectiveCertificateChain</c> of the signing policy).
+    /// </summary>
+    UntrustedRoot = 21,
+
+    /// <summary>
+    /// A timestamp obtained while signing is not from the expected TSA (<see cref="TimestampOptions.ExpectedTsaCertificate"/>)
+    /// or its TSA certificate does not chain to a trust anchor (<c>Timestamp/ProspectiveCertificateChain</c>).
+    /// </summary>
+    TimestampUntrusted = 22,
+
+    /// <summary>The TSA certificate of a timestamp obtained while signing is not valid at the time of the timestamp (<c>Timestamp/NotExpired</c>).</summary>
+    TimestampCertificateNotValid = 23,
+
+    /// <summary>A certificate of the TSA chain of a timestamp obtained while signing is revoked (<c>Timestamp/NotRevoked</c>).</summary>
+    TimestampCertificateRevoked = 24,
+
+    /// <summary>The revocation status of the TSA chain could not be established (<c>Timestamp/RevocationDataAvailable</c>).</summary>
+    TimestampRevocationStatusUnknown = 25,
 }
