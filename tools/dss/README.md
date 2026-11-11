@@ -252,6 +252,10 @@ the signature is qualified.
 | `DSS_TRUST_PERU` | `true` | `true` trusts the CAs of the Peruvian trusted list (downloaded at start; see above). |
 | `DSS_PERU_TSL_URL` | INDECOPI's address | Where to download the Peruvian trusted list from. |
 
+To keep settings across restarts, copy [`.env.example`](.env.example) to `tools/dss/.env` and uncomment what
+you change: Compose reads it on every `up`, and it is not committed (`.gitignore`). Through `tools/stack`, use
+`tools/stack/.env` (that compose is the one read).
+
 To use another DSS version, change `DSS_VERSION` in `docker-compose.yml`.
 
 You can also point the TestBench at a DSS you already run: set its address in the **DSS** panel

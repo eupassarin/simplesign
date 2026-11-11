@@ -149,12 +149,13 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
         var lotlSigner = info.TrustedLists is { } lists
             ? X509Certificate2.CreateFromPem(await _admin.GetStringAsync(new Uri(lists.LotlSignerUrl), cancellationToken))
             : null;
-        var signers = new List<SandboxSigner>();
-        foreach (var certificate in pki.Certificates.Where(c => c.Usage == "Signing"))
+        // Side by side: each PKCS#12 is downloaded and its key loaded (into the keychain on macOS) on its own thread,
+        // which is most of the time of a connection. The order of the Sandbox's list is kept.
+        var signers = (await Task.WhenAll(pki.Certificates.Where(c => c.Usage == "Signing").Select(async certificate =>
         {
             byte[] pfx = await _admin.GetByteArrayAsync(new Uri(baseUrl, $"api/certificates/{Uri.EscapeDataString(certificate.Id)}/pfx"), cancellationToken);
-            signers.Add(Load(certificate, pfx, info.PfxPassword));
-        }
+            return await Task.Run(() => Load(certificate, pfx, info.PfxPassword), cancellationToken);
+        }))).ToList();
 
         var connection = new SandboxConnection
         {

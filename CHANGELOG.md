@@ -16,6 +16,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PdfStructureParser.FindObjectBytes`, which rejects suffix matches.
 - **TestBench matrix:** the `appearance` dimension is back (invisible, visible, styled+QR, auto+image).
 
+### Changed — TestBench: Sandbox and DSS on/off, the DSS drawer, a faster Sandbox connection
+
+- **Sandbox and DSS on or off:** each control in the top bar opens a popup to turn it on when it is off (the address
+  and how to start it) and a drawer with everything once it is on, with a switch to turn it off. The controls are
+  back on the right of the top bar, after Sign and Validate.
+- **The DSS drawer**, in three tabs:
+  - **Overview:** one table of every server setting (how the Sandbox is trusted, EU lists, refresh, lists with a bad
+    signature, trust anchors, revocation cache, policy), with what each means next to SimpleSign's verdicts and the
+    variable that changes it.
+  - **Trust:** how DSS trusts the Sandbox and the lists, then every trusted certificate by group, in a searchable
+    table (name, organization and country read from the subject, UTF-8 escapes decoded).
+  - **Policy:** the validation policy DSS receives, in the same explained tree as the Policies panel. The constraints
+    left out of its `constraint.xml` (DSS 6.3 does not know them) are marked, and the XML can be read or downloaded
+    (`GET /api/dss/policy`, `/api/dss/constraint.xml`).
+- **`tools/dss` `config.json`:** also the forwarded Sandbox ports and the Peruvian list's address.
+- **Connecting to the Sandbox takes about 2 s instead of 15 s:**
+  - the signed samples are built in the background, each list readable as soon as it is done (the "expired" sample
+    waits ~10 s for a certificate to expire);
+  - connecting or disconnecting stops a build still running first, which also fixes "m_safeCertContext is an invalid
+    handle" on a quick reconnect;
+  - the signers' keys are loaded in parallel.
+- **Edit the stamp** no longer opens the first explanation's hover card: drawers do not move the focus when they open.
+- **`.env.example`** in `tools/stack` and `tools/dss`: every variable with its default and what it does. A local
+  `.env` (git-ignored) keeps a machine's choices, such as `DSS_LOAD_EU_TRUSTED_LISTS=cached`.
+
 ### Changed — The Sandbox is API only; its UI is the TestBench's Sandbox control
 
 - **Sandbox:** no page of its own (`web/` removed, no Node.js in its build or its Docker image). `/` says it is
