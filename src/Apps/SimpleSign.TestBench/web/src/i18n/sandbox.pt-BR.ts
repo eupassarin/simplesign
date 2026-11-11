@@ -116,6 +116,7 @@ export const sandboxPtBR: SandboxMessages = {
       Expired: { title: "LCRs expiradas", hint: "O nextUpdate das LCRs já passou: um cliente correto não confia nelas." },
       WrongKey: { title: "Assinatura errada", hint: "As LCRs levam o nome da AC, mas são assinadas por outra chave: um cliente correto as rejeita." },
       Stale: { title: "LCR antiga", hint: "Serve a LCR de antes da última revogação (ainda vigente): o que vê um cliente com uma cópia antiga." },
+      NoNextUpdate: { title: "Sem nextUpdate", hint: "As LCRs não têm o campo nextUpdate: nunca dizem quando sai a próxima, então o cliente não sabe se a sua cópia está em dia." },
     },
     ocspValues: {
       None: { title: "Normal", hint: "Responde good, revoked ou unknown com a situação atual." },

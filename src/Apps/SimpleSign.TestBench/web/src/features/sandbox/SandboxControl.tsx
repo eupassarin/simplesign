@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
-import { Download, FlaskConical, Loader2, Plug, RefreshCw, TriangleAlert, Unplug } from "lucide-react"
+import { Download, FlaskConical, Loader2, RefreshCw, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useT } from "@/i18n"
@@ -30,8 +31,8 @@ const faultsOn = (f: SandboxFaults | null) =>
 
 /**
  * The one place of the SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox), a separate app with a test PKI and its
- * services on real endpoints. Not connected, the button opens a popup to connect and how to start one. Connected,
- * it opens everything: the connection and its signers, the environment's addresses, the PKI (revocations,
+ * services on real endpoints. On or off, like DSS. Off, the button opens a popup to turn it on (connect) and how to
+ * start one. On, it opens a drawer with everything: the connection and its signers, the environment's addresses, the PKI (revocations,
  * downloads), the failures and the request log, all through the Sandbox's own admin API (passed through by the
  * TestBench, nothing kept here: another client switching a failure shows here too).
  */
@@ -54,14 +55,14 @@ export function SandboxControl() {
     return () => { stopped = true; clearInterval(timer) }
   }, [sandbox?.url])
   const failing = faultsOn(faults)
-  const label = sandbox ? `Sandbox: ${sandbox.name}` : t("sandbox.button")
+  const label = `Sandbox ${sandbox ? t("wb.dss.on") : t("wb.dss.offShort")}`
   const trigger = (
     <Button variant="ghost" size="sm" aria-label={label} className={cn("h-8", sandbox && "border-info/60 bg-info/10 border", failing && "border-destructive/60 bg-destructive/10")}
       onClick={sandbox ? () => setOpen(true) : undefined}>
       {failing ? <TriangleAlert className="text-destructive" /> : <FlaskConical />}<span className="max-xl:hidden">{label}</span>
     </Button>
   )
-  const hint = failing ? t("sandbox.faultsOn") : t("app.sandboxHint")
+  const hint = failing ? `${sandbox?.name} · ${t("sandbox.faultsOn")}` : sandbox ? `${sandbox.name} · ${t("app.sandboxHint")}` : t("app.sandboxHint")
   if (!sandbox) {
     return (
       <Popover>
@@ -69,7 +70,7 @@ export function SandboxControl() {
           <TooltipTrigger asChild><PopoverTrigger asChild>{trigger}</PopoverTrigger></TooltipTrigger>
           <TooltipContent className="max-w-64">{hint}</TooltipContent>
         </Tooltip>
-        <PopoverContent align="start" className="w-96 text-sm"><ConnectForm /></PopoverContent>
+        <PopoverContent align="end" className="w-96 text-sm"><ConnectForm /></PopoverContent>
       </Popover>
     )
   }
@@ -79,7 +80,7 @@ export function SandboxControl() {
         <TooltipTrigger asChild>{trigger}</TooltipTrigger>
         <TooltipContent className="max-w-64">{hint}</TooltipContent>
       </Tooltip>
-      <SheetContent className="flex w-[min(96vw,1200px)] flex-col p-0 sm:max-w-none">
+      <SheetContent className="flex w-[min(96vw,1200px)] flex-col p-0 sm:max-w-none" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader className="sr-only"><SheetTitle>{label}</SheetTitle><SheetDescription>{t("app.sandboxHint")}</SheetDescription></SheetHeader>
         <SandboxWorkspace faults={faults} onFaults={setFaults} onClose={() => setOpen(false)} />
       </SheetContent>
@@ -87,7 +88,7 @@ export function SandboxControl() {
   )
 }
 
-/** Not connected: the address (the one connected last), Connect, and how to start a Sandbox. */
+/** Off: the switch that connects, the address (the one connected last), and how to start a Sandbox. */
 function ConnectForm() {
   const { env, setEnv } = useWorkbench()
   const t = useT()
@@ -106,13 +107,16 @@ function ConnectForm() {
   }
   return (
     <div className="space-y-3">
-      <div>
-        <p className="flex items-center gap-1.5 font-medium"><FlaskConical className="size-4" /> {t("sandbox.title")}</p>
-        <p className="text-muted-foreground text-xs leading-relaxed">{t("sandbox.about")}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-1.5 font-medium"><FlaskConical className="size-4" /> {t("sandbox.title")}</p>
+          <p className="text-muted-foreground text-xs leading-relaxed">{t("sandbox.about")}</p>
+        </div>
+        {busy ? <Loader2 className="text-muted-foreground mt-1 size-4 shrink-0 animate-spin" />
+          : <Switch checked={false} onCheckedChange={(on) => { if (on) void connect() }} aria-label={t("sandbox.title")} />}
       </div>
-      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void connect() }}>
-        <Input value={url} onChange={(e) => setUrl(e.target.value)} className="font-mono text-xs" aria-label={t("sandbox.url")} />
-        <Button type="submit" size="sm" className="h-9" disabled={busy}>{busy ? <Loader2 className="animate-spin" /> : <Plug />} {t("sandbox.connect")}</Button>
+      <form onSubmit={(e) => { e.preventDefault(); void connect() }}>
+        <Input value={url} onChange={(e) => setUrl(e.target.value)} disabled={busy} className="font-mono text-xs" aria-label={t("sandbox.url")} />
       </form>
       {env?.sandboxError && <p className="text-destructive text-xs leading-relaxed break-words">{env.sandboxError}</p>}
       <div className="space-y-1.5">
@@ -173,7 +177,8 @@ function SandboxWorkspace({ faults, onFaults, onClose }: { faults: SandboxFaults
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={busy} onClick={() => run(api.sandbox.samples, t("sandbox.samplesDone"))}><RefreshCw /> {t("sandbox.samples")}</Button>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => { onClose(); void run(api.sandbox.disconnect, t("sandbox.disconnected")) }}><Unplug /> {t("sandbox.disconnect")}</Button>
+            <Switch checked disabled={busy} className="ml-1 self-center" aria-label={t("sandbox.disconnect")}
+              onCheckedChange={(on) => { if (!on) { onClose(); void run(api.sandbox.disconnect, t("sandbox.disconnected")) } }} />
           </div>
         </header>
         {error && <p className="text-destructive text-sm">{s("common.error")}: {error}</p>}

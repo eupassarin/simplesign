@@ -112,11 +112,11 @@ internal static class RunApi
         });
 
         // Every validation sample of the three formats, with the verdict each one should get.
-        api.MapGet("/validation/samples/all", (Validation.ValidationSampleStore pdf, CadesSampleStore cadesSamples, XmlSampleStore xmlSamples, DocumentStore documents) =>
-            pdf.Samples.Select(s => new SampleView(RunFormats.Pades, s.Id, s.FileId, documents.TryGet(s.FileId, out var f) ? f!.FileName : s.Id, null, L.T(s.Title), L.T(s.Description), s.ExpectedIndication))
-                .Concat(cadesSamples.Samples.Where(s => s.Kind != "data")
+        api.MapGet("/validation/samples/all", async (SampleService samples, DocumentStore documents, CancellationToken ct) =>
+            (await samples.ValidationAsync(ct)).Select(s => new SampleView(RunFormats.Pades, s.Id, s.FileId, documents.TryGet(s.FileId, out var f) ? f!.FileName : s.Id, null, L.T(s.Title), L.T(s.Description), s.ExpectedIndication))
+                .Concat((await samples.CadesAsync(ct)).Where(s => s.Kind != "data")
                     .Select(s => new SampleView(RunFormats.Cades, s.Id, s.FileId, s.FileName, s.DataId, L.T(s.Title), L.T(s.Description), s.ExpectedIndication)))
-                .Concat(xmlSamples.Samples.Where(s => s.Kind == "validation")
+                .Concat((await samples.XmlAsync(ct)).Where(s => s.Kind == "validation")
                     .Select(s => new SampleView(RunFormats.Xades, s.Id, s.FileId, s.FileName, s.DataId, L.T(s.Title), L.T(s.Description), s.ExpectedIndication))));
 
         // A stored validation report (SimpleSign's or DSS's JSON), read for the report viewer.
@@ -152,6 +152,9 @@ internal static class RunApi
             return Results.Ok(client.Settings);
         });
         dss.MapGet("/status", async (DssClient client, CancellationToken ct) => await client.StatusAsync(ct));
+        // The policy DSS is given (SimpleSign's default, as constraint.xml), to show and to download.
+        dss.MapGet("/policy", () => DssClient.Policy());
+        dss.MapGet("/constraint.xml", () => Results.File(System.Text.Encoding.UTF8.GetBytes(DssClient.Policy().ConstraintXml), "application/xml", "simplesign-policy.xml"));
         dss.MapPost("/validate", async (DssValidateRequest body, DssClient client, DocumentStore documents, CancellationToken ct) =>
             documents.TryGet(body.FileId, out _)
                 ? Results.Ok(await client.ValidateAsync(body.FileId, body.DataId, null, ct, policy: PolicyUploads.Validation(body.PolicyId, documents)))

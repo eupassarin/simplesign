@@ -24,7 +24,7 @@ interface Row {
 }
 
 const rows: Row[] = [
-  { field: "crl", title: "faults.crl", values: ["None", "Down", "Slow", "Expired", "WrongKey", "Stale"], prefix: "faults.crlValues", delay: "crlDelayMs" },
+  { field: "crl", title: "faults.crl", values: ["None", "Down", "Slow", "Expired", "WrongKey", "Stale", "NoNextUpdate"], prefix: "faults.crlValues", delay: "crlDelayMs" },
   { field: "ocsp", title: "faults.ocsp", values: ["None", "Down", "Slow", "TryLater", "Expired", "Unauthorized", "Unknown"], prefix: "faults.ocspValues", delay: "ocspDelayMs" },
   { field: "ocspSigner", title: "faults.ocspSigner", values: ["Issuer", "Delegated"], prefix: "faults.signerValues", neutral: true },
   { field: "tsa", title: "faults.tsa", values: ["None", "Down", "Slow", "InvalidToken", "Untrusted"], prefix: "faults.tsaValues", delay: "tsaDelayMs" },

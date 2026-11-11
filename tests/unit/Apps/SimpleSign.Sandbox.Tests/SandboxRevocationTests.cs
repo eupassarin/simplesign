@@ -215,6 +215,31 @@ public sealed class SandboxRevocationTests(SandboxFixture fixture)
         signer!.Thumbprint.ShouldBe(revoked.Thumbprint);
     }
 
+    [Fact]
+    public async Task Tsa_Expired_SignsWithTheExpiredCertificate()
+    {
+        byte[] data = Encoding.UTF8.GetBytes("timestamp me");
+        var request = Rfc3161TimestampRequest.CreateFromData(data, HashAlgorithmName.SHA256, requestSignerCertificates: true);
+        using var content = new ByteArrayContent(request.Encode());
+        var response = await Http.PostAsync("tsa/expired", content);
+        response.EnsureSuccessStatusCode();
+        byte[] reply = await response.Content.ReadAsByteArrayAsync();
+
+        // .NET's own ProcessResponse refuses the token: its signer had expired when it was made.
+        Should.Throw<CryptographicException>(() => request.ProcessResponse(reply, out _));
+        var timeStampResp = new System.Formats.Asn1.AsnReader(reply, System.Formats.Asn1.AsnEncodingRules.DER).ReadSequence();
+        _ = timeStampResp.ReadSequence(); // status
+        var cms = new SignedCms();
+        cms.Decode(timeStampResp.ReadEncodedValue().Span);
+        cms.CheckSignature(verifySignatureOnly: true);
+        Rfc3161TimestampTokenInfo.TryDecode(cms.ContentInfo.Content, out var info, out _).ShouldBeTrue();
+        var signer = cms.SignerInfos[0].Certificate;
+        using var expired = await LeafAsync("tsa-expired");
+        signer!.Thumbprint.ShouldBe(expired.Thumbprint);
+        signer.NotAfter.ToUniversalTime().ShouldBeLessThan(info!.Timestamp.UtcDateTime);
+        fixture.Info.Tsa.ExpiredUrl.ShouldBe(fixture.BaseUrl + "tsa/expired");
+    }
+
     private async Task<ChainRevocationResult> CheckAsync(string id, Core.Http.OutboundHttpPolicy? policy = null)
     {
         var leaf = await LeafAsync(id);

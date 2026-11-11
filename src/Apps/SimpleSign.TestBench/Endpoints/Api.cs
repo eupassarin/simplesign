@@ -7,7 +7,6 @@ using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Validation;
-using SimpleSign.TestBench.Xml;
 
 namespace SimpleSign.TestBench.Endpoints;
 
@@ -139,7 +138,8 @@ internal static class Api
             }
         });
         // Validation area
-        api.MapGet("/validation/samples", (ValidationSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
+        api.MapGet("/validation/samples", async (SampleService samples, CancellationToken ct) =>
+            (await samples.ValidationAsync(ct)).Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
         api.MapPost("/validation/bulk", async (BulkRequest body, InspectionService inspection, CancellationToken ct) => await inspection.BulkAsync(body, ct));
         api.MapPost("/inspect", async (InspectRequest body, InspectionService inspection, CancellationToken ct) => await inspection.InspectAsync(body.FileId, ct));
         api.MapGet("/files/{id}/cms/{field}", async (string id, string field, InspectionService inspection, CancellationToken ct) =>
@@ -149,7 +149,8 @@ internal static class Api
 
         // CAdES
         var cades = api.MapGroup("/cades");
-        cades.MapGet("/samples", (CadesSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
+        cades.MapGet("/samples", async (SampleService samples, CancellationToken ct) =>
+            (await samples.CadesAsync(ct)).Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
         cades.MapPost("/inspect", (InspectRequest body, DocumentStore documents) =>
         {
             var file = documents.Get(body.FileId);
@@ -158,7 +159,8 @@ internal static class Api
 
         // XML: XAdES
         var xml = api.MapGroup("/xml");
-        xml.MapGet("/samples", (XmlSampleStore samples) => samples.Samples.Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
+        xml.MapGet("/samples", async (SampleService samples, CancellationToken ct) =>
+            (await samples.XmlAsync(ct)).Select(s => s with { Title = L.T(s.Title), Description = L.T(s.Description) }));
 
         RunApi.Map(api);
         SandboxApi.Map(api);

@@ -43,6 +43,18 @@ Every new check is off in `SigningPolicy.Default`, so signing is unchanged until
   could show as trusted. With `ValidationOptions.CheckRevocation` on, the result now carries a warning saying so;
   `ValidateAsync` replaces it with the checks' outcome.
 
+### Added — Sandbox: an expired TSA, a SHA-1 CA, a signer without KeyUsage, CRLs without nextUpdate
+
+- **`tsa-expired`** (Timestamping, expired yesterday), served at `POST /tsa/expired`; `GET /api/info` gives its
+  address in `tsa.expiredUrl`.
+- **`intermediate-sha1`**, an intermediate CA whose certificate the root signs with sha1WithRSAEncryption, and
+  **`under-sha1-ca`**, a signer under it. An environment created before this CA existed gets it the next time it
+  opens. Its root and the certificates it already issued stay the same.
+- **`no-key-usage-extension`**: a signer with no KeyUsage extension at all. `no-signing-key-usage` has one, with
+  keyEncipherment only.
+- **`CrlFault.NoNextUpdate`**: while it is on, the CRLs (HTTP, HTTPS, LDAP) have no nextUpdate field. They are still
+  signed by their CA. The TestBench's Sandbox control lists it with the other CRL failures.
+
 ### Fixed — PAdES: the B-LT/B-LTA DSS update no longer overwrites the stamp's font object
 
 - **`LtvEmbedder`:** to add `/DSS` to the catalog it searched backwards for `"N 0 obj"` as plain text, so catalog
@@ -51,6 +63,31 @@ Every new check is off in `SigningPolicy.Default`, so signing is unchanged until
   validation reported "Form field removed" (a DocMDP violation when certified). It now uses
   `PdfStructureParser.FindObjectBytes`, which rejects suffix matches.
 - **TestBench matrix:** the `appearance` dimension is back (invisible, visible, styled+QR, auto+image).
+
+### Changed — TestBench: Sandbox and DSS on/off, the DSS drawer, a faster Sandbox connection
+
+- **Sandbox and DSS on or off:** each control in the top bar opens a popup to turn it on when it is off (the address
+  and how to start it) and a drawer with everything once it is on, with a switch to turn it off. The controls are
+  back on the right of the top bar, after Sign and Validate.
+- **The DSS drawer**, in three tabs:
+  - **Overview:** one table of every server setting (how the Sandbox is trusted, EU lists, refresh, lists with a bad
+    signature, trust anchors, revocation cache, policy), with what each means next to SimpleSign's verdicts and the
+    variable that changes it.
+  - **Trust:** how DSS trusts the Sandbox and the lists, then every trusted certificate by group, in a searchable
+    table (name, organization and country read from the subject, UTF-8 escapes decoded).
+  - **Policy:** the validation policy DSS receives, in the same explained tree as the Policies panel. The constraints
+    left out of its `constraint.xml` (DSS 6.3 does not know them) are marked, and the XML can be read or downloaded
+    (`GET /api/dss/policy`, `/api/dss/constraint.xml`).
+- **`tools/dss` `config.json`:** also the forwarded Sandbox ports and the Peruvian list's address.
+- **Connecting to the Sandbox takes about 2 s instead of 15 s:**
+  - the signed samples are built in the background, each list readable as soon as it is done (the "expired" sample
+    waits ~10 s for a certificate to expire);
+  - connecting or disconnecting stops a build still running first, which also fixes "m_safeCertContext is an invalid
+    handle" on a quick reconnect;
+  - the signers' keys are loaded in parallel.
+- **Edit the stamp** no longer opens the first explanation's hover card: drawers do not move the focus when they open.
+- **`.env.example`** in `tools/stack` and `tools/dss`: every variable with its default and what it does. A local
+  `.env` (git-ignored) keeps a machine's choices, such as `DSS_LOAD_EU_TRUSTED_LISTS=cached`.
 
 ### Changed — The Sandbox is API only; its UI is the TestBench's Sandbox control
 

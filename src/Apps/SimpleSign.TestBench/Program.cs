@@ -84,7 +84,8 @@ else
     await sandbox.ReconnectAsync();
 }
 
-await app.Services.GetRequiredService<SampleService>().RefreshAsync();
+// Built in the background: the app starts without waiting for them (their endpoints wait).
+_ = app.Services.GetRequiredService<SampleService>().Start();
 
 app.Use(async (context, next) =>
 {

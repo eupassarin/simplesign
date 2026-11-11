@@ -20,7 +20,7 @@ import type {
   PolicyView,
 } from "./types"
 
-import type { DssComparison, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, ReportView, RunEngine, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
+import type { DssComparison, DssPolicyView, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, ReportView, RunEngine, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -117,6 +117,8 @@ export const api = {
     settings: () => request<DssSettings>("GET", "/api/dss/settings"),
     save: (settings: DssSettings) => request<DssSettings>("PUT", "/api/dss/settings", settings),
     status: () => request<DssStatus>("GET", "/api/dss/status"),
+    policy: () => request<DssPolicyView>("GET", "/api/dss/policy"),
+    constraintXmlUrl: "/api/dss/constraint.xml",
     validate: (fileId: string, dataId?: string | null, policyId?: string | null) => request<DssComparison>("POST", "/api/dss/validate", { fileId, dataId, policyId }),
   },
 }

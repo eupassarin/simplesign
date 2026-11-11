@@ -133,6 +133,14 @@ DSS container whenever the root changed.
 The DSS variables of [`tools/dss/docker-compose.yml`](../dss/docker-compose.yml) (`DSS_LOAD_EU_TRUSTED_LISTS`,
 `DSS_SANDBOX_TRUST`…) apply here too: the `dss` service extends it.
 
+### Local settings (`.env`)
+
+To keep settings across restarts instead of exporting them every time, copy
+[`.env.example`](.env.example) to `tools/stack/.env` and uncomment what you change. Compose reads it on every
+`up`. It is this machine's choice, so it is not committed (`.gitignore`). Every line left commented keeps the
+default. For example, to use the EU trusted lists offline: run once with `DSS_LOAD_EU_TRUSTED_LISTS=true` (it fills
+the `tl-cache` volume), then put `DSS_LOAD_EU_TRUSTED_LISTS=cached` in `.env`.
+
 On other ports, start the TestBench with the same Sandbox:
 
 ```bash

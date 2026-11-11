@@ -34,13 +34,23 @@ public sealed record DssServerConfig(
     bool GovBr,
     bool TsaRoots,
     DssPeruTrust? Peru,
-    IReadOnlyList<DssTrustedCertificate>? Trusted);
+    IReadOnlyList<DssTrustedCertificate>? Trusted,
+    DssForwarding? Forwarding = null);
+
+/// <summary>The Sandbox ports the container forwards from its own localhost to <paramref name="Host"/> (the certificates name localhost).</summary>
+public sealed record DssForwarding(string? Host, string? Ports);
+
+/// <summary>
+/// The validation policy DSS is given with every request: SimpleSign's, as the DSS <c>constraint.xml</c>, without the
+/// constraints the DSS of tools/dss does not know (<paramref name="NotInDss"/>), which DSS then does not evaluate.
+/// </summary>
+public sealed record DssPolicyView(string Name, string ConstraintXml, IReadOnlyList<string> NotInDss);
 
 /// <summary>How DSS trusts the Sandbox: <c>list</c> (its trusted list), <c>anchor</c> (its root), <c>testbench</c> (the root through the TestBench) or <c>none</c>.</summary>
 public sealed record DssSandboxTrust(string? Url, string? TestBenchUrl, string? Requested, string? Trust, string? LotlUrl, bool Tls);
 
 /// <summary>The CAs of the Peruvian trusted list DSS trusts.</summary>
-public sealed record DssPeruTrust(bool Enabled, int Trusted, string? Origin, string? Sequence, string? NextUpdate);
+public sealed record DssPeruTrust(bool Enabled, int Trusted, string? Origin, string? Sequence, string? NextUpdate, string? Url = null);
 
 /// <summary>A certificate in DSS's trust store: its group (icp-brasil, govbr, tsa, peru, sandbox, mounted), its name and subject.</summary>
 public sealed record DssTrustedCertificate(string Group, string Name, string Subject);
@@ -126,6 +136,14 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
         }
     }
 
+    /// <summary>What DSS is given as its policy for <paramref name="policy"/> (null: SimpleSign's default), exactly as a request sends it.</summary>
+    internal static DssPolicyView Policy(SimpleSign.Core.Policies.ValidationPolicy? policy = null)
+    {
+        policy ??= SimpleSign.Core.Policies.ValidationPolicy.Default;
+        return new DssPolicyView(policy.Name ?? "SimpleSign", DssPolicyConverter.ToConstraintXml(policy.ToJson(), DssPolicyConverter.NotInDss63),
+            [.. DssPolicyConverter.NotInDss63.Order(StringComparer.Ordinal)]);
+    }
+
     /// <summary>The setup tools/dss wrote when DSS started; null when the server has none (a DSS started another way) or it cannot be read.</summary>
     private async Task<DssServerConfig?> ConfigAsync(DssSettings settings, CancellationToken cancellationToken)
     {
@@ -170,7 +188,7 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
     public async Task<DssComparison> ValidateAsync(string fileId, string? detachedDataId, RunLogger? logger, CancellationToken cancellationToken, string? detachedDataName = null,
         SimpleSign.Core.Policies.ValidationPolicy? policy = null)
     {
-        policy ??= SimpleSign.Core.Policies.ValidationPolicy.Default;
+        var sent = Policy(policy);
         var settings = Settings;
         var watch = Stopwatch.StartNew();
         var file = documents.Get(fileId);
@@ -183,7 +201,7 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
             // The same policy on both sides: SimpleSign's, written as the DSS constraint.xml.
             ["policy"] = new JsonObject
             {
-                ["bytes"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(DssPolicyConverter.ToConstraintXml(policy.ToJson(), DssPolicyConverter.NotInDss63))),
+                ["bytes"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(sent.ConstraintXml)),
                 ["digestAlgorithm"] = null,
                 ["name"] = "simplesign-policy.xml",
             },
@@ -194,7 +212,7 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
         try
         {
             var endpoint = new Uri(BaseUri(settings), ValidatePath);
-            logger?.Note(RunStages.CrossValidation, $"DSS: POST {endpoint} ({file.FileName}, {file.Content.Length} bytes, policy \"{policy.Name}\")");
+            logger?.Note(RunStages.CrossValidation, $"DSS: POST {endpoint} ({file.FileName}, {file.Content.Length} bytes, policy \"{sent.Name}\")");
             using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
             using var response = await _http.PostAsync(endpoint, content, cancellationToken);
             string text = await response.Content.ReadAsStringAsync(cancellationToken);
