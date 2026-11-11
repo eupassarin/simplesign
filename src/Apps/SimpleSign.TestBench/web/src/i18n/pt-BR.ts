@@ -521,6 +521,16 @@ export const ptBR: Messages = {
     dssHint: "O mesmo DSS serve aos dois modos. Em Real ele valida contra as raízes que recebeu: acrescente as suas em tools/dss/trust, ou carregue as listas de confiança da UE.",
   },
   sandbox: {
+    adobe: {
+      title: "Confiar no Adobe Acrobat/Reader",
+      about: "O Adobe só confia na lista dele (AATL) e nos certificados importados: uma assinatura deste Sandbox aparece com \"Signer's identity is unknown\" até a raiz dele ser uma raiz confiável lá.",
+      download: "Baixar a raiz (.cer)",
+      step1: "Preferências → Assinaturas → Identidades e certificados confiáveis → Mais…",
+      step2: "Certificados confiáveis → Importar → escolha simplesign-sandbox-root.cer.",
+      step3: "Selecione-o → Editar confiança → marque \"Usar este certificado como raiz confiável\".",
+      step4: "Abra o PDF de novo: a assinatura aparece como válida.",
+      time: "Sem carimbo do tempo (B-B), o Adobe mostra a hora do relógio do signatário; com B-T ou mais, a da TSA.",
+    },
     title: "SimpleSign Sandbox",
     intro: "Um app separado com uma PKI de teste e seus serviços em endereços reais: LCRs por HTTP, HTTPS e LDAP, OCSP, ACTs e um serviço CSC, com falhas para ligar. Conectado, a raiz dele é confiável, os serviços dele são alcançáveis (as origens passam pela proteção contra SSRF) e os signatários e ACTs dele podem ser escolhidos. Falhas, revogações e o log de requisições ficam na página do próprio Sandbox.",
     connection: "Conexão",
