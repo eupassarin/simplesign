@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BookOpen, FileSliders, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Stamp, Sun, SunMoon } from "lucide-react"
+import { BookOpen, FileSliders, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -13,9 +13,8 @@ import { DssControl } from "@/features/shared/DssControl"
 import { EngineControl } from "@/features/shared/EngineControl"
 import { CoveragePage } from "@/features/standards/CoveragePage"
 import { ValidatePage } from "@/features/validate/ValidatePage"
-import type { WorkbenchSchema } from "@/features/workbench/schema"
-import { useWorkbench, WorkbenchProvider, type AppMode } from "@/features/workbench/state"
-import { StampPage } from "@/features/stamp/StampPage"
+import type { RunKind, WorkbenchSchema } from "@/features/workbench/schema"
+import { useWorkbench, WorkbenchProvider } from "@/features/workbench/state"
 import { WorkbenchPage } from "@/features/workbench/WorkbenchPage"
 import { useTheme } from "@/hooks/use-theme"
 import { locales, useI18n, type Locale } from "@/i18n"
@@ -49,14 +48,13 @@ export default function App() {
   )
 }
 
-const modes: { id: AppMode; icon: typeof PenTool }[] = [
+const modes: { id: RunKind; icon: typeof PenTool }[] = [
   { id: "sign", icon: PenTool },
   { id: "validate", icon: ShieldCheck },
-  { id: "stamp", icon: Stamp },
 ]
 
 /**
- * One top bar and one task on screen. There are three tasks: Sign, Validate, and Stamp (the visible signature of PAdES); Reference (what
+ * One top bar and one task on screen. There are two tasks, Sign and Validate (the PAdES stamp opens as a drawer from Sign); Reference (what
  * the library covers of each standard), Sandbox (the connected SimpleSign Sandbox) and Environment
  * (what this machine has) open as panels over either; the engine (library or CLI) and the DSS switch, which both tasks use, sit beside them.
  */
@@ -110,7 +108,7 @@ function Shell() {
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col">
-        {mode === "sign" ? <WorkbenchPage /> : mode === "stamp" ? <StampPage /> : <ValidatePage />}
+        {mode === "sign" ? <WorkbenchPage /> : <ValidatePage />}
       </main>
     </div>
   )

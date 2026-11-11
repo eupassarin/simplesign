@@ -52,7 +52,19 @@ internal static class SandboxApi
         group.MapGet("/chain.pem", (SandboxEnvironment sandbox) => sandbox.Current is { } c
             ? Results.Text(c.Root.ExportCertificatePem() + "\n" + c.Intermediate.ExportCertificatePem() + "\n", "application/x-pem-file")
             : Results.NotFound());
+
+        // The root as a .cer (DER), the file Adobe Acrobat/Reader imports as a trusted certificate.
+        group.MapGet("/root.cer", (SandboxEnvironment sandbox) => RootCertificate(sandbox) is { } der
+            ? Results.File(der, "application/pkix-cert", RootFileName)
+            : Results.NotFound(new { error = Localization.L.T("No SimpleSign Sandbox is connected.") }));
     }
+
+    /// <summary>The name of the downloaded root.</summary>
+    internal const string RootFileName = "simplesign-sandbox-root.cer";
+
+    /// <summary>The connected Sandbox's root in DER, or null without a Sandbox.</summary>
+    internal static byte[]? RootCertificate(SandboxEnvironment sandbox) =>
+        sandbox.Current?.Root.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Cert);
 }
 
 /// <summary>Builds the signed samples (validation, CAdES, XML) again from the connected Sandbox, or drops them without one.</summary>

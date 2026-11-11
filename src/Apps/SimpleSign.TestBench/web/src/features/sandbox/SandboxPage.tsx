@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ExternalLink, FlaskConical, Loader2, Plug, RefreshCw, Unplug } from "lucide-react"
+import { Download, ExternalLink, FlaskConical, Loader2, Plug, RefreshCw, Unplug } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -83,6 +83,7 @@ export function SandboxPage() {
                   <KeyValue stacked mono label="CSC v2" copy={sandbox.cscUrl}>{sandbox.cscUrl}</KeyValue>
                 </div>
               </div>
+              <AdobeTrust />
             </Section>
 
             <Section title={t("sandbox.signers")} description={t("sandbox.signersHint")}>
@@ -103,6 +104,32 @@ export function SandboxPage() {
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Adobe Acrobat/Reader trusts only its own list (AATL) and what is imported: a signature from the Sandbox's PKI shows
+ * "Signer's identity is unknown" until its root is imported as a trusted root. The root as a .cer, and how.
+ */
+function AdobeTrust() {
+  const t = useT()
+  return (
+    <div className="mt-4 space-y-2 rounded-lg border px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{t("sandbox.adobe.title")}</p>
+          <p className="text-muted-foreground text-xs leading-relaxed">{t("sandbox.adobe.about")}</p>
+        </div>
+        <Button variant="outline" size="sm" asChild><a href="/api/sandbox/root.cer" download><Download /> {t("sandbox.adobe.download")}</a></Button>
+      </div>
+      <ol className="text-muted-foreground list-decimal space-y-0.5 pl-5 text-xs leading-relaxed">
+        <li>{t("sandbox.adobe.step1")}</li>
+        <li>{t("sandbox.adobe.step2")}</li>
+        <li>{t("sandbox.adobe.step3")}</li>
+        <li>{t("sandbox.adobe.step4")}</li>
+      </ol>
+      <p className="text-muted-foreground text-xs leading-relaxed">{t("sandbox.adobe.time")}</p>
     </div>
   )
 }

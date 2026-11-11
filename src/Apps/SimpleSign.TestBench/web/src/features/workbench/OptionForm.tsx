@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { ChevronRight, Stamp } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { StampPage } from "../stamp/StampPage"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useT } from "@/i18n"
 import { cn } from "@/lib/utils"
@@ -36,10 +38,11 @@ export function OptionForm() {
   )
 }
 
-/** The visible stamp is designed on the Stamp page: here, whether it is on, and the way there. */
+/** The visible stamp: whether it is on, and "Edit the stamp", which opens its page as a drawer over the form. */
 function StampLink() {
-  const { options, format, setMode } = useWorkbench()
+  const { options, format } = useWorkbench()
   const t = useT()
+  const [open, setOpen] = useState(false)
   if (format !== "pades") return null
   const visible = (options.appearance as { visible?: boolean } | undefined)?.visible === true
   return (
@@ -49,7 +52,13 @@ function StampLink() {
         <span className="block text-sm font-semibold">{t("stamp.title")}</span>
         <span className="text-muted-foreground block truncate text-xs">{t(visible ? "stamp.onSummary" : "stamp.offSummary")}</span>
       </span>
-      <Button variant="outline" size="sm" onClick={() => setMode("stamp")}>{t("stamp.edit")}</Button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild><Button variant="outline" size="sm">{t("stamp.edit")}</Button></SheetTrigger>
+        <SheetContent className="flex w-[min(96vw,1400px)] flex-col p-0 sm:max-w-none">
+          <SheetHeader className="sr-only"><SheetTitle>{t("stamp.title")}</SheetTitle><SheetDescription>{t("stamp.about")}</SheetDescription></SheetHeader>
+          <div className="min-h-0 flex-1">{open && <StampPage onClose={() => setOpen(false)} />}</div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
