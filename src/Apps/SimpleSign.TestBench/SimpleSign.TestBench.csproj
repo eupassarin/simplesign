@@ -63,8 +63,12 @@
           Inputs="@(WebSources);$(WebDir)/package.json;$(WebDir)/index.html" Outputs="$(WebDir)/dist/index.html">
     <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(WebDir)" Condition="!Exists('$(WebDir)/node_modules')" />
     <Exec Command="npm run build" WorkingDirectory="$(WebDir)" />
+    <!-- The build empties web/dist and writes files with new hashes: drop the files listed when the project was
+         evaluated (they no longer exist, so the copy to wwwroot would fail) and list what is there now. -->
     <ItemGroup>
-      <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Exclude="@(Content)" />
+      <_StaleWebDist Include="@(Content)" Condition="$([System.String]::Copy('%(Identity)').Replace('\','/').StartsWith('web/dist/'))" />
+      <Content Remove="@(_StaleWebDist)" />
+      <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" />
     </ItemGroup>
   </Target>
 
