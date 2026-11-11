@@ -64,6 +64,7 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         run.Engine.ShouldBe(RunEngines.Cli);
         run.Cli.ShouldNotBeNull().ShouldNotBeEmpty();
         run.Cli!.ShouldAllBe(c => c.ExitCode == 0);
+        run.Cli!.ShouldContain(c => c.Command.Contains(" validate ", StringComparison.Ordinal), "signed through the CLI, validated through it too");
         run.Cli!.ShouldAllBe(c => !c.Command.Contains(fixture.Sandbox.Connection.Info.PfxPassword, StringComparison.Ordinal));
         run.Overall.ShouldBe(expected.Overall, Problems(run));
         run.Validation.Select(v => v.Indication).ShouldBe(expected.Validation.Select(v => v.Indication));
@@ -207,6 +208,38 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
             run.Format.ShouldBe(RunFormats.Xades, sample.Id);
             run.Overall.ShouldBe(sample.ExpectedIndication, sample.Id);
             run.Detail.ShouldBeOfType<XmlValidationView>();
+        }
+    }
+
+    [SkippableTheory]
+    [InlineData(RunFormats.Pades)]
+    [InlineData(RunFormats.Cades)]
+    [InlineData(RunFormats.Xades)]
+    public async Task RunAsync_ValidateThroughTheCli_GivesTheLibrarysVerdicts(string format)
+    {
+        List<(string Id, string FileId, string? DataId)> samples = format switch
+        {
+            RunFormats.Cades => [.. fixture.CadesSamples.Where(s => s.Kind != "data" && s.ExpectedIndication is not null).Select(s => (s.Id, s.FileId, s.DataId))],
+            RunFormats.Xades => [.. fixture.XmlSamples.Where(s => s.Kind == "validation" && s.ExpectedIndication is not null).Select(s => (s.Id, s.FileId, s.DataId))],
+            _ => [.. fixture.ValidationSamples.Select(s => (s.Id, s.FileId, (string?)null))],
+        };
+        samples.ShouldNotBeEmpty();
+        foreach (var (id, fileId, dataId) in samples)
+        {
+            var expected = await fixture.Runs().RunAsync(Validate(fileId, dataId), default);
+            var run = await fixture.Runs().RunAsync(Validate(fileId, dataId) with { Engine = RunEngines.Cli }, default);
+
+            string commands = string.Join("\n", (run.Cli ?? []).Select(c => $"{c.Command} → {c.ExitCode}\n{c.Output}"));
+            run.Engine.ShouldBe(RunEngines.Cli, id);
+            run.Success.ShouldBe(expected.Success, $"{id}: {Problems(run)}\n{commands}");
+            run.Overall.ShouldBe(expected.Overall, $"{id}: {Problems(run)}\n{commands}");
+            run.Validation.Select(v => (v.Indication, v.SubIndication)).ShouldBe(expected.Validation.Select(v => (v.Indication, v.SubIndication)), $"{id}\n{commands}");
+            if (expected.Validation.Count > 0)
+            {
+                run.Cli.ShouldNotBeNull(id).ShouldHaveSingleItem(id).Command.ShouldContain("validate", Case.Sensitive, id);
+                run.ReportId.ShouldNotBeNull(id);
+                run.EtsiReportId.ShouldNotBeNull(id);
+            }
         }
     }
 

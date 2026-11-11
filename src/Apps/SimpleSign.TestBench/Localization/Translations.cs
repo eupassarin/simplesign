@@ -370,6 +370,8 @@ internal static class Translations
         // ── Runs through the CLI ───────────────────────────────────────
         ["The CLI ended with exit code {0}: {1}"] = "O CLI terminou com código de saída {0}: {1}",
         ["The CLI wrote no output file."] = "O CLI não gravou nenhum arquivo de saída.",
+        ["The CLI printed no validation result."] = "O CLI não imprimiu nenhum resultado de validação.",
+        ["The validation through the CLI failed: {0}"] = "A validação pelo CLI falhou: {0}",
         ["The simplesign CLI was not found next to the TestBench (cli/simplesign.dll). Build the TestBench again, or set SIMPLESIGN_CLI."] = "O CLI simplesign não foi encontrado ao lado do TestBench (cli/simplesign.dll). Compile o TestBench de novo ou defina SIMPLESIGN_CLI.",
         ["simplesign ended with exit code {0} in {1} ms."] = "simplesign terminou com código de saída {0} em {1} ms.",
         ["The CLI took longer than {0} minutes and was stopped."] = "O CLI levou mais de {0} minutos e foi interrompido.",
@@ -663,7 +665,7 @@ internal static class Translations
         ["Operating system roots"] = "Raízes do sistema operacional",
         ["The roots the operating system trusts."] = "As raízes em que o sistema operacional confia.",
         ["Public TSA roots"] = "Raízes dos TSAs públicos",
-        ["The public TSA roots are not in these snippets: --trust takes them from src/Apps/SimpleSign.TestBench/TsaRoots (the operating system usually trusts DigiCert's and Sectigo's, never FreeTSA's)."] = "As raízes dos TSAs públicos não estão nestes trechos: o --trust as lê de src/Apps/SimpleSign.TestBench/TsaRoots (o sistema operacional costuma confiar nas da DigiCert e da Sectigo, nunca na da FreeTSA).",
+        ["root.cer holds the roots to trust, the public TSAs' among them: copy them from src/Apps/SimpleSign.TestBench/TsaRoots (the operating system usually trusts DigiCert's and Sectigo's, never FreeTSA's)."] = "O root.cer reúne as raízes confiáveis, entre elas as dos TSAs públicos: copie-as de src/Apps/SimpleSign.TestBench/TsaRoots (o sistema operacional costuma confiar nas da DigiCert e da Sectigo, nunca na da FreeTSA).",
         ["The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA), so their timestamps reach a trust anchor. DSS trusts the same roots."] = "As raízes dos TSAs públicos oferecidos (DigiCert, Sectigo, FreeTSA), para que os carimbos deles cheguem a uma âncora de confiança. O DSS confia nas mesmas raízes.",
 
         // ── TestBench ETSI only ────────────────────────────────────────

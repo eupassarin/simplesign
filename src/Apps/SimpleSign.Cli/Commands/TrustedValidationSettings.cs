@@ -175,7 +175,9 @@ internal class TrustedValidationSettings : CommonSettings
     internal List<TrustedListInfo> LoadedTrustedLists { get; } = [];
 
     /// <summary>The policy, and the trust anchors of the trust folder and the trusted list.</summary>
-    internal async Task<(ValidationPolicy Policy, List<X509Certificate2> Anchors)> LoadTrustAsync(CancellationToken cancellationToken)
+    /// <param name="http">The CLI's HTTP provider (its proxy and outbound policy, <c>--allow-origin</c>): the trusted lists are downloaded through it.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    internal async Task<(ValidationPolicy Policy, List<X509Certificate2> Anchors)> LoadTrustAsync(SimpleSign.Core.Http.IHttpClientProvider? http, CancellationToken cancellationToken)
     {
         ValidationPolicy policy = PolicyPath is null ? ValidationPolicy.Default
             : PolicySignerPath is null ? ValidationPolicy.Load(PolicyPath)
@@ -194,7 +196,7 @@ internal class TrustedValidationSettings : CommonSettings
         {
             var options = new TrustedListOptions { SignerCertificates = [LoadCertificate(TrustedListSignerPath!)] };
             var list = Uri.TryCreate(TrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"
-                ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, cancellationToken: cancellationToken)
+                ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, http, cancellationToken: cancellationToken)
                 : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(TrustedList, cancellationToken), options);
             anchors.AddRange(list.GetTrustAnchors());
             LoadedTrustedLists.AddRange(list.TrustedLists);
@@ -207,7 +209,7 @@ internal class TrustedValidationSettings : CommonSettings
                 LotlLocation = new Uri(Lotl),
                 LotlSignerCertificates = [LoadCertificate(LotlSignerPath!)],
                 Territories = LotlTerritories,
-            }, cancellationToken: cancellationToken);
+            }, http, cancellationToken);
             anchors.AddRange(set.GetTrustAnchors());
             LoadedTrustedLists.AddRange(set.TrustedLists);
             foreach (var problem in set.Problems)

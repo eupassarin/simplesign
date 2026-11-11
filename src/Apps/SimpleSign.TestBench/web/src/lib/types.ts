@@ -273,6 +273,8 @@ export interface SigningResult {
   } | null
   deferred?: { hashToSignHex: string; digestAlgorithm: string; signatureAlgorithmOid: string; sessionBytes: number; rawSignatureHex: string } | null
   batch: { id: string; ok: boolean; error?: string | null; outputId?: string | null; bytes: number }[]
+  /** The signed PDF described like on the Validation page. */
+  report?: ValidationReport | null
   code: { cSharp: string; cli: string; cliNotes: string[] }
   issues: OptionIssue[]
 }

@@ -10,6 +10,7 @@ import { PoliciesPage } from "@/features/policies/PoliciesPage"
 import { SandboxPage } from "@/features/sandbox/SandboxPage"
 import { CatalogProvider } from "@/features/shared/catalog"
 import { DssControl } from "@/features/shared/DssControl"
+import { EngineControl } from "@/features/shared/EngineControl"
 import { CoveragePage } from "@/features/standards/CoveragePage"
 import { ValidatePage } from "@/features/validate/ValidatePage"
 import type { RunKind, WorkbenchSchema } from "@/features/workbench/schema"
@@ -55,7 +56,7 @@ const modes: { id: RunKind; icon: typeof PenTool }[] = [
 /**
  * One top bar and one task on screen. There are two tasks, Sign and Validate; Reference (what
  * the library covers of each standard), Sandbox (the connected SimpleSign Sandbox) and Environment
- * (what this machine has) open as panels over either; the DSS switch, which both tasks use, sits beside them.
+ * (what this machine has) open as panels over either; the engine (library or CLI) and the DSS switch, which both tasks use, sit beside them.
  */
 function Shell() {
   const { mode, setMode, env } = useWorkbench()
@@ -81,12 +82,13 @@ function Shell() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Panel icon={<FileSliders />} label={t("policies.title")} hint={t("policies.hint")}><PoliciesPage /></Panel>
-          <Panel icon={<BookOpen />} label={t("app.reference")} hint={t("app.referenceHint")}><CoveragePage /></Panel>
+          <Panel icon={<FileSliders />} label={t("policies.title")} hint={t("policies.hint")} reference><PoliciesPage /></Panel>
+          <Panel icon={<BookOpen />} label={t("app.reference")} hint={t("app.referenceHint")} reference><CoveragePage /></Panel>
           <Panel icon={<FlaskConical />} label={sandbox ? t("app.sandboxConnected") : t("app.sandboxNone")} active={!!sandbox}
             hint={sandbox ? `${t("app.sandboxName", { name: sandbox.name })} ${t("app.sandboxHint")}` : t("app.sandboxHint")}>
             <SandboxPage />
           </Panel>
+          <EngineControl />
           <DssControl />
           <Panel icon={<Globe />} label={t("app.environmentPanel")} hint={t("app.environmentRealHint")}>
             <RealEnvironment />
@@ -112,17 +114,20 @@ function Shell() {
   )
 }
 
-/** A reference or control panel that slides over the task without leaving it; `active` highlights a connected service. */
-function Panel({ icon, label, hint, active, children }: { icon: React.ReactNode; label: string; hint: string; active?: boolean; children: React.ReactNode }) {
+/**
+ * A reference or control panel that slides over the task without leaving it; `active` highlights a connected service.
+ * A `reference` panel (no state to show) keeps its label for wide screens only, so the stateful buttons keep theirs.
+ */
+function Panel({ icon, label, hint, active, reference, children }: { icon: React.ReactNode; label: string; hint: string; active?: boolean; reference?: boolean; children: React.ReactNode }) {
   return (
     <Sheet>
       <Tooltip>
         <TooltipTrigger asChild>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="sm" aria-label={label} className={cn("h-8", active && "border-info/60 bg-info/10 border")}>{icon}<span className="max-xl:hidden">{label}</span></Button>
+            <Button variant="ghost" size="sm" aria-label={label} className={cn("h-8", active && "border-info/60 bg-info/10 border")}>{icon}<span className={reference ? "max-2xl:hidden" : "max-xl:hidden"}>{label}</span></Button>
           </SheetTrigger>
         </TooltipTrigger>
-        <TooltipContent className="max-w-64">{hint}</TooltipContent>
+        <TooltipContent className="max-w-64">{reference ? <><span className="font-medium">{label}</span> · {hint}</> : hint}</TooltipContent>
       </Tooltip>
       <SheetContent className="flex w-[min(96vw,1200px)] flex-col p-0 sm:max-w-none">
         <SheetHeader className="sr-only"><SheetTitle>{label}</SheetTitle><SheetDescription>{hint}</SheetDescription></SheetHeader>

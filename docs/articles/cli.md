@@ -112,9 +112,13 @@ simplesign cades sign document.pdf --cert mycert.pfx --password secret --signing
 # Validate a CAdES signature
 simplesign cades validate document.pdf.p7s --data document.pdf
 
-# Validate with custom trust anchors
+# Validate with custom trust anchors (the operating system's roots stay trusted; add --no-system-roots to trust only these)
 simplesign cades validate document.pdf.p7s --data document.pdf --trust root-ca.pem
 ```
+
+`cades validate` checks every signer and countersignature. With `--json`, `signatures` lists them (`signer-1`,
+`signer-2`…, each with its `counterSignatures`: `signer-1.1`…); the top-level fields are those of the first signer.
+The exit code is 0 only when all are valid.
 
 ## XAdES Signatures
 
@@ -164,9 +168,13 @@ simplesign xades validate signed.xml --external-object terms.txt=terms.txt
 # Validate detached with original data
 simplesign xades validate signed.xml --data data.xml
 
-# Validate with custom trust anchors
+# Validate with custom trust anchors (the operating system's roots stay trusted; add --no-system-roots to trust only these)
 simplesign xades validate signed.xml --trust root-ca.pem
 ```
+
+`xades validate` checks every `ds:Signature` of the document and their countersignatures. With `--json`,
+`signatures` lists them, each with its `counterSignatures`; the top-level fields are those of the first. The exit
+code is 0 only when all are valid.
 
 ## Validation Output
 

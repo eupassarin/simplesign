@@ -74,7 +74,7 @@ interface ConformanceRow {
  * what is inside the file, the log and the code.
  */
 export function ValidatePage() {
-  const { schema, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, running, run, dss, openRun } = useWorkbench()
+  const { schema, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, running, run, dss, engine, openRun } = useWorkbench()
   const t = useT()
   const [samples, setSamples] = useState<ValidationSampleView[]>([])
   const [rows, setRows] = useState<ConformanceRow[] | null>(null)
@@ -107,7 +107,7 @@ export function ValidatePage() {
       for (const sample of list) {
         if (stop.current) break
         setRows((current) => current && current.map((r) => (r.sample === sample ? { ...r, status: "running" } : r)))
-        const { id } = await api.workbench.start("", { fileId: sample.fileId, dataId: sample.dataId ?? null, settings: validateOptions.validation }, dss.enabled, "validate")
+        const { id } = await api.workbench.start("", { fileId: sample.fileId, dataId: sample.dataId ?? null, settings: validateOptions.validation }, dss.enabled, "validate", engine)
         let result: RunView | undefined
         while (!result) {
           await new Promise((resolve) => setTimeout(resolve, 200))

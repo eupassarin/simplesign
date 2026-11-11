@@ -89,6 +89,15 @@ public sealed record SigningResult(
 {
     /// <summary>The commands a run through the CLI executed, with their exit codes and output; null for a library run.</summary>
     public IReadOnlyList<CliStep>? Cli { get; init; }
+
+    /// <summary>The reports the CLI's validation wrote; null for a library run.</summary>
+    public CliReports? Reports { get; init; }
+
+    /// <summary>
+    /// The signed PDF described like on the Validation page: each signature's verdict with what the inspector reads of
+    /// it (level, coverage, certificates, timestamp), and the file's DSS.
+    /// </summary>
+    public ValidationReport? Report { get; init; }
 }
 
 /// <summary>Signs with the effective options, validates the output and produces the matching code.</summary>
@@ -294,8 +303,8 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         }
 
         var result = await FinishAsync(o, report, code, outcome.Output!, achieved, achieved is not "B-B", achieved is "B-LT" or "B-LTA", achieved is "B-LTA",
-            warnings, signMs, null, [], cancellationToken);
-        return result with { Cli = outcome.Steps };
+            warnings, signMs, null, [], cancellationToken, cli: true);
+        return result with { Cli = [.. outcome.Steps, .. result.Cli ?? []] };
 
         // The signer that is elsewhere: before deferred complete, signs the data to sign that deferred prepare wrote.
         async Task SignOutsideAsync(CliLine command, string dir, CancellationToken ct)
@@ -313,17 +322,39 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
 
     private async Task<SigningResult> FinishAsync(SigningOptions o, OptionsReport report, CodeSnippets code, byte[] signed, string achieved,
         bool hasTimestamp, bool hasLtv, bool hasArchive, IReadOnlyList<string> warnings, long signMs, DeferredInfo? deferred,
-        IReadOnlyList<BatchItem> batch, CancellationToken cancellationToken)
+        IReadOnlyList<BatchItem> batch, CancellationToken cancellationToken, bool cli = false)
     {
         var source = documents.Get(o.DocumentId!);
         string fileName = Path.GetFileNameWithoutExtension(source.FileName) + "-signed.pdf";
         var stored = documents.Add(fileName, signed);
         var watch = Stopwatch.StartNew();
-        IReadOnlyList<SignatureReport> validation = o.Validate ? await _validation.ValidateAsync(signed, o.Validation ?? new ValidationSettings(), cancellationToken) : [];
+        var settings = o.Validation ?? new ValidationSettings();
+        IReadOnlyList<SignatureReport> validation = [];
+        CliOutcome? checkedByCli = null;
+        if (o.Validate && cli)
+        {
+            // Signed through the CLI, validated through it too.
+            (validation, checkedByCli) = await _validation.CliValidateAsync(signed, settings, cancellationToken);
+            if (!checkedByCli.Success)
+            {
+                warnings = [.. warnings, L.T("The validation through the CLI failed: {0}", checkedByCli.Error ?? "")];
+            }
+        }
+        else if (o.Validate)
+        {
+            validation = await _validation.ValidateAsync(signed, settings, cancellationToken);
+        }
+
         long validateMs = watch.ElapsedMilliseconds;
         var output = await InspectAsync(signed, cancellationToken);
+        var described = await _validation.DescribeAsync(stored.Id, validation, validateMs, code, cancellationToken);
         return new SigningResult(true, null, null, stored.Id, fileName, signed.Length, Compatibility.LevelName(o), achieved,
-            hasTimestamp, hasLtv, hasArchive, warnings, signMs, validateMs, validation, output, deferred, batch, code, report.Issues);
+            hasTimestamp, hasLtv, hasArchive, warnings, signMs, validateMs, validation, output, deferred, batch, code, report.Issues)
+        {
+            Report = described,
+            Cli = checkedByCli?.Steps,
+            Reports = checkedByCli is null ? null : CliValidation.Store(checkedByCli, documents, fileName),
+        };
     }
 
     private static async Task<OutputFacts?> InspectAsync(byte[] pdf, CancellationToken cancellationToken)

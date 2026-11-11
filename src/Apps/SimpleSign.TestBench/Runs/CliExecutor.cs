@@ -32,15 +32,30 @@ internal sealed record CliJob(
 /// <summary>One command the CLI ran: the line (secrets masked), its exit code and what it wrote.</summary>
 public sealed record CliStep(string Command, int ExitCode, string Output, long Ms);
 
-/// <summary>What the CLI did: each command, the file the last <c>--output</c> (or <c>--output-dir</c>) names, and the JSON of a sign command.</summary>
+/// <summary>
+/// What the CLI did: each command, the file the last <c>--output</c> (or <c>--output-dir</c>) names, the JSON of a sign
+/// command, and what a validate command printed and wrote.
+/// </summary>
 internal sealed record CliOutcome(IReadOnlyList<CliStep> Steps, byte[]? Output, CliSignJson? Json)
 {
-    public bool Success => Steps.Count > 0 && Steps.All(s => s.ExitCode == 0) && Output is not null;
+    /// <summary>The command that failed (a sign that did not end with 0, a validate that printed no verdict), or null.</summary>
+    public CliStep? Failed { get; init; }
+
+    /// <summary>The <c>--json</c> object a validate command printed, or null.</summary>
+    public string? ValidationJson { get; init; }
+
+    /// <summary>The ETSI TS 119 102-2 report (XML) a validate command wrote, or null.</summary>
+    public byte[]? EtsiReport { get; init; }
+
+    /// <summary>The simple report (JSON) a validate command wrote, or null.</summary>
+    public byte[]? SimpleReport { get; init; }
+
+    public bool Success => Steps.Count > 0 && Failed is null && (Output is not null || ValidationJson is not null);
 
     /// <summary>The error of the first command that failed, or why the output is missing.</summary>
-    public string? Error => Steps.FirstOrDefault(s => s.ExitCode != 0) is { } failed
+    public string? Error => Failed is { } failed
         ? Json?.Error ?? L.T("The CLI ended with exit code {0}: {1}", failed.ExitCode, Last(failed.Output))
-        : Output is null ? L.T("The CLI wrote no output file.") : null;
+        : Output is null && ValidationJson is null ? L.T("The CLI wrote no output file.") : null;
 
     private static string Last(string output)
     {
@@ -64,6 +79,14 @@ internal sealed class CliExecutor
 
     /// <summary>The commands that print one JSON object with <c>--json</c>.</summary>
     private static readonly string[][] s_json = [["sign"], ["cades", "sign"], ["xades", "sign"]];
+
+    /// <summary>The validate commands: <c>--json</c> and the two reports are added, and exit code 1 means "not valid", not a failure.</summary>
+    private static readonly string[][] s_validate = [["validate"], ["cades", "validate"], ["xades", "validate"]];
+
+    /// <summary>The reports a validate command writes in the work folder.</summary>
+    internal const string EtsiReportFile = "etsi-report.xml";
+
+    internal const string SimpleReportFile = "simple-report.json";
 
     private readonly Func<string?> _locate;
 
@@ -111,6 +134,7 @@ internal sealed class CliExecutor
             var steps = new List<CliStep>();
             string? written = null;
             CliSignJson? json = null;
+            string? validation = null;
             foreach (var command in job.Commands)
             {
                 if (job.BeforeCommand is { } before)
@@ -119,13 +143,19 @@ internal sealed class CliExecutor
                 }
 
                 var args = Resolve(command.Args, dir, job.Secrets);
-                bool wantsJson = s_json.Any(j => command.Args.Take(j.Length).SequenceEqual(j, StringComparer.Ordinal));
-                if (wantsJson)
+                bool wantsJson = Is(s_json, command);
+                bool validates = Is(s_validate, command);
+                string extra = validates ? $" --json --etsi-report {EtsiReportFile} --simple-report {SimpleReportFile}" : wantsJson ? " --json" : "";
+                if (validates)
+                {
+                    args.AddRange(["--json", "--etsi-report", System.IO.Path.Combine(dir, EtsiReportFile), "--simple-report", System.IO.Path.Combine(dir, SimpleReportFile)]);
+                }
+                else if (wantsJson)
                 {
                     args.Add("--json");
                 }
 
-                string shown = Mask(command) + (wantsJson ? " --json" : "");
+                string shown = Mask(command) + extra;
                 RunLog.Current?.Note(RunStages.Prepare, "$ " + shown);
                 var (exit, output, ms) = await StartAsync(cli, args, dir, cancellationToken);
                 RunLog.Current?.Note(RunStages.Finish, L.T("simplesign ended with exit code {0} in {1} ms.", exit, ms) + (output.Length > 0 ? "\n" + Trim(output) : ""), warning: exit != 0);
@@ -135,15 +165,26 @@ internal sealed class CliExecutor
                     json = ParseJson(output) ?? json;
                 }
 
-                if (exit != 0)
+                if (validates && exit is 0 or 1 && JsonText(output) is { } verdict)
                 {
-                    return new CliOutcome(steps, null, json);
+                    validation = verdict;
+                    continue;
+                }
+
+                if (exit != 0 || validates)
+                {
+                    return new CliOutcome(steps, null, json) { Failed = steps[^1] };
                 }
 
                 written = OutputOf(command.Args, dir) ?? written;
             }
 
-            return new CliOutcome(steps, written is null ? null : await ReadOutputAsync(written, cancellationToken), json);
+            return new CliOutcome(steps, written is null ? null : await ReadOutputAsync(written, cancellationToken), json)
+            {
+                ValidationJson = validation,
+                EtsiReport = await ReadOutputAsync(System.IO.Path.Combine(dir, EtsiReportFile), cancellationToken),
+                SimpleReport = await ReadOutputAsync(System.IO.Path.Combine(dir, SimpleReportFile), cancellationToken),
+            };
         }
         finally
         {
@@ -219,8 +260,11 @@ internal sealed class CliExecutor
         return null;
     }
 
-    /// <summary>The last JSON object the command printed.</summary>
-    internal static CliSignJson? ParseJson(string output)
+    private static bool Is(string[][] commands, CliLine command) =>
+        commands.Any(c => command.Args.Take(c.Length).SequenceEqual(c, StringComparer.Ordinal));
+
+    /// <summary>The last JSON object the command printed (indented: it starts a line), or null.</summary>
+    internal static string? JsonText(string output)
     {
         int start = output.LastIndexOf("\n{", StringComparison.Ordinal) + 1;
         if (start == 0 && !output.StartsWith('{'))
@@ -233,9 +277,29 @@ internal sealed class CliExecutor
             return null;
         }
 
+        string text = output[start..].Trim();
         try
         {
-            using var document = JsonDocument.Parse(output[start..]);
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object ? text : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The last JSON object the command printed.</summary>
+    internal static CliSignJson? ParseJson(string output)
+    {
+        if (JsonText(output) is not { } text)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(text);
             var root = document.RootElement;
             static string? Text(JsonElement element, string name) =>
                 element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
