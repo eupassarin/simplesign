@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — The Sandbox is API only; its UI is the TestBench's Sandbox control
+
+- **Sandbox:** no page of its own (`web/` removed, no Node.js in its build or its Docker image). `/` says it is
+  API only, where `/api/info` is and how to open the TestBench; unknown `/api/…` routes still answer JSON 404.
+  The services and the admin API are unchanged: the CLI, playbooks, DSS and `curl` use it without a TestBench.
+  `--no-browser` is still accepted (and ignored).
+- **TestBench, one Sandbox control:** the **Sandbox** button opens a popup to connect (and how to start one) when
+  none is connected, and everything when one is: overview and signers, environment, PKI (revoke, take back,
+  downloads), failures and request log. It turns red while a failure is on. The admin API is passed through at
+  `/api/sandbox/admin/{**path}`; the Sandbox keeps the state.
+- **TestBench top bar:** the engine (Library/CLI), Policies, Reference, Environment, Sandbox and DSS sit right after
+  Sign/Validate; language and theme stay on the right.
+- **DSS setup in the DSS popup:** `tools/dss` writes `/simplesign/config.json` (how the Sandbox is trusted, EU lists,
+  ICP-Brasil, Gov.br, Peru, TSA roots, revocation cache, every trusted certificate) and the popup shows it.
+- **Playbook:** the Sandbox link opens its `/api/info`.
+
 ### Added — TestBench: the Stamp page (visible signature with a live preview)
 
 - **Stamp page:** a drawer opened from the Sign page ("Edit the stamp"). The stamp's options are on the left. On the right is the PDF,

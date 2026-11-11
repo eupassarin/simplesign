@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react"
-import { BookOpen, FileSliders, FlaskConical, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
+import { BookOpen, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Toaster } from "@/components/ui/sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { RealEnvironment } from "@/features/environment/RealEnvironment"
 import { PoliciesPage } from "@/features/policies/PoliciesPage"
-import { SandboxPage } from "@/features/sandbox/SandboxPage"
+import { SandboxControl } from "@/features/sandbox/SandboxControl"
 import { CatalogProvider } from "@/features/shared/catalog"
 import { DssControl } from "@/features/shared/DssControl"
 import { EngineControl } from "@/features/shared/EngineControl"
@@ -54,21 +55,21 @@ const modes: { id: RunKind; icon: typeof PenTool }[] = [
 ]
 
 /**
- * One top bar and one task on screen. There are two tasks, Sign and Validate (the PAdES stamp opens as a drawer from Sign); Reference (what
- * the library covers of each standard), Sandbox (the connected SimpleSign Sandbox) and Environment
- * (what this machine has) open as panels over either; the engine (library or CLI) and the DSS switch, which both tasks use, sit beside them.
+ * One top bar and one task on screen. There are two tasks, Sign and Validate (the PAdES stamp opens as a drawer from Sign).
+ * Everything that applies to both sits right after them, in three groups: the engine (library or CLI); the reference
+ * panels (Policies, Reference, and Environment: what this machine has); and the outside services, the SimpleSign
+ * Sandbox (one control: connect, or everything about the connected one) and DSS. Language and theme stay on the right.
  */
 function Shell() {
-  const { mode, setMode, env } = useWorkbench()
-  const sandbox = env?.sandbox ?? null
+  const { mode, setMode } = useWorkbench()
   const { theme, setTheme } = useTheme()
   const { t, locale, setLocale } = useI18n()
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <div className="flex items-center gap-2">
           <div className="bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-lg"><PenTool className="size-4" /></div>
-          <div className="leading-tight max-md:hidden">
+          <div className="leading-tight max-2xl:hidden">
             <p className="text-sm font-semibold">SimpleSign</p>
             <p className="text-muted-foreground text-xs">TestBench</p>
           </div>
@@ -81,18 +82,15 @@ function Shell() {
             </button>
           ))}
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Panel icon={<FileSliders />} label={t("policies.title")} hint={t("policies.hint")} reference><PoliciesPage /></Panel>
-          <Panel icon={<BookOpen />} label={t("app.reference")} hint={t("app.referenceHint")} reference><CoveragePage /></Panel>
-          <Panel icon={<FlaskConical />} label={sandbox ? t("app.sandboxConnected") : t("app.sandboxNone")} active={!!sandbox}
-            hint={sandbox ? `${t("app.sandboxName", { name: sandbox.name })} ${t("app.sandboxHint")}` : t("app.sandboxHint")}>
-            <SandboxPage />
-          </Panel>
-          <EngineControl />
-          <DssControl />
-          <Panel icon={<Globe />} label={t("app.environmentPanel")} hint={t("app.environmentRealHint")}>
-            <RealEnvironment />
-          </Panel>
+        <EngineControl />
+        <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
+        <Panel icon={<FileSliders />} label={t("policies.title")} hint={t("policies.hint")} reference><PoliciesPage /></Panel>
+        <Panel icon={<BookOpen />} label={t("app.reference")} hint={t("app.referenceHint")} reference><CoveragePage /></Panel>
+        <Panel icon={<Globe />} label={t("app.environmentPanel")} hint={t("app.environmentRealHint")} reference><RealEnvironment /></Panel>
+        <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
+        <SandboxControl />
+        <DssControl />
+        <div className="ml-auto flex items-center gap-1">
           <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
             <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 border-none shadow-none" aria-label={t("app.language")}>
               <Globe className="size-4" />

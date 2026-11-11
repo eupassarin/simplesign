@@ -6,17 +6,17 @@ import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Fold, KeyValue, Pill, Section } from "@/components/parts"
-import { useI18n, type MessageKey } from "@/i18n"
-import { api } from "@/lib/api"
-import { revocationReasons, type CertificateView, type PkiView, type Publication, type SandboxInfo } from "@/lib/types"
+import { Fold, KeyValue, Pill, Section } from "./parts"
+import { useI18n, type MessageKey } from "./i18n"
+import { api } from "./api"
+import { revocationReasons, type CertificateView, type PkiView, type Publication, type SandboxInfo } from "./types"
 
 const publications: Publication[] = ["Both", "CrlOnly", "OcspOnly"]
 
 const pointerLabels: Record<string, string> = { CrlHttp: "CRL HTTP", CrlHttps: "CRL HTTPS", CrlLdap: "CRL LDAP", Ocsp: "OCSP" }
 
 /** The CAs, the issued certificates (signers and the services' own), with revocation and downloads. */
-export function PkiPage({ info, pki, onChanged }: { info: SandboxInfo; pki: PkiView; onChanged: () => void }) {
+export function PkiTab({ info, pki, onChanged }: { info: SandboxInfo; pki: PkiView; onChanged: () => void }) {
   const { t, date } = useI18n()
   const [busy, setBusy] = useState(false)
   const run = async (action: () => Promise<unknown>, done: string) => {

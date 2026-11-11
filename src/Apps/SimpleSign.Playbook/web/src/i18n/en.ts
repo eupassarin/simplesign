@@ -148,7 +148,7 @@ export const en = {
     check: "Check",
     ok: "Answers: '{name}' {version}",
     unreachable: "Does not answer",
-    open: "Open the Sandbox",
+    open: "Its API (/api/info)",
     certificates: "Its certificates",
     root: "Root",
   },

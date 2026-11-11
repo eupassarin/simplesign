@@ -1,12 +1,11 @@
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.FileProviders;
 using SimpleSign.Sandbox.Endpoints;
 using SimpleSign.Sandbox.Pki;
 using SimpleSign.Sandbox.Services;
 
 namespace SimpleSign.Sandbox;
 
-/// <summary>Builds the Sandbox web app: the PKI of the environment, its services, the admin API and the UI.</summary>
+/// <summary>Builds the Sandbox web app: the PKI of the environment, its services and the admin API (no UI: the TestBench has it).</summary>
 public static class SandboxApp
 {
     /// <summary>Builds the app for <paramref name="options"/> (not started).</summary>
@@ -87,42 +86,26 @@ public static class SandboxApp
 
         ServiceEndpoints.Map(app);
         AdminEndpoints.Map(app, options);
-        MapUi(app);
+        MapRoot(app);
         return app;
     }
 
-    /// <summary>The UI: the project's web/dist when running from bin/, else the copy published next to the binary.</summary>
-    private static void MapUi(WebApplication app)
+    /// <summary>
+    /// No page: the Sandbox is a service. "/" says so and where its UI is (the TestBench's Sandbox control); a route
+    /// that does not exist answers JSON under /api (a client sees "404", not HTML) and 404 elsewhere.
+    /// </summary>
+    private static void MapRoot(WebApplication app)
     {
-        string? ui = new[]
-        {
-            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "web", "dist")),
-            Path.Combine(AppContext.BaseDirectory, "wwwroot"),
-        }.FirstOrDefault(d => File.Exists(Path.Combine(d, "index.html")));
-        if (ui is null)
-        {
-            app.MapGet("/", () => Results.Text("The UI is not built. Run: cd src/Apps/SimpleSign.Sandbox/web && npm ci && npm run build.", "text/plain"));
-            return;
-        }
+        app.MapGet("/", (SandboxPki pki) => Results.Text(
+            $"""
+            SimpleSign Sandbox '{pki.Name}': a test PKI and its services. API only.
+              What a client needs: {pki.BaseUrl}api/info
+              Its UI is the TestBench's Sandbox control:
+                dotnet run --project src/Apps/SimpleSign.TestBench -- --sandbox {pki.BaseUrl}
 
-        var files = new PhysicalFileProvider(ui);
-        app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = files });
-        app.UseStaticFiles(new StaticFileOptions { FileProvider = files });
-        // An API route that does not exist (or a method it does not take) answers JSON, never the page:
-        // a client sees "404" instead of failing to parse HTML.
+            """,
+            "text/plain"));
         app.MapFallback("/api/{**rest}", (HttpContext context) =>
             Results.Json(new { error = $"No route {context.Request.Method} {context.Request.Path}." }, statusCode: StatusCodes.Status404NotFound));
-        // The page only for a browser navigating (GET), so a PATCH or POST to an unknown path is not answered 200 with HTML.
-        app.MapFallback(async context =>
-        {
-            if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method))
-            {
-                context.Response.StatusCode = StatusCodes.Status404NotFound;
-                return;
-            }
-
-            context.Response.ContentType = "text/html; charset=utf-8";
-            await context.Response.SendFileAsync(Path.Combine(ui, "index.html"));
-        });
     }
 }

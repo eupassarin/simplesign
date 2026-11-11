@@ -150,7 +150,7 @@ export const ptBR: Messages = {
     check: "Testar",
     ok: "Responde: '{name}' {version}",
     unreachable: "Não responde",
-    open: "Abrir o Sandbox",
+    open: "A API dele (/api/info)",
     certificates: "Os certificados dele",
     root: "Raiz",
   },

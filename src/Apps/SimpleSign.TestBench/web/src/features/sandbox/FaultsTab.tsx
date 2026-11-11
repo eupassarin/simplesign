@@ -4,10 +4,10 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pill } from "@/components/parts"
-import { useI18n, type MessageKey } from "@/i18n"
-import { api } from "@/lib/api"
-import type { SandboxFaults } from "@/lib/types"
+import { Pill } from "./parts"
+import { useI18n, type MessageKey } from "./i18n"
+import { api } from "./api"
+import type { SandboxFaults } from "./types"
 import { cn } from "@/lib/utils"
 
 type Prefix = "faults.tsaValues" | "faults.crlValues" | "faults.ocspValues" | "faults.signerValues" | "faults.tlValues"
@@ -32,7 +32,7 @@ const rows: Row[] = [
 ]
 
 /** Switch failures of the CRL server (HTTP, HTTPS, LDAP), the OCSP responder, the TSA and the trusted list on and off, one at a time. */
-export function FaultsPage({ initial, onChanged }: { initial: SandboxFaults | null; onChanged: (faults: SandboxFaults) => void }) {
+export function FaultsTab({ initial, onChanged }: { initial: SandboxFaults | null; onChanged: (faults: SandboxFaults) => void }) {
   const { t } = useI18n()
   const [faults, setFaults] = useState<SandboxFaults | null>(initial)
   // Fresh on every visit: another app may have switched a failure meanwhile.

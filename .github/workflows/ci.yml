@@ -378,7 +378,7 @@ jobs:
           npm run build
 
       - name: Build
-        run: dotnet build tests/unit/Apps/SimpleSign.TestBench.Tests --configuration Release && dotnet build src/Apps/SimpleSign.Sandbox --configuration Release -p:SkipWeb=true
+        run: dotnet build tests/unit/Apps/SimpleSign.TestBench.Tests --configuration Release && dotnet build src/Apps/SimpleSign.Sandbox --configuration Release
 
       # The TestBench tests sign and validate against a running SimpleSign Sandbox.
       - name: Start the SimpleSign Sandbox

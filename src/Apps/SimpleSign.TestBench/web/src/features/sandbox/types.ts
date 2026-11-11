@@ -1,4 +1,4 @@
-// Mirrors src/Apps/SimpleSign.Sandbox/Endpoints/AdminEndpoints.cs and Services/SandboxFaults.cs (camelCase JSON, enums as names).
+// The connected Sandbox's admin API, through the TestBench (/api/sandbox/admin). Mirrors src/Apps/SimpleSign.Sandbox/Endpoints/AdminEndpoints.cs and Services/SandboxFaults.cs (camelCase JSON, enums as names).
 
 export interface SandboxInfo {
   name: string

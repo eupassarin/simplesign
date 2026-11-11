@@ -221,6 +221,34 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
     }
 
     [Fact]
+    public async Task Root_ApiOnly_SaysWhereTheApiAndTheUiAre()
+    {
+        using var response = await Http.GetAsync("");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("text/plain");
+        string text = await response.Content.ReadAsStringAsync();
+        text.ShouldContain("API only");
+        text.ShouldContain("api/info");
+        text.ShouldContain("SimpleSign.TestBench");
+    }
+
+    [Theory]
+    [InlineData("GET", "api/nothing")]
+    [InlineData("PATCH", "api/certificates")]
+    public async Task UnknownApiRoute_AnswersJson404(string method, string path)
+    {
+        using var response = await Http.SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("application/json");
+    }
+
+    [Fact]
+    public async Task UnknownPage_IsNotFound() =>
+        (await Http.GetAsync("index.html")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+    [Fact]
     public async Task Pfx_Download_HasTheKeyAndTheChain()
     {
         byte[] pfx = await Http.GetByteArrayAsync("api/certificates/ecdsa-p256/pfx");

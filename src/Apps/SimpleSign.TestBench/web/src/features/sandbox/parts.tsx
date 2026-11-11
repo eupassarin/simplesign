@@ -2,8 +2,8 @@ import { useState, type ReactNode } from "react"
 import { Check, ChevronRight, Copy } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { useI18n } from "@/i18n"
-import { load, save } from "@/lib/storage"
+import { useI18n } from "./i18n"
+import { load, save } from "./storage"
 import { cn } from "@/lib/utils"
 
 /** A titled block of the page. */

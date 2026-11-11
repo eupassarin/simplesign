@@ -46,7 +46,6 @@ public sealed class SandboxFixture : IAsyncLifetime
                 HttpsPort = FreePort(),
                 LdapPort = FreePort(),
                 Ephemeral = true,
-                OpenBrowser = false,
             });
             try
             {

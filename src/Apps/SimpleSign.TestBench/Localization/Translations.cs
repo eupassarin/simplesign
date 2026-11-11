@@ -382,6 +382,7 @@ internal static class Translations
         ["simplesign sign-dir draws no stamp: the CLI's --visible is on sign only."] = "O simplesign sign-dir não desenha carimbo: o --visible do CLI só existe no sign.",
         ["Choose a document first."] = "Escolha um documento primeiro.",
         ["No SimpleSign Sandbox is connected."] = "Nenhum SimpleSign Sandbox está conectado.",
+        ["The Sandbox did not answer: {0}"] = "O Sandbox não respondeu: {0}",
         ["The CLI printed no validation result."] = "O CLI não imprimiu nenhum resultado de validação.",
         ["The validation through the CLI failed: {0}"] = "A validação pelo CLI falhou: {0}",
         ["The simplesign CLI was not found next to the TestBench (cli/simplesign.dll). Build the TestBench again, or set SIMPLESIGN_CLI."] = "O CLI simplesign não foi encontrado ao lado do TestBench (cli/simplesign.dll). Compile o TestBench de novo ou defina SIMPLESIGN_CLI.",

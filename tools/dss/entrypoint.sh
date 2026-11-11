@@ -15,6 +15,8 @@
 # It also forwards the Sandbox ports ($SANDBOX_FORWARD_PORTS) from the container's localhost to
 # $SANDBOX_FORWARD_HOST (forward.pl) and, when $DSS_REVOCATION_CACHE is "false", keeps no
 # revocation data between requests.
+# What it set up is written to /simplesign/config.json (served by Tomcat), which the TestBench's
+# DSS control shows: the trust anchors, how the Sandbox is trusted, the trusted lists.
 set -eu
 
 LIB=/opt/tomcat/lib
@@ -26,6 +28,10 @@ TL_CACHE="$CACHE/eu-tl"
 PERU_COPY="$CACHE/tsl-pe.xml"
 PERU_URL=${DSS_PERU_TSL_URL:-https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml}
 count=0
+# Every certificate trusted, one line each (group, name, subject), for config.json.
+TRUSTED=/tmp/trusted.tsv
+: > "$TRUSTED"
+group=mounted
 
 # Prints the certificate as text (PEM or DER); nothing when it is not a certificate.
 describe() {
@@ -56,6 +62,8 @@ trust() {
   if keytool -importcert -noprompt -trustcacerts -storetype PKCS12 -keystore "$STORE" -storepass "$PASS" -alias "$1" -file "$2" >/dev/null 2>&1; then
     count=$((count + 1))
     echo "[dss] trusting $1${3:+ ($3)}"
+    subject=$(openssl x509 -in "$2" -noout -subject -nameopt RFC2253 2>/dev/null || openssl x509 -inform DER -in "$2" -noout -subject -nameopt RFC2253 2>/dev/null || true)
+    printf '%s\t%s\t%s\n' "$group" "$1" "${subject#subject=}" >> "$TRUSTED"
   else
     echo "[dss] keytool could not import $2; skipped"
   fi
@@ -90,6 +98,7 @@ trust_peru() {
     echo "[dss] could not download the Peruvian trusted list from $PERU_URL; using $origin"
   else
     echo "[dss] could not download the Peruvian trusted list from $PERU_URL and no copy is kept; Peru skipped"
+    peru_origin="unavailable"
     return 0
   fi
 
@@ -112,6 +121,10 @@ trust_peru() {
 
   seq=$(xmlstarlet sel -N t="$ns" -t -v "//t:SchemeInformation/t:TSLSequenceNumber" "$tsl" 2>/dev/null || true)
   next=$(xmlstarlet sel -N t="$ns" -t -v "//t:SchemeInformation/t:NextUpdate/t:dateTime" "$tsl" 2>/dev/null || true)
+  peru_trusted=$((count - before))
+  peru_origin=$origin
+  peru_seq=$seq
+  peru_next=$next
   echo "[dss] Peru: $((count - before)) of $(wc -l < /tmp/peru-certs.b64 | tr -d ' ') CA certificate(s) trusted from the trusted list ($origin; sequence $seq, next update $next)"
 }
 
@@ -122,21 +135,33 @@ done
 
 # The roots SimpleSign.Brazil.IcpBrasil and SimpleSign.Brazil.GovBr embed. Only roots: the
 # intermediates are not trust anchors, and DSS fetches them from the certificates' AIA.
+peru_trusted=0
+peru_origin=""
+peru_seq=""
+peru_next=""
+group=icp-brasil
 if [ "${DSS_TRUST_ICP_BRASIL:-true}" = "true" ]; then
   trust_bundled ICP-Brasil /trust-icp-brasil/ICP-Brasilv*.crt
 fi
+group=govbr
 if [ "${DSS_TRUST_GOVBR:-true}" = "true" ]; then
   trust_bundled Gov.br /trust-govbr/GovBr-ACRaiz-*.crt
 fi
+group=tsa
 if [ "${DSS_TRUST_TSA_ROOTS:-true}" = "true" ]; then
   trust_bundled "public TSA" /trust-tsa/*.crt
 fi
+group=peru
 if [ "${DSS_TRUST_PERU:-true}" = "true" ]; then
   trust_peru
 fi
 
 # The SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox): its root, served at /root.pem.
+group=sandbox
 sandbox_trusted=false
+# How the Sandbox ended up trusted, for config.json: list, anchor, testbench (its root through the TestBench) or none.
+sandbox_mode=none
+sandbox_tls=false
 SANDBOX_TRUST=${DSS_SANDBOX_TRUST:-list}
 SANDBOX_LOTL=""
 case "$SANDBOX_TRUST" in
@@ -161,6 +186,7 @@ if [ -n "${SANDBOX_URL:-}" ]; then
       keytool -importcert -noprompt -storetype PKCS12 -keystore "$LIB/sandbox-lotl.p12" -storepass "$PASS" -alias sandbox-lotl-signer \
         -file /tmp/sandbox-lotl-signer.pem >/dev/null 2>&1
       echo "[dss] Sandbox trust: list (LOTL $SANDBOX_LOTL)"
+      sandbox_mode=list
     else
       if [ "$SANDBOX_TRUST" = list ]; then
         echo "[dss] the Sandbox publishes no list of trusted lists (/tl/lotl.xml): trusting its root as a bare anchor"
@@ -168,6 +194,7 @@ if [ -n "${SANDBOX_URL:-}" ]; then
       SANDBOX_LOTL=""
       trust sandbox-root /tmp/sandbox-root.pem
       echo "[dss] Sandbox trust: anchor"
+      sandbox_mode=anchor
     fi
   else
     echo "[dss] the SimpleSign Sandbox is not reachable at $SANDBOX_URL."
@@ -177,6 +204,7 @@ if [ "$sandbox_trusted" = false ] && [ -n "${TESTBENCH_URL:-}" ]; then
   if curl -fsS -m 5 "${TESTBENCH_URL%/}/api/sandbox/root.pem" -o /tmp/sandbox-root.pem; then
     trust sandbox-root-from-testbench /tmp/sandbox-root.pem
     sandbox_trusted=true
+    sandbox_mode=testbench
   else
     echo "[dss] the TestBench (or its connected Sandbox) is not reachable at $TESTBENCH_URL."
   fi
@@ -186,6 +214,7 @@ if [ "$sandbox_trusted" = true ]; then
   keytool -delete -cacerts -storepass changeit -alias simplesign-sandbox-root >/dev/null 2>&1 || true
   if keytool -importcert -noprompt -cacerts -storepass changeit -alias simplesign-sandbox-root -file /tmp/sandbox-root.pem >/dev/null 2>&1; then
     echo "[dss] trusting the Sandbox root for TLS too (CRLs over HTTPS)"
+    sandbox_tls=true
   else
     echo "[dss] could not add the Sandbox root to the JVM trust store; CRLs over HTTPS will fail"
   fi
@@ -278,4 +307,39 @@ fi
 } > "$LIB/dss-custom.properties"
 
 echo "[dss] $count extra trusted certificate(s); ICP-Brasil: ${DSS_TRUST_ICP_BRASIL:-true}; Gov.br: ${DSS_TRUST_GOVBR:-true}; public TSAs: ${DSS_TRUST_TSA_ROOTS:-true}; Peru: ${DSS_TRUST_PERU:-true}; EU trusted lists: $EU_TL; revocation cache: ${DSS_REVOCATION_CACHE:-false}; Sandbox: $([ -n "$SANDBOX_LOTL" ] && echo "trusted list" || echo "bare anchor")"
+# What was set up, as JSON, for the TestBench's DSS control (GET /simplesign/config.json): Tomcat
+# serves a folder of webapps/ as its own context, next to the DSS web application.
+json() {
+  printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+}
+bool() {
+  [ "$1" = true ] && echo true || echo false
+}
+CONFIG_DIR=/opt/tomcat/webapps/simplesign
+mkdir -p "$CONFIG_DIR"
+{
+  echo "{"
+  echo "  \"dssVersion\": $(json "${DSS_VERSION:-}"),"
+  echo "  \"startedAt\": $(json "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),"
+  echo "  \"sandbox\": { \"url\": $(json "${SANDBOX_URL:-}"), \"testBenchUrl\": $(json "${TESTBENCH_URL:-}"), \"requested\": $(json "$SANDBOX_TRUST"), \"trust\": $(json "$sandbox_mode"), \"lotlUrl\": $(json "$SANDBOX_LOTL"), \"tls\": $sandbox_tls },"
+  echo "  \"euTrustedLists\": $(json "$EU_TL"),"
+  echo "  \"tlLoaderOnline\": $(bool "$online"),"
+  echo "  \"tlRefreshSeconds\": $refresh,"
+  echo "  \"acceptInvalidTrustedLists\": $(bool "${DSS_ACCEPT_INVALID_TRUSTED_LISTS:-false}"),"
+  echo "  \"revocationCache\": $(bool "${DSS_REVOCATION_CACHE:-false}"),"
+  echo "  \"icpBrasil\": $(bool "${DSS_TRUST_ICP_BRASIL:-true}"),"
+  echo "  \"govBr\": $(bool "${DSS_TRUST_GOVBR:-true}"),"
+  echo "  \"tsaRoots\": $(bool "${DSS_TRUST_TSA_ROOTS:-true}"),"
+  echo "  \"peru\": { \"enabled\": $(bool "${DSS_TRUST_PERU:-true}"), \"trusted\": $peru_trusted, \"origin\": $(json "$peru_origin"), \"sequence\": $(json "$peru_seq"), \"nextUpdate\": $(json "$peru_next") },"
+  echo "  \"trusted\": ["
+  first=true
+  while IFS="$(printf '\t')" read -r g name subject; do
+    [ "$first" = true ] && first=false || echo ","
+    printf '    { "group": %s, "name": %s, "subject": %s }' "$(json "$g")" "$(json "$name")" "$(json "$subject")"
+  done < "$TRUSTED"
+  echo ""
+  echo "  ]"
+  echo "}"
+} > "$CONFIG_DIR/config.json"
+
 exec /opt/tomcat/bin/catalina.sh run
