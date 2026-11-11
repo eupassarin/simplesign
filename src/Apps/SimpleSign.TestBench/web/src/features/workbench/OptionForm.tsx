@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Stamp } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useT } from "@/i18n"
 import { cn } from "@/lib/utils"
@@ -28,9 +29,27 @@ export function OptionForm() {
   }
   return (
     <div className="space-y-3">
-      {schema.sections.map((section) => (
+      {schema.sections.map((section) => section.id === "appearance" ? <StampLink key={section.id} /> : (
         <SectionBlock key={section.id} section={section} open={open[section.id] ?? openByDefault.includes(section.id)} onOpenChange={(v) => toggle(section.id, v)} />
       ))}
+    </div>
+  )
+}
+
+/** The visible stamp is designed on the Stamp page: here, whether it is on, and the way there. */
+function StampLink() {
+  const { options, format, setMode } = useWorkbench()
+  const t = useT()
+  if (format !== "pades") return null
+  const visible = (options.appearance as { visible?: boolean } | undefined)?.visible === true
+  return (
+    <div className="bg-card flex items-center gap-3 rounded-lg border px-3 py-2.5">
+      <Stamp className="text-muted-foreground size-4 shrink-0" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{t("stamp.title")}</span>
+        <span className="text-muted-foreground block truncate text-xs">{t(visible ? "stamp.onSummary" : "stamp.offSummary")}</span>
+      </span>
+      <Button variant="outline" size="sm" onClick={() => setMode("stamp")}>{t("stamp.edit")}</Button>
     </div>
   )
 }

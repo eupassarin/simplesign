@@ -71,6 +71,41 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
         run.AchievedLevel.ShouldBe(expected.AchievedLevel);
     }
 
+    [SkippableFact]
+    public async Task RunAsync_CliEngine_DrawsTheSameStampAsTheLibrary()
+    {
+        var library = Request(RunFormats.Pades, fixture.Options() with
+        {
+            Reason = "Contrato",
+            Appearance = new AppearanceChoice
+            {
+                Visible = true,
+                Page = 1,
+                X = 90,
+                Y = 110,
+                Width = 230,
+                Height = 80,
+                VerticalAlignment = "Middle",
+                ShowReason = false,
+                ExtraLines = ["CRM 12345"],
+                TextColor = "#202060",
+                BorderColor = "#000000",
+                Culture = "pt-BR",
+            },
+        });
+
+        var expected = await fixture.Runs().RunAsync(library, default);
+        var run = await fixture.Runs().RunAsync(library with { Engine = RunEngines.Cli }, default);
+
+        expected.Success.ShouldBeTrue(Problems(expected));
+        run.Success.ShouldBeTrue(Problems(run) + "\n" + string.Join("\n", (run.Cli ?? []).Select(c => $"{c.Command}\n{c.Output}")));
+        run.Cli!.First().Command.ShouldContain("--hide-reason");
+        fixture.Documents.TryGet(run.OutputId!, out var cliOutput).ShouldBeTrue();
+        fixture.Documents.TryGet(expected.OutputId!, out var libraryOutput).ShouldBeTrue();
+        StampPreviewService.Rect(cliOutput!.Content, "Signature1").ShouldBe(StampPreviewService.Rect(libraryOutput!.Content, "Signature1"));
+        StampPreviewService.Rect(cliOutput.Content, "Signature1").ShouldBe([90, 110, 230, 80]);
+    }
+
     [Fact]
     public void Start_UnknownEngine_Throws()
     {

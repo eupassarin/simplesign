@@ -59,6 +59,31 @@ simplesign explain ByteRange
 simplesign version
 ```
 
+### Visible stamp
+
+`--visible` draws a stamp on the page; without `--page`, `--pos-x` or `--pos-y` it is placed automatically at the
+bottom of the page. Everything else is optional:
+
+| Option | What it does |
+|---|---|
+| `--page`, `--pos-x`, `--pos-y` | Page (1 is the first) and lower-left corner, in points |
+| `--stamp-width`, `--stamp-height` | Fixed size in points (default: computed from the text) |
+| `--text-align left\|center\|right`, `--vertical-align top\|middle\|bottom` | Text alignment |
+| `--no-shrink-to-fit`, `--max-text-length <N>` | Clip instead of shrinking the text; cut longer texts (default 40) |
+| `--signer-display-name <NAME>`, `--extra-line <TEXT>` (repeatable) | The name and more lines of text |
+| `--no-date`, `--hide-reason`, `--hide-location` | Leave the date, reason or location off the stamp (they stay in the signature) |
+| `--signed-by-label`, `--reason-label`, `--location-label`, `--date-label` | The labels |
+| `--date-format`, `--time-zone`, `--date-culture` | How the date is written |
+| `--font`, `--font-size`, `--label-font-size` | A PDF standard font and its sizes |
+| `--text-color`, `--background-color`, `--border-color` (`R,G,B` from 0 to 1), `--border-width` | Colors and border |
+| `--background-image <PNG\|JPEG>`, `--image-fit stretch\|contain\|cover` | An image behind the text |
+| `--qr-url <URL>` | A QR code with a verification URL |
+
+```bash
+simplesign sign contract.pdf --cert mycert.pfx --password secret --visible --page 2 --pos-x 72 --pos-y 72 \
+    --stamp-width 220 --stamp-height 70 --vertical-align middle --extra-line "CRM 12345" --date-culture pt-BR
+```
+
 ## CAdES Signatures
 
 ```bash

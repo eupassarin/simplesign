@@ -278,6 +278,11 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
 
         var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents)
             .File(CliLine.Placeholders.Input, pdf);
+        if (o.Appearance is { Visible: true, ImageUploadId: { Length: > 0 } imageId } && documents.TryGet(imageId, out var image))
+        {
+            jobs.File(CodeGenerator.StampImageFile, image!.Content);
+        }
+
         if (o.Mode == RunMode.Batch)
         {
             for (int i = 1; i <= o.BatchCopies; i++)

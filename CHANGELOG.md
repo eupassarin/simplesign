@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — TestBench: the Stamp page (visible signature with a live preview)
+
+- **Stamp page:** a new task next to Sign and Validate. The stamp's options are on the left. On the right is the PDF,
+  signed with the stamp by the library itself (a throwaway B-B signature, `POST /api/stamp/preview`) a moment after
+  each change.
+- **Placing it:** drag the rectangle to move it, drag its corner to resize it, or click the page to place it. With
+  automatic placement the rectangle shows where the library put the stamp.
+- **Signing with it:** the stamp is part of the PAdES options, so the Sign page signs with it, through the library or
+  the CLI, and the C# and CLI snippets include it.
+- The appearance options, their rules and their code generation come back from before `b4f12709`.
+
+### Added — CLI: more stamp options
+
+- `--vertical-align`, `--no-shrink-to-fit`, `--max-text-length`, `--date-culture`, `--signer-display-name`,
+  `--extra-line` (repeatable), `--hide-reason` and `--hide-location`.
+- `--background-image` reads PNG or JPEG by its content, not its extension.
+- The AEA lines (`--brasil`) are added after the `--extra-line` ones instead of replacing them.
+
 ### Changed — `cades validate` and `xades validate` check every signature
 
 - **Every signature:** both commands validate every signer, co-signer and countersignature (`ValidateAllAsync`), not

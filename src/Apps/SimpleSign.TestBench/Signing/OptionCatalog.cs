@@ -96,7 +96,13 @@ public static class OptionCatalog
         // Field
         ["field.New"] = new("New signature field", "Adds a field (and its widget) in the new revision.", null, null, "WithFieldName / SignatureFieldOptions.FieldName"),
         ["field.Existing"] = new("Existing empty field", "Signs a field that is already in the document (e.g. prepared by a form).",
-            "The document information dictionary cannot be changed in this mode.", null, "WithExistingField(name)"),
+            "The appearance is drawn in the field's own rectangle. The document information dictionary cannot be changed in this mode.", null, "WithExistingField(name)"),
+        ["appearance"] = new("Visible stamp", "Draws a stamp on the page; invisible signatures only show in the signature panel.",
+            "Text is laid out with Base14 font metrics (shrink-to-fit, wrapping); a QR code and a background image are optional.", "ISO 32000-1 §12.7.4.5", "WithAppearance(new SignatureAppearance { … })"),
+        ["appearance.verification"] = new("QR code", "A QR code with a verification URL.",
+            "For VALIDAR (health documents), print your own HTTPS endpoint with ValidarItiQrEndpoint.BuildQrCodeUrl: VALIDAR calls it with _format=application/validador-iti+json and your endpoint answers with ValidarItiQrEndpoint.Respond.",
+            "ITI VALIDAR QR code guide", "SignatureAppearance.VerificationUrl; ValidarItiQrEndpoint.BuildQrCodeUrl(endpoint, \"prescricao\")"),
+
         // Details
         ["details.basic"] = new("Signature dictionary", "Reason, location and contact are written in the PDF signature dictionary.",
             "Viewers show them in the signature panel. They are not part of the CMS.", "ISO 32000-1 Table 252", "SignatureFieldOptions.Reason/Location/ContactInfo/SignerName"),

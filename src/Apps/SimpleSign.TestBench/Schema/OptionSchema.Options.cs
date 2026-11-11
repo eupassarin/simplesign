@@ -344,6 +344,58 @@ public static partial class OptionSchema
 
     ];
 
+    // ── Visible stamp ───────────────────────────────────────────────────
+
+    private static List<SchemaOption> AppearanceOptions()
+    {
+        SchemaCondition visible = When("appearance.visible", "true");
+        SchemaOption A(string name, string kind, string title, string summary, string? api = null, SchemaValue[]? values = null, string? stateKey = null) =>
+            O("pades.appearance." + name, "appearance", s_pades, kind, "appearance." + name, title, summary,
+                standards: R("ISO 32000-1|§12.5.5 Appearance streams"), api: api ?? "SignatureAppearance." + char.ToUpperInvariant(name[0]) + name[1..],
+                values: values, stateKey: stateKey, when: visible);
+
+        return
+        [
+            OC("pades.appearance.visible", "appearance", s_pades, "toggle", "appearance.visible", "appearance",
+                R("ISO 32000-1|§12.7.4.5 Signature fields", "ISO 32000-1|§12.5.5 Appearance streams", "ETSI EN 319 142-1|§5.2 General syntax"), stateKey: "appearance"),
+            A("autoPosition", "toggle", "Place automatically", "Puts the stamp at the bottom of the page, left to right after the stamps already there.", "SignatureAppearance.Auto()", stateKey: "appearance.placement"),
+            A("page", "number", "Page", "The page of the stamp (1 is the first).", stateKey: "appearance.placement"),
+            A("x", "number", "X", "Distance from the left edge, in points.", stateKey: "appearance.placement"),
+            A("y", "number", "Y", "Distance from the bottom edge, in points.", stateKey: "appearance.placement"),
+            A("width", "number", "Width", "Width of the stamp, in points.", stateKey: "appearance.placement"),
+            A("height", "number", "Height", "Height of the stamp, in points.", stateKey: "appearance.placement"),
+            A("textAlignment", "choice", "Text alignment", "Horizontal alignment of the text.", values: [V("Left", "Left"), V("Center", "Center"), V("Right", "Right")]),
+            A("verticalAlignment", "choice", "Vertical alignment", "Vertical alignment of the text.", values: [V("Top", "Top"), V("Middle", "Middle"), V("Bottom", "Bottom")]),
+            A("shrinkToFit", "toggle", "Shrink text to fit", "Reduces the font size until the text fits the rectangle."),
+            A("maxTextLength", "number", "Maximum text length", "Longer values are cut."),
+            A("showDate", "toggle", "Show the date", "Prints the signing time."),
+            A("showReason", "toggle", "Show the reason", "Prints the reason."),
+            A("showLocation", "toggle", "Show the location", "Prints the location."),
+            A("signerDisplayName", "text", "Name on the stamp", "Empty: the certificate's common name."),
+            A("signedByLabel", "text", "\"Signed by\" label", "The text before the signer's name.", "SignatureAppearance.WithLabels(…)"),
+            A("reasonLabel", "text", "Reason label", "The text before the reason.", "SignatureAppearance.WithLabels(…)"),
+            A("locationLabel", "text", "Location label", "The text before the location.", "SignatureAppearance.WithLabels(…)"),
+            A("dateLabel", "text", "Date label", "The text before the date.", "SignatureAppearance.WithLabels(…)"),
+            A("extraLines", "lines", "Extra lines", "More lines of text, one per line.", "SignatureAppearance.WithExtraLines(…)"),
+            A("dateFormat", "text", "Date format", "A .NET date format, for example yyyy-MM-dd HH:mm.", "SignatureAppearance.WithDateFormat(…)"),
+            A("timeZoneId", "text", "Time zone", "An IANA or Windows time zone id. Empty: UTC.", "SignatureAppearance.TimeZone"),
+            A("culture", "text", "Culture", "The culture of the date text, for example pt-BR.", "SignatureAppearance.DateCulture"),
+            A("baseFont", "choice", "Font", "One of the PDF standard fonts.", "SignatureAppearance.BaseFontName",
+                [V("Helvetica", "Helvetica"), V("Helvetica-Bold", "Helvetica Bold"), V("Times-Roman", "Times"), V("Times-Bold", "Times Bold"), V("Courier", "Courier"), V("Courier-Bold", "Courier Bold")]),
+            A("fontSize", "number", "Font size", "Empty: chosen from the height.", "SignatureAppearance.CustomFontSize"),
+            A("labelFontSize", "number", "Label font size", "Empty: chosen from the font size.", "SignatureAppearance.CustomLabelFontSize"),
+            A("textColor", "color", "Text color", "Empty: black."),
+            A("backgroundColor", "color", "Background color", "Empty: transparent."),
+            A("borderColor", "color", "Border color", "Empty: no border."),
+            A("borderWidth", "number", "Border width", "In points."),
+            A("imageUploadId", "upload", "Background image", "A PNG or JPEG drawn behind the text.", "SignatureAppearance.WithBackgroundImagePng(…) / WithBackgroundImageJpeg(…)", stateKey: "appearance.image"),
+            A("imageFit", "choice", "Image fit", "How the image fills the rectangle.", "SignatureAppearance.BackgroundImageFit",
+                [V("Contain", "Contain"), V("Cover", "Cover"), V("Stretch", "Stretch")], "appearance.image"),
+            OC("pades.appearance.verificationUrl", "appearance", s_pades, "text", "appearance.verificationUrl", "appearance.verification",
+                R("ISO/IEC 18004|QR Code"), when: visible),
+        ];
+    }
+
     // ── Run and validation ──────────────────────────────────────────────
 
     private static List<SchemaOption> RunOptions() =>

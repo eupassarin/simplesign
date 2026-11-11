@@ -16,7 +16,8 @@ internal static class AppearanceBuilder
         AppearanceTextOptions? text = null,
         string? backgroundColor = null,
         string? imageFit = null,
-        AppearanceLayoutOptions? layout = null)
+        AppearanceLayoutOptions? layout = null,
+        AppearanceExtraOptions? extra = null)
     {
         if (!visible)
         {
@@ -31,8 +32,8 @@ internal static class AppearanceBuilder
             Page = page ?? 1,
             X = x ?? 20f,
             Y = y ?? 20f,
-            ShowReason = hasReason,
-            ShowLocation = hasLocation,
+            ShowReason = hasReason && extra?.HideReason != true,
+            ShowLocation = hasLocation && extra?.HideLocation != true,
             ShowDate = !noDate,
             VerificationUrl = qrUrl,
             CustomFontSize = fontSize,
@@ -46,24 +47,31 @@ internal static class AppearanceBuilder
             Width = layout?.Width,
             Height = layout?.Height,
             TextAlignment = ParseTextAlignment(layout?.TextAlign) ?? SignatureTextAlignment.Left,
+            VerticalAlignment = ParseVerticalAlignment(extra?.VerticalAlign) ?? SignatureVerticalAlignment.Top,
+            ShrinkToFit = extra?.NoShrinkToFit != true,
+            SignerDisplayName = extra?.SignerDisplayName,
+            MaxTextLength = extra?.MaxTextLength ?? new SignatureAppearance().MaxTextLength,
         };
+
+        if (extra?.ExtraLines is { Count: > 0 } lines)
+        {
+            appearance = appearance.WithExtraLines(lines);
+        }
 
         if (text is not null)
         {
             appearance = appearance
                 .WithLabels(text.SignedBy, text.Reason, text.Location, text.Date)
-                .WithDateFormat(text.DateFormat, text.TimeZone is null ? null : ParseTimeZone(text.TimeZone));
+                .WithDateFormat(text.DateFormat, text.TimeZone is null ? null : ParseTimeZone(text.TimeZone),
+                    extra?.DateCulture is null ? null : System.Globalization.CultureInfo.GetCultureInfo(extra.DateCulture));
         }
 
         if (backgroundImage is not null)
         {
+            // PNG or JPEG by its signature, whatever the extension says.
             var imageBytes = File.ReadAllBytes(backgroundImage);
-            var ext = Path.GetExtension(backgroundImage).ToLowerInvariant();
-            appearance = ext switch
-            {
-                ".png" => appearance.WithBackgroundImagePng(imageBytes),
-                _ => appearance.WithBackgroundImageJpeg(imageBytes),
-            };
+            bool isPng = imageBytes is [0x89, (byte)'P', (byte)'N', (byte)'G', ..];
+            appearance = isPng ? appearance.WithBackgroundImagePng(imageBytes) : appearance.WithBackgroundImageJpeg(imageBytes);
         }
 
         return appearance;
@@ -72,7 +80,7 @@ internal static class AppearanceBuilder
     internal static SignatureAppearance AddAeaExtraLines(SignatureAppearance appearance, string signerName, string cpf)
     {
         var masked = AdvancedSignatureInfo.MaskCpf(cpf);
-        return appearance.WithExtraLines([signerName, $"CPF: {masked}"]);
+        return appearance.WithExtraLines([.. appearance.ExtraLines ?? [], signerName, $"CPF: {masked}"]);
     }
 
     /// <summary>Parses a time zone ID (IANA or Windows) or a fixed UTC offset such as "-03:00".</summary>
@@ -122,6 +130,29 @@ internal static class AppearanceBuilder
         };
 
     /// <summary>Parses a text alignment name (left, center, right).</summary>
+    internal static SignatureVerticalAlignment? ParseVerticalAlignment(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "top" => SignatureVerticalAlignment.Top,
+            "middle" => SignatureVerticalAlignment.Middle,
+            "bottom" => SignatureVerticalAlignment.Bottom,
+            _ => null,
+        };
+
+    /// <summary>Whether <paramref name="name"/> is a culture .NET knows (pt-BR, en-US…).</summary>
+    internal static bool IsValidCulture(string name)
+    {
+        try
+        {
+            _ = System.Globalization.CultureInfo.GetCultureInfo(name, predefinedOnly: true);
+            return true;
+        }
+        catch (System.Globalization.CultureNotFoundException)
+        {
+            return false;
+        }
+    }
+
     internal static SignatureTextAlignment? ParseTextAlignment(string? value) =>
         value?.Trim().ToLowerInvariant() switch
         {
@@ -184,3 +215,16 @@ internal sealed record AppearanceTextOptions(
 /// <param name="Height">Fixed stamp height in points.</param>
 /// <param name="TextAlign">Text alignment name.</param>
 internal sealed record AppearanceLayoutOptions(float? Width, float? Height, string? TextAlign);
+
+/// <summary>More stamp options: vertical alignment, fitting, the name and extra lines, the date culture, what to hide.</summary>
+/// <param name="VerticalAlign">Vertical alignment name (top, middle, bottom).</param>
+/// <param name="NoShrinkToFit">Clip the text instead of shrinking it to the rectangle.</param>
+/// <param name="MaxTextLength">Longer values are cut.</param>
+/// <param name="DateCulture">Culture of the date text (pt-BR…).</param>
+/// <param name="SignerDisplayName">Name on the stamp instead of the certificate's.</param>
+/// <param name="ExtraLines">More lines of text.</param>
+/// <param name="HideReason">Keep the reason off the stamp (it stays in the signature).</param>
+/// <param name="HideLocation">Keep the location off the stamp (it stays in the signature).</param>
+internal sealed record AppearanceExtraOptions(
+    string? VerticalAlign, bool NoShrinkToFit, int? MaxTextLength, string? DateCulture, string? SignerDisplayName,
+    IReadOnlyList<string>? ExtraLines, bool HideReason, bool HideLocation);

@@ -202,7 +202,7 @@ public static class Compatibility
             Error(StepCrypto, L.T("Reserved /Contents size must be between 4096 and 200000 bytes."));
         }
 
-        // ── 5. Field ───────────────────────────────────────────────────
+        // ── 5. Field and appearance ────────────────────────────────────
         Set("field.New", OptionState.Shown);
         Set("field.Existing", !hasEmptyFields ? new OptionState(false, Note: L.T("The document has no empty signature field.")) : OptionState.Shown);
         bool existing = o.FieldMode == FieldMode.Existing && hasEmptyFields;
@@ -225,6 +225,14 @@ public static class Compatibility
         if (!existing && document?.Signatures.Any(s => s.FieldName == o.FieldName) == true)
         {
             Error(StepField, L.T("The document already has a signature field named '{0}'.", o.FieldName));
+        }
+
+        Set("appearance", OptionState.Shown);
+        Set("appearance.placement", existing ? new OptionState(false, Note: L.T("The stamp is drawn in the existing field's rectangle.")) : OptionState.Shown);
+        Set("appearance.image", OptionState.Shown);
+        if (o.Appearance.Visible && !existing && !o.Appearance.AutoPosition && (o.Appearance.Width is <= 0 || o.Appearance.Height is <= 0))
+        {
+            Error(StepField, L.T("The stamp needs a positive width and height."));
         }
 
         // ── 6. Details ─────────────────────────────────────────────────

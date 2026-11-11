@@ -272,4 +272,55 @@ public sealed class AppearanceBuilderTests
     [Fact]
     public void ParseTextAlignment_Unknown_ReturnsNull() =>
         AppearanceBuilder.ParseTextAlignment("justify").ShouldBeNull();
+
+    [Fact]
+    public void Build_WithExtraOptions_SetsEveryOne()
+    {
+        var result = AppearanceBuilder.Build(true, null, null, null, null, null, hasReason: true, hasLocation: true,
+            text: new AppearanceTextOptions(null, null, null, null, "dd/MM/yyyy", null),
+            extra: new AppearanceExtraOptions("middle", NoShrinkToFit: true, MaxTextLength: 120, DateCulture: "pt-BR",
+                SignerDisplayName: "Dra. Ana", ExtraLines: ["CRM 12345", "São Paulo"], HideReason: true, HideLocation: false));
+
+        result.VerticalAlignment.ShouldBe(PAdES.Signing.SignatureVerticalAlignment.Middle);
+        result.ShrinkToFit.ShouldBeFalse();
+        result.MaxTextLength.ShouldBe(120);
+        result.DateCulture!.Name.ShouldBe("pt-BR");
+        result.SignerDisplayName.ShouldBe("Dra. Ana");
+        result.ExtraLines.ShouldBe(["CRM 12345", "São Paulo"]);
+        result.ShowReason.ShouldBeFalse();
+        result.ShowLocation.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Build_WithoutExtraOptions_KeepsTheLibraryDefaults()
+    {
+        var result = AppearanceBuilder.Build(true, null, null, null, null, null, false, false);
+
+        result.VerticalAlignment.ShouldBe(PAdES.Signing.SignatureVerticalAlignment.Top);
+        result.ShrinkToFit.ShouldBeTrue();
+        result.MaxTextLength.ShouldBe(new PAdES.Signing.SignatureAppearance().MaxTextLength);
+    }
+
+    [Fact]
+    public void AddAeaExtraLines_AfterExtraLines_KeepsThem()
+    {
+        var result = AppearanceBuilder.AddAeaExtraLines(
+            new PAdES.Signing.SignatureAppearance().WithExtraLines(["Linha"]), "Ana", "12345678901");
+
+        result.ExtraLines![0].ShouldBe("Linha");
+        result.ExtraLines.Count.ShouldBe(3);
+    }
+
+    [Theory]
+    [InlineData("top", PAdES.Signing.SignatureVerticalAlignment.Top)]
+    [InlineData(" Middle", PAdES.Signing.SignatureVerticalAlignment.Middle)]
+    [InlineData("BOTTOM", PAdES.Signing.SignatureVerticalAlignment.Bottom)]
+    public void ParseVerticalAlignment_KnownValues_AreParsed(string value, PAdES.Signing.SignatureVerticalAlignment expected) =>
+        AppearanceBuilder.ParseVerticalAlignment(value).ShouldBe(expected);
+
+    [Theory]
+    [InlineData("pt-BR", true)]
+    [InlineData("xx-NOPE", false)]
+    public void IsValidCulture_Name_SaysWhetherItIsKnown(string name, bool expected) =>
+        AppearanceBuilder.IsValidCulture(name).ShouldBe(expected);
 }
