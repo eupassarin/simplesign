@@ -10,8 +10,8 @@ internal static partial class Log
     // ── Signing pipeline (1xxx) ──────────────────────────────────────
 
     [LoggerMessage(EventId = 1000, Level = LogLevel.Information,
-        Message = "[{OperationId}] Starting PDF signature with certificate: {Subject} (external={External})")]
-    internal static partial void SigningStarted(this ILogger logger, string operationId, string subject, bool external);
+        Message = "[{OperationId}] Starting PDF signature with certificate: {Subject} serial={SerialNumber} (external={External})")]
+    internal static partial void SigningStarted(this ILogger logger, string operationId, string subject, string serialNumber, bool external);
 
     [LoggerMessage(EventId = 1001, Level = LogLevel.Information,
         Message = "[{OperationId}] PDF signing completed in {ElapsedMs}ms ({Size} bytes)")]

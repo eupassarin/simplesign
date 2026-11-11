@@ -184,6 +184,32 @@ public sealed class XadesSignerBuilder
         return With(_options with { SigningPolicy = policy });
     }
 
+    /// <summary>
+    /// Records every signing operation of this builder, signed or refused, with <paramref name="sink"/> (a trail of
+    /// the signatures generated). The record is written before the signer returns; a failing sink fails the operation.
+    /// </summary>
+    /// <param name="sink">The audit sink (e.g. <see cref="JsonLinesAuditSink"/>).</param>
+    /// <returns>A new builder with the sink configured.</returns>
+    public XadesSignerBuilder WithAuditSink(ISignatureAuditSink sink)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        return With(_options with { AuditSink = sink });
+    }
+
+    /// <summary>
+    /// Adds trust anchors for the checks made before signing: the signing certificate must chain to one of them when
+    /// the signing policy's <c>SigningCertificate/ProspectiveCertificateChain</c> is not IGNORE, and they complete a
+    /// chain given without its root for the revocation check.
+    /// </summary>
+    /// <param name="providers">The trust anchor providers (e.g. <c>DirectoryTrustAnchorProvider</c>, <c>TrustedList</c>,
+    /// or the <c>TrustAnchorProviders</c> of a country extension).</param>
+    /// <returns>A new builder with the anchors added.</returns>
+    public XadesSignerBuilder WithTrustAnchors(params SimpleSign.Core.Extensions.ITrustAnchorProvider[] providers)
+    {
+        ArgumentNullException.ThrowIfNull(providers);
+        return With(_options with { TrustAnchors = [.. _options.TrustAnchors, .. providers] });
+    }
+
     /// <summary>Sets the checker used for the revocation check of the signing policy (<c>NotRevoked</c>, <c>RevocationDataAvailable</c>).</summary>
     /// <param name="checker">The chain revocation checker.</param>
     /// <returns>A new builder with the checker configured.</returns>
@@ -482,8 +508,16 @@ public sealed class XadesSignerBuilder
 
     /// <summary>Signs the XML document and returns a detailed result with level facts and warnings.</summary>
     /// <returns>The detailed XAdES signing result.</returns>
-    public async Task<XadesSigningResult> SignWithDetailsAsync(
-        CancellationToken cancellationToken = default)
+    public Task<XadesSigningResult> SignWithDetailsAsync(
+        CancellationToken cancellationToken = default) =>
+        SignatureAudit.RunAsync(
+            _options.AuditSink,
+            () => SignatureAuditEvent.Start("XAdES", _options.OperationId, _options.Profile.Level, SignerCertificate, _options.SigningPolicy, _xmlData),
+            () => SignWithDetailsCoreAsync(cancellationToken),
+            result => (result.SignedArtifact, result.AchievedLevel),
+            cancellationToken);
+
+    private async Task<XadesSigningResult> SignWithDetailsCoreAsync(CancellationToken cancellationToken)
     {
         var credential = _options.Credential
             ?? throw new SigningException(
@@ -496,7 +530,7 @@ public sealed class XadesSignerBuilder
         ValidatePrerequisites(credential);
         var warnings = new List<SigningWarning>();
         await SignerAcceptance.EnsureSignerAcceptableAsync(
-            certificate, chain, _options.SigningPolicy, _options.Dependencies.ChainRevocationChecker,
+            certificate, chain, _options.SigningPolicy, _options.TrustAnchors, _options.Dependencies.ChainRevocationChecker,
             _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger, warnings, cancellationToken).ConfigureAwait(false);
         if (_options.ExtendedForm != XadesExtendedForm.None && profile.Timestamp is null)
         {
@@ -556,7 +590,7 @@ public sealed class XadesSignerBuilder
         string operationId = _options.OperationId ?? "-";
         var stopwatch = Stopwatch.StartNew();
         logger.SigningStarted(operationId, _options.Form.ToString(), profile.Level.ToString(),
-            _options.ExtendedForm.ToString(), certificate.Subject, credential is XadesExternalCredential);
+            _options.ExtendedForm.ToString(), certificate.Subject, certificate.SerialNumber, credential is XadesExternalCredential);
         logger.AlgorithmResolved(hashAlg.Name ?? "?", sigAlgOid);
 
         // The Ids of the additional data objects are chosen once: with an external key the signature is assembled twice.
@@ -598,6 +632,10 @@ public sealed class XadesSignerBuilder
                 timestampTokenBytes = await ApplyTimestampAsync(signedXml, targetSignatureId, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
             {
                 throw;
             }
@@ -947,6 +985,10 @@ public sealed class XadesSignerBuilder
         {
             throw;
         }
+        catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             logger.TimestampFailed(operationId, ex.Message);
@@ -970,8 +1012,13 @@ public sealed class XadesSignerBuilder
     }
 
     private ITimestampClient CreateTimestampClient(TimestampOptions timestampOptions) =>
-        BaselineSigning.CreateTimestampClient(
-            timestampOptions, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger);
+        new TimestampAcceptance(
+            _options.SigningPolicy, _options.TrustAnchors, _options.Dependencies.ChainRevocationChecker,
+            _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger)
+        .Wrap(
+            BaselineSigning.CreateTimestampClient(
+                timestampOptions, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger),
+            timestampOptions);
 
     private async Task<(byte[] SignedXml, XadesLtvEmbeddingResult? Ltv)> ApplyExtendedFormAsync(
         byte[] signedXml,

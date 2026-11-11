@@ -62,6 +62,15 @@ public sealed record XmlOptions
     /// <summary>The uploaded signing policy (JSON, root SigningConstraints); null: <c>SigningPolicy.Default</c>.</summary>
     public string? SigningPolicyId { get; init; }
 
+    /// <summary>The trust anchors, expected TSA and audit trail of the checks made before signing.</summary>
+    public SigningControlsOptions SigningControls { get; init; } = new();
+
+    /// <summary>
+    /// Whether to run even when the signing policy is foreseen to refuse the signer, to show the library's own refusal
+    /// (a SigningException with its reason) instead of stopping before it.
+    /// </summary>
+    public bool AttemptRefused { get; init; }
+
     public RsaPadding Padding { get; init; } = RsaPadding.Pkcs1;
 
     /// <summary>Countersign a signature of the document instead of signing the document.</summary>

@@ -12,7 +12,7 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy (JSON, root ValidationConstraints). Write the default with 'simplesign policy export validation'")]
+    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, iofe, iofe-nonrepudiation). Write one with 'simplesign policy export validation [--preset NAME]'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>
@@ -50,7 +50,17 @@ internal class TrustedValidationSettings : CommonSettings
     [Description("Write the simple report (JSON: indication, sub-indication, signer, times, policy per signature) to this file")]
     public string? SimpleReportPath { get; init; }
 
-    /// <summary>Writes the reports asked with <see cref="EtsiReportPath"/> and <see cref="SimpleReportPath"/>.</summary>
+    /// <summary>Write the readable report (HTML) to this file.</summary>
+    [CommandOption("--html-report <PATH>")]
+    [Description("Write a readable report (HTML): result, integrity, signing time, signer certificate and public key per signature")]
+    public string? HtmlReportPath { get; init; }
+
+    /// <summary>The language of the HTML report.</summary>
+    [CommandOption("--report-language <CODE>")]
+    [Description("Language of the HTML report: en (default), pt or es")]
+    public string? ReportLanguage { get; init; }
+
+    /// <summary>Writes the reports asked with <see cref="EtsiReportPath"/>, <see cref="SimpleReportPath"/> and <see cref="HtmlReportPath"/>.</summary>
     internal void WriteReports(IReadOnlyList<SimpleSign.Core.Validation.SignatureReportEntry> entries)
     {
         if (EtsiReportPath is not null)
@@ -61,6 +71,11 @@ internal class TrustedValidationSettings : CommonSettings
         if (SimpleReportPath is not null)
         {
             File.WriteAllText(SimpleReportPath, SimpleSign.Core.Validation.ValidationReports.ToSimpleJson(entries));
+        }
+
+        if (HtmlReportPath is not null)
+        {
+            File.WriteAllText(HtmlReportPath, SimpleSign.Core.Validation.ValidationReports.ToHtml(entries, ReportLanguage));
         }
     }
 
@@ -130,7 +145,7 @@ internal class TrustedValidationSettings : CommonSettings
     {
         foreach (var (path, what) in new[]
         {
-            (PolicyPath, "Policy"), (PolicySignerPath, "Policy signer"), (TrustDirectorySignerPath, "Trust folder signer"),
+            (PolicyPath is not null && PolicyPresets.IsPreset(PolicyPresets.Validation, PolicyPath) ? null : PolicyPath, "Policy"), (PolicySignerPath, "Policy signer"), (TrustDirectorySignerPath, "Trust folder signer"),
             (TrustedListSignerPath, "Trusted list signer"),
             (LotlSignerPath, "LOTL signer"),
         })
@@ -180,6 +195,7 @@ internal class TrustedValidationSettings : CommonSettings
     internal async Task<(ValidationPolicy Policy, List<X509Certificate2> Anchors)> LoadTrustAsync(SimpleSign.Core.Http.IHttpClientProvider? http, CancellationToken cancellationToken)
     {
         ValidationPolicy policy = PolicyPath is null ? ValidationPolicy.Default
+            : PolicyPresets.IsPreset(PolicyPresets.Validation, PolicyPath) ? PolicyPresets.Validation[PolicyPath]()
             : PolicySignerPath is null ? ValidationPolicy.Load(PolicyPath)
             : ValidationPolicy.LoadSigned(PolicyPath, PolicyPath + ".p7s", LoadCertificate(PolicySignerPath));
 

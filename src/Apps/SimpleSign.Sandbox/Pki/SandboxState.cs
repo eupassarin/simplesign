@@ -131,7 +131,7 @@ internal sealed record SandboxState
 
     public required DateTimeOffset CreatedAt { get; init; }
 
-    /// <summary>The CAs: root, intermediate, a revoked intermediate and an expired one.</summary>
+    /// <summary>The CAs: root, intermediate, a revoked intermediate, an expired one and one the root signed with SHA-1.</summary>
     public required List<StoredAuthority> Authorities { get; init; }
 
     /// <summary>A TSA under its own self-signed CA, outside every trust anchor.</summary>

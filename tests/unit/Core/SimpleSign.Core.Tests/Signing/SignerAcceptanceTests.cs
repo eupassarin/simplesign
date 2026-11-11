@@ -182,7 +182,7 @@ public sealed class SignerAcceptanceTests
         var warnings = new List<SigningWarning>();
 
         await SignerAcceptance.EnsureSignerAcceptableAsync(
-            certificate, [], policy, null, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings, CancellationToken.None);
+            certificate, [], policy, [], null, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings, CancellationToken.None);
 
         warnings.ShouldHaveSingleItem().Code.ShouldBe(SigningWarningCode.PolicyConstraint);
     }
@@ -196,7 +196,7 @@ public sealed class SignerAcceptanceTests
         var warnings = new List<SigningWarning>();
 
         await SignerAcceptance.EnsureSignerAcceptableAsync(
-            certificate, [], policy, null, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings, CancellationToken.None);
+            certificate, [], policy, [], null, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings, CancellationToken.None);
 
         warnings.ShouldBeEmpty();
     }
@@ -211,7 +211,7 @@ public sealed class SignerAcceptanceTests
         SigningPolicy policy,
         IChainRevocationChecker? checker = null) =>
         SignerAcceptance.EnsureSignerAcceptableAsync(
-            certificate, chain, policy, checker, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings: null, CancellationToken.None);
+            certificate, chain, policy, [], checker, DefaultHttpClientProvider.Instance, NullLogger.Instance, warnings: null, CancellationToken.None);
 
     private static X509Certificate2 SelfSigned(
         X509KeyUsageFlags? keyUsage, int rsaKeySize = 2048, DateTimeOffset? notAfter = null)

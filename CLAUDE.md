@@ -28,10 +28,9 @@ dotnet test tests/integration/SimpleSign.Integration.Tests
 # CLI tests
 dotnet test tests/unit/Apps/SimpleSign.Cli.Tests
 
-# TestBench and Playbook tests need a running Sandbox (skipped without one; CI starts it)
+# TestBench tests need a running Sandbox (skipped without one; CI starts it)
 dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral
 dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests
-dotnet test tests/unit/Apps/SimpleSign.Playbook.Tests
 
 # AOT smoke test
 dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64
@@ -68,9 +67,9 @@ src/
 └── Apps/
     ├── SimpleSign.Cli/         CLI tool
     ├── SimpleSign.Agent/       Avalonia tray app + window (pt-BR/en-US, TestBench look, Native AOT): local signing agent (HTTP on 127.0.0.1)
-    ├── SimpleSign.TestBench/   Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option (real network + a connected Sandbox)
-    ├── SimpleSign.Sandbox/     Test PKI on real endpoints (CRL over HTTP/HTTPS/LDAP, OCSP, TSA, CSC) and failures to switch on; API only (its UI is the TestBench's Sandbox control)
-    └── SimpleSign.Playbook/    Runs a JSON playbook of CLI commands (Sandbox actions, checks), records each run; web UI
+    ├── SimpleSign.TestBench/   Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option (real network + a connected Sandbox);
+    │                           its Certification page runs certification scripts (docs/certification-scripts) and exports the evidence
+    └── SimpleSign.Sandbox/     Test PKI on real endpoints (CRL over HTTP/HTTPS/LDAP, OCSP, TSA, CSC) and failures to switch on; API only (its UI is the TestBench's Sandbox control)
 ```
 
 Internal infrastructure (logs, DER helpers, revocation plumbing) lives in each project's `Internal/` folder (ADR 0018).

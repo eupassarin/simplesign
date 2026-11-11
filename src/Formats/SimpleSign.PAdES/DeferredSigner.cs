@@ -113,7 +113,7 @@ public static class DeferredSigner
         }
 
         await SignerAcceptance.EnsureSignerAcceptableAsync(
-            certificate, options.ExtraCertificates ?? [], options.SigningPolicy, options.ChainRevocationChecker,
+            certificate, options.ExtraCertificates ?? [], options.SigningPolicy, options.TrustAnchors, options.ChainRevocationChecker,
             options.HttpClientProvider ?? DefaultHttpClientProvider.Instance, logger ?? NullLogger.Instance, warnings, cancellationToken).ConfigureAwait(false);
 
         string sigAlgOid = resolvedAlgorithm.SignatureAlgorithmOid;
@@ -182,6 +182,10 @@ public static class DeferredSigner
 
         return result;
     }
+
+    private static TimestampAcceptance Acceptance(DeferredSigningCompleteOptions options, ILogger? logger) =>
+        new(options.SigningPolicy, options.TrustAnchors, options.ChainRevocationChecker,
+            options.HttpClientProvider ?? DefaultHttpClientProvider.Instance, logger ?? NullLogger.Instance);
 
     /// <summary>
     /// Internal phase-two implementation shared by the immutable deferred builder.
@@ -275,6 +279,7 @@ public static class DeferredSigner
                         {
                             OutboundPolicy = (provider ?? DefaultHttpClientProvider.Instance).OutboundPolicy ?? OutboundHttpPolicy.Default,
                         };
+                tsaClient = Acceptance(options, logger).Wrap(tsaClient, timestampOptions);
                 timestampToken = await tsaClient.GetTimestampAsync(
                     TimestampClient.ExtractSignatureValue(cms), hashAlg, cancellationToken).ConfigureAwait(false);
                 cms = TimestampClient.EmbedTimestampInCms(cms, timestampToken);
@@ -353,6 +358,7 @@ public static class DeferredSigner
                 ITimestampClientFactory? archiveFactory = effective.NeedsDedicatedClient
                     ? new FixedTimestampClientFactory(TimestampClient.Create(effective, provider, logger))
                     : tsaFactory ?? new TimestampClientFactory(provider, logger);
+                archiveFactory = Acceptance(options, logger).Wrap(archiveFactory, effective);
                 await using var pdfStream = new MemoryStream(signedPdf, writable: false);
                 var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(pdfStream, cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
@@ -492,6 +498,9 @@ internal sealed class DeferredSigningOptions
     /// <summary>The checks run on the certificate, chain and algorithms before the hash is prepared.</summary>
     public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
 
+    /// <summary>The trust anchors for <c>SigningCertificate/ProspectiveCertificateChain</c> of <see cref="SigningPolicy"/>.</summary>
+    public IReadOnlyList<SimpleSign.Core.Extensions.ITrustAnchorProvider> TrustAnchors { get; init; } = [];
+
     /// <summary>The checker for the revocation check; null creates one from <see cref="HttpClientProvider"/>.</summary>
     public SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; init; }
 
@@ -510,4 +519,12 @@ internal sealed class DeferredSigningCompleteOptions
     /// <summary>Builder-wide fallback provider for timestamp and validation-data retrieval.</summary>
     public IHttpClientProvider? HttpClientProvider { get; init; }
 
+    /// <summary>The policy whose <c>Timestamp</c> constraints apply to the timestamps obtained while completing.</summary>
+    public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
+
+    /// <summary>The trust anchors for the TSA certificate.</summary>
+    public IReadOnlyList<SimpleSign.Core.Extensions.ITrustAnchorProvider> TrustAnchors { get; init; } = [];
+
+    /// <summary>The checker for the revocation of the TSA chain; null creates one.</summary>
+    public SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; init; }
 }

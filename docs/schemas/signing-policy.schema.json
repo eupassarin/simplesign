@@ -166,6 +166,9 @@
         "NotRevoked": {
           "$ref": "#/$defs/LevelConstraint"
         },
+        "CRLNextUpdatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
         "Cryptographic": {
           "$ref": "#/$defs/CryptographicConstraint"
         }
@@ -190,6 +193,12 @@
         "NotRevoked": {
           "$ref": "#/$defs/LevelConstraint"
         },
+        "CRLNextUpdatePresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "ProspectiveCertificateChain": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
         "Cryptographic": {
           "$ref": "#/$defs/CryptographicConstraint"
         }
@@ -211,8 +220,29 @@
         "CACertificate": {
           "$ref": "#/$defs/SigningCaCertificateConstraints"
         },
+        "Timestamp": {
+          "$ref": "#/$defs/SigningTimestampConstraints"
+        },
         "Cryptographic": {
           "$ref": "#/$defs/CryptographicConstraint"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SigningTimestampConstraints": {
+      "type": "object",
+      "properties": {
+        "ProspectiveCertificateChain": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotExpired": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "NotRevoked": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "RevocationDataAvailable": {
+          "$ref": "#/$defs/LevelConstraint"
         }
       },
       "additionalProperties": false

@@ -15,6 +15,11 @@ internal sealed class SignDirCommand(ICertificateChainService certChainService) 
     /// <summary>Settings of <c>sign-dir</c>.</summary>
     internal sealed class Settings : ExternalCredentialSettings
     {
+        /// <summary>Checks run before signing.</summary>
+        [CommandOption("--signing-policy <PATH>")]
+        [Description(SigningPolicyOption.Description)]
+        public string? SigningPolicy { get; init; }
+
         /// <summary>Directory of PDFs to sign.</summary>
         [CommandArgument(0, "<directory>")]
         [Description("Directory of PDFs to sign")]
@@ -151,7 +156,8 @@ internal sealed class SignDirCommand(ICertificateChainService certChainService) 
 
             string? error = PadesProfileOptions.Validate(LevelOptions)
                 ?? PadesProfileOptions.ValidateCrypto(Hash, SignatureAlgorithm, ContentsSize)
-                ?? ValidateTsaCredentials(TsaUrl);
+                ?? ValidateTsaCredentials(TsaUrl)
+                ?? (SigningPolicyOption.IsValid(SigningPolicy) ? null : SigningPolicyOption.Error(SigningPolicy));
             return error is null ? ValidationResult.Success() : ValidationResult.Error(error);
         }
     }
@@ -206,6 +212,11 @@ internal sealed class SignDirCommand(ICertificateChainService certChainService) 
                 builder = builder.WithOperationId(settings.OperationId);
             }
 
+            builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
+            if (settings.AuditSink() is { } audit)
+            {
+                builder = builder.WithAuditSink(audit);
+            }
             if (CliNetwork.IsConfigured)
             {
                 builder = builder.WithHttpClientProvider(CliNetwork.Provider);

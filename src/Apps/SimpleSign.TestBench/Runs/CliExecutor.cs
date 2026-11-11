@@ -50,6 +50,9 @@ internal sealed record CliOutcome(IReadOnlyList<CliStep> Steps, byte[]? Output, 
     /// <summary>The simple report (JSON) a validate command wrote, or null.</summary>
     public byte[]? SimpleReport { get; init; }
 
+    /// <summary>The audit trail a sign command wrote (<c>--audit-log</c>), signed or refused, or null.</summary>
+    public byte[]? AuditTrail { get; init; }
+
     public bool Success => Steps.Count > 0 && Failed is null && (Output is not null || ValidationJson is not null);
 
     /// <summary>The error of the first command that failed, or why the output is missing.</summary>
@@ -87,6 +90,9 @@ internal sealed class CliExecutor
     internal const string EtsiReportFile = "etsi-report.xml";
 
     internal const string SimpleReportFile = "simple-report.json";
+
+    /// <summary>The audit trail a sign command writes with <c>--audit-log</c>, read back after the run.</summary>
+    internal const string AuditFile = "audit.jsonl";
 
     private readonly Func<string?> _locate;
 
@@ -173,7 +179,11 @@ internal sealed class CliExecutor
 
                 if (exit != 0 || validates)
                 {
-                    return new CliOutcome(steps, null, json) { Failed = steps[^1] };
+                    return new CliOutcome(steps, null, json)
+                    {
+                        Failed = steps[^1],
+                        AuditTrail = await ReadOutputAsync(System.IO.Path.Combine(dir, AuditFile), cancellationToken),
+                    };
                 }
 
                 written = OutputOf(command.Args, dir) ?? written;
@@ -184,6 +194,7 @@ internal sealed class CliExecutor
                 ValidationJson = validation,
                 EtsiReport = await ReadOutputAsync(System.IO.Path.Combine(dir, EtsiReportFile), cancellationToken),
                 SimpleReport = await ReadOutputAsync(System.IO.Path.Combine(dir, SimpleReportFile), cancellationToken),
+                AuditTrail = await ReadOutputAsync(System.IO.Path.Combine(dir, AuditFile), cancellationToken),
             };
         }
         finally

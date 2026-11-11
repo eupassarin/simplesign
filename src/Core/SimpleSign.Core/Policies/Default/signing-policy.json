@@ -7,12 +7,21 @@
       "NotExpired": { "Level": "FAIL" },
       "RevocationDataAvailable": { "Level": "IGNORE" },
       "KeyUsage": { "Level": "FAIL", "Id": [ "digitalSignature", "nonRepudiation" ] },
-      "NotRevoked": { "Level": "IGNORE" }
+      "NotRevoked": { "Level": "IGNORE" },
+      "CRLNextUpdatePresent": { "Level": "IGNORE" },
+      "ProspectiveCertificateChain": { "Level": "IGNORE" }
     },
     "CACertificate": {
       "NotExpired": { "Level": "FAIL" },
       "RevocationDataAvailable": { "Level": "IGNORE" },
-      "NotRevoked": { "Level": "IGNORE" }
+      "NotRevoked": { "Level": "IGNORE" },
+      "CRLNextUpdatePresent": { "Level": "IGNORE" }
+    },
+    "Timestamp": {
+      "ProspectiveCertificateChain": { "Level": "IGNORE" },
+      "NotExpired": { "Level": "IGNORE" },
+      "NotRevoked": { "Level": "IGNORE" },
+      "RevocationDataAvailable": { "Level": "IGNORE" }
     },
     "Cryptographic": {
       "Level": "FAIL",

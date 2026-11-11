@@ -43,6 +43,7 @@ public sealed class IofeExtensionTests : IDisposable
         var iofe = IofeExtension.Load(TrustedListXml(), [_operator]);
         byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
             .WithCertificate(_pki.Leaf, [_pki.IntermediateCa])
+            .WithCountryExtension(iofe)
             .WithSigningPolicy(IofePolicies.Signing
                 .With("SigningCertificate/NotRevoked", null).With("SigningCertificate/RevocationDataAvailable", null)
                 .With("CACertificate/NotRevoked", null).With("CACertificate/RevocationDataAvailable", null))

@@ -158,7 +158,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     /// <summary>
     /// Validates the first signer of a CAdES signature. For an attached signature (.p7m) pass
     /// <see langword="null"/> as <paramref name="originalData"/> to validate the encapsulated content.
-    /// Use <see cref="ValidateAll"/> for co-signatures and countersignatures.
+    /// Use <see cref="ValidateAll"/> for co-signatures and countersignatures. Revocation is not checked here, of the signer chain nor of the TSA chain: with <see cref="ValidationOptions.CheckRevocation"/> on, the result carries a warning saying so; use <c>ValidateAsync</c> to check it.
     /// </summary>
     /// <param name="cmsBytes">DER-encoded CMS/PKCS#7 SignedData.</param>
     /// <param name="originalData">The signed document bytes; null to use the encapsulated content.</param>
@@ -276,7 +276,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             IsNotRevoked = facts.IsNotRevoked,
             RevocationSource = facts.RevocationSource,
             IsTsaTrusted = facts.IsTsaTrusted,
-            Warnings = [.. result.Warnings, .. revocationWarnings],
+            Warnings = [.. result.Warnings.Where(w => w != RevocationStep.NotCheckedWarning), .. revocationWarnings],
         };
     }
 
@@ -327,7 +327,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
     /// <summary>
     /// Validates every signer of a CAdES signature (co-signatures) and, under each, its
-    /// countersignatures (each checked against its parent's signature value).
+    /// countersignatures (each checked against its parent's signature value). Revocation is not checked here, of the signer chain nor of the TSA chain: with <see cref="ValidationOptions.CheckRevocation"/> on, the result carries a warning saying so; use <c>ValidateAsync</c> to check it.
     /// </summary>
     /// <param name="cmsBytes">DER-encoded CMS/PKCS#7 SignedData.</param>
     /// <param name="originalData">The signed document bytes; null to use the encapsulated content.</param>
@@ -620,6 +620,10 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
+        if (_options.ChecksRevocationFor(facts.IsChainAnchored))
+        {
+            warnings.Add(RevocationStep.NotCheckedWarning);
+        }
 
         return new CadesValidationResult
         {

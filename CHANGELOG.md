@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Certification scripts in the TestBench (the Playbook app is gone)
+
+- **TestBench → Certification:** loads a certification script (JSON, `docs/schemas/certification-script.schema.json`)
+  written beforehand from an accreditation guide, checks it against the connected Sandbox, runs each step through the
+  library, the CLI or both, waits for the manual steps (note, attachments, passed/failed), and exports the evidence:
+  an HTML page in the script's language (matrix requirement → steps → result) and a zip with the script, the run, and
+  per step the signed file, reports, log and attachments. API under `/api/script`.
+- **Samples:** `docs/certification-scripts/sandbox-basics.json` (the old Playbook sample) and
+  `indecopi-guia-v4.json` (INDECOPI's guide v4.0, Annex B: signing and verification by automated agents, timestamp
+  checks; Spanish). `AUTHORING.md` is the kit to have an LLM write one; `options.md` is generated from the TestBench.
+- **Built-in policies:** `strict`, `minimal`, `iofe` (signing) and `iofe`, `iofe-nonrepudiation` (validation), in the
+  TestBench's policy fields and as names for the CLI's `--signing-policy` / `--policy` and `policy export --preset`.
+- **IOFE:** `IofePolicies.Signing` turns on the trust anchor, CRL nextUpdate, chain cryptography and TSA checks;
+  `IofePolicies.Validation` refuses an expired or badly signed trusted list; new `ValidationNonRepudiation` (Req. 23).
+  Written out in `docs/policies/iofe-*.json`.
+- **CLI sign commands:** `--trust`, `--trust-dir`, `--tsl/--tsl-signer` (trust anchors before signing),
+  `--expected-tsa`, `--audit-log`; `--signing-policy` on `sign-dir` and `deferred`; `simplesign audit verify`.
+- **TestBench options:** trust anchors before signing, expected TSA, audit trail (shown in the log), and *Attempt
+  refused signatures*. CLI runs against the Sandbox now pass `--allow-ldap`, its HTTPS origin and `--tls-trust` with
+  its root, so CRLs over HTTPS and LDAP work through the CLI too.
+- **TestBench and the new Sandbox cases:** the TSA choice *Sandbox, expired TSA* (`SandboxExpired`) and the CRL failure
+  `NoNextUpdate`; the INDECOPI script uses them, the SHA-1 CA and the signer without KeyUsage, so the expired TSA, the
+  SHA-1 chain and the CRL without nextUpdate are automated steps.
+
+### Removed — The Playbook app
+
+- `src/Apps/SimpleSign.Playbook` and its tests: its sample is now a certification script, run by the TestBench.
+
+### Added — Signing controls you can turn on in the signing policy, an audit trail and a readable report
+
+Every new check is off in `SigningPolicy.Default`, so signing is unchanged until a policy turns it on.
+
+- **Trust anchor before signing:** `SigningCertificate/ProspectiveCertificateChain` refuses a signing certificate
+  that does not chain to a given anchor (`SigningErrorReason.UntrustedRoot`). The anchors come from
+  `WithTrustAnchors(...)` on the PAdES, CAdES, XAdES, deferred and batch builders, and on PAdES also from
+  `WithCountryExtension` (stored before but never read). Anchors also complete a chain given without its root for
+  the revocation check.
+- **TSA checked while signing (B-T, B-LT, B-LTA):** a new `Timestamp` section of the signing policy
+  (`ProspectiveCertificateChain`, `NotExpired` at genTime, `NotRevoked`, `RevocationDataAvailable`), and
+  `TimestampOptions.ExpectedTsaCertificate` / `ArchiveTimestampOptions.ExpectedTsaCertificate` to pin the TSA.
+  A refusal (`TimestampUntrusted`, `TimestampCertificateNotValid`, `TimestampCertificateRevoked`,
+  `TimestampRevocationStatusUnknown`) is never downgraded by `SigningLevelFailureBehavior.ReturnLowerLevel`.
+- **CRL without nextUpdate:** `SigningCertificate/CRLNextUpdatePresent` and `CACertificate/CRLNextUpdatePresent`.
+  `ChainRevocationChecker.CheckCurrentAsync` now returns the CRLs and OCSP responses it used.
+- **Audit trail:** `ISignatureAuditSink` gets a `SignatureAuditEvent` for every signature made or refused
+  (certificate, policy, input and output SHA-256, level, reason). Set it with `WithAuditSink(...)`.
+  `JsonLinesAuditSink` writes a hash-chained JSON-lines file, and `JsonLinesAuditSink.Verify` finds a changed,
+  removed or inserted line. The signing start log events (1000, 7000, 7100) now include the certificate serial.
+- **Readable report:** `ValidationReports.ToHtml(entries, language)` returns one HTML page in `en`, `pt` or `es`.
+  The CLI's validate commands take `--html-report <file>` and `--report-language <code>`. `ToSimpleJson` adds
+  `signerPublicKey` (SPKI, base64) and `signerCertificateSha256`.
+
+### Changed — PFX private keys are loaded as non-exportable
+
+- `CertificateLoader` (and so the CLI's `--cert`) no longer sets `X509KeyStorageFlags.Exportable`. Keys are
+  ephemeral except on macOS, whose key store has no ephemeral keys. Nothing in SimpleSign exported them. On Linux,
+  .NET does not enforce non-exportable keys.
+
+### Fixed — CAdES/XAdES synchronous validation says it did not check revocation
+
+- `Validate` / `ValidateAll` never checked revocation, neither of the signer chain nor of the TSA chain, yet a TSA
+  could show as trusted. With `ValidationOptions.CheckRevocation` on, the result now carries a warning saying so;
+  `ValidateAsync` replaces it with the checks' outcome.
+
+### Added — Sandbox: an expired TSA, a SHA-1 CA, a signer without KeyUsage, CRLs without nextUpdate
+
+- **`tsa-expired`** (Timestamping, expired yesterday), served at `POST /tsa/expired`; `GET /api/info` gives its
+  address in `tsa.expiredUrl`.
+- **`intermediate-sha1`**, an intermediate CA whose certificate the root signs with sha1WithRSAEncryption, and
+  **`under-sha1-ca`**, a signer under it. An environment created before this CA existed gets it the next time it
+  opens. Its root and the certificates it already issued stay the same.
+- **`no-key-usage-extension`**: a signer with no KeyUsage extension at all. `no-signing-key-usage` has one, with
+  keyEncipherment only.
+- **`CrlFault.NoNextUpdate`**: while it is on, the CRLs (HTTP, HTTPS, LDAP) have no nextUpdate field. They are still
+  signed by their CA. The TestBench's Sandbox control lists it with the other CRL failures.
+
 ### Fixed — PAdES: the B-LT/B-LTA DSS update no longer overwrites the stamp's font object
 
 - **`LtvEmbedder`:** to add `/DSS` to the catalog it searched backwards for `"N 0 obj"` as plain text, so catalog

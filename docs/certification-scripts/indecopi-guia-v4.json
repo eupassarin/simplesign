@@ -1,0 +1,1901 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/certification-script.schema.json",
+  "schema": 1,
+  "id": "indecopi-guia-v4",
+  "title": "INDECOPI — Acreditación de software de firma (Guía v4.0)",
+  "authority": "INDECOPI — Infraestructura Oficial de Firma Electrónica (IOFE), Perú",
+  "standard": "Guía de Acreditación de Aplicaciones de Software v4.0, Anexo B: firma y verificación por agentes automatizados, verificación de sello de tiempo",
+  "description": "Cada ítem del Anexo B para software de firma por agente automatizado (F-1…F-32) y de verificación por agentes automatizados (V-1…V-32), y la verificación de sello de tiempo (S-1…S-4), demostrado contra el Sandbox con la política IOFE, por la librería y por la CLI. Los ítems que dependen de un módulo criptográfico o clave propios de la solución no aplican a una librería.",
+  "language": "es",
+  "defaults": {
+    "engine": "both",
+    "format": "pades",
+    "options": {
+      "common": {
+        "level": "BB",
+        "credentialId": "sandbox:rsa-2048",
+        "signingPolicyId": "preset:signing:iofe",
+        "signingControls": {
+          "trust": [
+            "SandboxRoot"
+          ]
+        },
+        "attemptRefused": true,
+        "validation": {
+          "trust": [
+            "Sandbox"
+          ],
+          "policyId": "preset:validation:iofe"
+        }
+      },
+      "pades": {
+        "documentId": "sample:contract"
+      }
+    }
+  },
+  "requirements": [
+    {
+      "id": "F-1",
+      "group": "Firma por agente automatizado — TSL (opcional)",
+      "text": "La aplicación deberá verificar la firma de la AAC en la TSL y corroborar que corresponde a la raíz de la AAC.",
+      "reference": "§4.2, requerimiento opcional"
+    },
+    {
+      "id": "F-2",
+      "group": "Firma por agente automatizado — TSL (opcional)",
+      "text": "La aplicación deberá verificar que la fecha de vigencia de la TSL no ha expirado.",
+      "reference": "§4.2, requerimiento opcional"
+    },
+    {
+      "id": "F-3",
+      "group": "Firma por agente automatizado — TSL (opcional)",
+      "text": "La aplicación deberá verificar que la clave pública de la EC raíz del certificado se encuentra listada en la TSL.",
+      "reference": "§4.2, requerimiento opcional"
+    },
+    {
+      "id": "F-4",
+      "group": "Firma por agente automatizado — TSL (opcional)",
+      "text": "La descarga de la TSL puede ser periódica conforme a su periodo de vigencia.",
+      "reference": "§4.2, requerimiento opcional"
+    },
+    {
+      "id": "F-5",
+      "group": "Firma por agente automatizado — Req. 11 Revocación",
+      "text": "La aplicación deberá poder realizar el proceso de consulta de CRL mediante protocolos HTTP, LDAP o HTTPS.",
+      "reference": "§4.2.1"
+    },
+    {
+      "id": "F-6",
+      "group": "Firma por agente automatizado — Req. 11 Revocación",
+      "text": "La aplicación deberá verificar que la CRL esté firmada por la EC autorizada para realizar su emisión.",
+      "reference": "§4.2.1"
+    },
+    {
+      "id": "F-7",
+      "group": "Firma por agente automatizado — Req. 11 Revocación",
+      "text": "La aplicación deberá verificar que la CRL se encuentre vigente, es decir que no se haya cumplido su fecha de expiración.",
+      "reference": "§4.2.1"
+    },
+    {
+      "id": "F-8",
+      "group": "Firma por agente automatizado — Req. 11 Revocación",
+      "text": "Antes de realizar la firma de un documento o información, se debe realizar la consulta a la CRL respectiva para verificar que el certificado no se encuentre revocado.",
+      "reference": "§4.2.1"
+    },
+    {
+      "id": "F-9",
+      "group": "Firma por agente automatizado — Req. 11 Revocación",
+      "text": "Se debe verificar que cada uno de los certificados que formen parte de la cadena de certificación no se encuentren revocados.",
+      "reference": "§4.2.1"
+    },
+    {
+      "id": "F-10",
+      "group": "Firma por agente automatizado — Req. 11 Revocación",
+      "text": "La aplicación deberá realizar la verificación del estado de revocación de un certificado y su cadena realizando la consulta OCSP (RFC 2560 / 6960).",
+      "reference": "§4.2.1"
+    },
+    {
+      "id": "F-11",
+      "group": "Firma por agente automatizado — Req. 12 No expiración",
+      "text": "La aplicación deberá realizar la verificación del estado de no expiración de un certificado y su respectiva cadena de certificación.",
+      "reference": "§4.2.2"
+    },
+    {
+      "id": "F-12",
+      "group": "Firma por agente automatizado — Req. 13 Propósito",
+      "text": "La aplicación deberá verificar que los bit NonRepudiation y/o DigitalSignature se encuentran activos cuando se realiza el proceso de firma.",
+      "reference": "§4.2.3"
+    },
+    {
+      "id": "F-13",
+      "group": "Firma por agente automatizado — Req. 14 Control de acceso",
+      "text": "Las aplicaciones deben estar protegidas contra acceso no autorizado.",
+      "reference": "§4.2.4"
+    },
+    {
+      "id": "F-14",
+      "group": "Firma por agente automatizado — Req. 14 Control de acceso",
+      "text": "Las funciones de verificación del estado de validez de los certificados deben estar siempre activadas, salvo contingencia aprobada por la AAC.",
+      "reference": "§4.2.4"
+    },
+    {
+      "id": "F-15",
+      "group": "Firma por agente automatizado — Req. 14 Control de acceso",
+      "text": "Registros de auditoría de las firmas generadas, según el tipo de transacción.",
+      "reference": "§4.2.4"
+    },
+    {
+      "id": "F-16",
+      "group": "Firma por agente automatizado — Req. 14 Control de acceso",
+      "text": "Los derechos de administración no deben permitir la generación de firmas fuera de la transacción definida para la firma desatendida.",
+      "reference": "§4.2.4"
+    },
+    {
+      "id": "F-17",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "La función de firma con la clave privada debe realizarse solamente en el módulo criptográfico certificado y no en las librerías criptográficas de la aplicación.",
+      "reference": "§4.2.5"
+    },
+    {
+      "id": "F-18",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "No deben generarse copias automatizadas de la clave privada en el computador durante el proceso de firma.",
+      "reference": "§4.2.5"
+    },
+    {
+      "id": "F-19",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si el módulo criptográfico es parte de la solución: certificación FIPS 140-2 o Common Criteria EAL 4+.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-20",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: acceso a la clave protegido por al menos dos personas a la vez.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-21",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: acceso a las copias protegido por al menos dos personas.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-22",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: importación y exportación con la clave cifrada por una clave bajo control dual.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-23",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: registros de auditoría de generación, exportación, transporte, revocación, expiración y eliminación.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-24",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: protección física del módulo bajo control de dos personas y registro de movimientos.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-25",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: registro de los movimientos de los respaldos de las claves.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-26",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: petición del certificado conforme a PKCS #10.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-27",
+      "group": "Firma por agente automatizado — Req. 15 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: solicitud de revocación inmediata en caso de compromiso.",
+      "reference": "§4.2.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "F-28",
+      "group": "Firma por agente automatizado — Req. 16 Algoritmos",
+      "text": "La aplicación debe utilizar algoritmos criptográficos vigentes, no vulnerados ni obsoletos (Anexo A: SHA-224/256/384/512; RSA 2048/4096, DSA, ECDSA; sin MD5, SHA-1 ni RSA 1024).",
+      "reference": "§4.2.6"
+    },
+    {
+      "id": "F-29",
+      "group": "Firma por agente automatizado — Req. 17 Código",
+      "text": "La autenticidad de la aplicación debe estar protegida por firma digital con un certificado de firma de código reconocido por los sistemas operativos.",
+      "reference": "§4.2.7"
+    },
+    {
+      "id": "F-30",
+      "group": "Firma por agente automatizado — Req. 18 Visor",
+      "text": "Se deben brindar visores para verificar la integridad del documento firmado, la fecha de la firma, la clave pública y los datos del certificado.",
+      "reference": "§4.2.8"
+    },
+    {
+      "id": "F-31",
+      "group": "Firma por agente automatizado — Req. 19 Datos de verificación",
+      "text": "La aplicación debe adjuntar a la firma, protegidos por la firma, la fecha y hora de la firma y la clave pública de los certificados de la cadena (PAdES TS 102 778, XAdES TS 101 903, CAdES TS 101 733 desde CAdES-EPES; hoy EN 319 142/132/122).",
+      "reference": "§4.2.9"
+    },
+    {
+      "id": "F-32",
+      "group": "Firma por agente automatizado — Req. 20 Manuales",
+      "text": "Se deben implementar manuales de administración y usuario; para una librería, el manual del programador.",
+      "reference": "§4.2.10"
+    },
+    {
+      "id": "V-1",
+      "group": "Verificación por agentes automatizados — TSL (opcional)",
+      "text": "La aplicación deberá verificar la firma de la AAC en la TSL y corroborar que corresponde a la raíz de la AAC.",
+      "reference": "§4.3, requerimiento opcional"
+    },
+    {
+      "id": "V-2",
+      "group": "Verificación por agentes automatizados — TSL (opcional)",
+      "text": "La aplicación deberá verificar que la fecha de vigencia de la TSL no ha expirado.",
+      "reference": "§4.3, requerimiento opcional"
+    },
+    {
+      "id": "V-3",
+      "group": "Verificación por agentes automatizados — TSL (opcional)",
+      "text": "La aplicación deberá verificar que la clave pública de la EC raíz del certificado se encuentra listada en la TSL.",
+      "reference": "§4.3, requerimiento opcional"
+    },
+    {
+      "id": "V-4",
+      "group": "Verificación por agentes automatizados — TSL (opcional)",
+      "text": "La descarga de la TSL puede ser periódica conforme a su periodo de vigencia.",
+      "reference": "§4.3, requerimiento opcional"
+    },
+    {
+      "id": "V-5",
+      "group": "Verificación por agentes automatizados — Req. 21 Revocación",
+      "text": "La aplicación deberá poder realizar el proceso de consulta de CRL mediante protocolos HTTP, LDAP o HTTPS.",
+      "reference": "§4.3.1"
+    },
+    {
+      "id": "V-6",
+      "group": "Verificación por agentes automatizados — Req. 21 Revocación",
+      "text": "La aplicación deberá verificar que la CRL esté firmada por la EC autorizada para realizar su emisión.",
+      "reference": "§4.3.1"
+    },
+    {
+      "id": "V-7",
+      "group": "Verificación por agentes automatizados — Req. 21 Revocación",
+      "text": "La aplicación deberá verificar que la CRL se encuentre vigente, es decir que no se haya cumplido su fecha de expiración.",
+      "reference": "§4.3.1"
+    },
+    {
+      "id": "V-8",
+      "group": "Verificación por agentes automatizados — Req. 21 Revocación",
+      "text": "Antes de realizar la firma de un documento o información, se debe realizar la consulta a la CRL respectiva para verificar que el certificado no se encuentre revocado.",
+      "reference": "§4.3.1"
+    },
+    {
+      "id": "V-9",
+      "group": "Verificación por agentes automatizados — Req. 21 Revocación",
+      "text": "Se debe verificar que cada uno de los certificados que formen parte de la cadena de certificación no se encuentren revocados.",
+      "reference": "§4.3.1"
+    },
+    {
+      "id": "V-10",
+      "group": "Verificación por agentes automatizados — Req. 21 Revocación",
+      "text": "La aplicación deberá realizar la verificación del estado de revocación de un certificado y su cadena realizando la consulta OCSP (RFC 2560 / 6960).",
+      "reference": "§4.3.1"
+    },
+    {
+      "id": "V-11",
+      "group": "Verificación por agentes automatizados — Req. 22 No expiración",
+      "text": "La aplicación deberá realizar la verificación del estado de no expiración de un certificado y su respectiva cadena de certificación.",
+      "reference": "§4.3.2"
+    },
+    {
+      "id": "V-12",
+      "group": "Verificación por agentes automatizados — Req. 23 Propósito",
+      "text": "La aplicación deberá verificar que el bit NonRepudiation del perfil de certificado se encuentra activo.",
+      "reference": "§4.3.3"
+    },
+    {
+      "id": "V-13",
+      "group": "Verificación por agentes automatizados — Req. 24 Control de acceso",
+      "text": "Las aplicaciones deben estar protegidas contra acceso no autorizado.",
+      "reference": "§4.3.4"
+    },
+    {
+      "id": "V-14",
+      "group": "Verificación por agentes automatizados — Req. 24 Control de acceso",
+      "text": "Las funciones de verificación del estado de validez de los certificados deben estar siempre activadas, salvo contingencia aprobada por la AAC.",
+      "reference": "§4.3.4"
+    },
+    {
+      "id": "V-15",
+      "group": "Verificación por agentes automatizados — Req. 24 Control de acceso",
+      "text": "Registros de auditoría de las firmas generadas, según el tipo de transacción.",
+      "reference": "§4.3.4"
+    },
+    {
+      "id": "V-16",
+      "group": "Verificación por agentes automatizados — Req. 24 Control de acceso",
+      "text": "Los derechos de administración no deben permitir la generación de firmas fuera de la transacción definida para la firma desatendida.",
+      "reference": "§4.3.4"
+    },
+    {
+      "id": "V-17",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "La función de firma con la clave privada debe realizarse solamente en el módulo criptográfico certificado y no en las librerías criptográficas de la aplicación.",
+      "reference": "§4.3.5"
+    },
+    {
+      "id": "V-18",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "No deben generarse copias automatizadas de la clave privada en el computador durante el proceso de firma.",
+      "reference": "§4.3.5"
+    },
+    {
+      "id": "V-19",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si el módulo criptográfico es parte de la solución: certificación FIPS 140-2 o Common Criteria EAL 4+.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-20",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: acceso a la clave protegido por al menos dos personas a la vez.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-21",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: acceso a las copias protegido por al menos dos personas.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-22",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: importación y exportación con la clave cifrada por una clave bajo control dual.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-23",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: registros de auditoría de generación, exportación, transporte, revocación, expiración y eliminación.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-24",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: protección física del módulo bajo control de dos personas y registro de movimientos.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-25",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: registro de los movimientos de los respaldos de las claves.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-26",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: petición del certificado conforme a PKCS #10.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-27",
+      "group": "Verificación por agentes automatizados — Req. 25 Módulo criptográfico",
+      "text": "Si la clave privada es parte de la solución: solicitud de revocación inmediata en caso de compromiso.",
+      "reference": "§4.3.5",
+      "applies": false,
+      "justification": "La solución acreditada es una librería: no custodia ni genera la clave privada ni incluye el módulo criptográfico. La clave la custodia el integrador en su token, HSM o servicio de firma remota; la librería solo calcula el hash y pide la firma al dispositivo (PKCS#11, CSC v2 o firma diferida)."
+    },
+    {
+      "id": "V-28",
+      "group": "Verificación por agentes automatizados — Req. 26 Algoritmos",
+      "text": "La aplicación debe utilizar algoritmos criptográficos vigentes, no vulnerados ni obsoletos (Anexo A: SHA-224/256/384/512; RSA 2048/4096, DSA, ECDSA; sin MD5, SHA-1 ni RSA 1024).",
+      "reference": "§4.3.6"
+    },
+    {
+      "id": "V-29",
+      "group": "Verificación por agentes automatizados — Req. 27 Código",
+      "text": "La autenticidad de la aplicación debe estar protegida por firma digital con un certificado de firma de código reconocido por los sistemas operativos.",
+      "reference": "§4.3.7"
+    },
+    {
+      "id": "V-30",
+      "group": "Verificación por agentes automatizados — Req. 28 Visor",
+      "text": "Se deben brindar visores para verificar la integridad del documento firmado, la fecha de la firma, la clave pública y los datos del certificado.",
+      "reference": "§4.3.8"
+    },
+    {
+      "id": "V-31",
+      "group": "Verificación por agentes automatizados — Req. 29 Datos de verificación",
+      "text": "La aplicación debe adjuntar a la firma, protegidos por la firma, la fecha y hora de la firma y la clave pública de los certificados de la cadena, y una referencia al estado de no revocación de la cadena (PAdES TS 102 778, XAdES TS 101 903, CAdES TS 101 733 desde CAdES-EPES; hoy EN 319 142/132/122).",
+      "reference": "§4.3.9"
+    },
+    {
+      "id": "V-32",
+      "group": "Verificación por agentes automatizados — Req. 30 Manuales",
+      "text": "Se deben implementar manuales de administración y usuario; para una librería, el manual del programador.",
+      "reference": "§4.3.10"
+    },
+    {
+      "id": "S-1",
+      "group": "Verificación de sello de tiempo (RFC 3161)",
+      "text": "Verificar que el sello de tiempo contiene el identificador del certificado de la Autoridad de Sello de Tiempo consultada.",
+      "reference": "§4.4.1"
+    },
+    {
+      "id": "S-2",
+      "group": "Verificación de sello de tiempo (RFC 3161)",
+      "text": "Verificar la firma del sello de tiempo para corroborar que los datos son íntegros.",
+      "reference": "§4.4.1"
+    },
+    {
+      "id": "S-3",
+      "group": "Verificación de sello de tiempo (RFC 3161)",
+      "text": "Verificar que el certificado de la Autoridad de Sello de Tiempo no ha sido revocado.",
+      "reference": "§4.4.1"
+    },
+    {
+      "id": "S-4",
+      "group": "Verificación de sello de tiempo (RFC 3161)",
+      "text": "Verificar que la vigencia del certificado de la Autoridad de Sello de Tiempo no ha expirado.",
+      "reference": "§4.4.1"
+    }
+  ],
+  "sections": [
+    {
+      "id": "tsl",
+      "title": "Lista de servicios de confianza (TSL)",
+      "description": "Las anclas de confianza salen de la TSL del Sandbox, cuya firma se verifica contra el certificado del operador.",
+      "steps": [
+        {
+          "id": "tsl-ok",
+          "title": "Firma con la raíz listada en la TSL",
+          "requirements": [
+            "F-1",
+            "F-3"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "signed"
+          },
+          "description": "La TSL del Sandbox se descarga, su firma se verifica con el certificado del operador y la raíz de la cadena del firmante está listada: la firma procede."
+        },
+        {
+          "id": "tsl-wrong-signer",
+          "title": "TSL firmada por otra clave: rechazo",
+          "requirements": [
+            "F-1"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          },
+          "description": "El Sandbox publica una TSL firmada por una clave que no es la del operador (TSL falsa): no hay anclas y la firma se rechaza.",
+          "sandbox": {
+            "trustedList": "WrongSigner"
+          }
+        },
+        {
+          "id": "tsl-tampered",
+          "title": "TSL alterada: rechazo",
+          "requirements": [
+            "F-1"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          },
+          "sandbox": {
+            "trustedList": "Tampered"
+          }
+        },
+        {
+          "id": "tsl-expired",
+          "title": "TSL vencida: rechazo",
+          "requirements": [
+            "F-2"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          },
+          "description": "La TSL publicada tiene su NextUpdate en el pasado.",
+          "sandbox": {
+            "trustedList": "Expired"
+          }
+        },
+        {
+          "id": "tsl-download",
+          "kind": "manual",
+          "title": "Descarga periódica de la TSL",
+          "requirements": [
+            "F-4",
+            "V-4"
+          ],
+          "manual": {
+            "instructions": "Mostrar IofeExtension.LoadAsync con IofeExtensionOptions.CacheFile (o TrustedList.DownloadAsync con cacheFile): la TSL se descarga de nuevo según su vigencia y la última copia válida se conserva si la descarga falla. Adjuntar el fragmento del manual del programador.",
+            "attachment": true
+          }
+        },
+        {
+          "id": "v-tsl-ok",
+          "kind": "validate",
+          "title": "Verificación con anclas de la TSL",
+          "requirements": [
+            "V-1",
+            "V-3"
+          ],
+          "options": {
+            "fileId": "step:tsl-ok",
+            "settings": {
+              "trust": [
+                "SandboxTrustedList"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          }
+        },
+        {
+          "id": "v-tsl-wrong-signer",
+          "kind": "validate",
+          "title": "Verificación con TSL falsa",
+          "requirements": [
+            "V-1"
+          ],
+          "options": {
+            "fileId": "step:tsl-ok",
+            "settings": {
+              "trust": [
+                "SandboxTrustedList"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          },
+          "sandbox": {
+            "trustedList": "WrongSigner"
+          }
+        },
+        {
+          "id": "v-tsl-expired",
+          "kind": "validate",
+          "title": "Verificación con TSL vencida",
+          "requirements": [
+            "V-2"
+          ],
+          "options": {
+            "fileId": "step:tsl-ok",
+            "settings": {
+              "trust": [
+                "SandboxTrustedList"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          },
+          "sandbox": {
+            "trustedList": "Expired"
+          }
+        }
+      ]
+    },
+    {
+      "id": "revocation",
+      "title": "Revocación antes de firmar (CRL y OCSP)",
+      "steps": [
+        {
+          "id": "crl-https-good",
+          "title": "CRL por HTTPS, certificado vigente",
+          "requirements": [
+            "F-5",
+            "F-8"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:good-crl-https"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "crl-https-revoked",
+          "title": "CRL por HTTPS, certificado revocado: rechazo",
+          "requirements": [
+            "F-5",
+            "F-8"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:revoked-crl-https"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateRevoked"
+          }
+        },
+        {
+          "id": "crl-ldap-good",
+          "title": "CRL por LDAP, certificado vigente",
+          "requirements": [
+            "F-5"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:good-crl-ldap"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "crl-ldap-revoked",
+          "title": "CRL por LDAP, certificado revocado: rechazo",
+          "requirements": [
+            "F-5"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:revoked-crl-ldap"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateRevoked"
+          }
+        },
+        {
+          "id": "crl-wrong-key",
+          "title": "CRL firmada por otra clave: rechazo",
+          "requirements": [
+            "F-6"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:good-crl-https"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "RevocationStatusUnknown"
+          },
+          "description": "El Sandbox firma la CRL con una clave que no es la de la EC emisora: la CRL no se acepta y, sin OCSP, el estado es desconocido.",
+          "sandbox": {
+            "crl": "WrongKey"
+          }
+        },
+        {
+          "id": "crl-expired",
+          "title": "CRL vencida: rechazo",
+          "requirements": [
+            "F-7"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:good-crl-https"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "RevocationStatusUnknown"
+          },
+          "sandbox": {
+            "crl": "Expired"
+          }
+        },
+        {
+          "id": "crl-no-next-update",
+          "title": "CRL sin fecha de próxima actualización: rechazo",
+          "requirements": [
+            "F-7"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:good-crl-https"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "RevocationStatusUnknown"
+          },
+          "description": "Una CRL sin nextUpdate no permite saber si está vigente: la política IOFE (CRLNextUpdatePresent) la rechaza.",
+          "sandbox": {
+            "crl": "NoNextUpdate"
+          }
+        },
+        {
+          "id": "crl-stale",
+          "title": "Revocado después de la CRL en caché: rechazo",
+          "requirements": [
+            "F-8"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:rsa-3072"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateRevoked"
+          },
+          "description": "El certificado se revoca ahora; antes de firmar se consulta de nuevo (OCSP, luego la CRL descargada sin caché), no la copia anterior.",
+          "sandbox": {
+            "crl": "Stale",
+            "revoke": [
+              "rsa-3072"
+            ]
+          }
+        },
+        {
+          "id": "crl-down",
+          "title": "Servidor de CRL caído, sin OCSP: rechazo",
+          "requirements": [
+            "F-8"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:good-crl-https"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "RevocationStatusUnknown"
+          },
+          "sandbox": {
+            "crl": "Down"
+          }
+        },
+        {
+          "id": "v-crl-wrong-key",
+          "kind": "validate",
+          "title": "Verificación con CRL firmada por otra clave",
+          "requirements": [
+            "V-6"
+          ],
+          "options": {
+            "fileId": "step:crl-https-good",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          },
+          "sandbox": {
+            "crl": "WrongKey"
+          }
+        },
+        {
+          "id": "v-crl-expired",
+          "kind": "validate",
+          "title": "Verificación con CRL vencida",
+          "requirements": [
+            "V-7"
+          ],
+          "options": {
+            "fileId": "step:crl-https-good",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          },
+          "sandbox": {
+            "crl": "Expired"
+          }
+        },
+        {
+          "id": "chain-revoked",
+          "title": "Certificado bajo una EC revocada: rechazo",
+          "requirements": [
+            "F-9"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:under-revoked-ca"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateRevoked"
+          }
+        },
+        {
+          "id": "ocsp-good",
+          "title": "OCSP, certificado vigente",
+          "requirements": [
+            "F-10"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:good-ocsp"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "ocsp-revoked",
+          "title": "OCSP, certificado revocado: rechazo",
+          "requirements": [
+            "F-10"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:revoked-ocsp"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateRevoked"
+          }
+        },
+        {
+          "id": "ocsp-unauthorized",
+          "title": "Respuesta OCSP de un firmante no autorizado, sin CRL: rechazo",
+          "requirements": [
+            "F-10"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:good-ocsp"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "RevocationStatusUnknown"
+          },
+          "sandbox": {
+            "ocsp": "Unauthorized"
+          }
+        }
+      ]
+    },
+    {
+      "id": "validity",
+      "title": "Vigencia y propósito del certificado",
+      "steps": [
+        {
+          "id": "expired",
+          "title": "Certificado vencido: rechazo",
+          "requirements": [
+            "F-11"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:expired"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateExpired"
+          }
+        },
+        {
+          "id": "not-yet-valid",
+          "title": "Certificado aún no vigente: rechazo",
+          "requirements": [
+            "F-11"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:not-yet-valid"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateNotCurrentlyValid"
+          }
+        },
+        {
+          "id": "chain-expired",
+          "title": "Certificado bajo una EC vencida: rechazo",
+          "requirements": [
+            "F-11"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:under-expired-ca"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "ChainCertificateNotValid"
+          }
+        },
+        {
+          "id": "no-key-usage",
+          "title": "Certificado sin digitalSignature ni nonRepudiation: rechazo",
+          "requirements": [
+            "F-12"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:no-signing-key-usage"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyUsageNotPermitted"
+          }
+        },
+        {
+          "id": "no-key-usage-extension",
+          "title": "Certificado sin extensión KeyUsage: rechazo",
+          "requirements": [
+            "F-12"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:no-key-usage-extension"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyUsageNotPermitted"
+          }
+        },
+        {
+          "id": "no-key-usage-cades",
+          "title": "CADES: sin digitalSignature ni nonRepudiation",
+          "requirements": [
+            "F-12"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "credentialId": "sandbox:no-signing-key-usage"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyUsageNotPermitted"
+          }
+        },
+        {
+          "id": "no-key-usage-xades",
+          "title": "XADES: sin digitalSignature ni nonRepudiation",
+          "requirements": [
+            "F-12"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "credentialId": "sandbox:no-signing-key-usage"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyUsageNotPermitted"
+          }
+        },
+        {
+          "id": "signed-no-nonrepudiation",
+          "title": "Firma con certificado sin nonRepudiation (para verificar)",
+          "requirements": [
+            "F-12"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:no-nonrepudiation"
+          },
+          "expect": {
+            "outcome": "signed"
+          },
+          "description": "La firma (Req. 13) acepta digitalSignature o nonRepudiation; el archivo sirve al paso de verificación del Req. 23."
+        },
+        {
+          "id": "v-no-nonrepudiation",
+          "kind": "validate",
+          "title": "Verificación exige nonRepudiation: no aceptada",
+          "requirements": [
+            "V-12"
+          ],
+          "options": {
+            "fileId": "step:signed-no-nonrepudiation",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe-nonrepudiation"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          },
+          "description": "Con la política iofe-nonrepudiation el certificado sin nonRepudiation no pasa la restricción de la cadena (EN 319 102-1: INDETERMINATE)."
+        },
+        {
+          "id": "v-revoked",
+          "kind": "validate",
+          "title": "Verificación de un firmante revocado",
+          "requirements": [
+            "V-5",
+            "V-8",
+            "V-9",
+            "V-10"
+          ],
+          "options": {
+            "fileId": "sample:revoked",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          },
+          "description": "Muestra firmada por un certificado que luego fue revocado: el verificador consulta CRL/OCSP de la cadena y no la acepta."
+        },
+        {
+          "id": "v-expired",
+          "kind": "validate",
+          "title": "Verificación de un firmante vencido",
+          "requirements": [
+            "V-11"
+          ],
+          "options": {
+            "fileId": "sample:expired",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          }
+        },
+        {
+          "id": "v-untrusted",
+          "kind": "validate",
+          "title": "Verificación con raíz fuera de las anclas",
+          "requirements": [
+            "V-3"
+          ],
+          "options": {
+            "fileId": "sample:untrusted-root",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          }
+        }
+      ]
+    },
+    {
+      "id": "timestamp",
+      "title": "Sello de tiempo (RFC 3161)",
+      "description": "Cada sello obtenido al firmar se verifica: TSA esperada, firma del token, confianza, vigencia y revocación del certificado de la TSA.",
+      "steps": [
+        {
+          "id": "tsa-ok",
+          "title": "Sello de la TSA del Sandbox",
+          "requirements": [
+            "S-1",
+            "S-2",
+            "S-3",
+            "S-4",
+            "F-31"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ],
+              "expectedTsa": "tsa"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "tsa-unexpected",
+          "title": "Sello de otra TSA que la esperada: rechazo",
+          "requirements": [
+            "S-1"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ],
+              "expectedTsa": "tsa-revoked"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampUntrusted"
+          }
+        },
+        {
+          "id": "tsa-invalid-token",
+          "title": "Token con firma inválida: rechazo",
+          "requirements": [
+            "S-2"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "refused"
+          },
+          "sandbox": {
+            "tsa": "InvalidToken"
+          }
+        },
+        {
+          "id": "tsa-revoked",
+          "title": "TSA revocada: rechazo",
+          "requirements": [
+            "S-3"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxRevoked"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampCertificateRevoked"
+          }
+        },
+        {
+          "id": "tsa-untrusted",
+          "title": "TSA fuera de las anclas: rechazo",
+          "requirements": [
+            "S-1"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxUntrusted"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampUntrusted"
+          }
+        },
+        {
+          "id": "tsa-expired",
+          "title": "TSA con certificado vencido: rechazo",
+          "requirements": [
+            "S-4"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxExpired"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampCertificateNotValid"
+          },
+          "description": "El certificado de la TSA venció: el sello que emite ahora no es válido en su propia fecha."
+        },
+        {
+          "id": "tsa-revoked-cades",
+          "title": "CADES: TSA revocada",
+          "requirements": [
+            "S-3"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxRevoked"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampCertificateRevoked"
+          }
+        },
+        {
+          "id": "tsa-revoked-xades",
+          "title": "XADES: TSA revocada",
+          "requirements": [
+            "S-3"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxRevoked"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampCertificateRevoked"
+          }
+        },
+        {
+          "id": "tsa-expired-cades",
+          "title": "CADES: TSA vencida",
+          "requirements": [
+            "S-4"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxExpired"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampCertificateNotValid"
+          }
+        },
+        {
+          "id": "tsa-expired-xades",
+          "title": "XADES: TSA vencida",
+          "requirements": [
+            "S-4"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxExpired"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampCertificateNotValid"
+          }
+        }
+      ]
+    },
+    {
+      "id": "levels",
+      "title": "Datos de verificación y niveles (B-T, B-LT, B-LTA)",
+      "steps": [
+        {
+          "id": "pades-blt",
+          "title": "PADES B-LT",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-blta",
+          "title": "PADES B-LTA",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-blt",
+          "title": "CADES B-LT",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-blta",
+          "title": "CADES B-LTA",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-blt",
+          "title": "XADES B-LT",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-blta",
+          "title": "XADES B-LTA",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-attached-blta",
+          "title": "CAdES adjunta (p7m) B-LTA",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "contentType": "Enveloped"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "xades-detached-blta",
+          "title": "XAdES separada B-LTA",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "form": "Detached"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "xades-enveloping-blta",
+          "title": "XAdES envolvente B-LTA",
+          "requirements": [
+            "F-31",
+            "V-31"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "form": "Enveloping"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "v-altered",
+          "kind": "validate",
+          "title": "Documento alterado después de firmar",
+          "requirements": [
+            "V-30"
+          ],
+          "options": {
+            "fileId": "sample:tampered-content",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "invalid",
+            "indication": "TOTAL_FAILED"
+          }
+        },
+        {
+          "id": "v-cades-altered",
+          "kind": "validate",
+          "title": "CAdES: datos alterados",
+          "requirements": [
+            "V-30"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-changed-data",
+            "dataId": "cades-sample:v-changed-data#data",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "invalid"
+          }
+        },
+        {
+          "id": "v-xades-altered",
+          "kind": "validate",
+          "title": "XAdES: documento alterado",
+          "requirements": [
+            "V-30"
+          ],
+          "options": {
+            "fileId": "xades-sample:v-changed",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "invalid"
+          }
+        }
+      ]
+    },
+    {
+      "id": "crypto",
+      "title": "Algoritmos",
+      "steps": [
+        {
+          "id": "rsa-1024",
+          "title": "Clave RSA 1024: rechazo",
+          "requirements": [
+            "F-28",
+            "V-28"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:rsa-1024"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyTooWeak"
+          }
+        },
+        {
+          "id": "alg-rsa-4096",
+          "title": "Firma con RSA-4096",
+          "requirements": [
+            "F-28"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:rsa-4096"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "alg-ecdsa-p256",
+          "title": "Firma con ECDSA-P256",
+          "requirements": [
+            "F-28"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:ecdsa-p256"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "alg-ecdsa-p384",
+          "title": "Firma con ECDSA-P384",
+          "requirements": [
+            "F-28"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:ecdsa-p384"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "chain-sha1",
+          "title": "Cadena con una EC firmada con SHA-1: rechazo",
+          "requirements": [
+            "F-28",
+            "V-28"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:under-sha1-ca"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "AlgorithmNotPermitted"
+          }
+        },
+        {
+          "id": "rsa-1024-cades",
+          "title": "CADES: clave RSA 1024",
+          "requirements": [
+            "F-28"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "credentialId": "sandbox:rsa-1024"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyTooWeak"
+          }
+        },
+        {
+          "id": "rsa-1024-xades",
+          "title": "XADES: clave RSA 1024",
+          "requirements": [
+            "F-28"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "credentialId": "sandbox:rsa-1024"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyTooWeak"
+          }
+        },
+        {
+          "id": "alg-sha1",
+          "kind": "manual",
+          "title": "Resumen SHA-1 o MD5",
+          "requirements": [
+            "F-28",
+            "V-28"
+          ],
+          "manual": {
+            "instructions": "La interfaz no ofrece SHA-1 ni MD5. Mostrar las pruebas automatizadas SignWithObsoleteHash_IsRefused (SHA-1 y MD5, en PAdES, CAdES y XAdES) y la política iofe-signing.json (AcceptableDigestAlgo: SHA-2 y SHA-3). Adjuntar la salida de dotnet test.",
+            "attachment": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "controls",
+      "title": "Controles de seguridad y auditoría",
+      "steps": [
+        {
+          "id": "audit",
+          "title": "Registro de auditoría de cada firma",
+          "requirements": [
+            "F-15",
+            "V-15"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ],
+              "auditLog": true
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "logContains": [
+              "Audit:"
+            ]
+          },
+          "description": "Cada firma hecha o rechazada queda registrada (certificado, política, hashes de entrada y salida, motivo) en un registro encadenado por hash; la CLI lo verifica con simplesign audit verify."
+        },
+        {
+          "id": "audit-refused",
+          "title": "La firma rechazada también se registra",
+          "requirements": [
+            "F-15",
+            "V-15"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:revoked",
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ],
+              "auditLog": true
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateRevoked",
+            "logContains": [
+              "Audit:"
+            ]
+          }
+        },
+        {
+          "id": "access",
+          "kind": "manual",
+          "title": "Protección contra acceso no autorizado",
+          "requirements": [
+            "F-13",
+            "V-13",
+            "F-16",
+            "V-16"
+          ],
+          "manual": {
+            "instructions": "La librería no expone interfaz ni funciones de administración: se ejecuta dentro del proceso del integrador. Mostrar en el manual de administración las medidas exigidas al integrador (proceso sin acceso externo, credenciales de token/HSM fuera del código, firma solo dentro de la transacción definida).",
+            "attachment": true
+          }
+        },
+        {
+          "id": "always-on",
+          "kind": "manual",
+          "title": "Verificaciones siempre activas",
+          "requirements": [
+            "F-14",
+            "V-14"
+          ],
+          "manual": {
+            "instructions": "Mostrar la política IOFE como archivo firmado (SigningPolicy.LoadSigned / --signing-policy con su .p7s): las verificaciones de vigencia, propósito y revocación no se pueden desactivar sin romper la firma de la política. Adjuntar el archivo y su verificación.",
+            "attachment": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "module",
+      "title": "Módulo criptográfico y claves",
+      "steps": [
+        {
+          "id": "module-sign",
+          "kind": "manual",
+          "title": "Firma en el token o HSM",
+          "requirements": [
+            "F-17",
+            "V-17"
+          ],
+          "manual": {
+            "instructions": "Firmar con un token PKCS#11 real (y con SoftHSM): la librería calcula el hash y el token ejecuta C_Sign; ninguna llamada lee CKA_VALUE. Adjuntar la evidencia (modelo de token, driver, archivo firmado y su verificación).",
+            "attachment": true
+          }
+        },
+        {
+          "id": "no-copies",
+          "kind": "manual",
+          "title": "Sin copias de la clave privada",
+          "requirements": [
+            "F-18",
+            "V-18"
+          ],
+          "manual": {
+            "instructions": "Mostrar que la librería no exporta claves: los PFX se cargan como no exportables (CertificateLoader), PKCS#11 y CSC nunca entregan la clave. Adjuntar el extracto del código y el resultado de las pruebas.",
+            "attachment": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "deliverables",
+      "title": "Entregables",
+      "steps": [
+        {
+          "id": "viewer",
+          "kind": "validate",
+          "title": "Visor de verificación (informe en español)",
+          "requirements": [
+            "F-30",
+            "V-30"
+          ],
+          "options": {
+            "fileId": "step:pades-blta",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          },
+          "description": "El informe de verificación muestra integridad, fecha de firma, clave pública y datos del certificado; la CLI lo escribe en HTML con simplesign validate --html-report informe.html --report-language es."
+        },
+        {
+          "id": "code-signing",
+          "kind": "manual",
+          "title": "Firma del código",
+          "requirements": [
+            "F-29",
+            "V-29"
+          ],
+          "manual": {
+            "instructions": "Mostrar el paquete NuGet firmado (dotnet nuget verify) y los ejecutables firmados (Authenticode / codesign) con un certificado de firma de código de una EC reconocida por los sistemas operativos.",
+            "attachment": true
+          }
+        },
+        {
+          "id": "manuals",
+          "kind": "manual",
+          "title": "Manuales",
+          "requirements": [
+            "F-32",
+            "V-32"
+          ],
+          "manual": {
+            "instructions": "Entregar el manual del programador, el de administración y el de usuario (CLI), en español.",
+            "attachment": true
+          }
+        }
+      ]
+    }
+  ]
+}

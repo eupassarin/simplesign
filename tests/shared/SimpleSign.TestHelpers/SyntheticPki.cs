@@ -240,6 +240,10 @@ public sealed class SyntheticPki : IDisposable
     public byte[] BuildLeafCrl(DateTimeOffset thisUpdate, DateTimeOffset nextUpdate) =>
         BuildCrl(IntermediateCa, _intermediateKey, null, thisUpdate, nextUpdate);
 
+    /// <summary>Builds an intermediate-signed CRL for the leaf without nextUpdate (optional in RFC 5280).</summary>
+    public byte[] BuildLeafCrlWithoutNextUpdate() =>
+        BuildCrl(IntermediateCa, _intermediateKey, null, null, null, omitNextUpdate: true);
+
     /// <summary>Builds an issuer-signed CRL that revokes the leaf certificate.</summary>
     public byte[] BuildRevokedLeafCrl()
     {
@@ -295,7 +299,7 @@ public sealed class SyntheticPki : IDisposable
 
     private static byte[] BuildCrl(
         X509Certificate2 issuer, RSA issuerKey, byte[]? revokedSerial = null,
-        DateTimeOffset? thisUpdate = null, DateTimeOffset? nextUpdate = null)
+        DateTimeOffset? thisUpdate = null, DateTimeOffset? nextUpdate = null, bool omitNextUpdate = false)
     {
         var tbsWriter = new AsnWriter(AsnEncodingRules.DER);
         using (tbsWriter.PushSequence())
@@ -308,7 +312,11 @@ public sealed class SyntheticPki : IDisposable
 
             tbsWriter.WriteEncodedValue(issuer.SubjectName.RawData);
             tbsWriter.WriteUtcTime(thisUpdate ?? DateTimeOffset.UtcNow.AddDays(-1));
-            tbsWriter.WriteUtcTime(nextUpdate ?? DateTimeOffset.UtcNow.AddDays(30));
+            if (!omitNextUpdate)
+            {
+                tbsWriter.WriteUtcTime(nextUpdate ?? DateTimeOffset.UtcNow.AddDays(30));
+            }
+
             if (revokedSerial is not null)
             {
                 using (tbsWriter.PushSequence())

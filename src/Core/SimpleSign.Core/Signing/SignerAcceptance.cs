@@ -18,14 +18,19 @@ namespace SimpleSign.Core.Signing;
 /// </summary>
 internal static class SignerAcceptance
 {
+    private const string TrustConstraint = "SigningCertificate/ProspectiveCertificateChain";
+
     /// <summary>
     /// Checks the certificate and its chain against <paramref name="policy"/>. Throws a
     /// <see cref="SigningException"/> on the first FAIL constraint the certificate does not pass.
+    /// <paramref name="trustAnchors"/> are where <c>SigningCertificate/ProspectiveCertificateChain</c> looks for the
+    /// root; when given, they also complete a chain passed without its root.
     /// </summary>
     internal static async Task EnsureSignerAcceptableAsync(
         X509Certificate2 certificate,
         IReadOnlyList<X509Certificate2> chain,
         SigningPolicy policy,
+        IReadOnlyList<ITrustAnchorProvider> trustAnchors,
         IChainRevocationChecker? revocationChecker,
         IHttpClientProvider httpClientProvider,
         ILogger logger,
@@ -38,12 +43,26 @@ internal static class SignerAcceptance
 
         bool caValidity = tree.Level("CACertificate/NotExpired") != ConstraintLevel.Ignore;
         bool certificateCrypto = HasOwnCryptographic(tree, "SigningCertificate") || HasOwnCryptographic(tree, "CACertificate");
-        if (!caValidity && !certificateCrypto && !policy.ChecksRevocation)
+        var anchorLevel = tree.Level(TrustConstraint);
+        if (!caValidity && !certificateCrypto && !policy.ChecksRevocation && anchorLevel == ConstraintLevel.Ignore)
         {
             return;
         }
 
         var ordered = OrderChain(certificate, chain);
+        if (anchorLevel != ConstraintLevel.Ignore || (trustAnchors.Count > 0 && !CertificateFacts.IsSelfSigned(ordered[^1])))
+        {
+            var trusted = TrustedChain.Build(certificate, chain, trustAnchors, now, out string? error);
+            if (trusted is not null)
+            {
+                ordered = trusted;
+            }
+            else
+            {
+                Apply([new SigningPolicyFinding(TrustConstraint, anchorLevel, SigningErrorReason.UntrustedRoot, error!)], warnings, logger);
+            }
+        }
+
         var findings = new List<SigningPolicyFinding>();
         if (caValidity)
         {
@@ -159,25 +178,51 @@ internal static class SignerAcceptance
         return ordered;
     }
 
-    private static async Task CheckRevocationAsync(
+    private static Task CheckRevocationAsync(
         IReadOnlyList<X509Certificate2> ordered,
         PolicyTree tree,
         IChainRevocationChecker? revocationChecker,
         IHttpClientProvider httpClientProvider,
         ILogger logger,
         ICollection<SigningWarning>? warnings,
+        CancellationToken cancellationToken) =>
+        // The stricter of the signing certificate's and the CA certificates' levels decides.
+        CheckChainRevocationAsync(
+            ordered,
+            Stricter(tree.Level("SigningCertificate/NotRevoked"), tree.Level("CACertificate/NotRevoked")),
+            Stricter(tree.Level("SigningCertificate/RevocationDataAvailable"), tree.Level("CACertificate/RevocationDataAvailable")),
+            new ChainRevocationFindings("", "signing chain", SigningErrorReason.CertificateRevoked, SigningErrorReason.RevocationStatusUnknown)
+            {
+                NextUpdate = Stricter(tree.Level("SigningCertificate/CRLNextUpdatePresent"), tree.Level("CACertificate/CRLNextUpdatePresent")),
+            },
+            revocationChecker, httpClientProvider, logger, warnings, cancellationToken);
+
+    /// <summary>
+    /// Checks the revocation of <paramref name="ordered"/> (leaf first, ending at its root) now, and applies
+    /// <paramref name="notRevoked"/> to a revoked certificate and <paramref name="available"/> to an unknown status.
+    /// </summary>
+    internal static async Task CheckChainRevocationAsync(
+        IReadOnlyList<X509Certificate2> ordered,
+        ConstraintLevel notRevoked,
+        ConstraintLevel available,
+        ChainRevocationFindings findings,
+        IChainRevocationChecker? revocationChecker,
+        IHttpClientProvider httpClientProvider,
+        ILogger logger,
+        ICollection<SigningWarning>? warnings,
         CancellationToken cancellationToken)
     {
-        // The stricter of the signing certificate's and the CA certificates' levels decides.
-        var notRevoked = Stricter(tree.Level("SigningCertificate/NotRevoked"), tree.Level("CACertificate/NotRevoked"));
-        var available = Stricter(tree.Level("SigningCertificate/RevocationDataAvailable"), tree.Level("CACertificate/RevocationDataAvailable"));
+        if (notRevoked == ConstraintLevel.Ignore && available == ConstraintLevel.Ignore)
+        {
+            return;
+        }
 
         var last = ordered[^1];
         if (!CertificateFacts.IsSelfSigned(last))
         {
-            Apply([new SigningPolicyFinding("RevocationDataAvailable", available, SigningErrorReason.RevocationStatusUnknown,
-                $"The revocation of the signing chain cannot be checked: the issuer of '{last.Subject}' was not given. " +
-                "Pass the whole chain, up to the root, with the signing certificate.")], warnings, logger);
+            Apply([new SigningPolicyFinding(findings.Prefix + "RevocationDataAvailable", available, findings.UnknownReason,
+                $"The revocation of the {findings.Chain} cannot be checked: the issuer of '{last.Subject}' was not given. " +
+                "Pass the whole chain, up to the root, or the trust anchors.")], warnings, logger);
             return;
         }
 
@@ -188,17 +233,38 @@ internal static class SignerAcceptance
         switch (result.Status)
         {
             case ChainRevocationStatus.Revoked:
-                Apply([new SigningPolicyFinding("NotRevoked", notRevoked, SigningErrorReason.CertificateRevoked,
-                    "A certificate of the signing chain is revoked. " + string.Join(" ", result.Messages))], warnings, logger);
+                Apply([new SigningPolicyFinding(findings.Prefix + "NotRevoked", notRevoked, findings.RevokedReason,
+                    $"A certificate of the {findings.Chain} is revoked. " + string.Join(" ", result.Messages))], warnings, logger);
                 break;
             case ChainRevocationStatus.Good:
+                if (findings.NextUpdate != ConstraintLevel.Ignore && result.Crls.Any(crl => CrlEvaluator.ReadNextUpdate(crl) is null))
+                {
+                    Apply([new SigningPolicyFinding(findings.Prefix + "CRLNextUpdatePresent", findings.NextUpdate, findings.UnknownReason,
+                        $"A CRL of the {findings.Chain} has no nextUpdate: it cannot be told whether it is current.")], warnings, logger);
+                }
+
                 break;
             default:
-                Apply([new SigningPolicyFinding("RevocationDataAvailable", available, SigningErrorReason.RevocationStatusUnknown,
-                    "The revocation status of the signing chain could not be established. " + string.Join(" ", result.Messages))], warnings, logger);
+                Apply([new SigningPolicyFinding(findings.Prefix + "RevocationDataAvailable", available, findings.UnknownReason,
+                    $"The revocation status of the {findings.Chain} could not be established. " + string.Join(" ", result.Messages))], warnings, logger);
                 break;
         }
     }
 
+    /// <summary>Throws, warns or logs each finding by its level.</summary>
+    internal static void ApplyFindings(IEnumerable<SigningPolicyFinding> findings, ICollection<SigningWarning>? warnings, ILogger? logger) =>
+        Apply(findings, warnings, logger);
+
     private static ConstraintLevel Stricter(ConstraintLevel a, ConstraintLevel b) => (ConstraintLevel)Math.Min((int)a, (int)b);
+}
+
+/// <summary>How the findings of a chain revocation check are named.</summary>
+/// <param name="Prefix">The prefix of the constraint names ("" or "Timestamp/").</param>
+/// <param name="Chain">The chain, as messages name it.</param>
+/// <param name="RevokedReason">The reason of a revoked certificate.</param>
+/// <param name="UnknownReason">The reason of an unknown status.</param>
+internal sealed record ChainRevocationFindings(string Prefix, string Chain, SigningErrorReason RevokedReason, SigningErrorReason UnknownReason)
+{
+    /// <summary>The level for a CRL without nextUpdate (<c>CRLNextUpdatePresent</c>).</summary>
+    public ConstraintLevel NextUpdate { get; init; } = ConstraintLevel.Ignore;
 }

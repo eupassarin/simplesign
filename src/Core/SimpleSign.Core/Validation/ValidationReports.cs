@@ -264,6 +264,22 @@ public static class ValidationReports
     }
 
     /// <summary>
+    /// A readable report of the signatures, as one self-contained HTML page (no script, no external resource): for each
+    /// signature, the indication of ETSI EN 319 102-1 and why, the integrity of the signed data, the signing time and the
+    /// time a timestamp proves, the signer's certificate with its public key (SubjectPublicKeyInfo, PEM), the timestamps
+    /// and revocation data used, the policy applied, and the errors and warnings.
+    /// </summary>
+    /// <param name="signatures">The signatures.</param>
+    /// <param name="language">The language of the labels, as an ISO 639-1 code or a culture name: <c>en</c>, <c>pt</c> (<c>pt-BR</c>) or <c>es</c>; English for any other or when null.</param>
+    /// <param name="validationTime">The validation time; now when null.</param>
+    /// <returns>The HTML document.</returns>
+    public static string ToHtml(IEnumerable<SignatureReportEntry> signatures, string? language = null, DateTimeOffset? validationTime = null)
+    {
+        ArgumentNullException.ThrowIfNull(signatures);
+        return HtmlValidationReport.Write([.. signatures], language, (validationTime ?? DateTimeOffset.UtcNow).ToUniversalTime());
+    }
+
+    /// <summary>
     /// A simple report (JSON) of <paramref name="signatures"/>, with, per
     /// signature its indication, sub-indication, signer, times, policy, errors and warnings, its timestamps and
     /// revocation data with their own indication, and the counts.
@@ -306,6 +322,8 @@ public static class ValidationReports
                 if (signature.SignerCertificate is { } signer)
                 {
                     writer.WriteString("signedBy", signer.GetNameInfo(X509NameType.SimpleName, forIssuer: false));
+                    writer.WriteString("signerCertificateSha256", Convert.ToHexString(signer.GetCertHash(HashAlgorithmName.SHA256)));
+                    writer.WriteString("signerPublicKey", Convert.ToBase64String(signer.PublicKey.ExportSubjectPublicKeyInfo()));
                 }
 
                 if (signature.ClaimedSigningTime is { } claimed)

@@ -240,16 +240,29 @@ contract-signed.pdf  1/1 valid
 
 ## Signing Policy
 
-`sign`, `cades sign` and `xades sign` check the certificate before signing. `--signing-policy` chooses the checks:
+`sign`, `cades sign`, `xades sign`, `sign-dir` and `deferred prepare/complete` check the certificate before signing.
+`--signing-policy` chooses the checks: a JSON file, or a built-in name (`simplesign policy export signing --preset NAME`
+writes it out):
 
 | Value | Checks |
 |---|---|
 | `default` | Validity of every certificate of the chain, key usage digitalSignature or nonRepudiation, RSA ≥ 2048 bits, SHA-2/SHA-3 |
 | `strict` | `default` plus the revocation of the whole chain (CRL/OCSP); give the chain up to the root |
 | `minimal` | Only the dates of the signing certificate (tests and migrations) |
+| `iofe` | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
+
+What the policy checks against comes from these options:
+
+| Option | Means |
+|---|---|
+| `--trust <file>` (repeatable), `--trust-dir <dir>`, `--tsl <url\|file> --tsl-signer <file>` | The trust anchors the signer and each TSA must chain to (`ProspectiveCertificateChain`) |
+| `--expected-tsa <file>` | The certificate the TSA must sign with; a timestamp from another is refused (`TimestampUntrusted`) |
+| `--audit-log <file>` | Appends a hash-chained record of each signature made or refused; `simplesign audit verify <file>` checks the chain |
+
+`validate --policy` takes a file or `default`, `iofe` or `iofe-nonrepudiation`.
 
 A refusal prints the reason (`KeyTooWeak`, `KeyUsageNotPermitted`, `ChainCertificateNotValid`, `CertificateRevoked`,
-`RevocationStatusUnknown`, `AlgorithmNotPermitted`) and what to do about it. `simplesign explain <TERM>` explains the
+`RevocationStatusUnknown`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampCertificateRevoked`…) and what to do about it. `simplesign explain <TERM>` explains the
 ETSI sub-indications of a validation report, such as `CRYPTO_CONSTRAINTS_FAILURE_NO_POE`.
 
 ### JSON result
@@ -301,6 +314,8 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 | `--revocation-strategy ocsp-first\|crl-first` | Which revocation source is asked first (default `ocsp-first`); the other one answers when the first gives nothing |
 | `--etsi-report <file>` | Write the ETSI TS 119 102-2 signature validation report (XML, namespace `http://uri.etsi.org/19102/v1.2.1#`) |
 | `--simple-report <file>` | Write the simple report (JSON): per signature the indication, sub-indication, signer, times, policy, errors and warnings |
+| `--html-report <file>` | Write a readable report (one self-contained HTML page): per signature the result and its reason, integrity of the signed data, claimed and proved signing time, signer certificate with its public key (PEM) and SHA-256 fingerprint, timestamps, revocation data, policy, errors and warnings |
+| `--report-language <code>` | Language of the HTML report: `en` (default), `pt` or `es` |
 | `--revocation-for-untrusted` | Also check the revocation of chains that do not reach a trust anchor (off by default) |
 
 Every signature gets a verification report: the indication (TOTAL-PASSED, TOTAL-FAILED, INDETERMINATE), the

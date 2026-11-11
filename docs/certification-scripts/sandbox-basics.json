@@ -1,0 +1,75 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/certification-script.schema.json",
+  "schema": 1,
+  "id": "sandbox-basics",
+  "title": "Sandbox basics",
+  "description": "Signs and validates with the certificates of the connected Sandbox: a good chain, B-LT through its TSA, CRLs and OCSP, and the cases a signer must refuse (revoked by OCSP, by a CRL over HTTPS or LDAP, a revoked CA, a stale CRL, a CRL server down, an expired certificate or CA).",
+  "language": "en",
+  "defaults": {
+    "engine": "library",
+    "format": "pades",
+    "options": {
+      "common": { "documentId": "sample:contract", "level": "BB", "signingPolicyId": "preset:signing:strict", "attemptRefused": true }
+    }
+  },
+  "requirements": [
+    { "id": "sign", "group": "Signing", "text": "Sign with a good chain, at B-B and at B-LT through the Sandbox's TSA, CRLs and OCSP." },
+    { "id": "validate", "group": "Validation", "text": "The B-LT signature validates." },
+    { "id": "revocation", "group": "Revocation", "text": "Refuse to sign with a revoked certificate or CA, by OCSP or by a CRL (HTTPS, LDAP), even when an older CRL was cached; refuse when the status is unknown." },
+    { "id": "validity", "group": "Validity", "text": "Refuse to sign with an expired certificate or under an expired CA." },
+    { "id": "reader", "group": "Review", "text": "The B-LT PDF opens in a PDF reader with the signature shown." }
+  ],
+  "sections": [
+    {
+      "id": "signing",
+      "title": "Signing with a good chain",
+      "steps": [
+        { "id": "sign-basic", "title": "B-B with the strict policy", "requirements": ["sign"],
+          "options": { "credentialId": "sandbox:rsa-2048" }, "expect": { "outcome": "signed", "level": "B-B" } },
+        { "id": "sign-lt", "title": "B-LT through the Sandbox's TSA", "requirements": ["sign"],
+          "options": { "credentialId": "sandbox:rsa-2048", "level": "BLT", "timestamp": { "provider": "Sandbox" } },
+          "expect": { "outcome": "signed", "level": "B-LT" } },
+        { "id": "validate-lt", "kind": "validate", "title": "Validate the B-LT signature", "requirements": ["validate"],
+          "options": { "fileId": "step:sign-lt" }, "expect": { "outcome": "valid" } }
+      ]
+    },
+    {
+      "id": "revocation",
+      "title": "Revoked chains",
+      "steps": [
+        { "id": "revoked-ocsp", "title": "Revoked, OCSP only", "requirements": ["revocation"],
+          "options": { "credentialId": "sandbox:revoked-ocsp" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
+        { "id": "revoked-crl-https", "title": "Revoked, CRL over HTTPS", "requirements": ["revocation"],
+          "options": { "credentialId": "sandbox:revoked-crl-https" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
+        { "id": "revoked-crl-ldap", "title": "Revoked, CRL over LDAP", "requirements": ["revocation"],
+          "options": { "credentialId": "sandbox:revoked-crl-ldap" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
+        { "id": "revoked-ca", "title": "Under a revoked CA", "requirements": ["revocation"],
+          "options": { "credentialId": "sandbox:under-revoked-ca" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
+        { "id": "stale-crl", "title": "Revoked after the CRL a client may have cached", "requirements": ["revocation"],
+          "sandbox": { "revoke": ["rsa-4096"], "crl": "Stale" },
+          "options": { "credentialId": "sandbox:rsa-4096" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
+        { "id": "crl-down", "title": "CRL server down, no OCSP", "requirements": ["revocation"],
+          "sandbox": { "crl": "Down" },
+          "options": { "credentialId": "sandbox:good-crl-https" }, "expect": { "outcome": "refused", "reason": "RevocationStatusUnknown" } }
+      ]
+    },
+    {
+      "id": "validity",
+      "title": "Validity",
+      "steps": [
+        { "id": "expired", "title": "Expired certificate", "requirements": ["validity"],
+          "options": { "credentialId": "sandbox:expired" }, "expect": { "outcome": "refused", "reason": "CertificateExpired" } },
+        { "id": "expired-ca", "title": "Under an expired CA", "requirements": ["validity"],
+          "options": { "credentialId": "sandbox:under-expired-ca" }, "expect": { "outcome": "refused", "reason": "ChainCertificateNotValid" } }
+      ]
+    },
+    {
+      "id": "review",
+      "title": "Review",
+      "steps": [
+        { "id": "open-in-reader", "kind": "manual", "title": "Open the B-LT PDF in a PDF reader", "requirements": ["reader"],
+          "manual": { "instructions": "Download the file of step sign-lt and open it in a PDF reader (Acrobat, Foxit…). The signature panel lists one signature, signed by the Sandbox's rsa-2048 certificate. A screenshot is the evidence.", "attachment": true } }
+      ]
+    }
+  ]
+}

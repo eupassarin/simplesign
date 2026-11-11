@@ -117,7 +117,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         credentials.TryGet(options.CredentialId, out var credential);
         var report = Compatibility.Evaluate(options, document, credential?.Facts, sandbox.IsConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
         var empty = new CodeSnippets("", "", []);
-        if (!report.CanSign)
+        if (!report.CanRun)
         {
             return Failure(report, L.T("The options are not compatible; fix the errors listed for each step."), "Compatibility", empty);
         }
@@ -128,7 +128,8 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         CodeSnippets code = empty;
         try
         {
-            plan = new SigningPlan(effective, credential!, sandbox, documents);
+            var controls = await SigningControls.ResolveAsync(effective.SigningControls, sandbox, cancellationToken);
+            plan = new SigningPlan(effective, credential!, sandbox, documents, controls);
             var steps = plan.SignSteps();
             code = CodeGenerator.Generate(effective, plan, steps, credential!.Facts);
             if (engine == RunEngines.Cli)
@@ -137,12 +138,19 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
             }
 
             var watch = Stopwatch.StartNew();
-            return effective.Mode switch
+            try
             {
-                RunMode.Deferred => await DeferredAsync(effective, plan, credential, pdf, report, code, watch, cancellationToken),
-                RunMode.Batch => await BatchAsync(effective, plan, credential, pdf, report, code, watch, cancellationToken),
-                _ => await SignAsync(effective, plan, steps, pdf, report, code, watch, cancellationToken),
-            };
+                return effective.Mode switch
+                {
+                    RunMode.Deferred => await DeferredAsync(effective, plan, credential, pdf, report, code, watch, cancellationToken),
+                    RunMode.Batch => await BatchAsync(effective, plan, credential, pdf, report, code, watch, cancellationToken),
+                    _ => await SignAsync(effective, plan, steps, pdf, report, code, watch, cancellationToken),
+                };
+            }
+            finally
+            {
+                controls.Report(cliTrail: null);
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -278,6 +286,11 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
 
         var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents)
             .File(CliLine.Placeholders.Input, pdf);
+        foreach (var (name, content) in plan.Context.Controls.CliFiles())
+        {
+            jobs.File(name, content);
+        }
+
         if (o.Appearance is { Visible: true, ImageUploadId: { Length: > 0 } imageId } && documents.TryGet(imageId, out var image))
         {
             jobs.File(CodeGenerator.StampImageFile, image!.Content);
@@ -294,6 +307,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         var job = jobs.Build(code.CliCommands, o.Mode == RunMode.Deferred ? SignOutsideAsync : null);
         var watch = Stopwatch.StartNew();
         var outcome = await _cli.RunAsync(job, cancellationToken);
+        plan.Context.Controls.Report(outcome.AuditTrail);
         long signMs = watch.ElapsedMilliseconds;
         if (!outcome.Success)
         {

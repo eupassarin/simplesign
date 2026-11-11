@@ -121,7 +121,7 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     {
         var report = Evaluate(options);
         var o = report.Effective;
-        if (!report.CanSign)
+        if (!report.CanRun)
         {
             return Failure(report, L.T("Fix the issues before signing."), "Validation", new CodeSnippets("", "", []));
         }
@@ -129,7 +129,17 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         var credential = credentials.Get(o.CredentialId!);
         credential.LastUsed = DateTimeOffset.UtcNow;
         var data = documents.Get(o.DataId!);
-        var context = new PlanContext(credential, sandbox, documents);
+        SigningControls controls;
+        try
+        {
+            controls = await SigningControls.ResolveAsync(o.SigningControls, sandbox, cancellationToken);
+        }
+        catch (Exception ex) when (ex is SigningException or ArgumentException or HttpRequestException)
+        {
+            return Failure(report, ex.Message, SigningRunner.ErrorTypeOf(ex), new CodeSnippets("", "", []));
+        }
+
+        var context = new PlanContext(credential, sandbox, documents) { Controls = controls };
         var watch = Stopwatch.StartNew();
         byte[] signed;
         string? achieved;
@@ -149,7 +159,13 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
 
                 var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents)
                     .File(o.CounterSign ? SignedFile : DataFile, data.Content);
+                foreach (var (name, content) in controls.CliFiles())
+                {
+                    jobs.File(name, content);
+                }
+
                 var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands), cancellationToken);
+                controls.Report(outcome.AuditTrail);
                 if (!outcome.Success)
                 {
                     return Failure(report, outcome.Error!, outcome.Json?.ErrorType ?? "Cli", code) with { Cli = outcome.Steps };
@@ -184,6 +200,13 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Failure(report, ex.Message, SigningRunner.ErrorTypeOf(ex), FallbackCode(o, context, credential.Facts));
+        }
+        finally
+        {
+            if (cliSteps is null && engine != RunEngines.Cli)
+            {
+                controls.Report(cliTrail: null);
+            }
         }
 
         long signMs = watch.ElapsedMilliseconds;
@@ -522,6 +545,17 @@ internal sealed class XadesPlan
             _steps.Add((PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
         }
 
+        var controls = context.Controls;
+        if (controls.TrustCode() is { } trustCode)
+        {
+            _steps.Add((trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+        }
+
+        if (controls.Audit is { } audit)
+        {
+            _steps.Add((controls.AuditCode()!, b => b.WithAuditSink(audit)));
+        }
+
         if (credential.Facts.KeyAlgorithm == "RSA" && o.Padding == RsaPadding.Pss)
         {
             _steps.Add((".WithSignatureAlgorithm(Oids.RsaPss) // RSASSA-PSS, salt = hash length", b => b.WithSignatureAlgorithm(Oids.RsaPss)));
@@ -763,6 +797,8 @@ internal sealed class XadesPlan
         {
             cli.Add("--signing-policy", PolicyUploads.SigningFileName);
         }
+
+        _context.Controls.Cli(cli);
 
         cli.AddIf("--commitment", _o.Commitment);
         foreach (string role in _o.SignerRoles)

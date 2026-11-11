@@ -1,0 +1,1149 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/validation-policy.schema.json",
+  "ValidationConstraints": {
+    "Name": "INDECOPI \u2014 Gu\u00EDa de Acreditaci\u00F3n v4.0",
+    "Description": "The constraints and levels SimpleSign recommends for validating signatures (ETSI EN 319 102-1), with trust anchors from trusted lists. Cryptographic dates after ETSI TS 119 312.",
+    "SignatureConstraints": {
+      "StructuralValidation": {
+        "Level": "WARN"
+      },
+      "AcceptablePolicies": {
+        "Level": "FAIL",
+        "Id": [
+          "ANY_POLICY",
+          "NO_POLICY"
+        ]
+      },
+      "PolicyAvailable": {
+        "Level": "INFORM"
+      },
+      "PolicyHashMatch": {
+        "Level": "WARN"
+      },
+      "AcceptableFormats": {
+        "Level": "FAIL",
+        "Id": [
+          "*"
+        ]
+      },
+      "BasicSignatureConstraints": {
+        "ReferenceDataExistence": {
+          "Level": "FAIL"
+        },
+        "ReferenceDataIntact": {
+          "Level": "FAIL"
+        },
+        "SignatureIntact": {
+          "Level": "FAIL"
+        },
+        "SignatureDuplicated": {
+          "Level": "FAIL"
+        },
+        "ProspectiveCertificateChain": {
+          "Level": "FAIL"
+        },
+        "SignerInformationStore": {
+          "Level": "FAIL"
+        },
+        "ByteRange": {
+          "Level": "FAIL"
+        },
+        "ByteRangeCollision": {
+          "Level": "WARN"
+        },
+        "PdfSignatureDictionary": {
+          "Level": "FAIL"
+        },
+        "PdfPageDifference": {
+          "Level": "FAIL"
+        },
+        "PdfAnnotationOverlap": {
+          "Level": "WARN"
+        },
+        "DocMDP": {
+          "Level": "WARN"
+        },
+        "FieldMDP": {
+          "Level": "WARN"
+        },
+        "SigFieldLock": {
+          "Level": "WARN"
+        },
+        "UndefinedChanges": {
+          "Level": "WARN"
+        },
+        "SigningCertificate": {
+          "Recognition": {
+            "Level": "FAIL"
+          },
+          "Signature": {
+            "Level": "FAIL"
+          },
+          "NotExpired": {
+            "Level": "FAIL"
+          },
+          "AuthorityInfoAccessPresent": {
+            "Level": "WARN"
+          },
+          "RevocationDataSkip": {
+            "Level": "INFORM",
+            "CertificateExtensions": {
+              "Id": [
+                "0.4.0.194121.2.1",
+                "2.5.29.56"
+              ]
+            }
+          },
+          "RevocationInfoAccessPresent": {
+            "Level": "WARN"
+          },
+          "RevocationDataAvailable": {
+            "Level": "FAIL"
+          },
+          "AcceptableRevocationDataFound": {
+            "Level": "FAIL"
+          },
+          "CRLNextUpdatePresent": {
+            "Level": "WARN"
+          },
+          "RevocationFreshness": {
+            "Level": "IGNORE",
+            "Unit": "DAYS",
+            "Value": 0
+          },
+          "KeyUsage": {
+            "Level": "FAIL",
+            "Id": [
+              "digitalSignature",
+              "nonRepudiation"
+            ]
+          },
+          "PolicyTree": {
+            "Level": "WARN"
+          },
+          "NameConstraints": {
+            "Level": "WARN"
+          },
+          "AuthorityKeyIdentifierPresent": {
+            "Level": "WARN"
+          },
+          "NoRevAvail": {
+            "Level": "WARN"
+          },
+          "SupportedCriticalExtensions": {
+            "Level": "WARN",
+            "Id": [
+              "2.5.29.15",
+              "2.5.29.32",
+              "2.5.29.17",
+              "2.5.29.19",
+              "2.5.29.30",
+              "2.5.29.36",
+              "2.5.29.37",
+              "2.5.29.31",
+              "2.5.29.54",
+              "1.3.6.1.5.5.7.1.3"
+            ]
+          },
+          "ForbiddenExtensions": {
+            "Level": "FAIL",
+            "Id": [
+              "1.3.6.1.5.5.7.48.1.5"
+            ]
+          },
+          "IssuerName": {
+            "Level": "FAIL"
+          },
+          "SerialNumberPresent": {
+            "Level": "WARN"
+          },
+          "NotRevoked": {
+            "Level": "FAIL"
+          },
+          "NotOnHold": {
+            "Level": "FAIL"
+          },
+          "RevocationIssuerNotExpired": {
+            "Level": "FAIL"
+          },
+          "NotSelfSigned": {
+            "Level": "WARN"
+          },
+          "UsePseudonym": {
+            "Level": "INFORM"
+          },
+          "Cryptographic": {}
+        },
+        "CACertificate": {
+          "Signature": {
+            "Level": "FAIL"
+          },
+          "NotExpired": {
+            "Level": "FAIL"
+          },
+          "RevocationDataAvailable": {
+            "Level": "FAIL"
+          },
+          "AcceptableRevocationDataFound": {
+            "Level": "FAIL"
+          },
+          "CRLNextUpdatePresent": {
+            "Level": "WARN"
+          },
+          "RevocationFreshness": {
+            "Level": "IGNORE",
+            "Unit": "DAYS",
+            "Value": 0
+          },
+          "CA": {
+            "Level": "FAIL"
+          },
+          "MaxPathLength": {
+            "Level": "FAIL"
+          },
+          "KeyUsage": {
+            "Level": "FAIL",
+            "Id": [
+              "keyCertSign"
+            ]
+          },
+          "PolicyTree": {
+            "Level": "WARN"
+          },
+          "NameConstraints": {
+            "Level": "WARN"
+          },
+          "AuthorityKeyIdentifierPresent": {
+            "Level": "WARN"
+          },
+          "SubjectKeyIdentifierPresent": {
+            "Level": "FAIL"
+          },
+          "SupportedCriticalExtensions": {
+            "Level": "WARN",
+            "Id": [
+              "2.5.29.15",
+              "2.5.29.32",
+              "2.5.29.17",
+              "2.5.29.19",
+              "2.5.29.30",
+              "2.5.29.36",
+              "2.5.29.37",
+              "2.5.29.31",
+              "2.5.29.54",
+              "1.3.6.1.5.5.7.1.3"
+            ]
+          },
+          "ForbiddenExtensions": {
+            "Level": "FAIL",
+            "Id": [
+              "1.3.6.1.5.5.7.48.1.5",
+              "2.5.29.56"
+            ]
+          },
+          "IssuerName": {
+            "Level": "FAIL"
+          },
+          "NotRevoked": {
+            "Level": "FAIL"
+          },
+          "NotOnHold": {
+            "Level": "FAIL"
+          },
+          "Cryptographic": {}
+        },
+        "Cryptographic": {}
+      },
+      "SignedAttributes": {
+        "SigningCertificatePresent": {
+          "Level": "WARN"
+        },
+        "UnicitySigningCertificate": {
+          "Level": "WARN"
+        },
+        "SigningCertificateRefersCertificateChain": {
+          "Level": "WARN"
+        },
+        "SigningCertificateDigestAlgorithm": {
+          "Level": "WARN"
+        },
+        "CertDigestPresent": {
+          "Level": "FAIL"
+        },
+        "CertDigestMatch": {
+          "Level": "FAIL"
+        },
+        "IssuerSerialMatch": {
+          "Level": "WARN"
+        },
+        "SigningTime": {
+          "Level": "FAIL"
+        },
+        "SigningTimeInCertRange": {
+          "Level": "FAIL"
+        },
+        "MessageDigestOrSignedPropertiesPresent": {
+          "Level": "FAIL"
+        }
+      },
+      "UnsignedAttributes": {}
+    },
+    "CounterSignatureConstraints": {
+      "BasicSignatureConstraints": {
+        "ReferenceDataExistence": {
+          "Level": "FAIL"
+        },
+        "ReferenceDataIntact": {
+          "Level": "FAIL"
+        },
+        "SignatureIntact": {
+          "Level": "FAIL"
+        },
+        "SignatureDuplicated": {
+          "Level": "FAIL"
+        },
+        "ProspectiveCertificateChain": {
+          "Level": "FAIL"
+        },
+        "SigningCertificate": {
+          "Recognition": {
+            "Level": "FAIL"
+          },
+          "Signature": {
+            "Level": "FAIL"
+          },
+          "NotExpired": {
+            "Level": "FAIL"
+          },
+          "AuthorityInfoAccessPresent": {
+            "Level": "WARN"
+          },
+          "RevocationDataSkip": {
+            "Level": "INFORM",
+            "CertificateExtensions": {
+              "Id": [
+                "0.4.0.194121.2.1",
+                "2.5.29.56"
+              ]
+            }
+          },
+          "RevocationInfoAccessPresent": {
+            "Level": "WARN"
+          },
+          "RevocationDataAvailable": {
+            "Level": "FAIL"
+          },
+          "AcceptableRevocationDataFound": {
+            "Level": "FAIL"
+          },
+          "CRLNextUpdatePresent": {
+            "Level": "WARN"
+          },
+          "RevocationFreshness": {
+            "Level": "IGNORE",
+            "Unit": "DAYS",
+            "Value": 0
+          },
+          "KeyUsage": {
+            "Level": "WARN",
+            "Id": [
+              "nonRepudiation"
+            ]
+          },
+          "PolicyTree": {
+            "Level": "WARN"
+          },
+          "NameConstraints": {
+            "Level": "WARN"
+          },
+          "AuthorityKeyIdentifierPresent": {
+            "Level": "WARN"
+          },
+          "NoRevAvail": {
+            "Level": "WARN"
+          },
+          "SupportedCriticalExtensions": {
+            "Level": "WARN",
+            "Id": [
+              "2.5.29.15",
+              "2.5.29.32",
+              "2.5.29.17",
+              "2.5.29.19",
+              "2.5.29.30",
+              "2.5.29.36",
+              "2.5.29.37",
+              "2.5.29.31",
+              "2.5.29.54",
+              "1.3.6.1.5.5.7.1.3"
+            ]
+          },
+          "ForbiddenExtensions": {
+            "Level": "FAIL",
+            "Id": [
+              "1.3.6.1.5.5.7.48.1.5"
+            ]
+          },
+          "IssuerName": {
+            "Level": "FAIL"
+          },
+          "SerialNumberPresent": {
+            "Level": "WARN"
+          },
+          "NotRevoked": {
+            "Level": "FAIL"
+          },
+          "NotOnHold": {
+            "Level": "FAIL"
+          },
+          "NotSelfSigned": {
+            "Level": "WARN"
+          },
+          "UsePseudonym": {
+            "Level": "INFORM"
+          },
+          "Cryptographic": {}
+        },
+        "CACertificate": {
+          "Signature": {
+            "Level": "FAIL"
+          },
+          "NotExpired": {
+            "Level": "FAIL"
+          },
+          "RevocationDataAvailable": {
+            "Level": "FAIL"
+          },
+          "AcceptableRevocationDataFound": {
+            "Level": "FAIL"
+          },
+          "CRLNextUpdatePresent": {
+            "Level": "WARN"
+          },
+          "RevocationFreshness": {
+            "Level": "IGNORE",
+            "Unit": "DAYS",
+            "Value": 0
+          },
+          "CA": {
+            "Level": "FAIL"
+          },
+          "MaxPathLength": {
+            "Level": "FAIL"
+          },
+          "KeyUsage": {
+            "Level": "FAIL",
+            "Id": [
+              "keyCertSign"
+            ]
+          },
+          "PolicyTree": {
+            "Level": "WARN"
+          },
+          "NameConstraints": {
+            "Level": "WARN"
+          },
+          "AuthorityKeyIdentifierPresent": {
+            "Level": "WARN"
+          },
+          "SubjectKeyIdentifierPresent": {
+            "Level": "FAIL"
+          },
+          "SupportedCriticalExtensions": {
+            "Level": "WARN",
+            "Id": [
+              "2.5.29.15",
+              "2.5.29.32",
+              "2.5.29.17",
+              "2.5.29.19",
+              "2.5.29.30",
+              "2.5.29.36",
+              "2.5.29.37",
+              "2.5.29.31",
+              "2.5.29.54",
+              "1.3.6.1.5.5.7.1.3"
+            ]
+          },
+          "ForbiddenExtensions": {
+            "Level": "FAIL",
+            "Id": [
+              "1.3.6.1.5.5.7.48.1.5",
+              "2.5.29.56"
+            ]
+          },
+          "IssuerName": {
+            "Level": "FAIL"
+          },
+          "NotRevoked": {
+            "Level": "FAIL"
+          },
+          "NotOnHold": {
+            "Level": "FAIL"
+          },
+          "Cryptographic": {}
+        },
+        "Cryptographic": {}
+      },
+      "SignedAttributes": {
+        "SigningCertificatePresent": {
+          "Level": "WARN"
+        },
+        "UnicitySigningCertificate": {
+          "Level": "WARN"
+        },
+        "SigningCertificateRefersCertificateChain": {
+          "Level": "WARN"
+        },
+        "SigningCertificateDigestAlgorithm": {
+          "Level": "WARN"
+        },
+        "CertDigestPresent": {
+          "Level": "FAIL"
+        },
+        "CertDigestMatch": {
+          "Level": "FAIL"
+        },
+        "IssuerSerialMatch": {
+          "Level": "WARN"
+        },
+        "SigningTime": {
+          "Level": "FAIL"
+        },
+        "SigningTimeInCertRange": {
+          "Level": "FAIL"
+        },
+        "MessageDigestOrSignedPropertiesPresent": {
+          "Level": "FAIL"
+        }
+      }
+    },
+    "Timestamp": {
+      "TimestampDelay": {
+        "Level": "IGNORE",
+        "Unit": "DAYS",
+        "Value": 0
+      },
+      "RevocationTimeAgainstBestSignatureTime": {
+        "Level": "FAIL"
+      },
+      "BestSignatureTimeBeforeExpirationDateOfSigningCertificate": {
+        "Level": "FAIL"
+      },
+      "Coherence": {
+        "Level": "WARN"
+      },
+      "BasicSignatureConstraints": {
+        "ReferenceDataExistence": {
+          "Level": "FAIL"
+        },
+        "ReferenceDataIntact": {
+          "Level": "FAIL"
+        },
+        "SignatureIntact": {
+          "Level": "FAIL"
+        },
+        "ProspectiveCertificateChain": {
+          "Level": "FAIL"
+        },
+        "ByteRange": {
+          "Level": "FAIL"
+        },
+        "ByteRangeCollision": {
+          "Level": "WARN"
+        },
+        "PdfSignatureDictionary": {
+          "Level": "FAIL"
+        },
+        "PdfPageDifference": {
+          "Level": "FAIL"
+        },
+        "PdfAnnotationOverlap": {
+          "Level": "WARN"
+        },
+        "DocMDP": {
+          "Level": "WARN"
+        },
+        "FieldMDP": {
+          "Level": "WARN"
+        },
+        "SigFieldLock": {
+          "Level": "WARN"
+        },
+        "UndefinedChanges": {
+          "Level": "WARN"
+        },
+        "SigningCertificate": {
+          "Recognition": {
+            "Level": "FAIL"
+          },
+          "Signature": {
+            "Level": "FAIL"
+          },
+          "NotExpired": {
+            "Level": "FAIL"
+          },
+          "RevocationDataAvailable": {
+            "Level": "FAIL"
+          },
+          "AcceptableRevocationDataFound": {
+            "Level": "FAIL"
+          },
+          "CRLNextUpdatePresent": {
+            "Level": "WARN"
+          },
+          "RevocationFreshness": {
+            "Level": "IGNORE",
+            "Unit": "DAYS",
+            "Value": 0
+          },
+          "ExtendedKeyUsage": {
+            "Level": "FAIL",
+            "Id": [
+              "timeStamping"
+            ]
+          },
+          "PolicyTree": {
+            "Level": "WARN"
+          },
+          "NameConstraints": {
+            "Level": "WARN"
+          },
+          "AuthorityKeyIdentifierPresent": {
+            "Level": "WARN"
+          },
+          "SupportedCriticalExtensions": {
+            "Level": "WARN",
+            "Id": [
+              "2.5.29.15",
+              "2.5.29.32",
+              "2.5.29.17",
+              "2.5.29.19",
+              "2.5.29.30",
+              "2.5.29.36",
+              "2.5.29.37",
+              "2.5.29.31",
+              "2.5.29.54",
+              "1.3.6.1.5.5.7.1.3"
+            ]
+          },
+          "ForbiddenExtensions": {
+            "Level": "FAIL",
+            "Id": [
+              "1.3.6.1.5.5.7.48.1.5"
+            ]
+          },
+          "IssuerName": {
+            "Level": "FAIL"
+          },
+          "NotRevoked": {
+            "Level": "FAIL"
+          },
+          "NotOnHold": {
+            "Level": "FAIL"
+          },
+          "NotSelfSigned": {
+            "Level": "WARN"
+          },
+          "Cryptographic": {}
+        },
+        "CACertificate": {
+          "Signature": {
+            "Level": "FAIL"
+          },
+          "NotExpired": {
+            "Level": "FAIL"
+          },
+          "RevocationDataAvailable": {
+            "Level": "WARN"
+          },
+          "AcceptableRevocationDataFound": {
+            "Level": "WARN"
+          },
+          "CRLNextUpdatePresent": {
+            "Level": "WARN"
+          },
+          "RevocationFreshness": {
+            "Level": "IGNORE",
+            "Unit": "DAYS",
+            "Value": 0
+          },
+          "CA": {
+            "Level": "FAIL"
+          },
+          "MaxPathLength": {
+            "Level": "FAIL"
+          },
+          "KeyUsage": {
+            "Level": "FAIL",
+            "Id": [
+              "keyCertSign"
+            ]
+          },
+          "PolicyTree": {
+            "Level": "WARN"
+          },
+          "NameConstraints": {
+            "Level": "WARN"
+          },
+          "AuthorityKeyIdentifierPresent": {
+            "Level": "WARN"
+          },
+          "SubjectKeyIdentifierPresent": {
+            "Level": "FAIL"
+          },
+          "SupportedCriticalExtensions": {
+            "Level": "WARN",
+            "Id": [
+              "2.5.29.15",
+              "2.5.29.32",
+              "2.5.29.17",
+              "2.5.29.19",
+              "2.5.29.30",
+              "2.5.29.36",
+              "2.5.29.37",
+              "2.5.29.31",
+              "2.5.29.54",
+              "1.3.6.1.5.5.7.1.3"
+            ]
+          },
+          "ForbiddenExtensions": {
+            "Level": "FAIL",
+            "Id": [
+              "1.3.6.1.5.5.7.48.1.5",
+              "2.5.29.56"
+            ]
+          },
+          "IssuerName": {
+            "Level": "FAIL"
+          },
+          "NotRevoked": {
+            "Level": "FAIL"
+          },
+          "NotOnHold": {
+            "Level": "FAIL"
+          },
+          "Cryptographic": {}
+        },
+        "Cryptographic": {}
+      },
+      "SignedAttributes": {
+        "SigningCertificatePresent": {
+          "Level": "WARN"
+        },
+        "SigningCertificateRefersCertificateChain": {
+          "Level": "WARN"
+        },
+        "CertDigestPresent": {
+          "Level": "WARN"
+        },
+        "IssuerSerialMatch": {
+          "Level": "WARN"
+        }
+      },
+      "TSAGeneralNameContentMatch": {
+        "Level": "WARN"
+      },
+      "AtsHashIndex": {
+        "Level": "WARN"
+      }
+    },
+    "Revocation": {
+      "UnknownStatus": {
+        "Level": "FAIL"
+      },
+      "ThisUpdatePresent": {
+        "Level": "FAIL"
+      },
+      "RevocationIssuerKnown": {
+        "Level": "FAIL"
+      },
+      "RevocationIssuerValidAtProductionTime": {
+        "Level": "FAIL"
+      },
+      "RevocationAfterCertificateIssuance": {
+        "Level": "FAIL"
+      },
+      "RevocationHasInformationAboutCertificate": {
+        "Level": "FAIL"
+      },
+      "OCSPResponderIdMatch": {
+        "Level": "FAIL"
+      },
+      "SelfIssuedOCSP": {
+        "Level": "WARN"
+      },
+      "BasicSignatureConstraints": {
+        "ReferenceDataExistence": {
+          "Level": "FAIL"
+        },
+        "ReferenceDataIntact": {
+          "Level": "FAIL"
+        },
+        "SignatureIntact": {
+          "Level": "FAIL"
+        },
+        "ProspectiveCertificateChain": {
+          "Level": "FAIL"
+        },
+        "SigningCertificate": {
+          "Recognition": {
+            "Level": "FAIL"
+          },
+          "Signature": {
+            "Level": "FAIL"
+          },
+          "NotExpired": {
+            "Level": "FAIL"
+          },
+          "RevocationDataSkip": {
+            "Level": "IGNORE",
+            "CertificateExtensions": {
+              "Id": [
+                "1.3.6.1.5.5.7.48.1.5"
+              ]
+            }
+          },
+          "RevocationDataAvailable": {
+            "Level": "FAIL"
+          },
+          "AcceptableRevocationDataFound": {
+            "Level": "FAIL"
+          },
+          "CRLNextUpdatePresent": {
+            "Level": "WARN"
+          },
+          "RevocationFreshness": {
+            "Level": "IGNORE",
+            "Unit": "DAYS",
+            "Value": 0
+          },
+          "PolicyTree": {
+            "Level": "WARN"
+          },
+          "NameConstraints": {
+            "Level": "WARN"
+          },
+          "AuthorityKeyIdentifierPresent": {
+            "Level": "WARN"
+          },
+          "SupportedCriticalExtensions": {
+            "Level": "WARN",
+            "Id": [
+              "2.5.29.15",
+              "2.5.29.32",
+              "2.5.29.17",
+              "2.5.29.19",
+              "2.5.29.30",
+              "2.5.29.36",
+              "2.5.29.37",
+              "2.5.29.31",
+              "2.5.29.54",
+              "1.3.6.1.5.5.7.1.3",
+              "1.3.6.1.5.5.7.48.1.5"
+            ]
+          },
+          "IssuerName": {
+            "Level": "FAIL"
+          },
+          "NotRevoked": {
+            "Level": "FAIL"
+          },
+          "NotOnHold": {
+            "Level": "FAIL"
+          },
+          "Cryptographic": {}
+        },
+        "CACertificate": {
+          "Signature": {
+            "Level": "FAIL"
+          },
+          "NotExpired": {
+            "Level": "FAIL"
+          },
+          "RevocationDataAvailable": {
+            "Level": "WARN"
+          },
+          "AcceptableRevocationDataFound": {
+            "Level": "WARN"
+          },
+          "CRLNextUpdatePresent": {
+            "Level": "WARN"
+          },
+          "RevocationFreshness": {
+            "Level": "IGNORE",
+            "Unit": "DAYS",
+            "Value": 0
+          },
+          "CA": {
+            "Level": "FAIL"
+          },
+          "MaxPathLength": {
+            "Level": "FAIL"
+          },
+          "KeyUsage": {
+            "Level": "FAIL",
+            "Id": [
+              "keyCertSign"
+            ]
+          },
+          "PolicyTree": {
+            "Level": "WARN"
+          },
+          "NameConstraints": {
+            "Level": "WARN"
+          },
+          "AuthorityKeyIdentifierPresent": {
+            "Level": "WARN"
+          },
+          "SubjectKeyIdentifierPresent": {
+            "Level": "FAIL"
+          },
+          "SupportedCriticalExtensions": {
+            "Level": "WARN",
+            "Id": [
+              "2.5.29.15",
+              "2.5.29.32",
+              "2.5.29.17",
+              "2.5.29.19",
+              "2.5.29.30",
+              "2.5.29.36",
+              "2.5.29.37",
+              "2.5.29.31",
+              "2.5.29.54",
+              "1.3.6.1.5.5.7.1.3"
+            ]
+          },
+          "ForbiddenExtensions": {
+            "Level": "FAIL",
+            "Id": [
+              "1.3.6.1.5.5.7.48.1.5",
+              "2.5.29.56"
+            ]
+          },
+          "IssuerName": {
+            "Level": "FAIL"
+          },
+          "NotRevoked": {
+            "Level": "FAIL"
+          },
+          "NotOnHold": {
+            "Level": "FAIL"
+          },
+          "Cryptographic": {}
+        },
+        "Cryptographic": {}
+      }
+    },
+    "Cryptographic": {
+      "Level": "FAIL",
+      "AcceptableEncryptionAlgo": {
+        "Algo": [
+          "RSA",
+          "RSASSA-PSS",
+          "DSA",
+          "ECDSA",
+          "PLAIN-ECDSA"
+        ]
+      },
+      "MiniPublicKeySize": {
+        "Algo": [
+          {
+            "Value": "DSA",
+            "Size": 1024
+          },
+          {
+            "Value": "RSA",
+            "Size": 786
+          },
+          {
+            "Value": "RSASSA-PSS",
+            "Size": 786
+          },
+          {
+            "Value": "ECDSA",
+            "Size": 160
+          },
+          {
+            "Value": "PLAIN-ECDSA",
+            "Size": 160
+          }
+        ]
+      },
+      "AcceptableDigestAlgo": {
+        "Algo": [
+          "MD5",
+          "SHA1",
+          "SHA224",
+          "SHA256",
+          "SHA384",
+          "SHA512",
+          "SHA3-256",
+          "SHA3-384",
+          "SHA3-512",
+          "RIPEMD160",
+          "WHIRLPOOL"
+        ]
+      },
+      "AlgoExpirationDate": {
+        "Level": "FAIL",
+        "Format": "yyyy-MM-dd",
+        "UpdateDate": "2026-02-01",
+        "LevelAfterUpdate": "WARN",
+        "Algo": [
+          {
+            "Value": "MD5",
+            "Date": "2004-08-01"
+          },
+          {
+            "Value": "SHA1",
+            "Date": "2012-08-01"
+          },
+          {
+            "Value": "SHA224",
+            "Date": "2029-01-01"
+          },
+          "SHA256",
+          "SHA384",
+          "SHA512",
+          "SHA3-256",
+          "SHA3-384",
+          "SHA3-512",
+          {
+            "Value": "RIPEMD160",
+            "Date": "2014-08-01"
+          },
+          {
+            "Value": "WHIRLPOOL",
+            "Date": "2020-12-01"
+          },
+          {
+            "Value": "DSA",
+            "Size": 1024,
+            "Date": "2015-12-01"
+          },
+          {
+            "Value": "DSA",
+            "Size": 1900,
+            "Date": "2027-01-01"
+          },
+          {
+            "Value": "DSA",
+            "Size": 3000
+          },
+          {
+            "Value": "RSA",
+            "Size": 786,
+            "Date": "2010-08-01"
+          },
+          {
+            "Value": "RSA",
+            "Size": 1024,
+            "Date": "2019-10-01"
+          },
+          {
+            "Value": "RSA",
+            "Size": 1536,
+            "Date": "2019-10-01"
+          },
+          {
+            "Value": "RSA",
+            "Size": 1900,
+            "Date": "2027-01-01"
+          },
+          {
+            "Value": "RSA",
+            "Size": 3000,
+            "Date": "2035-01-01"
+          },
+          {
+            "Value": "RSASSA-PSS",
+            "Size": 786,
+            "Date": "2010-08-01"
+          },
+          {
+            "Value": "RSASSA-PSS",
+            "Size": 1024,
+            "Date": "2019-10-01"
+          },
+          {
+            "Value": "RSASSA-PSS",
+            "Size": 1536,
+            "Date": "2019-10-01"
+          },
+          {
+            "Value": "RSASSA-PSS",
+            "Size": 1900,
+            "Date": "2027-01-01"
+          },
+          {
+            "Value": "RSASSA-PSS",
+            "Size": 3000
+          },
+          {
+            "Value": "ECDSA",
+            "Size": 160,
+            "Date": "2012-08-01"
+          },
+          {
+            "Value": "ECDSA",
+            "Size": 163,
+            "Date": "2012-08-01"
+          },
+          {
+            "Value": "ECDSA",
+            "Size": 224,
+            "Date": "2021-10-01"
+          },
+          {
+            "Value": "ECDSA",
+            "Size": 256
+          },
+          {
+            "Value": "PLAIN-ECDSA",
+            "Size": 160,
+            "Date": "2012-08-01"
+          },
+          {
+            "Value": "PLAIN-ECDSA",
+            "Size": 163,
+            "Date": "2012-08-01"
+          },
+          {
+            "Value": "PLAIN-ECDSA",
+            "Size": 224,
+            "Date": "2021-10-01"
+          },
+          {
+            "Value": "PLAIN-ECDSA",
+            "Size": 256
+          }
+        ]
+      }
+    },
+    "Model": {
+      "Value": "SHELL"
+    },
+    "TrustedLists": {
+      "TLFreshness": {
+        "Level": "WARN",
+        "Unit": "HOURS",
+        "Value": 6
+      },
+      "TLNotExpired": {
+        "Level": "FAIL"
+      },
+      "TLWellSigned": {
+        "Level": "FAIL"
+      },
+      "TLVersion": {
+        "Level": "FAIL",
+        "Id": [
+          "5",
+          "6"
+        ]
+      },
+      "TLStructure": {
+        "Level": "WARN"
+      }
+    }
+  }
+}

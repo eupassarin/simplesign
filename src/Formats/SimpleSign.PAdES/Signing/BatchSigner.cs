@@ -28,6 +28,8 @@ public sealed class BatchSigner : IAsyncDisposable
     private readonly int _maxConcurrency;
     private readonly SigningPolicy _signingPolicy;
     private readonly SimpleSign.Core.Revocation.IChainRevocationChecker? _chainRevocationChecker;
+    private readonly SimpleSign.Core.Extensions.ITrustAnchorProvider[] _trustAnchors;
+    private readonly ISignatureAuditSink? _auditSink;
     private int _successCount;
     private int _failureCount;
     private long _totalElapsedMs;
@@ -48,6 +50,8 @@ public sealed class BatchSigner : IAsyncDisposable
         _maxConcurrency = builder.MaxConcurrency;
         _signingPolicy = builder.SigningPolicy;
         _chainRevocationChecker = builder.ChainRevocationChecker;
+        _trustAnchors = [.. builder.TrustAnchors];
+        _auditSink = builder.AuditSink;
     }
 
     /// <summary>Creates a batch configuration for <paramref name="certificate"/>.</summary>
@@ -182,7 +186,12 @@ public sealed class BatchSigner : IAsyncDisposable
         }
 
         builder = builder.WithLevel(_profile).WithHttpClientProvider(_httpClientProvider).WithLogger(_logger)
-            .WithSigningPolicy(_signingPolicy);
+            .WithSigningPolicy(_signingPolicy).WithTrustAnchors(_trustAnchors);
+        if (_auditSink is not null)
+        {
+            builder = builder.WithAuditSink(_auditSink);
+        }
+
         if (_chainRevocationChecker is not null)
         {
             builder = builder.WithChainRevocationChecker(_chainRevocationChecker);
@@ -261,6 +270,7 @@ public sealed class BatchSigner : IAsyncDisposable
             Logger = NullLogger.Instance;
             MaxConcurrency = 4;
             SigningPolicy = SigningPolicy.Default;
+            TrustAnchors = [];
         }
 
         private BatchSignerBuilder(BatchSignerBuilder source, IReadOnlyList<X509Certificate2>? chain = null,
@@ -272,7 +282,9 @@ public sealed class BatchSigner : IAsyncDisposable
             SignatureFieldOptions? fieldOptions = null, bool replaceFieldOptions = false,
             string? operationId = null, bool replaceOperationId = false, int? maxConcurrency = null,
             SigningPolicy? signingPolicy = null,
-            SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker = null)
+            SimpleSign.Core.Revocation.IChainRevocationChecker? chainRevocationChecker = null,
+            IReadOnlyList<SimpleSign.Core.Extensions.ITrustAnchorProvider>? trustAnchors = null,
+            ISignatureAuditSink? auditSink = null)
         {
             Certificate = source.Certificate;
             Chain = chain ?? source.Chain;
@@ -288,6 +300,8 @@ public sealed class BatchSigner : IAsyncDisposable
             MaxConcurrency = maxConcurrency ?? source.MaxConcurrency;
             SigningPolicy = signingPolicy ?? source.SigningPolicy;
             ChainRevocationChecker = chainRevocationChecker ?? source.ChainRevocationChecker;
+            TrustAnchors = trustAnchors ?? source.TrustAnchors;
+            AuditSink = auditSink ?? source.AuditSink;
         }
 
         internal X509Certificate2 Certificate { get; }
@@ -304,6 +318,26 @@ public sealed class BatchSigner : IAsyncDisposable
         internal int MaxConcurrency { get; }
         internal SigningPolicy SigningPolicy { get; }
         internal SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; }
+        internal IReadOnlyList<SimpleSign.Core.Extensions.ITrustAnchorProvider> TrustAnchors { get; }
+        internal ISignatureAuditSink? AuditSink { get; }
+
+        /// <summary>Records each signature of the batch, signed or refused (see <see cref="PadesSignerBuilder.WithAuditSink"/>).</summary>
+        /// <param name="sink">The audit sink.</param>
+        /// <returns>A new builder with the sink configured.</returns>
+        public BatchSignerBuilder WithAuditSink(ISignatureAuditSink sink)
+        {
+            ArgumentNullException.ThrowIfNull(sink);
+            return new BatchSignerBuilder(this, auditSink: sink);
+        }
+
+        /// <summary>Adds trust anchors for the checks run before each signature (see <see cref="PadesSignerBuilder.WithTrustAnchors"/>).</summary>
+        /// <param name="providers">The trust anchor providers.</param>
+        /// <returns>A new builder with the anchors added.</returns>
+        public BatchSignerBuilder WithTrustAnchors(params SimpleSign.Core.Extensions.ITrustAnchorProvider[] providers)
+        {
+            ArgumentNullException.ThrowIfNull(providers);
+            return new BatchSignerBuilder(this, trustAnchors: [.. TrustAnchors, .. providers]);
+        }
 
         /// <summary>Sets the checks run before each signature (see <see cref="PadesSignerBuilder.WithSigningPolicy"/>).</summary>
         public BatchSignerBuilder WithSigningPolicy(SigningPolicy policy)

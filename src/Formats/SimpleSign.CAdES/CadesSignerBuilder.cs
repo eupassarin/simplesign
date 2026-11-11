@@ -210,6 +210,32 @@ public sealed class CadesSignerBuilder
         return With(_options with { SigningPolicy = policy });
     }
 
+    /// <summary>
+    /// Records every signing operation of this builder, signed or refused, with <paramref name="sink"/> (a trail of
+    /// the signatures generated). The record is written before the signer returns; a failing sink fails the operation.
+    /// </summary>
+    /// <param name="sink">The audit sink (e.g. <see cref="JsonLinesAuditSink"/>).</param>
+    /// <returns>A new builder with the sink configured.</returns>
+    public CadesSignerBuilder WithAuditSink(ISignatureAuditSink sink)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        return With(_options with { AuditSink = sink });
+    }
+
+    /// <summary>
+    /// Adds trust anchors for the checks made before signing: the signing certificate must chain to one of them when
+    /// the signing policy's <c>SigningCertificate/ProspectiveCertificateChain</c> is not IGNORE, and they complete a
+    /// chain given without its root for the revocation check.
+    /// </summary>
+    /// <param name="providers">The trust anchor providers (e.g. <c>DirectoryTrustAnchorProvider</c>, <c>TrustedList</c>,
+    /// or the <c>TrustAnchorProviders</c> of a country extension).</param>
+    /// <returns>A new builder with the anchors added.</returns>
+    public CadesSignerBuilder WithTrustAnchors(params SimpleSign.Core.Extensions.ITrustAnchorProvider[] providers)
+    {
+        ArgumentNullException.ThrowIfNull(providers);
+        return With(_options with { TrustAnchors = [.. _options.TrustAnchors, .. providers] });
+    }
+
     /// <summary>Sets the checker used for the revocation check of the signing policy (<c>NotRevoked</c>, <c>RevocationDataAvailable</c>).</summary>
     /// <param name="checker">The chain revocation checker.</param>
     /// <returns>A new builder with the checker configured.</returns>
@@ -486,8 +512,16 @@ public sealed class CadesSignerBuilder
     /// achieved baseline levels, actual feature flags, and warnings.
     /// </summary>
     /// <returns>The detailed CAdES signing result.</returns>
-    public async Task<CadesSigningResult> SignWithDetailsAsync(
-        CancellationToken cancellationToken = default)
+    public Task<CadesSigningResult> SignWithDetailsAsync(
+        CancellationToken cancellationToken = default) =>
+        SignatureAudit.RunAsync(
+            _options.AuditSink,
+            () => SignatureAuditEvent.Start("CAdES", _options.OperationId, _options.Profile.Level, SignerCertificate, _options.SigningPolicy, _data),
+            () => SignWithDetailsCoreAsync(cancellationToken),
+            result => (result.SignedArtifact, result.AchievedLevel),
+            cancellationToken);
+
+    private async Task<CadesSigningResult> SignWithDetailsCoreAsync(CancellationToken cancellationToken)
     {
         var credential = _options.Credential
             ?? throw new SigningException(
@@ -500,7 +534,7 @@ public sealed class CadesSignerBuilder
         ValidatePrerequisites(credential);
         var warnings = new List<SigningWarning>();
         await SignerAcceptance.EnsureSignerAcceptableAsync(
-            certificate, chain, _options.SigningPolicy, _options.Dependencies.ChainRevocationChecker,
+            certificate, chain, _options.SigningPolicy, _options.TrustAnchors, _options.Dependencies.ChainRevocationChecker,
             _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger, warnings, cancellationToken).ConfigureAwait(false);
         if (_options.IsCounterSignature && (_options.ContentHints is not null || _options.MimeType is not null))
         {
@@ -532,7 +566,7 @@ public sealed class CadesSignerBuilder
         var stopwatch = Stopwatch.StartNew();
         string operation = _options.IsCounterSignature ? "CounterSign" : _options.CoSignTarget is not null ? "CoSign" : "Sign";
         logger.SigningStarted(operationId, operation, _options.ContentType.ToString(), profile.Level.ToString(),
-            _options.ExtendedForm.ToString(), certificate.Subject, credential is CadesExternalCredential);
+            _options.ExtendedForm.ToString(), certificate.Subject, certificate.SerialNumber, credential is CadesExternalCredential);
         logger.AlgorithmResolved(hashAlg.Name ?? "?", sigAlgOid);
         logger.SignedAttributesSelected(_options.CommitmentType.HasValue,
             _options.SignaturePolicy is not null || _options.SignaturePolicyOid is not null);
@@ -576,6 +610,10 @@ public sealed class CadesSignerBuilder
                 timestampTokenBytes = await ApplyTimestampAsync(cms, hashAlg, profile.Timestamp, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
             {
                 throw;
             }
@@ -919,6 +957,10 @@ public sealed class CadesSignerBuilder
         {
             throw;
         }
+        catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             logger.TimestampFailed(operationId, ex.Message);
@@ -990,8 +1032,13 @@ public sealed class CadesSignerBuilder
     }
 
     private ITimestampClient CreateTimestampClient(TimestampOptions timestampOptions) =>
-        BaselineSigning.CreateTimestampClient(
-            timestampOptions, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger);
+        new TimestampAcceptance(
+            _options.SigningPolicy, _options.TrustAnchors, _options.Dependencies.ChainRevocationChecker,
+            _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger)
+        .Wrap(
+            BaselineSigning.CreateTimestampClient(
+                timestampOptions, _options.Dependencies.TsaFactory, _options.Dependencies.HttpClientProvider, _options.Dependencies.Logger),
+            timestampOptions);
 
     private async Task<byte[]> ApplyExtendedFormAsync(
         byte[] cms,

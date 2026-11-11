@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useT } from "@/i18n"
 import { api } from "@/lib/api"
-import type { CadesSample, OptionState, PolicyKind, SampleDocument, TimestampChoice, XmlSample } from "@/lib/types"
+import type { CadesSample, OptionState, PolicyKind, PolicyPreset, SampleDocument, TimestampChoice, XmlSample } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { CredentialPicker } from "../credentials/CredentialPicker"
 import { PoliciesPage } from "../policies/PoliciesPage"
@@ -325,6 +325,13 @@ function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId:
   const t = useT()
   const [name, setName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [presets, setPresets] = useState<PolicyPreset[]>([])
+  useEffect(() => {
+    let current = true
+    api.policies.presets().then((all) => { if (current) setPresets(all.filter((p) => p.kind === kind)) }).catch(() => undefined)
+    return () => { current = false }
+  }, [kind])
+  const preset = presets.find((p) => p.id === uploadId)
   useEffect(() => {
     let current = true
     api.policies.view({ kind, uploadId }).then((v) => {
@@ -342,6 +349,15 @@ function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId:
         </Pill>
         {error && <span className="text-destructive">{error}</span>}
       </div>
+      {presets.length > 0 && (
+        <Select value={preset?.id ?? "__none"} onValueChange={(v) => onChange(v === "__none" ? null : v)}>
+          <SelectTrigger className="w-full max-w-sm" aria-label={t("policies.preset")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none">{t("policies.presetNone")}</SelectItem>
+            {presets.map((p) => <SelectItem key={p.id} value={p.id}>{p.title} ({p.name})</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
       <div className="flex flex-wrap items-center gap-1">
         <Sheet>
           <SheetTrigger asChild><Button variant="outline" size="sm"><Eye /> {t("policies.view")}</Button></SheetTrigger>

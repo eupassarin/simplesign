@@ -106,6 +106,63 @@ public sealed class ValidationReportsTests : IDisposable
 
     public void Dispose() => _pki.Dispose();
 
+    [Fact]
+    public void ToHtml_ValidSignature_ShowsResultIntegrityTimeAndPublicKey()
+    {
+        string html = ValidationReports.ToHtml([Entry("Signature1")]);
+
+        html.ShouldContain("TOTAL_PASSED");
+        html.ShouldContain("intact");
+        html.ShouldContain("Claimed signing time");
+        html.ShouldContain("-----BEGIN PUBLIC KEY-----");
+        html.ShouldContain(Convert.ToHexString(_pki.Leaf.GetCertHash(System.Security.Cryptography.HashAlgorithmName.SHA256)));
+        html.ShouldContain(_pki.Leaf.SerialNumber);
+    }
+
+    [Fact]
+    public void ToHtml_AlteredDocument_ShowsFailedAndAltered()
+    {
+        string html = ValidationReports.ToHtml([Entry("Signature1", invalid: true)]);
+
+        html.ShouldContain("TOTAL_FAILED");
+        html.ShouldContain("HASH_FAILURE");
+        html.ShouldContain("altered");
+    }
+
+    [Theory]
+    [InlineData("es", "Informe de verificación de firmas", "lang=\"es\"")]
+    [InlineData("pt-BR", "Relatório de validação de assinaturas", "lang=\"pt\"")]
+    [InlineData("de", "Signature validation report", "lang=\"en\"")]
+    [InlineData(null, "Signature validation report", "lang=\"en\"")]
+    public void ToHtml_Language_UsesItsLabelsOrEnglish(string? language, string title, string lang)
+    {
+        string html = ValidationReports.ToHtml([Entry("Signature1")], language);
+
+        html.ShouldContain(System.Net.WebUtility.HtmlEncode(title));
+        html.ShouldContain(lang);
+    }
+
+    [Fact]
+    public void ToHtml_TextFromTheSignature_IsEncoded()
+    {
+        var entry = Entry("Signature1") with { Errors = ["<script>alert(1)</script>"] };
+
+        string html = ValidationReports.ToHtml([entry]);
+
+        html.ShouldNotContain("<script>");
+        html.ShouldContain("&lt;script&gt;");
+    }
+
+    [Fact]
+    public void ToSimpleJson_Signer_HasItsPublicKeyAndFingerprint()
+    {
+        using var json = JsonDocument.Parse(ValidationReports.ToSimpleJson([Entry("Signature1")]));
+        var signature = json.RootElement.GetProperty("signatures")[0];
+
+        signature.GetProperty("signerPublicKey").GetString().ShouldBe(Convert.ToBase64String(_pki.Leaf.PublicKey.ExportSubjectPublicKeyInfo()));
+        signature.GetProperty("signerCertificateSha256").GetString()!.Length.ShouldBe(64);
+    }
+
     private SignatureReportEntry Entry(string id, bool invalid = false) => new()
     {
         Id = id,

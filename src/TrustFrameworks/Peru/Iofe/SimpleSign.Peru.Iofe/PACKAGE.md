@@ -20,6 +20,7 @@ var iofe = await IofeExtension.LoadAsync(new IofeExtensionOptions
 
 byte[] signed = await PadesSigner.Document(pdf)
     .WithCertificate(certificate, chain)
+    .WithCountryExtension(iofe) // trust anchors: the signer must chain to INDECOPI's list
     .WithSigningPolicy(IofePolicies.Signing)          // chain, key usage, algorithms, revocation
     .SignAsync();
 

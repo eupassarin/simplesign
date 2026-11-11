@@ -129,7 +129,8 @@ internal static class ServiceEndpoints
         });
 
         // RFC 3161 TSA: /tsa/tsr (and /tsa/archive), /tsa/authenticated (HTTP Basic), /tsa/untrusted,
-        // /tsa/revoked (its certificate is revoked) and /tsa/wrong-name (the token names another TSA).
+        // /tsa/revoked (its certificate is revoked), /tsa/expired (its certificate has expired) and
+        // /tsa/wrong-name (the token names another TSA).
         app.MapPost("/tsa/{kind}", TimestampAsync);
 
         // CSC v2 (the simulated provider is an HttpMessageHandler: requests are passed through).
@@ -209,7 +210,7 @@ internal static class ServiceEndpoints
 
     private static async Task<IResult> TimestampAsync(string kind, HttpContext context, SandboxPki pki, CancellationToken ct)
     {
-        if (kind is not ("tsr" or "archive" or "authenticated" or "untrusted" or "revoked" or "wrong-name"))
+        if (kind is not ("tsr" or "archive" or "authenticated" or "untrusted" or "revoked" or "expired" or "wrong-name"))
         {
             return Results.NotFound();
         }
@@ -270,7 +271,12 @@ internal static class ServiceEndpoints
             return new SandboxTsa(pki.UntrustedTsa, pki.UntrustedTsaKey, []).Respond(request);
         }
 
-        var certificate = pki.Certificate(kind == "revoked" ? "tsa-revoked" : "tsa");
+        var certificate = pki.Certificate(kind switch
+        {
+            "revoked" => "tsa-revoked",
+            "expired" => "tsa-expired",
+            _ => "tsa",
+        });
         using var key = certificate.Certificate.GetRSAPrivateKey()!;
         return new SandboxTsa(certificate.Certificate, key, pki.ChainOf(certificate.Id),
             kind == "wrong-name" ? new X500DistinguishedName(WrongTsaName) : null).Respond(request);

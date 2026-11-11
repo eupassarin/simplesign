@@ -94,6 +94,7 @@ internal static class Api
             "validation" => Results.File(System.Text.Encoding.UTF8.GetBytes(SimpleSign.Core.Policies.ValidationPolicy.Default.ToJson()), "application/json", PolicyUploads.ValidationFileName),
             _ => Results.NotFound(),
         });
+        api.MapGet("/policies/presets", () => Policies.PolicyPresets.All);
         api.MapPost("/policies/view", (Policies.PolicyViewRequest body, DocumentStore store) => Policies.PolicyViewer.View(body, store));
 
         // Credentials
@@ -164,6 +165,7 @@ internal static class Api
 
         RunApi.Map(api);
         SandboxApi.Map(api);
+        ScriptApi.Map(api);
         EnvironmentApi.Map(api);
 
         api.MapFallback(() => Results.NotFound(new { error = "Unknown API route." }));

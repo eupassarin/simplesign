@@ -10,8 +10,8 @@ internal static partial class XadesLog
     // ── Signing pipeline (700x–702x) ─────────────────────────────────
 
     [LoggerMessage(EventId = 7000, Level = LogLevel.Information,
-        Message = "[{OperationId}] Starting XAdES signature: form={Form}, level={Level}, extended={ExtendedForm}, certificate={Subject} (external={External})")]
-    internal static partial void SigningStarted(this ILogger logger, string operationId, string form, string level, string extendedForm, string subject, bool external);
+        Message = "[{OperationId}] Starting XAdES signature: form={Form}, level={Level}, extended={ExtendedForm}, certificate={Subject} serial={SerialNumber} (external={External})")]
+    internal static partial void SigningStarted(this ILogger logger, string operationId, string form, string level, string extendedForm, string subject, string serialNumber, bool external);
 
     [LoggerMessage(EventId = 7001, Level = LogLevel.Information,
         Message = "[{OperationId}] XAdES signing completed in {ElapsedMs}ms ({Size} bytes), requested={RequestedLevel}, achieved={AchievedLevel}")]

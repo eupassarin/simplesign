@@ -34,6 +34,12 @@ public sealed record ArchiveTimestampOptions
     /// </summary>
     public System.Security.Cryptography.X509Certificates.X509Certificate2? ClientCertificate { get; init; }
 
+    /// <summary>
+    /// The certificate the archive TSA is expected to sign with, when <see cref="Endpoint"/> is set (see
+    /// <see cref="TimestampOptions.ExpectedTsaCertificate"/>). Without an endpoint, the signature TSA's applies.
+    /// </summary>
+    public System.Security.Cryptography.X509Certificates.X509Certificate2? ExpectedTsaCertificate { get; init; }
+
     /// <summary>The TSA settings the archive timestamp uses, given the signature TSA's.</summary>
     /// <param name="signatureTimestamp">The signature timestamp settings.</param>
     public TimestampOptions Resolve(TimestampOptions signatureTimestamp)
@@ -47,6 +53,7 @@ public sealed record ArchiveTimestampOptions
                 {
                     Authorization = signatureTimestamp.Authorization,
                     ClientCertificate = signatureTimestamp.ClientCertificate,
+                    ExpectedTsaCertificate = signatureTimestamp.ExpectedTsaCertificate,
                 };
         }
 
@@ -54,6 +61,7 @@ public sealed record ArchiveTimestampOptions
         {
             Authorization = Authorization,
             ClientCertificate = ClientCertificate,
+            ExpectedTsaCertificate = ExpectedTsaCertificate,
         };
     }
 

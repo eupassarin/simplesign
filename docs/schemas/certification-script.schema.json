@@ -1,0 +1,429 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/certification-script.schema.json",
+  "title": "SimpleSign certification script",
+  "description": "The requirements of an accreditation guide and the TestBench steps that show each one. Load it in the TestBench (Certification).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "title",
+    "requirements",
+    "sections"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "This schema\u0027s URL."
+    },
+    "schema": {
+      "const": 1,
+      "description": "Schema version."
+    },
+    "id": {
+      "type": "string",
+      "description": "Short id (indecopi-guia-v4)."
+    },
+    "title": {
+      "type": "string",
+      "description": "Title of the script and of the evidence."
+    },
+    "authority": {
+      "type": "string",
+      "description": "The authority that accredits."
+    },
+    "standard": {
+      "type": "string",
+      "description": "The document the requirements come from, with its version."
+    },
+    "description": {
+      "type": "string",
+      "description": "What the script covers."
+    },
+    "language": {
+      "type": "string",
+      "description": "Language of the texts and of the evidence.",
+      "enum": [
+        "en",
+        "pt",
+        "es"
+      ]
+    },
+    "defaults": {
+      "type": "object",
+      "description": "What every step starts from.",
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "type": "string",
+          "description": "Engine.",
+          "enum": [
+            "library",
+            "cli",
+            "both"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "description": "Format of steps that name none.",
+          "enum": [
+            "pades",
+            "cades",
+            "xades"
+          ]
+        },
+        "crossValidate": {
+          "type": "boolean",
+          "description": "Whether EU DSS also validates."
+        },
+        "options": {
+          "type": "object",
+          "description": "Options under each step\u0027s: common (every format), then pades, cades or xades.",
+          "properties": {
+            "common": {
+              "type": "object",
+              "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+            },
+            "pades": {
+              "type": "object",
+              "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+            },
+            "cades": {
+              "type": "object",
+              "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+            },
+            "xades": {
+              "type": "object",
+              "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "description": "The requirements, in the guide\u0027s order.",
+      "items": {
+        "$ref": "#/$defs/requirement"
+      }
+    },
+    "sections": {
+      "type": "array",
+      "description": "The steps, grouped.",
+      "items": {
+        "$ref": "#/$defs/section"
+      }
+    }
+  },
+  "$defs": {
+    "requirement": {
+      "type": "object",
+      "description": "A requirement of the guide.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique id, as the guide numbers it (F-5, Req-11)."
+        },
+        "group": {
+          "type": "string",
+          "description": "The group it belongs to (Req. 11 \u2014 Revocation)."
+        },
+        "text": {
+          "type": "string",
+          "description": "What the guide asks, in its words."
+        },
+        "reference": {
+          "type": "string",
+          "description": "Where it is in the guide (section, page)."
+        },
+        "applies": {
+          "type": "boolean",
+          "description": "Whether it applies; false needs a justification. Default: true."
+        },
+        "justification": {
+          "type": "string",
+          "description": "Why it does not apply."
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ]
+    },
+    "section": {
+      "type": "object",
+      "description": "A group of steps.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique id."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the section shows."
+        },
+        "steps": {
+          "type": "array",
+          "description": "The steps, run in order.",
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "steps"
+      ]
+    },
+    "sandbox": {
+      "type": "object",
+      "description": "The Sandbox state for the step; put back after it.",
+      "additionalProperties": false,
+      "properties": {
+        "crl": {
+          "type": "string",
+          "description": "CRL failure.",
+          "enum": [
+            "None",
+            "Down",
+            "Slow",
+            "Expired",
+            "WrongKey",
+            "Stale",
+            "NoNextUpdate"
+          ]
+        },
+        "ocsp": {
+          "type": "string",
+          "description": "OCSP failure.",
+          "enum": [
+            "None",
+            "Down",
+            "Slow",
+            "TryLater",
+            "Expired",
+            "Unauthorized",
+            "Unknown"
+          ]
+        },
+        "tsa": {
+          "type": "string",
+          "description": "TSA failure.",
+          "enum": [
+            "None",
+            "Down",
+            "Slow",
+            "InvalidToken",
+            "Untrusted"
+          ]
+        },
+        "trustedList": {
+          "type": "string",
+          "description": "Trusted list failure.",
+          "enum": [
+            "None",
+            "Expired",
+            "WrongSigner",
+            "Tampered"
+          ]
+        },
+        "revoke": {
+          "type": "array",
+          "description": "Certificates to revoke for the step.",
+          "items": {
+            "type": "string",
+            "description": "A Sandbox certificate id."
+          }
+        }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "description": "What the run must show; every field given is checked, for each engine.",
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "description": "signed / refused (SigningException) / error, or the verdict valid / invalid / indeterminate.",
+          "enum": [
+            "signed",
+            "refused",
+            "error",
+            "valid",
+            "invalid",
+            "indeterminate"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "description": "The SigningErrorReason of a refusal.",
+          "enum": [
+            "CredentialMissing",
+            "PrivateKeyMissing",
+            "CertificateExpired",
+            "AlgorithmIncompatible",
+            "LevelNotAchievable",
+            "LevelDependenciesMissing",
+            "ExternalSignerReturnedEmpty",
+            "DowngradeRequiresDetailedResult",
+            "DocumentNotSignable",
+            "DocumentEncrypted",
+            "NetworkFailure",
+            "Unspecified",
+            "CertificateNotCurrentlyValid",
+            "ExternalSignerFailure",
+            "ExternalSignerReturnedInvalidSignature",
+            "CertificateRevoked",
+            "RevocationStatusUnknown",
+            "ChainCertificateNotValid",
+            "KeyUsageNotPermitted",
+            "AlgorithmNotPermitted",
+            "KeyTooWeak",
+            "UntrustedRoot",
+            "TimestampUntrusted",
+            "TimestampCertificateNotValid",
+            "TimestampCertificateRevoked",
+            "TimestampRevocationStatusUnknown"
+          ]
+        },
+        "indication": {
+          "type": "string",
+          "description": "ETSI indication of the first signature.",
+          "enum": [
+            "TOTAL_PASSED",
+            "TOTAL_FAILED",
+            "INDETERMINATE"
+          ]
+        },
+        "subIndication": {
+          "type": "string",
+          "description": "ETSI sub-indication (HASH_FAILURE, REVOKED_NO_POE\u2026)."
+        },
+        "level": {
+          "type": "string",
+          "description": "Level achieved (signature) or detected (validation).",
+          "enum": [
+            "B-B",
+            "B-T",
+            "B-LT",
+            "B-LTA"
+          ]
+        },
+        "dssAgrees": {
+          "type": "boolean",
+          "description": "Whether EU DSS must agree (needs crossValidate)."
+        },
+        "logContains": {
+          "type": "array",
+          "description": "Texts the run\u0027s log must contain.",
+          "items": {
+            "type": "string",
+            "description": "Text."
+          }
+        }
+      }
+    },
+    "manual": {
+      "type": "object",
+      "description": "A step done by hand: the operator follows the instructions, attaches evidence and decides.",
+      "additionalProperties": false,
+      "properties": {
+        "instructions": {
+          "type": "string",
+          "description": "What to do and what to show."
+        },
+        "attachment": {
+          "type": "boolean",
+          "description": "Whether a file must be attached."
+        }
+      },
+      "required": [
+        "instructions"
+      ]
+    },
+    "step": {
+      "type": "object",
+      "description": "One run (or manual check) and what it must show.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique id; step:ID names the file it signed."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the step shows and why."
+        },
+        "kind": {
+          "type": "string",
+          "description": "What the step does. Default: sign.",
+          "enum": [
+            "sign",
+            "validate",
+            "manual"
+          ]
+        },
+        "requirements": {
+          "type": "array",
+          "description": "The requirements the step shows.",
+          "items": {
+            "type": "string",
+            "description": "A requirement id."
+          }
+        },
+        "format": {
+          "type": "string",
+          "description": "Format of a signature; the default\u0027s when absent.",
+          "enum": [
+            "pades",
+            "cades",
+            "xades"
+          ]
+        },
+        "engine": {
+          "type": "string",
+          "description": "Engine; the default\u0027s when absent.",
+          "enum": [
+            "library",
+            "cli",
+            "both"
+          ]
+        },
+        "crossValidate": {
+          "type": "boolean",
+          "description": "Whether EU DSS also validates."
+        },
+        "sandbox": {
+          "$ref": "#/$defs/sandbox"
+        },
+        "options": {
+          "type": "object",
+          "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+        },
+        "expect": {
+          "$ref": "#/$defs/expect"
+        },
+        "manual": {
+          "$ref": "#/$defs/manual"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ]
+    }
+  }
+}

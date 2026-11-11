@@ -17,6 +17,7 @@ import type {
   CmsFacts,
   XmlSample,
   PolicyKind,
+  PolicyPreset,
   PolicyView,
 } from "./types"
 
@@ -62,6 +63,7 @@ export const api = {
   uploadDocument: (file: File) => request<DocumentFacts>("POST", "/api/documents", upload(file)),
   policies: {
     view: (body: { kind: PolicyKind; json?: string | null; uploadId?: string | null }) => request<PolicyView>("POST", "/api/policies/view", body),
+    presets: () => request<PolicyPreset[]>("GET", "/api/policies/presets"),
   },
   uploadFile: (file: File) => request<{ id: string; fileName: string; size: number }>("POST", "/api/uploads", upload(file)),
   fileUrl: (id: string, download = false) => `/api/files/${encodeURIComponent(id)}${download ? "?download=true" : ""}`,

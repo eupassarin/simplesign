@@ -29,12 +29,12 @@ internal sealed class SigningPlan
     private readonly SigningPolicyInput _signingPolicy;
     private readonly DocumentStore _documents;
 
-    public SigningPlan(SigningOptions effective, CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents)
+    public SigningPlan(SigningOptions effective, CredentialHandle credential, SandboxEnvironment sandbox, DocumentStore documents, SigningControls? controls = null)
     {
         _o = effective;
         _credential = credential;
         _documents = documents;
-        Context = new PlanContext(credential, sandbox, documents);
+        Context = new PlanContext(credential, sandbox, documents) { Controls = controls ?? SigningControls.None };
         _signingPolicy = PolicyUploads.Signing(effective.SigningPolicyId, documents);
         if (_signingPolicy.Error is { } error)
         {
@@ -93,6 +93,17 @@ internal sealed class SigningPlan
         {
             var policy = _signingPolicy.Policy;
             steps.Add(new(PolicyUploads.SigningCode(_signingPolicy), b => b.WithSigningPolicy(policy)));
+        }
+
+        var controls = Context.Controls;
+        if (controls.TrustCode() is { } trustCode)
+        {
+            steps.Add(new(trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+        }
+
+        if (controls.Audit is { } audit)
+        {
+            steps.Add(new(controls.AuditCode()!, b => b.WithAuditSink(audit)));
         }
 
         if (SignatureAlgorithmOid is { } oid)

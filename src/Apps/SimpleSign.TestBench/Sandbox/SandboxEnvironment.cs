@@ -43,9 +43,29 @@ internal sealed class SandboxConnection : IDisposable
 
     public Uri RevokedTsaUri => new(Info.Tsa.RevokedUrl);
 
+    /// <summary>The TSA whose certificate has expired.</summary>
+    /// <exception cref="InvalidOperationException">The Sandbox is older than that TSA.</exception>
+    public Uri ExpiredTsaUri => new(Info.Tsa.ExpiredUrl ?? throw new InvalidOperationException("This Sandbox has no expired TSA: update it."));
+
     public Uri WrongNameTsaUri => new(Info.Tsa.WrongNameUrl);
 
     public Uri CscBaseUri => new(Info.Csc.BaseUrl);
+
+    /// <summary>
+    /// The Sandbox's root as a PEM file on this machine, for the CLI's <c>--tls-trust</c> (its HTTPS endpoints, CRLs
+    /// over HTTPS included, use a certificate under this root). Written once per root.
+    /// </summary>
+    public string RootPemFile()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "simplesign-testbench", $"tls-root-{Root.Thumbprint}.pem");
+        if (!File.Exists(path))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, Root.ExportCertificatePem() + "\n");
+        }
+
+        return path;
+    }
 
     public SandboxSigner Signer(string id) =>
         Signers.FirstOrDefault(s => s.Id == id) ?? throw new KeyNotFoundException($"The Sandbox has no signer '{id}'.");

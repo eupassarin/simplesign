@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using SimpleSign.Core.Crypto;
 
 namespace SimpleSign.TestHelpers;
 
@@ -53,6 +52,11 @@ public static class ConstraintTestCertificates
         return (Reload(leafWithKey), intermediate, root);
     }
 
+    // Exportable, unlike the library's own loading: tests write these certificates out as PFX files.
     private static X509Certificate2 Reload(X509Certificate2 certificate) =>
-        CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx, "constraint"), "constraint");
+#if NET9_0_OR_GREATER
+        X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx, "constraint"), "constraint", X509KeyStorageFlags.Exportable);
+#else
+        new(certificate.Export(X509ContentType.Pfx, "constraint"), "constraint", X509KeyStorageFlags.Exportable);
+#endif
 }

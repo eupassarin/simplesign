@@ -13,6 +13,10 @@ internal static partial class Log
         Message = "Signing policy ({Constraint}): {Message}")]
     internal static partial void SigningPolicyInformation(this ILogger logger, string constraint, string message);
 
+    [LoggerMessage(EventId = 2801, Level = LogLevel.Warning,
+        Message = "Signing policy warning: {Message}")]
+    internal static partial void SigningPolicyWarning(this ILogger logger, string message);
+
     // ── Revocation (24xx) ────────────────────────────────────────────
 
     [LoggerMessage(EventId = 2410, Level = LogLevel.Debug,

@@ -14,6 +14,14 @@ namespace SimpleSign.Core.Validation.Policy;
 /// </summary>
 internal static class RevocationStep
 {
+    /// <summary>
+    /// The warning of a synchronous validation made with revocation checking on: it checks neither the signer chain nor
+    /// the TSA chain (a TSA reported as trusted was not checked for revocation). <c>ValidateAsync</c> replaces it with the
+    /// outcome of the checks.
+    /// </summary>
+    internal const string NotCheckedWarning =
+        "Revocation: the revocation of the signer chain and of the TSA chain was not checked by this synchronous method; use ValidateAsync to check it.";
+
     internal static async Task<(ValidationFacts Facts, ValidationEvaluation Evaluation, List<string> Warnings)> RunAsync(
         ValidationFacts facts,
         IReadOnlyList<X509Certificate2> chainCandidates,

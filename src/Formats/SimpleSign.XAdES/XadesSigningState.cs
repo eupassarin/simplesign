@@ -88,4 +88,10 @@ internal sealed record XadesSigningOptions(
 
     /// <summary>The checks run on the certificate, chain and algorithms before signing.</summary>
     public SigningPolicy SigningPolicy { get; init; } = SigningPolicy.Default;
+
+    /// <summary>Where each signing operation is recorded; null for none.</summary>
+    public ISignatureAuditSink? AuditSink { get; init; }
+
+    /// <summary>The trust anchors given with <c>WithTrustAnchors</c>, checked before signing.</summary>
+    public IReadOnlyList<SimpleSign.Core.Extensions.ITrustAnchorProvider> TrustAnchors { get; init; } = [];
 }

@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\Extras\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
     <!-- The CLI a run with engine "cli" starts (cli/simplesign.dll next to the TestBench): built first, not referenced. -->
     <ProjectReference Include="..\SimpleSign.Cli\SimpleSign.Cli.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
@@ -45,6 +46,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleSign.TestBench.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The certification scripts in docs/, offered as samples on the Certification page. -->
+    <EmbeddedResource Include="..\..\..\docs\certification-scripts\*.json" LogicalName="SimpleSign.TestBench.Scripts.Samples.%(Filename)%(Extension)" />
     <!-- The roots of the public TSAs (PublicTsaRoots); tools/dss mounts the same folder. -->
     <EmbeddedResource Include="TsaRoots/*.crt" LogicalName="TsaRoots/%(Filename)%(Extension)" />
     <Content Remove="web/**" />

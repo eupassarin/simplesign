@@ -185,6 +185,22 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_HtmlReport_WritesItInTheLanguageAsked()
+    {
+        string signed = await SignAsync("html-report.pdf");
+        string html = Path.Combine(_tempDir, "report.html");
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath,
+            "--html-report", html, "--report-language", "es");
+
+        exit.ShouldBe(0, output);
+        string text = File.ReadAllText(html);
+        text.ShouldContain("TOTAL_PASSED");
+        text.ShouldContain("-----BEGIN PUBLIC KEY-----");
+        text.ShouldContain("lang=\"es\"");
+    }
+
+    [Fact]
     public async Task Validate_UnknownLevel_IsRefused()
     {
         string signed = await SignAsync("bad-level.pdf");
@@ -394,6 +410,71 @@ public sealed class CliCommandTests : IDisposable
         var error = json.RootElement.GetProperty("error");
         error.GetProperty("type").GetString().ShouldBe("SigningException");
         error.GetProperty("reason").GetString().ShouldBe("KeyTooWeak");
+    }
+
+    [Fact]
+    public async Task Sign_IofePresetWithoutTrustAnchors_IsRefusedAsUntrusted()
+    {
+        string input = WriteMinimalPdf("iofe-untrusted-input.pdf");
+
+        var (exit, text) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password,
+            "--output", Path.Combine(_tempDir, "iofe-untrusted.pdf"), "--signing-policy", "iofe", "--json");
+
+        exit.ShouldNotBe(0);
+        using var json = JsonDocument.Parse(text);
+        json.RootElement.GetProperty("error").GetProperty("reason").GetString().ShouldBe("UntrustedRoot");
+    }
+
+    [Fact]
+    public async Task Sign_IofePresetWithTrustAndAuditLog_SignsAndTheTrailVerifies()
+    {
+        string input = WriteMinimalPdf("iofe-trusted-input.pdf");
+        string audit = Path.Combine(_tempDir, "audit.jsonl");
+
+        var (exit, text) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password,
+            "--output", Path.Combine(_tempDir, "iofe-trusted.pdf"), "--signing-policy", "iofe", "--trust", _cerPath, "--audit-log", audit);
+        var (verifyExit, verifyText) = await RunAsync("audit", "verify", audit);
+        File.WriteAllText(audit, File.ReadAllText(audit).Replace("\"signed\":true", "\"signed\":false", StringComparison.Ordinal));
+        var (tamperedExit, _) = await RunAsync("audit", "verify", audit);
+
+        exit.ShouldBe(0, text);
+        verifyExit.ShouldBe(0, verifyText);
+        tamperedExit.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Sign_TslWithoutSigner_IsRefused()
+    {
+        var (exit, _) = await RunAsync("sign", WriteMinimalPdf("tsl-input.pdf"), "--cert", _pfxPath, "--password", Password,
+            "--output", Path.Combine(_tempDir, "tsl.pdf"), "--tsl", "https://example.org/tl.xml");
+
+        exit.ShouldNotBe(0);
+    }
+
+    [Theory]
+    [InlineData("signing", "iofe")]
+    [InlineData("validation", "iofe-nonrepudiation")]
+    public async Task PolicyExport_Preset_WritesTheBuiltInPolicy(string kind, string preset)
+    {
+        string path = Path.Combine(_tempDir, $"{kind}-{preset}.json");
+
+        var (exit, output) = await RunAsync("policy", "export", kind, "--preset", preset, "--output", path);
+
+        exit.ShouldBe(0, output);
+        File.ReadAllText(path).ShouldContain("INDECOPI");
+    }
+
+    [Fact]
+    public async Task Validate_PolicyByName_UsesTheBuiltInPolicy()
+    {
+        string signed = await SignAsync("named-policy.pdf");
+
+        string report = Path.Combine(_tempDir, "named-policy.json");
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--policy", "iofe", "--simple-report", report);
+
+        exit.ShouldBe(0, output);
+        File.ReadAllText(report).ShouldContain("INDECOPI");
     }
 
     [Theory]

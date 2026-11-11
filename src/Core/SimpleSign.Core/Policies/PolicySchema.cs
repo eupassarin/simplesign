@@ -96,11 +96,14 @@ internal static class PolicySchema
             [("Name", PolicyAttributeKind.String)]);
         // The signing policy: the checks SimpleSign makes before signing, with the names of CertificateConstraints.
         Add("SigningConstraints",
-            "Description:String SigningCertificate:SigningCertificateConstraints CACertificate:SigningCaCertificateConstraints Cryptographic:C",
+            "Description:String SigningCertificate:SigningCertificateConstraints CACertificate:SigningCaCertificateConstraints " +
+            "Timestamp:SigningTimestampConstraints Cryptographic:C",
             [("Name", PolicyAttributeKind.String)]);
         Add("SigningCertificateConstraints",
-            "NotExpired:L RevocationDataAvailable:L KeyUsage:M ExtendedKeyUsage:M NotRevoked:L Cryptographic:C");
-        Add("SigningCaCertificateConstraints", "NotExpired:L RevocationDataAvailable:L NotRevoked:L Cryptographic:C");
+            "NotExpired:L RevocationDataAvailable:L KeyUsage:M ExtendedKeyUsage:M NotRevoked:L CRLNextUpdatePresent:L ProspectiveCertificateChain:L Cryptographic:C");
+        // The checks of the TSA certificate of each timestamp obtained while signing (B-T, B-LT, B-LTA).
+        Add("SigningTimestampConstraints", "ProspectiveCertificateChain:L NotExpired:L NotRevoked:L RevocationDataAvailable:L");
+        Add("SigningCaCertificateConstraints", "NotExpired:L RevocationDataAvailable:L NotRevoked:L CRLNextUpdatePresent:L Cryptographic:C");
         Add("SignatureConstraints",
             "StructuralValidation:L AcceptablePolicies:M PolicyAvailable:L SignaturePolicyStorePresent:L PolicyHashMatch:L " +
             "AcceptableFormats:M FullScope:L BasicSignatureConstraints:BasicSignatureConstraints " +

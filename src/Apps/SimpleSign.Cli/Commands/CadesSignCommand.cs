@@ -366,7 +366,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
             builder = builder.WithOperationId(settings.OperationId);
         }
 
-        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy));
+        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
+        if (settings.AuditSink() is { } audit)
+        {
+            builder = builder.WithAuditSink(audit);
+        }
         if (CliNetwork.IsConfigured)
         {
             builder = builder.WithHttpClientProvider(CliNetwork.Provider);
@@ -478,7 +482,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
             password ??= await PasswordResolver.ResolveAsync(password, isInteractive: true);
             _pfxPassword = password;
 
-            return new X509Certificate2(settings.CertPath, password, X509KeyStorageFlags.Exportable);
+            return _certChainService.LoadPkcs12FromFile(settings.CertPath, password);
         }
 
         // Fallback: try current user store

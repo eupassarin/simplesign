@@ -42,6 +42,9 @@ public enum CrlFault
     /// copy a client cached before the certificate was revoked.
     /// </summary>
     Stale,
+
+    /// <summary>Serves CRLs without a nextUpdate field: they never say when the next CRL is due.</summary>
+    NoNextUpdate,
 }
 
 /// <summary>What the OCSP responder does with a request.</summary>
