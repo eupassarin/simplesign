@@ -522,6 +522,16 @@ export const en = {
     dssHint: "The same DSS serves both modes. In Real it validates against the roots it was given: add yours to tools/dss/trust, or load the EU trusted lists.",
   },
   sandbox: {
+    adobe: {
+      title: "Trust it in Adobe Acrobat/Reader",
+      about: "Adobe trusts only its own list (AATL) and the certificates you import: a signature from this Sandbox shows \"Signer's identity is unknown\" until its root is a trusted root there.",
+      download: "Download the root (.cer)",
+      step1: "Preferences → Signatures → Identities & Trusted Certificates → More…",
+      step2: "Trusted Certificates → Import → choose simplesign-sandbox-root.cer.",
+      step3: "Select it → Edit Trust → check \"Use this certificate as a trusted root\".",
+      step4: "Open the PDF again: the signature shows as valid.",
+      time: "Without a timestamp (B-B) Adobe shows the time from the signer's clock; with B-T or higher, the TSA's.",
+    },
     title: "SimpleSign Sandbox",
     intro: "A separate app with a test PKI and its services on real endpoints: CRLs over HTTP, HTTPS and LDAP, OCSP, TSAs and a CSC service, with failures to switch on. Connected, its root is trusted, its services can be reached (their origins pass the SSRF guard) and its signers and TSAs can be chosen. Failures, revocations and its request log are in the Sandbox's own page.",
     connection: "Connection",
