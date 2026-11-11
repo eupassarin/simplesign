@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — PAdES: the B-LT/B-LTA DSS update no longer overwrites the stamp's font object
+
+- **`LtvEmbedder`:** to add `/DSS` to the catalog it searched backwards for `"N 0 obj"` as plain text, so catalog
+  `1 0 obj` matched `21 0 obj`. A visible stamp appends its font as objects 20–21 after the catalog, so the DSS
+  revision wrote the font descriptor as the new catalog. The AcroForm and the signature field were lost, and
+  validation reported "Form field removed" (a DocMDP violation when certified). It now uses
+  `PdfStructureParser.FindObjectBytes`, which rejects suffix matches.
+- **TestBench matrix:** the `appearance` dimension is back (invisible, visible, styled+QR, auto+image).
+
 ### Changed — The Sandbox is API only; its UI is the TestBench's Sandbox control
 
 - **Sandbox:** no page of its own (`web/` removed, no Node.js in its build or its Docker image). `/` says it is
