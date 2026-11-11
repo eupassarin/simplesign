@@ -39,7 +39,7 @@ used for real signatures.
 | CRLs over HTTPS | `https://localhost:5301/crl/{ca}.crl` (TLS certificate issued by the Sandbox root) |
 | CRLs over LDAP | `ldap://localhost:5302/cn={ca},o=SimpleSign Sandbox?certificateRevocationList;binary` |
 | OCSP (RFC 6960) | `POST /ocsp/{ca}` and `GET /ocsp/{ca}/{request}` |
-| TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/wrong-name` |
+| TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/expired`, `/tsa/wrong-name` |
 | CSC v2 | `/csc/v2/…` (PIN, OTP, SCAL 1/2, OAuth with a login page that approves at once) |
 | Trusted lists (ETSI TS 119 612 v5) | `/tl/lotl.xml` (list of trusted lists), `/tl/tl.xml` (the trusted list), `/tl/lotl-signer.pem`, `/tl/tl-signer.pem` (the operators' certificates) |
 
@@ -69,7 +69,8 @@ Create another environment to use another address, for instance one a Docker con
 ## The PKI
 
 A root, an intermediate CA that issues the signers, a second intermediate that the root has
-revoked, and a third that has expired. Each certificate has a purpose:
+revoked, a third that has expired, and a fourth whose certificate the root signed with SHA-1.
+An environment created before a CA was added gets it the next time it opens (its root stays). Each certificate has a purpose:
 
 | Certificate | What a correct client does |
 |---|---|
@@ -81,10 +82,12 @@ revoked, and a third that has expired. Each certificate has a purpose:
 | `under-revoked-ca` | Refuses: its issuing CA is revoked in the root's CRL |
 | `expired`, `not-yet-valid` | Refuses: outside its validity |
 | `under-expired-ca` | Refuses: its issuing CA expired |
+| `under-sha1-ca` | Refuses under a policy that rejects SHA-1: the root signed its issuing CA with SHA-1 |
 | `rsa-1024` | Refuses: key too weak |
-| `no-signing-key-usage` | Refuses: no digitalSignature or nonRepudiation |
+| `no-signing-key-usage` | Refuses: no digitalSignature or nonRepudiation (keyEncipherment only) |
+| `no-key-usage-extension` | No KeyUsage extension at all: refused by a policy that requires a signing key usage |
 | `no-nonrepudiation` | Signs; some validation policies flag it |
-| `tsa`, `tsa-revoked` | The TSAs' certificates |
+| `tsa`, `tsa-revoked`, `tsa-expired` | The TSAs' certificates (`/tsa/tsr`, `/tsa/revoked`, `/tsa/expired`) |
 
 Every signer can be downloaded as a PKCS#12 (password in `GET /api/info`). **Revoke now** adds a
 certificate to its CA's CRL and OCSP answers at once (or to one of them only); **Back to normal**
@@ -94,7 +97,7 @@ puts every revocation and failure back.
 
 | Service | Failures |
 |---|---|
-| CRL (HTTP, HTTPS, LDAP) | down, slow, expired (nextUpdate passed), signed by the wrong key, stale (the CRL published before the last revocation: a copy cached before it) |
+| CRL (HTTP, HTTPS, LDAP) | down, slow, expired (nextUpdate passed), signed by the wrong key, stale (the CRL published before the last revocation: a copy cached before it), no nextUpdate |
 | OCSP | down, slow, tryLater, expired response, signed by an unauthorized responder, unknown for every certificate; delegated responder (OCSPSigning, `id-pkix-ocsp-nocheck`) |
 | TSA | down, slow, invalid token |
 | Trusted list | expired (NextUpdate passed), signed by a certificate the LOTL does not name, changed after signing |
@@ -132,7 +135,7 @@ drives the Sandbox the same way, with or without a TestBench, and what one clien
 | `POST /api/reset` | Back to the initial state: revocations, failures off, log cleared | | 204 |
 
 `SandboxFaults` fields: `tsa` (`None`, `Down`, `Slow`, `InvalidToken`, `Untrusted`), `crl` (`None`,
-`Down`, `Slow`, `Expired`, `WrongKey`, `Stale`), `ocsp` (`None`, `Down`, `Slow`, `TryLater`, `Expired`,
+`Down`, `Slow`, `Expired`, `WrongKey`, `Stale`, `NoNextUpdate`), `ocsp` (`None`, `Down`, `Slow`, `TryLater`, `Expired`,
 `Unauthorized`, `Unknown`), `ocspSigner` (`Issuer`, `Delegated`), `trustedList` (`None`, `Expired`,
 `WrongSigner`, `Tampered`), and `tsaDelayMs`, `crlDelayMs`, `ocspDelayMs` (0–60000, used when `Slow`).
 

@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -89,6 +90,38 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
         byte[] crl = await WithFaultsAsync(new SandboxFaults(Crl: CrlFault.Expired), () => Http.GetByteArrayAsync("crl/intermediate.crl"));
 
         CrlEvaluator.Evaluate(leaf, crl, intermediate, DateTimeOffset.UtcNow).ShouldBe(CrlStatus.NotApplicable);
+    }
+
+    [Fact]
+    public async Task Faults_CrlNoNextUpdate_HasNoNextUpdateAndIsSignedByTheIssuer()
+    {
+        using var intermediate = X509CertificateLoader.LoadCertificate(await Http.GetByteArrayAsync("aia/intermediate.cer"));
+        byte[] normal = await Http.GetByteArrayAsync("crl/intermediate.crl");
+        byte[] crl = await WithFaultsAsync(new SandboxFaults(Crl: CrlFault.NoNextUpdate), () => Http.GetByteArrayAsync("crl/intermediate.crl"));
+
+        HasNextUpdate(normal).ShouldBeTrue();
+        HasNextUpdate(crl).ShouldBeFalse();
+        var list = new AsnReader(crl, AsnEncodingRules.DER).ReadSequence();
+        byte[] tbs = list.ReadEncodedValue().ToArray();
+        _ = list.ReadSequence();
+        byte[] signature = list.ReadBitString(out _);
+        using var key = intermediate.GetRSAPublicKey()!;
+        key.VerifyData(tbs, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1).ShouldBeTrue();
+    }
+
+    /// <summary>Whether the TBSCertList has a nextUpdate (a time right after thisUpdate).</summary>
+    private static bool HasNextUpdate(byte[] crl)
+    {
+        var tbs = new AsnReader(crl, AsnEncodingRules.DER).ReadSequence().ReadSequence();
+        if (tbs.PeekTag().HasSameClassAndValue(Asn1Tag.Integer))
+        {
+            _ = tbs.ReadInteger();
+        }
+
+        _ = tbs.ReadSequence(); // signature
+        _ = tbs.ReadSequence(); // issuer
+        _ = tbs.ReadEncodedValue(); // thisUpdate
+        return tbs.HasData && (tbs.PeekTag().HasSameClassAndValue(Asn1Tag.UtcTime) || tbs.PeekTag().HasSameClassAndValue(Asn1Tag.GeneralizedTime));
     }
 
     [Fact]
@@ -272,10 +305,11 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
     {
         var pki = await Http.GetFromJsonAsync<PkiView>("api/pki", SandboxFixture.Json);
 
-        pki!.Authorities.Select(a => a.Id).ShouldBe(["root", "intermediate", "intermediate-revoked", "intermediate-expired"], ignoreOrder: true);
+        pki!.Authorities.Select(a => a.Id).ShouldBe(["root", "intermediate", "intermediate-revoked", "intermediate-expired", "intermediate-sha1"], ignoreOrder: true);
         pki.Certificates.Select(c => c.Id).ShouldBe(["rsa-2048", "rsa-3072", "rsa-4096", "ecdsa-p256", "ecdsa-p384", "ecdsa-p521", "expired", "not-yet-valid",
             "revoked", "revoked-ocsp", "revoked-crl-https", "revoked-crl-ldap", "good-ocsp", "good-crl-https", "good-crl-ldap", "under-revoked-ca", "under-expired-ca",
-            "no-nonrepudiation", "rsa-1024", "no-signing-key-usage", "tsa", "tsa-revoked", "ocsp-responder", "tls-server"]);
+            "no-nonrepudiation", "rsa-1024", "no-signing-key-usage", "no-key-usage-extension", "under-sha1-ca", "tsa", "tsa-revoked", "tsa-expired",
+            "ocsp-responder", "tls-server"]);
         pki.Certificates.Single(c => c.Id == "revoked").RevokedAt.ShouldNotBeNull();
         DateTime.Parse(pki.Certificates.Single(c => c.Id == "expired").NotAfter, System.Globalization.CultureInfo.InvariantCulture).ShouldBeLessThan(DateTime.Now);
         DateTime.Parse(pki.Certificates.Single(c => c.Id == "not-yet-valid").NotBefore, System.Globalization.CultureInfo.InvariantCulture).ShouldBeGreaterThan(DateTime.Now);

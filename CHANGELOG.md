@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Sandbox: an expired TSA, a SHA-1 CA, a signer without KeyUsage, CRLs without nextUpdate
+
+- **`tsa-expired`** (Timestamping, expired yesterday), served at `POST /tsa/expired`; `GET /api/info` gives its
+  address in `tsa.expiredUrl`.
+- **`intermediate-sha1`**, an intermediate CA whose certificate the root signs with sha1WithRSAEncryption, and
+  **`under-sha1-ca`**, a signer under it. An environment created before this CA existed gets it the next time it
+  opens. Its root and the certificates it already issued stay the same.
+- **`no-key-usage-extension`**: a signer with no KeyUsage extension at all. `no-signing-key-usage` has one, with
+  keyEncipherment only.
+- **`CrlFault.NoNextUpdate`**: while it is on, the CRLs (HTTP, HTTPS, LDAP) have no nextUpdate field. They are still
+  signed by their CA. The TestBench's Sandbox control lists it with the other CRL failures.
+
 ### Fixed — PAdES: the B-LT/B-LTA DSS update no longer overwrites the stamp's font object
 
 - **`LtvEmbedder`:** to add `/DSS` to the catalog it searched backwards for `"N 0 obj"` as plain text, so catalog

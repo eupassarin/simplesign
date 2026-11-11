@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -59,8 +60,8 @@ internal sealed record RevocationStatus(bool Known, DateTimeOffset? RevokedAt, X
 }
 
 /// <summary>
-/// The test PKI of one Sandbox environment: a root, an intermediate CA, a revoked and an expired
-/// intermediate, and the certificates that cover the cases a client must handle (every key type,
+/// The test PKI of one Sandbox environment: a root, an intermediate CA, a revoked, an expired and a
+/// SHA-1-signed intermediate, and the certificates that cover the cases a client must handle (every key type,
 /// expired, revoked by CRL over HTTP, HTTPS or LDAP or by OCSP, under a revoked or expired CA…)
 /// plus those that run the services (TSA, OCSP responder, TLS). Kept in the environment's folder,
 /// so a client told to trust the root keeps trusting it. Certificates point to this Sandbox's
@@ -78,6 +79,9 @@ internal sealed class SandboxPki : IDisposable
     public const string RevokedIntermediateId = "intermediate-revoked";
 
     public const string ExpiredIntermediateId = "intermediate-expired";
+
+    /// <summary>An intermediate CA whose certificate the root signed with SHA-1 (a hash no longer accepted for signatures).</summary>
+    public const string Sha1IntermediateId = "intermediate-sha1";
 
     /// <summary>The LDAP base DN of a CA's entry: <c>cn={id},o=sandbox</c>.</summary>
     public static string LdapDn(string caId) => $"cn={caId},o=sandbox";
@@ -256,7 +260,7 @@ internal sealed class SandboxPki : IDisposable
         }
 
         bool created = state is null;
-        state ??= Create(options);
+        state = state is null ? Create(options) : WithMissingAuthorities(state);
         if (!created && state.BaseUrl != options.BaseUrl)
         {
             logger?.LogWarning("The environment '{Name}' was created for {Stored}; its certificates keep pointing there (asked: {Asked}).", state.Name, state.BaseUrl, options.BaseUrl);
@@ -393,6 +397,7 @@ internal sealed class SandboxPki : IDisposable
                 CrlFault.Expired => BuildCrl(authority.Certificate, authority.Key, CrlEntries(caId), _state.CrlNumber, expired: true),
                 CrlFault.WrongKey => BuildCrl(authority.Certificate, RogueOcspKey, CrlEntries(caId), _state.CrlNumber),
                 CrlFault.Stale => _previousCrls.TryGetValue(caId, out var previous) ? previous : Crl(caId),
+                CrlFault.NoNextUpdate => WithoutNextUpdate(BuildCrl(authority.Certificate, authority.Key, CrlEntries(caId), _state.CrlNumber), authority.Key),
                 _ => Crl(caId),
             };
         }
@@ -476,25 +481,8 @@ internal sealed class SandboxPki : IDisposable
         using var root = CaRequest($"CN=SimpleSign Sandbox Root CA ({name}), O=SimpleSign Sandbox", rootKey, pathLength: 1)
             .CreateSelfSigned(now.AddYears(-3), now.AddYears(25));
 
-        StoredAuthority Intermediate(string id, string title, string cn, DateTimeOffset from, DateTimeOffset to, string? problem = null, bool revoked = false)
-        {
-            using var key = RSA.Create(2048);
-            var request = CaRequest($"CN={cn} ({name}), O=SimpleSign Sandbox", key, pathLength: 0);
-            request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(root, true, false));
-            request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([new Uri(baseUrl, $"crl/{RootId}.crl").AbsoluteUri]));
-            request.CertificateExtensions.Add(new X509AuthorityInformationAccessExtension([new Uri(baseUrl, $"ocsp/{RootId}").AbsoluteUri], [new Uri(baseUrl, $"aia/{RootId}.cer").AbsoluteUri]));
-            using var certificate = request.Create(root.SubjectName, X509SignatureGenerator.CreateForRSA(rootKey, RSASignaturePadding.Pkcs1), from, to, NextSerial());
-            return new StoredAuthority
-            {
-                Id = id,
-                Title = title,
-                Pair = Pair(certificate, key),
-                IssuerId = RootId,
-                Problem = problem,
-                RevokedAt = revoked ? now.AddHours(-1) : null,
-                RevocationReason = revoked ? nameof(X509RevocationReason.CACompromise) : null,
-            };
-        }
+        StoredAuthority Intermediate(string id, string title, string cn, DateTimeOffset from, DateTimeOffset to, string? problem = null, bool revoked = false) =>
+            IssueIntermediate(root, rootKey, baseUrl, name, NextSerial(), new IntermediateDefinition(id, title, cn, from, to, problem, revoked ? now.AddHours(-1) : null));
 
         var authorities = new List<StoredAuthority>
         {
@@ -503,6 +491,7 @@ internal sealed class SandboxPki : IDisposable
             Intermediate(RevokedIntermediateId, "Revoked intermediate CA", "SimpleSign Sandbox CA 2 (revoked)", now.AddYears(-2), now.AddYears(15), "Revoked", revoked: true),
             Intermediate(ExpiredIntermediateId, "Expired intermediate CA", "SimpleSign Sandbox CA 3 (expired)", now.AddYears(-3), now.AddDays(-1), "Expired"),
         };
+        authorities.AddRange(MissingAuthorities(authorities, root, rootKey, baseUrl, name, NextSerial, now));
 
         using var untrustedKey = RSA.Create(2048);
         var untrustedRequest = new CertificateRequest("CN=TSA Outside the Chain, O=Outside", untrustedKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -526,6 +515,65 @@ internal sealed class SandboxPki : IDisposable
             UntrustedTsa = Pair(untrusted, untrustedKey),
             RogueOcspResponder = Pair(rogue, rogueKey),
             NextSerial = serial,
+        };
+    }
+
+    /// <summary>An intermediate CA under the root.</summary>
+    private sealed record IntermediateDefinition(
+        string Id,
+        string Title,
+        string CommonName,
+        DateTimeOffset From,
+        DateTimeOffset To,
+        string? Problem = null,
+        DateTimeOffset? RevokedAt = null,
+        bool Sha1 = false);
+
+    /// <summary>
+    /// The intermediate CAs added after the first environments were created: an environment that
+    /// lacks one gets it when it is opened (the root, and every certificate it already issued, stay).
+    /// </summary>
+    private static IEnumerable<StoredAuthority> MissingAuthorities(IReadOnlyCollection<StoredAuthority> existing, X509Certificate2 root, RSA rootKey,
+        Uri baseUrl, string name, Func<byte[]> nextSerial, DateTimeOffset now)
+    {
+        if (!existing.Any(a => a.Id == Sha1IntermediateId))
+        {
+            yield return IssueIntermediate(root, rootKey, baseUrl, name, nextSerial(), new IntermediateDefinition(
+                Sha1IntermediateId, "Intermediate CA signed with SHA-1", "SimpleSign Sandbox CA 4 (SHA-1)", now.AddYears(-2), now.AddYears(15),
+                "Signed with SHA-1", Sha1: true));
+        }
+    }
+
+    /// <summary>Adds to a stored environment the CAs it lacks (see <see cref="MissingAuthorities"/>).</summary>
+    private static SandboxState WithMissingAuthorities(SandboxState state)
+    {
+        var rootPair = state.Authorities.First(a => a.Id == RootId).Pair;
+        using var root = X509Certificate2.CreateFromPem(rootPair.Certificate);
+        using var rootKey = RSA.Create();
+        rootKey.ImportFromPem(rootPair.Key);
+        long serial = state.NextSerial;
+        var added = MissingAuthorities(state.Authorities, root, rootKey, state.BaseUrl, state.Name, () => SerialBytes(++serial), DateTimeOffset.UtcNow).ToList();
+        return added.Count == 0 ? state : state with { Authorities = [.. state.Authorities, .. added], NextSerial = serial };
+    }
+
+    private static StoredAuthority IssueIntermediate(X509Certificate2 root, RSA rootKey, Uri baseUrl, string name, byte[] serial, IntermediateDefinition definition)
+    {
+        using var key = RSA.Create(2048);
+        var request = CaRequest($"CN={definition.CommonName} ({name}), O=SimpleSign Sandbox", key, pathLength: 0);
+        request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(root, true, false));
+        request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([new Uri(baseUrl, $"crl/{RootId}.crl").AbsoluteUri]));
+        request.CertificateExtensions.Add(new X509AuthorityInformationAccessExtension([new Uri(baseUrl, $"ocsp/{RootId}").AbsoluteUri], [new Uri(baseUrl, $"aia/{RootId}.cer").AbsoluteUri]));
+        var generator = definition.Sha1 ? new Sha1RsaSignatureGenerator(rootKey) : X509SignatureGenerator.CreateForRSA(rootKey, RSASignaturePadding.Pkcs1);
+        using var certificate = request.Create(root.SubjectName, generator, definition.From, definition.To, serial);
+        return new StoredAuthority
+        {
+            Id = definition.Id,
+            Title = definition.Title,
+            Pair = Pair(certificate, key),
+            IssuerId = RootId,
+            Problem = definition.Problem,
+            RevokedAt = definition.RevokedAt,
+            RevocationReason = definition.RevokedAt is null ? null : nameof(X509RevocationReason.CACompromise),
         };
     }
 
@@ -581,9 +629,15 @@ internal sealed class SandboxPki : IDisposable
         new("rsa-1024", "Weak key (RSA 1024)", "RSA 1024 key: the default signing policy refuses it (KeyTooWeak).", SandboxKeyType.Rsa1024, "Key too small"),
         new("no-signing-key-usage", "Without a signing key usage", "Key usage has keyEncipherment only: the default signing policy refuses it (KeyUsageNotPermitted).",
             Problem: "No signing key usage", KeyUsage: X509KeyUsageFlags.KeyEncipherment),
+        new("no-key-usage-extension", "Without a key usage extension", "The certificate has no KeyUsage extension at all: a policy that requires digitalSignature or nonRepudiation refuses it.",
+            Problem: "No key usage extension", KeyUsage: X509KeyUsageFlags.None),
+        new("under-sha1-ca", "Under a SHA-1 CA", "Valid itself, but the root signed its issuing CA's certificate with SHA-1: a policy that refuses SHA-1 rejects the chain.",
+            Problem: "Issuer signed with SHA-1", IssuerId: Sha1IntermediateId),
         new("tsa", "TSA", "The time-stamping authority of /tsa/tsr and /tsa/authenticated.", Usage: CertificateUsage.Timestamping),
         new("tsa-revoked", "Revoked TSA", "The TSA of /tsa/revoked: its certificate is revoked, so its tokens must not be trusted.",
             Problem: "Revoked", Usage: CertificateUsage.Timestamping, Revoked: true),
+        new("tsa-expired", "Expired TSA", "The TSA of /tsa/expired: its certificate expired yesterday, so its tokens must not be trusted.",
+            Problem: "Expired", Usage: CertificateUsage.Timestamping),
         new("ocsp-responder", "Delegated OCSP responder", "Signs the intermediate CA's OCSP responses when the delegated signer is chosen (OCSPSigning, id-pkix-ocsp-nocheck).",
             Usage: CertificateUsage.OcspSigning, Pointers: RevocationPointers.None),
         new("tls-server", "HTTPS endpoint", "The TLS certificate of the HTTPS endpoint (serverAuth, localhost and the public host).",
@@ -708,7 +762,12 @@ internal sealed class SandboxPki : IDisposable
             _ => X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation,
         };
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(keyUsage, true));
+        if (keyUsage != X509KeyUsageFlags.None)
+        {
+            // None: no KeyUsage extension at all (the no-key-usage-extension case).
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(keyUsage, true));
+        }
+
         request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
         request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer.Certificate, true, false));
         request.CertificateExtensions.Add(seed.Usage switch
@@ -871,6 +930,52 @@ internal sealed class SandboxPki : IDisposable
             X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer, true, false), expired ? now.AddDays(-8) : now.AddMinutes(-5));
     }
 
+    /// <summary>
+    /// The same CRL without its nextUpdate field (optional in RFC 5280 §5.1.2.5), signed again by
+    /// <paramref name="signingKey"/>: a CRL that never says when the next one is due.
+    /// </summary>
+    private static byte[] WithoutNextUpdate(byte[] crl, RSA signingKey)
+    {
+        var certificateList = new AsnReader(crl, AsnEncodingRules.DER).ReadSequence();
+        var tbs = certificateList.ReadSequence();
+        byte[] signatureAlgorithm = certificateList.ReadEncodedValue().ToArray();
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            if (tbs.PeekTag().HasSameClassAndValue(Asn1Tag.Integer))
+            {
+                writer.WriteEncodedValue(tbs.ReadEncodedValue().Span); // version
+            }
+
+            writer.WriteEncodedValue(tbs.ReadEncodedValue().Span); // signature
+            writer.WriteEncodedValue(tbs.ReadEncodedValue().Span); // issuer
+            writer.WriteEncodedValue(tbs.ReadEncodedValue().Span); // thisUpdate
+            if (tbs.HasData && IsTime(tbs.PeekTag()))
+            {
+                _ = tbs.ReadEncodedValue(); // nextUpdate: left out
+            }
+
+            while (tbs.HasData)
+            {
+                writer.WriteEncodedValue(tbs.ReadEncodedValue().Span); // revokedCertificates, crlExtensions
+            }
+        }
+
+        byte[] newTbs = writer.Encode();
+        byte[] signature = signingKey.SignData(newTbs, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var list = new AsnWriter(AsnEncodingRules.DER);
+        using (list.PushSequence())
+        {
+            list.WriteEncodedValue(newTbs);
+            list.WriteEncodedValue(signatureAlgorithm);
+            list.WriteBitString(signature);
+        }
+
+        return list.Encode();
+
+        static bool IsTime(Asn1Tag tag) => tag.HasSameClassAndValue(Asn1Tag.UtcTime) || tag.HasSameClassAndValue(Asn1Tag.GeneralizedTime);
+    }
+
     private static byte[] TrimSerial(ReadOnlySpan<byte> serial)
     {
         int start = 0;
@@ -949,4 +1054,23 @@ internal sealed class SandboxPki : IDisposable
         System.Buffers.Binary.BinaryPrimitives.WriteInt64BigEndian(bytes.AsSpan(4), serial);
         return bytes;
     }
+}
+
+/// <summary>
+/// Signs with sha1WithRSAEncryption (PKCS#1 v1.5), which <see cref="X509SignatureGenerator.CreateForRSA"/>
+/// no longer offers: for the CA certificate the root signs with SHA-1. The hash the request asks for is ignored.
+/// </summary>
+internal sealed class Sha1RsaSignatureGenerator(RSA key) : X509SignatureGenerator
+{
+    // AlgorithmIdentifier { sha1WithRSAEncryption (1.2.840.113549.1.1.5), NULL }
+    private static readonly byte[] s_algorithm = [0x30, 0x0D, 0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x05, 0x05, 0x00];
+
+    private readonly X509SignatureGenerator _inner = CreateForRSA(key, RSASignaturePadding.Pkcs1);
+
+    public override byte[] GetSignatureAlgorithmIdentifier(HashAlgorithmName hashAlgorithm) => [.. s_algorithm];
+
+    public override byte[] SignData(byte[] data, HashAlgorithmName hashAlgorithm) =>
+        key.SignData(data, HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
+
+    protected override PublicKey BuildPublicKey() => _inner.PublicKey;
 }

@@ -116,6 +116,7 @@ export const sandboxEn = {
       Expired: { title: "Expired CRLs", hint: "The CRLs' nextUpdate has passed: a correct client does not rely on them." },
       WrongKey: { title: "Wrong signature", hint: "The CRLs carry the CA's name but are signed by another key: a correct client rejects them." },
       Stale: { title: "Stale CRL", hint: "Serves the CRL from before the last revocation (still current): what a client with an old copy sees." },
+      NoNextUpdate: { title: "No nextUpdate", hint: "The CRLs have no nextUpdate field: they never say when the next one is due, so a client cannot tell whether its copy is current." },
     },
     ocspValues: {
       None: { title: "Normal", hint: "Answers good, revoked or unknown with the current status." },

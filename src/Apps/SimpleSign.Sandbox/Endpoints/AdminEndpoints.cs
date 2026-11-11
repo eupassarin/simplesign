@@ -31,7 +31,8 @@ public sealed record SandboxUrls(string RootCertificate, string IntermediateCert
 /// <summary>The URLs of one CA: its certificate, its CRL over HTTP, HTTPS and LDAP, and its OCSP responder.</summary>
 public sealed record AuthorityUrls(string Id, string Certificate, string Crl, string HttpsCrl, string LdapCrl, string Ocsp);
 
-public sealed record TsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string WrongName, string User, string Password);
+public sealed record TsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string WrongName, string User, string Password,
+    string ExpiredUrl);
 
 public sealed record CscInfo(string BaseUrl, string ClientId, string ClientSecret, string ServiceToken, string Pin, string Otp, IReadOnlyList<CscCredentialView> Credentials);
 
@@ -159,7 +160,7 @@ internal static class AdminEndpoints
             [.. pki.Authorities.Select(a => new AuthorityUrls(a.Id, pki.CertificateUrl(a.Id).AbsoluteUri, pki.CrlUrl(a.Id).AbsoluteUri,
                 pki.HttpsCrlUrl(a.Id).AbsoluteUri, pki.LdapCrlUrl(a.Id).OriginalString, pki.OcspUrl(a.Id).AbsoluteUri))],
             new TsaInfo(Url("tsa/tsr"), Url("tsa/authenticated"), Url("tsa/untrusted"), Url("tsa/revoked"), Url("tsa/wrong-name"), ServiceEndpoints.WrongTsaName,
-                ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword),
+                ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword, Url("tsa/expired")),
             new CscInfo(csc.BaseUri.AbsoluteUri, SandboxCsc.ClientId, SandboxCsc.ClientSecret, SandboxCsc.ServiceToken, SandboxCsc.Pin, SandboxCsc.Otp,
                 [.. csc.Credentials.Select(c => new CscCredentialView(c.Id, c.Description, c.CertificateId, c.AuthMode, c.Scal, c.MultiSign))]),
             SandboxPki.PfxPassword,
