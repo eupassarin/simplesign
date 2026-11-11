@@ -10,7 +10,6 @@ import { api } from "@/lib/api"
 import type { CadesSignResult, CadesValidationView, SigningResult, ValidationReport, XmlSignResult, XmlValidationView } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { CmsStructure } from "../cades/CmsViews"
-import { PdfPreview } from "../shared/PdfPreview"
 import { DetailedCard, InspectView } from "../validate/pdf"
 import { ReportButtons } from "../shared/ReportViewer"
 import { CodeTabs, Indication } from "../shared/results"
@@ -315,7 +314,6 @@ function Difference({ row }: { row: DssComparisonRow }) {
 /** What is inside the produced file, in the terms of its format. */
 function Inspection({ run }: { run: RunView }) {
   const { t, number } = useI18n()
-  const yes = (b: boolean) => t(b ? "common.yes" : "common.no")
   if (run.kind === "validate") {
     // The validators' own reports: the same views, without the signing facts.
     if (run.format === "cades") return <CmsStructure facts={(run.detail as CadesValidationView).structure} />
@@ -336,18 +334,11 @@ function Inspection({ run }: { run: RunView }) {
     const detail = run.detail as XmlSignResult
     return detail.validation ? <div className="space-y-6"><XmlViews view={detail.validation} /></div> : <p className="text-muted-foreground text-sm">{t("wb.inspection.needsValidation")}</p>
   }
+  // A signed PDF: the same views as the Validation page (each signature in detail, then the file's objects).
   const detail = run.detail as SigningResult
   return (
-    <div className="space-y-5">
-      <div className="grid gap-x-8 rounded-lg border px-4 py-2 sm:grid-cols-2">
-        <KeyValue label={t("result.output.signatures")}>{detail.output?.signatureCount}</KeyValue>
-        <KeyValue label={t("result.output.level")}>{detail.output?.detectedLevel}</KeyValue>
-        <KeyValue label={t("result.output.timestamp")}>{yes(detail.hasSignatureTimestamp)}</KeyValue>
-        <KeyValue label={t("result.output.dss")}>{detail.output?.hasDss ? t("result.output.dssValue", { certs: detail.output.dssCertificates, crls: detail.output.dssCrls, ocsps: detail.output.dssOcsps }) : t("common.no")}</KeyValue>
-        <KeyValue label={t("result.output.archive")}>{yes(detail.hasArchiveTimestamp)}</KeyValue>
-        <KeyValue label="DocMDP">{detail.output?.docMdpLevel ? `P=${detail.output.docMdpLevel}` : t("common.none")}</KeyValue>
-        <KeyValue label="PDF/A">{detail.output?.pdfALevel}</KeyValue>
-      </div>
+    <div className="space-y-6">
+      {detail.report?.signatures.map((s) => <DetailedCard key={s.report.fieldName} signature={s} />)}
       {detail.deferred && (
         <div className="space-y-1 rounded-lg border px-4 py-2">
           <p className="py-1 text-sm font-medium">{t("result.tabs.deferred")}</p>
@@ -373,7 +364,7 @@ function Inspection({ run }: { run: RunView }) {
           </TableBody>
         </Table>
       )}
-      <PdfPreview url={api.fileUrl(run.outputId!)} page={1} onPageChange={() => {}} />
+      <InspectView file={{ id: run.outputId! }} />
     </div>
   )
 }

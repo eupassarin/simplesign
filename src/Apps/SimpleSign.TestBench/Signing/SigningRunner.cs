@@ -92,6 +92,12 @@ public sealed record SigningResult(
 
     /// <summary>The reports the CLI's validation wrote; null for a library run.</summary>
     public CliReports? Reports { get; init; }
+
+    /// <summary>
+    /// The signed PDF described like on the Validation page: each signature's verdict with what the inspector reads of
+    /// it (level, coverage, certificates, timestamp), and the file's DSS.
+    /// </summary>
+    public ValidationReport? Report { get; init; }
 }
 
 /// <summary>Signs with the effective options, validates the output and produces the matching code.</summary>
@@ -341,9 +347,11 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
 
         long validateMs = watch.ElapsedMilliseconds;
         var output = await InspectAsync(signed, cancellationToken);
+        var described = await _validation.DescribeAsync(stored.Id, validation, validateMs, code, cancellationToken);
         return new SigningResult(true, null, null, stored.Id, fileName, signed.Length, Compatibility.LevelName(o), achieved,
             hasTimestamp, hasLtv, hasArchive, warnings, signMs, validateMs, validation, output, deferred, batch, code, report.Issues)
         {
+            Report = described,
             Cli = checkedByCli?.Steps,
             Reports = checkedByCli is null ? null : CliValidation.Store(checkedByCli, documents, fileName),
         };

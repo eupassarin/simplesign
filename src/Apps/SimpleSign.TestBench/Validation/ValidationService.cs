@@ -185,7 +185,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     }
 
     /// <summary>The report of the verdicts on a PDF's signatures, with what the inspector reads of each one and of the file.</summary>
-    private async Task<ValidationReport> DescribeAsync(string fileId, IReadOnlyList<SignatureReport> results, long ms, CodeSnippets code, CancellationToken cancellationToken)
+    internal async Task<ValidationReport> DescribeAsync(string fileId, IReadOnlyList<SignatureReport> results, long ms, CodeSnippets code, CancellationToken cancellationToken)
     {
         var file = documents.Get(fileId);
         var facts = await documents.FactsAsync(fileId, cancellationToken);
