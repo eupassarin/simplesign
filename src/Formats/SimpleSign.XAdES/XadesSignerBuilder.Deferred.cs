@@ -35,6 +35,18 @@ public sealed partial class XadesSignerBuilder
         });
     }
 
+    /// <summary>
+    /// The same builder for a signature prepared in two phases: its certificate and chain, with the key held
+    /// elsewhere. A builder without a certificate is returned as it is.
+    /// </summary>
+    internal XadesSignerBuilder ForDeferredPreparation() =>
+        _options.Credential is { } credential
+            ? With(_options with
+            {
+                Credential = new XadesExternalCredential(GetCertificate(credential), GetChain(credential), DeferredPlaceholderSigner.Instance),
+            })
+            : this;
+
     /// <summary>The same builder with the detached document of a session that does not carry it.</summary>
     internal XadesSignerBuilder WithDetachedDocument(byte[] document) => new((byte[])document.Clone(), _options);
 

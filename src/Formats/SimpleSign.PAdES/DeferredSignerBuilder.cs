@@ -61,6 +61,35 @@ public sealed class DeferredSignerBuilder
         _state = new State([], [.. sessionData], [.. sessionIntegrityKey], profile) { OperationId = operationId };
     }
 
+    /// <summary>Initializes a deferred builder with the document, the certificate and the options of a one-call builder.</summary>
+    internal DeferredSignerBuilder(
+        byte[] pdfBytes, PadesSigningOptions options, X509Certificate2? certificate, IReadOnlyList<X509Certificate2> chain)
+    {
+        _state = new State(pdfBytes, SessionData: null, SessionIntegrityKey: null, options.Profile)
+        {
+            Certificate = certificate,
+            ExtraCertificates = [.. chain],
+            HashAlgorithm = options.HashAlgorithm,
+            HashAlgorithmExplicitlySet = options.HashAlgorithmExplicitlySet,
+            SignatureAlgorithmOid = options.SignatureAlgorithmOid,
+            Field = options.Field,
+            Logger = options.Dependencies.Logger,
+            HttpClientProvider = options.Dependencies.HttpClientProvider,
+            SigningPolicy = options.SigningPolicy,
+            ChainRevocationChecker = options.Dependencies.ChainRevocationChecker,
+            TrustAnchors = options.TrustAnchors,
+            CountryExtensions = options.CountryExtensions,
+            AuditSink = options.AuditSink,
+            OperationId = options.OperationId,
+            EnforcePdfA = options.EnforcePdfA,
+            SigningTime = options.SigningTime,
+            SignaturePolicy = options.SignaturePolicy,
+            Metadata = options.Metadata,
+            DocumentInfo = options.DocumentInfo,
+            DssArtifacts = options.DssArtifacts,
+        };
+    }
+
     private DeferredSignerBuilder(State state)
     {
         _state = state;

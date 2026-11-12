@@ -15,6 +15,20 @@ namespace SimpleSign.PAdES;
 /// </content>
 public sealed partial class PadesSignerBuilder
 {
+    /// <summary>A deferred builder over the same document, with the certificate and every option of this builder.</summary>
+    internal DeferredSignerBuilder ToDeferred()
+    {
+        _inputPdf.Seek(0, SeekOrigin.Begin);
+        using var copy = new MemoryStream();
+        _inputPdf.CopyTo(copy);
+        _inputPdf.Seek(0, SeekOrigin.Begin);
+        return new DeferredSignerBuilder(
+            copy.ToArray(),
+            _options,
+            _options.Credential is { } credential ? GetCertificate(credential) : null,
+            _options.Credential is { } withChain ? GetChain(withChain) : []);
+    }
+
     /// <summary>
     /// Takes the PDF prepared in phase one and the CMS assembled from the external signature to the level the
     /// session asks for, and reads the result back.

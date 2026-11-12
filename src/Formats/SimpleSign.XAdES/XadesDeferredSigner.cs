@@ -38,6 +38,21 @@ public static class XadesDeferredSigner
     }
 
     /// <summary>
+    /// Creates a builder that prepares in two phases the signature a one-call builder is configured for: its
+    /// document (or the countersignature it was created for), its certificate and chain, and every option.
+    /// The private key of the certificate, or the external signer, is not used: the key signs between the
+    /// phases. Use it to configure a signature once and decide how it is signed at the end.
+    /// </summary>
+    /// <param name="builder">A builder from <see cref="XadesSigner"/>, configured.</param>
+    /// <returns>A builder that needs <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    public static XadesDeferredSignerBuilder From(XadesSignerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        return new XadesDeferredSignerBuilder(builder.ForDeferredPreparation(), session: null, sessionIntegrityKey: null);
+    }
+
+    /// <summary>
     /// Creates a builder that prepares a two-phase countersignature of a signature of an already signed document
     /// (ETSI EN 319 132-1 §5.2.7.2). The bytes to sign are the canonical SignedInfo of the countersignature.
     /// The builder accepts the B-B and B-T levels. See <see cref="XadesSigner.CounterSign"/>.
@@ -47,7 +62,7 @@ public static class XadesDeferredSigner
     /// <returns>A builder that needs <c>WithCertificate</c> and <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="signedXml"/> is null.</exception>
     public static XadesDeferredSignerBuilder CounterSign(byte[] signedXml, string? signatureId = null) =>
-        new(XadesSigner.CounterSign(signedXml, signatureId), session: null, sessionIntegrityKey: null);
+        From(XadesSigner.CounterSign(signedXml, signatureId));
 
     /// <summary>Resumes a session prepared by <see cref="XadesDeferredSignerBuilder.PrepareAsync(CancellationToken)"/>.</summary>
     /// <param name="sessionData">The session returned by phase one.</param>

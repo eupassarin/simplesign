@@ -43,6 +43,21 @@ public static class DeferredSigner
     }
 
     /// <summary>
+    /// Creates a builder that prepares in two phases the signature a one-call builder is configured for: its
+    /// PDF, its certificate and chain, and every option (field, appearance, metadata, signature policy, level,
+    /// country extensions…). The private key of the certificate, or the external signer, is not used: the key
+    /// signs between the phases. Use it to configure a signature once and decide how it is signed at the end.
+    /// </summary>
+    /// <param name="builder">A builder from <see cref="PadesSigner"/>, configured. Its document is read here.</param>
+    /// <returns>A builder that needs <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    public static DeferredSignerBuilder From(PadesSignerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        return builder.ToDeferred();
+    }
+
+    /// <summary>
     /// Resumes phase two of a deferred signing operation from server-side session data.
     /// </summary>
     /// <param name="sessionData">Integrity-protected serialized session returned by phase one.</param>

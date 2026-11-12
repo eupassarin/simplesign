@@ -35,6 +35,18 @@ public sealed partial class CadesSignerBuilder
         });
     }
 
+    /// <summary>
+    /// The same builder for a signature prepared in two phases: its certificate and chain, with the key held
+    /// elsewhere. A builder without a certificate is returned as it is.
+    /// </summary>
+    internal CadesSignerBuilder ForDeferredPreparation() =>
+        _options.Credential is { } credential
+            ? With(_options with
+            {
+                Credential = new CadesExternalCredential(GetCertificate(credential), GetChain(credential), DeferredPlaceholderSigner.Instance),
+            })
+            : this;
+
     /// <summary>The same builder over <paramref name="data"/>: the content of a session that does not carry it.</summary>
     internal CadesSignerBuilder WithData(byte[] data) => new((byte[])data.Clone(), _options);
 

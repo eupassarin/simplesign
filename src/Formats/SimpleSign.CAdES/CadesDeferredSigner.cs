@@ -33,6 +33,21 @@ public static class CadesDeferredSigner
     }
 
     /// <summary>
+    /// Creates a builder that prepares in two phases the signature a one-call builder is configured for: its
+    /// document (or the co-signature or countersignature it was created for), its certificate and chain, and
+    /// every option. The private key of the certificate, or the external signer, is not used: the key signs
+    /// between the phases. Use it to configure a signature once and decide how it is signed at the end.
+    /// </summary>
+    /// <param name="builder">A builder from <see cref="CadesSigner"/>, configured.</param>
+    /// <returns>A builder that needs <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    public static CadesDeferredSignerBuilder From(CadesSignerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        return new CadesDeferredSignerBuilder(builder.ForDeferredPreparation(), session: null, sessionIntegrityKey: null);
+    }
+
+    /// <summary>
     /// Creates a builder that prepares a two-phase co-signature: a new signer over the same content, added to
     /// <paramref name="existingSignature"/> (a .p7s or .p7m) when the session is completed. See <see cref="CadesSigner.CoSign"/>.
     /// </summary>
@@ -41,7 +56,7 @@ public static class CadesDeferredSigner
     /// <returns>A builder that needs <c>WithCertificate</c> and <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
     /// <exception cref="ArgumentException">Detached signature without <paramref name="data"/>, or data that the existing signature does not cover.</exception>
     public static CadesDeferredSignerBuilder CoSign(byte[] existingSignature, byte[]? data = null) =>
-        new(CadesSigner.CoSign(existingSignature, data), session: null, sessionIntegrityKey: null);
+        From(CadesSigner.CoSign(existingSignature, data));
 
     /// <summary>
     /// Creates a builder that prepares a two-phase countersignature of signer <paramref name="signerIndex"/> of
@@ -53,7 +68,7 @@ public static class CadesDeferredSigner
     /// <returns>A builder that needs <c>WithCertificate</c> and <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
     /// <exception cref="ArgumentOutOfRangeException">There is no such signer.</exception>
     public static CadesDeferredSignerBuilder CounterSign(byte[] existingSignature, int signerIndex = 0) =>
-        new(CadesSigner.CounterSign(existingSignature, signerIndex), session: null, sessionIntegrityKey: null);
+        From(CadesSigner.CounterSign(existingSignature, signerIndex));
 
     /// <summary>Resumes a session prepared by <see cref="CadesDeferredSignerBuilder.PrepareAsync(CancellationToken)"/>.</summary>
     /// <param name="sessionData">The session returned by phase one.</param>
