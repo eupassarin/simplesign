@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — PKCS#11: PIN warning flags of a token
+
+- `Pkcs11TokenInfo.IsPinCountLow`, `IsPinFinalTry`, `IsPinToBeChanged` and `IsUserPinInitialized`, read from
+  `CK_TOKEN_INFO.flags` by `Pkcs11Signer.ListTokens` with `IsPinLocked`: warn the user before a wrong PIN locks the
+  token. Init-only properties; the positional constructor is unchanged.
+
 ### Added — `AuditChain`: the audit hash chain for any store
 
 - `AuditChain.Canonicalize(SignatureAuditEvent)`, `AuditChain.Link(previousHash, content)`, `AuditChain.Append`,

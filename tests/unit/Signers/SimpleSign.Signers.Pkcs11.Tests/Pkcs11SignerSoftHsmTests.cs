@@ -192,6 +192,10 @@ public sealed class Pkcs11SignerSoftHsmTests(SoftHsmFixture hsm)
 
         token.IsLoginRequired.ShouldBeTrue();
         token.IsPinLocked.ShouldBeFalse();
+        token.IsUserPinInitialized.ShouldBeTrue();
+        token.IsPinCountLow.ShouldBeFalse();
+        token.IsPinFinalTry.ShouldBeFalse();
+        token.IsPinToBeChanged.ShouldBeFalse();
         token.Certificates.Select(c => c.Label).OrderBy(l => l)
             .ShouldBe([SoftHsmFixture.EcKeyLabel, SoftHsmFixture.RsaKeyLabel, "test-ca"]);
         token.Certificates.Single(c => c.Label == SoftHsmFixture.RsaKeyLabel).Id.ToArray().ShouldBe(SoftHsmFixture.RsaKeyId);
