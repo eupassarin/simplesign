@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BookOpen, ClipboardCheck, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
+import { BookCheck, BookOpen, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
@@ -9,14 +9,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { RealEnvironment } from "@/features/environment/RealEnvironment"
 import { PoliciesPage } from "@/features/policies/PoliciesPage"
 import { SandboxControl } from "@/features/sandbox/SandboxControl"
-import { ScriptPage } from "@/features/script/ScriptPage"
+import { PlaybookPage } from "@/features/playbook/PlaybookPage"
 import { CatalogProvider } from "@/features/shared/catalog"
 import { DssControl } from "@/features/shared/DssControl"
 import { EngineControl } from "@/features/shared/EngineControl"
 import { CoveragePage } from "@/features/standards/CoveragePage"
 import { ValidatePage } from "@/features/validate/ValidatePage"
-import type { RunKind, WorkbenchSchema } from "@/features/workbench/schema"
-import { useWorkbench, WorkbenchProvider } from "@/features/workbench/state"
+import type { WorkbenchSchema } from "@/features/workbench/schema"
+import { useWorkbench, WorkbenchProvider, type AppMode } from "@/features/workbench/state"
 import { WorkbenchPage } from "@/features/workbench/WorkbenchPage"
 import { useTheme } from "@/hooks/use-theme"
 import { locales, useI18n, type Locale } from "@/i18n"
@@ -50,13 +50,15 @@ export default function App() {
   )
 }
 
-const modes: { id: RunKind; icon: typeof PenTool }[] = [
+const modes: { id: AppMode; icon: typeof PenTool }[] = [
   { id: "sign", icon: PenTool },
   { id: "validate", icon: ShieldCheck },
+  { id: "playbook", icon: BookCheck },
 ]
 
 /**
- * One top bar and one task on screen. There are two tasks, Sign and Validate (the PAdES stamp opens as a drawer from Sign).
+ * One top bar and one task on screen. There are three tasks: Sign, Validate (the PAdES stamp opens as a drawer from Sign) and
+ * Playbook (steps written beforehand, run against the Sandbox).
  * Everything that applies to both sits on the right, in three groups: the engine (library or CLI); the reference
  * panels (Policies, Reference, and Environment: what this machine has); and the outside services, the SimpleSign
  * Sandbox and DSS (each on or off: a popup to turn it on, a drawer with everything once on). Then language and theme.
@@ -93,7 +95,6 @@ function Shell() {
           <SandboxControl />
           <DssControl />
           <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
-          <Panel icon={<ClipboardCheck />} label={t("script.button")} hint={t("script.hint")} full><ScriptPage /></Panel>
           <div className="ml-1 flex items-center gap-1">
             <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
               <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 border-none shadow-none" aria-label={t("app.language")}>
@@ -111,7 +112,7 @@ function Shell() {
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col">
-        {mode === "sign" ? <WorkbenchPage /> : <ValidatePage />}
+        {mode === "sign" ? <WorkbenchPage /> : mode === "validate" ? <ValidatePage /> : <PlaybookPage />}
       </main>
     </div>
   )
@@ -121,7 +122,7 @@ function Shell() {
  * A reference or control panel that slides over the task without leaving it; `active` highlights a connected service.
  * A `reference` panel (no state to show) keeps its label for wide screens only, so the stateful buttons keep theirs.
  */
-function Panel({ icon, label, hint, active, reference, full, children }: { icon: React.ReactNode; label: string; hint: string; active?: boolean; reference?: boolean; full?: boolean; children: React.ReactNode }) {
+function Panel({ icon, label, hint, active, reference, children }: { icon: React.ReactNode; label: string; hint: string; active?: boolean; reference?: boolean; children: React.ReactNode }) {
   return (
     <Sheet>
       <Tooltip>
@@ -132,7 +133,7 @@ function Panel({ icon, label, hint, active, reference, full, children }: { icon:
         </TooltipTrigger>
         <TooltipContent className="max-w-64">{reference ? <><span className="font-medium">{label}</span> · {hint}</> : hint}</TooltipContent>
       </Tooltip>
-      <SheetContent className={cn("flex flex-col p-0 sm:max-w-none", full ? "w-screen" : "w-[min(96vw,1200px)]")} onOpenAutoFocus={(e) => e.preventDefault()}>
+      <SheetContent className="flex w-[min(96vw,1200px)] flex-col p-0 sm:max-w-none" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader className="sr-only"><SheetTitle>{label}</SheetTitle><SheetDescription>{hint}</SheetDescription></SheetHeader>
         {children}
       </SheetContent>

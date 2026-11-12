@@ -1,6 +1,6 @@
-# Certification script — run options
+# Playbook — run options
 
-Generated from the TestBench (`ScriptSchema.OptionsMarkdown`); do not edit. A step's `options` is a JSON object whose keys are the **paths** below (a dot is a nested object: `signingControls.trust` is `{ "signingControls": { "trust": [...] } }`).
+Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A step's `options` is a JSON object whose keys are the **paths** below (a dot is a nested object: `signingControls.trust` is `{ "signingControls": { "trust": [...] } }`).
 
 ## Symbolic values
 
@@ -200,4 +200,4 @@ Generated from the TestBench (`ScriptSchema.OptionsMarkdown`); do not edit. A st
 
 ## Sandbox
 
-Signer ids (`sandbox:ID`) and certificate ids (`sandbox.revoke`) are those of the connected Sandbox (`GET /api/pki` on it); the TestBench checks them when it loads a script. Failures: crl None/Down/Slow/Expired/WrongKey/Stale/NoNextUpdate, ocsp None/Down/Slow/TryLater/Expired/Unauthorized/Unknown, tsa None/Down/Slow/InvalidToken/Untrusted, trustedList None/Expired/WrongSigner/Tampered.
+Signer ids (`sandbox:ID`) and certificate ids (`sandbox.revoke`) are those of the connected Sandbox (`GET /api/pki` on it); the TestBench checks them when it loads a playbook. Failures: crl None/Down/Slow/Expired/WrongKey/Stale/NoNextUpdate, ocsp None/Down/Slow/TryLater/Expired/Unauthorized/Unknown, tsa None/Down/Slow/InvalidToken/Untrusted, trustedList None/Expired/WrongSigner/Tampered.

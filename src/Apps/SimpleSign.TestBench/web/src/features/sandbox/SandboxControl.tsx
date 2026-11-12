@@ -42,7 +42,7 @@ export function SandboxControl() {
   const sandbox = env?.sandbox ?? null
   const [open, setOpen] = useState(false)
   const [faults, setFaults] = useState<SandboxFaults | null>(null)
-  // The failures can be switched by any client of the Sandbox (a certification script, curl): read them now and then.
+  // The failures can be switched by any client of the Sandbox (a playbook, curl): read them now and then.
   useEffect(() => {
     if (!sandbox) {
       setFaults(null)

@@ -7,16 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added — Certification scripts in the TestBench (the Playbook app is gone)
+### Added — Playbooks in the TestBench (the Playbook app is gone)
 
-- **TestBench → Certification:** loads a certification script (JSON, `docs/schemas/certification-script.schema.json`)
-  written beforehand from an accreditation guide, checks it against the connected Sandbox, runs each step through the
-  library, the CLI or both, waits for the manual steps (note, attachments, passed/failed), and exports the evidence:
-  an HTML page in the script's language (matrix requirement → steps → result) and a zip with the script, the run, and
-  per step the signed file, reports, log and attachments. API under `/api/script`.
-- **Samples:** `docs/certification-scripts/sandbox-basics.json` (the old Playbook sample) and
-  `indecopi-guia-v4.json` (INDECOPI's guide v4.0, Annex B: signing and verification by automated agents, timestamp
-  checks; Spanish). `AUTHORING.md` is the kit to have an LLM write one; `options.md` is generated from the TestBench.
+- **TestBench → Playbook tab** (after Sign and Validate; it was the Certification page): loads a playbook (JSON,
+  schema 2, `docs/schemas/playbook.schema.json`) written beforehand — sections of steps, each with free tags — checks
+  it against the connected Sandbox and runs one step, a section or all, through the library, the CLI or both. Three
+  columns: the steps (filter by tag), everything the selected step will do before it runs (what is signed and by
+  whom, every setting by group, Sandbox changes, expectation, C# and CLI commands), and its latest result with every
+  detail (report in a dialog, files, CLI commands, log). The latest result of each step is kept while the TestBench
+  runs. Evidence: an HTML page (steps by section, summary by tag) and a zip with the playbook, the results, and per
+  step the signed file, reports and log. API under `/api/playbook`.
+- **Playbook tab details:** a two-row toolbar; a tag filter with autocomplete (several tags at once); C# and CLI in
+  their own tabs with syntax colors; before a step runs, column 3 shows its JSON as written (and the defaults,
+  collapsed); **Clear result** for one step and **Restart** for all; the loaded playbook can be viewed (colored JSON) or
+  downloaded; **Options reference**, a dialog in the UI's language with every option path per format, the symbolic
+  values and the Sandbox's failures and ids (`/api/playbook/sandbox`; the Markdown stays for LLMs).
+- **EU DSS cross-validation in a playbook:** `crossValidate` in `defaults` or on a step; the preview shows it (Run card),
+  results and evidence say "DSS unavailable" when DSS does not answer (the step still runs; it fails only with
+  `expect.dssAgrees`), and the validator warns about `dssAgrees` without `crossValidate` or on a refusal. The INDECOPI
+  playbook turns it on.
+- **Samples:** `docs/playbooks/sandbox-basics.json` (the old Playbook app's sample) and `indecopi-guia-v4.json` (the
+  automated part of INDECOPI's guide v4.0, Annex B, in English, tagged with the guide's item ids; written by
+  `tools/playbooks/indecopi.py`). `AUTHORING.md` is the kit to have an LLM write one; `options.md` is generated from
+  the TestBench.
 - **Built-in policies:** `strict`, `minimal`, `iofe` (signing) and `iofe`, `iofe-nonrepudiation` (validation), in the
   TestBench's policy fields and as names for the CLI's `--signing-policy` / `--policy` and `policy export --preset`.
 - **IOFE:** `IofePolicies.Signing` turns on the trust anchor, CRL nextUpdate, chain cryptography and TSA checks;
@@ -28,12 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused signatures*. CLI runs against the Sandbox now pass `--allow-ldap`, its HTTPS origin and `--tls-trust` with
   its root, so CRLs over HTTPS and LDAP work through the CLI too.
 - **TestBench and the new Sandbox cases:** the TSA choice *Sandbox, expired TSA* (`SandboxExpired`) and the CRL failure
-  `NoNextUpdate`; the INDECOPI script uses them, the SHA-1 CA and the signer without KeyUsage, so the expired TSA, the
+  `NoNextUpdate`; the INDECOPI playbook uses them, the SHA-1 CA and the signer without KeyUsage, so the expired TSA, the
   SHA-1 chain and the CRL without nextUpdate are automated steps.
 
 ### Removed — The Playbook app
 
-- `src/Apps/SimpleSign.Playbook` and its tests: its sample is now a certification script, run by the TestBench.
+- `src/Apps/SimpleSign.Playbook` and its tests: its sample is now a playbook, run by the TestBench's Playbook tab.
 
 ### Added — Signing controls you can turn on in the signing policy, an audit trail and a readable report
 
