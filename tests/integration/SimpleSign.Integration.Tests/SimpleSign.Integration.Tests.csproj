@@ -27,11 +27,14 @@
     <ProjectReference Include="..\..\..\src\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
     <ProjectReference Include="..\..\..\src\TrustFrameworks\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
     <ProjectReference Include="..\..\..\src\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil.Xades\SimpleSign.Brazil.IcpBrasil.Xades.csproj" />
+    <ProjectReference Include="..\..\..\src\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
     <ProjectReference Include="..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The INDECOPI list signer kept with the IOFE unit tests (see its Fixtures/README.md). -->
+    <Content Include="..\..\unit\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe.Tests\Fixtures\tsl-pe-signer.pem" Link="Fixtures\iofe\tsl-pe-signer.pem" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

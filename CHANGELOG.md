@@ -34,6 +34,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playbook `indecopi-guia-v4`: the `tsl` section uses the INDECOPI-layout list, with new steps for a TSA whose CA is
   listed as `unspecified` (`tsl-tsa-unspecified`, `tsl-tsa-unlisted`, `v-tsl-tsa-unspecified`).
 
+### Fixed — Trusted lists: INDECOPI's real list
+
+- `TrustedList` verifies lists whose `ds:Signature` element declares a namespace (INDECOPI's declares `xmlns:etsi`
+  there): `SignedXml` left those declarations out of the canonical SignedInfo, so INDECOPI's list was always refused as
+  "not signed by the scheme operator's certificate" — `IofeExtension.LoadAsync` could not load it. They are now
+  declared on SignedInfo too, which leaves its canonical form unchanged.
+- `TrustedListOptions.ExcludedExtendedKeyUsages` applies to end-entity certificates only: a CA certificate whose EKU
+  names an excluded usage (INDECOPI lists Core Andina's Certisign Application CA, CA:TRUE with codeSigning among its
+  EKUs) stays an anchor.
+
+### Added — IOFE: tests against INDECOPI's real list
+
+- A copy of INDECOPI's list (sequence 25) and of the certificate it is signed with (TSL Suscriptor, SHA-256
+  `bc32323c…12ed`, **to be confirmed with INDECOPI**) in the IOFE tests' fixtures, with offline tests: the list
+  verifies, the five time-stamping services (Camerfirma, Acepta, Llama.pe, BPO, FirmEasy) are anchors, no end-entity
+  code-signing certificate is. An integration test checks the same on the live list.
+
 ### Fixed — IOFE validation policy and INDECOPI's list version
 
 - `IofePolicies.Validation` / `ValidationNonRepudiation` accept a trusted list of version 3 (`TrustedLists/TLVersion`
