@@ -87,4 +87,12 @@ internal static partial class CadesLog
     [LoggerMessage(EventId = 7131, Level = LogLevel.Information,
         Message = "[{OperationId}] countersignature attribute added to signer {SignerIndex}")]
     internal static partial void CounterSignatureAdded(this ILogger logger, string operationId, int signerIndex);
+
+    [LoggerMessage(EventId = 7140, Level = LogLevel.Information,
+        Message = "[{OperationId}] Deferred CAdES signature prepared: {Size} bytes of signed attributes to sign, session of {SessionSize} bytes")]
+    internal static partial void DeferredPrepared(this ILogger logger, string operationId, int size, int sessionSize);
+
+    [LoggerMessage(EventId = 7141, Level = LogLevel.Information,
+        Message = "[{OperationId}] Completing deferred CAdES signature: external signature of {Size} bytes verified against the certificate")]
+    internal static partial void DeferredCompleting(this ILogger logger, string operationId, int size);
 }

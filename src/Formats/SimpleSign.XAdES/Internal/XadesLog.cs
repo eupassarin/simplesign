@@ -93,6 +93,16 @@ internal static partial class XadesLog
         Message = "Read-back verification of the produced signature {SignatureId}: signature={SignatureValid}, integrity={IntegrityValid}")]
     internal static partial void ReadBackVerified(this ILogger logger, string signatureId, bool signatureValid, bool integrityValid);
 
+    // ── Two-phase signing (703x) ─────────────────────────────────────
+
+    [LoggerMessage(EventId = 7030, Level = LogLevel.Information,
+        Message = "[{OperationId}] Deferred XAdES signature {SignatureId} prepared: {Size} bytes of canonical SignedInfo to sign, session of {SessionSize} bytes")]
+    internal static partial void DeferredPrepared(this ILogger logger, string operationId, string signatureId, int size, int sessionSize);
+
+    [LoggerMessage(EventId = 7031, Level = LogLevel.Information,
+        Message = "[{OperationId}] Completing deferred XAdES signature {SignatureId}: external signature of {Size} bytes verified against the certificate")]
+    internal static partial void DeferredCompleting(this ILogger logger, string operationId, string signatureId, int size);
+
     // ── Validation (705x) ────────────────────────────────────────────
 
     [LoggerMessage(EventId = 7050, Level = LogLevel.Information,
