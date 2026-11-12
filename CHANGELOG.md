@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — IOFE: INDECOPI's trusted list kept current
+
+- `IofeTrustedListSource` (`IofeExtension.LoadRefreshableAsync`, `new IofeExtension(source)`): reads INDECOPI's list
+  again on demand (`RefreshAsync`) or on a schedule (`StartAutoRefresh`). Each copy is verified like the first and
+  swapped in one step, so concurrent signers and validators see the old list or the new one. A copy that cannot be
+  downloaded or verified, or with a lower sequence number, is refused (`RefreshFailed`) and the last good copy is
+  served — from `CacheFile` after a restart, written atomically — until its NextUpdate passes, then no anchors.
+  `Current` gives the sequence number, issue time, NextUpdate and SHA-256; `Changed` gives the services added and
+  removed. It is an `ITimedTrustAnchorProvider` and `ITrustedListInfoProvider`.
+- `services.AddSimpleSignIofe(options, refreshInterval)` registers it with a hosted service that reads the list when the
+  host starts and every 6 hours by default (`Microsoft.Extensions.Hosting.Abstractions` dependency).
+
 ### Added — Sandbox: a trusted list in INDECOPI's layout
 
 - `/tl/iofe.xml`: a trusted list laid out as INDECOPI's `tsl-pe.xml` (ETSI TS 102 231 v3, TSLType `generic`, statuses
