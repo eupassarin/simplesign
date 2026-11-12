@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playbook `indecopi-guia-v4`: the `tsl` section uses the INDECOPI-layout list, with new steps for a TSA whose CA is
   listed as `unspecified` (`tsl-tsa-unspecified`, `tsl-tsa-unlisted`, `v-tsl-tsa-unspecified`).
 
+### Added — IOFE article
+
+- `docs/articles/iofe.md`: what IOFE and INDECOPI's list are (and how the list differs from EU lists), loading it with
+  the out-of-band signer and the cache, keeping it current, the `IofePolicies` against the guide, TSAs, running the
+  `indecopi-guia-v4` playbook against the Sandbox and exporting the evidence, the checklist. Linked from the README,
+  the package's README and PACKAGE.md (whose broken `indecopi-evidence.md` link now points to it); IOFE is ✅ in
+  `docs/conformance.md`.
+
 ### Added — IOFE: checklist of INDECOPI's accreditation guide
 
 - `docs/playbooks/indecopi-checklist.md`: every item of annex B of the *Guía de Acreditación de Aplicaciones de

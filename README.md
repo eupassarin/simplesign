@@ -129,6 +129,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Observability](docs/articles/observability.md) | Traces and metrics (`ActivitySource`/`Meter` named `SimpleSign`) |
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
 | [ICP-Brasil](docs/articles/icp-brasil.md) / [Fiscal XML](docs/articles/fiscal-xml.md) | Brazilian PKI and NF-e/eSocial signing |
+| [IOFE (Peru)](docs/articles/iofe.md) | INDECOPI's trusted list kept current, the policies of INDECOPI's accreditation guide, its checklist and playbook |
 | [CLI](docs/articles/cli.md) | `simplesign sign`, `validate`, `cades`, `xades`… |
 | [Signing agent](docs/articles/agent.md) / [TestBench](docs/articles/testbench.md) | Tray app with a local signing API; local web app to try every option |
 | [Standard coverage](docs/articles/coverage.md) | Every option with the clause that defines it, and what is not implemented |
