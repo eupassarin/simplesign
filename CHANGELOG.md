@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `SigningCertificateCheck`: will this certificate be accepted?
+
+- `SigningCertificateCheck.EvaluateAsync(certificate, SigningCertificateCheckOptions)` runs the checks the signers
+  make before signing — validity of the certificate and its chain, key usage, key and algorithms, chain to the trust
+  anchors (`SigningCertificate/ProspectiveCertificateChain`) and revocation of the chain (`IChainRevocationChecker`) —
+  without signing, and returns every finding with the `SigningErrorReason` a signer would refuse with. It never throws
+  for a refused certificate. Same code path as the signers (`SignerAcceptance`), not a copy.
+
 ### Added — PKCS#11: PIN warning flags of a token
 
 - `Pkcs11TokenInfo.IsPinCountLow`, `IsPinFinalTry`, `IsPinToBeChanged` and `IsUserPinInitialized`, read from

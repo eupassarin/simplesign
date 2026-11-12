@@ -130,6 +130,31 @@ The same in code: `SigningPolicy.Default.With("SigningCertificate/NotRevoked", n
 `WithSigningPolicy` is on the CAdES, XAdES, deferred and batch builders too. `WithChainRevocationChecker` replaces the
 checker used for the revocation check (by default it downloads through the builder's `IHttpClientProvider`).
 
+### Checking a certificate before signing
+
+`SigningCertificateCheck.EvaluateAsync` runs the signers' own checks without signing: a server can tell the user
+whether their certificate will be accepted before asking for the PIN. It covers everything above (validity of the
+certificate and its chain, key usage, key and algorithms, chain to the trust anchors, revocation of the chain) and
+never throws for a refused certificate:
+
+```csharp
+var check = await SigningCertificateCheck.EvaluateAsync(certificate, new SigningCertificateCheckOptions
+{
+    Chain = chain,
+    Policy = policy,                                   // the one the signer will use
+    TrustAnchors = [extension.TrustAnchorProviders[0]],
+    HashAlgorithm = HashAlgorithmName.SHA256,          // optional: the digest of the signature to be made
+});
+if (!check.IsAcceptable)
+{
+    return Refuse(check.Reason, check.Message);       // the SigningErrorReason the signer would throw with
+}
+```
+
+`Findings` lists every constraint not passed (FAIL, WARN, INFORM), where a signer stops at the first FAIL. `Time`
+moves the validity, trust and cryptographic checks; revocation is always checked as it is now. `SigningPolicy.Evaluate`
+remains the offline subset (the signing certificate alone, no chain, anchors or network).
+
 ### Audit trail
 
 `WithAuditSink(ISignatureAuditSink)` records every signature made or refused. `JsonLinesAuditSink` appends one JSON

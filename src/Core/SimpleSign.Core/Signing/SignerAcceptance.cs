@@ -35,21 +35,42 @@ internal static class SignerAcceptance
         IHttpClientProvider httpClientProvider,
         ILogger logger,
         ICollection<SigningWarning>? warnings,
+        CancellationToken cancellationToken) =>
+        await EvaluateSignerAsync(
+            certificate, chain, policy, trustAnchors, revocationChecker, httpClientProvider, logger,
+            findings => Apply(findings, warnings, logger), DateTimeOffset.UtcNow, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// The checks of <see cref="EnsureSignerAcceptableAsync"/>, handing each group of findings to
+    /// <paramref name="report"/> (which throws to stop, as a signer does, or keeps them all, as
+    /// <see cref="SigningCertificateCheck"/> does). <paramref name="now"/> is the time of the validity, trust and
+    /// cryptographic checks; revocation is always checked as it is now.
+    /// </summary>
+    /// <returns>The chain the checks used, leaf first (ending at a trust anchor when one was found).</returns>
+    internal static async Task<IReadOnlyList<X509Certificate2>> EvaluateSignerAsync(
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        SigningPolicy policy,
+        IReadOnlyList<ITrustAnchorProvider> trustAnchors,
+        IChainRevocationChecker? revocationChecker,
+        IHttpClientProvider httpClientProvider,
+        ILogger logger,
+        Action<IEnumerable<SigningPolicyFinding>> report,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
         var tree = policy.Tree;
-        Apply(policy.Evaluate(certificate, now), warnings, logger);
+        report(policy.Evaluate(certificate, now));
 
         bool caValidity = tree.Level("CACertificate/NotExpired") != ConstraintLevel.Ignore;
         bool certificateCrypto = HasOwnCryptographic(tree, "SigningCertificate") || HasOwnCryptographic(tree, "CACertificate");
         var anchorLevel = tree.Level(TrustConstraint);
+        var ordered = OrderChain(certificate, chain);
         if (!caValidity && !certificateCrypto && !policy.ChecksRevocation && anchorLevel == ConstraintLevel.Ignore)
         {
-            return;
+            return ordered;
         }
 
-        var ordered = OrderChain(certificate, chain);
         if (anchorLevel != ConstraintLevel.Ignore || (trustAnchors.Count > 0 && !CertificateFacts.IsSelfSigned(ordered[^1])))
         {
             var trusted = TrustedChain.Build(certificate, chain, trustAnchors, now, out string? error);
@@ -59,7 +80,7 @@ internal static class SignerAcceptance
             }
             else
             {
-                Apply([new SigningPolicyFinding(TrustConstraint, anchorLevel, SigningErrorReason.UntrustedRoot, error!)], warnings, logger);
+                report([new SigningPolicyFinding(TrustConstraint, anchorLevel, SigningErrorReason.UntrustedRoot, error!)]);
             }
         }
 
@@ -105,12 +126,14 @@ internal static class SignerAcceptance
             }
         }
 
-        Apply(findings, warnings, logger);
+        report(findings);
 
         if (policy.ChecksRevocation)
         {
-            await CheckRevocationAsync(ordered, tree, revocationChecker, httpClientProvider, logger, warnings, cancellationToken).ConfigureAwait(false);
+            await CheckRevocationAsync(ordered, tree, revocationChecker, httpClientProvider, logger, report, cancellationToken).ConfigureAwait(false);
         }
+
+        return ordered;
     }
 
     /// <summary>Checks the digest algorithm of the signature to be made against <paramref name="policy"/>.</summary>
@@ -184,7 +207,7 @@ internal static class SignerAcceptance
         IChainRevocationChecker? revocationChecker,
         IHttpClientProvider httpClientProvider,
         ILogger logger,
-        ICollection<SigningWarning>? warnings,
+        Action<IEnumerable<SigningPolicyFinding>> report,
         CancellationToken cancellationToken) =>
         // The stricter of the signing certificate's and the CA certificates' levels decides.
         CheckChainRevocationAsync(
@@ -195,11 +218,28 @@ internal static class SignerAcceptance
             {
                 NextUpdate = Stricter(tree.Level("SigningCertificate/CRLNextUpdatePresent"), tree.Level("CACertificate/CRLNextUpdatePresent")),
             },
-            revocationChecker, httpClientProvider, logger, warnings, cancellationToken);
+            revocationChecker, httpClientProvider, logger, report, cancellationToken);
 
     /// <summary>
     /// Checks the revocation of <paramref name="ordered"/> (leaf first, ending at its root) now, and applies
     /// <paramref name="notRevoked"/> to a revoked certificate and <paramref name="available"/> to an unknown status.
+    /// </summary>
+    internal static Task CheckChainRevocationAsync(
+        IReadOnlyList<X509Certificate2> ordered,
+        ConstraintLevel notRevoked,
+        ConstraintLevel available,
+        ChainRevocationFindings findings,
+        IChainRevocationChecker? revocationChecker,
+        IHttpClientProvider httpClientProvider,
+        ILogger logger,
+        ICollection<SigningWarning>? warnings,
+        CancellationToken cancellationToken) =>
+        CheckChainRevocationAsync(ordered, notRevoked, available, findings, revocationChecker, httpClientProvider, logger,
+            f => Apply(f, warnings, logger), cancellationToken);
+
+    /// <summary>
+    /// <see cref="CheckChainRevocationAsync(IReadOnlyList{X509Certificate2}, ConstraintLevel, ConstraintLevel, ChainRevocationFindings, IChainRevocationChecker?, IHttpClientProvider, ILogger, ICollection{SigningWarning}?, CancellationToken)"/>,
+    /// handing the findings to <paramref name="report"/>.
     /// </summary>
     internal static async Task CheckChainRevocationAsync(
         IReadOnlyList<X509Certificate2> ordered,
@@ -209,7 +249,7 @@ internal static class SignerAcceptance
         IChainRevocationChecker? revocationChecker,
         IHttpClientProvider httpClientProvider,
         ILogger logger,
-        ICollection<SigningWarning>? warnings,
+        Action<IEnumerable<SigningPolicyFinding>> report,
         CancellationToken cancellationToken)
     {
         if (notRevoked == ConstraintLevel.Ignore && available == ConstraintLevel.Ignore)
@@ -220,9 +260,9 @@ internal static class SignerAcceptance
         var last = ordered[^1];
         if (!CertificateFacts.IsSelfSigned(last))
         {
-            Apply([new SigningPolicyFinding(findings.Prefix + "RevocationDataAvailable", available, findings.UnknownReason,
+            report([new SigningPolicyFinding(findings.Prefix + "RevocationDataAvailable", available, findings.UnknownReason,
                 $"The revocation of the {findings.Chain} cannot be checked: the issuer of '{last.Subject}' was not given. " +
-                "Pass the whole chain, up to the root, or the trust anchors.")], warnings, logger);
+                "Pass the whole chain, up to the root, or the trust anchors.")]);
             return;
         }
 
@@ -233,20 +273,20 @@ internal static class SignerAcceptance
         switch (result.Status)
         {
             case ChainRevocationStatus.Revoked:
-                Apply([new SigningPolicyFinding(findings.Prefix + "NotRevoked", notRevoked, findings.RevokedReason,
-                    $"A certificate of the {findings.Chain} is revoked. " + string.Join(" ", result.Messages))], warnings, logger);
+                report([new SigningPolicyFinding(findings.Prefix + "NotRevoked", notRevoked, findings.RevokedReason,
+                    $"A certificate of the {findings.Chain} is revoked. " + string.Join(" ", result.Messages))]);
                 break;
             case ChainRevocationStatus.Good:
                 if (findings.NextUpdate != ConstraintLevel.Ignore && result.Crls.Any(crl => CrlEvaluator.ReadNextUpdate(crl) is null))
                 {
-                    Apply([new SigningPolicyFinding(findings.Prefix + "CRLNextUpdatePresent", findings.NextUpdate, findings.UnknownReason,
-                        $"A CRL of the {findings.Chain} has no nextUpdate: it cannot be told whether it is current.")], warnings, logger);
+                    report([new SigningPolicyFinding(findings.Prefix + "CRLNextUpdatePresent", findings.NextUpdate, findings.UnknownReason,
+                        $"A CRL of the {findings.Chain} has no nextUpdate: it cannot be told whether it is current.")]);
                 }
 
                 break;
             default:
-                Apply([new SigningPolicyFinding(findings.Prefix + "RevocationDataAvailable", available, findings.UnknownReason,
-                    $"The revocation status of the {findings.Chain} could not be established. " + string.Join(" ", result.Messages))], warnings, logger);
+                report([new SigningPolicyFinding(findings.Prefix + "RevocationDataAvailable", available, findings.UnknownReason,
+                    $"The revocation status of the {findings.Chain} could not be established. " + string.Join(" ", result.Messages))]);
                 break;
         }
     }
