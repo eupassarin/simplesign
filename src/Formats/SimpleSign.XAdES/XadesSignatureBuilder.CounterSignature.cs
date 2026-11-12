@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml;
@@ -113,7 +114,50 @@ internal static partial class XadesSignatureBuilder
     }
 
     /// <summary>Writes the signature value into a countersignature made by <see cref="PrepareCounterSignature"/>.</summary>
-    internal static byte[] CompleteCounterSignature(byte[] preparedXml, string signatureId, byte[] signatureValue)
+    internal static byte[] CompleteCounterSignature(byte[] preparedXml, string signatureId, byte[] signatureValue) =>
+        SetSignatureValue(preparedXml, signatureId, signatureValue);
+
+    /// <summary>
+    /// The octets ds:SignatureValue holds for a raw signature made by a key held elsewhere. Such a signer
+    /// returns ECDSA as an ASN.1 DER SEQUENCE { r, s } (the <see cref="IExternalSigner"/> contract), while
+    /// XMLDSig writes r and s as two fixed-length integers one after the other (W3C XMLDSig Core 1.1 §6.4.3).
+    /// An RSA signature is already in its XMLDSig form.
+    /// </summary>
+    /// <param name="rawSignature">The signature, already verified against <paramref name="certificate"/>.</param>
+    /// <param name="certificate">The signer certificate.</param>
+    internal static byte[] XmlSignatureValue(byte[] rawSignature, X509Certificate2 certificate)
+    {
+        using ECDsa? ecdsa = certificate.GetECDsaPublicKey();
+        if (ecdsa is null)
+        {
+            return rawSignature;
+        }
+
+        int fieldSize = (ecdsa.KeySize + 7) / 8;
+        var reader = new AsnReader(rawSignature, AsnEncodingRules.DER);
+        AsnReader sequence = reader.ReadSequence();
+        ReadOnlySpan<byte> r = sequence.ReadIntegerBytes().Span.TrimStart((byte)0);
+        ReadOnlySpan<byte> s = sequence.ReadIntegerBytes().Span.TrimStart((byte)0);
+        sequence.ThrowIfNotEmpty();
+        reader.ThrowIfNotEmpty();
+        if (r.Length > fieldSize || s.Length > fieldSize)
+        {
+            throw new SigningException(
+                "The ECDSA signature does not fit the curve of the signing certificate.",
+                SigningErrorReason.ExternalSignerReturnedInvalidSignature);
+        }
+
+        byte[] value = new byte[fieldSize * 2];
+        r.CopyTo(value.AsSpan(fieldSize - r.Length));
+        s.CopyTo(value.AsSpan((fieldSize * 2) - s.Length));
+        return value;
+    }
+
+    /// <summary>
+    /// Writes the signature value into the ds:Signature with the given Id of a document assembled with an
+    /// empty ds:SignatureValue: a countersignature, or a signature prepared in the first of two phases.
+    /// </summary>
+    internal static byte[] SetSignatureValue(byte[] preparedXml, string signatureId, byte[] signatureValue)
     {
         var doc = new XmlDocument { PreserveWhitespace = true };
         doc.Load(new MemoryStream(preparedXml));
