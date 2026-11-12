@@ -70,6 +70,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `AsCertification` refuses a document that is already signed.
 - A contract test keeps the deferred builders of the three formats from falling behind the one-call builders.
 
+### Added — Agent: certificates by country or trust framework
+
+- `GET /api/certificates?country=XX` lists the certificates that chain to the trust anchors (with the intermediates)
+  of that country's registered `ICountryExtension`s; `?trust=icp-brasil` or `?trust=govbr` names one framework, and
+  `?signingOnly=true` keeps those valid now with digitalSignature or nonRepudiation. The chain is checked with
+  `SigningCertificateCheck`. An unknown country or framework answers 400 with the known ones. `filterIcpBrasil=true`
+  keeps its former meaning (issuer name or ICP-Brasil policy OID).
+
+### Added — Traces and metrics (`SimpleSignTelemetry`)
+
+- An `ActivitySource` and a `Meter` named `SimpleSign` (constants in `SimpleSign.Core.Diagnostics.SimpleSignTelemetry`):
+  activities, counters and duration histograms for signing (format, requested/achieved level, outcome, reason — every
+  signer, deferred included), TSA requests, OCSP requests, CRL fetches (cache hit), trusted-list loading and
+  validation (format, indication). Tags hold no payload, certificate data, full URL or personal data. Nothing is
+  measured when nobody listens. See `docs/articles/observability.md`.
+
+### Added — Sandbox: signers with a chosen subject
+
+- `POST /api/certificates/custom` issues a signing certificate under the intermediate CA with a subject given as a DN
+  string or a list of attributes (`CN`, `serialNumber`, `C`, `O`, `OU`, `L`, `ST`, `T`, `G`, `SN`,
+  `organizationIdentifier`; checked for length and characters), an optional key type, key usage and validity. It is
+  listed with the other certificates (`custom-…`): revocable, downloadable as PFX/CER, answered by OCSP and the CRLs;
+  `POST /api/reset` removes it.
+- `--signing-country XX` (or `none`) sets the country of the seeded signers' subject when an environment is created;
+  `BR` stays the default and existing environments keep theirs.
+
+### Added — `DataToSignInspector`: what is about to be signed; the Agent signs only signature data
+
+- `DataToSignInspector.Inspect(data, certificate)` recognizes the two `ExternalSigningPayloadKind`s: DER CMS signed
+  attributes (one `contentType`, one `messageDigest`, and a `signingCertificateV2`/`signingCertificate` that must name
+  the given certificate) and a canonical XML-DSig `SignedInfo` (no declaration or DTD, its methods, at least one
+  reference with a digest). It returns the kind, the digests with their algorithm (`DataToSignDigest.ToShortString()`
+  for a consent dialog) or the reason for refusing (`DataToSignRefusal`).
+- **Behavior change — SimpleSign.Agent:** `POST /api/sign` now refuses, with 400 and before asking the user, any item
+  that is not signed attributes or a `SignedInfo` (a raw hash, a document, bytes of another protocol), and the
+  confirmation dialog shows the digest being signed. Token signatures carry the detected payload kind. The self-test
+  signs real signed attributes.
+
+### Added — `SigningCertificateCheck`: will this certificate be accepted?
+
+- `SigningCertificateCheck.EvaluateAsync(certificate, SigningCertificateCheckOptions)` runs the checks the signers
+  make before signing — validity of the certificate and its chain, key usage, key and algorithms, chain to the trust
+  anchors (`SigningCertificate/ProspectiveCertificateChain`) and revocation of the chain (`IChainRevocationChecker`) —
+  without signing, and returns every finding with the `SigningErrorReason` a signer would refuse with. It never throws
+  for a refused certificate. Same code path as the signers (`SignerAcceptance`), not a copy.
+
+### Added — PKCS#11: PIN warning flags of a token
+
+- `Pkcs11TokenInfo.IsPinCountLow`, `IsPinFinalTry`, `IsPinToBeChanged` and `IsUserPinInitialized`, read from
+  `CK_TOKEN_INFO.flags` by `Pkcs11Signer.ListTokens` with `IsPinLocked`: warn the user before a wrong PIN locks the
+  token. Init-only properties; the positional constructor is unchanged.
+
+### Added — `AuditChain`: the audit hash chain for any store
+
+- `AuditChain.Canonicalize(SignatureAuditEvent)`, `AuditChain.Link(previousHash, content)`, `AuditChain.Append`,
+  `AuditChain.Genesis`, `AuditChain.Follows` and `AuditChain.Verify(IEnumerable<AuditChainRecord>)`: the content and
+  SHA-256 chaining of `JsonLinesAuditSink`, public so that a database-backed `ISignatureAuditSink` produces the same
+  chain and can be checked the same way. `JsonLinesAuditSink` uses them; its file format is unchanged and existing logs
+  keep verifying.
+
 ### Fixed — XAdES with an external ECDSA key
 
 - `XadesSigner…WithExternalSigner` (and `XadesSigner.CounterSign` with an external signer) wrote the ECDSA signature

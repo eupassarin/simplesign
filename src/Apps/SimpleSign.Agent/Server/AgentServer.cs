@@ -164,7 +164,20 @@ internal sealed class AgentServer : IAsyncDisposable
             {
                 string source = request.Query["source"].ToString() is { Length: > 0 } s ? s.ToLowerInvariant() : "all";
                 bool icp = bool.TryParse(request.Query["filterIcpBrasil"], out bool f) && f;
-                var list = await _signer.ListAsync(source, icp, context.RequestAborted);
+                bool signingOnly = bool.TryParse(request.Query["signingOnly"], out bool s2) && s2;
+                IReadOnlyList<TrustFramework>? frameworks;
+                try
+                {
+                    frameworks = _services.TrustFrameworks.Select(request.Query["country"].ToString(), request.Query["trust"].ToString());
+                }
+                catch (ArgumentException ex)
+                {
+                    await WriteErrorAsync(response, 400, L.T("api.unknownTrust", ex.Message,
+                        string.Join(", ", _services.TrustFrameworks.All.Select(t => $"{t.Id} ({t.Extension.Value.RegionCode})"))));
+                    return;
+                }
+
+                var list = await _signer.ListAsync(new CertificateQuery(source, icp, frameworks, signingOnly), context.RequestAborted);
                 _services.Log.Add("Agent", L.T("log.listed", label, list.Count));
                 await WriteAsync(response, list, AgentJsonContext.Default.ListAgentCertificate);
                 return;
@@ -209,6 +222,11 @@ internal sealed class AgentServer : IAsyncDisposable
         catch (KeyNotFoundException ex)
         {
             await WriteErrorAsync(response, 404, ex.Message);
+        }
+        catch (AgentRequestException ex)
+        {
+            _services.Log.Add("Agent", $"{label}: {ex.Message}", isError: true);
+            await WriteErrorAsync(response, 400, ex.Message);
         }
 #pragma warning disable CA1031 // The agent must answer every request.
         catch (Exception ex) when (ex is not OperationCanceledException)

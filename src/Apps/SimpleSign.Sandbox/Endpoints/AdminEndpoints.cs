@@ -65,6 +65,28 @@ public sealed record PkiView(IReadOnlyList<CertificateView> Authorities, Certifi
 /// <summary>A revocation: the reason (an <see cref="X509RevocationReason"/> name) and where it is published.</summary>
 public sealed record RevokeRequest(string? Reason, RevocationPublication Publication = RevocationPublication.Both);
 
+/// <summary>
+/// A signing certificate to issue with a chosen subject: <see cref="Subject"/> as a DN string, or <see cref="Rdns"/>
+/// (most specific first, as a DN string reads). Accepted attributes: CN (required), serialNumber, C, O, OU, L, ST, T,
+/// G/GN, SN, organizationIdentifier; 1 to 64 characters each, 16 at most.
+/// </summary>
+/// <param name="Subject">The subject, such as <c>CN=Juan Pérez, serialNumber=PNOPE-12345678, C=PE</c>.</param>
+/// <param name="Rdns">The subject as attributes, instead of <paramref name="Subject"/>.</param>
+/// <param name="KeyType">The key; default RSA 2048.</param>
+/// <param name="KeyUsage">
+/// Key usages (<c>DigitalSignature</c>, <c>NonRepudiation</c>, <c>KeyEncipherment</c>, <c>DataEncipherment</c>,
+/// <c>KeyAgreement</c>); default digitalSignature and nonRepudiation; an empty list leaves the extension out.
+/// </param>
+/// <param name="Title">What the UI shows; default the CN.</param>
+/// <param name="ValidityDays">Days of validity from now, 1 to 825; default 365.</param>
+public sealed record CustomCertificateRequest(
+    string? Subject = null,
+    IReadOnlyList<SubjectAttribute>? Rdns = null,
+    SandboxKeyType? KeyType = null,
+    IReadOnlyList<string>? KeyUsage = null,
+    string? Title = null,
+    int? ValidityDays = null);
+
 /// <summary>The API of the UI: the PKI, revocations, failures and the request log.</summary>
 internal static class AdminEndpoints
 {
@@ -89,6 +111,7 @@ internal static class AdminEndpoints
             [.. pki.Certificates.Select(View)]));
         admin.MapPost("/certificates/short-lived", (int? seconds, SandboxPki pki) =>
             Results.File(pki.IssueShortLived(TimeSpan.FromSeconds(Math.Clamp(seconds ?? 3, 1, 3600))), "application/x-pkcs12", "short-lived.pfx"));
+        admin.MapPost("/certificates/custom", (CustomCertificateRequest request, SandboxPki pki) => IssueCustom(request, pki));
         admin.MapGet("/certificates/{id}", (string id, SandboxPki pki) =>
             Found(pki, id, () => Results.Ok(View(pki.Certificate(id)))));
         admin.MapGet("/certificates/{id}/pfx", (string id, SandboxPki pki) =>
@@ -167,6 +190,60 @@ internal static class AdminEndpoints
             // What a client puts in OutboundHttpPolicy.LoopbackOrigins to reach this Sandbox on this machine.
             [.. new[] { pki.BaseUrl, pki.HttpsBaseUrl, pki.LdapBaseUrl }.Select(u => u.GetLeftPart(UriPartial.Authority))],
             new TrustedListsInfo(Url("tl/lotl.xml"), Url("tl/tl.xml"), Url("tl/lotl-signer.pem"), Url("tl/tl-signer.pem"), SandboxTrustedLists.Territory));
+    }
+
+    private const X509KeyUsageFlags LeafUsages = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation
+        | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment | X509KeyUsageFlags.KeyAgreement;
+
+    internal static IResult IssueCustom(CustomCertificateRequest request, SandboxPki pki)
+    {
+        if ((request.Subject is { Length: > 0 }) == (request.Rdns is { Count: > 0 }))
+        {
+            return Results.BadRequest(new { error = "Give either subject (a DN string) or rdns." });
+        }
+
+        if (request.ValidityDays is < 1 or > 825)
+        {
+            return Results.BadRequest(new { error = "validityDays must be between 1 and 825." });
+        }
+
+        if (request.Title is { Length: > 128 })
+        {
+            return Results.BadRequest(new { error = "title may have 128 characters at most." });
+        }
+
+        X509KeyUsageFlags? usage = null;
+        if (request.KeyUsage is { } names)
+        {
+            var flags = X509KeyUsageFlags.None;
+            foreach (string name in names)
+            {
+                if (!Enum.TryParse<X509KeyUsageFlags>(name, ignoreCase: true, out var flag) || flag == X509KeyUsageFlags.None || (flag & ~LeafUsages) != 0)
+                {
+                    return Results.BadRequest(new { error = $"Unknown or CA-only key usage '{name}': use DigitalSignature, NonRepudiation, KeyEncipherment, DataEncipherment or KeyAgreement." });
+                }
+
+                flags |= flag;
+            }
+
+            usage = flags;
+        }
+
+        try
+        {
+            var subject = request.Subject is { Length: > 0 } dn ? SandboxSubject.Parse(dn) : SandboxSubject.Build(request.Rdns!);
+            var issued = pki.IssueCustom(subject, request.Title, request.KeyType ?? SandboxKeyType.Rsa2048, usage,
+                TimeSpan.FromDays(request.ValidityDays ?? 365));
+            return Results.Created($"/api/certificates/{issued.Id}", View(issued));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
     }
 
     private static IResult Found(SandboxPki pki, string id, Func<IResult> action) =>

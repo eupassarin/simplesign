@@ -27,6 +27,9 @@ internal sealed class AgentServices(SettingsStore settings, IDialogService dialo
 
     public IDialogService Dialogs { get; } = dialogs;
 
+    /// <summary>The trust frameworks of <c>?country=</c> and <c>?trust=</c>.</summary>
+    public TrustFrameworks TrustFrameworks { get; init; } = TrustFrameworks.Default;
+
     public ActivityLog Log { get; } = new();
 
     /// <summary>Signatures made since the agent started.</summary>

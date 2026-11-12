@@ -83,6 +83,9 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>An intermediate CA whose certificate the root signed with SHA-1 (a hash no longer accepted for signatures).</summary>
     public const string Sha1IntermediateId = "intermediate-sha1";
 
+    /// <summary>How many short-lived signers and TSAs the OCSP responder keeps answering good for (the latest ones).</summary>
+    public const int ShortLivedKept = 256;
+
     /// <summary>The LDAP base DN of a CA's entry: <c>cn={id},o=sandbox</c>.</summary>
     public static string LdapDn(string caId) => $"cn={caId},o=sandbox";
 
@@ -305,7 +308,9 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>
     /// A signer issued by the intermediate CA that is valid for <paramref name="lifetime"/> from now, as a
     /// PKCS#12 file with its chain: to make a signature whose certificate has expired by validation time
-    /// (a correct client refuses to sign with an expired certificate). Not kept in the environment. Its validity starts
+    /// (a correct client refuses to sign with an expired certificate). Not listed with the environment's certificates,
+    /// but its serial number is kept (the last <see cref="ShortLivedKept"/>, across restarts) so the intermediate CA's
+    /// OCSP responder answers good for it, as a real CA does for what it issued; the CRL does not list it. Its validity starts
     /// two hours back, before the CRLs and OCSP responses it will be checked against (their thisUpdate is an hour back).
     /// </summary>
     public byte[] IssueShortLived(TimeSpan lifetime)
@@ -315,8 +320,9 @@ internal sealed class SandboxPki : IDisposable
             var now = DateTimeOffset.UtcNow;
             var seed = new SeedDefinition("short-lived", "Short-lived signer", "");
             var pair = IssueLeaf(seed, now.AddHours(-2), now.Add(lifetime));
-            Save();
             using var certificate = X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
+            RememberShortLived(seed.IssuerId, certificate);
+            Save();
             var collection = new X509Certificate2Collection { certificate, Intermediate, Root };
             return collection.Export(X509ContentType.Pkcs12, PfxPassword)!;
         }
@@ -325,8 +331,9 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>
     /// A TSA certificate issued by the intermediate CA that is valid for <paramref name="lifetime"/> from now, with its
     /// key: the TSA of <c>/tsa/short-lived</c>, whose tokens outlive its certificate (past signature validation, where a
-    /// later archive time-stamp proves the token existed while the certificate was valid). Not kept in the environment;
-    /// its validity starts two hours back, as for <see cref="IssueShortLived"/>.
+    /// later archive time-stamp proves the token existed while the certificate was valid). Not listed with the environment's
+    /// certificates, but, as for <see cref="IssueShortLived"/>, its serial number is kept so the intermediate CA's OCSP
+    /// responder answers good for it; its validity starts two hours back.
     /// </summary>
     public X509Certificate2 IssueShortLivedTsa(TimeSpan lifetime)
     {
@@ -335,9 +342,72 @@ internal sealed class SandboxPki : IDisposable
             var now = DateTimeOffset.UtcNow;
             var seed = new SeedDefinition("tsa-short-lived", "Short-lived TSA", "", Usage: CertificateUsage.Timestamping);
             var pair = IssueLeaf(seed, now.AddHours(-2), now.Add(lifetime));
+            var certificate = X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
+            RememberShortLived(seed.IssuerId, certificate);
             Save();
-            return X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
+            return certificate;
         }
+    }
+
+    /// <summary>The id prefix of the certificates issued on request (<see cref="IssueCustom"/>).</summary>
+    public const string CustomPrefix = "custom-";
+
+    /// <summary>How many certificates issued on request an environment keeps (until <see cref="Reset"/>).</summary>
+    public const int MaxCustom = 200;
+
+    /// <summary>Whether <paramref name="id"/> is a certificate issued on request.</summary>
+    public static bool IsCustom(string id) => id.StartsWith(CustomPrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Issues a signing certificate with <paramref name="subject"/> under the intermediate CA, listed with the others:
+    /// revocable, downloadable as PFX and CER, answered by the CA's OCSP responder and CRLs. Kept until <see cref="Reset"/>.
+    /// </summary>
+    /// <param name="subject">The subject, already checked (<see cref="SandboxSubject"/>).</param>
+    /// <param name="title">What the UI shows; null for the subject's CN.</param>
+    /// <param name="keyType">The key.</param>
+    /// <param name="keyUsage">The key usage; null for digitalSignature and nonRepudiation.</param>
+    /// <param name="validity">How long it is valid from now (its validity starts a day back).</param>
+    /// <exception cref="InvalidOperationException">The environment already has <see cref="MaxCustom"/> of them.</exception>
+    public SandboxCertificate IssueCustom(X500DistinguishedName subject, string? title, SandboxKeyType keyType, X509KeyUsageFlags? keyUsage, TimeSpan validity)
+    {
+        ArgumentNullException.ThrowIfNull(subject);
+        lock (_gate)
+        {
+            if (_state.Certificates.Count(c => IsCustom(c.Id)) >= MaxCustom)
+            {
+                throw new InvalidOperationException($"The environment already has {MaxCustom} certificates issued on request; reset it to remove them.");
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            string id = CustomPrefix + Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();
+            string name = title is { Length: > 0 } ? title : subject.EnumerateRelativeDistinguishedNames()
+                .FirstOrDefault(r => !r.HasMultipleElements && r.GetSingleElementType().Value == "2.5.4.3")?.GetSingleElementValue() ?? subject.Name;
+            var seed = new SeedDefinition(id, name, $"Issued on request: {subject.Name}", keyType, KeyUsage: keyUsage);
+            _state = _state with
+            {
+                Certificates = [.. _state.Certificates, new StoredCertificate
+                {
+                    Id = id,
+                    Title = name,
+                    Description = seed.Description,
+                    KeyType = keyType,
+                    Usage = CertificateUsage.Signing,
+                    Pointers = seed.Pointers,
+                    Profile = seed.Profile,
+                    Pair = IssueLeaf(seed, now.AddDays(-1), now.Add(validity), subject),
+                    Publication = RevocationPublication.Both,
+                }],
+            };
+            Republish();
+            return _certificates.Single(c => c.Id == id);
+        }
+    }
+
+    /// <summary>Keeps the serial number of a short-lived certificate (the last <see cref="ShortLivedKept"/>) for the OCSP responder.</summary>
+    private void RememberShortLived(string issuerId, X509Certificate2 certificate)
+    {
+        var entry = new StoredSerial(issuerId, Convert.ToHexString(TrimSerial(certificate.SerialNumberBytes.Span)));
+        _state = _state with { ShortLived = [.. _state.ShortLived.Append(entry).TakeLast(ShortLivedKept)] };
     }
 
     /// <summary>The chain of a certificate, from its issuer up to the root.</summary>
@@ -384,7 +454,7 @@ internal sealed class SandboxPki : IDisposable
             _state = _state with
             {
                 Faults = new SandboxFaults(),
-                Certificates = [.. _state.Certificates.Select(c => c with
+                Certificates = [.. _state.Certificates.Where(c => !IsCustom(c.Id)).Select(c => c with
                 {
                     RevokedAt = c.RevokedByDefault ? revokedAt : null,
                     RevocationReason = c.RevokedByDefault ? nameof(X509RevocationReason.KeyCompromise) : null,
@@ -424,7 +494,8 @@ internal sealed class SandboxPki : IDisposable
 
     /// <summary>
     /// The status of a serial number, as the OCSP responder of <paramref name="caId"/> answers it
-    /// (revocations published in the CRL only are not known to it).
+    /// (revocations published in the CRL only are not known to it). The short-lived signers and TSAs it issued lately
+    /// (see <see cref="IssueShortLived"/>) are good; a serial number it never issued is unknown.
     /// </summary>
     public RevocationStatus OcspStatus(string caId, ReadOnlySpan<byte> serial)
     {
@@ -439,8 +510,13 @@ internal sealed class SandboxPki : IDisposable
             }
 
             var certificate = _certificates.FirstOrDefault(c => c.IssuerId == caId && TrimSerial(c.Certificate.SerialNumberBytes.Span).AsSpan().SequenceEqual(wanted));
-            return certificate is null ? RevocationStatus.Unknown
-                : certificate.RevokedAt is { } revokedAt && certificate.Publication != RevocationPublication.CrlOnly
+            if (certificate is null)
+            {
+                string hex = Convert.ToHexString(wanted);
+                return _state.ShortLived.Any(s => s.IssuerId == caId && s.Serial == hex) ? RevocationStatus.Good : RevocationStatus.Unknown;
+            }
+
+            return certificate.RevokedAt is { } revokedAt && certificate.Publication != RevocationPublication.CrlOnly
                     ? new RevocationStatus(true, revokedAt, ParseReason(certificate.RevocationReason))
                     : RevocationStatus.Good;
         }
@@ -534,6 +610,7 @@ internal sealed class SandboxPki : IDisposable
             UntrustedTsa = Pair(untrusted, untrustedKey),
             RogueOcspResponder = Pair(rogue, rogueKey),
             NextSerial = serial,
+            SigningCountry = options.SigningCountry is { Length: 2 } country && country.All(char.IsAsciiLetterUpper) ? country : "",
         };
     }
 
@@ -734,7 +811,7 @@ internal sealed class SandboxPki : IDisposable
         };
     }
 
-    private StoredKeyPair IssueLeaf(SeedDefinition seed, DateTimeOffset from, DateTimeOffset to)
+    private StoredKeyPair IssueLeaf(SeedDefinition seed, DateTimeOffset from, DateTimeOffset to, X500DistinguishedName? subjectName = null)
     {
         var issuer = Authority(seed.IssuerId);
         using AsymmetricAlgorithm key = seed.KeyType switch
@@ -749,9 +826,9 @@ internal sealed class SandboxPki : IDisposable
         };
         string holder = seed.Title.Split(" (")[0];
         var name = new X500DistinguishedNameBuilder();
-        if (seed.Usage == CertificateUsage.Signing)
+        if (seed.Usage == CertificateUsage.Signing && _state.SigningCountry.Length == 2)
         {
-            name.AddCountryOrRegion("BR");
+            name.AddCountryOrRegion(_state.SigningCountry);
         }
 
         name.AddOrganizationName("SimpleSign Sandbox");
@@ -767,7 +844,7 @@ internal sealed class SandboxPki : IDisposable
             CertificateUsage.TlsServer => BaseUrl.Host,
             _ => holder,
         });
-        var subject = name.Build();
+        var subject = subjectName ?? name.Build();
         var request = key switch
         {
             RSA rsa => new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1),

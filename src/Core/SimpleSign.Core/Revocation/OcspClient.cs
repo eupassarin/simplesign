@@ -95,6 +95,28 @@ public sealed class OcspClient : IOcspClient
     {
         ArgumentNullException.ThrowIfNull(cert);
         ArgumentException.ThrowIfNullOrWhiteSpace(ocspUrl);
+        var telemetry = Diagnostics.Telemetry.Ocsp.Start();
+        string? host = telemetry.IsActive ? Diagnostics.Telemetry.HostOf(ocspUrl) : null;
+        try
+        {
+            var result = await FetchOcspResponseCoreAsync(cert, issuerCert, ocspUrl, ct).ConfigureAwait(false);
+            telemetry.Complete(result.IsValid ? Diagnostics.SimpleSignTelemetry.Outcomes.Success : Diagnostics.SimpleSignTelemetry.Outcomes.Revoked,
+                [new(Diagnostics.SimpleSignTelemetry.Tags.ServerAddress, host)]);
+            return result;
+        }
+        catch (Exception)
+        {
+            telemetry.Complete(Diagnostics.SimpleSignTelemetry.Outcomes.Error, [new(Diagnostics.SimpleSignTelemetry.Tags.ServerAddress, host)]);
+            throw;
+        }
+    }
+
+    private async Task<OcspFetchResult> FetchOcspResponseCoreAsync(
+        X509Certificate2 cert,
+        X509Certificate2? issuerCert,
+        string ocspUrl,
+        CancellationToken ct)
+    {
         byte[] ocspRequest = BuildOcspRequest(cert, issuerCert);
         using var content = new ByteArrayContent(ocspRequest);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/ocsp-request");

@@ -126,6 +126,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Deferred signing](docs/articles/deferred-signing.md) | Two-phase signing (PAdES, CAdES, XAdES) for keys on another machine |
 | [Remote signing](docs/articles/remote-signing.md) | The generic interface for keys outside the engine |
 | [PKCS#11](docs/articles/pkcs11.md) / [Cloud signing](docs/articles/cloud-signing.md) | Tokens, HSMs and cloud certificates |
+| [Observability](docs/articles/observability.md) | Traces and metrics (`ActivitySource`/`Meter` named `SimpleSign`) |
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
 | [ICP-Brasil](docs/articles/icp-brasil.md) / [Fiscal XML](docs/articles/fiscal-xml.md) | Brazilian PKI and NF-e/eSocial signing |
 | [CLI](docs/articles/cli.md) | `simplesign sign`, `validate`, `cades`, `xades`… |

@@ -79,6 +79,39 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
     }
 
     [Fact]
+    public async Task CustomCertificate_ChosenSubject_IssuedDownloadableAndRevocable()
+    {
+        using var intermediate = X509CertificateLoader.LoadCertificate(await Http.GetByteArrayAsync("aia/intermediate.cer"));
+        using var issued = await Http.PostAsJsonAsync("api/certificates/custom",
+            new CustomCertificateRequest(Rdns: [new("CN", "Juan Pérez"), new("serialNumber", "PNOPE-12345678"), new("C", "PE")],
+                KeyType: SimpleSign.Sandbox.Pki.SandboxKeyType.EcdsaP256, KeyUsage: ["NonRepudiation"]), SandboxFixture.Json);
+        issued.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var view = (await issued.Content.ReadFromJsonAsync<CertificateView>(SandboxFixture.Json))!;
+
+        using var leaf = X509CertificateLoader.LoadCertificate(await Http.GetByteArrayAsync($"api/certificates/{view.Id}/cer"));
+        (await Http.GetByteArrayAsync($"api/certificates/{view.Id}/pfx")).ShouldNotBeEmpty();
+        (await Http.PostAsJsonAsync($"api/certificates/{view.Id}/revoke", new RevokeRequest("KeyCompromise"))).EnsureSuccessStatusCode();
+
+        leaf.Subject.ShouldContain("SERIALNUMBER=PNOPE-12345678", Case.Insensitive);
+        leaf.Extensions.OfType<X509KeyUsageExtension>().Single().KeyUsages.ShouldBe(X509KeyUsageFlags.NonRepudiation);
+        CrlEvaluator.Evaluate(leaf, await Http.GetByteArrayAsync("crl/intermediate.crl"), intermediate, DateTimeOffset.UtcNow).ShouldBe(CrlStatus.Revoked);
+    }
+
+    [Theory]
+    [InlineData("""{"subject":"CN=Ana, E=ana@example.com"}""")]
+    [InlineData("""{"subject":"O=No common name"}""")]
+    [InlineData("""{"subject":"CN=Ana","rdns":[{"type":"CN","value":"Ana"}]}""")]
+    [InlineData("""{"subject":"CN=Ana","keyUsage":["KeyCertSign"]}""")]
+    [InlineData("""{"subject":"CN=Ana","validityDays":5000}""")]
+    [InlineData("""{"rdns":[{"type":"C","value":"Peru"},{"type":"CN","value":"Ana"}]}""")]
+    public async Task CustomCertificate_InvalidRequest_IsRefused(string body)
+    {
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        (await Http.PostAsync("api/certificates/custom", content)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Revoke_UnknownReason_IsRefused() =>
         (await Http.PostAsJsonAsync("api/certificates/rsa-2048/revoke", new RevokeRequest("Bored"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 

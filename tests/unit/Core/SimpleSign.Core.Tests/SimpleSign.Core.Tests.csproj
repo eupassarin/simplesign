@@ -34,6 +34,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Signing/Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
     <ProjectReference Include="..\..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
     <ProjectReference Include="..\..\..\shared\SimpleSign.TestFixtures\SimpleSign.TestFixtures.csproj" />

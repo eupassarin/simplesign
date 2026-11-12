@@ -194,15 +194,13 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
                     }
                 }
 
-                tokens.Add(new Pkcs11TokenInfo(
+                tokens.Add(Pkcs11TokenInfo.FromFlags(
                     slot,
                     info.Label,
                     info.Manufacturer,
                     info.Model,
                     info.SerialNumber,
-                    IsLoginRequired: (info.Flags & CkConstants.CkfLoginRequired) != 0,
-                    HasProtectedAuthenticationPath: (info.Flags & CkConstants.CkfProtectedAuthenticationPath) != 0,
-                    IsPinLocked: (info.Flags & CkConstants.CkfUserPinLocked) != 0,
+                    info.Flags,
                     certificates.Select(c => new Pkcs11CertificateInfo(c.Label, c.Id, c.Certificate)).ToList().AsReadOnly()));
             }
 

@@ -43,10 +43,12 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
         // CERTIFICATE_CHAIN_GENERAL_FAILURE). An "unknown" answer is not acceptable revocation data, and the CRL is.
         ["fault:ocsp-unknown"] = "SimpleSign uses the valid CRL when OCSP answers unknown; DSS does not",
 
-        // A certificate issued on demand, expired by validation time; the Sandbox's OCSP responder does not know it.
-        // EN 319 102-1 §5.2.6: an expired signing certificate with no proof of existence is OUT_OF_BOUNDS_NO_POE,
-        // which SimpleSign gives; DSS looks at the revocation data first (CERTIFICATE_CHAIN_GENERAL_FAILURE).
-        ["sample:expired"] = "SimpleSign reports the expiry (OUT_OF_BOUNDS_NO_POE); DSS the unknown OCSP status",
+        // A certificate issued on demand, expired by validation time. EN 319 102-1 §5.2.6: an expired signing certificate
+        // with no proof of existence is OUT_OF_BOUNDS_NO_POE, which SimpleSign gives; DSS looked at the revocation data
+        // first (CERTIFICATE_CHAIN_GENERAL_FAILURE) while the Sandbox's OCSP responder answered "unknown" for it. It now
+        // answers good for the short-lived certificates it issues, so DSS may agree: remove this entry once a run with
+        // DSS shows no difference (until then it does no harm: an entry that no longer differs is never reported).
+        ["sample:expired"] = "SimpleSign reports the expiry (OUT_OF_BOUNDS_NO_POE); DSS may stop at the revocation data",
     };
 
     private static readonly string[] Signers =

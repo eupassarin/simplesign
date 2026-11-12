@@ -272,6 +272,23 @@ public sealed class TimestampClient : ITimestampClient
 
     private async Task<byte[]> SendRequestAsync(byte[] timestampRequest, CancellationToken ct)
     {
+        var telemetry = Diagnostics.Telemetry.Timestamp.Start();
+        string? host = telemetry.IsActive ? _tcpEndpoint?.Host ?? Diagnostics.Telemetry.HostOf(_tsaUrl) : null;
+        try
+        {
+            byte[] response = await SendRequestCoreAsync(timestampRequest, ct).ConfigureAwait(false);
+            telemetry.Complete(Diagnostics.SimpleSignTelemetry.Outcomes.Success, [new(Diagnostics.SimpleSignTelemetry.Tags.ServerAddress, host)]);
+            return response;
+        }
+        catch (Exception)
+        {
+            telemetry.Complete(Diagnostics.SimpleSignTelemetry.Outcomes.Error, [new(Diagnostics.SimpleSignTelemetry.Tags.ServerAddress, host)]);
+            throw;
+        }
+    }
+
+    private async Task<byte[]> SendRequestCoreAsync(byte[] timestampRequest, CancellationToken ct)
+    {
         if (_tcpEndpoint is not null)
         {
             if (Http.UrlValidator.IsLoopbackHost(_tcpEndpoint) && !OutboundPolicy.AllowsLoopback(_tcpEndpoint))

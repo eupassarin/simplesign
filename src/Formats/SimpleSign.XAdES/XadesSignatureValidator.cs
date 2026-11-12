@@ -81,7 +81,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         CancellationToken cancellationToken = default)
     {
         var anchors = trustAnchors?.ToList();
-        return WithRevocationAsync(Validate(signedXml, anchors, originalData), cancellationToken);
+        return SimpleSign.Core.Diagnostics.Telemetry.MeasureValidationAsync(
+            "XAdES", () => WithRevocationAsync(Validate(signedXml, anchors, originalData), cancellationToken), r => [r.Indication.ToString()]);
     }
 
     /// <summary>
@@ -100,7 +101,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         CancellationToken cancellationToken = default)
     {
         var anchors = trustAnchors?.ToList();
-        return WithRevocationAsync(Validate(signedXml, anchors, externalData), cancellationToken);
+        return SimpleSign.Core.Diagnostics.Telemetry.MeasureValidationAsync(
+            "XAdES", () => WithRevocationAsync(Validate(signedXml, anchors, externalData), cancellationToken), r => [r.Indication.ToString()]);
     }
 
     /// <summary>
@@ -118,7 +120,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         IEnumerable<X509Certificate2>? trustAnchors = null,
         byte[]? originalData = null,
         CancellationToken cancellationToken = default) =>
-        WithRevocationAsync(ValidateAll(signedXml, trustAnchors?.ToList(), originalData), cancellationToken);
+        SimpleSign.Core.Diagnostics.Telemetry.MeasureValidationAsync(
+            "XAdES", () => WithRevocationAsync(ValidateAll(signedXml, trustAnchors?.ToList(), originalData), cancellationToken),
+            r => r.Select(x => x.Indication.ToString()));
 
     /// <summary>Validates every signature like <see cref="ValidateAllAsync(byte[], IEnumerable{X509Certificate2}, byte[], CancellationToken)"/>, with detached data objects by URI.</summary>
     /// <param name="signedXml">The signed XML document.</param>
@@ -131,7 +135,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         IEnumerable<X509Certificate2>? trustAnchors,
         IReadOnlyDictionary<string, byte[]> externalData,
         CancellationToken cancellationToken = default) =>
-        WithRevocationAsync(ValidateAll(signedXml, trustAnchors?.ToList(), externalData), cancellationToken);
+        SimpleSign.Core.Diagnostics.Telemetry.MeasureValidationAsync(
+            "XAdES", () => WithRevocationAsync(ValidateAll(signedXml, trustAnchors?.ToList(), externalData), cancellationToken),
+            r => r.Select(x => x.Indication.ToString()));
 
     private async Task<IReadOnlyList<XadesValidationResult>> WithRevocationAsync(
         IReadOnlyList<XadesValidationResult> results, CancellationToken cancellationToken)
