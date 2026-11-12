@@ -240,6 +240,36 @@ public sealed class SandboxRevocationTests(SandboxFixture fixture)
         fixture.Info.Tsa.ExpiredUrl.ShouldBe(fixture.BaseUrl + "tsa/expired");
     }
 
+    [Fact]
+    public async Task OcspStatus_ShortLivedSigner_IsGood()
+    {
+        var response = await Http.PostAsync("api/certificates/short-lived?seconds=3600", null);
+        response.EnsureSuccessStatusCode();
+        var collection = X509CertificateLoader.LoadPkcs12Collection(await response.Content.ReadAsByteArrayAsync(), SandboxPki.PfxPassword);
+        using var leaf = collection.Single(c => c.HasPrivateKey);
+
+        (await FetchOcspAsync(leaf)).IsValid.ShouldBeTrue();
+        // Still not listed with the environment's certificates.
+        var pki = (await Http.GetFromJsonAsync<PkiView>("api/pki", SandboxFixture.Json))!;
+        pki.Certificates.ShouldNotContain(c => c.Id == "short-lived");
+    }
+
+    [Fact]
+    public async Task OcspStatus_ShortLivedTsa_IsGood()
+    {
+        byte[] data = Encoding.UTF8.GetBytes("timestamp me");
+        var request = Rfc3161TimestampRequest.CreateFromData(data, HashAlgorithmName.SHA256, requestSignerCertificates: true);
+        using var content = new ByteArrayContent(request.Encode());
+        var response = await Http.PostAsync("tsa/short-lived?seconds=3600", content);
+        response.EnsureSuccessStatusCode();
+        var token = request.ProcessResponse(await response.Content.ReadAsByteArrayAsync(), out _);
+        token.VerifySignatureForData(data, out var signer).ShouldBeTrue();
+
+        (await FetchOcspAsync(signer!)).IsValid.ShouldBeTrue();
+        var pki = (await Http.GetFromJsonAsync<PkiView>("api/pki", SandboxFixture.Json))!;
+        pki.Certificates.ShouldNotContain(c => c.Id == "tsa-short-lived");
+    }
+
     private async Task<ChainRevocationResult> CheckAsync(string id, Core.Http.OutboundHttpPolicy? policy = null)
     {
         var leaf = await LeafAsync(id);
@@ -251,9 +281,10 @@ public sealed class SandboxRevocationTests(SandboxFixture fixture)
         return await checker.CheckAsync([leaf, issuer, fixture.Root], DateTimeOffset.UtcNow, [], [], allowOnline: true, CancellationToken.None);
     }
 
-    private async Task<OcspFetchResult> FetchOcspAsync(string id)
+    private async Task<OcspFetchResult> FetchOcspAsync(string id) => await FetchOcspAsync(await LeafAsync(id));
+
+    private async Task<OcspFetchResult> FetchOcspAsync(X509Certificate2 leaf)
     {
-        var leaf = await LeafAsync(id);
         var issuer = X509CertificateLoader.LoadCertificate(await Http.GetByteArrayAsync("aia/intermediate.cer"));
         var client = new OcspClient(fixture.Client) { OutboundPolicy = fixture.Policy };
         return await client.FetchOcspResponseAsync(leaf, issuer, OcspClient.GetOcspUri(leaf)!.AbsoluteUri, CancellationToken.None);
