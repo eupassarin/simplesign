@@ -439,6 +439,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Legal basis of the signature, for the signature metadata")]
         public string? LegalBasis { get; init; }
 
+        /// <summary>More chain certificates of the signer, when preparing a two-phase signature.</summary>
+        [CommandOption("--chain <PATH>")]
+        [Description("With --prepare: more certificates of the signer's chain (PEM or DER)")]
+        public string? ChainPath { get; init; }
+
         /// <summary>The level options, as <see cref="PadesProfileOptions"/> takes them.</summary>
         internal PadesProfileOptions.Level LevelOptions => new(TsaUrl, Ltv, Archival, ArchiveTsaUrl, ReturnLowerLevel, RevocationPreference);
 
@@ -456,7 +461,10 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
 
             bool hasCertPath = !string.IsNullOrWhiteSpace(CertPath);
             bool hasThumbprint = !string.IsNullOrWhiteSpace(Thumbprint);
-            if (ValidatePrepare(CertPath, hasThumbprint, Password, OutputPath) is { } prepareError)
+            if ((ValidatePrepare(CertPath, hasThumbprint, Password, OutputPath)
+                ?? (ChainPath is null ? null
+                    : !Prepare ? "--chain requires --prepare: a PFX carries its own chain."
+                    : File.Exists(ChainPath) ? null : $"Chain not found: {ChainPath}")) is { } prepareError)
             {
                 return ValidationResult.Error(prepareError);
             }
@@ -807,7 +815,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
     /// </summary>
     private async Task<int> ExecutePrepareAsync(Settings settings, ILoggerFactory? loggerFactory, CancellationToken cancellation)
     {
-        var (cert, chainCerts) = DeferredPrepareSupport.LoadCertificates(_certChainService, settings.CertPath!);
+        var (cert, chainCerts) = DeferredPrepareSupport.LoadCertificates(_certChainService, settings.CertPath!, settings.ChainPath);
         try
         {
             var pdfBytes = await File.ReadAllBytesAsync(settings.InputPath, cancellation);
