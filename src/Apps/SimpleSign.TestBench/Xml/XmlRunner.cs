@@ -402,7 +402,9 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             checks.AddRange(ValidationService.PolicyRows(v.Constraints));
             bool invalid = !v.SignatureValid || !v.IntegrityValid || v.HasValidSignatureTimeStamp == false || v.HasValidArchiveTimeStamp == false
                 || v.HasValidSigAndRefsTimeStamp == false || v.HasValidCompleteReferences == false || v.HasValidDataObjectsTimeStamp == false;
-            string indication = invalid ? "Invalid" : v.Indication;
+            // The library's verdict when it evaluated the policy (EN 319 102-1: a reference whose data is missing is
+            // INDETERMINATE, not INVALID); the checks above only when it did not.
+            string indication = v.Constraints.Count > 0 ? v.Indication : invalid ? "Invalid" : v.Indication;
             string? reference = countersigned is null ? v.SignatureId : L.T("{0} (countersignature of {1})", v.SignatureId ?? "-", countersigned);
             reports.Add(new XmlSignatureReport(i, reference, v.Signer, indication,
                 v.DetectedLevel switch

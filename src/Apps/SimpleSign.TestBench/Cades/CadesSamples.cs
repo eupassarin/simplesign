@@ -72,6 +72,20 @@ internal static class CadesSamples
         byte[] countersigned = await CadesSigner.CounterSign(cosigned, 0).WithCertificate(ana, chain).WithHttpClientProvider(sandbox)
             .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(connection.TsaUri, sandbox))).SignAsync(cancellationToken);
 
+        // A content time-stamp from a TSA whose clock is an hour ahead: it is later than the signature time-stamp
+        // (EN 319 102-1: TIMESTAMP_ORDER_FAILURE).
+        byte[] tsOrder = await CadesSigner.Document(text).WithCertificate(maria, chain).WithHttpClientProvider(sandbox)
+            .WithContentTimestamp(new TimestampOptions(new Uri(connection.TsaUri, "shifted?seconds=3600"), sandbox))
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(connection.TsaUri, sandbox))).SignAsync(cancellationToken);
+
+        // A signature time-stamp from a TSA that gives no accuracy (EN 319 422 asks for it).
+        byte[] noAccuracy = await CadesSigner.Document(text).WithCertificate(maria, chain).WithHttpClientProvider(sandbox)
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(connection.TsaUri, "no-accuracy"), sandbox))).SignAsync(cancellationToken);
+
+        // signing-certificate-v2 names João's certificate while Maria signs and only her chain is embedded
+        // (EN 319 102-1 §5.2.3: NO_SIGNING_CERTIFICATE_FOUND).
+        byte[] wrongCertificateReference = WrongCertificateReference(text, maria, joao, chain);
+
         byte[] changedText = (byte[])text.Clone();
         changedText[^2] = (byte)'!';
         byte[] tampered = (byte[])detached.Clone();
@@ -104,7 +118,27 @@ internal static class CadesSamples
                 "One byte of the signature value was changed: the RSA verification fails.", "Invalid", "signature"),
             Signature("v-untrusted", "raiz-desconhecida.p7s", untrusted, textId, "Root outside the trust anchors",
                 "Signed with a self-signed certificate that no trusted root vouches for.", "Indeterminate", "chain"),
+            Signature("v-ts-order", "carimbo-fora-de-ordem.p7s", tsOrder, textId, "Content time-stamp after the signature time-stamp",
+                "The content time-stamp comes from a TSA whose clock is an hour ahead, so it is later than the signature time-stamp. The default policy only warns; the strict one fails (TIMESTAMP_ORDER_FAILURE).", "Valid", "time-stamps"),
+            Signature("v-no-accuracy", "sem-precisao.p7s", noAccuracy, textId, "Time-stamp without accuracy",
+                "The signature time-stamp gives no accuracy. The default policy does not check it; a policy with the EN 319 422 profile does.", "Valid", "time-stamps"),
+            Signature("v-wrong-cert-ref", "referencia-errada.p7s", wrongCertificateReference, textId, "Signing certificate reference does not match",
+                "signing-certificate-v2 names another certificate than the one that signed, which is the only one embedded.", "Indeterminate", "signer"),
         ];
+    }
+
+    /// <summary>
+    /// A detached CMS signed by <paramref name="signer"/> whose signing-certificate-v2 attribute names
+    /// <paramref name="named"/>: built from the signed attributes up, as no signer would produce it.
+    /// </summary>
+    private static byte[] WrongCertificateReference(byte[] content, X509Certificate2 signer, X509Certificate2 named, IReadOnlyList<X509Certificate2> chain)
+    {
+        const string sha256 = "2.16.840.1.101.3.4.2.1";
+        const string sha256WithRsa = "1.2.840.113549.1.1.11";
+        byte[] attributes = CmsSignatureBuilder.BuildSignedAttributes(SHA256.HashData(content), sha256, DateTimeOffset.UtcNow, named, padesAttributes: false);
+        using var key = signer.GetRSAPrivateKey() ?? throw new InvalidOperationException("The signer has no RSA key.");
+        byte[] signature = key.SignData(attributes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        return CmsSignatureBuilder.BuildSignedData(sha256, sha256WithRsa, HashAlgorithmName.SHA256, attributes, signature, signer, [signer, .. chain]);
     }
 
     /// <summary>Flips one byte in the middle of the first signer's signature value.</summary>

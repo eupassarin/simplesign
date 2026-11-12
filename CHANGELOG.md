@@ -44,6 +44,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NoNextUpdate`; the INDECOPI playbook uses them, the SHA-1 CA and the signer without KeyUsage, so the expired TSA, the
   SHA-1 chain and the CRL without nextUpdate are automated steps.
 
+### Added — ETSI conformance playbook
+
+- `docs/playbooks/etsi-checklist.md`: what a run must show for each ETSI standard (PAdES, CAdES, XAdES baseline and
+  extended, RFC 3161 / EN 319 422, EN 319 102-1 validation, TS 119 612, EN 319 412 / TS 119 312), each item marked as
+  shown by a playbook, by unit tests, needing something new, or out of scope.
+- `docs/playbooks/etsi-baseline.json` (bundled sample, written by `tools/playbooks/etsi.py`): 115 steps covering every
+  item a run can show, tagged with the item ids and standards, cross-validated with EU DSS.
+- Playbooks: `sandbox-short-lived:N` (a Sandbox signer valid for N seconds, issued when the step runs), `fixture:NAME`
+  (bundled signature-policy document, attribute certificate and SAML assertion) and a step's `wait`. New CAdES samples
+  `v-ts-order` (content time-stamp later than the signature time-stamp) and `v-wrong-cert-ref`; built-in validation
+  policy `strict` (TestBench and CLI `--policy strict`). Sandbox: `/tsa/shifted?seconds=N`, a TSA whose clock is off;
+  short-lived signers are valid from two hours back, so their CRL and OCSP data is not older than them.
+
+### Fixed
+
+- Validation: a time-stamp whose TSA could not be judged still counts for the order of the time-stamps
+  (TIMESTAMP_ORDER_FAILURE), and a signing-certificate reference that is missing, repeated or does not match is
+  INDETERMINATE / NO_SIGNING_CERTIFICATE_FOUND (EN 319 102-1 §5.2.3), as in EU DSS, instead of SIG_CONSTRAINTS_FAILURE.
+- CAdES validation: the signature time-stamp is evaluated in the policy's Timestamp context also when no trust
+  anchors are passed to the call (its TSA is judged against the configured roots, as the content and archive
+  time-stamps already were).
+- Validation: a detached CAdES or XAdES signature validated without its data is INDETERMINATE / SIGNED_DATA_NOT_FOUND
+  (it was INVALID, or for CAdES a result with no evaluation); the data's integrity is not judged without it.
+- Validation: a signature that names a signature policy whose document it does not carry now has `PolicyAvailable`
+  false, so a validation policy that requires it (`PolicyAvailable` FAIL, as the `strict` preset) gives
+  INDETERMINATE / SIGNATURE_POLICY_NOT_AVAILABLE. New `ValidationOptions.SignaturePolicyDocuments`
+  (`ISignaturePolicyDocumentProvider`) supplies policy documents from elsewhere. The default policy only informs.
+
+### Added — Augmenting existing signatures (ADR 0025)
+
+- `PadesAugmenter`, `CadesAugmenter` and `XadesAugmenter` raise a signed file to B-T, B-LT or B-LTA without touching
+  what is signed, and `RenewArchive` adds a new archive (or document) time-stamp to a B-LTA. A level that cannot be
+  reached throws `SigningException` (`LevelNotAchievable`).
+- CLI: `simplesign augment <file> --level BT|BLT|BLTA --tsa URL [--data] [--signature-id] [--renew] [--json]`.
+- TestBench: run kind `augment`; playbook steps of kind `augment` (options `fileId`, `dataId`, `level`, `timestamp`,
+  `renew`; outcome `augmented`). The ETSI playbook raises a B-B of each format to B-LTA and renews a PAdES B-LTA.
+- The PAdES conformance detector counts a document time-stamp after a signature as its B-T time-stamp (EN 319 142-1).
+
+### Added — ETSI report schema and EN 319 422 time-stamp profile
+
+- `ValidationReports.ValidateEtsiXml`: checks a TS 119 102-2 report against its schema (v1.2.1), embedded with the
+  schemas it imports; nothing is fetched (the schema test is offline now).
+- Validation policy constraints `Timestamp/AccuracyPresent`, `Timestamp/OrderingFalse` and
+  `Timestamp/AcceptablePolicies` (the EN 319 422 profile of a time-stamp: accuracy given, no ordering, an accepted
+  TSA policy). Not in the default policy, so nothing changes until a policy sets them.
+- TestBench: library runs also produce the ETSI report (`etsi-report.xml`); playbooks can expect `etsiReport: valid`.
+  Sandbox TSAs give their accuracy (one second); `/tsa/no-accuracy` does not.
+- TestBench: the files of a playbook's kept results (signed output, reports) are no longer forgotten when more than
+  200 files are produced, so a long playbook's validation steps and evidence keep finding them.
+
 ### Removed — The Playbook app
 
 - `src/Apps/SimpleSign.Playbook` and its tests: its sample is now a playbook, run by the TestBench's Playbook tab.

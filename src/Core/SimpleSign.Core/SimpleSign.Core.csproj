@@ -47,6 +47,12 @@
   <ItemGroup>
     <EmbeddedResource Include="Policies\Default\validation-policy.json" LogicalName="SimpleSign.Core.Policies.Default.validation-policy.json" />
     <EmbeddedResource Include="Policies\Default\signing-policy.json" LogicalName="SimpleSign.Core.Policies.Default.signing-policy.json" />
+    <!-- The ETSI TS 119 102-2 report schema and the schemas it imports (the XAdES project's files, linked). -->
+    <EmbeddedResource Include="Validation\Schemas\TS119102-2-v122.xsd" LogicalName="SimpleSign.Core.Schemas.TS119102-2-v122.xsd" />
+    <EmbeddedResource Include="..\..\Formats\SimpleSign.XAdES\Schemas\xml.xsd" LogicalName="SimpleSign.Core.Schemas.xml.xsd" Link="Validation\Schemas\xml.xsd" />
+    <EmbeddedResource Include="..\..\Formats\SimpleSign.XAdES\Schemas\xmldsig-core-schema.xsd" LogicalName="SimpleSign.Core.Schemas.xmldsig-core-schema.xsd" Link="Validation\Schemas\xmldsig-core-schema.xsd" />
+    <EmbeddedResource Include="..\..\Formats\SimpleSign.XAdES\Schemas\XAdES01903v132-201601.xsd" LogicalName="SimpleSign.Core.Schemas.XAdES01903v132-201601.xsd" Link="Validation\Schemas\XAdES01903v132-201601.xsd" />
+    <EmbeddedResource Include="..\..\Formats\SimpleSign.XAdES\Schemas\ts_119612v020201_201601xsd.xsd" LogicalName="SimpleSign.Core.Schemas.ts_119612v020201_201601xsd.xsd" Link="Validation\Schemas\ts_119612v020201_201601xsd.xsd" />
   </ItemGroup>
 
   <ItemGroup>

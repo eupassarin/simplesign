@@ -556,6 +556,77 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
         evaluation.Indication.ShouldBe(SignatureIndication.Valid);
     }
 
+    [Theory]
+    [InlineData("1.2.3.4", ConstraintStatus.Passed)]
+    [InlineData("9.9.9", ConstraintStatus.Failed)]
+    public void Evaluate_TimestampProfile_AccuracyOrderingAndPolicyAreChecked(string acceptedPolicy, ConstraintStatus policyStatus)
+    {
+        using var tsa = _pki.IssueTimestampingCertificate();
+        var genTime = DateTimeOffset.UtcNow.AddHours(-1);
+        byte[] token = TimestampTestResponseBuilder.CreateTokenForData([1, 2, 3], new TimestampTokenOptions
+        {
+            TsaCertificate = tsa,
+            ExtraCertificates = [_pki.IntermediateCa, _pki.RootCa],
+            GenTime = genTime,
+        });
+        var fail = new PolicyConstraint(ConstraintLevel.Fail);
+        var policy = ValidationPolicy.Default
+            .With("Timestamp/AccuracyPresent", fail)
+            .With("Timestamp/OrderingFalse", fail)
+            .With("Timestamp/AcceptablePolicies", new PolicyConstraint(ConstraintLevel.Fail) { Ids = [acceptedPolicy] });
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with
+        {
+            ProofOfExistence = genTime,
+            Timestamps = [new TimestampTokenFacts(TimestampTokenKind.Signature, token, ImprintValid: true, Trusted: true)],
+        }, policy);
+
+        // The test TSA writes the policy 1.2.3.4, no accuracy and no ordering.
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/AccuracyPresent" && c.Status == ConstraintStatus.Failed);
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/OrderingFalse" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/AcceptablePolicies" && c.Status == policyStatus);
+    }
+
+    [Fact]
+    public void Evaluate_SigningCertificateReferenceDoesNotMatch_NoSigningCertificateFound()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { HasSigningCertificateReference = true, SigningCertificateReferenceMatches = false },
+            ValidationPolicy.Default);
+
+        evaluation.Constraints.ShouldContain(c => c.Id.EndsWith("/CertDigestMatch", StringComparison.Ordinal) && c.Status == ConstraintStatus.Failed);
+        evaluation.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.NoSigningCertificateFound);
+    }
+
+    [Fact]
+    public void Evaluate_ContentTimestampAfterSignatureTimestamp_TimestampOrderFailure()
+    {
+        using var tsa = _pki.IssueTimestampingCertificate();
+        var signatureTime = DateTimeOffset.UtcNow.AddHours(-2);
+        byte[] Token(DateTimeOffset genTime) => TimestampTestResponseBuilder.CreateTokenForData([1, 2, 3], new TimestampTokenOptions
+        {
+            TsaCertificate = tsa,
+            ExtraCertificates = [_pki.IntermediateCa, _pki.RootCa],
+            GenTime = genTime,
+        });
+        var policy = ValidationPolicy.Default.With("Timestamp/Coherence", new PolicyConstraint(ConstraintLevel.Fail));
+
+        // The content timestamp's TSA could not be judged (Trusted null): its time still counts for the order.
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with
+        {
+            ProofOfExistence = signatureTime,
+            Timestamps =
+            [
+                new TimestampTokenFacts(TimestampTokenKind.Content, Token(signatureTime.AddHours(1)), ImprintValid: true, Trusted: null),
+                new TimestampTokenFacts(TimestampTokenKind.Signature, Token(signatureTime), ImprintValid: true, Trusted: true),
+            ],
+        }, policy);
+
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/Coherence" && c.Status == ConstraintStatus.Failed);
+        evaluation.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.TimestampOrderFailure);
+    }
+
     [Fact]
     public void Evaluate_TrustServiceOfTheAnchor_TypeAndStatusAreChecked()
     {

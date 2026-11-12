@@ -70,10 +70,10 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | | AD-RT (Referência Temporal) | ✅ | AD-RB + RFC 3161 timestamp |
 | | AD-RV/AD-RC/AD-RA | ✅ | CAdES-XL/A: certificate-refs, revocation-refs, cert-values, revocation-values via CmsAttribute |
 | **RFC 5652** | CMS SignedData | ✅ | Full compliance (§5.1–5.6), detached signatures |
-| **ETSI EN 319 142-1** | PAdES core (B-B, B-T, B-LT, B-LTA) | ✅ | Signature creation & augmentation |
+| **ETSI EN 319 142-1** | PAdES core (B-B, B-T, B-LT, B-LTA) | ✅ | Signature creation; augmentation of a signed PDF and archive renewal (`PadesAugmenter`, ADR 0025) |
 | **ETSI EN 319 142-2** | PAdES extended (LTV, archival) | ✅ | DSS/VRI + document timestamps |
-| **ETSI EN 319 122-1** | CAdES B-B, B-T, B-LT, B-LTA | ✅ | RFC 3161 binding, authenticated root CMS validation sets (RFC 5940 OCSP), `archiveTimestampV3` + `ATSHashIndexV3` |
-| **ETSI EN 319 132-1** | XAdES B-B, B-T, B-LT, B-LTA | ✅ | ETSI archive preimage; XMLDSig reference processing; same-document distributed unsigned properties and counter-signatures |
+| **ETSI EN 319 122-1** | CAdES B-B, B-T, B-LT, B-LTA | ✅ | RFC 3161 binding, authenticated root CMS validation sets (RFC 5940 OCSP), `archiveTimestampV3` + `ATSHashIndexV3`; augmentation of an existing signature (`CadesAugmenter`) |
+| **ETSI EN 319 132-1** | XAdES B-B, B-T, B-LT, B-LTA | ✅ | ETSI archive preimage; XMLDSig reference processing; same-document distributed unsigned properties and counter-signatures; augmentation (`XadesAugmenter`) |
 | **RFC 9688** | SHA-3 OIDs and parameters in CMS | ✅ | id-sha3-256/384/512, id-rsassa-pkcs1-v1_5-with-sha3-256/384/512, id-ecdsa-with-sha3-256/384/512 |
 | **RFC 8933** | EdDSA in CMS | ⏳ | OIDs are recognized, but signing is deferred until raw external output is verifiable on every target |
 | **RFC 8032** | EdDSA algorithm | ⏳ | Ed25519/Ed448 signing is not advertised in v0.10.1 |

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -130,7 +131,8 @@ internal static class ServiceEndpoints
 
         // RFC 3161 TSA: /tsa/tsr (and /tsa/archive), /tsa/authenticated (HTTP Basic), /tsa/untrusted,
         // /tsa/revoked (its certificate is revoked), /tsa/expired (its certificate has expired) and
-        // /tsa/wrong-name (the token names another TSA).
+        // /tsa/wrong-name (the token names another TSA), /tsa/shifted?seconds=N (its clock is N seconds off, -86400 to 86400)
+        // and /tsa/no-accuracy (the TSTInfo gives no accuracy, which EN 319 422 asks for).
         app.MapPost("/tsa/{kind}", TimestampAsync);
 
         // CSC v2 (the simulated provider is an HttpMessageHandler: requests are passed through).
@@ -210,9 +212,20 @@ internal static class ServiceEndpoints
 
     private static async Task<IResult> TimestampAsync(string kind, HttpContext context, SandboxPki pki, CancellationToken ct)
     {
-        if (kind is not ("tsr" or "archive" or "authenticated" or "untrusted" or "revoked" or "expired" or "wrong-name"))
+        if (kind is not ("tsr" or "archive" or "authenticated" or "untrusted" or "revoked" or "expired" or "wrong-name" or "shifted" or "no-accuracy"))
         {
             return Results.NotFound();
+        }
+
+        var shift = TimeSpan.Zero;
+        if (kind == "shifted")
+        {
+            if (!int.TryParse(context.Request.Query["seconds"], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int seconds) || seconds is < -86400 or > 86400)
+            {
+                return Results.Text("Give ?seconds=N, -86400 to 86400: how far the TSA's clock is off.", statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            shift = TimeSpan.FromSeconds(seconds);
         }
 
         if (kind == "authenticated")
@@ -246,7 +259,7 @@ internal static class ServiceEndpoints
         byte[] reply;
         try
         {
-            reply = Stamp(pki, faults.Tsa == TsaFault.Untrusted ? "untrusted" : kind, body.ToArray());
+            reply = Stamp(pki, faults.Tsa == TsaFault.Untrusted ? "untrusted" : kind, body.ToArray(), shift);
         }
         catch (System.Formats.Asn1.AsnContentException)
         {
@@ -264,7 +277,7 @@ internal static class ServiceEndpoints
     }
 
     /// <summary>Answers a TimeStampReq with the TSA of an endpoint, built from the current certificates.</summary>
-    private static byte[] Stamp(SandboxPki pki, string kind, byte[] request)
+    private static byte[] Stamp(SandboxPki pki, string kind, byte[] request, TimeSpan shift)
     {
         if (kind == "untrusted")
         {
@@ -279,6 +292,6 @@ internal static class ServiceEndpoints
         });
         using var key = certificate.Certificate.GetRSAPrivateKey()!;
         return new SandboxTsa(certificate.Certificate, key, pki.ChainOf(certificate.Id),
-            kind == "wrong-name" ? new X500DistinguishedName(WrongTsaName) : null).Respond(request);
+            kind == "wrong-name" ? new X500DistinguishedName(WrongTsaName) : null, shift, accuracy: kind != "no-accuracy").Respond(request);
     }
 }

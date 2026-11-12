@@ -305,7 +305,8 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>
     /// A signer issued by the intermediate CA that is valid for <paramref name="lifetime"/> from now, as a
     /// PKCS#12 file with its chain: to make a signature whose certificate has expired by validation time
-    /// (a correct client refuses to sign with an expired certificate). Not kept in the environment.
+    /// (a correct client refuses to sign with an expired certificate). Not kept in the environment. Its validity starts
+    /// two hours back, before the CRLs and OCSP responses it will be checked against (their thisUpdate is an hour back).
     /// </summary>
     public byte[] IssueShortLived(TimeSpan lifetime)
     {
@@ -313,7 +314,7 @@ internal sealed class SandboxPki : IDisposable
         {
             var now = DateTimeOffset.UtcNow;
             var seed = new SeedDefinition("short-lived", "Short-lived signer", "");
-            var pair = IssueLeaf(seed, now.AddMinutes(-1), now.Add(lifetime));
+            var pair = IssueLeaf(seed, now.AddHours(-2), now.Add(lifetime));
             Save();
             using var certificate = X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
             var collection = new X509Certificate2Collection { certificate, Intermediate, Root };

@@ -71,6 +71,24 @@ public sealed class XadesSignatureValidatorTests
     }
 
     [Fact]
+    public async Task Validate_DetachedSignatureWithoutData_IndeterminateSignedDataNotFound()
+    {
+        byte[] signed = await XadesSigner.Document(s_xmlBytes)
+            .WithCertificate(s_cert)
+            .WithForm(XadesForm.Detached)
+            .WithDataUri("doc.xml")
+            .SignAsync();
+
+        var validator = new XadesSignatureValidator(new ValidationOptions { CheckRevocation = false });
+        var result = validator.Validate(signed, trustAnchors: [s_cert]);
+        var all = validator.ValidateAll(signed, [s_cert]);
+
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate, string.Join("; ", result.Errors));
+        result.SubIndication.ShouldBe(SignatureSubIndication.SignedDataNotFound);
+        all.ShouldHaveSingleItem().SubIndication.ShouldBe(SignatureSubIndication.SignedDataNotFound, string.Join("; ", all[0].Errors));
+    }
+
+    [Fact]
     public async Task Validate_EnvelopingSignature_ReturnsValid()
     {
         byte[] signed = await XadesSigner.Document(s_xmlBytes)

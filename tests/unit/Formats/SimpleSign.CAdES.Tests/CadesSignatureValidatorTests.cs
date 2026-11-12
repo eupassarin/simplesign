@@ -56,6 +56,22 @@ public sealed class CadesSignatureValidatorTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_DetachedSignatureWithoutData_IndeterminateSignedDataNotFound()
+    {
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(_cert)
+            .SignAsync();
+
+        var validator = new CadesSignatureValidator(
+            new ValidationOptions { CheckRevocation = false });
+        var result = validator.Validate(cms, originalData: null, [_cert]);
+
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        result.SubIndication.ShouldBe(SignatureSubIndication.SignedDataNotFound);
+        result.Errors.ShouldContain(e => e.Contains("signed data was not given", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Validate_WrongData_DetachedSignature_ReturnsInvalid()
     {
         var cms = await CadesSigner.Document(_data)

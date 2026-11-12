@@ -79,7 +79,7 @@ public sealed record PlaybookStep
     /// <summary>Free labels (a requirement id, a topic): the page filters by them and the evidence groups by them.</summary>
     public IReadOnlyList<string> Tags { get; init; } = [];
 
-    /// <summary><c>sign</c> or <c>validate</c>.</summary>
+    /// <summary><c>sign</c>, <c>validate</c> or <c>augment</c> (raise the level of a signed file: options <c>fileId</c>, <c>dataId</c>, <c>level</c>, <c>timestamp</c>, <c>renew</c>).</summary>
     public string Kind { get; init; } = PlaybookStepKinds.Sign;
 
     /// <summary>The format; the default's when null. Not used by a validation (the file says what it is).</summary>
@@ -90,6 +90,9 @@ public sealed record PlaybookStep
 
     /// <summary>Whether DSS also validates; the default's when null.</summary>
     public bool? CrossValidate { get; init; }
+
+    /// <summary>Seconds to wait before the step runs (a certificate that must expire first): 0 to 300.</summary>
+    public int? Wait { get; init; }
 
     /// <summary>The Sandbox state for the step, put back after it.</summary>
     public PlaybookSandbox? Sandbox { get; init; }
@@ -159,7 +162,7 @@ public sealed record PlaybookSandbox
 /// <summary>What a run must show; every field given is checked.</summary>
 public sealed record PlaybookExpectation
 {
-    /// <summary><c>signed</c>, <c>refused</c> (SigningException), <c>error</c>, <c>valid</c>, <c>invalid</c> or <c>indeterminate</c>.</summary>
+    /// <summary><c>signed</c>, <c>refused</c> (SigningException), <c>error</c>, <c>valid</c>, <c>invalid</c>, <c>indeterminate</c> or <c>augmented</c>.</summary>
     public string? Outcome { get; init; }
 
     /// <summary>The <c>SigningErrorReason</c> of a refusal (<c>CertificateRevoked</c>).</summary>
@@ -176,6 +179,15 @@ public sealed record PlaybookExpectation
 
     /// <summary>Whether DSS must agree (cross-validation on).</summary>
     public bool? DssAgrees { get; init; }
+
+    /// <summary><c>valid</c>: the run's ETSI TS 119 102-2 report must be valid against its schema.</summary>
+    public string? EtsiReport { get; init; }
+
+    /// <summary>
+    /// Constraints of the validation policy that must fail (their names, as the report shows them: <c>AccuracyPresent</c>),
+    /// in the signature or in what it carries (a time-stamp, revocation data).
+    /// </summary>
+    public IReadOnlyList<string> FailedConstraints { get; init; } = [];
 
     /// <summary>Texts the run's log must contain.</summary>
     public IReadOnlyList<string> LogContains { get; init; } = [];
@@ -213,6 +225,16 @@ public sealed record PlaybookExpectation
             yield return ("dssAgrees", agrees ? "yes" : "no");
         }
 
+        if (EtsiReport is not null)
+        {
+            yield return ("etsiReport", EtsiReport);
+        }
+
+        foreach (string constraint in FailedConstraints)
+        {
+            yield return ("failedConstraints", constraint);
+        }
+
         foreach (string text in LogContains)
         {
             yield return ("logContains", text);
@@ -235,12 +257,13 @@ public static class PlaybookStepKinds
 {
     public const string Sign = "sign";
     public const string Validate = "validate";
+    public const string Augment = "augment";
 
-    public static IReadOnlyList<string> All { get; } = [Sign, Validate];
+    public static IReadOnlyList<string> All { get; } = [Sign, Validate, Augment];
 }
 
 /// <summary>The outcomes an expectation can name.</summary>
 public static class PlaybookOutcomes
 {
-    public static IReadOnlyList<string> All { get; } = ["signed", "refused", "error", "valid", "invalid", "indeterminate"];
+    public static IReadOnlyList<string> All { get; } = ["signed", "refused", "error", "valid", "invalid", "indeterminate", "augmented"];
 }

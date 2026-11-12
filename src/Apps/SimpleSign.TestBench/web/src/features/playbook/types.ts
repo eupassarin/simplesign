@@ -11,6 +11,8 @@ export interface PlaybookExpectation {
   subIndication?: string | null
   level?: string | null
   dssAgrees?: boolean | null
+  etsiReport?: string | null
+  failedConstraints?: string[]
   logContains: string[]
 }
 
@@ -19,7 +21,7 @@ export interface PlaybookStep {
   title: string
   description?: string | null
   tags: string[]
-  kind: "sign" | "validate"
+  kind: "sign" | "validate" | "augment"
   format?: string | null
   engine?: PlaybookEngine | null
   crossValidate?: boolean | null

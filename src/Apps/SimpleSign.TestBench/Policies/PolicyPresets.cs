@@ -30,11 +30,17 @@ internal static class PolicyPresets
         .With("CACertificate/NotExpired", new PolicyConstraint(ConstraintLevel.Ignore))
         .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore));
 
+    /// <summary>The library's default validation policy, with time-stamps out of order and an unavailable signature policy failing.</summary>
+    internal static ValidationPolicy StrictValidation { get; } = ValidationPolicy.Default
+        .WithName("SimpleSign default, strict")
+        .With("Timestamp/Coherence", Fail).With("SignatureConstraints/PolicyAvailable", Fail);
+
     private static readonly (string Kind, string Name, Func<string> Json, string? Title)[] s_all =
     [
         (PolicyViewer.Signing, "strict", () => Strict.ToJson(), Strict.Name),
         (PolicyViewer.Signing, "minimal", () => Minimal.ToJson(), Minimal.Name),
         (PolicyViewer.Signing, "iofe", () => IofePolicies.Signing.ToJson(), IofePolicies.Signing.Name),
+        (PolicyViewer.Validation, "strict", () => StrictValidation.ToJson(), StrictValidation.Name),
         (PolicyViewer.Validation, "iofe", () => IofePolicies.Validation.ToJson(), IofePolicies.Validation.Name),
         (PolicyViewer.Validation, "iofe-nonrepudiation", () => IofePolicies.ValidationNonRepudiation.ToJson(), IofePolicies.ValidationNonRepudiation.Name),
     ];

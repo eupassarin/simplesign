@@ -79,6 +79,22 @@ internal sealed class CredentialFactory(SandboxEnvironment sandbox, DocumentStor
         };
     }
 
+    /// <summary>A Sandbox signer issued now and valid for <paramref name="lifetime"/> only (1 to 3600 seconds).</summary>
+    /// <exception cref="SandboxNotConnectedException">No Sandbox is connected.</exception>
+    public async Task<CredentialHandle> OpenSandboxShortLivedAsync(TimeSpan lifetime, CancellationToken cancellationToken)
+    {
+        var connection = sandbox.Connection;
+        byte[] pfx = await sandbox.IssueShortLivedPfxAsync(lifetime, cancellationToken).ConfigureAwait(false);
+        var collection = X509CertificateLoader.LoadPkcs12Collection(pfx, connection.Info.PfxPassword, KeyStorage);
+        var leaf = collection.First(c => c.HasPrivateKey);
+        var chain = collection.Where(c => !ReferenceEquals(c, leaf)).ToList();
+        return new CredentialHandle(CredentialKind.SandboxA1, $"Sandbox · short-lived ({(int)lifetime.TotalSeconds} s)", leaf, chain, null, new Owned(collection),
+            notes: [new Note("Issued by the Sandbox '{0}' for {1} seconds: it expires soon after it signs.", connection.Info.Name, (int)lifetime.TotalSeconds)])
+        {
+            Cli = new CliSigner(pfx, connection.Info.PfxPassword),
+        };
+    }
+
     public CredentialHandle OpenPfx(PfxCredentialRequest request)
     {
         var file = documents.Get(request.UploadId);

@@ -533,6 +533,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             Timestamps = cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps
                 ? [new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, timestamp.IsIntegrityValid, timestamp.IsTsaTrusted)]
                 : null,
+            PolicyDocumentAvailable = _options.PolicyDocumentFound(cmsData.SignaturePolicyOid),
         }.WithCms(cmsData, _options.TrustedRoots, field.PdfSigningTime), _options.PolicyFor(cmsData.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
 

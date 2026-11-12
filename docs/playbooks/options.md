@@ -9,8 +9,10 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `sandbox:SIGNER` | A Sandbox signer, as `credentialId` (see the Sandbox signers below). |
 | `sample:ID` | A sample PDF as `documentId` (`contract`, …), or a PAdES validation sample as a validation's `fileId` (`valid`, `revoked`, `expired`, `tampered-content`, `untrusted-root`, `untrusted-tsa`…). |
 | `cades-sample:ID` / `xades-sample:ID` | A CAdES or XAdES sample: data to sign as `dataId` (`text`, `json`, `pdf` / `order`), or a signed file as a validation's `fileId` (`v-valid`, `v-tampered`… / `v-xades`, `v-changed`…); `ID#data` is the data a detached sample signature is checked against, as a validation's `dataId`. |
-| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: `preset:signing:strict`, `preset:signing:minimal`, `preset:signing:iofe`, `preset:validation:iofe`, `preset:validation:iofe-nonrepudiation`. |
+| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: `preset:signing:strict`, `preset:signing:minimal`, `preset:signing:iofe`, `preset:validation:strict`, `preset:validation:iofe`, `preset:validation:iofe-nonrepudiation`. |
 | `step:ID` | The file an earlier step signed, as `fileId` of a validation or as the input of a later signature. |
+| `sandbox-short-lived:N` | A Sandbox signer issued when the step runs and valid for N seconds (1 to 3600), as `credentialId`: with a later step's `wait`, its certificate has expired by validation time. |
+| `fixture:NAME` | A bundled file, as an upload option: `fixture:signature-policy` (A signature-policy document (for the signature-policy-store)), `fixture:attribute-certificate` (An X.509 attribute certificate (RFC 5755) with the role 'Legal representative'), `fixture:saml-assertion` (A SAML 2.0 assertion about the signer), `fixture:validation-policy-en319422` (A validation policy with the EN 319 422 time-stamp profile: accuracy given, no ordering, the Sandbox TSA's policy). |
 
 ## Validation steps
 
@@ -197,6 +199,10 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `validation.policyId` | upload |  | Validation policy (JSON): The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on. |
 | `validation.level` | choice | `BasicSignatures`, `Timestamps`, `LongTermData`, `ArchivalData` | Validation level: How much of each signature is validated. |
 | `validation.revocationStrategy` | choice | `OcspFirst`, `CrlFirst` | Revocation strategy: Which revocation source is asked first; the other one is the fallback. |
+
+## Step fields
+
+`wait`: seconds (0 to 300) the step waits before it runs, before its Sandbox changes.
 
 ## Sandbox
 

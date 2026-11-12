@@ -12,7 +12,7 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, iofe, iofe-nonrepudiation). Write one with 'simplesign policy export validation [--preset NAME]'")]
+    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, iofe, iofe-nonrepudiation). Write one with 'simplesign policy export validation [--preset NAME]'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>

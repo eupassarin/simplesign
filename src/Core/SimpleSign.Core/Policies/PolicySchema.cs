@@ -121,7 +121,8 @@ internal static class PolicySchema
             "TimestampDelay:T RevocationTimeAgainstBestSignatureTime:L " +
             "BestSignatureTimeBeforeExpirationDateOfSigningCertificate:L Coherence:L TimestampValid:L " +
             "BasicSignatureConstraints:BasicSignatureConstraints SignedAttributes:SignedAttributesConstraints " +
-            "TSAGeneralNamePresent:L TSAGeneralNameContentMatch:L TSAGeneralNameOrderMatch:L AtsHashIndex:L");
+            "TSAGeneralNamePresent:L TSAGeneralNameContentMatch:L TSAGeneralNameOrderMatch:L AtsHashIndex:L " +
+            "AccuracyPresent:L OrderingFalse:L AcceptablePolicies:M");
         Add("RevocationConstraints",
             "UnknownStatus:L ThisUpdatePresent:L RevocationIssuerKnown:L RevocationIssuerValidAtProductionTime:L " +
             "RevocationAfterCertificateIssuance:L RevocationHasInformationAboutCertificate:L OCSPResponderIdMatch:L " +

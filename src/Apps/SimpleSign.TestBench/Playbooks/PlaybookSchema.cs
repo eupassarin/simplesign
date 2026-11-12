@@ -91,6 +91,9 @@ internal static class PlaybookSchema
                 ["indication"] = Str("ETSI indication of the first signature.", ["TOTAL_PASSED", "TOTAL_FAILED", "INDETERMINATE"]),
                 ["subIndication"] = Str("ETSI sub-indication (HASH_FAILURE, REVOKED_NO_POE…)."),
                 ["level"] = Str("Level achieved (signature) or detected (validation).", ["B-B", "B-T", "B-LT", "B-LTA"]),
+                ["failedConstraints"] = Arr(Str("A constraint name (AccuracyPresent)."),
+                    "Constraints of the validation policy that must fail, by name, in the signature or what it carries (a time-stamp, revocation data)."),
+                ["etsiReport"] = Str("valid: the run's ETSI TS 119 102-2 validation report must be valid against its schema (embedded in SimpleSign).", ["valid"]),
                 ["dssAgrees"] = Bool("Whether EU DSS must agree with SimpleSign. Needs crossValidate on the step or in the defaults, and a run that produces a file (a refusal is never sent to DSS); when DSS is unavailable this check fails."),
                 ["logContains"] = Arr(Str("Text."), "Texts the run's log must contain."),
             }),
@@ -104,6 +107,7 @@ internal static class PlaybookSchema
                 ["format"] = Str("Format of a signature; the default's when absent.", RunFormats.All),
                 ["engine"] = Str("Engine; the default's when absent.", PlaybookEngines.All),
                 ["crossValidate"] = Bool("Whether EU DSS also validates the file this step produces; overrides defaults.crossValidate."),
+                ["wait"] = new JsonObject { ["type"] = "integer", ["minimum"] = 0, ["maximum"] = 300, ["description"] = "Seconds to wait before the step runs, before its Sandbox changes (a short-lived certificate that must expire, a revocation that must come after a time-stamp)." },
                 ["sandbox"] = Ref("sandbox"),
                 ["options"] = options,
                 ["expect"] = Ref("expect"),
@@ -161,7 +165,10 @@ internal static class PlaybookSchema
             .Append("| `cades-sample:ID` / `xades-sample:ID` | A CAdES or XAdES sample: data to sign as `dataId` (`text`, `json`, `pdf` / `order`), or a signed file as a validation's `fileId` (`v-valid`, `v-tampered`… / `v-xades`, `v-changed`…); `ID#data` is the data a detached sample signature is checked against, as a validation's `dataId`. |\n")
             .Append("| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: ")
             .Append(string.Join(", ", PolicyPresets.All.Select(p => $"`{p.Id}`"))).Append(". |\n")
-            .Append("| `step:ID` | The file an earlier step signed, as `fileId` of a validation or as the input of a later signature. |\n\n")
+            .Append("| `step:ID` | The file an earlier step signed, as `fileId` of a validation or as the input of a later signature. |\n")
+            .Append("| `sandbox-short-lived:N` | A Sandbox signer issued when the step runs and valid for N seconds (1 to 3600), as `credentialId`: with a later step's `wait`, its certificate has expired by validation time. |\n")
+            .Append("| `fixture:NAME` | A bundled file, as an upload option: ")
+            .Append(string.Join(", ", Documents.Fixtures.All.Select(f => $"`{f.Id}` ({f.Title})"))).Append(". |\n\n")
             .Append("## Validation steps\n\n`kind: \"validate\"` takes `{ \"fileId\": \"step:ID\", \"dataId\": \"sample:ID\"?, \"settings\": { \"trust\": [...], \"policyId\": \"preset:validation:NAME\", \"level\": \"ArchivalData\" } }`.\n\n");
         foreach (var format in schema.Formats)
         {
@@ -176,6 +183,7 @@ internal static class PlaybookSchema
             md.Append('\n');
         }
 
+        md.Append("## Step fields\n\n`wait`: seconds (0 to 300) the step waits before it runs, before its Sandbox changes.\n\n");
         md.Append("## Sandbox\n\nSigner ids (`sandbox:ID`) and certificate ids (`sandbox.revoke`) are those of the connected Sandbox (`GET /api/pki` on it); ")
             .Append("the TestBench checks them when it loads a playbook. Failures: crl ").Append(string.Join("/", Enum.GetNames<CrlFault>()))
             .Append(", ocsp ").Append(string.Join("/", Enum.GetNames<OcspFault>()))

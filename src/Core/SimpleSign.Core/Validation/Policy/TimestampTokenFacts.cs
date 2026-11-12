@@ -33,9 +33,52 @@ internal sealed record TimestampTokenFacts(TimestampTokenKind Kind, byte[] Token
     };
 }
 
+/// <summary>The fields of a TSTInfo EN 319 422 profiles: the TSA policy, whether accuracy is given, and ordering.</summary>
+internal sealed record TstInfoProfile(string? Policy, bool AccuracyPresent, bool Ordering);
+
 /// <summary>Reads the TSTInfo of a timestamp token.</summary>
 internal static class TstInfoReader
 {
+    /// <summary>The policy, accuracy and ordering of a timestamp token's TSTInfo (RFC 3161 §2.4.2); null when it cannot be read.</summary>
+    public static TstInfoProfile? ProfileFromToken(byte[] token)
+    {
+        try
+        {
+            var signedData = new AsnReader(token, AsnEncodingRules.BER).ReadSequence();
+            signedData.ReadObjectIdentifier();
+            var content = signedData.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true)).ReadSequence();
+            content.ReadInteger();
+            content.ReadSetOf(skipSortOrderValidation: true);
+            var encapsulated = content.ReadSequence();
+            encapsulated.ReadObjectIdentifier();
+            var info = new AsnReader(encapsulated.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true)).ReadOctetString(),
+                AsnEncodingRules.DER).ReadSequence();
+            info.ReadInteger(); // version
+            string policy = info.ReadObjectIdentifier();
+            info.ReadSequence(); // messageImprint
+            info.ReadIntegerBytes(); // serialNumber
+            info.ReadGeneralizedTime(); // genTime
+            bool accuracy = false;
+            bool ordering = false;
+            if (info.HasData && info.PeekTag().HasSameClassAndValue(Asn1Tag.Sequence))
+            {
+                info.ReadSequence(); // accuracy
+                accuracy = true;
+            }
+
+            if (info.HasData && info.PeekTag().HasSameClassAndValue(Asn1Tag.Boolean))
+            {
+                ordering = info.ReadBoolean();
+            }
+
+            return new TstInfoProfile(policy, accuracy, ordering);
+        }
+        catch (AsnContentException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>The genTime and TSA name of a timestamp token (a CMS ContentInfo with a TSTInfo).</summary>
     public static (DateTimeOffset? GenTime, X500DistinguishedName? Tsa, bool TsaPresent) FromToken(byte[] token)
     {

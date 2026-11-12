@@ -394,7 +394,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         // but doesn't in current .NET. At signing time, tempSig was in the document.
         // We rebuild the signing-time document structure for CheckSignature to work.
         // The references (HASH_FAILURE when one does not match) and the SignatureValue (SIG_CRYPTO_FAILURE) apart.
-        bool referencesValid = VerifyWithSignedXml(doc, sigElement, ns, errors, out bool signatureValueValid, originalData);
+        bool referencesValid = VerifyWithSignedXml(doc, sigElement, ns, errors, out bool signatureValueValid, out bool signedDataMissing, originalData);
         bool sigValid = referencesValid && signatureValueValid;
 
         if (!sigValid)
@@ -502,7 +502,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         var facts = new ValidationFacts
         {
             IsIntegrityValid = referencesValid,
-            IsSignatureValid = sigValid,
+            // A reference whose data was not given (a detached signature validated alone): SIGNED_DATA_NOT_FOUND, and
+            // the signature is judged by its SignatureValue over SignedInfo alone.
+            IsSignatureValid = signedDataMissing ? signatureValueValid : sigValid,
+            SignedDataFound = signedDataMissing ? false : null,
             SignerCertificate = signerCert,
             IsCertificateChainValid = chainValid,
             IsTsaTrusted = tsaTrusted,
@@ -530,7 +533,9 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             SignatureIdUnique = string.IsNullOrEmpty(extraction.SignatureId) ? null : CountIds(doc, extraction.SignatureId) == 1,
             CoversWholeDocument = sigElement.SelectSingleNode("ds:SignedInfo/ds:Reference[@URI='']", ns) is not null ? true : null,
             PolicyStorePresent = ReadSignaturePolicy(sigElement, ns) is null ? null : XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null,
-            PolicyDocumentAvailable = XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null ? true : null,
+            // Obtained when the signature carries it (SignaturePolicyStore) or a provider found it; otherwise not.
+            PolicyDocumentAvailable = ReadSignaturePolicy(sigElement, ns)?.Oid is not { } policyOid ? null
+                : XadesSignatureBuilder.ReadSignaturePolicyStore(sigElement, ns) is not null || _options.PolicyDocumentFound(policyOid) == true,
             IsCounterSignature = depth > 0,
             StructureErrors = Internal.XmlSchemas.Validate(sigElement),
             TrustedLists = _options.TrustedLists,
@@ -822,9 +827,11 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlNamespaceManager ns,
         List<string> errors,
         out bool signatureValueValid,
+        out bool signedDataMissing,
         XadesDetachedData? originalData = null)
     {
         signatureValueValid = false;
+        signedDataMissing = false;
         try
         {
             if (sigElement.SelectSingleNode("ds:SignedInfo", ns) is not XmlElement signedInfoEl)
@@ -922,7 +929,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             }
 
             // Step 2: Verify reference digests, whatever the signature value gave.
-            return VerifyReferenceDigests(doc, sigElement, signedInfoEl, ns, errors, originalData);
+            return VerifyReferenceDigests(doc, sigElement, signedInfoEl, ns, errors, out signedDataMissing, originalData);
         }
         // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
@@ -938,9 +945,11 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         XmlElement signedInfoEl,
         XmlNamespaceManager ns,
         List<string> errors,
+        out bool dataMissing,
         XadesDetachedData? originalData = null)
     {
         bool allValid = true;
+        dataMissing = false;
         var refNodes = signedInfoEl.SelectNodes("ds:Reference", ns);
 
         if (refNodes is null || refNodes.Count == 0)
@@ -995,6 +1004,13 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             try
             {
                 actualDigest = ComputeReferenceDigest(doc, sigElement, refEl, hashAlg, ns, originalData);
+            }
+            catch (ReferenceDataNotFoundException ex)
+            {
+                errors.Add(ex.Message);
+                allValid = false;
+                dataMissing = true;
+                continue;
             }
             // S2221: intentional -- validation pipeline converts exceptions to error messages
             catch (Exception ex)
@@ -1055,8 +1071,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             return XmlCompatibleData(externalData, refEl, ns);
         }
 
-        throw new NotSupportedException(
-            $"Reference URI scheme not supported: '{uri}'. Provide original data via the originalData parameter for Detached form validation.");
+        throw new ReferenceDataNotFoundException(
+            $"The data of reference '{uri}' was not given: pass it (the detached data) to validate a detached signature.");
     }
 
     private static byte[] XmlCompatibleData(
@@ -1899,3 +1915,6 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             ?? root.SelectSingleNode(flatPath, ns) as XmlElement;
     }
 }
+
+/// <summary>The data a ds:Reference points to is not in the document and was not given (a detached signature validated alone).</summary>
+internal sealed class ReferenceDataNotFoundException(string message) : NotSupportedException(message);

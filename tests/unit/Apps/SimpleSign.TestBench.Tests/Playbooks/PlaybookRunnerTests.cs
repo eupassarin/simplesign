@@ -43,6 +43,7 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
     [SkippableTheory]
     [InlineData("sandbox-basics")]
     [InlineData("indecopi-guia-v4")]
+    [InlineData("etsi-baseline")]
     public async Task RunToEnd_Sample_PassesEveryStep(string sample)
     {
         fixture.RequireSandbox();
