@@ -33,7 +33,7 @@ namespace SimpleSign.XAdES;
 /// the TSA credentials.
 /// </para>
 /// <para>
-/// A countersignature is not built in two phases: use <see cref="XadesSigner.CounterSign"/> with an external signer.
+/// A countersignature is prepared with <see cref="XadesDeferredSigner.CounterSign"/>.
 /// </para>
 /// </remarks>
 [RequiresUnreferencedCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]

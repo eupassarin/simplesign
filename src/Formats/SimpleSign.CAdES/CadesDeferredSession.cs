@@ -68,6 +68,15 @@ internal sealed class CadesDeferredSession
     /// <summary>The operation id given in phase one, for the audit record and the logs of phase two.</summary>
     public string? OperationId { get; init; }
 
+    /// <summary>The existing signature the new signer is added to (co-signature), or null.</summary>
+    public byte[]? CoSignTarget { get; init; }
+
+    /// <summary>The existing signature one of whose signers is countersigned, or null. <see cref="Content"/> is then that signer's signature value.</summary>
+    public byte[]? CounterSignTarget { get; init; }
+
+    /// <summary>The signer of <see cref="CounterSignTarget"/> that is countersigned.</summary>
+    public int CounterSignIndex { get; init; }
+
     /// <summary>Serializes the session, authenticated with <paramref name="key"/>.</summary>
     internal byte[] Protect(byte[] key) =>
         DeferredSessionEnvelope.Protect(this, CadesDeferredSessionJsonContext.Default.CadesDeferredSession, Format, key);

@@ -75,6 +75,9 @@ internal sealed class XadesDeferredSession
     /// <summary>The operation id given in phase one, for the audit record and the logs of phase two.</summary>
     public string? OperationId { get; init; }
 
+    /// <summary>Whether the signature being made countersigns a signature of the document.</summary>
+    public bool CounterSignature { get; init; }
+
     /// <summary>Serializes the session, authenticated with <paramref name="key"/>.</summary>
     internal byte[] Protect(byte[] key) =>
         DeferredSessionEnvelope.Protect(this, XadesDeferredSessionJsonContext.Default.XadesDeferredSession, Format, key);

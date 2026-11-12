@@ -32,6 +32,29 @@ public static class CadesDeferredSigner
         return new CadesDeferredSignerBuilder(new CadesSignerBuilder(data, logger: null), session: null, sessionIntegrityKey: null);
     }
 
+    /// <summary>
+    /// Creates a builder that prepares a two-phase co-signature: a new signer over the same content, added to
+    /// <paramref name="existingSignature"/> (a .p7s or .p7m) when the session is completed. See <see cref="CadesSigner.CoSign"/>.
+    /// </summary>
+    /// <param name="existingSignature">The existing CMS signature. It travels in the session.</param>
+    /// <param name="data">The signed content; required for a detached .p7s, ignored for an attached .p7m.</param>
+    /// <returns>A builder that needs <c>WithCertificate</c> and <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
+    /// <exception cref="ArgumentException">Detached signature without <paramref name="data"/>, or data that the existing signature does not cover.</exception>
+    public static CadesDeferredSignerBuilder CoSign(byte[] existingSignature, byte[]? data = null) =>
+        new(CadesSigner.CoSign(existingSignature, data), session: null, sessionIntegrityKey: null);
+
+    /// <summary>
+    /// Creates a builder that prepares a two-phase countersignature of signer <paramref name="signerIndex"/> of
+    /// <paramref name="existingSignature"/> (RFC 5652 §11.4). The bytes to sign are the signed attributes over that
+    /// signer's signature value. See <see cref="CadesSigner.CounterSign"/>.
+    /// </summary>
+    /// <param name="existingSignature">The existing CMS signature. It travels in the session.</param>
+    /// <param name="signerIndex">The signer to countersign.</param>
+    /// <returns>A builder that needs <c>WithCertificate</c> and <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">There is no such signer.</exception>
+    public static CadesDeferredSignerBuilder CounterSign(byte[] existingSignature, int signerIndex = 0) =>
+        new(CadesSigner.CounterSign(existingSignature, signerIndex), session: null, sessionIntegrityKey: null);
+
     /// <summary>Resumes a session prepared by <see cref="CadesDeferredSignerBuilder.PrepareAsync(CancellationToken)"/>.</summary>
     /// <param name="sessionData">The session returned by phase one.</param>
     /// <param name="sessionIntegrityKey">The server-owned HMAC key given in phase one.</param>

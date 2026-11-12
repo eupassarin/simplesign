@@ -255,6 +255,59 @@ public sealed class XadesDeferredSignerTests : IDisposable
         results.ShouldAllBe(r => r.IsValid);
     }
 
+    // ── Countersignature ──────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task CounterSign_InTwoPhases_IsUnderTheSignatureItCountersigns(bool ecdsa, bool timestamped)
+    {
+        X509Certificate2 witness = Signer(ecdsa);
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(witness);
+        using X509Certificate2 signer = TestCertificateFactory.CreateSelfSignedCert("CN=First Signer, O=Tests");
+        byte[] signed = await XadesSigner.Document(_xml).WithCertificate(signer).SignAsync();
+        var audit = new RecordingAuditSink();
+
+        XadesDeferredSignerBuilder builder = XadesDeferredSigner.CounterSign(signed)
+            .WithCertificate(publicCertificate)
+            .WithSessionIntegrityKey(s_key)
+            .WithSignerRole("Witness");
+        XadesDeferredPrepareResult prepared = await (timestamped
+            ? builder.WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(TsaUrl))))
+            : builder).PrepareAsync();
+        XadesSigningResult result = await XadesDeferredSigner.Resume(prepared.SessionData, s_key)
+            .WithHttpClientProvider(Http)
+            .WithAuditSink(audit)
+            .CompleteWithDetailsAsync(RemoteKey.Sign(witness, prepared.ToSigningRequest()));
+
+        result.AchievedLevel.ShouldBe(timestamped ? AdesBaselineLevel.Timestamped : AdesBaselineLevel.Basic);
+        XadesValidationResult validation = new XadesSignatureValidator().Validate(result.SignedArtifact, [signer, witness]);
+        validation.IsValid.ShouldBeTrue(string.Join("; ", validation.Errors));
+        XadesValidationResult counter = validation.CounterSignatures.ShouldHaveSingleItem();
+        counter.IsValid.ShouldBeTrue(string.Join("; ", counter.Errors));
+        counter.SignerCertificate!.Subject.ShouldBe(witness.Subject);
+        counter.ClaimedRoles.ShouldBe(["Witness"]);
+        counter.HasValidSignatureTimeStamp.ShouldBe(timestamped ? true : null);
+        audit.Events.ShouldHaveSingleItem().Signed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task CounterSign_LevelAboveTimestamped_IsRefusedWhilePreparing()
+    {
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_rsa);
+        byte[] signed = await XadesSigner.Document(_xml).WithCertificate(_ecdsa).SignAsync();
+        var tsa = new TimestampOptions(new Uri(TsaUrl));
+
+        var ex = await Should.ThrowAsync<SigningException>(() => XadesDeferredSigner.CounterSign(signed)
+            .WithCertificate(publicCertificate)
+            .WithSessionIntegrityKey(s_key)
+            .WithLevel(AdesBaselineProfile.LongTerm(tsa, new LongTermValidationOptions()))
+            .PrepareAsync());
+
+        ex.Reason.ShouldBe(SigningErrorReason.LevelNotAchievable);
+    }
+
     // ── What is signed is fixed in phase one ──────────────────────────────
 
     [Theory]

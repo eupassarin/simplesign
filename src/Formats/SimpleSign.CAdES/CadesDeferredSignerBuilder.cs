@@ -31,8 +31,8 @@ namespace SimpleSign.CAdES;
 /// the TSA credentials.
 /// </para>
 /// <para>
-/// A co-signature or a countersignature is not built in two phases: use <see cref="CadesSigner.CoSign"/> and
-/// <see cref="CadesSigner.CounterSign"/> with an external signer.
+/// A co-signature and a countersignature are prepared with <see cref="CadesDeferredSigner.CoSign"/> and
+/// <see cref="CadesDeferredSigner.CounterSign"/>; the existing signature travels in the session.
 /// </para>
 /// </remarks>
 public sealed class CadesDeferredSignerBuilder

@@ -37,6 +37,18 @@ public static class XadesDeferredSigner
         return new XadesDeferredSignerBuilder(new XadesSignerBuilder(xmlData, logger: null), session: null, sessionIntegrityKey: null);
     }
 
+    /// <summary>
+    /// Creates a builder that prepares a two-phase countersignature of a signature of an already signed document
+    /// (ETSI EN 319 132-1 §5.2.7.2). The bytes to sign are the canonical SignedInfo of the countersignature.
+    /// The builder accepts the B-B and B-T levels. See <see cref="XadesSigner.CounterSign"/>.
+    /// </summary>
+    /// <param name="signedXml">The signed XML document. The array is copied.</param>
+    /// <param name="signatureId">The Id of the ds:Signature to countersign; null when the document has a single signature.</param>
+    /// <returns>A builder that needs <c>WithCertificate</c> and <c>WithSessionIntegrityKey</c> before <c>PrepareAsync</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="signedXml"/> is null.</exception>
+    public static XadesDeferredSignerBuilder CounterSign(byte[] signedXml, string? signatureId = null) =>
+        new(XadesSigner.CounterSign(signedXml, signatureId), session: null, sessionIntegrityKey: null);
+
     /// <summary>Resumes a session prepared by <see cref="XadesDeferredSignerBuilder.PrepareAsync(CancellationToken)"/>.</summary>
     /// <param name="sessionData">The session returned by phase one.</param>
     /// <param name="sessionIntegrityKey">The server-owned HMAC key given in phase one.</param>

@@ -28,6 +28,7 @@ public sealed partial class XadesSignerBuilder
                 session.ArchiveTimestampEndpoint, session.RevocationPreference, session.ClockSkewSeconds),
             ExtendedForm = session.ExtendedForm,
             OperationId = session.OperationId,
+            IsCounterSignature = session.CounterSignature,
             AdditionalDataObjects = session.ExternalDataObjects is { Length: > 0 } external
                 ? [.. external.Select(o => XadesDataObject.External(o.Uri, o.Content))]
                 : null,
@@ -63,18 +64,36 @@ public sealed partial class XadesSignerBuilder
                 SigningErrorReason.CredentialMissing);
         SigningStart start = await BeginAsync(credential, cancellationToken).ConfigureAwait(false);
 
-        var additionalReferences = XadesSignatureBuilder.PlanAdditionalReferences(_options.AdditionalDataObjects);
-        // The data objects timestamp is a signed property, so the TSA is asked before the bytes to sign exist.
-        XadesDataObjectsTimeStamp? dataObjectsTimeStamp = _options.DataObjectsTimestamp is { } dataTsa
-            ? await RequestDataObjectsTimeStampAsync(dataTsa, start.HashAlgorithm, _options.OperationId ?? "-", additionalReferences, cancellationToken).ConfigureAwait(false)
-            : null;
+        byte[] signedInfo;
+        byte[] preparedXml;
+        string signatureId;
+        DateTimeOffset signingTime;
+        if (_options.IsCounterSignature)
+        {
+            // The countersignature is put in its place in the document with an empty signature value.
+            signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
+            XadesCounterSignaturePreparation counter = XadesSignatureBuilder.PrepareCounterSignature(
+                _xmlData, _options.CounterSignTargetId, start.Certificate, start.HashAlgorithm, signingTime, start.Chain,
+                _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm, start.SignatureAlgorithmOid,
+                _options.Roles, _options.ProductionPlace, XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization));
+            (signedInfo, preparedXml, signatureId) = (counter.SignedInfoCanonical, counter.PreparedXml, counter.SignatureId);
+        }
+        else
+        {
+            var additionalReferences = XadesSignatureBuilder.PlanAdditionalReferences(_options.AdditionalDataObjects);
+            // The data objects timestamp is a signed property, so the TSA is asked before the bytes to sign exist.
+            XadesDataObjectsTimeStamp? dataObjectsTimeStamp = _options.DataObjectsTimestamp is { } dataTsa
+                ? await RequestDataObjectsTimeStampAsync(dataTsa, start.HashAlgorithm, _options.OperationId ?? "-", additionalReferences, cancellationToken).ConfigureAwait(false)
+                : null;
 
-        ExternalPreparation preparation = PrepareExternal(
-            start.Certificate, start.HashAlgorithm, start.SignatureAlgorithmOid, dataObjectsTimeStamp, additionalReferences);
-        byte[] preparedXml = AssembleExternal(
-            preparation, signatureValue: [], start.Certificate, start.Chain, start.HashAlgorithm, start.SignatureAlgorithmOid,
-            dataObjectsTimeStamp, additionalReferences);
-        string signatureId = XadesSignatureBuilder.GetLastSignatureId(preparedXml);
+            ExternalPreparation preparation = PrepareExternal(
+                start.Certificate, start.HashAlgorithm, start.SignatureAlgorithmOid, dataObjectsTimeStamp, additionalReferences);
+            preparedXml = AssembleExternal(
+                preparation, signatureValue: [], start.Certificate, start.Chain, start.HashAlgorithm, start.SignatureAlgorithmOid,
+                dataObjectsTimeStamp, additionalReferences);
+            (signedInfo, signatureId, signingTime) =
+                (preparation.SignedInfoCanonical, XadesSignatureBuilder.GetLastSignatureId(preparedXml), preparation.SigningTime);
+        }
 
         // The policy store is an unsigned property: it goes in now, before the timestamps of phase two.
         if (_options.PolicyStore is { } policyStore)
@@ -89,17 +108,17 @@ public sealed partial class XadesSignerBuilder
         var profile = _options.Profile;
         var session = new XadesDeferredSession
         {
-            SignedInfo = preparation.SignedInfoCanonical,
+            SignedInfo = signedInfo,
             PreparedXml = preparedXml,
             SignatureId = signatureId,
-            DetachedContent = _options.Form == XadesForm.Detached ? _xmlData : null,
+            DetachedContent = !_options.IsCounterSignature && _options.Form == XadesForm.Detached ? _xmlData : null,
             ExternalDataObjects = external.Length == 0 ? null : external,
             InputSha256 = Convert.ToHexString(SHA256.HashData(_xmlData)),
             CertificateDer = start.Certificate.RawData,
             ExtraCertificatesDer = start.Chain.Count == 0 ? null : [.. start.Chain.Select(c => c.RawData)],
             HashAlgorithm = start.HashAlgorithm.Name!,
             SignatureAlgorithmOid = start.SignatureAlgorithmOid,
-            SigningTime = preparation.SigningTime,
+            SigningTime = signingTime,
             RequestedLevel = profile.Level,
             LevelFailureBehavior = profile.FailureBehavior,
             TimestampEndpoint = profile.Timestamp?.Endpoint.ToString(),
@@ -108,14 +127,15 @@ public sealed partial class XadesSignerBuilder
             ClockSkewSeconds = DeferredProfile.ClockSkewSecondsToRecord(profile),
             ExtendedForm = _options.ExtendedForm,
             OperationId = _options.OperationId,
+            CounterSignature = _options.IsCounterSignature,
         };
 
         byte[] sessionData = session.Protect(sessionIntegrityKey);
         _options.Dependencies.Logger.DeferredPrepared(
-            _options.OperationId ?? "-", signatureId, preparation.SignedInfoCanonical.Length, sessionData.Length);
+            _options.OperationId ?? "-", signatureId, signedInfo.Length, sessionData.Length);
         return new XadesDeferredPrepareResult
         {
-            DataToSign = preparation.SignedInfoCanonical,
+            DataToSign = signedInfo,
             SessionData = sessionData,
             DigestAlgorithm = start.HashAlgorithm.Name!,
             SignatureAlgorithmOid = start.SignatureAlgorithmOid,

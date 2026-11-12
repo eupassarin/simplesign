@@ -29,6 +29,9 @@ public sealed partial class CadesSignerBuilder
             ContentType = session.Attached ? CadesContentType.Enveloped : CadesContentType.Detached,
             ExtendedForm = session.ExtendedForm,
             OperationId = session.OperationId,
+            CoSignTarget = session.CoSignTarget,
+            CounterSignTarget = session.CounterSignTarget,
+            CounterSignIndex = session.CounterSignIndex,
         });
     }
 
@@ -88,6 +91,9 @@ public sealed partial class CadesSignerBuilder
             ExtendedForm = _options.ExtendedForm,
             PolicyStoreAttribute = _options.PolicyStore is { } store ? CadesSignaturePolicyStore.Encode(store).DerValue : null,
             OperationId = _options.OperationId,
+            CoSignTarget = _options.CoSignTarget,
+            CounterSignTarget = _options.CounterSignTarget,
+            CounterSignIndex = _options.CounterSignIndex,
         };
 
         byte[] sessionData = session.Protect(sessionIntegrityKey);
