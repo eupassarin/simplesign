@@ -36,7 +36,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `separateArchiveTsa` | toggle |  | Different TSA for the archive timestamp: By default the document timestamp comes from the signature TSA. |
 | `archiveTimestamp` | tsa |  | Archive TSA: The TSA of the document timestamp (B-LTA). |
 | `signingPolicyId` | upload |  | Signing policy (JSON): The checks made before signing: a JSON file with root SigningConstraints. Without a file, the library's default: validity of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. A constraint at FAIL stops the signature, at WARN it becomes a warning. |
-| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList`, `SandboxIofeList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
 | `signingControls.expectedTsa` | choice | `""`, `tsa`, `tsa-revoked` | Expected TSA: The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted). |
 | `signingControls.auditLog` | toggle |  | Audit trail: Records each signature made or refused (certificate, policy, hashes, reason) in a hash-chained trail; the Logs tab shows the records and whether the chain holds. |
 | `hash` | choice | `Sha256`, `Sha384`, `Sha512`, `Sha3_256`, `Sha3_384`, `Sha3_512` | Digest algorithm: Hash of the document bytes and of the signed attributes. |
@@ -102,7 +102,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `operationId` | text |  | Operation id: A correlation id for logs and warnings. |
 | `attemptRefused` | toggle |  | Attempt refused signatures: Runs even when the signing policy is foreseen to refuse the signer, so the result shows the library's own refusal (SigningException and its reason) — what a certification needs as evidence. |
 | `validate` | toggle |  | Validate after signing: Validates the produced file with SimpleSign's own validator. |
-| `validation.trust` | trust | `SandboxTrustedList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.trust` | trust | `SandboxTrustedList`, `SandboxIofeList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
 | `validation.policyId` | upload |  | Validation policy (JSON): The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on. |
 | `validation.level` | choice | `BasicSignatures`, `Timestamps`, `LongTermData`, `ArchivalData` | Validation level: How much of each signature is validated. |
 | `validation.revocationStrategy` | choice | `OcspFirst`, `CrlFirst` | Revocation strategy: Which revocation source is asked first; the other one is the fallback. |
@@ -128,7 +128,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `timestamp` | tsa |  | Time-stamping authority (TSA): Who signs the trusted time of the signature. |
 | `contentTimestamp` | toggle |  | Content timestamp: A timestamp over the content, asked from the signature TSA before signing: proves the content existed before the signature. |
 | `signingPolicyId` | upload |  | Signing policy (JSON): The checks made before signing: a JSON file with root SigningConstraints. Without a file, the library's default: validity of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. A constraint at FAIL stops the signature, at WARN it becomes a warning. |
-| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList`, `SandboxIofeList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
 | `signingControls.expectedTsa` | choice | `""`, `tsa`, `tsa-revoked` | Expected TSA: The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted). |
 | `signingControls.auditLog` | toggle |  | Audit trail: Records each signature made or refused (certificate, policy, hashes, reason) in a hash-chained trail; the Logs tab shows the records and whether the chain holds. |
 | `hash` | choice | `Sha256`, `Sha384`, `Sha512`, `Sha3_256`, `Sha3_384`, `Sha3_512` | Digest algorithm: Hash of the document bytes and of the signed attributes. |
@@ -146,7 +146,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `operationId` | text |  | Operation id: A correlation id for logs and warnings. |
 | `attemptRefused` | toggle |  | Attempt refused signatures: Runs even when the signing policy is foreseen to refuse the signer, so the result shows the library's own refusal (SigningException and its reason) — what a certification needs as evidence. |
 | `validate` | toggle |  | Validate after signing: Validates the produced file with SimpleSign's own validator. |
-| `validation.trust` | trust | `SandboxTrustedList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.trust` | trust | `SandboxTrustedList`, `SandboxIofeList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
 | `validation.policyId` | upload |  | Validation policy (JSON): The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on. |
 | `validation.level` | choice | `BasicSignatures`, `Timestamps`, `LongTermData`, `ArchivalData` | Validation level: How much of each signature is validated. |
 | `validation.revocationStrategy` | choice | `OcspFirst`, `CrlFirst` | Revocation strategy: Which revocation source is asked first; the other one is the fallback. |
@@ -174,7 +174,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `timestamp` | tsa |  | Time-stamping authority (TSA): Who signs the trusted time of the signature. |
 | `dataObjectsTimestamp` | toggle |  | Data objects timestamp: A timestamp over the signed data, asked from the signature TSA before signing (AllDataObjectsTimeStamp). |
 | `signingPolicyId` | upload |  | Signing policy (JSON): The checks made before signing: a JSON file with root SigningConstraints. Without a file, the library's default: validity of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. A constraint at FAIL stops the signature, at WARN it becomes a warning. |
-| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList`, `SandboxIofeList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
 | `signingControls.expectedTsa` | choice | `""`, `tsa`, `tsa-revoked` | Expected TSA: The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted). |
 | `signingControls.auditLog` | toggle |  | Audit trail: Records each signature made or refused (certificate, policy, hashes, reason) in a hash-chained trail; the Logs tab shows the records and whether the chain holds. |
 | `hash` | choice | `Sha256`, `Sha384`, `Sha512`, `Sha3_256`, `Sha3_384`, `Sha3_512` | Digest algorithm: Hash of the document bytes and of the signed attributes. |
@@ -195,7 +195,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `operationId` | text |  | Operation id: A correlation id for logs and warnings. |
 | `attemptRefused` | toggle |  | Attempt refused signatures: Runs even when the signing policy is foreseen to refuse the signer, so the result shows the library's own refusal (SigningException and its reason) — what a certification needs as evidence. |
 | `validate` | toggle |  | Validate after signing: Validates the produced file with SimpleSign's own validator. |
-| `validation.trust` | trust | `SandboxTrustedList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.trust` | trust | `SandboxTrustedList`, `SandboxIofeList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
 | `validation.policyId` | upload |  | Validation policy (JSON): The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on. |
 | `validation.level` | choice | `BasicSignatures`, `Timestamps`, `LongTermData`, `ArchivalData` | Validation level: How much of each signature is validated. |
 | `validation.revocationStrategy` | choice | `OcspFirst`, `CrlFirst` | Revocation strategy: Which revocation source is asked first; the other one is the fallback. |

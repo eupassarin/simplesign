@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Sandbox: a trusted list in INDECOPI's layout
+
+- `/tl/iofe.xml`: a trusted list laid out as INDECOPI's `tsl-pe.xml` (ETSI TS 102 231 v3, TSLType `generic`, statuses
+  `undersupervision` / `supervisionrevoked`, territory `PE`, one provider per service, no supply points), signed by the
+  TL operator, with the trusted-list failures applying to it. Its services: the root CA (CA/QC); a new self-signed
+  **Timestamping CA** (`tsa-ca`) typed `unspecified` — the CA of the new `/tsa/iofe` TSA (`tsa-iofe`), as INDECOPI lists
+  the Llama.pe Timestamping CA, so that TSA chains through the `unspecified` service only —; the revoked TSA
+  (`unspecified`, withdrawn); and a signature software listed with a new code-signing certificate (`code-signing`),
+  which must never become an anchor. `GET /api/info` gives `trustedLists.iofeUrl` and `tsa.iofeUrl`.
+- TestBench: the trust choice `SandboxIofeList` (signing controls and validation, read with
+  `IofeExtension.DefaultListOptions`) and the TSA `SandboxIofe`; the Sandbox panel shows both URLs.
+- CLI: `--tsl-profile iofe` on signing and validation reads `--tsl` as `IofeExtension` does.
+- Playbook `indecopi-guia-v4`: the `tsl` section uses the INDECOPI-layout list, with new steps for a TSA whose CA is
+  listed as `unspecified` (`tsl-tsa-unspecified`, `tsl-tsa-unlisted`, `v-tsl-tsa-unspecified`).
+
+### Fixed — IOFE validation policy and INDECOPI's list version
+
+- `IofePolicies.Validation` / `ValidationNonRepudiation` accept a trusted list of version 3 (`TrustedLists/TLVersion`
+  3, 5, 6): INDECOPI publishes Peru's list in TS 102 231 v3, which the default constraint (5, 6) made INDETERMINATE.
+
 ### Added — Agent: certificates by country or trust framework
 
 - `GET /api/certificates?country=XX` lists the certificates that chain to the trust anchors (with the intermediates)

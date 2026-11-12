@@ -75,6 +75,38 @@ public sealed class SigningControlsTests(TestBenchFixture fixture) : IDisposable
         result.ErrorType.ShouldBe("SigningException (TimestampCertificateRevoked)", result.Error);
     }
 
+    [SkippableTheory]
+    [InlineData(RunEngines.Library)]
+    [InlineData(RunEngines.Cli)]
+    public async Task IofeListWithTheTsaItListsAsUnspecified_Signs(string engine)
+    {
+        var options = Timestamped(TsaProvider.SandboxIofe) with
+        {
+            SigningPolicyId = IofeSigning,
+            SigningControls = new SigningControlsOptions { Trust = [SigningTrustChoice.SandboxIofeList] },
+        };
+
+        var (result, _) = await RunAsync(options, engine);
+
+        result.Error.ShouldBeNull(string.Join(" | ", result.Issues.Select(i => i.ToString())));
+    }
+
+    [SkippableTheory]
+    [InlineData(RunEngines.Library)]
+    [InlineData(RunEngines.Cli)]
+    public async Task IofeTsaWithTheSandboxRootOnly_IsRefusedAsUntrusted(string engine)
+    {
+        var options = Timestamped(TsaProvider.SandboxIofe) with
+        {
+            SigningPolicyId = IofeSigning,
+            SigningControls = new SigningControlsOptions { Trust = [SigningTrustChoice.SandboxRoot] },
+        };
+
+        var (result, _) = await RunAsync(options, engine);
+
+        result.ErrorType.ShouldBe("SigningException (TimestampUntrusted)", result.Error);
+    }
+
     private SigningOptions Timestamped(TsaProvider tsa = TsaProvider.Sandbox) =>
         fixture.Options() with { Level = BaselineLevel.BT, Timestamp = new TimestampChoice { Provider = tsa } };
 

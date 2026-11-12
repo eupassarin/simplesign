@@ -39,12 +39,15 @@ def refused(reason=None):
     return {"outcome": "refused", **({"reason": reason} if reason else {})}
 
 
-TSL = {"trust": ["SandboxTrustedList"]}
+TSL = {"trust": ["SandboxIofeList"]}
 TSA = {"provider": "Sandbox"}
+IOFE_VALIDATION = {"trust": ["SandboxIofeList"], "policyId": "preset:validation:iofe"}
 
 sections = [
     {"id": "tsl", "title": "Trusted list (TSL)",
-     "description": "The trust anchors come from the Sandbox's trusted list, whose signature is checked against the operator's certificate.",
+     "description": "The trust anchors come from the Sandbox's list laid out as INDECOPI's (/tl/iofe.xml: TS 102 231 v3, TSLType generic, "
+                    "status undersupervision, TSAs and signature software typed unspecified), read as IofeExtension reads Peru's; its "
+                    "signature is checked against the operator's certificate.",
      "steps": [
          sign("tsl-ok", "Sign with a root listed in the TSL", ["F-1", "F-3", "tsl"], {"outcome": "signed"}, signingControls=TSL,
               desc="The Sandbox's TSL is downloaded, its signature is checked with the operator's certificate, and the signer's root is listed: the signature is made."),
@@ -53,11 +56,24 @@ sections = [
          sign("tsl-tampered", "Tampered TSL: refused", ["F-1", "tsl"], refused("UntrustedRoot"), sandbox={"trustedList": "Tampered"}, signingControls=TSL),
          sign("tsl-expired", "Expired TSL: refused", ["F-2", "tsl"], refused("UntrustedRoot"), sandbox={"trustedList": "Expired"}, signingControls=TSL,
               desc="The published TSL has its NextUpdate in the past."),
-         validate("v-tsl-ok", "Validate with anchors from the TSL", ["V-1", "V-3", "tsl"], "step:tsl-ok", {"outcome": "valid"}, trust=["SandboxTrustedList"]),
+         {**sign("tsl-tsa-unspecified", "Time-stamp from a TSA whose CA the TSL lists as 'unspecified'", ["S-1", "F-3", "tsl", "tsa"],
+                 {"outcome": "signed", "level": "B-T"}, level="BT", timestamp={"provider": "SandboxIofe"}, signingControls=TSL,
+                 validation=IOFE_VALIDATION,
+                 desc="As INDECOPI lists the Llama.pe Timestamping CA (not its TSU) with the service type 'unspecified', the TSL names the "
+                      "self-signed CA of the Sandbox's IOFE TSA: its time-stamp chains to that service and the signature is made. "
+                      "Not cross-validated: DSS reads the EU-style list, which does not name that CA."),
+            "crossValidate": False},
+         {**sign("tsl-tsa-unlisted", "Same TSA without the TSL: refused", ["S-1", "tsl", "tsa"], refused("TimestampUntrusted"), level="BT",
+                 timestamp={"provider": "SandboxIofe"},
+                 desc="With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service is what makes it trusted."),
+            "crossValidate": False},
+         validate("v-tsl-ok", "Validate with anchors from the TSL", ["V-1", "V-3", "tsl"], "step:tsl-ok", {"outcome": "valid"}, trust=["SandboxIofeList"]),
          validate("v-tsl-wrong-signer", "Validate with a fake TSL", ["V-1", "tsl"], "step:tsl-ok", {"outcome": "indeterminate"},
-                  sandbox={"trustedList": "WrongSigner"}, trust=["SandboxTrustedList"]),
+                  sandbox={"trustedList": "WrongSigner"}, trust=["SandboxIofeList"]),
          validate("v-tsl-expired", "Validate with an expired TSL", ["V-2", "tsl"], "step:tsl-ok", {"outcome": "indeterminate"},
-                  sandbox={"trustedList": "Expired"}, trust=["SandboxTrustedList"]),
+                  sandbox={"trustedList": "Expired"}, trust=["SandboxIofeList"]),
+         validate("v-tsl-tsa-unspecified", "Validate a time-stamp whose TSA's CA the TSL lists as 'unspecified'", ["V-3", "S-1", "tsl", "tsa"],
+                  "step:tsl-tsa-unspecified", {"outcome": "valid"}, trust=["SandboxIofeList"]),
      ]},
     {"id": "revocation", "title": "Revocation before signing (CRL and OCSP)", "steps": [
         sign("crl-https-good", "CRL over HTTPS, good certificate", ["F-5", "F-8", "crl"], {"outcome": "signed"}, credentialId="sandbox:good-crl-https"),

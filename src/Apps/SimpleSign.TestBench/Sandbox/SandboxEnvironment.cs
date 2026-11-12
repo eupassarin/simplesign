@@ -49,6 +49,16 @@ internal sealed class SandboxConnection : IDisposable
 
     public Uri WrongNameTsaUri => new(Info.Tsa.WrongNameUrl);
 
+    /// <summary>The TSA under its own CA, which the Sandbox's INDECOPI-layout list names as an <c>unspecified</c> service.</summary>
+    /// <exception cref="InvalidOperationException">The Sandbox is older than that TSA.</exception>
+    public Uri IofeTsaUri => new(Info.Tsa.IofeUrl ?? throw new InvalidOperationException("This Sandbox has no INDECOPI-layout TSA: update it."));
+
+    /// <summary>The Sandbox's trusted list laid out as INDECOPI's; null for a Sandbox without one.</summary>
+    public Uri? IofeListUri => Info.TrustedLists?.IofeUrl is { } url ? new Uri(url) : null;
+
+    /// <summary>The certificate the trusted list and the INDECOPI-layout list are signed with; null for a Sandbox without trusted lists.</summary>
+    public X509Certificate2? TlSigner { get; init; }
+
     /// <summary>How long the certificate of <see cref="ShortLivedTsaUri"/> stays valid.</summary>
     public const int ShortLivedTsaSeconds = 30;
 
@@ -81,6 +91,7 @@ internal sealed class SandboxConnection : IDisposable
         Root.Dispose();
         Intermediate.Dispose();
         LotlSigner?.Dispose();
+        TlSigner?.Dispose();
         foreach (var signer in Signers)
         {
             signer.Certificate.Dispose();
@@ -175,6 +186,9 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
         var lotlSigner = info.TrustedLists is { } lists
             ? X509Certificate2.CreateFromPem(await _admin.GetStringAsync(new Uri(lists.LotlSignerUrl), cancellationToken))
             : null;
+        var tlSigner = info.TrustedLists is { } tl
+            ? X509Certificate2.CreateFromPem(await _admin.GetStringAsync(new Uri(tl.TlSignerUrl), cancellationToken))
+            : null;
         // Side by side: each PKCS#12 is downloaded and its key loaded (into the keychain on macOS) on its own thread,
         // which is most of the time of a connection. The order of the Sandbox's list is kept.
         var signers = (await Task.WhenAll(pki.Certificates.Where(c => c.Usage == "Signing").Select(async certificate =>
@@ -193,6 +207,7 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
             Certificates = pki.Certificates,
             Policy = PolicyFor(info),
             LotlSigner = lotlSigner,
+            TlSigner = tlSigner,
         };
         SandboxConnection? previous;
         lock (_gate)

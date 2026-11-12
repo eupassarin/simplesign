@@ -117,6 +117,11 @@ internal class TrustedValidationSettings : CommonSettings
     [Description("Certificate the trusted list must be signed with (the scheme operator's)")]
     public string? TrustedListSignerPath { get; init; }
 
+    /// <summary>Which services of <c>--tsl</c> become anchors.</summary>
+    [CommandOption("--tsl-profile <NAME>")]
+    [Description("Which services of --tsl become anchors: default (CA and TSA services) or iofe (INDECOPI's list: its 'unspecified' TSAs too, never a code-signing certificate; an expired list is kept for the policy's TLNotExpired to judge)")]
+    public string? TrustedListProfile { get; init; }
+
     /// <summary>A list of trusted lists (LOTL); its national lists become trust anchors.</summary>
     [CommandOption("--lotl <URL>")]
     [Description("List of trusted lists (LOTL, e.g. https://ec.europa.eu/tools/lotl/eu-lotl.xml): the CA and TSA services of the national lists it points to become trust anchors")]
@@ -176,6 +181,11 @@ internal class TrustedValidationSettings : CommonSettings
             return Spectre.Console.ValidationResult.Error("--lotl needs a URL and --lotl-signer: the certificate the LOTL must be signed with.");
         }
 
+        if (!TrustedListProfiles.IsKnown(TrustedListProfile))
+        {
+            return Spectre.Console.ValidationResult.Error($"Unknown --tsl-profile '{TrustedListProfile}': use {TrustedListProfiles.Names}.");
+        }
+
         if (TrustedList is not null && TrustedListSignerPath is null)
         {
             return Spectre.Console.ValidationResult.Error("--tsl needs --tsl-signer: the certificate the list must be signed with.");
@@ -213,7 +223,13 @@ internal class TrustedValidationSettings : CommonSettings
 
         if (TrustedList is not null)
         {
-            var options = new TrustedListOptions { SignerCertificates = [LoadCertificate(TrustedListSignerPath!)] };
+            var options = TrustedListProfiles.Options(TrustedListProfile, LoadCertificate(TrustedListSignerPath!));
+            if (TrustedListProfile is not null && TrustedListProfile.Equals("iofe", StringComparison.OrdinalIgnoreCase))
+            {
+                // As the IOFE validation policy expects: an expired list is read, and its TLNotExpired constraint judges it.
+                options = options with { RejectExpired = false };
+            }
+
             var list = Uri.TryCreate(TrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"
                 ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, http, cancellationToken: cancellationToken)
                 : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(TrustedList, cancellationToken), options);

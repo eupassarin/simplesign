@@ -46,14 +46,16 @@ public static class IofePolicies
     /// Validation: the constraints of <see cref="ValidationPolicy.Default"/> (obsolete algorithms fail unless an
     /// older proof of existence covers them), a signing certificate without digitalSignature or nonRepudiation
     /// fails (Req. 13, 26), and a trusted list that is expired or not signed by its operator gives no anchors
-    /// (optional TSL requirement).
+    /// (optional TSL requirement). A trusted list of version 3 (ETSI TS 102 231 v3, the format INDECOPI publishes
+    /// Peru's in) is accepted besides versions 5 and 6 (TS 119 612).
     /// </summary>
     public static ValidationPolicy Validation { get; } = ValidationPolicy.Default
         .WithName(Name)
         .With("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage",
             Fail with { Ids = ["digitalSignature", "nonRepudiation"] })
         .With("TrustedLists/TLNotExpired", Fail)
-        .With("TrustedLists/TLWellSigned", Fail);
+        .With("TrustedLists/TLWellSigned", Fail)
+        .With("TrustedLists/TLVersion", Fail with { Ids = ["3", "5", "6"] });
 
     /// <summary>
     /// Validation as <see cref="Validation"/>, except that the signing certificate must have nonRepudiation: what the

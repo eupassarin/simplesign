@@ -23,8 +23,12 @@ public sealed record SandboxInfo(
     IReadOnlyList<string> LoopbackOrigins,
     TrustedListsInfo TrustedLists);
 
-/// <summary>The Sandbox's trust scheme: its list of trusted lists, its trusted list, and the operators' certificates (PEM).</summary>
-public sealed record TrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory);
+/// <summary>
+/// The Sandbox's trust scheme: its list of trusted lists, its trusted list, and the operators' certificates (PEM); and
+/// <paramref name="IofeUrl"/>, a trusted list laid out as INDECOPI's (territory PE), signed by the same operator as the
+/// trusted list (<paramref name="TlSignerUrl"/>).
+/// </summary>
+public sealed record TrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory, string IofeUrl);
 
 public sealed record SandboxUrls(string RootCertificate, string IntermediateCertificate, string RootPem, string ChainPem, string RootCrl, string IntermediateCrl);
 
@@ -32,7 +36,7 @@ public sealed record SandboxUrls(string RootCertificate, string IntermediateCert
 public sealed record AuthorityUrls(string Id, string Certificate, string Crl, string HttpsCrl, string LdapCrl, string Ocsp);
 
 public sealed record TsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string WrongName, string User, string Password,
-    string ExpiredUrl);
+    string ExpiredUrl, string IofeUrl);
 
 public sealed record CscInfo(string BaseUrl, string ClientId, string ClientSecret, string ServiceToken, string Pin, string Otp, IReadOnlyList<CscCredentialView> Credentials);
 
@@ -183,13 +187,14 @@ internal static class AdminEndpoints
             [.. pki.Authorities.Select(a => new AuthorityUrls(a.Id, pki.CertificateUrl(a.Id).AbsoluteUri, pki.CrlUrl(a.Id).AbsoluteUri,
                 pki.HttpsCrlUrl(a.Id).AbsoluteUri, pki.LdapCrlUrl(a.Id).OriginalString, pki.OcspUrl(a.Id).AbsoluteUri))],
             new TsaInfo(Url("tsa/tsr"), Url("tsa/authenticated"), Url("tsa/untrusted"), Url("tsa/revoked"), Url("tsa/wrong-name"), ServiceEndpoints.WrongTsaName,
-                ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword, Url("tsa/expired")),
+                ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword, Url("tsa/expired"), Url("tsa/iofe")),
             new CscInfo(csc.BaseUri.AbsoluteUri, SandboxCsc.ClientId, SandboxCsc.ClientSecret, SandboxCsc.ServiceToken, SandboxCsc.Pin, SandboxCsc.Otp,
                 [.. csc.Credentials.Select(c => new CscCredentialView(c.Id, c.Description, c.CertificateId, c.AuthMode, c.Scal, c.MultiSign))]),
             SandboxPki.PfxPassword,
             // What a client puts in OutboundHttpPolicy.LoopbackOrigins to reach this Sandbox on this machine.
             [.. new[] { pki.BaseUrl, pki.HttpsBaseUrl, pki.LdapBaseUrl }.Select(u => u.GetLeftPart(UriPartial.Authority))],
-            new TrustedListsInfo(Url("tl/lotl.xml"), Url("tl/tl.xml"), Url("tl/lotl-signer.pem"), Url("tl/tl-signer.pem"), SandboxTrustedLists.Territory));
+            new TrustedListsInfo(Url("tl/lotl.xml"), Url("tl/tl.xml"), Url("tl/lotl-signer.pem"), Url("tl/tl-signer.pem"), SandboxTrustedLists.Territory,
+                Url("tl/iofe.xml")));
     }
 
     private const X509KeyUsageFlags LeafUsages = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation

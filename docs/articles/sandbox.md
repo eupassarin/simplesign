@@ -39,9 +39,10 @@ used for real signatures.
 | CRLs over HTTPS | `https://localhost:5301/crl/{ca}.crl` (TLS certificate issued by the Sandbox root) |
 | CRLs over LDAP | `ldap://localhost:5302/cn={ca},o=SimpleSign Sandbox?certificateRevocationList;binary` |
 | OCSP (RFC 6960) | `POST /ocsp/{ca}` and `GET /ocsp/{ca}/{request}` |
-| TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/expired`, `/tsa/wrong-name`, `/tsa/shifted?seconds=N` (its clock is N seconds off, -86400 to 86400), `/tsa/no-accuracy` (no accuracy in the TSTInfo; the others give one second, as EN 319 422 asks), `/tsa/short-lived?seconds=N` (a TSA certificate issued for the request, valid N more seconds, 1 to 3600: its tokens outlive it) |
+| TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/expired`, `/tsa/wrong-name`, `/tsa/shifted?seconds=N` (its clock is N seconds off, -86400 to 86400), `/tsa/no-accuracy` (no accuracy in the TSTInfo; the others give one second, as EN 319 422 asks), `/tsa/short-lived?seconds=N` (a TSA certificate issued for the request, valid N more seconds, 1 to 3600: its tokens outlive it), `/tsa/iofe` (a TSA under its own self-signed CA, trusted only through `/tl/iofe.xml`) |
 | CSC v2 | `/csc/v2/…` (PIN, OTP, SCAL 1/2, OAuth with a login page that approves at once) |
 | Trusted lists (ETSI TS 119 612 v5) | `/tl/lotl.xml` (list of trusted lists), `/tl/tl.xml` (the trusted list), `/tl/lotl-signer.pem`, `/tl/tl-signer.pem` (the operators' certificates) |
+| Trusted list in INDECOPI's layout (TS 102 231 v3) | `/tl/iofe.xml` (territory `PE`, signed by the TL operator: `/tl/tl-signer.pem`) |
 
 The HTTPS endpoint listens on the port after the HTTP one and LDAP on the one after that
 (`--https-port`, `--ldap-port` change them).
@@ -70,7 +71,8 @@ Create another environment to use another address, for instance one a Docker con
 ## The PKI
 
 A root, an intermediate CA that issues the signers, a second intermediate that the root has
-revoked, a third that has expired, and a fourth whose certificate the root signed with SHA-1.
+revoked, a third that has expired, and a fourth whose certificate the root signed with SHA-1; and, apart from the root,
+a self-signed Timestamping CA (`tsa-ca`) that issues the TSA of `/tsa/iofe` only.
 An environment created before a CA was added gets it the next time it opens (its root stays). Each certificate has a purpose:
 
 | Certificate | What a correct client does |
@@ -89,6 +91,8 @@ An environment created before a CA was added gets it the next time it opens (its
 | `no-key-usage-extension` | No KeyUsage extension at all: refused by a policy that requires a signing key usage |
 | `no-nonrepudiation` | Signs; some validation policies flag it |
 | `tsa`, `tsa-revoked`, `tsa-expired` | The TSAs' certificates (`/tsa/tsr`, `/tsa/revoked`, `/tsa/expired`) |
+| `tsa-iofe` | The TSA of `/tsa/iofe`, under `tsa-ca`: trusted only through a list that names that CA (`/tl/iofe.xml`) |
+| `code-signing` | A code-signing certificate (EKU codeSigning), listed in `/tl/iofe.xml` as accredited signature software: never a trust anchor |
 
 Signers with a chosen subject (`POST /api/certificates/custom`) are issued by the intermediate CA
 and listed with the others (id `custom-…`), so they can be revoked and downloaded the same way;
@@ -183,6 +187,36 @@ simplesign validate signed.pdf --lotl http://localhost:5300/tl/lotl.xml --lotl-s
 ```
 
 The TestBench does this by default (trust "Sandbox trusted list"), and so does the DSS container in `tools/dss`.
+
+### The list in INDECOPI's layout
+
+`/tl/iofe.xml` is laid out as INDECOPI publishes Peru's list (`https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml`), so a
+client of the IOFE extension can be tried against the real shape: ETSI TS 102 231 v3 (`TSLVersionIdentifier` 3, the
+`eSigDir-1999-93-EC-TrustedList` URIs), TSLType `…/TSLType/generic`, territory `PE`, one provider per service, no
+supply points (INDECOPI publishes no TSA URLs) and no LOTL pointing to it. Its services:
+- the root CA (`Svctype/CA/QC`, `undersupervision`);
+- the Timestamping CA (`Svctype/unspecified`, `undersupervision`): the **CA** of the `/tsa/iofe` TSA, not the TSA, as
+  INDECOPI lists the Llama.pe Timestamping CA; the TSA's chain closes through this service only;
+- the revoked TSA (`Svctype/unspecified`, `supervisionrevoked`);
+- a signature software listed with its code-signing certificate (`Svctype/unspecified`, `undersupervision`), as
+  INDECOPI lists RENIEC's and Indenova's: `IofeExtension.DefaultListOptions` must not make it an anchor.
+
+It is signed by the TL operator (`/tl/tl-signer.pem`) and the trusted-list failures (`Expired`, `WrongSigner`,
+`Tampered`, `WithdrawnAfterUse`) apply to it as to `/tl/tl.xml`. Read it as the IOFE extension does:
+
+```csharp
+var list = await TrustedList.DownloadAsync(new Uri("http://localhost:5300/tl/iofe.xml"),
+    IofeExtension.DefaultListOptions with { SignerCertificates = [tlSigner] });
+var iofe = new IofeExtension(list);
+```
+
+```bash
+simplesign validate signed.pdf --tsl http://localhost:5300/tl/iofe.xml --tsl-signer tl-signer.pem --tsl-profile iofe --policy iofe
+```
+
+In the TestBench it is the trust choice "Sandbox list in INDECOPI's layout" (`SandboxIofeList`), and the TSA
+"Sandbox TSA under its own CA (IOFE)" (`SandboxIofe`); the `indecopi-guia-v4` playbook uses both. DSS keeps reading the
+EU-style list.
 
 ## Using it from a client
 

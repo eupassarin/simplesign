@@ -97,6 +97,17 @@ public sealed class IofePoliciesTests : IDisposable
         keyUsage.Ids.ShouldBe(["nonRepudiation"]);
     }
 
+    [Fact]
+    public void Validation_TrustedListVersion_AcceptsTheVersion3IndecopiPublishes()
+    {
+        foreach (var policy in new[] { IofePolicies.Validation, IofePolicies.ValidationNonRepudiation })
+        {
+            var version = policy.Find("TrustedLists/TLVersion").ShouldNotBeNull();
+            version.Level.ShouldBe(ConstraintLevel.Fail);
+            version.Ids.ShouldBe(["3", "5", "6"]);
+        }
+    }
+
     [Theory]
     [InlineData("iofe-signing.json")]
     [InlineData("iofe-validation.json")]

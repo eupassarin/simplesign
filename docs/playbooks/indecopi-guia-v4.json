@@ -35,7 +35,7 @@
     {
       "id": "tsl",
       "title": "Trusted list (TSL)",
-      "description": "The trust anchors come from the Sandbox's trusted list, whose signature is checked against the operator's certificate.",
+      "description": "The trust anchors come from the Sandbox's list laid out as INDECOPI's (/tl/iofe.xml: TS 102 231 v3, TSLType generic, status undersupervision, TSAs and signature software typed unspecified), read as IofeExtension reads Peru's; its signature is checked against the operator's certificate.",
       "steps": [
         {
           "id": "tsl-ok",
@@ -49,7 +49,7 @@
           "options": {
             "signingControls": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ]
             }
           },
@@ -69,7 +69,7 @@
           "options": {
             "signingControls": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ]
             }
           },
@@ -93,7 +93,7 @@
           "options": {
             "signingControls": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ]
             }
           },
@@ -116,7 +116,7 @@
           "options": {
             "signingControls": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ]
             }
           },
@@ -128,6 +128,62 @@
           "sandbox": {
             "trustedList": "Expired"
           }
+        },
+        {
+          "id": "tsl-tsa-unspecified",
+          "title": "Time-stamp from a TSA whose CA the TSL lists as 'unspecified'",
+          "tags": [
+            "S-1",
+            "F-3",
+            "tsl",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxIofe"
+            },
+            "signingControls": {
+              "trust": [
+                "SandboxIofeList"
+              ]
+            },
+            "validation": {
+              "trust": [
+                "SandboxIofeList"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          },
+          "description": "As INDECOPI lists the Llama.pe Timestamping CA (not its TSU) with the service type 'unspecified', the TSL names the self-signed CA of the Sandbox's IOFE TSA: its time-stamp chains to that service and the signature is made. Not cross-validated: DSS reads the EU-style list, which does not name that CA.",
+          "crossValidate": false
+        },
+        {
+          "id": "tsl-tsa-unlisted",
+          "title": "Same TSA without the TSL: refused",
+          "tags": [
+            "S-1",
+            "tsl",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxIofe"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampUntrusted"
+          },
+          "description": "With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service is what makes it trusted.",
+          "crossValidate": false
         },
         {
           "id": "v-tsl-ok",
@@ -142,7 +198,7 @@
             "fileId": "step:tsl-ok",
             "settings": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ],
               "policyId": "preset:validation:iofe"
             }
@@ -163,7 +219,7 @@
             "fileId": "step:tsl-ok",
             "settings": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ],
               "policyId": "preset:validation:iofe"
             }
@@ -187,7 +243,7 @@
             "fileId": "step:tsl-ok",
             "settings": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ],
               "policyId": "preset:validation:iofe"
             }
@@ -197,6 +253,29 @@
           },
           "sandbox": {
             "trustedList": "Expired"
+          }
+        },
+        {
+          "id": "v-tsl-tsa-unspecified",
+          "kind": "validate",
+          "title": "Validate a time-stamp whose TSA's CA the TSL lists as 'unspecified'",
+          "tags": [
+            "V-3",
+            "S-1",
+            "tsl",
+            "tsa"
+          ],
+          "options": {
+            "fileId": "step:tsl-tsa-unspecified",
+            "settings": {
+              "trust": [
+                "SandboxIofeList"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "valid"
           }
         }
       ]

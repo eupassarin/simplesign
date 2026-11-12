@@ -57,6 +57,7 @@ export function EnvironmentTab({ info }: { info: SandboxInfo }) {
             <KeyValue stacked mono label={t("environment.tsaUntrusted")} copy={info.tsa.untrustedUrl}>{info.tsa.untrustedUrl}</KeyValue>
             <KeyValue stacked mono label={t("environment.tsaRevoked")} copy={info.tsa.revokedUrl}>{info.tsa.revokedUrl}</KeyValue>
             <KeyValue stacked mono label={t("environment.tsaWrongName", { name: info.tsa.wrongName })} copy={info.tsa.wrongNameUrl}>{info.tsa.wrongNameUrl}</KeyValue>
+            {info.tsa.iofeUrl && <KeyValue stacked mono label={t("environment.tsaIofe")} copy={info.tsa.iofeUrl}>{info.tsa.iofeUrl}</KeyValue>}
           </Fold>
 
           <Fold id="env.csc" title={t("environment.csc")} summary={t("environment.cscSummary", { n: info.csc.credentials.length })}>
@@ -93,6 +94,7 @@ export function EnvironmentTab({ info }: { info: SandboxInfo }) {
               <KeyValue stacked mono label={t("environment.tl")} copy={info.trustedLists.tlUrl}>{link(info.trustedLists.tlUrl)}</KeyValue>
               <KeyValue stacked mono label={t("environment.lotlSigner")} copy={info.trustedLists.lotlSignerUrl}>{link(info.trustedLists.lotlSignerUrl)}</KeyValue>
               <KeyValue stacked mono label={t("environment.tlSigner")} copy={info.trustedLists.tlSignerUrl}>{link(info.trustedLists.tlSignerUrl)}</KeyValue>
+              {info.trustedLists.iofeUrl && <KeyValue stacked mono label={t("environment.iofeList")} copy={info.trustedLists.iofeUrl}>{link(info.trustedLists.iofeUrl)}</KeyValue>}
             </Fold>
           )}
 
