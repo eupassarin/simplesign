@@ -10,6 +10,7 @@ using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES;
@@ -54,7 +55,7 @@ public static class DeferredSigner
         ArgumentOutOfRangeException.ThrowIfZero(sessionData.Length);
         ArgumentNullException.ThrowIfNull(sessionIntegrityKey);
         var session = DeferredSigningSession.Deserialize(sessionData, sessionIntegrityKey);
-        return new DeferredSignerBuilder(sessionData, sessionIntegrityKey, RestoreProfile(session), resume: true);
+        return new DeferredSignerBuilder(sessionData, sessionIntegrityKey, RestoreProfile(session), session.OperationId);
     }
 
     /// <summary>
@@ -96,6 +97,13 @@ public static class DeferredSigner
         (logger ?? NullLogger.Instance).DeferredPrepareStarted(certificate.Subject, effectiveHash.Name!);
 
         var fieldOptions = options.FieldOptions ?? new SignatureFieldOptions();
+        var dssArtifacts = options.DssArtifacts ?? [];
+        if (dssArtifacts.Count > 0 && (options.Profile?.Level ?? AdesBaselineLevel.Basic) < AdesBaselineLevel.LongTerm)
+        {
+            throw new SigningException(
+                "DSS artifacts are written with the long-term validation data: use a B-LT or B-LTA profile.",
+                SigningErrorReason.LevelNotAchievable);
+        }
 
         var operationTime = DateTimeOffset.UtcNow;
         if (certificate.NotBefore > operationTime)
@@ -127,11 +135,44 @@ public static class DeferredSigner
                 "This PDF has a certification signature (DocMDP) that prohibits further changes.");
         }
 
+        if (fieldOptions.CertificationLevel is not null)
+        {
+            using var fieldCheck = new MemoryStream(pdfBytes);
+            var fields = await PdfStructureReader.ReadSignatureFieldsAsync(fieldCheck, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (fields.Any(f => f.IsSigned))
+            {
+                throw new SigningException(
+                    "Only the first signature of a document can certify it (DocMDP): this PDF is already signed. Sign without AsCertification().",
+                    SigningErrorReason.DocumentNotSignable);
+            }
+        }
+
+        // The PDF/A level shapes the signature field, as in one-call signing; with WithPdfAPreservation,
+        // options that would break the level are refused.
+        PdfALevel pdfALevel;
+        using (var levelCheck = new MemoryStream(pdfBytes))
+        {
+            pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(levelCheck, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        if (options.EnforcePdfA)
+        {
+            var errors = PdfAPreservationValidator.Validate(pdfALevel, fieldOptions)
+                .Where(i => i.Severity == PdfAIssueSeverity.Error).ToList();
+            if (errors.Count > 0)
+            {
+                throw new SigningException(
+                    $"PDF/A preservation check failed: {string.Join("; ", errors.Select(e => e.Message))}",
+                    SigningErrorReason.DocumentNotSignable);
+            }
+        }
+
         // 1. Prepare PDF with signature placeholder
+        var signingTime = options.SigningTime ?? DateTimeOffset.UtcNow;
         using var inputStream = new MemoryStream(pdfBytes);
         using var outputStream = new MemoryStream();
         var prepareResult = await PdfSignatureWriter.PrepareAsync(
-            inputStream, outputStream, fieldOptions, logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+            inputStream, outputStream, fieldOptions, logger, pdfALevel, signingTime, options.DocumentInfo, cancellationToken).ConfigureAwait(false);
 
         (logger ?? NullLogger.Instance).DeferredPdfPrepared();
 
@@ -140,10 +181,9 @@ public static class DeferredSigner
             outputStream, prepareResult.ByteRange, logger: logger, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // 3. Compute document hash and build signed attributes
-        var signingTime = DateTimeOffset.UtcNow;
         byte[] contentHash = CmsSignatureBuilder.ComputeHash(signedBytes, effectiveHash);
         byte[] signedAttrs = CmsSignatureBuilder.BuildSignedAttributes(
-            contentHash, digestOid, signingTime, certificate);
+            contentHash, digestOid, signingTime, certificate, options.ExtraAttributes, padesAttributes: true);
 
         // 4. Build session (all state needed for Phase 2)
         var session = new DeferredSigningSession
@@ -167,6 +207,9 @@ public static class DeferredSigner
             TimestampEndpoint = options.Profile?.Timestamp?.Endpoint.ToString(),
             ArchiveTimestampEndpoint = options.Profile?.ArchiveTimestamp?.Endpoint?.ToString(),
             RevocationPreference = options.Profile?.LongTermValidation?.RevocationPreference ?? RevocationPreference.OcspFirst,
+            LongTermClockSkewSeconds = DeferredProfile.ClockSkewSecondsToRecord(options.Profile),
+            OperationId = options.OperationId,
+            DssArtifacts = dssArtifacts.Count == 0 ? null : [.. dssArtifacts],
         };
 
         var result = new DeferredSigningPrepareResult
@@ -176,6 +219,8 @@ public static class DeferredSigner
             DigestAlgorithm = effectiveHash.Name!,
             SignatureAlgorithmOid = sigAlgOid,
             Warnings = warnings.AsReadOnly(),
+            RsaPssParameters = resolvedAlgorithm.RsaPssParameters,
+            OperationId = options.OperationId,
         };
 
         (logger ?? NullLogger.Instance).DeferredPrepareCompleted(result.HashToSign.Length, result.SessionData.Length);
@@ -324,7 +369,7 @@ public static class DeferredSigner
                     ClockSkewTolerance = profile.LongTermValidation.ClockSkewTolerance,
                 };
                 signedPdf = await ltvEmbedder.EmbedLtvDataAsync(
-                    signedPdf, allCerts, timestampToken, cancellationToken).ConfigureAwait(false);
+                    signedPdf, allCerts, timestampToken, session.DssArtifacts ?? [], profile.LongTermValidation, cancellationToken).ConfigureAwait(false);
 
                 var requiredCertificates = new List<X509Certificate2>(allCerts);
                 var tsaCertificates = TsaCertificateExtractor.ExtractCertificates(timestampToken);
@@ -404,40 +449,10 @@ public static class DeferredSigner
             $"Unsupported digest OID '{digestOid}' in deferred signing session.")
     };
 
-    private static AdesBaselineProfile RestoreProfile(DeferredSigningSession session)
-    {
-        if (session.RequestedLevel == AdesBaselineLevel.Basic)
-        {
-            return AdesBaselineProfile.Basic();
-        }
-
-        if (string.IsNullOrWhiteSpace(session.TimestampEndpoint) ||
-            !Uri.TryCreate(session.TimestampEndpoint, UriKind.Absolute, out Uri? timestampEndpoint))
-        {
-            throw new ArgumentException(
-                "The deferred session requests a timestamped baseline level but has no valid TSA endpoint.",
-                nameof(session));
-        }
-
-        var timestamp = new TimestampOptions(timestampEndpoint);
-        return session.RequestedLevel switch
-        {
-            AdesBaselineLevel.Timestamped => AdesBaselineProfile.Timestamped(timestamp, session.LevelFailureBehavior),
-            AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(
-                timestamp,
-                new LongTermValidationOptions { RevocationPreference = session.RevocationPreference },
-                session.LevelFailureBehavior),
-            AdesBaselineLevel.Archive => AdesBaselineProfile.Archive(
-                timestamp,
-                new LongTermValidationOptions { RevocationPreference = session.RevocationPreference },
-                string.IsNullOrWhiteSpace(session.ArchiveTimestampEndpoint)
-                    ? null
-                    : new ArchiveTimestampOptions(new Uri(session.ArchiveTimestampEndpoint, UriKind.Absolute)),
-                session.LevelFailureBehavior),
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(session), "The deferred session contains an unsupported requested baseline level.")
-        };
-    }
+    private static AdesBaselineProfile RestoreProfile(DeferredSigningSession session) =>
+        DeferredProfile.Restore(
+            session.RequestedLevel, session.LevelFailureBehavior, session.TimestampEndpoint,
+            session.ArchiveTimestampEndpoint, session.RevocationPreference, session.LongTermClockSkewSeconds);
 }
 
 /// <summary>Result of the deferred signing preparation phase.</summary>
@@ -463,6 +478,27 @@ public sealed class DeferredSigningPrepareResult
 
     /// <summary>The WARN constraints of the signing policy the certificate or the algorithms did not meet.</summary>
     public IReadOnlyList<SigningWarning> Warnings { get; init; } = [];
+
+    /// <summary>
+    /// The bytes the external signer signs: the DER-encoded signed attributes. The same bytes as
+    /// <see cref="HashToSign"/>, under the name the CAdES and XAdES results use.
+    /// </summary>
+    public byte[] DataToSign => HashToSign;
+
+    /// <summary>The PSS parameters the signer must use, for an RSASSA-PSS signature.</summary>
+    internal RsaPssParameters? RsaPssParameters { get; init; }
+
+    /// <summary>The operation id given to the builder.</summary>
+    internal string? OperationId { get; init; }
+
+    /// <summary>
+    /// The same request an <see cref="IExternalSigner"/> receives in one-call signing: the data to sign, the
+    /// resolved algorithms and, for RSASSA-PSS, the complete parameters. Hand it to the signer that holds the key.
+    /// </summary>
+    /// <returns>The signing request.</returns>
+    public ExternalSigningRequest ToSigningRequest() =>
+        new(HashToSign, new HashAlgorithmName(DigestAlgorithm), SignatureAlgorithmOid,
+            ExternalSigningPayloadKind.CmsSignedAttributes, OperationId, RsaPssParameters);
 }
 
 /// <summary>Internal configuration used while a deferred builder prepares a signature.</summary>
@@ -506,6 +542,24 @@ internal sealed class DeferredSigningOptions
 
     /// <summary>The HTTP provider for the revocation check; null uses the default provider.</summary>
     public IHttpClientProvider? HttpClientProvider { get; init; }
+
+    /// <summary>The operation id recorded in the session and in the signing request.</summary>
+    public string? OperationId { get; init; }
+
+    /// <summary>Whether signature options that would break the PDF/A level of the document are refused.</summary>
+    public bool EnforcePdfA { get; init; }
+
+    /// <summary>The claimed signing time written in the signature dictionary; null for the moment of preparation.</summary>
+    public DateTimeOffset? SigningTime { get; init; }
+
+    /// <summary>Entries of the document information dictionary written in the signing revision.</summary>
+    public IReadOnlyDictionary<string, string>? DocumentInfo { get; init; }
+
+    /// <summary>Signed attributes added to the mandatory ones (commitment type, signature policy…).</summary>
+    public IReadOnlyList<CmsAttribute>? ExtraAttributes { get; init; }
+
+    /// <summary>Extra DSS streams written with the B-LT data in phase two.</summary>
+    public IReadOnlyList<PdfDssArtifact>? DssArtifacts { get; init; }
 }
 
 /// <summary>Internal configuration used while a deferred builder completes a signature.</summary>
