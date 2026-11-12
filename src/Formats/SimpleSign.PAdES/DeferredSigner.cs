@@ -8,7 +8,6 @@ using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.PAdES.Validation;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Internal;
@@ -228,10 +227,6 @@ public static class DeferredSigner
         return result;
     }
 
-    private static TimestampAcceptance Acceptance(DeferredSigningCompleteOptions options, ILogger? logger) =>
-        new(options.SigningPolicy, options.TrustAnchors, options.ChainRevocationChecker,
-            options.HttpClientProvider ?? DefaultHttpClientProvider.Instance, logger ?? NullLogger.Instance);
-
     /// <summary>
     /// Internal phase-two implementation shared by the immutable deferred builder.
     /// </summary>
@@ -248,6 +243,33 @@ public static class DeferredSigner
     /// <param name="sessionIntegrityKey">Server-owned HMAC key used to verify the serialized session.</param>
     /// <returns>The fully signed PDF bytes.</returns>
     internal static async Task<byte[]> CompleteAsync(
+        byte[] sessionData,
+        byte[] rawSignature,
+        byte[] sessionIntegrityKey,
+        DeferredSigningCompleteOptions? options = null,
+        ILogger? logger = null,
+        ITimestampClientFactory? tsaFactory = null,
+        CancellationToken cancellationToken = default)
+    {
+        PadesSigningResult result = await CompleteWithDetailsAsync(
+            sessionData, rawSignature, sessionIntegrityKey, options, logger, tsaFactory, cancellationToken).ConfigureAwait(false);
+        return result.SignedArtifact;
+    }
+
+    /// <summary>
+    /// Phase two with its details: verifies the raw signature against the certificate of the session, assembles
+    /// the CMS and takes the prepared PDF to the requested level through the steps of one-call signing
+    /// (signature timestamp, validation data, document timestamp, read-back verification).
+    /// </summary>
+    /// <param name="sessionData">Serialized session from <see cref="DeferredSigningPrepareResult.SessionData"/>.</param>
+    /// <param name="rawSignature">Raw signature bytes from the external signer.</param>
+    /// <param name="sessionIntegrityKey">Server-owned HMAC key used to verify the serialized session.</param>
+    /// <param name="options">Optional completion configuration.</param>
+    /// <param name="logger">Optional logger for debug diagnostics.</param>
+    /// <param name="tsaFactory">Optional TSA client factory for DI integration.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The signed PDF with the requested and achieved levels and the warnings.</returns>
+    internal static async Task<PadesSigningResult> CompleteWithDetailsAsync(
         byte[] sessionData,
         byte[] rawSignature,
         byte[] sessionIntegrityKey,
@@ -306,120 +328,13 @@ public static class DeferredSigner
 
             (logger ?? NullLogger.Instance).DeferredCmsAssembled(cms.Length);
 
-            // Apply the signature timestamp from the complete baseline profile.
-            AdesBaselineProfile? profile = options.Profile;
-            TimestampOptions? timestampOptions = profile?.Timestamp;
-            byte[]? timestampToken = null;
-            if (timestampOptions is not null)
-            {
-                string endpoint = timestampOptions.Endpoint.ToString();
-                var provider = timestampOptions.HttpClientProvider ?? options.HttpClientProvider;
-                var httpClient = provider?.GetClient() ?? DefaultHttpClientProvider.Instance.GetClient();
-                var hashAlg = resolvedAlgorithm.HashAlgorithm;
-                ITimestampClient tsaClient = timestampOptions.NeedsDedicatedClient
-                    ? TimestampClient.Create(timestampOptions, provider ?? DefaultHttpClientProvider.Instance, logger)
-                    : tsaFactory is not null
-                        ? tsaFactory.Create(endpoint)
-                        : new TimestampClient(httpClient, endpoint, logger)
-                        {
-                            OutboundPolicy = (provider ?? DefaultHttpClientProvider.Instance).OutboundPolicy ?? OutboundHttpPolicy.Default,
-                        };
-                tsaClient = Acceptance(options, logger).Wrap(tsaClient, timestampOptions);
-                timestampToken = await tsaClient.GetTimestampAsync(
-                    TimestampClient.ExtractSignatureValue(cms), hashAlg, cancellationToken).ConfigureAwait(false);
-                cms = TimestampClient.EmbedTimestampInCms(cms, timestampToken);
-            }
+            PadesSigningResult result = await PadesSignerBuilder.CompleteDeferredAsync(
+                session, cms, certificate, extraCerts, resolvedAlgorithm.HashAlgorithm, options, logger, tsaFactory, cancellationToken)
+                .ConfigureAwait(false);
 
-            // Reconstruct PDF prepare result
-            var prepareResult = new PdfSignaturePrepareResult
-            {
-                ByteRange = new PdfByteRange
-                {
-                    Offset1 = session.ByteRangeOffset1,
-                    Length1 = session.ByteRangeLength1,
-                    Offset2 = session.ByteRangeOffset2,
-                    Length2 = session.ByteRangeLength2
-                },
-                ContentsHexOffset = session.ContentsHexOffset,
-                ContentsReservedBytes = session.ContentsReservedBytes,
-                SigDictObjectNumber = session.SigDictObjectNumber
-            };
+            (logger ?? NullLogger.Instance).DeferredCompleteFinished(result.SignedArtifact.Length);
 
-            // Write CMS into the prepared PDF's /Contents placeholder
-            using var outputStream = new MemoryStream();
-            await outputStream.WriteAsync(session.PreparedPdf, cancellationToken).ConfigureAwait(false);
-            await PdfSignatureWriter.FinalizeAsync(outputStream, prepareResult, cms, logger, cancellationToken).ConfigureAwait(false);
-
-            var signedPdf = outputStream.ToArray();
-
-            if (profile?.Level >= AdesBaselineLevel.LongTerm)
-            {
-                if (timestampToken is null)
-                {
-                    throw new SigningException(
-                        "B-LT/B-LTA deferred signing requires a signature timestamp token.",
-                        SigningErrorReason.LevelNotAchievable);
-                }
-
-                var ltvProvider = profile.LongTermValidation!.HttpClientProvider ??
-                    options.HttpClientProvider ?? DefaultHttpClientProvider.Instance;
-                var ltvEmbedder = new LtvEmbedder(ltvProvider, logger)
-                {
-                    RevocationPreference = profile.LongTermValidation.RevocationPreference,
-                    ClockSkewTolerance = profile.LongTermValidation.ClockSkewTolerance,
-                };
-                signedPdf = await ltvEmbedder.EmbedLtvDataAsync(
-                    signedPdf, allCerts, timestampToken, session.DssArtifacts ?? [], profile.LongTermValidation, cancellationToken).ConfigureAwait(false);
-
-                var requiredCertificates = new List<X509Certificate2>(allCerts);
-                var tsaCertificates = TsaCertificateExtractor.ExtractCertificates(timestampToken);
-                try
-                {
-                    requiredCertificates.AddRange(tsaCertificates.Where(tsa => requiredCertificates.All(
-                        certificateInChain => !string.Equals(certificateInChain.Thumbprint, tsa.Thumbprint, StringComparison.OrdinalIgnoreCase))));
-                    await using var dssStream = new MemoryStream(signedPdf, writable: false);
-                    var dss = await DssExtractor.TryReadFullDssDataAsync(dssStream, cancellationToken, logger).ConfigureAwait(false);
-                    if (!LtvEmbedder.HasCompleteEvidence(dss, requiredCertificates))
-                    {
-                        throw new SigningException(
-                            "B-LT deferred signing could not embed complete validation evidence for every signer and TSA certificate path.",
-                            SigningErrorReason.LevelNotAchievable);
-                    }
-                }
-                finally
-                {
-                    foreach (var tsaCertificate in tsaCertificates)
-                    {
-                        tsaCertificate.Dispose();
-                    }
-                }
-            }
-
-            if (profile?.Level >= AdesBaselineLevel.Archive)
-            {
-                var effective = profile.ArchiveTimestamp?.Resolve(profile.Timestamp!) ?? profile.Timestamp!;
-                var endpoint = effective.Endpoint;
-                var provider = effective.HttpClientProvider ?? options.HttpClientProvider ?? DefaultHttpClientProvider.Instance;
-                ITimestampClientFactory? archiveFactory = effective.NeedsDedicatedClient
-                    ? new FixedTimestampClientFactory(TimestampClient.Create(effective, provider, logger))
-                    : tsaFactory ?? new TimestampClientFactory(provider, logger);
-                archiveFactory = Acceptance(options, logger).Wrap(archiveFactory, effective);
-                await using var pdfStream = new MemoryStream(signedPdf, writable: false);
-                var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(pdfStream, cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
-                signedPdf = await DocTimeStampWriter.AppendDocTimeStampAsync(
-                    signedPdf,
-                    endpoint.ToString(),
-                    provider.GetClient(),
-                    resolvedAlgorithm.HashAlgorithm,
-                    pdfALevel,
-                    archiveFactory,
-                    cancellationToken).ConfigureAwait(false);
-            }
-
-            (logger ?? NullLogger.Instance).DeferredCompleteFinished(signedPdf.Length);
-
-            return signedPdf;
+            return result;
         }
         finally
         {
@@ -581,4 +496,7 @@ internal sealed class DeferredSigningCompleteOptions
 
     /// <summary>The checker for the revocation of the TSA chain; null creates one.</summary>
     public SimpleSign.Core.Revocation.IChainRevocationChecker? ChainRevocationChecker { get; init; }
+
+    /// <summary>The operation id for the log messages of the completion; null takes the one of the session.</summary>
+    public string? OperationId { get; init; }
 }

@@ -23,7 +23,7 @@ namespace SimpleSign.PAdES;
 /// Immutable builder that accumulates PAdES signing configuration.
 /// Each method returns a new instance — no shared mutable state.
 /// </summary>
-public sealed class PadesSignerBuilder
+public sealed partial class PadesSignerBuilder
 {
     private readonly Stream _inputPdf;
     private readonly PadesSigningOptions _options;
@@ -632,6 +632,29 @@ public sealed class PadesSignerBuilder
         var cms = useExternal
             ? await BuildExternalCmsAsync(signedBytes, effectiveHash, sigOid, resolvedAlgorithm.RsaPssParameters, certificate, chain, (ExternalCredential)credential, cancellationToken).ConfigureAwait(false)
             : BuildLocalCms(signedBytes, effectiveHash, sigOid, certificate, chain);
+
+        return await FinishAsync(
+            outputStream, prepareResult, cms, effectiveHash, pdfALevel, warnings, opId, sw, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Takes a prepared PDF and the CMS that holds the signer's signature to the requested level: signature
+    /// timestamp, the CMS written into the PDF, validation data, document timestamp; then reads the result back
+    /// and reports what it holds.
+    /// </summary>
+    private async Task<PadesSigningResult> FinishAsync(
+        Stream outputStream,
+        PdfSignaturePrepareResult prepareResult,
+        byte[] cms,
+        HashAlgorithmName effectiveHash,
+        PdfALevel? pdfALevel,
+        List<SigningWarning> warnings,
+        string opId,
+        System.Diagnostics.Stopwatch sw,
+        CancellationToken cancellationToken)
+    {
+        var profile = _options.Profile;
+        var logger = _options.Dependencies.Logger;
 
         byte[]? timestampTokenBytes = null;
         if (profile.Timestamp is not null)

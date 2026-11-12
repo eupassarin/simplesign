@@ -392,6 +392,84 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
         ex.Reason.ShouldBe(SigningErrorReason.DocumentNotSignable);
     }
 
+    // ── CompleteWithDetailsAsync ──────────────────────────────────────────
+
+    [Theory]
+    [InlineData(AdesBaselineLevel.Basic)]
+    [InlineData(AdesBaselineLevel.Timestamped)]
+    [InlineData(AdesBaselineLevel.LongTerm)]
+    [InlineData(AdesBaselineLevel.Archive)]
+    public async Task CompleteWithDetailsAsync_EachLevel_ReportsWhatThePdfHolds(AdesBaselineLevel level)
+    {
+        using X509Certificate2 publicLeaf = RemoteKey.PublicOnly(_pki.Leaf);
+        var tsa = new TimestampOptions(new Uri(TsaUrl));
+        var validation = new LongTermValidationOptions { RevocationPreference = RevocationPreference.CrlFirst };
+        AdesBaselineProfile profile = level switch
+        {
+            AdesBaselineLevel.Basic => AdesBaselineProfile.Basic(),
+            AdesBaselineLevel.Timestamped => AdesBaselineProfile.Timestamped(tsa),
+            AdesBaselineLevel.LongTerm => AdesBaselineProfile.LongTerm(tsa, validation),
+            _ => AdesBaselineProfile.Archive(tsa, validation),
+        };
+        DeferredSigningPrepareResult prepared = await DeferredSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+            .WithCertificate(publicLeaf, _pki.IntermediatesAndRoot())
+            .WithSessionIntegrityKey(s_key)
+            .WithLevel(profile)
+            .PrepareAsync();
+
+        PadesSigningResult result = await DeferredSigner.Resume(prepared.SessionData, s_key)
+            .WithHttpClientProvider(new SingleClientProvider(_http))
+            .CompleteWithDetailsAsync(RemoteKey.Sign(_pki.Leaf, prepared.ToSigningRequest()));
+
+        result.RequestedLevel.ShouldBe(level);
+        result.AchievedLevel.ShouldBe(level);
+        result.HasSignatureTimestamp.ShouldBe(level >= AdesBaselineLevel.Timestamped);
+        result.HasLongTermValidationMaterial.ShouldBe(level >= AdesBaselineLevel.LongTerm);
+        result.HasArchiveTimestamp.ShouldBe(level == AdesBaselineLevel.Archive);
+        result.Warnings.ShouldBeEmpty();
+        await ShouldBeValid(result.SignedArtifact, _pki.RootCa);
+    }
+
+    [Fact]
+    public async Task CompleteWithDetailsAsync_ProfileThatMayReturnALowerLevel_ReportsTheLevelReached()
+    {
+        using HttpClient failing = MockHttpHandler.Failing();
+        var audit = new RecordingAuditSink();
+        DeferredSigningPrepareResult prepared = await Prepare()
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(TsaUrl)), SigningLevelFailureBehavior.ReturnLowerLevel))
+            .PrepareAsync();
+        byte[] signature = RemoteKey.Sign(_signer, prepared.ToSigningRequest());
+        DeferredSignerBuilder resumed = DeferredSigner.Resume(prepared.SessionData, s_key)
+            .WithHttpClientProvider(new SingleClientProvider(failing))
+            .WithAuditSink(audit);
+
+        var ex = await Should.ThrowAsync<SigningException>(() => resumed.CompleteAsync(signature));
+        PadesSigningResult result = await resumed.CompleteWithDetailsAsync(signature);
+
+        ex.Reason.ShouldBe(SigningErrorReason.DowngradeRequiresDetailedResult);
+        result.RequestedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        result.HasSignatureTimestamp.ShouldBeFalse();
+        result.Warnings.ShouldContain(w => w.Code == SigningWarningCode.LevelDowngraded);
+        audit.Events.ShouldHaveSingleItem().AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        await ShouldBeValid(result.SignedArtifact);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_StrictProfileAndTsaThatDoesNotAnswer_Throws()
+    {
+        using HttpClient failing = MockHttpHandler.Failing();
+        DeferredSigningPrepareResult prepared = await Prepare()
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(TsaUrl))))
+            .PrepareAsync();
+
+        var ex = await Should.ThrowAsync<SigningException>(() => DeferredSigner.Resume(prepared.SessionData, s_key)
+            .WithHttpClientProvider(new SingleClientProvider(failing))
+            .CompleteAsync(RemoteKey.Sign(_signer, prepared.ToSigningRequest())));
+
+        ex.Reason.ShouldBe(SigningErrorReason.NetworkFailure);
+    }
+
     // ── Phase one fixes what is signed ────────────────────────────────────
 
     [Fact]
