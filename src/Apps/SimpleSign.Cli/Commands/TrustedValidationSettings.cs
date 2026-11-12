@@ -224,18 +224,27 @@ internal class TrustedValidationSettings : CommonSettings
         if (TrustedList is not null)
         {
             var options = TrustedListProfiles.Options(TrustedListProfile, LoadCertificate(TrustedListSignerPath!));
-            if (TrustedListProfile is not null && TrustedListProfile.Equals("iofe", StringComparison.OrdinalIgnoreCase))
+            bool iofe = TrustedListProfile is not null && TrustedListProfile.Equals("iofe", StringComparison.OrdinalIgnoreCase);
+            if (iofe)
             {
                 // As the IOFE validation policy expects: an expired list is read, and its TLNotExpired constraint judges it.
                 options = options with { RejectExpired = false };
             }
 
-            var list = Uri.TryCreate(TrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"
-                ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, http, cancellationToken: cancellationToken)
-                : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(TrustedList, cancellationToken), options);
-            anchors.AddRange(list.GetTrustAnchors());
-            LoadedTrustedLists.AddRange(list.TrustedLists);
-            LoadedTimedAnchors.Add(list);
+            try
+            {
+                var list = Uri.TryCreate(TrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"
+                    ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, http, cancellationToken: cancellationToken)
+                    : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(TrustedList, cancellationToken), options);
+                anchors.AddRange(list.GetTrustAnchors());
+                LoadedTrustedLists.AddRange(list.TrustedLists);
+                LoadedTimedAnchors.Add(list);
+            }
+            catch (System.Security.Cryptography.CryptographicException ex) when (iofe)
+            {
+                // A list not signed by INDECOPI gives no anchors: the signatures are INDETERMINATE, as with a LOTL's lists.
+                Spectre.Console.AnsiConsole.MarkupLine($"[yellow]TSL:[/] {Spectre.Console.Markup.Escape($"{TrustedList}: {ex.Message} No anchor comes from it.")}");
+            }
         }
 
         if (Lotl is not null)

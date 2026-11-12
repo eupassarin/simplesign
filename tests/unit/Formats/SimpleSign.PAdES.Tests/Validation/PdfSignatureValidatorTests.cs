@@ -417,6 +417,31 @@ public sealed class PdfSignatureValidatorTests
         results[0].ChainValidationRegion.ShouldBe("XX");
     }
 
+    [Fact(DisplayName = "The trusted lists of the options are evaluated (an expired list makes it INDETERMINATE)")]
+    public async Task ValidateAsync_TrustedListsInTheOptions_AreEvaluated()
+    {
+        using X509Certificate2 cert = CreateRsaCertWithKey();
+        byte[] pdfBytes = BuildMinimalPdfForSigning();
+        using MemoryStream outputStream = new MemoryStream();
+        await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
+        var expired = new TrustedListInfo(
+            "PE", null, "3", DateTimeOffset.UtcNow.AddMonths(-7), DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, IsWellSigned: true, [cert]);
+        var validator = new PdfSignatureValidator(new ValidationOptions
+        {
+            CheckRevocation = false,
+            TrustSystemRoots = false,
+            TrustedRoots = [cert],
+            TrustedLists = [expired],
+            Policy = SimpleSign.Core.Policies.ValidationPolicy.Default.With("TrustedLists/TLNotExpired", new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Fail)),
+        });
+
+        using MemoryStream signedStream = new MemoryStream(outputStream.ToArray());
+        var result = (await validator.ValidateAsync(signedStream)).ShouldHaveSingleItem();
+
+        result.Constraints.ShouldContain(c => c.Id == "TrustedLists/TLNotExpired" && c.Status == ConstraintStatus.Failed);
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
+    }
+
     [Fact(DisplayName = "Providers receive the validation context with the parsed signature")]
     public async Task ValidateAsync_WithMatchingProvider_PassesContext()
     {

@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/policies/iofe-signing-nonrepudiation.json`): section 4.2 asks an automated agent for the nonRepudiation bit;
   playbook step `no-nonrepudiation-agent`. The requirement numbers in the `IofePolicies` XML docs follow the guide.
 
+### Fixed — Trusted-list constraints in PAdES validation and the CLI
+
+- `PdfSignatureValidator` evaluates the TrustedLists constraints for the lists of `ValidationOptions.TrustedLists`
+  too, not only for those of its trust anchor providers: `simplesign validate --tsl/--lotl` judged no TrustedLists
+  constraint (an expired list validated as TOTAL-PASSED). `validate` and `validate-dir` now pass the lists they load.
+- `simplesign validate --tsl … --tsl-profile iofe`: a list not signed by the given certificate gives no anchors
+  (INDETERMINATE, with a warning) instead of stopping the command, as the library and `--lotl` do.
+
 ### Fixed — Trusted lists: INDECOPI's real list
 
 - `TrustedList` verifies lists whose `ds:Signature` element declares a namespace (INDECOPI's declares `xmlns:etsi`
