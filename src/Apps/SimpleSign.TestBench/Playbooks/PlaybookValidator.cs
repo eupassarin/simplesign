@@ -117,7 +117,7 @@ internal static class PlaybookValidator
     {
         if (!PlaybookStepKinds.All.Contains(step.Kind))
         {
-            error(at + ".kind", $"Unknown kind '{step.Kind}': use sign or validate.");
+            error(at + ".kind", $"Unknown kind '{step.Kind}': use sign, validate or augment.");
             return;
         }
 
@@ -134,6 +134,11 @@ internal static class PlaybookValidator
         if (step.Engine is { } engine && !PlaybookEngines.All.Contains(engine))
         {
             error(at + ".engine", $"Unknown engine '{engine}': use library, cli or both.");
+        }
+
+        if (step.Wait is < 0 or > 300)
+        {
+            error(at + ".wait", "Wait 0 to 300 seconds.");
         }
 
         if (step.Expect is null)
@@ -160,15 +165,26 @@ internal static class PlaybookValidator
             }
         }
 
-        if (step.Kind == PlaybookStepKinds.Validate
+        if (step.Kind is PlaybookStepKinds.Validate or PlaybookStepKinds.Augment
             && (step.Options is not { ValueKind: JsonValueKind.Object } options || !options.TryGetProperty("fileId", out _)))
         {
-            error(at + ".options.fileId", "A validation needs options.fileId (step:ID or a sample).");
+            error(at + ".options.fileId", $"A{(step.Kind == PlaybookStepKinds.Augment ? "n augmentation" : " validation")} needs options.fileId (step:ID or a sample).");
+        }
+
+        if (step.Kind == PlaybookStepKinds.Augment && (step.Engine ?? playbook.Defaults.Engine) != PlaybookEngines.Library)
+        {
+            error(at + ".engine", "An augmentation runs through the library: set engine to library.");
         }
 
         foreach (var (path, value) in Strings(step.Options, at + ".options").Concat(Strings(playbook.Defaults.Options, "$.defaults.options")))
         {
-            if (value.StartsWith("sandbox:", StringComparison.Ordinal) && sandbox is not null
+            if (value.StartsWith(PlaybookRunner.ShortLivedPrefix, StringComparison.Ordinal)
+                && (!int.TryParse(value[PlaybookRunner.ShortLivedPrefix.Length..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int seconds)
+                    || seconds is < 1 or > 3600))
+            {
+                error(path, $"'{value}': give the lifetime in seconds, 1 to 3600.");
+            }
+            else if (value.StartsWith("sandbox:", StringComparison.Ordinal) && sandbox is not null
                 && sandbox.Signers.All(s => s.Id != value["sandbox:".Length..]))
             {
                 error(path, $"The Sandbox has no signer '{value["sandbox:".Length..]}'.");
@@ -195,6 +211,11 @@ internal static class PlaybookValidator
         if (expect.Indication is { } indication && indication is not ("TOTAL_PASSED" or "TOTAL_FAILED" or "INDETERMINATE"))
         {
             error(at + ".indication", $"Unknown indication '{indication}': use TOTAL_PASSED, TOTAL_FAILED or INDETERMINATE.");
+        }
+
+        if (expect.EtsiReport is { } etsiReport && etsiReport != "valid")
+        {
+            error(at + ".etsiReport", $"Unknown value '{etsiReport}': use valid.");
         }
 
         if (expect.Level is { } level && level is not ("B-B" or "B-T" or "B-LT" or "B-LTA"))

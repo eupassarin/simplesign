@@ -157,12 +157,28 @@ public sealed class PlaybookValidatorTests
     [Fact]
     public void Samples_AreValidPlaybooks()
     {
-        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["indecopi-guia-v4", "sandbox-basics"]);
+        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["etsi-baseline", "indecopi-guia-v4", "sandbox-basics"]);
         foreach (var sample in PlaybookSamples.All)
         {
             var check = PlaybookValidator.Check(PlaybookSamples.Json(sample.Id)!, sandbox: null);
             check.CanRun.ShouldBeTrue($"{sample.Id}: " + string.Join("; ", check.Issues.Where(i => i.IsError).Select(i => $"{i.Path}: {i.Message}")));
             check.Playbook!.AllSteps().ShouldAllBe(s => s.Step.Tags.Count > 0, $"{sample.Id}: every step has tags");
         }
+    }
+
+    [Fact]
+    public void EtsiSample_CoversEveryChecklistItemARunCanShow()
+    {
+        // Rows of docs/playbooks/etsi-checklist.md whose "How" starts with P: each needs a step tagged with its id.
+        var items = File.ReadAllLines(RepositoryPaths.Get("docs", "playbooks", "etsi-checklist.md"))
+            .Select(l => l.Split('|', StringSplitOptions.TrimEntries))
+            .Where(c => c.Length > 3 && System.Text.RegularExpressions.Regex.IsMatch(c[1], "^[A-Z]{2}-[0-9]+$") && c[^2].StartsWith('P'))
+            .Select(c => c[1])
+            .ToList();
+        var tags = PlaybookValidator.Check(PlaybookSamples.Json("etsi-baseline")!, sandbox: null).Playbook!
+            .AllSteps().SelectMany(s => s.Step.Tags).ToHashSet(StringComparer.Ordinal);
+
+        items.ShouldNotBeEmpty();
+        items.Where(i => !tags.Contains(i)).ShouldBeEmpty("checklist items with P and no step");
     }
 }

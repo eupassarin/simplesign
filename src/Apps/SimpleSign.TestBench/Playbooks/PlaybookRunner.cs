@@ -114,6 +114,8 @@ internal sealed class PlaybookRunner(
     CadesSampleStore? cadesSamples = null, XmlSampleStore? xmlSamples = null, ValidationSampleStore? validationSamples = null) : IDisposable
 {
     private readonly Lock _gate = new();
+    private readonly Lock _pinGate = new();
+    private readonly Dictionary<string, int> _pins = new(StringComparer.Ordinal);
     private PlaybookSession? _session;
 
     /// <summary>The loaded playbook's check, or null.</summary>
@@ -154,11 +156,13 @@ internal sealed class PlaybookRunner(
             string key = Key(check.Playbook, json);
             if (check.Playbook is { } playbook && _session?.Key != key)
             {
+                Release(_session?.Results.Values);
                 _session?.Dispose();
                 _session = new PlaybookSession(key, playbook, json);
             }
             else if (check.Playbook is null)
             {
+                Release(_session?.Results.Values);
                 _session?.Dispose();
                 _session = null;
             }
@@ -225,8 +229,58 @@ internal sealed class PlaybookRunner(
             throw new KeyNotFoundException($"No step '{stepId}'.");
         }
 
+        var before = session.Results;
         session.Clear(stepId);
+        Release(stepId is null ? before.Values : before.TryGetValue(stepId, out var cleared) ? [cleared] : null);
         return session.View();
+    }
+
+    /// <summary>The files a kept result shows (its output and reports): pinned, so a long playbook does not lose them.</summary>
+    private static IEnumerable<string> FilesOf(IEnumerable<PlaybookEngineRun> runs) =>
+        runs.SelectMany(r => new[] { r.OutputId, r.ReportId, r.EtsiReportId }).OfType<string>();
+
+    // Counted: a file can be in several results (a validation of a step's output), and only files this runner pinned
+    // are let go (samples and built-in policies stay pinned).
+    private void Keep(IEnumerable<PlaybookEngineRun> runs)
+    {
+        lock (_pinGate)
+        {
+            foreach (string id in FilesOf(runs))
+            {
+                if (_pins.TryGetValue(id, out int count))
+                {
+                    _pins[id] = count + 1;
+                }
+                else if (documents.Pin(id))
+                {
+                    _pins[id] = 1;
+                }
+            }
+        }
+    }
+
+    private void Release(IEnumerable<PlaybookStepResult>? results)
+    {
+        lock (_pinGate)
+        {
+            foreach (string id in FilesOf((results ?? []).SelectMany(r => r.Runs)))
+            {
+                if (!_pins.TryGetValue(id, out int count))
+                {
+                    continue;
+                }
+
+                if (count > 1)
+                {
+                    _pins[id] = count - 1;
+                }
+                else
+                {
+                    _pins.Remove(id);
+                    documents.Unpin(id);
+                }
+            }
+        }
     }
 
     /// <summary>Runs (part of) the loaded playbook to its end (tests).</summary>
@@ -251,7 +305,13 @@ internal sealed class PlaybookRunner(
         var sandboxLines = SandboxRows(step.Sandbox);
         var expect = (step.Expect?.Fields() ?? []).Select(f => new PreviewItem(f.Name, f.Name, f.Value)).ToList();
         var missing = new List<string>();
-        var options = Resolve(merged, session, missing);
+        var issued = await ShortLivedAsync(merged, session, fresh: false, cancellationToken).ConfigureAwait(false);
+        var options = Resolve(merged, session, missing, issued);
+
+        if (step.Kind == PlaybookStepKinds.Augment)
+        {
+            return AugmentPreview(step, options, sandboxLines, expect, missing);
+        }
 
         if (step.Kind == PlaybookStepKinds.Validate)
         {
@@ -289,6 +349,53 @@ internal sealed class PlaybookRunner(
             SignerRows(description.Signer, asked),
             Groups(format, effective, asked, description.States),
             sandboxLines, expect, description.Code, description.Issues, missing, description.Error);
+    }
+
+    /// <summary>The preview of an augmentation: the file, the level, the TSA, and the library call and CLI command that do it.</summary>
+    private PlaybookStepPreview AugmentPreview(PlaybookStep step, JsonElement options, IReadOnlyList<PreviewItem> sandboxLines,
+        IReadOnlyList<PreviewItem> expect, IReadOnlyList<string> missing)
+    {
+        var augment = options.Deserialize<AugmentOptions>(WorkbenchJson.Options);
+        var target = new List<PreviewItem>();
+        string fileName = "signed-file";
+        string format = "pades";
+        if (augment?.FileId is { } fileId && documents.TryGet(fileId, out var file))
+        {
+            fileName = file!.FileName;
+            format = Validation.FormatDetector.Detect(file.Content);
+            target.Add(new("file", "File", $"{file.FileName} ({file.Content.Length.ToString("N0", CultureInfo.InvariantCulture)} bytes)"));
+        }
+        else
+        {
+            target.Add(new("file", "File", missing.Count > 0 ? $"step:{missing[0]}" : "—"));
+        }
+
+        string level = augment?.Level ?? "BLTA";
+        string tsa = augment?.Timestamp?.Provider.ToString() ?? "Sandbox";
+        var settings = new List<PreviewSetting>
+        {
+            new("level", "Level to reach", level, true, true),
+            new("timestamp", "TSA", tsa, augment?.Timestamp is not null, true),
+            new("renew", "Renew the archive time-stamp", augment?.Renew == true ? "on" : "off", augment?.Renew == true, augment?.Renew == true),
+        };
+        string augmenter = format switch
+        {
+            RunFormats.Cades => "CadesAugmenter.Signature(File.ReadAllBytes(\"" + fileName + "\"), detachedData)",
+            RunFormats.Xades => "XadesAugmenter.Document(File.ReadAllBytes(\"" + fileName + "\"), detachedData)",
+            _ => "PadesAugmenter.Document(File.ReadAllBytes(\"" + fileName + "\"))",
+        };
+        string levelName = level.ToUpperInvariant().Replace("-", "", StringComparison.Ordinal) switch
+        {
+            "BT" => "Timestamped",
+            "BLT" => "LongTerm",
+            _ => "Archive",
+        };
+        string code = $"var result = await {augmenter}\n    .WithTimestamp(new TimestampOptions(new Uri(tsaUrl)))\n    .ToLevel(AdesBaselineLevel.{levelName})"
+            + (augment?.Renew == true ? "\n    .RenewArchive()" : "") + "\n    .AugmentAsync();\n// result.Level: the level reached";
+        string cli = $"simplesign augment {fileName} --level {level} --tsa $TSA_URL" + (augment?.DataId is not null ? " --data data" : "") + (augment?.Renew == true ? " --renew" : "");
+        return new PlaybookStepPreview(step.Id, step.Kind, format, PlaybookEngines.Library, false, "defaults", target, [],
+            [new PreviewGroup("augment", "Augmentation", settings)], sandboxLines, expect,
+            new CodeSnippets(code, cli, ["The library's augmenter for the format, then a validation of the result."]), [], missing, null);
     }
 
     private static T Options<T>(JsonElement options) =>
@@ -333,12 +440,21 @@ internal sealed class PlaybookRunner(
         bool changedSandbox = false;
         try
         {
+            // The wait comes first: time passes (a certificate expires, a time-stamp ages) before the Sandbox changes.
+            if (step.Wait is > 0 and var wait)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(wait), session.Token).ConfigureAwait(false);
+            }
+
             // Put back even when applying fails half-way.
             changedSandbox = step.Sandbox is { Any: true } && sandbox.IsConnected;
             await ApplySandboxAsync(step.Sandbox, session.Token).ConfigureAwait(false);
             string format = step.Format ?? session.Playbook.Defaults.Format;
+
             var missing = new List<string>();
-            var options = Resolve(Merge(session.Playbook.Defaults.Options, format, step.Options), session, missing);
+            var stepOptions = Merge(session.Playbook.Defaults.Options, format, step.Options);
+            var issued = await ShortLivedAsync(stepOptions, session, fresh: true, session.Token).ConfigureAwait(false);
+            var options = Resolve(stepOptions, session, missing, issued);
             if (missing.Count > 0)
             {
                 throw new InvalidOperationException($"Step {missing[0]} produced no file yet: run it first.");
@@ -348,9 +464,15 @@ internal sealed class PlaybookRunner(
             foreach (string runEngine in engine == PlaybookEngines.Both ? [RunEngines.Library, RunEngines.Cli] : new[] { engine })
             {
                 var request = new RunRequest(format, options, step.CrossValidate ?? session.Playbook.Defaults.CrossValidate,
-                    step.Kind == PlaybookStepKinds.Validate ? RunKinds.Validate : RunKinds.Sign, runEngine);
+                    step.Kind switch
+                    {
+                        PlaybookStepKinds.Validate => RunKinds.Validate,
+                        PlaybookStepKinds.Augment => RunKinds.Augment,
+                        _ => RunKinds.Sign,
+                    }, runEngine);
                 var view = await runs.RunAsync(request, session.Token).ConfigureAwait(false);
-                results.Add(PlaybookExpectations.Evaluate(runEngine, view, step.Expect ?? new PlaybookExpectation()));
+                results.Add(PlaybookExpectations.Evaluate(runEngine, view, step.Expect ?? new PlaybookExpectation(),
+                    id => documents.TryGet(id, out var file) ? file!.Content : null));
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -374,6 +496,9 @@ internal sealed class PlaybookRunner(
         }
 
         bool passed = message is null && results.Count > 0 && results.All(r => r.Passed);
+        session.Results.TryGetValue(step.Id, out var previous);
+        Release(previous is null ? null : [previous]);
+        Keep(results);
         session.Done(step.Id, new PlaybookStepResult(passed ? PlaybookStatuses.Passed : PlaybookStatuses.Failed, message, results, watch.ElapsedMilliseconds, DateTimeOffset.Now));
     }
 
@@ -454,7 +579,7 @@ internal sealed class PlaybookRunner(
     /// The options with their symbolic values replaced: <c>sandbox:SIGNER</c> by a credential, <c>step:ID</c> by the file
     /// that step signed (the steps without one go to <paramref name="missing"/>), and the samples by their files.
     /// </summary>
-    private JsonElement Resolve(JsonObject options, PlaybookSession session, List<string> missing)
+    private JsonElement Resolve(JsonObject options, PlaybookSession session, List<string> missing, IReadOnlyDictionary<string, string> issued)
     {
         Replace(options);
         return JsonSerializer.SerializeToElement(options);
@@ -496,6 +621,11 @@ internal sealed class PlaybookRunner(
 
         string? Symbol(string text)
         {
+            if (text.StartsWith(ShortLivedPrefix, StringComparison.Ordinal))
+            {
+                return issued.TryGetValue(text, out string? id) ? id : throw new InvalidOperationException($"'{text}' was not issued.");
+            }
+
             if (text.StartsWith("sandbox:", StringComparison.Ordinal))
             {
                 string signer = text["sandbox:".Length..];
@@ -538,6 +668,41 @@ internal sealed class PlaybookRunner(
 
             return null;
         }
+    }
+
+    /// <summary>A Sandbox signer issued for the run and valid for N seconds only: <c>sandbox-short-lived:N</c>.</summary>
+    internal const string ShortLivedPrefix = "sandbox-short-lived:";
+
+    /// <summary>
+    /// Opens the <c>sandbox-short-lived:N</c> signers the options name: a new one for each run of a step (its lifetime
+    /// counts from then), one per session for a preview.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>> ShortLivedAsync(JsonObject options, PlaybookSession session, bool fresh, CancellationToken cancellationToken)
+    {
+        var issued = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string text in PlaybookValidator.Strings(JsonSerializer.SerializeToElement(options), "$").Select(s => s.Value)
+                     .Where(v => v.StartsWith(ShortLivedPrefix, StringComparison.Ordinal)))
+        {
+            if (issued.ContainsKey(text) || (!fresh && session.TryGetSigner("preview:" + text, out string? cached) && issued.TryAdd(text, cached!)))
+            {
+                continue;
+            }
+
+            if (!int.TryParse(text[ShortLivedPrefix.Length..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int seconds)
+                || seconds is < 1 or > 3600)
+            {
+                throw new ArgumentException($"'{text}': give the lifetime in seconds, 1 to 3600.");
+            }
+
+            string id = credentials.Add(await factory.OpenSandboxShortLivedAsync(TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false)).Id;
+            issued[text] = id;
+            if (!fresh)
+            {
+                session.Signer("preview:" + text, () => id);
+            }
+        }
+
+        return issued;
     }
 
     private static (string Id, bool Data) SampleId(string value) =>
@@ -769,6 +934,15 @@ internal sealed class PlaybookSession(string key, Playbook playbook, string json
     }
 
     /// <summary>The credential of a Sandbox signer, opened once.</summary>
+    /// <summary>A signer already opened under <paramref name="signer"/>, if any.</summary>
+    public bool TryGetSigner(string signer, out string? id)
+    {
+        lock (_gate)
+        {
+            return _signers.TryGetValue(signer, out id);
+        }
+    }
+
     public string Signer(string signer, Func<string> open)
     {
         lock (_gate)

@@ -161,7 +161,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     /// Use <see cref="ValidateAll"/> for co-signatures and countersignatures. Revocation is not checked here, of the signer chain nor of the TSA chain: with <see cref="ValidationOptions.CheckRevocation"/> on, the result carries a warning saying so; use <c>ValidateAsync</c> to check it.
     /// </summary>
     /// <param name="cmsBytes">DER-encoded CMS/PKCS#7 SignedData.</param>
-    /// <param name="originalData">The signed document bytes; null to use the encapsulated content.</param>
+    /// <param name="originalData">The signed document bytes; null to use the encapsulated content. A detached signature
+    /// validated without them is INDETERMINATE / SIGNED_DATA_NOT_FOUND.</param>
     /// <param name="trustAnchors">Optional trust anchors for certificate chain validation.</param>
     /// <returns>A detailed validation result.</returns>
     public CadesValidationResult Validate(
@@ -176,13 +177,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
 
         byte[]? content = originalData ?? set.EncapsulatedContent;
-        if (content is null)
-        {
-            return Failed("The signature is detached: pass the signed data.");
-        }
-
         return set.Signers is [var first, ..]
-            ? ValidateSigner(cmsBytes, first, content, (data, errors) => VerifyContentHash(content, data, errors), trustAnchors, isFirstSigner: true)
+            ? ValidateSigner(cmsBytes, first, content, (data, errors) => content is null ? DataNotGiven(errors) : VerifyContentHash(content, data, errors), trustAnchors, isFirstSigner: true)
             : Failed("The CMS has no signer.");
     }
 
@@ -344,16 +340,11 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
 
         byte[]? content = originalData ?? set.EncapsulatedContent;
-        if (content is null)
-        {
-            return new CadesValidationReport { Errors = ["The signature is detached: pass the signed data."] };
-        }
-
         var signers = new List<CadesSignerValidationResult>();
         for (int i = 0; i < set.Signers.Count; i++)
         {
             var signer = set.Signers[i];
-            var result = ValidateSigner(cmsBytes, signer, content, (data, errors) => VerifyContentHash(content, data, errors), trustAnchors, isFirstSigner: i == 0);
+            var result = ValidateSigner(cmsBytes, signer, content, (data, errors) => content is null ? DataNotGiven(errors) : VerifyContentHash(content, data, errors), trustAnchors, isFirstSigner: i == 0);
             signers.Add(new CadesSignerValidationResult
             {
                 Index = i,
@@ -423,7 +414,10 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
         if (cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps)
         {
-            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted));
+            // Without anchors given to this call, the TSA is judged against the configured roots, as the content and
+            // archive timestamps are, so the token's constraints are evaluated.
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid,
+                tsaTrusted ?? TimestampTrust.ChainsTo(signatureToken, trustAnchors ?? _options.TrustedRoots)));
         }
 
         // An archive timestamp whose TSA cannot be judged (no anchors) is left out rather than reported as untrusted.
@@ -617,6 +611,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             IsCounterSignature = isCounterSignature,
             TrustedLists = _options.TrustedLists,
             Timestamps = TimestampTokens(cmsData, tsValid, tsaTrusted, archiveToken, archiveTsValid, archiveV3, trustAnchors, contentTimestampToken, contentTsValid),
+            PolicyDocumentAvailable = _options.PolicyDocumentFound(cmsData.SignaturePolicyOid),
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -708,6 +703,13 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         Oids.Sha3_512 => HashAlgorithmName.SHA3_512,
         _ => HashAlgorithmName.SHA256,
     };
+
+    /// <summary>A detached signature validated without its data: nothing to compare, and the policy says SIGNED_DATA_NOT_FOUND.</summary>
+    private static bool DataNotGiven(List<string> errors)
+    {
+        errors.Add("The signature is detached and its signed data was not given: its integrity cannot be checked.");
+        return false;
+    }
 
     private static bool VerifyContentHash(byte[] originalData, CmsSignedData cmsData, List<string> errors)
     {

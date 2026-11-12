@@ -200,7 +200,8 @@
             "error",
             "valid",
             "invalid",
-            "indeterminate"
+            "indeterminate",
+            "augmented"
           ]
         },
         "reason": {
@@ -258,6 +259,21 @@
             "B-LTA"
           ]
         },
+        "failedConstraints": {
+          "type": "array",
+          "description": "Constraints of the validation policy that must fail, by name, in the signature or what it carries (a time-stamp, revocation data).",
+          "items": {
+            "type": "string",
+            "description": "A constraint name (AccuracyPresent)."
+          }
+        },
+        "etsiReport": {
+          "type": "string",
+          "description": "valid: the run\u0027s ETSI TS 119 102-2 validation report must be valid against its schema (embedded in SimpleSign).",
+          "enum": [
+            "valid"
+          ]
+        },
         "dssAgrees": {
           "type": "boolean",
           "description": "Whether EU DSS must agree with SimpleSign. Needs crossValidate on the step or in the defaults, and a run that produces a file (a refusal is never sent to DSS); when DSS is unavailable this check fails."
@@ -302,7 +318,8 @@
           "description": "What the step does. Default: sign.",
           "enum": [
             "sign",
-            "validate"
+            "validate",
+            "augment"
           ]
         },
         "format": {
@@ -326,6 +343,12 @@
         "crossValidate": {
           "type": "boolean",
           "description": "Whether EU DSS also validates the file this step produces; overrides defaults.crossValidate."
+        },
+        "wait": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300,
+          "description": "Seconds to wait before the step runs, before its Sandbox changes (a short-lived certificate that must expire, a revocation that must come after a time-stamp)."
         },
         "sandbox": {
           "$ref": "#/$defs/sandbox"

@@ -372,7 +372,7 @@ function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSele
         <span className="min-w-0 flex-1">
           <span className="block text-sm leading-snug">{step.title}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-1">
-            <span className="text-muted-foreground font-mono text-[10px] uppercase">{step.kind === "validate" ? t("playbook.kindValidate") : step.format ?? defaultFormat}</span>
+            <span className="text-muted-foreground font-mono text-[10px] uppercase">{step.kind === "validate" ? t("playbook.kindValidate") : step.kind === "augment" ? t("playbook.kindAugment") : step.format ?? defaultFormat}</span>
             {step.tags.map((x) => (
               <span key={x} role="button" tabIndex={-1} title={t("playbook.filterByTag", { tag: x })} onClick={(e) => { e.stopPropagation(); onTag(x) }}
                 className={cn("rounded px-1 font-mono text-[10px]", chosenTags.includes(x) ? "bg-primary/15 text-primary" : "bg-muted-foreground/10 hover:bg-muted-foreground/20")}>{x}</span>
@@ -389,7 +389,7 @@ function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSele
 const itemKeys = new Set([
   "engine", "crossValidate", "format", "document", "existingSignatures", "data", "file", "signer", "playbook", "subject", "issuer", "key", "valid", "nonRepudiation", "source",
   "crl", "ocsp", "tsa", "trustedList", "revoke",
-  "outcome", "reason", "indication", "subIndication", "level", "dssAgrees", "logContains",
+  "outcome", "reason", "indication", "subIndication", "level", "dssAgrees", "etsiReport", "failedConstraints", "logContains",
 ])
 const validationKeys = new Set(["trust", "policy", "level", "revocation"])
 
@@ -500,7 +500,7 @@ function StepPlan({ step, engine, view, canRun, onRun, onTag }: {
           <StatusIcon status={status} />
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold leading-snug">{step.title}</h2>
-            <p className="text-muted-foreground font-mono text-xs">{step.id}{preview && ` · ${preview.kind === "validate" ? t("playbook.kindValidate") : preview.format} · ${engineLabel(t, preview.engine)}${preview.crossValidate ? " · DSS" : ""}`}</p>
+            <p className="text-muted-foreground font-mono text-xs">{step.id}{preview && ` · ${preview.kind === "validate" ? t("playbook.kindValidate") : preview.kind === "augment" ? `${t("playbook.kindAugment")} · ${preview.format}` : preview.format} · ${engineLabel(t, preview.engine)}${preview.crossValidate ? " · DSS" : ""}`}</p>
           </div>
           <Button size="sm" disabled={!canRun} onClick={onRun}>{status === "running" ? <Loader2 className="animate-spin" /> : <Play />} {t("playbook.runStep")}</Button>
         </div>

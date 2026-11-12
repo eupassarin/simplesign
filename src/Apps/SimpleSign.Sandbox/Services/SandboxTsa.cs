@@ -8,9 +8,12 @@ namespace SimpleSign.Sandbox.Services;
 /// <summary>
 /// An RFC 3161 time-stamping authority: reads the request (hash algorithm, imprint, nonce, certReq)
 /// and returns a granted response with the current time, signed by the given TSA certificate. The
-/// TSTInfo names the TSA (the tsa field) with <paramref name="tsaName"/>, its own subject by default.
+/// TSTInfo names the TSA (the tsa field) with <paramref name="tsaName"/>, its own subject by default, and its genTime is
+/// the current time moved by <paramref name="clockShift"/> (a TSA whose clock is wrong). The TSTInfo gives its accuracy
+/// (one second, as EN 319 422 asks) unless <paramref name="accuracy"/> is false.
 /// </summary>
-internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X509Certificate2> chain, X500DistinguishedName? tsaName = null)
+internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X509Certificate2> chain, X500DistinguishedName? tsaName = null,
+    TimeSpan clockShift = default, bool accuracy = true)
 {
     private const string TstInfoOid = "1.2.840.113549.1.9.16.1.4";
     private const string SignedDataOid = "1.2.840.113549.1.7.2";
@@ -78,7 +81,15 @@ internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X5
             }
 
             tstInfo.WriteInteger(Interlocked.Increment(ref s_serial));
-            tstInfo.WriteGeneralizedTime(DateTimeOffset.UtcNow, omitFractionalSeconds: true);
+            tstInfo.WriteGeneralizedTime(DateTimeOffset.UtcNow + clockShift, omitFractionalSeconds: true);
+            if (accuracy)
+            {
+                using (tstInfo.PushSequence()) // accuracy { seconds 1 }
+                {
+                    tstInfo.WriteInteger(1);
+                }
+            }
+
             if (nonce is { } n)
             {
                 tstInfo.WriteInteger(n);
@@ -99,7 +110,7 @@ internal sealed class SandboxTsa(X509Certificate2 tsa, RSA key, IReadOnlyList<X5
         using (attributes.PushSetOf())
         {
             Attribute(attributes, "1.2.840.113549.1.9.3", w => w.WriteObjectIdentifier(TstInfoOid));
-            Attribute(attributes, "1.2.840.113549.1.9.5", w => w.WriteUtcTime(DateTimeOffset.UtcNow));
+            Attribute(attributes, "1.2.840.113549.1.9.5", w => w.WriteUtcTime(DateTimeOffset.UtcNow + clockShift));
             Attribute(attributes, "1.2.840.113549.1.9.4", w => w.WriteOctetString(contentDigest));
             // ESS signing-certificate-v2 (RFC 5816): SHA-256 of the TSA certificate.
             Attribute(attributes, "1.2.840.113549.1.9.16.2.47", w =>

@@ -97,6 +97,9 @@ export function OptionsReferenceDialog({ open, onOpenChange }: { open: boolean; 
                   <SymbolRow value="preset:signing:NAME · preset:validation:NAME" text={t("playbook.optionsRef.symPreset")}
                     extra={presets.map((p) => p.id)} />
                   <SymbolRow value="step:ID" text={t("playbook.optionsRef.symStep")} />
+                  <SymbolRow value="sandbox-short-lived:N" text={t("playbook.optionsRef.symShortLived")} />
+                  <SymbolRow value="fixture:NAME" text={t("playbook.optionsRef.symFixture")}
+                    extra={["fixture:signature-policy", "fixture:attribute-certificate", "fixture:saml-assertion"]} />
                 </tbody>
               </table>
               <div className="space-y-1">

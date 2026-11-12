@@ -275,7 +275,14 @@ internal static class ValidationPolicyEvaluator
             {
                 if (token.Trusted is null)
                 {
-                    continue; // A TSA no one could judge is not evaluated: it would only show as an untrusted chain.
+                    // A TSA no one could judge is not evaluated (it would only show as an untrusted chain), but its time
+                    // still counts for the order of the timestamps (EN 319 102-1 §5.6.2.1).
+                    if (TstInfoReader.FromToken(token.Token).GenTime is { } untrustedTime)
+                    {
+                        all.Add((token.Kind, untrustedTime));
+                    }
+
+                    continue;
                 }
 
                 Crypto.CmsSignedData cms;
@@ -440,6 +447,16 @@ internal static class ValidationPolicyEvaluator
             Check(Timestamp + "/TimestampValid", token.ImprintValid == true && facts.IsSignatureValid && token.Trusted == true,
                 "The timestamp is valid.", "The timestamp is not valid (its imprint, signature or TSA).", I, S);
             Check(Timestamp + "/TSAGeneralNamePresent", tstInfo.TsaPresent, "The timestamp names its TSA.", "The timestamp does not name its TSA.", I, S);
+            // The time-stamp profile of EN 319 422 §5.2: the accuracy is given, ordering is not used, and the TSA policy is one accepted.
+            if (TstInfoReader.ProfileFromToken(token.Token) is { } profile)
+            {
+                Check(Timestamp + "/AccuracyPresent", profile.AccuracyPresent, "The timestamp gives its accuracy.",
+                    "The timestamp does not give its accuracy (EN 319 422).", I, S);
+                Check(Timestamp + "/OrderingFalse", !profile.Ordering, "The timestamp does not claim ordering.",
+                    "The timestamp claims ordering (EN 319 422 asks it to be false or absent).", I, S);
+                CheckValues(Timestamp + "/AcceptablePolicies", profile.Policy is { } policy ? [policy] : [], "time-stamp policy");
+            }
+
             if (tstInfo.Tsa is { } tsa && facts.SignerCertificate is { } tsaCertificate)
             {
                 static IEnumerable<string> Parts(X500DistinguishedName name) =>
@@ -532,9 +549,18 @@ internal static class ValidationPolicyEvaluator
 
         private void EvaluateBasic(string basic)
         {
-            Check(basic + "/ReferenceDataIntact", facts.IsIntegrityValid,
-                "The signed data matches the signature.", "The signed data does not match the signature.",
-                SignatureIndication.Invalid, SignatureSubIndication.HashFailure);
+            // Without the signed data (a detached signature whose data was not given, a reference that cannot be
+            // resolved) its integrity cannot be judged: INDETERMINATE / SIGNED_DATA_NOT_FOUND (EN 319 102-1 §5.2.7),
+            // not a hash failure.
+            bool dataFound = facts.SignedDataFound != false;
+            Fact(basic + "/ReferenceDataExistence", facts.SignedDataFound, "The signed data was found.", "The signed data was not found.",
+                SignatureIndication.Indeterminate, SignatureSubIndication.SignedDataNotFound);
+            if (dataFound)
+            {
+                Check(basic + "/ReferenceDataIntact", facts.IsIntegrityValid,
+                    "The signed data matches the signature.", "The signed data does not match the signature.",
+                    SignatureIndication.Invalid, SignatureSubIndication.HashFailure);
+            }
 
             if (facts.IsSignatureVerificationIndeterminate)
             {
@@ -549,10 +575,11 @@ internal static class ValidationPolicyEvaluator
                     SignatureIndication.Invalid, SignatureSubIndication.SigCryptoFailure);
             }
 
-            Fact(basic + "/ReferenceDataExistence", facts.SignedDataFound, "The signed data was found.", "The signed data was not found.",
-                SignatureIndication.Indeterminate, SignatureSubIndication.SignedDataNotFound);
-            Check(basic + "/SignatureValid", facts.IsIntegrityValid && facts.IsSignatureValid, "The signature is intact.", "The signature is not intact.",
-                SignatureIndication.Invalid, SignatureSubIndication.SigCryptoFailure);
+            if (dataFound)
+            {
+                Check(basic + "/SignatureValid", facts.IsIntegrityValid && facts.IsSignatureValid, "The signature is intact.", "The signature is not intact.",
+                    SignatureIndication.Invalid, SignatureSubIndication.SigCryptoFailure);
+            }
             Fact(basic + "/SignerInformationStore", facts.SignerInfoCount is { } count ? count == 1 : null,
                 "The CMS has one SignerInfo.", $"The CMS has {facts.SignerInfoCount} SignerInfos; one is expected.",
                 SignatureIndication.Invalid, SignatureSubIndication.FormatFailure);
@@ -1109,18 +1136,21 @@ internal static class ValidationPolicyEvaluator
                 }
             }
 
+            // Identification of the signing certificate (EN 319 102-1 §5.2.3): a signature whose reference to its signing
+            // certificate is missing, repeated or does not match has no identified signer: NO_SIGNING_CERTIFICATE_FOUND.
+            const SignatureSubIndication NotIdentified = SignatureSubIndication.NoSigningCertificateFound;
             if (facts.HasSigningCertificateReference is { } present)
             {
                 Check(path + "/SigningCertificatePresent", present, "The signature references its signing certificate.",
-                    "The signature does not reference its signing certificate.", I, S);
+                    "The signature does not reference its signing certificate.", I, NotIdentified);
                 Check(path + "/CertDigestPresent", present, "The reference carries the certificate's digest.",
-                    "The signature carries no digest of its signing certificate.", I, S);
+                    "The signature carries no digest of its signing certificate.", I, NotIdentified);
             }
 
             if (facts.SigningCertificateReferenceMatches is { } match)
             {
                 Check(path + "/CertDigestMatch", match, "The certificate digest in the signature matches the signing certificate.",
-                    "The certificate digest in the signature does not match the signing certificate.", I, S);
+                    "The certificate digest in the signature does not match the signing certificate.", I, NotIdentified);
             }
 
             if (facts.SignedAttributes is not { } attributes)
@@ -1134,7 +1164,7 @@ internal static class ValidationPolicyEvaluator
             if (attributes.SigningCertificateAttributes > 0)
             {
                 Check(path + "/UnicitySigningCertificate", attributes.SigningCertificateAttributes == 1, "There is one signing-certificate attribute.",
-                    $"There are {attributes.SigningCertificateAttributes} signing-certificate attributes.", I, S);
+                    $"There are {attributes.SigningCertificateAttributes} signing-certificate attributes.", I, NotIdentified);
             }
 
             EvaluateCertificateReferences(path, attributes.CertificateReferences);
@@ -1484,8 +1514,9 @@ internal static class CmsValidationFacts
             SignedAttributes = SignedAttributeFacts.FromCms(cms.SignedAttrs),
             UnsignedAttributes = facts.UnsignedAttributes ?? UnsignedOf(cms),
             PolicyStorePresent = cms.SignaturePolicyOid is null ? null : HasUnsigned(cms, Constants.Oids.SignaturePolicyStore),
+            // Obtained when the signature carries it (signature-policy-store) or a provider found it; otherwise not.
             PolicyDocumentAvailable = facts.PolicyDocumentAvailable
-                ?? (cms.SignaturePolicyOid is not null && HasUnsigned(cms, Constants.Oids.SignaturePolicyStore) ? true : null),
+                ?? (cms.SignaturePolicyOid is not null ? HasUnsigned(cms, Constants.Oids.SignaturePolicyStore) : null),
         };
     }
 

@@ -1,7 +1,5 @@
 using System.Text.Json;
-using System.Xml;
 using System.Xml.Linq;
-using System.Xml.Schema;
 using Shouldly;
 using SimpleSign.Core.Policies;
 using SimpleSign.Core.Validation;
@@ -181,34 +179,13 @@ public sealed class ValidationReportsTests : IDisposable
     };
 }
 
-/// <summary>Validates the ETSI report against the schema DSS uses (needs the network).</summary>
-[Trait("Category", "Integration")]
+/// <summary>Validates the ETSI report against the TS 119 102-2 schema embedded in SimpleSign (offline).</summary>
+[Trait("Category", "Unit")]
 public sealed class ValidationReportsSchemaTests
 {
     [Fact]
     public void ToEtsiXml_IsValidAgainstTheTs119102Schema()
     {
-        var schemas = new XmlSchemaSet { XmlResolver = new XmlUrlResolver() };
-        try
-        {
-            // The imports, loaded first: the W3C xmldsig schema has a DOCTYPE the default reader refuses.
-            Add(schemas, "http://www.w3.org/2000/09/xmldsig#", "http://www.w3.org/TR/2002/REC-xmldsig-core-20020212/xmldsig-core-schema.xsd");
-            Add(schemas, "http://uri.etsi.org/01903/v1.3.2#", "http://uri.etsi.org/01903/v1.3.2/XAdES.xsd");
-            Add(schemas, "http://uri.etsi.org/02231/v2#", "http://uri.etsi.org/19612/v2.2.1/ts_119612v020201_201601xsd.xsd");
-            Add(schemas, ValidationReports.EtsiNamespace,
-                "https://raw.githubusercontent.com/esig/dss/master/specs-validation-report/src/main/resources/xsd/TS119102-2-v122.xsd");
-            schemas.Compile();
-        }
-        catch (Exception ex) when (ex is XmlException or XmlSchemaException or System.Net.WebException or HttpRequestException or IOException)
-        {
-            if (Environment.GetEnvironmentVariable("SIMPLESIGN_REQUIRE_NETWORK") == "1")
-            {
-                throw;
-            }
-
-            return; // Offline, or an imported schema is not reachable: nothing to check against.
-        }
-
         using var pki = new SyntheticPki();
         string xml = ValidationReports.ToEtsiXml(
         [
@@ -229,21 +206,14 @@ public sealed class ValidationReportsSchemaTests
                 ],
             },
         ]);
-        var errors = new List<string>();
 
-        XDocument.Parse(xml).Validate(schemas, (_, e) => errors.Add(e.Message));
-
-        errors.ShouldBeEmpty();
+        ValidationReports.ValidateEtsiXml(xml).ShouldBeEmpty();
     }
 
-    private static void Add(XmlSchemaSet schemas, string targetNamespace, string url)
+    [Fact]
+    public void ValidateEtsiXml_NotAReport_GivesErrors()
     {
-        if (schemas.Contains(targetNamespace))
-        {
-            return;
-        }
-
-        using var reader = XmlReader.Create(url, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, XmlResolver = new XmlUrlResolver() });
-        schemas.Add(targetNamespace, reader);
+        ValidationReports.ValidateEtsiXml("""<ValidationReport xmlns="http://uri.etsi.org/19102/v1.2.1#"><Nope/></ValidationReport>""").ShouldNotBeEmpty();
+        ValidationReports.ValidateEtsiXml("not xml").ShouldNotBeEmpty();
     }
 }

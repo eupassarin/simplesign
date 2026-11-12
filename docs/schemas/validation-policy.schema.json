@@ -591,6 +591,15 @@
         },
         "AtsHashIndex": {
           "$ref": "#/$defs/LevelConstraint"
+        },
+        "AccuracyPresent": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "OrderingFalse": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "AcceptablePolicies": {
+          "$ref": "#/$defs/MultiValuesConstraint"
         }
       },
       "additionalProperties": false

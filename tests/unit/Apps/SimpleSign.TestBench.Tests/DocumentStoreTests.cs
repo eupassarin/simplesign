@@ -73,4 +73,27 @@ public sealed class DocumentStoreTests(TestBenchFixture fixture)
         store.TryGet(policy, out _).ShouldBeTrue();
         store.TryGet(first, out _).ShouldBeFalse();
     }
+
+    [Fact]
+    public void Pin_PastTheLimit_KeepsTheFileUntilUnpinned()
+    {
+        var store = new DocumentStore();
+        string kept = store.Add("output-0.pdf", [0]).Id;
+
+        store.Pin(kept).ShouldBeTrue();
+        store.Pin(kept).ShouldBeFalse("pinned already");
+        for (int i = 1; i < 400; i++)
+        {
+            store.Add($"output-{i}.pdf", [1]);
+        }
+
+        store.TryGet(kept, out _).ShouldBeTrue();
+        store.Unpin(kept);
+        for (int i = 0; i < 400; i++)
+        {
+            store.Add($"more-{i}.pdf", [2]);
+        }
+
+        store.TryGet(kept, out _).ShouldBeFalse();
+    }
 }

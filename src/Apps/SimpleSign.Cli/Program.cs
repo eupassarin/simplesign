@@ -65,6 +65,8 @@ internal static partial class Program
                 deferred.AddCommand<DeferredCompleteCommand>("complete")
                     .WithDescription("Embed the signature made elsewhere into the prepared PDF");
             });
+            config.AddCommand<AugmentCommand>("augment")
+                .WithDescription("Raise an existing signature (PDF, CMS or XML) to B-T, B-LT or B-LTA");
             config.AddCommand<ValidateCommand>("validate")
                 .WithDescription("Validate PDF signatures");
             config.AddCommand<ValidateDirCommand>("validate-dir")

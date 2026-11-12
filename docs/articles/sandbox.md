@@ -39,7 +39,7 @@ used for real signatures.
 | CRLs over HTTPS | `https://localhost:5301/crl/{ca}.crl` (TLS certificate issued by the Sandbox root) |
 | CRLs over LDAP | `ldap://localhost:5302/cn={ca},o=SimpleSign Sandbox?certificateRevocationList;binary` |
 | OCSP (RFC 6960) | `POST /ocsp/{ca}` and `GET /ocsp/{ca}/{request}` |
-| TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/expired`, `/tsa/wrong-name` |
+| TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/expired`, `/tsa/wrong-name`, `/tsa/shifted?seconds=N` (its clock is N seconds off, -86400 to 86400), `/tsa/no-accuracy` (no accuracy in the TSTInfo; the others give one second, as EN 319 422 asks) |
 | CSC v2 | `/csc/v2/…` (PIN, OTP, SCAL 1/2, OAuth with a login page that approves at once) |
 | Trusted lists (ETSI TS 119 612 v5) | `/tl/lotl.xml` (list of trusted lists), `/tl/tl.xml` (the trusted list), `/tl/lotl-signer.pem`, `/tl/tl-signer.pem` (the operators' certificates) |
 
@@ -125,7 +125,7 @@ drives the Sandbox the same way, with or without a TestBench, and what one clien
 | `GET /api/certificates/{id}/cer` | Its certificate (DER) | | `application/pkix-cert` |
 | `POST /api/certificates/{id}/revoke` | Revokes it now | `{"reason": "KeyCompromise", "publication": "Both" \| "CrlOnly" \| "OcspOnly"}` (both optional) | `CertificateView`, 400 for an unknown reason |
 | `POST /api/certificates/{id}/unrevoke` | Takes the revocation back | | `CertificateView` |
-| `POST /api/certificates/short-lived?seconds=3` | Issues a signer that expires in 1–3600 s | | `application/x-pkcs12` |
+| `POST /api/certificates/short-lived?seconds=3` | Issues a signer that expires in 1–3600 s (valid from two hours back, before the CRLs and OCSP responses it is checked against) | | `application/x-pkcs12` |
 | `GET /api/faults` | The failures | | `SandboxFaults` |
 | `PUT /api/faults` | Replaces every failure | `SandboxFaults` (fields left out take their default) | `SandboxFaults` |
 | `PATCH /api/faults` | Changes only the fields sent | any subset of `SandboxFaults` | `SandboxFaults` |

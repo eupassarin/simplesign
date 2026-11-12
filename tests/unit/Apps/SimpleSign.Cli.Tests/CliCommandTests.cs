@@ -1489,6 +1489,37 @@ public sealed class CliCommandTests : IDisposable
         return path;
     }
 
+    [Fact]
+    public async Task Augment_NoTsaForATimestampedLevel_FailsWithJsonError()
+    {
+        string data = Path.Combine(_tempDir, "augment.txt");
+        await File.WriteAllTextAsync(data, "augment me");
+        var (signExit, _) = await RunAsync(["cades", "sign", data, "--cert", _pfxPath, "--password", Password]);
+        signExit.ShouldBe(0);
+
+        var (exit, output) = await RunAsync(["augment", data + ".p7s", "--level", "BT", "--json"]);
+
+        exit.ShouldBe(1);
+        output.ShouldContain("\"success\":false");
+        output.ShouldContain("time-stamp is needed");
+    }
+
+    [Fact]
+    public async Task Augment_UnknownLevel_IsRefused()
+    {
+        var (exit, output) = await RunAsync(["augment", WritePdf("augment-level.pdf"), "--level", "B-X"]);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("--level must be BT, BLT or BLTA");
+    }
+
+    [Theory]
+    [InlineData("%PDF-1.7", "pdf")]
+    [InlineData("\uFEFF  <?xml version=\"1.0\"?><a/>", "xml")]
+    [InlineData("0\u0082", "cms")]
+    public void Augment_FormatOf_ReadsTheContent(string start, string format) =>
+        SimpleSign.Cli.Commands.AugmentCommand.FormatOf(System.Text.Encoding.UTF8.GetBytes(start)).ShouldBe(format);
+
     private static async Task<(int Exit, string Output)> RunAsync(params string[] args)
     {
         var services = new ServiceCollection();

@@ -58,8 +58,11 @@ them and the evidence groups by them.
 
 | Kind | Runs | Expectation |
 |---|---|---|
-| `sign` | A TestBench signature (`options`: the Sign page's, see [options.md](../playbooks/options.md)) | `outcome` signed / refused / error, `reason` (the `SigningErrorReason` of a refusal), `level`, `indication`, `dssAgrees`, `logContains` |
-| `validate` | A validation of `options.fileId` (`step:ID` for a file an earlier step signed, or a sample) | `outcome` valid / invalid / indeterminate, `indication`, `subIndication` |
+| `sign` | A TestBench signature (`options`: the Sign page's, see [options.md](../playbooks/options.md)) | `outcome` signed / refused / error, `reason` (the `SigningErrorReason` of a refusal), `level`, `indication`, `dssAgrees`, `etsiReport`, `logContains` |
+| `validate` | A validation of `options.fileId` (`step:ID` for a file an earlier step signed, or a sample) | `outcome` valid / invalid / indeterminate, `indication`, `subIndication`, `etsiReport` |
+| `augment` | Raises `options.fileId` to `options.level` (`BT`, `BLT`, `BLTA`) with the library's augmenter, through `options.timestamp` (`renew: true` renews a B-LTA), then validates the result; library engine only | `outcome` augmented / refused / error, `level`, `indication`, `subIndication` |
+
+`etsiReport: "valid"` checks the run's ETSI TS 119 102-2 report against the schema embedded in SimpleSign.
 
 The TestBench's **Options reference** (Playbook tab) lists, in the UI's language, every option path, symbolic value and
 Sandbox id and failure a step can use; [options.md](../playbooks/options.md) is the same catalogue in Markdown.
@@ -72,6 +75,11 @@ to run it first.
 
 `sandbox` puts the Sandbox in the state the step needs (CRL, OCSP, TSA or trusted-list failure, certificates to
 revoke) and puts it back after the step. A run of several steps starts from a clean Sandbox.
+
+`wait` (0 to 300 seconds) makes a step wait before it runs, before its Sandbox changes: a certificate issued with
+`sandbox-short-lived:N` expires meanwhile, or a revocation comes clearly after an earlier step's time-stamp. Upload
+options take bundled files as `fixture:NAME` (a signature-policy document, an attribute certificate, a SAML
+assertion).
 
 The options that matter most for a certification:
 
@@ -96,7 +104,11 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
 - `indecopi-guia-v4` — the automated part of INDECOPI's guide v4.0, Annex B: signing (F-n) and verification (V-n) by
   automated agents and the time-stamp checks (S-n), with the IOFE policies, through the library and the CLI. Written
   by `tools/playbooks/indecopi.py`.
+- `etsi-baseline` — SimpleSign against the ETSI standards: PAdES, CAdES and XAdES baseline (EN 319 142-1, 319 122-1,
+  319 132-1), the extended forms, time-stamps, EN 319 102-1 validation (indication and sub-indication) and trusted
+  lists, cross-validated with EU DSS. It covers the items [etsi-checklist.md](../playbooks/etsi-checklist.md) marks P;
+  each step is tagged with its item id and standard. Written by `tools/playbooks/etsi.py`.
 
 Tests: `tests/unit/Apps/SimpleSign.TestBench.Tests/Playbooks` checks the format, the kept results and the preview, and
-runs both samples against the Sandbox. The schema is `docs/schemas/playbook.schema.json` (also
+runs every sample against the Sandbox (and checks that the ETSI one covers every P item of its checklist). The schema is `docs/schemas/playbook.schema.json` (also
 `GET /api/playbook/schema`).

@@ -41,10 +41,11 @@ internal sealed partial class DocumentStore
     private readonly ConcurrentDictionary<string, DocumentFacts> _facts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SampleDocument> _samples = new(StringComparer.Ordinal);
 
-    /// <summary>Creates the store with the built-in policies (<see cref="Policies.PolicyPresets"/>) in it.</summary>
+    /// <summary>Creates the store with the built-in policies (<see cref="Policies.PolicyPresets"/>) and the <see cref="Fixtures"/> in it.</summary>
     public DocumentStore()
     {
         Policies.PolicyPresets.AddTo(this);
+        Fixtures.AddTo(this);
     }
 
     public IReadOnlyCollection<SampleDocument> Samples => _samples.Values;
@@ -105,6 +106,28 @@ internal sealed partial class DocumentStore
 
         Touch(id);
         return true;
+    }
+
+    /// <summary>Keeps a file however many are added after it (a result someone still shows), until <see cref="Unpin"/>.</summary>
+    /// <returns>Whether this call pinned it (false: unknown, or pinned already).</returns>
+    public bool Pin(string id)
+    {
+        if (_files.TryGetValue(id, out var file) && !file.Pinned)
+        {
+            _files[id] = file with { Pinned = true };
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Lets a file pinned with <see cref="Pin"/> be forgotten again, least recently used first.</summary>
+    public void Unpin(string id)
+    {
+        if (_files.TryGetValue(id, out var file) && file.Pinned)
+        {
+            _files[id] = file with { Pinned = false };
+        }
     }
 
     /// <summary>Forgets a file (a preview replaced by a newer one).</summary>

@@ -60,6 +60,18 @@ public static class ValidationReports
 
     private const string Etsi = "urn:etsi:019102:";
 
+    /// <summary>
+    /// Checks <paramref name="xml"/> against the ETSI TS 119 102-2 validation report schema (v1.2.1), embedded with the
+    /// schemas it imports: nothing is fetched.
+    /// </summary>
+    /// <param name="xml">A validation report, as <see cref="ToEtsiXml"/> writes it.</param>
+    /// <returns>The schema errors (at most 20); empty when the report is valid.</returns>
+    public static IReadOnlyList<string> ValidateEtsiXml(string xml)
+    {
+        ArgumentNullException.ThrowIfNull(xml);
+        return EtsiReportSchema.Validate(xml);
+    }
+
     /// <summary>The ETSI TS 119 102-2 signature validation report of <paramref name="signatures"/>.</summary>
     /// <param name="signatures">The signatures, from <c>ToReportEntry()</c> on the validation results.</param>
     /// <param name="level">The validation level used; it gives the validation process (Basic, LTVM, LTA).</param>

@@ -26,9 +26,12 @@ public static class ConformanceDetector
             return PAdESConformanceLevel.CmsOnly;
         }
 
-        bool hasTimestamp = signature.Timestamp is not null;
+        // B-T: a signature time-stamp, or a document time-stamp after the signature (EN 319 142-1 §6.3). The archive
+        // time-stamp of B-LTA is a document time-stamp beyond the one that may stand for the signature time-stamp.
+        int documentTimestamps = DocumentTimestampsAfter(signature, allSignatures);
+        bool hasTimestamp = signature.Timestamp is not null || documentTimestamps > 0;
         bool hasDss = document.SecurityStore?.IsPresent == true;
-        bool hasDocTimestamp = HasDocumentTimestampAfter(signature, allSignatures);
+        bool hasDocTimestamp = signature.Timestamp is not null ? documentTimestamps > 0 : documentTimestamps > 1;
 
         if (hasTimestamp && hasDss && hasDocTimestamp)
         {
@@ -92,20 +95,10 @@ public static class ConformanceDetector
         return lowest;
     }
 
-    private static bool HasDocumentTimestampAfter(
+    private static int DocumentTimestampsAfter(
         SignatureFieldInfo signature,
-        IReadOnlyList<SignatureFieldInfo> allSignatures)
-    {
+        IReadOnlyList<SignatureFieldInfo> allSignatures) =>
         // A document timestamp is a signature with SubFilter "ETSI.RFC3161"
         // that covers the bytes after this signature (higher ByteRange.Offset2)
-        foreach (var other in allSignatures)
-        {
-            if (other.IsDocumentTimestamp && other.ByteRange.Offset2 > signature.ByteRange.Offset2)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+        allSignatures.Count(other => other.IsDocumentTimestamp && other.ByteRange.Offset2 > signature.ByteRange.Offset2);
 }

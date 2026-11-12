@@ -156,4 +156,45 @@ public sealed class CadesSignaturePolicyStoreTests : IDisposable
     [Fact]
     public void WithSignaturePolicyStore_Null_Throws() =>
         Should.Throw<ArgumentNullException>(() => CadesSigner.Document(_data).WithSignaturePolicyStore(null!));
+
+    private static readonly SimpleSign.Core.Policies.ValidationPolicy s_requirePolicyDocument = SimpleSign.Core.Policies.ValidationPolicy.Default
+        .With("SignatureConstraints/AcceptablePolicies", new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Ignore))
+        .With("SignatureConstraints/PolicyAvailable", new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Fail));
+
+    [Fact]
+    public async Task Validate_PolicyDocumentNotCarriedNorFound_SignaturePolicyNotAvailable()
+    {
+        byte[] cms = await CadesSigner.Document(_data).WithCertificate(_cert).WithSignaturePolicy(s_policy).SignAsync();
+
+        var result = new SimpleSign.CAdES.CadesSignatureValidator(new SimpleSign.Core.Validation.ValidationOptions
+        {
+            CheckRevocation = false,
+            Policy = s_requirePolicyDocument,
+        }).Validate(cms, _data, [_cert]);
+
+        result.Indication.ShouldBe(SimpleSign.Core.Validation.SignatureIndication.Indeterminate);
+        result.SubIndication.ShouldBe(SimpleSign.Core.Validation.SignatureSubIndication.SignaturePolicyNotAvailable);
+    }
+
+    [Fact]
+    public async Task Validate_PolicyDocumentFromTheProvider_IsAvailable()
+    {
+        byte[] cms = await CadesSigner.Document(_data).WithCertificate(_cert).WithSignaturePolicy(s_policy).SignAsync();
+
+        var result = new SimpleSign.CAdES.CadesSignatureValidator(new SimpleSign.Core.Validation.ValidationOptions
+        {
+            CheckRevocation = false,
+            Policy = s_requirePolicyDocument,
+            SignaturePolicyDocuments = new Documents(),
+        }).Validate(cms, _data, [_cert]);
+
+        result.SubIndication.ShouldNotBe(SimpleSign.Core.Validation.SignatureSubIndication.SignaturePolicyNotAvailable);
+        result.Constraints.ShouldContain(c => c.Id.EndsWith("/PolicyAvailable", StringComparison.Ordinal)
+            && c.Status == SimpleSign.Core.Validation.ConstraintStatus.Passed);
+    }
+
+    private sealed class Documents : SimpleSign.Core.Policies.ISignaturePolicyDocumentProvider
+    {
+        public byte[]? Find(string policyOid) => policyOid == PolicyOid ? s_policyDocument : null;
+    }
 }

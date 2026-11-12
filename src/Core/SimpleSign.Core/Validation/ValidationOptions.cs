@@ -31,6 +31,16 @@ public sealed class ValidationOptions
     internal Policies.ValidationPolicy PolicyFor(string? signaturePolicyOid) =>
         PolicyProvider?.ValidationFor(signaturePolicyOid) ?? Policy;
 
+    /// <summary>
+    /// Finds the document of the signature policy a signature names when the signature does not carry it. Null: a policy
+    /// document is available only from the signature's signature-policy-store.
+    /// </summary>
+    public Policies.ISignaturePolicyDocumentProvider? SignaturePolicyDocuments { get; init; }
+
+    /// <summary>Whether <see cref="SignaturePolicyDocuments"/> has the document of <paramref name="signaturePolicyOid"/>: true, or null when unknown.</summary>
+    internal bool? PolicyDocumentFound(string? signaturePolicyOid) =>
+        signaturePolicyOid is not null && SignaturePolicyDocuments?.Find(signaturePolicyOid) is not null ? true : null;
+
     /// <summary>How validation data is fetched: revocation strategy and fallback, AIA, untrusted chains. Default: <see cref="VerifierOptions.Default"/>.</summary>
     public VerifierOptions Verifier { get; init; } = VerifierOptions.Default;
 

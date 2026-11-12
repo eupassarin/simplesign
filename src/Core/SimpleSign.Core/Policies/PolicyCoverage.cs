@@ -74,6 +74,7 @@ public static class PolicyCoverage
         "Model", "Timestamp/TimestampDelay", "Timestamp/TimestampValid", "Timestamp/Coherence", "Timestamp/AtsHashIndex",
         "Timestamp/RevocationTimeAgainstBestSignatureTime", "Timestamp/BestSignatureTimeBeforeExpirationDateOfSigningCertificate",
         "Timestamp/TSAGeneralNamePresent", "Timestamp/TSAGeneralNameContentMatch", "Timestamp/TSAGeneralNameOrderMatch",
+        "Timestamp/AccuracyPresent", "Timestamp/OrderingFalse", "Timestamp/AcceptablePolicies",
         "Revocation/UnknownStatus", "Revocation/ThisUpdatePresent", "Revocation/RevocationIssuerKnown",
         "Revocation/RevocationIssuerValidAtProductionTime", "Revocation/RevocationAfterCertificateIssuance",
         "Revocation/OCSPResponderIdMatch", "Revocation/SelfIssuedOCSP", "Revocation/RevocationHasInformationAboutCertificate", "TrustedLists/TLFreshness", "TrustedLists/TLNotExpired", "TrustedLists/TLWellSigned", "TrustedLists/TLStructure",

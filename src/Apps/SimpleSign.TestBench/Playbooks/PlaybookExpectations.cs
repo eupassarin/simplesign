@@ -7,7 +7,11 @@ namespace SimpleSign.TestBench.Playbooks;
 internal static class PlaybookExpectations
 {
     /// <summary>The run of a step through one engine, with a row per field of <paramref name="expect"/>.</summary>
-    public static PlaybookEngineRun Evaluate(string engine, RunView view, PlaybookExpectation expect)
+    /// <param name="engine">The engine the run used.</param>
+    /// <param name="view">The run.</param>
+    /// <param name="expect">What the step expects.</param>
+    /// <param name="file">Reads a stored file by id (the ETSI report, for <see cref="PlaybookExpectation.EtsiReport"/>); null when not needed.</param>
+    public static PlaybookEngineRun Evaluate(string engine, RunView view, PlaybookExpectation expect, Func<string, byte[]?>? file = null)
     {
         var verdict = view.Validation.FirstOrDefault(v => !v.IsTimestamp);
         string? indication = verdict?.EtsiIndication;
@@ -51,6 +55,25 @@ internal static class PlaybookExpectations
             checks.Add(new("dssAgrees", agrees ? "yes" : "no", found, dssAgrees == agrees));
         }
 
+        if (expect.FailedConstraints.Count > 0)
+        {
+            var failed = view.Validation.Where(v => !v.IsTimestamp).SelectMany(v => v.Findings ?? [])
+                .Where(f => f.Status == "fail").Select(f => f.Constraint).ToHashSet(StringComparer.Ordinal);
+            foreach (string constraint in expect.FailedConstraints)
+            {
+                checks.Add(new("failedConstraint", constraint, failed.Contains(constraint) ? "failed" : "not failed", failed.Contains(constraint)));
+            }
+        }
+
+        if (expect.EtsiReport is { } etsiReport)
+        {
+            string found = view.EtsiReportId is not { } reportId || file?.Invoke(reportId) is not { } xml ? "no report"
+                : SimpleSign.Core.Validation.ValidationReports.ValidateEtsiXml(System.Text.Encoding.UTF8.GetString(xml)) is { Count: > 0 } errors
+                    ? $"{errors.Count} schema error(s): {errors[0]}"
+                    : "valid";
+            checks.Add(new("etsiReport", etsiReport, found, found == etsiReport));
+        }
+
         foreach (string text in expect.LogContains)
         {
             bool found = view.Logs.Any(l => l.Message.Contains(text, StringComparison.OrdinalIgnoreCase))
@@ -75,7 +98,7 @@ internal static class PlaybookExpectations
     /// <summary>signed, refused, error (a sign run) or valid, invalid, indeterminate (the first signature's verdict).</summary>
     internal static string OutcomeOf(RunView view, string? indication)
     {
-        if (view.Kind == RunKinds.Sign && !view.Success)
+        if (view.Kind is RunKinds.Sign or RunKinds.Augment && !view.Success)
         {
             return view.ErrorType?.StartsWith("SigningException", StringComparison.Ordinal) == true ? "refused" : "error";
         }
@@ -91,7 +114,7 @@ internal static class PlaybookExpectations
             };
         }
 
-        return "signed";
+        return view.Kind == RunKinds.Augment ? "augmented" : "signed";
     }
 
     /// <summary>The reason in <c>SigningException (Reason)</c>, or null.</summary>

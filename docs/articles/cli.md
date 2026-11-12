@@ -259,7 +259,12 @@ What the policy checks against comes from these options:
 | `--expected-tsa <file>` | The certificate the TSA must sign with; a timestamp from another is refused (`TimestampUntrusted`) |
 | `--audit-log <file>` | Appends a hash-chained record of each signature made or refused; `simplesign audit verify <file>` checks the chain |
 
-`validate --policy` takes a file or `default`, `iofe` or `iofe-nonrepudiation`.
+`augment <file> --level BT|BLT|BLTA --tsa URL` raises an existing PAdES, CAdES or XAdES signature (the format is read
+from the file): a document time-stamp, a DSS and a new document time-stamp for a PDF; the signature time-stamp,
+validation data and archive time-stamp for CAdES and XAdES. `--data` gives a detached signature's data (B-LTA needs
+it), `--signature-id` picks a ds:Signature, `--renew` renews a B-LTA, `--json` prints the levels before and after.
+
+`validate --policy` takes a file or `default`, `strict` (time-stamps out of order and an unavailable signature policy fail), `iofe` or `iofe-nonrepudiation`.
 
 A refusal prints the reason (`KeyTooWeak`, `KeyUsageNotPermitted`, `ChainCertificateNotValid`, `CertificateRevoked`,
 `RevocationStatusUnknown`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampCertificateRevoked`…) and what to do about it. `simplesign explain <TERM>` explains the

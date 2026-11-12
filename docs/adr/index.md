@@ -27,3 +27,4 @@ SimpleSign, including their rationale, consequences, and alternatives.
 - [ADR 0022: Validation Policy and ETSI Sub-Indications](0022-validation-policy-and-etsi-report.md)
 - [ADR 0023: Signing and Validation Policies in the Structure of the EU DSS](0023-policies-in-the-dss-structure.md) (superseded in part by 0024)
 - [ADR 0024: SimpleSign's Own Policy Format](0024-own-policy-format.md)
+- [ADR 0025: Augmenting Existing Signatures](0025-augmenting-existing-signatures.md)

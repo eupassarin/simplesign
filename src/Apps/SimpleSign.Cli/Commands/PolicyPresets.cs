@@ -33,6 +33,9 @@ internal static class PolicyPresets
         new Dictionary<string, Func<ValidationPolicy>>(StringComparer.OrdinalIgnoreCase)
         {
             ["default"] = () => ValidationPolicy.Default,
+            ["strict"] = () => ValidationPolicy.Default
+                .WithName("SimpleSign default, strict")
+                .With("Timestamp/Coherence", Fail).With("SignatureConstraints/PolicyAvailable", Fail),
             ["iofe"] = () => IofePolicies.Validation,
             ["iofe-nonrepudiation"] = () => IofePolicies.ValidationNonRepudiation,
         };

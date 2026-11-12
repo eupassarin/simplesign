@@ -238,13 +238,20 @@ internal sealed class SandboxEnvironment : IHttpClientProvider, IDisposable
         }
     }
 
-    /// <summary>A signer valid for <paramref name="lifetime"/> only, issued by the Sandbox for this call.</summary>
-    public async Task<X509Certificate2> IssueShortLivedAsync(TimeSpan lifetime, CancellationToken cancellationToken = default)
+    /// <summary>The PKCS#12 (password: the Sandbox's PfxPassword) of a signer valid for <paramref name="lifetime"/> only, issued for this call.</summary>
+    public async Task<byte[]> IssueShortLivedPfxAsync(TimeSpan lifetime, CancellationToken cancellationToken = default)
     {
         var connection = Connection;
         using var response = await _admin.PostAsync(new Uri(connection.Url, $"api/certificates/short-lived?seconds={(int)lifetime.TotalSeconds}"), null, cancellationToken);
         response.EnsureSuccessStatusCode();
-        var collection = X509CertificateLoader.LoadPkcs12Collection(await response.Content.ReadAsByteArrayAsync(cancellationToken), connection.Info.PfxPassword, KeyStorage);
+        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+    }
+
+    /// <summary>A signer valid for <paramref name="lifetime"/> only, issued by the Sandbox for this call.</summary>
+    public async Task<X509Certificate2> IssueShortLivedAsync(TimeSpan lifetime, CancellationToken cancellationToken = default)
+    {
+        var connection = Connection;
+        var collection = X509CertificateLoader.LoadPkcs12Collection(await IssueShortLivedPfxAsync(lifetime, cancellationToken), connection.Info.PfxPassword, KeyStorage);
         var leaf = collection.Single(c => c.HasPrivateKey);
         foreach (var other in collection.Where(c => !ReferenceEquals(c, leaf)))
         {

@@ -1,0 +1,2849 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",
+  "schema": 2,
+  "id": "etsi-baseline",
+  "title": "ETSI baseline signatures and validation",
+  "description": "What docs/playbooks/etsi-checklist.md marks as shown by a run: PAdES, CAdES and XAdES baseline signatures (EN 319 142-1, EN 319 122-1, EN 319 132-1), the extended forms, time-stamps, EN 319 102-1 validation and trusted lists, against the Sandbox, cross-validated with EU DSS when one is connected. Tags name the checklist items and the standards.",
+  "defaults": {
+    "engine": "library",
+    "format": "pades",
+    "crossValidate": true,
+    "options": {
+      "common": {
+        "level": "BB",
+        "credentialId": "sandbox:rsa-2048",
+        "attemptRefused": true,
+        "validation": {
+          "trust": [
+            "Sandbox"
+          ]
+        }
+      },
+      "pades": {
+        "documentId": "sample:contract"
+      }
+    }
+  },
+  "sections": [
+    {
+      "id": "pades",
+      "title": "PAdES baseline (EN 319 142-1)",
+      "description": "The four levels, then what a PDF signature adds: certification, incremental updates, PDF/A, the SubFilter, and the optional attributes.",
+      "steps": [
+        {
+          "id": "pades-bb",
+          "title": "PADES B-B",
+          "tags": [
+            "PA-1",
+            "EN 319 142-1",
+            "levels"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BB"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-bt",
+          "title": "PADES B-T",
+          "tags": [
+            "PA-3",
+            "EN 319 142-1",
+            "levels"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-blt",
+          "title": "PADES B-LT",
+          "tags": [
+            "PA-4",
+            "EN 319 142-1",
+            "levels"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-blta",
+          "title": "PADES B-LTA",
+          "tags": [
+            "PA-5",
+            "EN 319 142-1",
+            "levels"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-blta-archive-tsa",
+          "title": "PAdES B-LTA with a separate archive TSA",
+          "tags": [
+            "PA-5",
+            "TS-5",
+            "EN 319 142-1",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "separateArchiveTsa": true,
+            "archiveTimestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "pades-appended",
+          "kind": "validate",
+          "title": "Content appended after the signature",
+          "tags": [
+            "PA-7",
+            "EN 319 142-1",
+            "integrity"
+          ],
+          "options": {
+            "fileId": "sample:appended",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          },
+          "description": "An incremental update after the signature: the signed revision is intact; the report says what came after."
+        },
+        {
+          "id": "pades-certified-1",
+          "title": "Certification (DocMDP P=1)",
+          "tags": [
+            "PA-8",
+            "EN 319 142-1",
+            "docmdp"
+          ],
+          "format": "pades",
+          "options": {
+            "certification": "NoChanges"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "pades-certified-2",
+          "title": "Certification (DocMDP P=2)",
+          "tags": [
+            "PA-8",
+            "EN 319 142-1",
+            "docmdp"
+          ],
+          "format": "pades",
+          "options": {
+            "certification": "FormFilling"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "pades-certified-3",
+          "title": "Certification (DocMDP P=3)",
+          "tags": [
+            "PA-8",
+            "EN 319 142-1",
+            "docmdp"
+          ],
+          "format": "pades",
+          "options": {
+            "certification": "FormFillingAndAnnotations"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "pades-attributes",
+          "title": "Reason and location",
+          "tags": [
+            "PA-9",
+            "EN 319 142-1",
+            "attributes"
+          ],
+          "format": "pades",
+          "options": {
+            "reason": "Approval of the contract",
+            "location": "Lima, PE"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "pades-policy",
+          "title": "Explicit signature policy (signature-policy-identifier)",
+          "tags": [
+            "PA-9",
+            "EN 319 142-1",
+            "policy"
+          ],
+          "format": "pades",
+          "options": {
+            "kind": "CustomPolicy",
+            "customPolicy": {
+              "oid": "1.3.6.1.4.1.99999.1.1",
+              "hashAlgorithm": "Sha256",
+              "hashHex": "0000000000000000000000000000000000000000000000000000000000000000",
+              "uri": "https://example.org/policy.der"
+            }
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "pades-pdfa",
+          "title": "Preserve PDF/A",
+          "tags": [
+            "PA-10",
+            "EN 319 142-1",
+            "pdfa"
+          ],
+          "format": "pades",
+          "options": {
+            "preservePdfA": true
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "pades-adbe",
+          "title": "adbe.pkcs7.detached SubFilter",
+          "tags": [
+            "PA-11",
+            "EN 319 142-1",
+            "subfilter"
+          ],
+          "format": "pades",
+          "options": {
+            "subFilter": "AdbePkcs7Detached"
+          },
+          "expect": {
+            "outcome": "signed"
+          },
+          "description": "The pre-PAdES SubFilter: still produced and read, but not a PAdES baseline signature."
+        }
+      ]
+    },
+    {
+      "id": "cades",
+      "title": "CAdES baseline (EN 319 122-1)",
+      "description": "Detached and attached content, the optional signed attributes, co-signatures and countersignatures, and the four levels.",
+      "steps": [
+        {
+          "id": "cades-bb",
+          "title": "CADES B-B",
+          "tags": [
+            "CA-1",
+            "EN 319 122-1",
+            "levels"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BB"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-bt",
+          "title": "CADES B-T",
+          "tags": [
+            "CA-5",
+            "EN 319 122-1",
+            "levels"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-blt",
+          "title": "CADES B-LT",
+          "tags": [
+            "CA-6",
+            "EN 319 122-1",
+            "levels"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-blta",
+          "title": "CADES B-LTA",
+          "tags": [
+            "CA-7",
+            "EN 319 122-1",
+            "levels"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-attached",
+          "title": "CAdES B-B, attached content (p7m)",
+          "tags": [
+            "CA-1",
+            "EN 319 122-1"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "contentType": "Enveloped"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-attributes",
+          "title": "Commitment type, signer location, roles, content hints, MIME type",
+          "tags": [
+            "CA-2",
+            "EN 319 122-1",
+            "attributes"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "commitment": "ProofOfOrigin",
+            "signerCountry": "PE",
+            "signerLocality": "Lima",
+            "signerPostalAddress": [
+              "Av. Example 123"
+            ],
+            "signerRoles": [
+              "Legal representative"
+            ],
+            "mimeType": "text/plain",
+            "contentDescription": "Contract"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "cades-policy",
+          "title": "Explicit signature policy (signature-policy-identifier, SPuri)",
+          "tags": [
+            "CA-2",
+            "EN 319 122-1",
+            "policy"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "kind": "CustomPolicy",
+            "policyOid": "1.3.6.1.4.1.99999.1.1",
+            "policyUri": "https://example.org/policy.der"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "cades-policy-store",
+          "title": "Signature policy with the policy document embedded (signature-policy-store)",
+          "tags": [
+            "CA-8",
+            "CA-2",
+            "EN 319 122-1",
+            "policy"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "kind": "CustomPolicy",
+            "policyOid": "1.3.6.1.4.1.99999.1.1",
+            "policyDocumentId": "fixture:signature-policy"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "cades-certified-role",
+          "title": "Certified role (attribute certificate) and a signed SAML assertion",
+          "tags": [
+            "CA-2",
+            "EN 319 122-1",
+            "attributes"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "attributeCertificateId": "fixture:attribute-certificate",
+            "signedAssertionId": "fixture:saml-assertion"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "cades-content-ts",
+          "title": "Content time-stamp before signing",
+          "tags": [
+            "CA-3",
+            "EN 319 122-1",
+            "tsa"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "contentTimestamp": true
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "cades-cosign",
+          "title": "Co-signature (a second, parallel signer)",
+          "tags": [
+            "CA-4",
+            "EN 319 122-1"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "operation": "CoSign",
+            "existingSignatureId": "step:cades-bb",
+            "credentialId": "sandbox:rsa-3072"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "cades-countersign",
+          "title": "Countersignature of the first signer",
+          "tags": [
+            "CA-4",
+            "EN 319 122-1"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "operation": "CounterSign",
+            "existingSignatureId": "step:cades-bb",
+            "signerIndex": 0,
+            "credentialId": "sandbox:ecdsa-p256"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "cades-tree",
+          "kind": "validate",
+          "title": "Validate co-signers and a countersignature",
+          "tags": [
+            "CA-4",
+            "EN 319 122-1",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-tree",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          }
+        }
+      ]
+    },
+    {
+      "id": "xades",
+      "title": "XAdES baseline (EN 319 132-1)",
+      "description": "Enveloped, enveloping and detached; the optional signed properties, the data-objects time-stamp, countersignatures and the four levels.",
+      "steps": [
+        {
+          "id": "xades-bb",
+          "title": "XADES B-B",
+          "tags": [
+            "XA-1",
+            "EN 319 132-1",
+            "levels"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BB"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-bt",
+          "title": "XADES B-T",
+          "tags": [
+            "XA-6",
+            "EN 319 132-1",
+            "levels"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-blt",
+          "title": "XADES B-LT",
+          "tags": [
+            "XA-7",
+            "EN 319 132-1",
+            "levels"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-blta",
+          "title": "XADES B-LTA",
+          "tags": [
+            "XA-8",
+            "EN 319 132-1",
+            "levels"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-enveloping",
+          "title": "XAdES B-B, enveloping",
+          "tags": [
+            "XA-1",
+            "EN 319 132-1"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "form": "Enveloping"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-detached",
+          "title": "XAdES B-B, detached",
+          "tags": [
+            "XA-1",
+            "EN 319 132-1"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "form": "Detached"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-v1",
+          "title": "XAdES 1.3.2 SigningCertificate (V1)",
+          "tags": [
+            "XA-1",
+            "EN 319 132-1"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "signingCertificateV1": true
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "xades-attributes",
+          "title": "Commitment type, roles, production place, data object format",
+          "tags": [
+            "XA-2",
+            "EN 319 132-1",
+            "attributes"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "commitment": "ProofOfApproval",
+            "signerRoles": [
+              "Legal representative"
+            ],
+            "placeCity": "Lima",
+            "placeCountry": "PE",
+            "mimeType": "application/xml"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "xades-policy",
+          "title": "Explicit signature policy (SignaturePolicyIdentifier)",
+          "tags": [
+            "XA-2",
+            "EN 319 132-1",
+            "policy"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "kind": "CustomPolicy",
+            "policyOid": "1.3.6.1.4.1.99999.1.1",
+            "policyUri": "https://example.org/policy.der"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "xades-policy-store",
+          "title": "SignaturePolicyStore with the policy document",
+          "tags": [
+            "XA-2",
+            "EN 319 132-1",
+            "policy"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "kind": "CustomPolicy",
+            "policyOid": "1.3.6.1.4.1.99999.1.1",
+            "policyDocumentId": "fixture:signature-policy"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "xades-certified-role",
+          "title": "SignerRoleV2 with a certified role and a signed SAML assertion",
+          "tags": [
+            "XA-2",
+            "EN 319 132-1",
+            "attributes"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "attributeCertificateId": "fixture:attribute-certificate",
+            "signedAssertionId": "fixture:saml-assertion"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "xades-data-ts",
+          "title": "AllDataObjectsTimeStamp",
+          "tags": [
+            "XA-3",
+            "EN 319 132-1",
+            "tsa"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "dataObjectsTimestamp": true
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "xades-countersign",
+          "title": "CounterSignature",
+          "tags": [
+            "XA-5",
+            "EN 319 132-1"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "step:xades-bb",
+            "counterSign": true,
+            "credentialId": "sandbox:ecdsa-p256"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "xades-inclusive",
+          "title": "Inclusive canonicalization",
+          "tags": [
+            "XA-9",
+            "EN 319 132-1"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "canonicalization": "Inclusive"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "algorithms",
+      "title": "Keys and digests (all formats)",
+      "steps": [
+        {
+          "id": "pades-rsa-4096",
+          "title": "PADES with RSA-4096",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 142-1",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:rsa-4096"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-ecdsa-p256",
+          "title": "PADES with ECDSA-P256",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 142-1",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:ecdsa-p256"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-ecdsa-p384",
+          "title": "PADES with ECDSA-P384",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 142-1",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:ecdsa-p384"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-ecdsa-p521",
+          "title": "PADES with ECDSA-P521",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 142-1",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:ecdsa-p521"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-rsa-4096",
+          "title": "CADES with RSA-4096",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 122-1",
+            "TS 119 312"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "credentialId": "sandbox:rsa-4096"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-ecdsa-p256",
+          "title": "CADES with ECDSA-P256",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 122-1",
+            "TS 119 312"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "credentialId": "sandbox:ecdsa-p256"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-ecdsa-p384",
+          "title": "CADES with ECDSA-P384",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 122-1",
+            "TS 119 312"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "credentialId": "sandbox:ecdsa-p384"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-ecdsa-p521",
+          "title": "CADES with ECDSA-P521",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 122-1",
+            "TS 119 312"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "credentialId": "sandbox:ecdsa-p521"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-rsa-4096",
+          "title": "XADES with RSA-4096",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 132-1",
+            "TS 119 312"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "credentialId": "sandbox:rsa-4096"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-ecdsa-p256",
+          "title": "XADES with ECDSA-P256",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 132-1",
+            "TS 119 312"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "credentialId": "sandbox:ecdsa-p256"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-ecdsa-p384",
+          "title": "XADES with ECDSA-P384",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 132-1",
+            "TS 119 312"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "credentialId": "sandbox:ecdsa-p384"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-ecdsa-p521",
+          "title": "XADES with ECDSA-P521",
+          "tags": [
+            "AL-1",
+            "CE-1",
+            "EN 319 132-1",
+            "TS 119 312"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "credentialId": "sandbox:ecdsa-p521"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-pss",
+          "title": "PADES with RSASSA-PSS",
+          "tags": [
+            "AL-1",
+            "EN 319 142-1",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "padding": "Pss"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-pss",
+          "title": "CADES with RSASSA-PSS",
+          "tags": [
+            "AL-1",
+            "EN 319 122-1",
+            "TS 119 312"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "padding": "Pss"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-pss",
+          "title": "XADES with RSASSA-PSS",
+          "tags": [
+            "AL-1",
+            "EN 319 132-1",
+            "TS 119 312"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "padding": "Pss"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-sha384",
+          "title": "PADES with SHA384",
+          "tags": [
+            "AL-2",
+            "EN 319 142-1",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "hash": "Sha384"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "pades-sha512",
+          "title": "PADES with SHA512",
+          "tags": [
+            "AL-2",
+            "EN 319 142-1",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "hash": "Sha512"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-sha384",
+          "title": "CADES with SHA384",
+          "tags": [
+            "AL-2",
+            "EN 319 122-1",
+            "TS 119 312"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "hash": "Sha384"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cades-sha512",
+          "title": "CADES with SHA512",
+          "tags": [
+            "AL-2",
+            "EN 319 122-1",
+            "TS 119 312"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "hash": "Sha512"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-sha384",
+          "title": "XADES with SHA384",
+          "tags": [
+            "AL-2",
+            "EN 319 132-1",
+            "TS 119 312"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "hash": "Sha384"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "xades-sha512",
+          "title": "XADES with SHA512",
+          "tags": [
+            "AL-2",
+            "EN 319 132-1",
+            "TS 119 312"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "hash": "Sha512"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "rsa-1024",
+          "title": "RSA 1024 key: refused",
+          "tags": [
+            "AL-1",
+            "CE-3",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:rsa-1024"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyTooWeak"
+          }
+        },
+        {
+          "id": "chain-sha1",
+          "title": "Chain with a CA signed with SHA-1: refused",
+          "tags": [
+            "CE-3",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:under-sha1-ca",
+            "signingPolicyId": "preset:signing:iofe",
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "AlgorithmNotPermitted"
+          }
+        },
+        {
+          "id": "level-not-reached",
+          "title": "B-T with the TSA down: refused",
+          "tags": [
+            "AL-4",
+            "EN 319 142-1",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "refused"
+          },
+          "sandbox": {
+            "tsa": "Down"
+          }
+        },
+        {
+          "id": "level-lower",
+          "title": "B-T with the TSA down, lower level allowed: B-B",
+          "tags": [
+            "AL-4",
+            "EN 319 142-1",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "returnLowerLevel": true
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          },
+          "sandbox": {
+            "tsa": "Down"
+          }
+        }
+      ]
+    },
+    {
+      "id": "extended",
+      "title": "Extended forms (EN 319 122-2, EN 319 132-2)",
+      "steps": [
+        {
+          "id": "cades-ext-c",
+          "title": "CADES -C (complete references)",
+          "tags": [
+            "EX-1",
+            "EN 319 122-2",
+            "extended"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "extendedForm": "CompleteReferences"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "cades-ext-xl",
+          "title": "CADES -X-L",
+          "tags": [
+            "EX-1",
+            "EN 319 122-2",
+            "extended"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "extendedForm": "ExtendedLong"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "cades-ext-a",
+          "title": "CADES -A (archive)",
+          "tags": [
+            "EX-1",
+            "EN 319 122-2",
+            "extended"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "extendedForm": "Archive"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "xades-ext-c",
+          "title": "XADES -C (complete references)",
+          "tags": [
+            "EX-2",
+            "EN 319 132-2",
+            "extended"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "extendedForm": "CompleteReferences"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "xades-ext-xl",
+          "title": "XADES -X-L",
+          "tags": [
+            "EX-2",
+            "EN 319 132-2",
+            "extended"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "extendedForm": "ExtendedLong"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "xades-ext-a",
+          "title": "XADES -A (archive)",
+          "tags": [
+            "EX-2",
+            "EN 319 132-2",
+            "extended"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "extendedForm": "Archive"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "augment",
+      "title": "Augmentation (raising an existing signature's level)",
+      "description": "A B-B signature made above is raised one level at a time with the library's augmenters (PadesAugmenter, CadesAugmenter, XadesAugmenter); each result is validated. The PAdES B-LTA is then renewed with a new document time-stamp.",
+      "steps": [
+        {
+          "id": "aug-pades-bt",
+          "kind": "augment",
+          "title": "PADES: augment to B-T",
+          "tags": [
+            "EX-3",
+            "EN 319 142-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:pades-bb",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-T",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "aug-pades-blt",
+          "kind": "augment",
+          "title": "PADES: augment to B-LT",
+          "tags": [
+            "EX-3",
+            "EN 319 142-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:aug-pades-bt",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "aug-pades-blta",
+          "kind": "augment",
+          "title": "PADES: augment to B-LTA",
+          "tags": [
+            "EX-3",
+            "EN 319 142-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:aug-pades-blt",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "aug-pades-renew",
+          "kind": "augment",
+          "title": "PAdES: renew the archive time-stamp",
+          "tags": [
+            "PA-6",
+            "EN 319 142-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:aug-pades-blta",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "renew": true
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          },
+          "description": "The validation data of the last document time-stamp, then a new document time-stamp over it."
+        },
+        {
+          "id": "aug-cades-bt",
+          "kind": "augment",
+          "title": "CADES: augment to B-T",
+          "tags": [
+            "EX-3",
+            "EN 319 122-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:cades-bb",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "dataId": "cades-sample:text"
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-T",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "aug-cades-blt",
+          "kind": "augment",
+          "title": "CADES: augment to B-LT",
+          "tags": [
+            "EX-3",
+            "EN 319 122-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:aug-cades-bt",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "dataId": "cades-sample:text"
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "aug-cades-blta",
+          "kind": "augment",
+          "title": "CADES: augment to B-LTA",
+          "tags": [
+            "EX-3",
+            "EN 319 122-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:aug-cades-blt",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "dataId": "cades-sample:text"
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "aug-xades-bt",
+          "kind": "augment",
+          "title": "XADES: augment to B-T",
+          "tags": [
+            "EX-3",
+            "EN 319 132-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:xades-bb",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-T",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "aug-xades-blt",
+          "kind": "augment",
+          "title": "XADES: augment to B-LT",
+          "tags": [
+            "EX-3",
+            "EN 319 132-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:aug-xades-bt",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LT",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "aug-xades-blta",
+          "kind": "augment",
+          "title": "XADES: augment to B-LTA",
+          "tags": [
+            "EX-3",
+            "EN 319 132-1",
+            "augment"
+          ],
+          "options": {
+            "fileId": "step:aug-xades-blt",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "timestamps",
+      "title": "Time-stamps (RFC 3161, EN 319 422)",
+      "steps": [
+        {
+          "id": "ts-invalid-token",
+          "title": "Token with an invalid signature: refused",
+          "tags": [
+            "TS-1",
+            "RFC 3161",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "refused"
+          },
+          "sandbox": {
+            "tsa": "InvalidToken"
+          }
+        },
+        {
+          "id": "ts-revoked",
+          "title": "TSA certificate revoked: refused",
+          "tags": [
+            "TS-2",
+            "RFC 3161",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxRevoked"
+            },
+            "signingPolicyId": "preset:signing:iofe",
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampCertificateRevoked"
+          }
+        },
+        {
+          "id": "ts-expired",
+          "title": "TSA certificate expired: refused",
+          "tags": [
+            "TS-2",
+            "RFC 3161",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxExpired"
+            },
+            "signingPolicyId": "preset:signing:iofe",
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampCertificateNotValid"
+          }
+        },
+        {
+          "id": "ts-untrusted",
+          "title": "TSA outside the anchors: refused",
+          "tags": [
+            "TS-2",
+            "RFC 3161",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxUntrusted"
+            },
+            "signingPolicyId": "preset:signing:iofe",
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampUntrusted"
+          }
+        },
+        {
+          "id": "ts-expected",
+          "title": "Expected TSA",
+          "tags": [
+            "TS-3",
+            "RFC 3161",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ],
+              "expectedTsa": "tsa"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "ts-unexpected",
+          "title": "Another TSA than expected: refused",
+          "tags": [
+            "TS-3",
+            "RFC 3161",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "signingPolicyId": "preset:signing:iofe",
+            "signingControls": {
+              "trust": [
+                "SandboxRoot"
+              ],
+              "expectedTsa": "tsa-revoked"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampUntrusted"
+          }
+        },
+        {
+          "id": "ts-profile-ok",
+          "kind": "validate",
+          "title": "Time-stamp with the EN 319 422 profile",
+          "tags": [
+            "TS-6",
+            "EN 319 422",
+            "tsa"
+          ],
+          "options": {
+            "fileId": "step:cades-bt",
+            "dataId": "cades-sample:text",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "fixture:validation-policy-en319422"
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          },
+          "description": "The Sandbox TSA gives its accuracy, does not claim ordering and uses the policy the validation policy accepts."
+        },
+        {
+          "id": "ts-profile-no-accuracy",
+          "kind": "validate",
+          "title": "Time-stamp without accuracy, under the EN 319 422 profile",
+          "tags": [
+            "TS-6",
+            "EN 319 422",
+            "tsa"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-no-accuracy",
+            "dataId": "cades-sample:v-no-accuracy#data",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "fixture:validation-policy-en319422"
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "failedConstraints": [
+              "AccuracyPresent"
+            ]
+          },
+          "description": "The time-stamp fails AccuracyPresent, so it is not used as a proof of existence (EN 319 102-1); the signature itself, with a valid certificate, still passes."
+        },
+        {
+          "id": "ts-authenticated",
+          "title": "Authenticated TSA (HTTP Basic)",
+          "tags": [
+            "TS-4",
+            "RFC 3161",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxAuthenticated"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        }
+      ]
+    },
+    {
+      "id": "validation",
+      "title": "Validation (EN 319 102-1)",
+      "description": "Each case must give its indication and sub-indication. Files come from samples or from the signing steps above.",
+      "steps": [
+        {
+          "id": "va-valid-pades",
+          "kind": "validate",
+          "title": "Intact PAdES",
+          "tags": [
+            "VA-1",
+            "VA-20",
+            "VA-21",
+            "EN 319 102-1",
+            "TS 119 102-2"
+          ],
+          "options": {
+            "fileId": "sample:valid",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED",
+            "etsiReport": "valid"
+          }
+        },
+        {
+          "id": "va-valid-cades",
+          "kind": "validate",
+          "title": "Intact CAdES (detached)",
+          "tags": [
+            "VA-1",
+            "VA-21",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-valid",
+            "dataId": "cades-sample:v-valid#data",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "va-valid-xades",
+          "kind": "validate",
+          "title": "Intact XAdES",
+          "tags": [
+            "VA-1",
+            "VA-21",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "xades-sample:v-xades",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "va-hash-pades",
+          "kind": "validate",
+          "title": "PDF content changed",
+          "tags": [
+            "VA-2",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "sample:tampered-content",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "invalid",
+            "indication": "TOTAL_FAILED",
+            "subIndication": "HASH_FAILURE"
+          }
+        },
+        {
+          "id": "va-hash-cades",
+          "kind": "validate",
+          "title": "CAdES data changed",
+          "tags": [
+            "VA-2",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-changed-data",
+            "dataId": "cades-sample:v-changed-data#data",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "invalid",
+            "indication": "TOTAL_FAILED",
+            "subIndication": "HASH_FAILURE"
+          }
+        },
+        {
+          "id": "va-hash-xades",
+          "kind": "validate",
+          "title": "XAdES document changed",
+          "tags": [
+            "VA-2",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "xades-sample:v-changed",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "invalid",
+            "indication": "TOTAL_FAILED",
+            "subIndication": "HASH_FAILURE"
+          }
+        },
+        {
+          "id": "va-sig-pades",
+          "kind": "validate",
+          "title": "PDF signature value changed",
+          "tags": [
+            "VA-3",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "sample:tampered-cms",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "invalid",
+            "indication": "TOTAL_FAILED",
+            "subIndication": "SIG_CRYPTO_FAILURE"
+          }
+        },
+        {
+          "id": "va-sig-cades",
+          "kind": "validate",
+          "title": "CAdES signature value changed",
+          "tags": [
+            "VA-3",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-tampered",
+            "dataId": "cades-sample:v-tampered#data",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "invalid",
+            "indication": "TOTAL_FAILED",
+            "subIndication": "SIG_CRYPTO_FAILURE"
+          }
+        },
+        {
+          "id": "va-sig-xades",
+          "kind": "validate",
+          "title": "XAdES signature value changed",
+          "tags": [
+            "VA-3",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "xades-sample:v-tampered",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "invalid",
+            "indication": "TOTAL_FAILED",
+            "subIndication": "SIG_CRYPTO_FAILURE"
+          }
+        },
+        {
+          "id": "va-untrusted",
+          "kind": "validate",
+          "title": "Root outside the anchors",
+          "tags": [
+            "VA-4",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "sample:untrusted-root",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE",
+            "subIndication": "NO_CERTIFICATE_CHAIN_FOUND"
+          }
+        },
+        {
+          "id": "va-revoked",
+          "kind": "validate",
+          "title": "Signer revoked, no POE before it",
+          "tags": [
+            "VA-5",
+            "VA-20",
+            "EN 319 102-1",
+            "TS 119 102-2"
+          ],
+          "options": {
+            "fileId": "sample:revoked",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE",
+            "subIndication": "REVOKED_NO_POE",
+            "etsiReport": "valid"
+          }
+        },
+        {
+          "id": "va-poe-file",
+          "title": "B-T signature, then its signer is revoked",
+          "tags": [
+            "VA-6",
+            "EN 319 142-1"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "credentialId": "sandbox:rsa-3072"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "va-revoked-after-poe",
+          "kind": "validate",
+          "title": "Revoked after the signature time-stamp",
+          "tags": [
+            "VA-6",
+            "EN 319 102-1",
+            "revocation"
+          ],
+          "options": {
+            "fileId": "step:va-poe-file",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          },
+          "wait": 2,
+          "description": "The signature time-stamp is a proof of existence before the revocation: the signature stays valid.",
+          "sandbox": {
+            "revoke": [
+              "rsa-3072"
+            ]
+          }
+        },
+        {
+          "id": "va-short-lived-file",
+          "title": "B-LTA by a signer valid for 20 seconds",
+          "tags": [
+            "VA-9",
+            "EN 319 142-1"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "credentialId": "sandbox-short-lived:20"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "va-expired-after-lta",
+          "kind": "validate",
+          "title": "Signer expired after a valid B-LTA",
+          "tags": [
+            "VA-9",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "step:va-short-lived-file",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          },
+          "wait": 25,
+          "description": "Validated after the signer's certificate expired: the signature time-stamp proves the signature existed while it was valid."
+        },
+        {
+          "id": "va-revoked-ca",
+          "title": "Signer under a revoked CA: refused before signing",
+          "tags": [
+            "VA-7",
+            "EN 319 102-1",
+            "revocation"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:under-revoked-ca",
+            "signingPolicyId": "preset:signing:strict"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateRevoked"
+          }
+        },
+        {
+          "id": "va-expired",
+          "kind": "validate",
+          "title": "Signer expired, no POE",
+          "tags": [
+            "VA-8",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "sample:expired",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE",
+            "subIndication": "OUT_OF_BOUNDS_NO_POE"
+          }
+        },
+        {
+          "id": "va-not-yet-valid",
+          "title": "Signer not yet valid: refused before signing",
+          "tags": [
+            "VA-10",
+            "EN 319 102-1"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:not-yet-valid"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "CertificateNotCurrentlyValid"
+          }
+        },
+        {
+          "id": "va-revocation-unknown",
+          "kind": "validate",
+          "title": "Revocation status unknown (OCSP and CRL down)",
+          "tags": [
+            "VA-11",
+            "EN 319 102-1",
+            "revocation"
+          ],
+          "options": {
+            "fileId": "step:pades-bb",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE"
+          },
+          "sandbox": {
+            "ocsp": "Down",
+            "crl": "Down"
+          }
+        },
+        {
+          "id": "va-timestamp-order",
+          "kind": "validate",
+          "title": "Content time-stamp later than the signature time-stamp",
+          "tags": [
+            "VA-15",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-ts-order",
+            "dataId": "cades-sample:v-ts-order#data",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:strict"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE",
+            "subIndication": "TIMESTAMP_ORDER_FAILURE"
+          },
+          "description": "Out-of-order time-stamps are a constraint of the validation policy (Timestamp/Coherence): the default only warns, the strict preset fails."
+        },
+        {
+          "id": "va-wrong-cert-ref",
+          "kind": "validate",
+          "title": "signing-certificate-v2 names another certificate",
+          "tags": [
+            "VA-16",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-wrong-cert-ref",
+            "dataId": "cades-sample:v-wrong-cert-ref#data",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE",
+            "subIndication": "NO_SIGNING_CERTIFICATE_FOUND"
+          }
+        },
+        {
+          "id": "va-policy-not-available",
+          "kind": "validate",
+          "title": "Signature policy whose document is not available",
+          "tags": [
+            "VA-14",
+            "EN 319 102-1",
+            "policy"
+          ],
+          "options": {
+            "fileId": "step:cades-policy",
+            "dataId": "cades-sample:text",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:strict"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE",
+            "subIndication": "SIGNATURE_POLICY_NOT_AVAILABLE"
+          },
+          "description": "The signature names a policy but does not carry its document, and the validator has no way to obtain it: under a policy that requires it (PolicyAvailable FAIL)."
+        },
+        {
+          "id": "va-policy-available",
+          "kind": "validate",
+          "title": "Signature policy carried in the signature-policy-store",
+          "tags": [
+            "VA-14",
+            "CA-8",
+            "EN 319 102-1",
+            "policy"
+          ],
+          "options": {
+            "fileId": "step:cades-policy-store",
+            "dataId": "cades-sample:text",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:strict"
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "va-signed-data-missing-cades",
+          "kind": "validate",
+          "title": "Detached CAdES validated without its data",
+          "tags": [
+            "VA-17",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "cades-sample:v-valid",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE",
+            "subIndication": "SIGNED_DATA_NOT_FOUND"
+          }
+        },
+        {
+          "id": "va-signed-data-missing-xades",
+          "kind": "validate",
+          "title": "Detached XAdES validated without its data",
+          "tags": [
+            "VA-17",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "xades-sample:v-detached",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE",
+            "subIndication": "SIGNED_DATA_NOT_FOUND"
+          }
+        },
+        {
+          "id": "va-weak-key-file",
+          "title": "RSA 1024 signature (minimal signing policy, to validate)",
+          "tags": [
+            "VA-12",
+            "TS 119 312"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:rsa-1024",
+            "signingPolicyId": "preset:signing:minimal"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "va-weak-key",
+          "kind": "validate",
+          "title": "RSA 1024 against the crypto suite",
+          "tags": [
+            "VA-12",
+            "EN 319 102-1",
+            "TS 119 312"
+          ],
+          "options": {
+            "fileId": "step:va-weak-key-file",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE"
+          }
+        },
+        {
+          "id": "va-key-usage-file",
+          "title": "Signer with neither digitalSignature nor nonRepudiation (minimal signing policy, to validate)",
+          "tags": [
+            "VA-13"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:no-signing-key-usage",
+            "signingPolicyId": "preset:signing:minimal"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "va-key-usage",
+          "kind": "validate",
+          "title": "Signer with neither digitalSignature nor nonRepudiation",
+          "tags": [
+            "VA-13",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "step:va-key-usage-file",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE"
+          },
+          "description": "The key usage a signer needs is a constraint of the validation policy (EN 319 102-1): the IOFE policy asks for digitalSignature or nonRepudiation."
+        },
+        {
+          "id": "va-level-basicsignatures",
+          "kind": "validate",
+          "title": "B-LTA validated at level BasicSignatures",
+          "tags": [
+            "VA-18",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "step:pades-blta",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "level": "BasicSignatures"
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          }
+        },
+        {
+          "id": "va-level-timestamps",
+          "kind": "validate",
+          "title": "B-LTA validated at level Timestamps",
+          "tags": [
+            "VA-18",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "step:pades-blta",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "level": "Timestamps"
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          }
+        },
+        {
+          "id": "va-level-longtermdata",
+          "kind": "validate",
+          "title": "B-LTA validated at level LongTermData",
+          "tags": [
+            "VA-18",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "step:pades-blta",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "level": "LongTermData"
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          }
+        },
+        {
+          "id": "va-level-archivaldata",
+          "kind": "validate",
+          "title": "B-LTA validated at level ArchivalData",
+          "tags": [
+            "VA-18",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "step:pades-blta",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "level": "ArchivalData"
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          }
+        },
+        {
+          "id": "va-policy-file",
+          "title": "Signer without nonRepudiation (to validate)",
+          "tags": [
+            "VA-19"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:no-nonrepudiation"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "va-policy",
+          "kind": "validate",
+          "title": "A validation policy that requires nonRepudiation",
+          "tags": [
+            "VA-19",
+            "EN 319 102-1",
+            "TS 119 172-1"
+          ],
+          "options": {
+            "fileId": "step:va-policy-file",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe-nonrepudiation"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE"
+          }
+        }
+      ]
+    },
+    {
+      "id": "trusted-lists",
+      "title": "Trusted lists (TS 119 612)",
+      "steps": [
+        {
+          "id": "tl-ok",
+          "title": "Anchors from the Sandbox's trusted list",
+          "tags": [
+            "TL-1",
+            "TS 119 612"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B"
+          }
+        },
+        {
+          "id": "tl-expired",
+          "title": "Trusted list expired: refused",
+          "tags": [
+            "TL-2",
+            "TS 119 612"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          },
+          "sandbox": {
+            "trustedList": "Expired"
+          }
+        },
+        {
+          "id": "tl-wrongsigner",
+          "title": "Trusted list signed by another key: refused",
+          "tags": [
+            "TL-3",
+            "TS 119 612"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          },
+          "sandbox": {
+            "trustedList": "WrongSigner"
+          }
+        },
+        {
+          "id": "tl-tampered",
+          "title": "Trusted list tampered: refused",
+          "tags": [
+            "TL-4",
+            "TS 119 612"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          },
+          "sandbox": {
+            "trustedList": "Tampered"
+          }
+        },
+        {
+          "id": "va-tl-ok",
+          "kind": "validate",
+          "title": "Validate with anchors from the trusted list",
+          "tags": [
+            "TL-1",
+            "TS 119 612",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "step:tl-ok",
+            "settings": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid"
+          }
+        },
+        {
+          "id": "va-tl-wrong-signer",
+          "kind": "validate",
+          "title": "Validate with a fake trusted list",
+          "tags": [
+            "TL-3",
+            "TS 119 612",
+            "EN 319 102-1"
+          ],
+          "options": {
+            "fileId": "step:tl-ok",
+            "settings": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          },
+          "sandbox": {
+            "trustedList": "WrongSigner"
+          }
+        }
+      ]
+    }
+  ]
+}
