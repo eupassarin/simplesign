@@ -111,6 +111,28 @@ public sealed class DssClientTests
     }
 
     [Fact]
+    public void Classify_OcspUnknown_IsADisagreementNotASetupProblem()
+    {
+        var theirs = new DssSignature("S-1", "INDETERMINATE", "CERTIFICATE_CHAIN_GENERAL_FAILURE", "PAdES-BASELINE-T", "Short-lived signer", null,
+            ["The certificate validation is not conclusive!", "No acceptable revocation data for the certificate!",
+             "The revocation status is unknown (Unknown response from OCSP)!"], []);
+
+        var (reason, cause, _) = DssClient.Classify(theirs);
+
+        cause.ShouldBe(DssClient.Causes.Disagreement);
+        reason.ShouldNotBeNull().ShouldContain("unknown");
+    }
+
+    [Fact]
+    public void Classify_RevocationDataMissing_IsASetupProblem()
+    {
+        var theirs = new DssSignature("S-1", "INDETERMINATE", "TRY_LATER", "PAdES-BASELINE-B", "Maria Sandbox", null,
+            ["No acceptable revocation data for the certificate!"], []);
+
+        DssClient.Classify(theirs).Cause.ShouldBe(DssClient.Causes.Setup);
+    }
+
+    [Fact]
     public void Compare_DocumentTimestampVerdict_IsNotLinedUpWithADssSignature()
     {
         string passed = Report.Replace("\"INDETERMINATE\"", "\"TOTAL_PASSED\"", StringComparison.Ordinal)

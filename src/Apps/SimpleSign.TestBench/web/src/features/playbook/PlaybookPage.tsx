@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { BookCheck, CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, Circle, Clock, Download, Eraser, ExternalLink, FileJson, FolderOpen, ListTree, Loader2, Play, RotateCcw, Square, Tag, X, XCircle } from "lucide-react"
+import { AlertTriangle, BookCheck, CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, Circle, Clock, Download, Eraser, ExternalLink, FileJson, FolderOpen, ListTree, Loader2, Play, RotateCcw, Search, Square, Tag, X, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -35,6 +35,23 @@ function remember(key: string, value: string | null) {
   } catch { /* private window: not remembered */ }
 }
 
+/** The results the step list filters by: not run covers pending, queued and running. */
+type StatusFilter = "all" | "passed" | "failed" | "notRun"
+
+function statusOf(view?: PlaybookStepView): Exclude<StatusFilter, "all"> {
+  return view?.status === "passed" ? "passed" : view?.status === "failed" ? "failed" : "notRun"
+}
+
+/** Whether DSS reached another verdict than SimpleSign in the step's latest run (any engine). */
+function dssDiffers(view?: PlaybookStepView): boolean {
+  return !!view?.result?.runs.some((r) => r.dssAgrees === false)
+}
+
+/** Lower case without accents, so "assinatura" finds "Assinatura" and "validacao" finds "validação". */
+function fold(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+}
+
 /**
  * The Playbook tab: load a playbook written beforehand (sections of steps, each with free tags), see everything a step
  * will do before running it, run it alone, a section or everything against the Sandbox, and read every detail of the
@@ -48,6 +65,9 @@ export function PlaybookPage() {
   const [engine, setEngine] = useState<string>(() => remembered("pb.engine") ?? "playbook")
   const [selected, setSelected] = useState<string | null>(() => remembered("pb.step"))
   const [chosenTags, setChosenTags] = useState<string[]>([])
+  const [titleQuery, setTitleQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [dssOnly, setDssOnly] = useState(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [confirmRestart, setConfirmRestart] = useState(false)
   const [stepJson, setStepJson] = useState<Map<string, string>>(new Map())
@@ -80,9 +100,16 @@ export function PlaybookPage() {
     remember("pb.engine", value)
   }
 
+  const resetFilters = useCallback(() => {
+    setChosenTags([])
+    setTitleQuery("")
+    setStatusFilter("all")
+    setDssOnly(false)
+  }, [])
+
   const onLoaded = useCallback((result: PlaybookLoaded) => {
     setLoaded(result)
-    setChosenTags([])
+    resetFilters()
     playbookApi.state().then(setState).catch(() => undefined)
     const steps = result.playbook?.sections.flatMap((s) => s.steps) ?? []
     setSelected((current) => {
@@ -91,7 +118,7 @@ export function PlaybookPage() {
       return next
     })
     if (!result.canRun) toast.error(t("playbook.errors", { count: result.issues.filter((i) => i.isError).length }))
-  }, [t])
+  }, [t, resetFilters])
 
   const openFile = async (file: File) => {
     try {
@@ -112,7 +139,7 @@ export function PlaybookPage() {
   const clear = async (stepId?: string) => {
     try {
       setState(await playbookApi.clear(stepId))
-      if (!stepId) setChosenTags([])
+      if (!stepId) resetFilters()
     } catch (e) {
       toast.error((e as Error).message)
     }
@@ -139,13 +166,43 @@ export function PlaybookPage() {
   const tags = useMemo(() => [...new Set(playbook?.sections.flatMap((s) => s.steps.flatMap((step) => step.tags)) ?? [])]
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), [playbook])
   const steps = useMemo(() => playbook?.sections.flatMap((s) => s.steps) ?? [], [playbook])
-  const shownCount = steps.filter((s) => chosenTags.length === 0 || s.tags.some((x) => chosenTags.includes(x))).length
+  // Tags (any of them) and the title or id narrow the list first; the result and DSS filters then apply on top.
+  const narrowed = useMemo(() => {
+    const query = fold(titleQuery.trim())
+    return new Set(steps
+      .filter((s) => (chosenTags.length === 0 || s.tags.some((x) => chosenTags.includes(x)))
+        && (query === "" || fold(s.title).includes(query) || fold(s.id).includes(query)))
+      .map((s) => s.id))
+  }, [steps, chosenTags, titleQuery])
+  const isShown = (s: PlaybookStep) => {
+    const view = views.get(s.id)
+    return narrowed.has(s.id) && (statusFilter === "all" || statusOf(view) === statusFilter) && (!dssOnly || dssDiffers(view))
+  }
+  const shownCount = steps.filter(isShown).length
+  const filtering = chosenTags.length > 0 || titleQuery.trim() !== "" || statusFilter !== "all" || dssOnly
+  // Each count is what clicking it would show, given the other filters.
+  const filterCounts = useMemo(() => {
+    const c = { all: 0, passed: 0, failed: 0, notRun: 0, dss: 0 }
+    for (const s of steps) {
+      if (!narrowed.has(s.id)) continue
+      const view = views.get(s.id)
+      const differs = dssDiffers(view)
+      if (!dssOnly || differs) { c.all++; c[statusOf(view)]++ }
+      if (differs && (statusFilter === "all" || statusOf(view) === statusFilter)) c.dss++
+    }
+    return c
+  }, [steps, narrowed, views, dssOnly, statusFilter])
   const step = steps.find((s) => s.id === selected) ?? null
   const errors = loaded?.issues.filter((i) => i.isError) ?? []
   const warnings = loaded?.issues.filter((i) => !i.isError) ?? []
   const counts = useMemo(() => {
     const all = [...views.values()]
-    return { passed: all.filter((s) => s.status === "passed").length, failed: all.filter((s) => s.status === "failed").length, total: steps.length }
+    return {
+      passed: all.filter((s) => s.status === "passed").length,
+      failed: all.filter((s) => s.status === "failed").length,
+      dss: all.filter(dssDiffers).length,
+      total: steps.length,
+    }
   }, [views, steps])
   const canRun = !!loaded?.canRun && !state.running
   const hasResults = [...views.values()].some((s) => s.result)
@@ -190,6 +247,12 @@ export function PlaybookPage() {
             <span className="text-muted-foreground ml-1 flex items-center gap-2 text-xs tabular-nums">
               <span className="flex items-center gap-1"><CheckCircle2 className="text-success size-3.5" />{counts.passed}</span>
               <span className="flex items-center gap-1"><XCircle className="text-destructive size-3.5" />{counts.failed}</span>
+              {counts.dss > 0 && (
+                <button type="button" aria-pressed={dssOnly} title={t("playbook.filter.dssHint")} onClick={() => setDssOnly((on) => !on)}
+                  className={cn("hover:text-foreground flex items-center gap-1 rounded px-1", dssOnly && "bg-warning/15 text-foreground")}>
+                  <AlertTriangle className="text-warning size-3.5" />{t("playbook.filter.dssCount", { count: counts.dss })}
+                </button>
+              )}
               <span>{t("playbook.countsOf", { total: counts.total })}</span>
             </span>
           )}
@@ -233,16 +296,29 @@ export function PlaybookPage() {
       ) : (
         <div className="flex min-h-0 flex-1">
           <aside className="flex w-[340px] shrink-0 flex-col border-r">
-            {tags.length > 0 && (
-              <div className="border-b p-2">
-                <TagFilter tags={tags} chosen={chosenTags} onChange={setChosenTags} />
-                {chosenTags.length > 0 && <p className="text-muted-foreground mt-1 px-1 text-[11px]">{t("playbook.tagShown", { shown: shownCount, total: steps.length })}</p>}
+            <div className="space-y-2 border-b p-2">
+              <TitleFilter value={titleQuery} onChange={setTitleQuery} />
+              {tags.length > 0 && <TagFilter tags={tags} chosen={chosenTags} onChange={setChosenTags} />}
+              <div className="flex items-center gap-1.5">
+                <StatusFilterControl value={statusFilter} counts={filterCounts} onChange={setStatusFilter} />
+                <button type="button" aria-pressed={dssOnly} title={t("playbook.filter.dssHint")} onClick={() => setDssOnly((on) => !on)}
+                  className={cn("flex items-center gap-1 rounded-md border px-2 py-1 text-xs tabular-nums transition-colors",
+                    dssOnly ? "border-warning/60 bg-warning/15 font-medium" : "text-muted-foreground hover:text-foreground")}>
+                  <AlertTriangle className="text-warning size-3.5" />{t("playbook.filter.dss")} {filterCounts.dss}
+                </button>
               </div>
-            )}
+              {filtering && (
+                <p className="text-muted-foreground flex items-center gap-2 px-1 text-[11px]">
+                  {t("playbook.filter.shown", { shown: shownCount, total: steps.length })}
+                  <button type="button" className="hover:text-foreground underline underline-offset-2" onClick={resetFilters}>{t("playbook.filter.clear")}</button>
+                </p>
+              )}
+            </div>
             <ScrollArea className="min-h-0 flex-1">
               <div className="p-2">
+                {shownCount === 0 && <p className="text-muted-foreground p-4 text-center text-xs">{t("playbook.filter.none")}</p>}
                 {playbook.sections.map((section) => {
-                  const shown = section.steps.filter((s) => chosenTags.length === 0 || s.tags.some((x) => chosenTags.includes(x)))
+                  const shown = section.steps.filter(isShown)
                   if (shown.length === 0) return null
                   return (
                     <div key={section.id} className="mb-3">
@@ -253,7 +329,7 @@ export function PlaybookPage() {
                       </div>
                       {shown.map((s) => (
                         <StepRow key={s.id} step={s} view={views.get(s.id)} active={selected === s.id} canRun={canRun} defaultFormat={playbook.defaults.format}
-                          chosenTags={chosenTags} onSelect={() => select(s.id)} onRun={() => start({ stepId: s.id })} onTag={addTag} />
+                          chosenTags={chosenTags} onSelect={() => select(s.id)} onRun={() => start({ stepId: s.id })} onTag={addTag} onDss={() => setDssOnly(true)} />
                       ))}
                     </div>
                   )
@@ -288,6 +364,53 @@ function EvidenceLink({ enabled, href, newTab, children }: { enabled: boolean; h
     <Button variant="outline" size="sm" asChild>
       <a href={href} {...(newTab ? { target: "_blank", rel: "noreferrer" } : { download: true })}>{children}</a>
     </Button>
+  )
+}
+
+/** Narrows the steps to those whose title or id contains the text (case and accents ignored). */
+function TitleFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const t = useT()
+  return (
+    <div className="border-input focus-within:ring-ring/50 focus-within:border-ring flex min-h-8 items-center gap-1.5 rounded-md border px-2 py-1 focus-within:ring-[3px]">
+      <Search className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+      <input value={value} aria-label={t("playbook.filter.title")} placeholder={t("playbook.filter.title")}
+        className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-xs outline-none"
+        onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") onChange("") }} />
+      {value && (
+        <button type="button" aria-label={t("playbook.filter.clearTitle")} title={t("playbook.filter.clearTitle")}
+          className="text-muted-foreground hover:text-foreground" onClick={() => onChange("")}><X className="size-3.5" /></button>
+      )}
+    </div>
+  )
+}
+
+/** All | passed | failed | not run, as buttons joined together, each with how many steps it would show. */
+function StatusFilterControl({ value, counts, onChange }: {
+  value: StatusFilter
+  counts: Record<StatusFilter, number>
+  onChange: (value: StatusFilter) => void
+}) {
+  const t = useT()
+  const options: { id: StatusFilter; icon?: React.ReactNode }[] = [
+    { id: "all" },
+    { id: "passed", icon: <CheckCircle2 className="text-success size-3.5" /> },
+    { id: "failed", icon: <XCircle className="text-destructive size-3.5" /> },
+    { id: "notRun", icon: <Circle className="text-muted-foreground size-3.5" /> },
+  ]
+  return (
+    <div className="bg-muted flex rounded-md p-0.5 text-xs" role="radiogroup" aria-label={t("playbook.filter.status")}>
+      {options.map(({ id, icon }) => {
+        const name = t(`playbook.filter.${id}` as MessageKey)
+        return (
+          <button key={id} type="button" role="radio" aria-checked={value === id} title={name} aria-label={`${name} (${counts[id]})`}
+            onClick={() => onChange(id)}
+            className={cn("flex items-center gap-1 rounded px-2 py-1 tabular-nums transition-all",
+              value === id ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+            {icon ?? name} {counts[id]}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -353,7 +476,7 @@ function TagFilter({ tags, chosen, onChange }: { tags: string[]; chosen: string[
   )
 }
 
-function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSelect, onRun, onTag }: {
+function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSelect, onRun, onTag, onDss }: {
   step: PlaybookStep
   view?: PlaybookStepView
   active: boolean
@@ -363,6 +486,7 @@ function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSele
   onSelect: () => void
   onRun: () => void
   onTag: (tag: string) => void
+  onDss: () => void
 }) {
   const t = useT()
   return (
@@ -373,6 +497,12 @@ function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSele
           <span className="block text-sm leading-snug">{step.title}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-1">
             <span className="text-muted-foreground font-mono text-[10px] uppercase">{step.kind === "validate" ? t("playbook.kindValidate") : step.kind === "augment" ? t("playbook.kindAugment") : step.format ?? defaultFormat}</span>
+            {dssDiffers(view) && (
+              <span role="button" tabIndex={-1} title={t("playbook.filter.dssRow")} onClick={(e) => { e.stopPropagation(); onDss() }}
+                className="border-warning/50 bg-warning/10 hover:bg-warning/20 flex items-center gap-0.5 rounded border px-1 font-mono text-[10px]">
+                <AlertTriangle className="text-warning size-2.5" />DSS
+              </span>
+            )}
             {step.tags.map((x) => (
               <span key={x} role="button" tabIndex={-1} title={t("playbook.filterByTag", { tag: x })} onClick={(e) => { e.stopPropagation(); onTag(x) }}
                 className={cn("rounded px-1 font-mono text-[10px]", chosenTags.includes(x) ? "bg-primary/15 text-primary" : "bg-muted-foreground/10 hover:bg-muted-foreground/20")}>{x}</span>
