@@ -1,16 +1,16 @@
 using System.Text.Json;
 
-namespace SimpleSign.TestBench.Scripts;
+namespace SimpleSign.TestBench.Playbooks;
 
 /// <summary>
-/// A certification script: the requirements of an accreditation guide and the steps that show each one, written
-/// beforehand (by hand or by an LLM from the guide) and run by the TestBench against the Sandbox. Schema:
-/// <c>docs/schemas/certification-script.schema.json</c>.
+/// A playbook: sections of steps the TestBench runs against the Sandbox (signatures that must be made or refused,
+/// files that must validate or not), through the library, the CLI or both. Written beforehand (by hand or by an LLM)
+/// to help with the systemic part of a certification. Schema: <c>docs/schemas/playbook.schema.json</c>.
 /// </summary>
-public sealed record CertificationScript
+public sealed record Playbook
 {
-    /// <summary>The schema version: 1.</summary>
-    public int Schema { get; init; } = 1;
+    /// <summary>The schema version: 2.</summary>
+    public int Schema { get; init; } = 2;
 
     /// <summary>A short id (<c>indecopi-guia-v4</c>).</summary>
     public string Id { get; init; } = "";
@@ -18,37 +18,28 @@ public sealed record CertificationScript
     /// <summary>The title shown and written in the evidence.</summary>
     public string Title { get; init; } = "";
 
-    /// <summary>The authority that accredits (INDECOPI, ITI…).</summary>
-    public string? Authority { get; init; }
-
-    /// <summary>The document the requirements come from, with its version.</summary>
-    public string? Standard { get; init; }
-
-    /// <summary>What the script covers.</summary>
+    /// <summary>What the playbook covers.</summary>
     public string? Description { get; init; }
 
-    /// <summary>The language of the texts and of the evidence: <c>en</c>, <c>pt</c> or <c>es</c>.</summary>
-    public string Language { get; init; } = "en";
-
     /// <summary>What every step starts from.</summary>
-    public ScriptDefaults Defaults { get; init; } = new();
-
-    /// <summary>The requirements, in the guide's order.</summary>
-    public IReadOnlyList<ScriptRequirement> Requirements { get; init; } = [];
+    public PlaybookDefaults Defaults { get; init; } = new();
 
     /// <summary>The steps, grouped in sections.</summary>
-    public IReadOnlyList<ScriptSection> Sections { get; init; } = [];
+    public IReadOnlyList<PlaybookSection> Sections { get; init; } = [];
 
     /// <summary>The steps in order, with their section.</summary>
-    public IEnumerable<(ScriptSection Section, ScriptStep Step)> AllSteps() =>
+    public IEnumerable<(PlaybookSection Section, PlaybookStep Step)> AllSteps() =>
         Sections.SelectMany(s => s.Steps.Select(step => (s, step)));
+
+    /// <summary>A step by id, or null.</summary>
+    public PlaybookStep? Step(string id) => AllSteps().Select(s => s.Step).FirstOrDefault(s => s.Id == id);
 }
 
 /// <summary>The values every step starts from.</summary>
-public sealed record ScriptDefaults
+public sealed record PlaybookDefaults
 {
     /// <summary>The engine: <c>library</c>, <c>cli</c> or <c>both</c>.</summary>
-    public string Engine { get; init; } = ScriptEngines.Library;
+    public string Engine { get; init; } = PlaybookEngines.Library;
 
     /// <summary>Whether each signature is also validated by EU DSS.</summary>
     public bool CrossValidate { get; init; }
@@ -63,30 +54,8 @@ public sealed record ScriptDefaults
     public JsonElement? Options { get; init; }
 }
 
-/// <summary>A requirement of the guide.</summary>
-public sealed record ScriptRequirement
-{
-    /// <summary>A unique id, as the guide numbers it (<c>F-5</c>, <c>Req-11</c>).</summary>
-    public string Id { get; init; } = "";
-
-    /// <summary>The group it belongs to (<c>Req. 11 — Revocation</c>).</summary>
-    public string? Group { get; init; }
-
-    /// <summary>What the guide asks, in its words.</summary>
-    public string Text { get; init; } = "";
-
-    /// <summary>Where it is in the guide (section, page).</summary>
-    public string? Reference { get; init; }
-
-    /// <summary>Whether it applies to the software; false needs a <see cref="Justification"/>.</summary>
-    public bool Applies { get; init; } = true;
-
-    /// <summary>Why it does not apply.</summary>
-    public string? Justification { get; init; }
-}
-
 /// <summary>A group of steps.</summary>
-public sealed record ScriptSection
+public sealed record PlaybookSection
 {
     public string Id { get; init; } = "";
 
@@ -94,11 +63,11 @@ public sealed record ScriptSection
 
     public string? Description { get; init; }
 
-    public IReadOnlyList<ScriptStep> Steps { get; init; } = [];
+    public IReadOnlyList<PlaybookStep> Steps { get; init; } = [];
 }
 
-/// <summary>One thing to run (or to do by hand) and what it must show.</summary>
-public sealed record ScriptStep
+/// <summary>One run and what it must show.</summary>
+public sealed record PlaybookStep
 {
     /// <summary>A unique id; <c>step:ID</c> in a later step's options names the file this one signed.</summary>
     public string Id { get; init; } = "";
@@ -107,11 +76,11 @@ public sealed record ScriptStep
 
     public string? Description { get; init; }
 
-    /// <summary><c>sign</c>, <c>validate</c> or <c>manual</c>.</summary>
-    public string Kind { get; init; } = ScriptStepKinds.Sign;
+    /// <summary>Free labels (a requirement id, a topic): the page filters by them and the evidence groups by them.</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
 
-    /// <summary>The requirements the step shows.</summary>
-    public IReadOnlyList<string> Requirements { get; init; } = [];
+    /// <summary><c>sign</c> or <c>validate</c>.</summary>
+    public string Kind { get; init; } = PlaybookStepKinds.Sign;
 
     /// <summary>The format; the default's when null. Not used by a validation (the file says what it is).</summary>
     public string? Format { get; init; }
@@ -123,25 +92,23 @@ public sealed record ScriptStep
     public bool? CrossValidate { get; init; }
 
     /// <summary>The Sandbox state for the step, put back after it.</summary>
-    public ScriptSandbox? Sandbox { get; init; }
+    public PlaybookSandbox? Sandbox { get; init; }
 
     /// <summary>
     /// The TestBench options of the run (the Sign page's for a signature, <c>fileId</c>/<c>dataId</c>/<c>settings</c> for a
-    /// validation), with symbolic values: <c>sandbox:SIGNER</c>, <c>sample:ID</c>, <c>preset:KIND:NAME</c>, <c>step:ID</c>.
+    /// validation), with symbolic values: <c>sandbox:SIGNER</c>, <c>sample:ID</c>, <c>cades-sample:ID</c>,
+    /// <c>xades-sample:ID</c>, <c>preset:KIND:NAME</c>, <c>step:ID</c>.
     /// </summary>
     public JsonElement? Options { get; init; }
 
     /// <summary>What the run must show.</summary>
-    public ScriptExpectation? Expect { get; init; }
-
-    /// <summary>For a manual step: what to do and what to keep.</summary>
-    public ScriptManual? Manual { get; init; }
+    public PlaybookExpectation? Expect { get; init; }
 }
 
 /// <summary>The Sandbox failures and revocations a step needs.</summary>
-public sealed record ScriptSandbox
+public sealed record PlaybookSandbox
 {
-    /// <summary>CRL failure: None, Down, Slow, Expired, WrongKey, Stale…</summary>
+    /// <summary>CRL failure: None, Down, Slow, Expired, WrongKey, Stale, NoNextUpdate.</summary>
     public string? Crl { get; init; }
 
     /// <summary>OCSP failure: None, Down, Slow, TryLater, Expired, Unauthorized, Unknown.</summary>
@@ -158,10 +125,39 @@ public sealed record ScriptSandbox
 
     /// <summary>Whether anything is asked.</summary>
     public bool Any => Crl is not null || Ocsp is not null || Tsa is not null || TrustedList is not null || Revoke.Count > 0;
+
+    /// <summary>The changes, one line each, as the page and the evidence show them.</summary>
+    public IEnumerable<string> Describe()
+    {
+        if (Crl is not null)
+        {
+            yield return $"CRL: {Crl}";
+        }
+
+        if (Ocsp is not null)
+        {
+            yield return $"OCSP: {Ocsp}";
+        }
+
+        if (Tsa is not null)
+        {
+            yield return $"TSA: {Tsa}";
+        }
+
+        if (TrustedList is not null)
+        {
+            yield return $"Trusted list: {TrustedList}";
+        }
+
+        foreach (string id in Revoke)
+        {
+            yield return $"Revoke: {id}";
+        }
+    }
 }
 
 /// <summary>What a run must show; every field given is checked.</summary>
-public sealed record ScriptExpectation
+public sealed record PlaybookExpectation
 {
     /// <summary><c>signed</c>, <c>refused</c> (SigningException), <c>error</c>, <c>valid</c>, <c>invalid</c> or <c>indeterminate</c>.</summary>
     public string? Outcome { get; init; }
@@ -183,20 +179,49 @@ public sealed record ScriptExpectation
 
     /// <summary>Texts the run's log must contain.</summary>
     public IReadOnlyList<string> LogContains { get; init; } = [];
-}
 
-/// <summary>A step done by hand.</summary>
-public sealed record ScriptManual
-{
-    /// <summary>What to do and what to show the auditor.</summary>
-    public string Instructions { get; init; } = "";
+    /// <summary>The fields given, as label and value, for the page and the evidence.</summary>
+    public IEnumerable<(string Name, string Value)> Fields()
+    {
+        if (Outcome is not null)
+        {
+            yield return ("outcome", Outcome);
+        }
 
-    /// <summary>Whether a file (screenshot, document) must be attached.</summary>
-    public bool Attachment { get; init; }
+        if (Reason is not null)
+        {
+            yield return ("reason", Reason);
+        }
+
+        if (Indication is not null)
+        {
+            yield return ("indication", Indication);
+        }
+
+        if (SubIndication is not null)
+        {
+            yield return ("subIndication", SubIndication);
+        }
+
+        if (Level is not null)
+        {
+            yield return ("level", Level);
+        }
+
+        if (DssAgrees is { } agrees)
+        {
+            yield return ("dssAgrees", agrees ? "yes" : "no");
+        }
+
+        foreach (string text in LogContains)
+        {
+            yield return ("logContains", text);
+        }
+    }
 }
 
 /// <summary>The engines of a step.</summary>
-public static class ScriptEngines
+public static class PlaybookEngines
 {
     public const string Library = "library";
     public const string Cli = "cli";
@@ -206,17 +231,16 @@ public static class ScriptEngines
 }
 
 /// <summary>The kinds of step.</summary>
-public static class ScriptStepKinds
+public static class PlaybookStepKinds
 {
     public const string Sign = "sign";
     public const string Validate = "validate";
-    public const string Manual = "manual";
 
-    public static IReadOnlyList<string> All { get; } = [Sign, Validate, Manual];
+    public static IReadOnlyList<string> All { get; } = [Sign, Validate];
 }
 
 /// <summary>The outcomes an expectation can name.</summary>
-public static class ScriptOutcomes
+public static class PlaybookOutcomes
 {
     public static IReadOnlyList<string> All { get; } = ["signed", "refused", "error", "valid", "invalid", "indeterminate"];
 }

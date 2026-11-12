@@ -1,15 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/certification-script.schema.json",
-  "title": "SimpleSign certification script",
-  "description": "The requirements of an accreditation guide and the TestBench steps that show each one. Load it in the TestBench (Certification).",
+  "$id": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",
+  "title": "SimpleSign playbook",
+  "description": "Sections of TestBench steps (signatures to make or refuse, files to validate) and what each must show. Load it in the TestBench (Playbook tab).",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema",
     "id",
     "title",
-    "requirements",
     "sections"
   ],
   "properties": {
@@ -18,7 +17,7 @@
       "description": "This schema\u0027s URL."
     },
     "schema": {
-      "const": 1,
+      "const": 2,
       "description": "Schema version."
     },
     "id": {
@@ -27,28 +26,11 @@
     },
     "title": {
       "type": "string",
-      "description": "Title of the script and of the evidence."
-    },
-    "authority": {
-      "type": "string",
-      "description": "The authority that accredits."
-    },
-    "standard": {
-      "type": "string",
-      "description": "The document the requirements come from, with its version."
+      "description": "Title of the playbook and of the evidence."
     },
     "description": {
       "type": "string",
-      "description": "What the script covers."
-    },
-    "language": {
-      "type": "string",
-      "description": "Language of the texts and of the evidence.",
-      "enum": [
-        "en",
-        "pt",
-        "es"
-      ]
+      "description": "What the playbook covers."
     },
     "defaults": {
       "type": "object",
@@ -75,7 +57,7 @@
         },
         "crossValidate": {
           "type": "boolean",
-          "description": "Whether EU DSS also validates."
+          "description": "Whether EU DSS also validates every file a step produces, next to SimpleSign (default false). When DSS is unavailable the step still runs and its result says so."
         },
         "options": {
           "type": "object",
@@ -83,30 +65,23 @@
           "properties": {
             "common": {
               "type": "object",
-              "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
             },
             "pades": {
               "type": "object",
-              "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
             },
             "cades": {
               "type": "object",
-              "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
             },
             "xades": {
               "type": "object",
-              "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
             }
           },
           "additionalProperties": false
         }
-      }
-    },
-    "requirements": {
-      "type": "array",
-      "description": "The requirements, in the guide\u0027s order.",
-      "items": {
-        "$ref": "#/$defs/requirement"
       }
     },
     "sections": {
@@ -118,41 +93,6 @@
     }
   },
   "$defs": {
-    "requirement": {
-      "type": "object",
-      "description": "A requirement of the guide.",
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique id, as the guide numbers it (F-5, Req-11)."
-        },
-        "group": {
-          "type": "string",
-          "description": "The group it belongs to (Req. 11 \u2014 Revocation)."
-        },
-        "text": {
-          "type": "string",
-          "description": "What the guide asks, in its words."
-        },
-        "reference": {
-          "type": "string",
-          "description": "Where it is in the guide (section, page)."
-        },
-        "applies": {
-          "type": "boolean",
-          "description": "Whether it applies; false needs a justification. Default: true."
-        },
-        "justification": {
-          "type": "string",
-          "description": "Why it does not apply."
-        }
-      },
-      "required": [
-        "id",
-        "text"
-      ]
-    },
     "section": {
       "type": "object",
       "description": "A group of steps.",
@@ -320,7 +260,7 @@
         },
         "dssAgrees": {
           "type": "boolean",
-          "description": "Whether EU DSS must agree (needs crossValidate)."
+          "description": "Whether EU DSS must agree with SimpleSign. Needs crossValidate on the step or in the defaults, and a run that produces a file (a refusal is never sent to DSS); when DSS is unavailable this check fails."
         },
         "logContains": {
           "type": "array",
@@ -332,27 +272,9 @@
         }
       }
     },
-    "manual": {
-      "type": "object",
-      "description": "A step done by hand: the operator follows the instructions, attaches evidence and decides.",
-      "additionalProperties": false,
-      "properties": {
-        "instructions": {
-          "type": "string",
-          "description": "What to do and what to show."
-        },
-        "attachment": {
-          "type": "boolean",
-          "description": "Whether a file must be attached."
-        }
-      },
-      "required": [
-        "instructions"
-      ]
-    },
     "step": {
       "type": "object",
-      "description": "One run (or manual check) and what it must show.",
+      "description": "One run and what it must show.",
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -367,22 +289,21 @@
           "type": "string",
           "description": "What the step shows and why."
         },
+        "tags": {
+          "type": "array",
+          "description": "Free labels (a requirement id, a topic): the page filters by them, the evidence groups by them.",
+          "items": {
+            "type": "string",
+            "description": "A tag."
+          }
+        },
         "kind": {
           "type": "string",
           "description": "What the step does. Default: sign.",
           "enum": [
             "sign",
-            "validate",
-            "manual"
+            "validate"
           ]
-        },
-        "requirements": {
-          "type": "array",
-          "description": "The requirements the step shows.",
-          "items": {
-            "type": "string",
-            "description": "A requirement id."
-          }
         },
         "format": {
           "type": "string",
@@ -404,25 +325,23 @@
         },
         "crossValidate": {
           "type": "boolean",
-          "description": "Whether EU DSS also validates."
+          "description": "Whether EU DSS also validates the file this step produces; overrides defaults.crossValidate."
         },
         "sandbox": {
           "$ref": "#/$defs/sandbox"
         },
         "options": {
           "type": "object",
-          "description": "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+          "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
         },
         "expect": {
           "$ref": "#/$defs/expect"
-        },
-        "manual": {
-          "$ref": "#/$defs/manual"
         }
       },
       "required": [
         "id",
-        "title"
+        "title",
+        "expect"
       ]
     }
   }

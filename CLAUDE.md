@@ -68,7 +68,7 @@ src/
     ├── SimpleSign.Cli/         CLI tool
     ├── SimpleSign.Agent/       Avalonia tray app + window (pt-BR/en-US, TestBench look, Native AOT): local signing agent (HTTP on 127.0.0.1)
     ├── SimpleSign.TestBench/   Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option (real network + a connected Sandbox);
-    │                           its Certification page runs certification scripts (docs/certification-scripts) and exports the evidence
+    │                           its Playbook tab runs playbooks (docs/playbooks): preview, run and keep each step's result, export the evidence
     └── SimpleSign.Sandbox/     Test PKI on real endpoints (CRL over HTTP/HTTPS/LDAP, OCSP, TSA, CSC) and failures to switch on; API only (its UI is the TestBench's Sandbox control)
 ```
 

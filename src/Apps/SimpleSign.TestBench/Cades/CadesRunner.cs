@@ -117,6 +117,29 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         return new CadesInputs(dataName, existing, matches);
     }
 
+    /// <summary>What a CAdES signature with <paramref name="options"/> would do, without making it.</summary>
+    internal async Task<RunDescription> DescribeAsync(CadesOptions options, CancellationToken cancellationToken)
+    {
+        var report = Evaluate(options);
+        credentials.TryGet(report.Effective.CredentialId, out var credential);
+        CodeSnippets? code = null;
+        string? error = null;
+        if (credential is not null)
+        {
+            try
+            {
+                var controls = await SigningControls.ResolveAsync(report.Effective.SigningControls, sandbox, cancellationToken);
+                code = new CadesPlan(report.Effective, new PlanContext(credential, sandbox, documents) { Controls = controls }).Code(credential.Facts);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SigningException or HttpRequestException or KeyNotFoundException)
+            {
+                error = ex.Message;
+            }
+        }
+
+        return new RunDescription(report.Effective, report.Options, report.Issues, code, error, credential?.Facts);
+    }
+
     public CadesOptionsReport Evaluate(CadesOptions o)
     {
         credentials.TryGet(o.CredentialId, out var credential);

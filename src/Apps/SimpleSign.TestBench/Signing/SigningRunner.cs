@@ -106,6 +106,31 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
     private readonly ValidationService _validation = new(sandbox, documents);
     private readonly CliExecutor _cli = new();
 
+    /// <summary>What a signature with <paramref name="options"/> would do, without making it.</summary>
+    internal async Task<RunDescription> DescribeAsync(SigningOptions options, CancellationToken cancellationToken)
+    {
+        DocumentFacts? document = options.DocumentId is { } id && documents.TryGet(id, out _) ? await documents.FactsAsync(id, cancellationToken) : null;
+        credentials.TryGet(options.CredentialId, out var credential);
+        var report = Compatibility.Evaluate(options, document, credential?.Facts, sandbox.IsConnected, PolicyUploads.Signing(options.SigningPolicyId, documents));
+        CodeSnippets? code = null;
+        string? error = null;
+        if (credential is not null)
+        {
+            try
+            {
+                var controls = await SigningControls.ResolveAsync(report.Effective.SigningControls, sandbox, cancellationToken);
+                var plan = new SigningPlan(report.Effective, credential, sandbox, documents, controls);
+                code = CodeGenerator.Generate(report.Effective, plan, plan.SignSteps(), credential.Facts);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SigningException or HttpRequestException or KeyNotFoundException)
+            {
+                error = ex.Message;
+            }
+        }
+
+        return new RunDescription(report.Effective, report.Options, report.Issues, code, error, credential?.Facts);
+    }
+
     public Task<SigningResult> RunAsync(SigningOptions options, CancellationToken cancellationToken) =>
         RunAsync(options, RunEngines.Library, cancellationToken);
 

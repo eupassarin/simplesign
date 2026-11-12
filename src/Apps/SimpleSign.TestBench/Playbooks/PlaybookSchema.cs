@@ -7,21 +7,21 @@ using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Schema;
 
-namespace SimpleSign.TestBench.Scripts;
+namespace SimpleSign.TestBench.Playbooks;
 
 /// <summary>
-/// What a script author (a person or an LLM working offline) needs: the JSON Schema of the file
-/// (<c>docs/schemas/certification-script.schema.json</c>) and the catalogue of the run options a step can set
-/// (<c>docs/certification-scripts/options.md</c>), both generated from the code so they never drift.
+/// What a playbook author (a person or an LLM working offline) needs: the JSON Schema of the file
+/// (<c>docs/schemas/playbook.schema.json</c>) and the catalogue of the run options a step can set
+/// (<c>docs/playbooks/options.md</c>), both generated from the code so they never drift.
 /// </summary>
-internal static class ScriptSchema
+internal static class PlaybookSchema
 {
     /// <summary>Where the schema is published.</summary>
-    public const string Id = "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/certification-script.schema.json";
+    public const string Id = "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json";
 
     private static readonly JsonSerializerOptions s_indented = new() { WriteIndented = true };
 
-    /// <summary>The JSON Schema (draft 2020-12) of a certification script.</summary>
+    /// <summary>The JSON Schema (draft 2020-12) of a playbook.</summary>
     public static string Json()
     {
         static JsonObject Str(string description, IEnumerable<string>? values = null)
@@ -62,22 +62,13 @@ internal static class ScriptSchema
         var options = new JsonObject
         {
             ["type"] = "object",
-            ["description"] = "TestBench run options (see docs/certification-scripts/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), "
+            ["description"] = "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), "
                 + "sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). "
                 + "A validation takes { fileId, dataId?, settings? }.",
         };
 
         var defs = new JsonObject
         {
-            ["requirement"] = Obj("A requirement of the guide.", new JsonObject
-            {
-                ["id"] = Str("Unique id, as the guide numbers it (F-5, Req-11)."),
-                ["group"] = Str("The group it belongs to (Req. 11 — Revocation)."),
-                ["text"] = Str("What the guide asks, in its words."),
-                ["reference"] = Str("Where it is in the guide (section, page)."),
-                ["applies"] = Bool("Whether it applies; false needs a justification. Default: true."),
-                ["justification"] = Str("Why it does not apply."),
-            }, "id", "text"),
             ["section"] = Obj("A group of steps.", new JsonObject
             {
                 ["id"] = Str("Unique id."),
@@ -95,60 +86,51 @@ internal static class ScriptSchema
             }),
             ["expect"] = Obj("What the run must show; every field given is checked, for each engine.", new JsonObject
             {
-                ["outcome"] = Str("signed / refused (SigningException) / error, or the verdict valid / invalid / indeterminate.", ScriptOutcomes.All),
+                ["outcome"] = Str("signed / refused (SigningException) / error, or the verdict valid / invalid / indeterminate.", PlaybookOutcomes.All),
                 ["reason"] = Str("The SigningErrorReason of a refusal.", Enum.GetNames<SigningErrorReason>()),
                 ["indication"] = Str("ETSI indication of the first signature.", ["TOTAL_PASSED", "TOTAL_FAILED", "INDETERMINATE"]),
                 ["subIndication"] = Str("ETSI sub-indication (HASH_FAILURE, REVOKED_NO_POE…)."),
                 ["level"] = Str("Level achieved (signature) or detected (validation).", ["B-B", "B-T", "B-LT", "B-LTA"]),
-                ["dssAgrees"] = Bool("Whether EU DSS must agree (needs crossValidate)."),
+                ["dssAgrees"] = Bool("Whether EU DSS must agree with SimpleSign. Needs crossValidate on the step or in the defaults, and a run that produces a file (a refusal is never sent to DSS); when DSS is unavailable this check fails."),
                 ["logContains"] = Arr(Str("Text."), "Texts the run's log must contain."),
             }),
-            ["manual"] = Obj("A step done by hand: the operator follows the instructions, attaches evidence and decides.", new JsonObject
-            {
-                ["instructions"] = Str("What to do and what to show."),
-                ["attachment"] = Bool("Whether a file must be attached."),
-            }, "instructions"),
-            ["step"] = Obj("One run (or manual check) and what it must show.", new JsonObject
+            ["step"] = Obj("One run and what it must show.", new JsonObject
             {
                 ["id"] = Str("Unique id; step:ID names the file it signed."),
                 ["title"] = Str("Title."),
                 ["description"] = Str("What the step shows and why."),
-                ["kind"] = Str("What the step does. Default: sign.", ScriptStepKinds.All),
-                ["requirements"] = Arr(Str("A requirement id."), "The requirements the step shows."),
+                ["tags"] = Arr(Str("A tag."), "Free labels (a requirement id, a topic): the page filters by them, the evidence groups by them."),
+                ["kind"] = Str("What the step does. Default: sign.", PlaybookStepKinds.All),
                 ["format"] = Str("Format of a signature; the default's when absent.", RunFormats.All),
-                ["engine"] = Str("Engine; the default's when absent.", ScriptEngines.All),
-                ["crossValidate"] = Bool("Whether EU DSS also validates."),
+                ["engine"] = Str("Engine; the default's when absent.", PlaybookEngines.All),
+                ["crossValidate"] = Bool("Whether EU DSS also validates the file this step produces; overrides defaults.crossValidate."),
                 ["sandbox"] = Ref("sandbox"),
                 ["options"] = options,
                 ["expect"] = Ref("expect"),
-                ["manual"] = Ref("manual"),
-            }, "id", "title"),
+            }, "id", "title", "expect"),
         };
 
         var schema = new JsonObject
         {
             ["$schema"] = "https://json-schema.org/draft/2020-12/schema",
             ["$id"] = Id,
-            ["title"] = "SimpleSign certification script",
-            ["description"] = "The requirements of an accreditation guide and the TestBench steps that show each one. Load it in the TestBench (Certification).",
+            ["title"] = "SimpleSign playbook",
+            ["description"] = "Sections of TestBench steps (signatures to make or refuse, files to validate) and what each must show. Load it in the TestBench (Playbook tab).",
             ["type"] = "object",
             ["additionalProperties"] = false,
-            ["required"] = new JsonArray("schema", "id", "title", "requirements", "sections"),
+            ["required"] = new JsonArray("schema", "id", "title", "sections"),
             ["properties"] = new JsonObject
             {
                 ["$schema"] = Str("This schema's URL."),
-                ["schema"] = new JsonObject { ["const"] = 1, ["description"] = "Schema version." },
+                ["schema"] = new JsonObject { ["const"] = 2, ["description"] = "Schema version." },
                 ["id"] = Str("Short id (indecopi-guia-v4)."),
-                ["title"] = Str("Title of the script and of the evidence."),
-                ["authority"] = Str("The authority that accredits."),
-                ["standard"] = Str("The document the requirements come from, with its version."),
-                ["description"] = Str("What the script covers."),
-                ["language"] = Str("Language of the texts and of the evidence.", ["en", "pt", "es"]),
+                ["title"] = Str("Title of the playbook and of the evidence."),
+                ["description"] = Str("What the playbook covers."),
                 ["defaults"] = Obj("What every step starts from.", new JsonObject
                 {
-                    ["engine"] = Str("Engine.", ScriptEngines.All),
+                    ["engine"] = Str("Engine.", PlaybookEngines.All),
                     ["format"] = Str("Format of steps that name none.", RunFormats.All),
-                    ["crossValidate"] = Bool("Whether EU DSS also validates."),
+                    ["crossValidate"] = Bool("Whether EU DSS also validates every file a step produces, next to SimpleSign (default false). When DSS is unavailable the step still runs and its result says so."),
                     ["options"] = new JsonObject
                     {
                         ["type"] = "object",
@@ -157,7 +139,6 @@ internal static class ScriptSchema
                         ["additionalProperties"] = false,
                     },
                 }),
-                ["requirements"] = Arr(Ref("requirement"), "The requirements, in the guide's order."),
                 ["sections"] = Arr(Ref("section"), "The steps, grouped."),
             },
             ["$defs"] = defs,
@@ -170,8 +151,8 @@ internal static class ScriptSchema
     {
         var schema = OptionSchema.All;
         var md = new StringBuilder();
-        md.Append("# Certification script — run options\n\n")
-            .Append("Generated from the TestBench (`ScriptSchema.OptionsMarkdown`); do not edit. A step's `options` is a JSON object whose keys are the ")
+        md.Append("# Playbook — run options\n\n")
+            .Append("Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A step's `options` is a JSON object whose keys are the ")
             .Append("**paths** below (a dot is a nested object: `signingControls.trust` is `{ \"signingControls\": { \"trust\": [...] } }`).\n\n")
             .Append("## Symbolic values\n\n")
             .Append("| Value | Means |\n|---|---|\n")
@@ -196,12 +177,46 @@ internal static class ScriptSchema
         }
 
         md.Append("## Sandbox\n\nSigner ids (`sandbox:ID`) and certificate ids (`sandbox.revoke`) are those of the connected Sandbox (`GET /api/pki` on it); ")
-            .Append("the TestBench checks them when it loads a script. Failures: crl ").Append(string.Join("/", Enum.GetNames<CrlFault>()))
+            .Append("the TestBench checks them when it loads a playbook. Failures: crl ").Append(string.Join("/", Enum.GetNames<CrlFault>()))
             .Append(", ocsp ").Append(string.Join("/", Enum.GetNames<OcspFault>()))
             .Append(", tsa ").Append(string.Join("/", Enum.GetNames<TsaFault>()))
             .Append(", trustedList ").Append(string.Join("/", Enum.GetNames<TlFault>())).Append(".\n");
         return md.ToString();
     }
 
+    /// <summary>
+    /// What a step's <c>sandbox</c> block and <c>sandbox:ID</c> values can name: the failures of each service (from the
+    /// enums, so they never drift) and, with a Sandbox connected, its signer and certificate ids.
+    /// </summary>
+    /// <param name="signers">The connected Sandbox's signers as id and title; null when none is connected.</param>
+    /// <param name="certificates">The connected Sandbox's certificates (revocable by id); null when none is connected.</param>
+    public static PlaybookSandboxReference SandboxReference(
+        IEnumerable<(string Id, string Title)>? signers, IEnumerable<SandboxCertificateInfo>? certificates) =>
+        new(
+            signers is not null,
+            signers?.Select(s => new PlaybookReferenceId(s.Id, s.Title)).ToList() ?? [],
+            certificates?.Select(c => new PlaybookReferenceId(c.Id, c.Title)).ToList() ?? [],
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                ["crl"] = Enum.GetNames<CrlFault>(),
+                ["ocsp"] = Enum.GetNames<OcspFault>(),
+                ["tsa"] = Enum.GetNames<TsaFault>(),
+                ["trustedList"] = Enum.GetNames<TlFault>(),
+            });
+
     private static string Cell(string text) => text.Replace("|", "\\|", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
 }
+
+/// <summary>An id a playbook can name, with its title.</summary>
+public sealed record PlaybookReferenceId(string Id, string Title);
+
+/// <summary>What a playbook's <c>sandbox</c> blocks and <c>sandbox:ID</c> values can name.</summary>
+/// <param name="Connected">Whether a Sandbox is connected (the ids come from it).</param>
+/// <param name="Signers">The signer ids, for <c>sandbox:ID</c>.</param>
+/// <param name="Certificates">The certificate ids, for <c>sandbox.revoke</c>.</param>
+/// <param name="Faults">The failures of each service: crl, ocsp, tsa, trustedList.</param>
+public sealed record PlaybookSandboxReference(
+    bool Connected,
+    IReadOnlyList<PlaybookReferenceId> Signers,
+    IReadOnlyList<PlaybookReferenceId> Certificates,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> Faults);

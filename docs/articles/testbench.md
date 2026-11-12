@@ -53,7 +53,7 @@ address, **Connect** and how to start one. Connected, it opens everything: an ov
 signers with **Sign with**, its root for Adobe), its environment, its PKI (revoke, take back, download PFX
 and certificates), its failures and its request log. These go through the Sandbox's own admin API, passed
 through by the TestBench (`/api/sandbox/admin/…`): the Sandbox keeps the state, so a failure switched on by
-a certification script or `curl` shows here too. The button turns red while a failure is on.
+a playbook or `curl` shows here too. The button turns red while a failure is on.
 Without a Sandbox, the Sandbox signers and TSAs are disabled and the validation samples that need
 signed files are not built.
 
@@ -231,13 +231,18 @@ or broken in one specific way, each with the verdict it should get:
 that run. With DSS on, most of these samples are INDETERMINATE there unless the Sandbox environment
 names an address DSS reaches: they are B-B signatures.
 
-## Certification
+## Playbook
 
-**Certification** (top bar) opens a full-screen page that runs a [certification script](certification-script.md): the
-requirements of an accreditation guide and the steps that show each one, against the Sandbox, through the library,
-the CLI or both. It lists every requirement with its result, shows each step's expected and found values per engine,
-waits for the manual steps (note and attachments), and exports the evidence (an HTML page in the script's language
-and a zip with the reports, signed files and logs). Samples: `sandbox-basics` and INDECOPI's guide v4.0.
+The **Playbook** tab (after Sign and Validate) runs a [playbook](playbook.md): sections of steps written beforehand,
+each with free tags, against the Sandbox, through the library, the CLI or both. In three columns: the steps (filter by
+tag, run one, a section or all), everything the selected step will do before it runs (what is signed and by whom,
+every setting by group, the Sandbox changes, the expectation, the C# and CLI commands), and its latest result with
+every detail (expected and found per engine, the report in a dialog, files, CLI commands, log). Results stay while the
+TestBench runs (**Clear result** forgets one, **Restart** all of them); the evidence (an HTML page and a zip) is built
+from them. Samples: `sandbox-basics` and INDECOPI's
+guide v4.0. The **Options reference** button opens, in the UI's language, what a step can hold: the option paths of
+each format, the symbolic values (`sandbox:`, `sample:`, `preset:`, `step:`…) and the Sandbox failures and ids; its
+Markdown version ([options.md](../playbooks/options.md)) is the one to attach for an LLM.
 
 The options it relies on are on the Sign page too: built-in signing and validation policies (`strict`, `minimal`,
 `iofe`…) next to an uploaded file, the trust anchors and expected TSA of the checks made before signing, the audit

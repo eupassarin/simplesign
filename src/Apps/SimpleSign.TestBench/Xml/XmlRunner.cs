@@ -105,6 +105,29 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     public XmlFacts? Facts(string? dataId) =>
         dataId is not null && documents.TryGet(dataId, out var file) ? XmlInspector.Inspect(dataId, file!.FileName, file.Content) : null;
 
+    /// <summary>What a XAdES signature with <paramref name="options"/> would do, without making it.</summary>
+    internal async Task<RunDescription> DescribeAsync(XmlOptions options, CancellationToken cancellationToken)
+    {
+        var report = Evaluate(options);
+        credentials.TryGet(report.Effective.CredentialId, out var credential);
+        CodeSnippets? code = null;
+        string? error = null;
+        if (credential is not null)
+        {
+            try
+            {
+                var controls = await SigningControls.ResolveAsync(report.Effective.SigningControls, sandbox, cancellationToken);
+                code = new XadesPlan(report.Effective, new PlanContext(credential, sandbox, documents) { Controls = controls }).Code(credential.Facts);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SigningException or HttpRequestException or KeyNotFoundException)
+            {
+                error = ex.Message;
+            }
+        }
+
+        return new RunDescription(report.Effective, report.Options, report.Issues, code, error, credential?.Facts);
+    }
+
     public XmlOptionsReport Evaluate(XmlOptions o)
     {
         credentials.TryGet(o.CredentialId, out var credential);

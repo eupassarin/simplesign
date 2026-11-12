@@ -8,7 +8,7 @@ the CLI, the Agent, your own application, or another validator such as DSS.
 
 It is a service with an API and no page of its own: its UI is the TestBench's **Sandbox** control
 (connect, then the PKI, failures and request log), and every other client drives it through the same
-[admin API](#admin-api), so a Sandbox set up by a certification script, a test suite or `curl` serves any validator
+[admin API](#admin-api), so a Sandbox set up by a playbook, a test suite or `curl` serves any validator
 without the TestBench.
 
 It simulates what a real PKI does, including what goes wrong: a certificate revoked by CRL or

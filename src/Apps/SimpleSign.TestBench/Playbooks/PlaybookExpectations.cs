@@ -1,21 +1,21 @@
 using System.Text.Json;
 using SimpleSign.TestBench.Runs;
 
-namespace SimpleSign.TestBench.Scripts;
+namespace SimpleSign.TestBench.Playbooks;
 
-/// <summary>Compares what a TestBench run showed with what a step expects.</summary>
-internal static class ScriptExpectations
+/// <summary>Compares what a TestBench run showed with what a playbook step expects.</summary>
+internal static class PlaybookExpectations
 {
     /// <summary>The run of a step through one engine, with a row per field of <paramref name="expect"/>.</summary>
-    public static ScriptEngineRun Evaluate(string engine, RunView view, ScriptExpectation expect)
+    public static PlaybookEngineRun Evaluate(string engine, RunView view, PlaybookExpectation expect)
     {
         var verdict = view.Validation.FirstOrDefault(v => !v.IsTimestamp);
         string? indication = verdict?.EtsiIndication;
         string? subIndication = verdict?.SubIndication;
         string? reason = ReasonOf(view.ErrorType);
-        bool? dssAgrees = DssAgrees(view.CrossValidation);
+        var (dssAgrees, crossValidated, dssError) = Dss(view.CrossValidation);
         string? level = view.Kind == RunKinds.Validate ? verdict?.Level : view.AchievedLevel;
-        var checks = new List<ScriptCheckRow>();
+        var checks = new List<PlaybookCheckRow>();
 
         if (expect.Outcome is { } outcome)
         {
@@ -45,7 +45,10 @@ internal static class ScriptExpectations
 
         if (expect.DssAgrees is { } agrees)
         {
-            checks.Add(new("dssAgrees", agrees ? "yes" : "no", dssAgrees is null ? "not cross-validated" : dssAgrees.Value ? "yes" : "no", dssAgrees == agrees));
+            string found = dssAgrees is { } a ? a ? "yes" : "no"
+                : crossValidated ? $"DSS unavailable: {dssError ?? "no verdict"}"
+                : "not cross-validated";
+            checks.Add(new("dssAgrees", agrees ? "yes" : "no", found, dssAgrees == agrees));
         }
 
         foreach (string text in expect.LogContains)
@@ -61,8 +64,12 @@ internal static class ScriptExpectations
             checks.Add(new("outcome", "success", view.Success ? "success" : view.Error ?? "failure", view.Success));
         }
 
-        return new ScriptEngineRun(engine, view.Id, view.Success, view.Error, view.ErrorType, view.OutputId, view.FileName, view.AchievedLevel,
-            indication, subIndication, dssAgrees, view.ReportId, view.EtsiReportId, view.TotalMs, checks);
+        return new PlaybookEngineRun(engine, view.Id, view.Success, view.Error, view.ErrorType, view.OutputId, view.FileName, view.AchievedLevel,
+            indication, subIndication, dssAgrees, view.ReportId, view.EtsiReportId, view.TotalMs, checks)
+        {
+            CrossValidated = crossValidated,
+            DssError = dssAgrees is null && crossValidated ? dssError ?? "DSS gave no verdict." : null,
+        };
     }
 
     /// <summary>signed, refused, error (a sign run) or valid, invalid, indeterminate (the first signature's verdict).</summary>
@@ -100,23 +107,29 @@ internal static class ScriptExpectations
         return open >= 0 && close > open ? errorType[(open + 1)..close].Trim() : null;
     }
 
-    private static bool? DssAgrees(object? crossValidation)
+    /// <summary>DSS's verdict on a run: whether it agrees (null: no verdict), whether DSS was asked, and why it gave none.</summary>
+    private static (bool? Agrees, bool Asked, string? Error) Dss(object? crossValidation)
     {
         if (crossValidation is null)
         {
-            return null;
+            return (null, false, null);
         }
 
         var element = JsonSerializer.SerializeToElement(crossValidation, crossValidation.GetType(), WorkbenchJson.Options);
-        if (element.ValueKind != JsonValueKind.Object
-            || (element.TryGetProperty("available", out var available) && available.ValueKind == JsonValueKind.False))
+        if (element.ValueKind != JsonValueKind.Object)
         {
-            return null;
+            return (null, true, null);
+        }
+
+        string? error = element.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
+        if (element.TryGetProperty("available", out var available) && available.ValueKind == JsonValueKind.False)
+        {
+            return (null, true, error ?? "DSS did not answer.");
         }
 
         return element.TryGetProperty("agree", out var agree) && agree.ValueKind is JsonValueKind.True or JsonValueKind.False
-            ? agree.GetBoolean()
-            : null;
+            ? (agree.GetBoolean(), true, null)
+            : (null, true, error);
     }
 
     private static bool Same(string expected, string? found) => string.Equals(expected, found, StringComparison.OrdinalIgnoreCase);
