@@ -49,8 +49,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The certification scripts in docs/, offered as samples on the Certification page. -->
-    <EmbeddedResource Include="..\..\..\docs\certification-scripts\*.json" LogicalName="SimpleSign.TestBench.Scripts.Samples.%(Filename)%(Extension)" />
+    <!-- The playbooks in docs/, offered as samples on the Playbook tab. -->
+    <EmbeddedResource Include="..\..\..\docs\playbooks\*.json" LogicalName="SimpleSign.TestBench.Playbooks.Samples.%(Filename)%(Extension)" />
     <!-- The roots of the public TSAs (PublicTsaRoots); tools/dss mounts the same folder. -->
     <EmbeddedResource Include="TsaRoots/*.crt" LogicalName="TsaRoots/%(Filename)%(Extension)" />
     <Content Remove="web/**" />

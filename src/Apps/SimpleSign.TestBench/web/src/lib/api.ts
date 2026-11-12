@@ -32,6 +32,11 @@ export function setApiLocale(value: string) {
   locale = value
 }
 
+/** The language the UI asks the server for (Accept-Language). */
+export function apiLocale() {
+  return locale
+}
+
 async function request<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { "Accept-Language": locale }
   const init: RequestInit = { method, headers, signal }

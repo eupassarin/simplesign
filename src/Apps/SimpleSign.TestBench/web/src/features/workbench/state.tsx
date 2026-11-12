@@ -28,10 +28,13 @@ export interface ValidateTarget {
   dataName?: string | null
 }
 
+/** The tasks of the top bar: the two run kinds, and the Playbook tab. */
+export type AppMode = RunKind | "playbook"
+
 interface WorkbenchValue {
-  /** The task on screen: make a signature, or validate a file. Each keeps its own result. */
-  mode: RunKind
-  setMode: (mode: RunKind) => void
+  /** The task on screen: make a signature, validate a file (each keeps its own result), or run a playbook. */
+  mode: AppMode
+  setMode: (mode: AppMode) => void
   validateTarget: ValidateTarget | null
   setValidateTarget: (target: ValidateTarget | null) => void
   /** The trust and revocation settings of the Validate task, shaped like the options ({ validation: … }). */
@@ -140,13 +143,16 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
   }))
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [evaluating, setEvaluating] = useState(false)
-  const [mode, setModeState] = useState<RunKind>(() => load<string>("wb.mode", "sign") === "validate" ? "validate" : "sign")
+  const [mode, setModeState] = useState<AppMode>(() => {
+    const saved = load<string>("wb.mode", "sign")
+    return saved === "validate" || saved === "playbook" ? saved : "sign"
+  })
   const [slots, setSlots] = useState<Record<RunKind, Slot>>({ sign: emptySlot, validate: emptySlot })
   const patchSlot = useCallback((kind: RunKind, change: (slot: Slot) => Slot) => setSlots((all) => ({ ...all, [kind]: change(all[kind]) })), [])
-  const { run, logs, running } = slots[mode]
+  const { run, logs, running } = slots[mode === "playbook" ? "sign" : mode]
   const [validateTarget, setValidateTarget] = useState<ValidateTarget | null>(null)
   const [validateOptions, setValidateOptions] = useState<Options>(() => ({ validate: true, validation: initial(schema, "pades", connected).validation }))
-  const setMode = useCallback((next: RunKind) => {
+  const setMode = useCallback((next: AppMode) => {
     localStorage.setItem("wb.mode", JSON.stringify(next))
     setModeState(next)
   }, [])

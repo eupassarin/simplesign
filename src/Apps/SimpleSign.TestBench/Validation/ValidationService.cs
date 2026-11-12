@@ -576,7 +576,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         ]
         : [];
 
-    private CodeSnippets ValidationCode(ValidationSettings s)
+    internal CodeSnippets ValidationCode(ValidationSettings s)
     {
         var sb = new StringBuilder();
         sb.Append("using SimpleSign.PAdES.Validation;\nusing SimpleSign.Core.Validation;\n");

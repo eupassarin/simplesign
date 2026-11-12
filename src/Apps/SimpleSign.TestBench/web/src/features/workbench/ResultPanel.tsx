@@ -83,7 +83,7 @@ function Signing() {
 }
 
 /** The commands a run through the CLI executed: each line, its exit code and time, and what it printed (open on click). */
-function CliSteps({ steps }: { steps: CliStep[] }) {
+export function CliSteps({ steps }: { steps: CliStep[] }) {
   const t = useT()
   return (
     <div className="space-y-2 rounded-lg border p-4">
