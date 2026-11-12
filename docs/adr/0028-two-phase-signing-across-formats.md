@@ -59,11 +59,21 @@ its HMAC, so every field added to it has to be left out at its default value, or
 **Consequences:**
 - A session carries the content: the PDF, the CAdES content (also when detached — phase two reads it back and, at
   B-LTA, timestamps it) and the XAdES detached document and external data objects. Callers store it server-side; it is
-  about 4/3 of the content.
-- Co-signatures and countersignatures are not built in two phases. They use the one-call builders with an external
-  signer.
-- PAdES completion still returns bytes and takes a strict profile; CAdES and XAdES also have
-  `CompleteWithDetailsAsync`, because their completion is the one-call pipeline and already reports the achieved level.
+  about 4/3 of the content. For CAdES and XAdES it can stay out (`WithContentOutsideSession`,
+  `WithDetachedDataOutsideSession`): the session then carries the SHA-256, and the resumed builder is given the content
+  again and refuses anything else. The PDF and the XML that holds the signature are the prepared artifact itself and
+  always travel.
+- Co-signatures and countersignatures are prepared the same way (`CadesDeferredSigner.CoSign` / `CounterSign`,
+  `XadesDeferredSigner.CounterSign`). Because the deferred builder wraps the one-call builder, they needed no second
+  implementation: the session records which signature the new signer joins.
+- `From(builder)` on the three entry points turns a configured one-call builder into the builder that prepares the
+  same signature, so an application configures once and chooses one call or two phases at the end. It is also how the
+  CLI (`--prepare`) and the TestBench reuse their option handling.
+- PAdES completion runs the one-call pipeline too (`PadesSignerBuilder.FinishAsync`), so the three formats have
+  `CompleteWithDetailsAsync`, which reports the achieved level. `CompleteAsync` returns bytes and takes a strict
+  profile only.
+- The builder extensions of the country packages exist on the deferred builders; a test in those packages compares them as the contract test
+  compares the builders.
 - Preparing a PAdES signature now reads the PDF/A level of the document and shapes the signature field for it, as
   one-call signing does.
 - XAdES writes an external ECDSA signature as `r || s`, the form XMLDSig takes; it used to write the DER sequence the

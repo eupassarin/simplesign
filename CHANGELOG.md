@@ -28,6 +28,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ToSigningRequest()` on the prepare results of the three formats: the `ExternalSigningRequest` an `IExternalSigner`
   receives (data, algorithms, operation id, RSASSA-PSS parameters).
 
+### Added — Two-phase signing: co-signatures, countersignatures, `From(builder)`, content outside the session
+
+- `CadesDeferredSigner.CoSign(existing, data?)`, `CadesDeferredSigner.CounterSign(existing, signerIndex)` and
+  `XadesDeferredSigner.CounterSign(signedXml, signatureId?)` prepare a co-signature or a countersignature for a key
+  that is elsewhere, with the options, session and completion of a first signature.
+- `DeferredSigner.From(PadesSignerBuilder)`, `CadesDeferredSigner.From(CadesSignerBuilder)` and
+  `XadesDeferredSigner.From(XadesSignerBuilder)` turn a configured one-call builder into the builder that prepares
+  the same signature: configure once, choose one call or two phases at the end.
+- `DeferredSignerBuilder.CompleteWithDetailsAsync` (PAdES) returns the `PadesSigningResult` of one-call signing —
+  requested and achieved levels, warnings — and takes a profile that may return a lower level. Completion now runs the
+  pipeline of `PadesSignerBuilder`. `DeferredSigningCompleteOptions.OperationId`.
+- A CAdES or XAdES session can leave the content out and carry its SHA-256 instead:
+  `WithContentOutsideSession()` → `WithContent(data)` on the resumed builder (CAdES);
+  `WithDetachedDataOutsideSession()` → `WithDetachedData(document)` and `WithExternalData(uri, content)` (XAdES).
+  Content that is not what phase one signed is refused. A session without these options is unchanged.
+- The Brazilian builder extensions on the two-phase builders: `WithAdvancedSignature` (`SimpleSign.Brazil`);
+  `WithIcpBrasilPolicy`, `ResolveIcpBrasilPolicy`, `WithHealthDocument` for PAdES and `WithIcpBrasilPolicy` for CAdES
+  (`SimpleSign.Brazil.IcpBrasil`); `WithIcpBrasilPolicy` for XAdES (`SimpleSign.Brazil.IcpBrasil.Xades`).
+  `DeferredSignerBuilder`, `CadesDeferredSignerBuilder` and `XadesDeferredSignerBuilder` expose `SignerCertificate`
+  and `SignerChain` for them.
+- CLI: `--prepare` on `sign`, `cades sign` and `xades sign` (with `--session-key`, `--session`, `--to-sign`,
+  `--content-outside-session`, `--detached-data-outside-session`) takes every option of the command and writes the
+  session and the data to sign; `deferred complete` finishes a session of any of the three formats (`--content`,
+  `--detached-data`, `--external-object`, `--json`) and reports the achieved level.
+- TestBench: the deferred mode of the Sign page takes every option of one-call signing, and the CAdES and XML pages
+  have **Two phases**. Both show the C# of the three phases and the two CLI commands, and run through the library or
+  the CLI.
+
 ### Added — `DeferredSignerBuilder` (PAdES) takes the options of `PadesSignerBuilder`
 
 - New on the deferred builder: `WithOperationId`, `WithPdfAPreservation`, `WithSignaturePolicy`,

@@ -224,8 +224,16 @@ byte[] signedXml = await XadesDeferredSigner.Resume(preparedXml.SessionData, ses
 ```
 
 Phase one runs the signing policy and fixes what is signed; phase two verifies the signature against
-the certificate and finishes the level. See [Deferred signing](deferred-signing.md) for what each
-phase decides, what is given again on the resumed builder, and the session.
+the certificate and finishes the level (`CompleteWithDetailsAsync` reports the level achieved).
+
+Co-signatures and countersignatures are prepared the same way — `CadesDeferredSigner.CoSign(existing, data)`,
+`CadesDeferredSigner.CounterSign(existing, signerIndex)`, `XadesDeferredSigner.CounterSign(signedXml)` — and
+`CadesDeferredSigner.From(builder)` / `XadesDeferredSigner.From(builder)` prepare the signature a one-call
+builder is already configured for. A large content can stay out of the session
+(`WithContentOutsideSession`, `WithDetachedDataOutsideSession`) and be given again on the resumed builder.
+
+See [Deferred signing](deferred-signing.md) for what each phase decides, what is given again on the
+resumed builder, and the session.
 
 ## Signing Policy
 

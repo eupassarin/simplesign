@@ -143,6 +143,37 @@ public sealed class IcpBrasilXadesExtensionsTests : IDisposable
     public void AboveAdRbWithoutTsa_Throws() =>
         Should.Throw<ArgumentException>(() => XadesSigner.Document(_xml).WithCertificate(_pki.Leaf).WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt));
 
+    /// <summary>
+    /// A builder extension of a Brazilian package that exists for one-call signing exists for two-phase signing,
+    /// with the same parameters: a new extension fails this test until the two-phase builder has it.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(IcpBrasilXadesExtensions))]
+    [InlineData(typeof(IcpBrasilSigningExtensions))]
+    [InlineData(typeof(SimpleSign.Brazil.Signing.SignerBuilderBrazilExtensions))]
+    public void BuilderExtensions_OfOneCallSigning_ExistOnTheTwoPhaseBuilders(Type anyTypeOfThePackage)
+    {
+        var twoPhase = new Dictionary<Type, Type>
+        {
+            [typeof(PAdES.PadesSignerBuilder)] = typeof(PAdES.DeferredSignerBuilder),
+            [typeof(CAdES.CadesSignerBuilder)] = typeof(CAdES.CadesDeferredSignerBuilder),
+            [typeof(XadesSignerBuilder)] = typeof(XadesDeferredSignerBuilder),
+        };
+        var extensions = anyTypeOfThePackage.Assembly.GetExportedTypes()
+            .SelectMany(t => t.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+            .Where(m => m.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), inherit: false))
+            .ToList();
+        static string Shape(System.Reflection.MethodInfo method, Type builder) =>
+            $"{method.Name}({builder.Name}, {string.Join(", ", method.GetParameters().Skip(1).Select(p => p.ParameterType))})";
+
+        var onTwoPhase = extensions.Where(m => twoPhase.ContainsValue(m.GetParameters()[0].ParameterType))
+            .Select(m => Shape(m, m.GetParameters()[0].ParameterType)).ToHashSet(StringComparer.Ordinal);
+        var oneCall = extensions.Where(m => twoPhase.ContainsKey(m.GetParameters()[0].ParameterType)).ToList();
+
+        oneCall.ShouldNotBeEmpty();
+        oneCall.Select(m => Shape(m, twoPhase[m.GetParameters()[0].ParameterType])).Where(shape => !onTwoPhase.Contains(shape)).ShouldBeEmpty();
+    }
+
     private Task<byte[]> Sign(IcpBrasilPolicy policy) =>
         XadesSigner.Document(_xml).WithCertificate(_pki.Leaf, _pki.IntermediatesAndRoot())
             .WithHttpClientProvider(new SingleClientProvider(_http))
