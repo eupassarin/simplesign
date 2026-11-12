@@ -317,6 +317,16 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
                 L.T("This is how DSS is set up, not a problem of the signature: give DSS the Sandbox root (see tools/dss/README.md)."));
         }
 
+        // DSS did get an answer: the OCSP responder said "unknown" (it does not know the certificate). SimpleSign then
+        // checks the CRL; DSS stops there. Not a reachability problem, so it is told apart from the case below.
+        if (theirs.Errors.Any(e => e.Contains("Unknown response from OCSP", StringComparison.OrdinalIgnoreCase)
+                || e.Contains("revocation status is unknown", StringComparison.OrdinalIgnoreCase)))
+        {
+            return (L.T("The OCSP responder answered \"unknown\" for a certificate of the chain: SimpleSign then checked the CRL, DSS stops at the unknown answer."),
+                Causes.Disagreement,
+                L.T("\"Unknown\" means the responder does not know the certificate: fix the responder (or embed the revocation data at B-LT); the validators handle the answer differently."));
+        }
+
         bool revocation = theirs.SubIndication is { } sub
                 && (sub.Contains("REVOCATION", StringComparison.OrdinalIgnoreCase) || sub.Contains("TRY_LATER", StringComparison.OrdinalIgnoreCase))
             || theirs.Errors.Any(e => e.Contains("revocation", StringComparison.OrdinalIgnoreCase));
