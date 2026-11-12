@@ -5,7 +5,9 @@
 
 - `IofeExtension`: trust anchors from INDECOPI's trusted list (`TrustedList`, ETSI TS 119 612 / TS 102 231 v3),
   whose signature is checked against the certificate INDECOPI signs it with. That certificate is not bundled:
-  obtain it from INDECOPI and check its fingerprint out of band.
+  obtain it from INDECOPI and check its fingerprint out of band. The list types several accredited TSAs as
+  `Svctype/unspecified` (Llama.pe, BPO Advisors, Girasol): `IofeExtension.DefaultListOptions` keeps that type too,
+  without the code-signing certificates of the signature software listed under it.
 - `IofePolicies.Signing` / `Validation` / `ValidationNonRepudiation`: the policies of INDECOPI's accreditation guide (v4.0),
   also kept as files in `docs/policies/iofe-*.json`. Signing with `Signing` needs trust anchors (the extension or
   `WithTrustAnchors`) and checks the whole chain's revocation and every TSA before signing.

@@ -26,8 +26,8 @@ public sealed record IofeExtensionOptions
     public IHttpClientProvider? HttpClientProvider { get; init; }
 
     /// <summary>
-    /// Which services of the list become trust anchors. Null keeps the defaults of <see cref="TrustedListOptions"/>
-    /// (active CA and TSA services) with <see cref="TrustedListSigners"/>.
+    /// Which services of the list become trust anchors. Null keeps <see cref="IofeExtension.DefaultListOptions"/>
+    /// with <see cref="TrustedListSigners"/>.
     /// </summary>
     public TrustedListOptions? ListOptions { get; init; }
 }
@@ -46,6 +46,20 @@ public sealed class IofeExtension : ICountryExtension
         ArgumentNullException.ThrowIfNull(trustedList);
         TrustedList = trustedList;
     }
+
+    /// <summary>
+    /// The services of INDECOPI's list that become trust anchors: the defaults of <see cref="TrustedListOptions"/>
+    /// (active CA and TSA services) plus the active services typed <c>Svctype/unspecified</c>, which is how the list
+    /// publishes several accredited timestamping authorities (Llama.pe, BPO Advisors, Girasol). The same type holds
+    /// the accredited signature software, whose code-signing certificates are left out.
+    /// </summary>
+    public static TrustedListOptions DefaultListOptions { get; } = new()
+    {
+        ServiceTypes = [.. new TrustedListOptions().ServiceTypes, "/unspecified"],
+        ExcludedExtendedKeyUsages = [CodeSigningOid],
+    };
+
+    private const string CodeSigningOid = "1.3.6.1.5.5.7.3.3";
 
     /// <summary>The trusted list the anchors come from.</summary>
     public TrustedList TrustedList { get; }
@@ -74,7 +88,7 @@ public sealed class IofeExtension : ICountryExtension
             throw new ArgumentException("The certificate INDECOPI signs the trusted list with is required (TrustedListSigners).", nameof(options));
         }
 
-        var listOptions = (options.ListOptions ?? new TrustedListOptions()) with { SignerCertificates = options.TrustedListSigners };
+        var listOptions = (options.ListOptions ?? DefaultListOptions) with { SignerCertificates = options.TrustedListSigners };
         var list = await TrustedList.DownloadAsync(
             options.TrustedListUrl, listOptions, options.HttpClientProvider, options.CacheFile, cancellationToken).ConfigureAwait(false);
         return new IofeExtension(list);
@@ -85,5 +99,5 @@ public sealed class IofeExtension : ICountryExtension
     /// <param name="trustedListSigners">The certificates INDECOPI signs the list with.</param>
     /// <returns>The extension.</returns>
     public static IofeExtension Load(byte[] trustedListXml, IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> trustedListSigners) =>
-        new(TrustedList.Load(trustedListXml, new TrustedListOptions { SignerCertificates = trustedListSigners }));
+        new(TrustedList.Load(trustedListXml, DefaultListOptions with { SignerCertificates = trustedListSigners }));
 }
