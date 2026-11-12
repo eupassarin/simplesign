@@ -26,6 +26,7 @@ internal static class PolicyPresets
                 .With("CACertificate/NotExpired", new PolicyConstraint(ConstraintLevel.Ignore))
                 .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore)),
             ["iofe"] = () => IofePolicies.Signing,
+            ["iofe-nonrepudiation"] = () => IofePolicies.SigningNonRepudiation,
         };
 
     /// <summary>The validation policies by name.</summary>

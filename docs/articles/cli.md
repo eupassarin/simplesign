@@ -250,6 +250,7 @@ writes it out):
 | `strict` | `default` plus the revocation of the whole chain (CRL/OCSP); give the chain up to the root |
 | `minimal` | Only the dates of the signing certificate (tests and migrations) |
 | `iofe` | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
+| `iofe-nonrepudiation` | `iofe`, and the signing certificate must have nonRepudiation (what the guide asks of an automated agent, section 4.2) |
 
 What the policy checks against comes from these options:
 

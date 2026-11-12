@@ -1,9 +1,9 @@
 """Writes docs/playbooks/indecopi-guia-v4.json: the automated steps that help with an INDECOPI (IOFE, Peru) software
-accreditation (Guía de Acreditación de Software v4.0, annex B), run in the TestBench against the Sandbox.
+accreditation (Guía de Acreditación de Aplicaciones de Software v4.0, annex B), run in the TestBench against the Sandbox.
 
-Tags name the items of the guide each step helps with (F-n: signing by an automated agent, V-n: verification by
-automated agents, S-n: time-stamp verification) and a topic. Items that need a person (manuals, code signing, the
-cryptographic module) are not here: they are handled outside the playbook.
+Tags name the annex B items each step helps with (F-n: section 4.2, signing by an automated agent; V-n: section 4.3,
+verification by automated agents; S-n: section 4.4, time-stamps) and a topic. Items that need a person (manuals, code
+signing, the cryptographic module) are not here: docs/playbooks/indecopi-checklist.md says where each one is handled.
 
     python3 tools/playbooks/indecopi.py docs/playbooks/indecopi-guia-v4.json
 """
@@ -109,7 +109,12 @@ sections = [
                credentialId="sandbox:no-signing-key-usage") for f in ("cades", "xades")],
         sign("signed-no-nonrepudiation", "Sign with a certificate without nonRepudiation (to validate)", ["F-12", "key-usage"], {"outcome": "signed"},
              credentialId="sandbox:no-nonrepudiation",
-             desc="Signing accepts digitalSignature or nonRepudiation; the file is used by the validation step that requires nonRepudiation."),
+             desc="The iofe signing policy accepts digitalSignature or nonRepudiation (as section 4.1 does for end-user software); "
+                  "the file is used by the validation step that requires nonRepudiation."),
+        sign("no-nonrepudiation-agent", "Automated agent: a certificate without nonRepudiation is refused", ["F-12", "key-usage"],
+             refused("KeyUsageNotPermitted"), credentialId="sandbox:no-nonrepudiation", signingPolicyId="preset:signing:iofe-nonrepudiation",
+             desc="Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe-nonrepudiation "
+                  "policy refuses a certificate that has digitalSignature only."),
         validate("v-no-nonrepudiation", "Validation requires nonRepudiation: not accepted", ["V-12", "key-usage"], "step:signed-no-nonrepudiation",
                  {"outcome": "indeterminate"}, policyId="preset:validation:iofe-nonrepudiation",
                  desc="With the iofe-nonrepudiation policy the certificate without nonRepudiation fails the chain constraint (EN 319 102-1: INDETERMINATE)."),
@@ -180,7 +185,9 @@ playbook = {
     "description": "The automated part of an INDECOPI (IOFE, Peru) accreditation of signing and verification software (Guía de Acreditación "
                    "de Software v4.0, annex B): each step runs against the Sandbox with the IOFE policy, through the library and the CLI, "
                    "cross-validated with EU DSS when one is connected. "
-                   "Tags name the items of the guide (F-n signing, V-n verification, S-n time-stamps) and a topic.",
+                   "Tags name the items of annex B of the guide (F-n: section 4.2, signing by an automated agent; V-n: section 4.3, "
+                   "verification by automated agents; S-n: section 4.4, time-stamps) and a topic; docs/playbooks/indecopi-checklist.md "
+                   "maps every item to a step, a test or what is left to the accredited product.",
     "defaults": {
         "engine": "both",
         "format": "pades",

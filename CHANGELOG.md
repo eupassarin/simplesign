@@ -34,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playbook `indecopi-guia-v4`: the `tsl` section uses the INDECOPI-layout list, with new steps for a TSA whose CA is
   listed as `unspecified` (`tsl-tsa-unspecified`, `tsl-tsa-unlisted`, `v-tsl-tsa-unspecified`).
 
+### Added — IOFE: checklist of INDECOPI's accreditation guide
+
+- `docs/playbooks/indecopi-checklist.md`: every item of annex B of the *Guía de Acreditación de Aplicaciones de
+  Software* v4.0 — sections 4.2 (F-1…F-32), 4.3 (V-1…V-32), 4.4 (S-1…S-4) and 4.1 (E-1…E-19) — marked as shown by
+  the `indecopi-guia-v4` playbook, by tests, or left to the accredited product, with the step ids; a TestBench test
+  checks that every P item has a step and every step it names exists.
+- `IofePolicies.SigningNonRepudiation` (preset `iofe-nonrepudiation` for signing in the CLI and the TestBench,
+  `docs/policies/iofe-signing-nonrepudiation.json`): section 4.2 asks an automated agent for the nonRepudiation bit;
+  playbook step `no-nonrepudiation-agent`. The requirement numbers in the `IofePolicies` XML docs follow the guide.
+
 ### Fixed — Trusted lists: INDECOPI's real list
 
 - `TrustedList` verifies lists whose `ds:Signature` element declares a namespace (INDECOPI's declares `xmlns:etsi`

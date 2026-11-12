@@ -46,6 +46,7 @@ internal static class PolicyPresets
         (PolicyViewer.Signing, "minimal", () => Minimal.ToJson(), Minimal.Name),
         (PolicyViewer.Signing, "anchored", () => Anchored.ToJson(), Anchored.Name),
         (PolicyViewer.Signing, "iofe", () => IofePolicies.Signing.ToJson(), IofePolicies.Signing.Name),
+        (PolicyViewer.Signing, "iofe-nonrepudiation", () => IofePolicies.SigningNonRepudiation.ToJson(), IofePolicies.SigningNonRepudiation.Name),
         (PolicyViewer.Validation, "strict", () => StrictValidation.ToJson(), StrictValidation.Name),
         (PolicyViewer.Validation, "iofe", () => IofePolicies.Validation.ToJson(), IofePolicies.Validation.Name),
         (PolicyViewer.Validation, "iofe-nonrepudiation", () => IofePolicies.ValidationNonRepudiation.ToJson(), IofePolicies.ValidationNonRepudiation.Name),
