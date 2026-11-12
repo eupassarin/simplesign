@@ -111,6 +111,9 @@ internal sealed record StoredCertificate
     public RevocationPublication Publication { get; init; }
 }
 
+/// <summary>A certificate a CA issued without keeping it in the environment: its issuer and serial number (hex, no leading zeros).</summary>
+internal sealed record StoredSerial(string IssuerId, string Serial);
+
 /// <summary>Everything an environment keeps between runs (state.json in its folder).</summary>
 internal sealed record SandboxState
 {
@@ -147,6 +150,12 @@ internal sealed record SandboxState
     public StoredKeyPair? TlSigner { get; init; }
 
     public List<StoredCertificate> Certificates { get; init; } = [];
+
+    /// <summary>
+    /// The short-lived signers and TSAs issued lately (the last <see cref="SandboxPki.ShortLivedKept"/>), oldest first: not
+    /// listed with <see cref="Certificates"/>, but their CA's OCSP responder answers good for them.
+    /// </summary>
+    public List<StoredSerial> ShortLived { get; init; } = [];
 
     public long CrlNumber { get; init; } = 1;
 

@@ -83,6 +83,9 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>An intermediate CA whose certificate the root signed with SHA-1 (a hash no longer accepted for signatures).</summary>
     public const string Sha1IntermediateId = "intermediate-sha1";
 
+    /// <summary>How many short-lived signers and TSAs the OCSP responder keeps answering good for (the latest ones).</summary>
+    public const int ShortLivedKept = 256;
+
     /// <summary>The LDAP base DN of a CA's entry: <c>cn={id},o=sandbox</c>.</summary>
     public static string LdapDn(string caId) => $"cn={caId},o=sandbox";
 
@@ -305,7 +308,9 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>
     /// A signer issued by the intermediate CA that is valid for <paramref name="lifetime"/> from now, as a
     /// PKCS#12 file with its chain: to make a signature whose certificate has expired by validation time
-    /// (a correct client refuses to sign with an expired certificate). Not kept in the environment. Its validity starts
+    /// (a correct client refuses to sign with an expired certificate). Not listed with the environment's certificates,
+    /// but its serial number is kept (the last <see cref="ShortLivedKept"/>, across restarts) so the intermediate CA's
+    /// OCSP responder answers good for it, as a real CA does for what it issued; the CRL does not list it. Its validity starts
     /// two hours back, before the CRLs and OCSP responses it will be checked against (their thisUpdate is an hour back).
     /// </summary>
     public byte[] IssueShortLived(TimeSpan lifetime)
@@ -315,8 +320,9 @@ internal sealed class SandboxPki : IDisposable
             var now = DateTimeOffset.UtcNow;
             var seed = new SeedDefinition("short-lived", "Short-lived signer", "");
             var pair = IssueLeaf(seed, now.AddHours(-2), now.Add(lifetime));
-            Save();
             using var certificate = X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
+            RememberShortLived(seed.IssuerId, certificate);
+            Save();
             var collection = new X509Certificate2Collection { certificate, Intermediate, Root };
             return collection.Export(X509ContentType.Pkcs12, PfxPassword)!;
         }
@@ -325,8 +331,9 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>
     /// A TSA certificate issued by the intermediate CA that is valid for <paramref name="lifetime"/> from now, with its
     /// key: the TSA of <c>/tsa/short-lived</c>, whose tokens outlive its certificate (past signature validation, where a
-    /// later archive time-stamp proves the token existed while the certificate was valid). Not kept in the environment;
-    /// its validity starts two hours back, as for <see cref="IssueShortLived"/>.
+    /// later archive time-stamp proves the token existed while the certificate was valid). Not listed with the environment's
+    /// certificates, but, as for <see cref="IssueShortLived"/>, its serial number is kept so the intermediate CA's OCSP
+    /// responder answers good for it; its validity starts two hours back.
     /// </summary>
     public X509Certificate2 IssueShortLivedTsa(TimeSpan lifetime)
     {
@@ -335,9 +342,18 @@ internal sealed class SandboxPki : IDisposable
             var now = DateTimeOffset.UtcNow;
             var seed = new SeedDefinition("tsa-short-lived", "Short-lived TSA", "", Usage: CertificateUsage.Timestamping);
             var pair = IssueLeaf(seed, now.AddHours(-2), now.Add(lifetime));
+            var certificate = X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
+            RememberShortLived(seed.IssuerId, certificate);
             Save();
-            return X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
+            return certificate;
         }
+    }
+
+    /// <summary>Keeps the serial number of a short-lived certificate (the last <see cref="ShortLivedKept"/>) for the OCSP responder.</summary>
+    private void RememberShortLived(string issuerId, X509Certificate2 certificate)
+    {
+        var entry = new StoredSerial(issuerId, Convert.ToHexString(TrimSerial(certificate.SerialNumberBytes.Span)));
+        _state = _state with { ShortLived = [.. _state.ShortLived.Append(entry).TakeLast(ShortLivedKept)] };
     }
 
     /// <summary>The chain of a certificate, from its issuer up to the root.</summary>
@@ -424,7 +440,8 @@ internal sealed class SandboxPki : IDisposable
 
     /// <summary>
     /// The status of a serial number, as the OCSP responder of <paramref name="caId"/> answers it
-    /// (revocations published in the CRL only are not known to it).
+    /// (revocations published in the CRL only are not known to it). The short-lived signers and TSAs it issued lately
+    /// (see <see cref="IssueShortLived"/>) are good; a serial number it never issued is unknown.
     /// </summary>
     public RevocationStatus OcspStatus(string caId, ReadOnlySpan<byte> serial)
     {
@@ -439,8 +456,13 @@ internal sealed class SandboxPki : IDisposable
             }
 
             var certificate = _certificates.FirstOrDefault(c => c.IssuerId == caId && TrimSerial(c.Certificate.SerialNumberBytes.Span).AsSpan().SequenceEqual(wanted));
-            return certificate is null ? RevocationStatus.Unknown
-                : certificate.RevokedAt is { } revokedAt && certificate.Publication != RevocationPublication.CrlOnly
+            if (certificate is null)
+            {
+                string hex = Convert.ToHexString(wanted);
+                return _state.ShortLived.Any(s => s.IssuerId == caId && s.Serial == hex) ? RevocationStatus.Good : RevocationStatus.Unknown;
+            }
+
+            return certificate.RevokedAt is { } revokedAt && certificate.Publication != RevocationPublication.CrlOnly
                     ? new RevocationStatus(true, revokedAt, ParseReason(certificate.RevocationReason))
                     : RevocationStatus.Good;
         }

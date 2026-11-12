@@ -94,6 +94,26 @@ public sealed class SandboxPkiTests : IDisposable
     }
 
     [Fact]
+    public void OcspStatus_ShortLivedAfterReopening_IsStillGood()
+    {
+        byte[] signer, tsa;
+        using (var pki = SandboxPki.Open(_directory, Options))
+        {
+            var collection = X509CertificateLoader.LoadPkcs12Collection(pki.IssueShortLived(TimeSpan.FromMinutes(5)), SandboxPki.PfxPassword);
+            signer = collection.Single(c => c.HasPrivateKey).SerialNumberBytes.ToArray();
+            using var shortLivedTsa = pki.IssueShortLivedTsa(TimeSpan.FromMinutes(5));
+            tsa = shortLivedTsa.SerialNumberBytes.ToArray();
+        }
+
+        using var again = SandboxPki.Open(_directory, Options);
+
+        again.OcspStatus(SandboxPki.IntermediateId, signer).ShouldBe(RevocationStatus.Good);
+        again.OcspStatus(SandboxPki.IntermediateId, tsa).ShouldBe(RevocationStatus.Good);
+        again.OcspStatus(SandboxPki.RevokedIntermediateId, signer).ShouldBe(RevocationStatus.Unknown);
+        again.Certificates.ShouldNotContain(c => c.Id == "short-lived" || c.Id == "tsa-short-lived");
+    }
+
+    [Fact]
     public void Open_EnvironmentWithoutTheSha1Ca_AddsItAndKeepsTheRoot()
     {
         string root, rsa2048;
