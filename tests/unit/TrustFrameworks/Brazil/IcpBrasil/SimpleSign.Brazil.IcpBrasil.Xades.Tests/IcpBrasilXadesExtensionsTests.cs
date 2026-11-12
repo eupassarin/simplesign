@@ -69,6 +69,33 @@ public sealed class IcpBrasilXadesExtensionsTests : IDisposable
         check.Policy.Info.Format.ShouldBe(IcpBrasilPolicyFormat.Xades);
     }
 
+    [Theory]
+    [InlineData(IcpBrasilPolicy.AdRb)]
+    [InlineData(IcpBrasilPolicy.AdRt)]
+    [InlineData(IcpBrasilPolicy.AdRv)]
+    [InlineData(IcpBrasilPolicy.AdRc)]
+    [InlineData(IcpBrasilPolicy.AdRa)]
+    public async Task WithIcpBrasilPolicy_TwoPhaseSignature_HasEveryPropertyThePolicyMandates(IcpBrasilPolicy policy)
+    {
+        byte[] key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        using var publicLeaf = RemoteKey.PublicOnly(_pki.Leaf);
+        var prepared = await XadesDeferredSigner.Document(_xml)
+            .WithCertificate(publicLeaf, _pki.IntermediatesAndRoot())
+            .WithSessionIntegrityKey(key)
+            .WithIcpBrasilPolicy(policy, policy == IcpBrasilPolicy.AdRb ? null : new TimestampOptions(new Uri("http://mock-tsa.example.com")))
+            .PrepareAsync();
+        byte[] signed = await XadesDeferredSigner.Resume(prepared.SessionData, key)
+            .WithHttpClientProvider(new SingleClientProvider(_http))
+            .CompleteAsync(RemoteKey.Sign(_pki.Leaf, prepared.ToSigningRequest()));
+
+        var result = Validate(signed);
+        result.IsSignatureValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        var check = IcpBrasilXadesPolicyValidator.Validate(signed, result);
+        check.Status.ShouldBe(IcpBrasilPolicyStatus.Valid, string.Join("; ", check.Errors));
+        check.Policy!.Info.Policy.ShouldBe(policy);
+        System.Text.Encoding.UTF8.GetString(signed).ShouldNotContain("SigningCertificateV2");
+    }
+
     [Fact]
     public async Task WithIcpBrasilPolicy_WritesSigningCertificateV1AndThePaDigest()
     {

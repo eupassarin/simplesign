@@ -66,6 +66,12 @@ public sealed class DeferredSignerBuilder
         _state = state;
     }
 
+    /// <summary>The signer certificate given to <c>WithCertificate</c>, or <see langword="null"/> before it is called and on a resumed builder. Extensions read it to pick policies.</summary>
+    public X509Certificate2? SignerCertificate => _state.Certificate;
+
+    /// <summary>The certificate chain given with the signer certificate (empty when none was given).</summary>
+    public IReadOnlyList<X509Certificate2> SignerChain => _state.ExtraCertificates;
+
     /// <summary>
     /// The registered country extensions, whose trust anchors are used with the ones given to
     /// <see cref="WithTrustAnchors(ITrustAnchorProvider[])"/>.

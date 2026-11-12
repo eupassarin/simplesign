@@ -55,6 +55,11 @@ public sealed class DeferredSigningContractTests
 
         missing.ShouldBeEmpty($"{deferred.Name} lacks options of {oneCall.Name}");
         Options(deferred).ShouldAllBe(m => m.ReturnType == deferred);
+
+        // What the country packages read from a builder to pick a policy (the signer, its chain, the extensions).
+        var deferredProperties = deferred.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => $"{p.PropertyType} {p.Name}").ToList();
+        oneCall.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => $"{p.PropertyType} {p.Name}")
+            .ShouldBeSubsetOf(deferredProperties);
     }
 
     private static IEnumerable<MethodInfo> Options(Type builder) =>
