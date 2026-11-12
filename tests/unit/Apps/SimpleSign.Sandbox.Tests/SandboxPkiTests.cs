@@ -27,6 +27,88 @@ public sealed class SandboxPkiTests : IDisposable
     }
 
     [Fact]
+    public void IssueCustom_ChosenSubject_IsListedRevocableAndUnderTheIntermediate()
+    {
+        using var pki = SandboxPki.Open(null, Options);
+        var subject = SandboxSubject.Parse("CN=Juan Pérez, serialNumber=PNOPE-12345678, C=PE");
+
+        var issued = pki.IssueCustom(subject, null, SandboxKeyType.EcdsaP256, null, TimeSpan.FromDays(30));
+
+        issued.Id.ShouldStartWith(SandboxPki.CustomPrefix);
+        issued.Title.ShouldBe("Juan Pérez");
+        issued.Certificate.SubjectName.RawData.ShouldBe(subject.RawData);
+        issued.Certificate.Issuer.ShouldBe(pki.Intermediate.Subject);
+        issued.Certificate.HasPrivateKey.ShouldBeTrue();
+        issued.IsUsable.ShouldBeTrue();
+        pki.Certificates.ShouldContain(c => c.Id == issued.Id);
+        byte[] serial = issued.Certificate.SerialNumberBytes.ToArray();
+        pki.OcspStatus(SandboxPki.IntermediateId, serial).ShouldBe(RevocationStatus.Good);
+
+        pki.Revoke(issued.Id);
+
+        pki.OcspStatus(SandboxPki.IntermediateId, serial).RevokedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void IssueCustom_KeyUsageGiven_HasOnlyIt()
+    {
+        using var pki = SandboxPki.Open(null, Options);
+
+        var issued = pki.IssueCustom(SandboxSubject.Parse("CN=Ana"), "t", SandboxKeyType.Rsa2048, X509KeyUsageFlags.DigitalSignature, TimeSpan.FromDays(1));
+
+        issued.Certificate.Extensions.OfType<X509KeyUsageExtension>().Single().KeyUsages.ShouldBe(X509KeyUsageFlags.DigitalSignature);
+    }
+
+    [Fact]
+    public void Reset_AfterIssueCustom_RemovesIt()
+    {
+        using var pki = SandboxPki.Open(null, Options);
+        var issued = pki.IssueCustom(SandboxSubject.Parse("CN=Ana"), null, SandboxKeyType.Rsa2048, null, TimeSpan.FromDays(1));
+
+        pki.Reset();
+
+        pki.Certificates.ShouldNotContain(c => c.Id == issued.Id);
+    }
+
+    [Fact]
+    public void IssueCustom_ReopenedEnvironment_KeepsIt()
+    {
+        string id;
+        using (var pki = SandboxPki.Open(_directory, Options))
+        {
+            id = pki.IssueCustom(SandboxSubject.Parse("CN=Ana"), null, SandboxKeyType.Rsa2048, null, TimeSpan.FromDays(1)).Id;
+        }
+
+        using var reopened = SandboxPki.Open(_directory, Options);
+
+        reopened.Certificate(id).Certificate.Subject.ShouldBe("CN=Ana");
+    }
+
+    [Fact]
+    public void Open_SigningCountryGiven_SeededSignersCarryIt()
+    {
+        using var pki = SandboxPki.Open(null, Options with { SigningCountry = "PE" });
+
+        pki.Certificate("rsa-2048").Certificate.Subject.ShouldContain("C=PE");
+    }
+
+    [Fact]
+    public void Open_SigningCountryEmpty_SeededSignersHaveNoCountry()
+    {
+        using var pki = SandboxPki.Open(null, Options with { SigningCountry = "" });
+
+        pki.Certificate("rsa-2048").Certificate.Subject.ShouldNotContain("C=");
+    }
+
+    [Fact]
+    public void Open_Default_SeededSignersKeepBr()
+    {
+        using var pki = SandboxPki.Open(null, Options);
+
+        pki.Certificate("rsa-2048").Certificate.Subject.ShouldContain("C=BR");
+    }
+
+    [Fact]
     public void Certificate_ExpiredTsa_HasExpiredAndIsForTimestamping()
     {
         using var pki = SandboxPki.Open(null, Options);

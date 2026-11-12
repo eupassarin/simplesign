@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Sandbox: signers with a chosen subject
+
+- `POST /api/certificates/custom` issues a signing certificate under the intermediate CA with a subject given as a DN
+  string or a list of attributes (`CN`, `serialNumber`, `C`, `O`, `OU`, `L`, `ST`, `T`, `G`, `SN`,
+  `organizationIdentifier`; checked for length and characters), an optional key type, key usage and validity. It is
+  listed with the other certificates (`custom-…`): revocable, downloadable as PFX/CER, answered by OCSP and the CRLs;
+  `POST /api/reset` removes it.
+- `--signing-country XX` (or `none`) sets the country of the seeded signers' subject when an environment is created;
+  `BR` stays the default and existing environments keep theirs.
+
 ### Added — `DataToSignInspector`: what is about to be signed; the Agent signs only signature data
 
 - `DataToSignInspector.Inspect(data, certificate)` recognizes the two `ExternalSigningPayloadKind`s: DER CMS signed

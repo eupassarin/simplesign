@@ -6,6 +6,9 @@ public sealed record SandboxOptions
     /// <summary>The default port (HTTP services, admin API and UI).</summary>
     public const int DefaultPort = 5300;
 
+    /// <summary>The default country of the seeded signing certificates.</summary>
+    public const string DefaultSigningCountry = "BR";
+
     /// <summary>The environment's name: each name has its own folder, PKI and state.</summary>
     public string Name { get; init; } = "default";
 
@@ -33,6 +36,12 @@ public sealed record SandboxOptions
     /// <summary>Where the environment is kept. Null: the user's local application data.</summary>
     public string? DataDirectory { get; init; }
 
+    /// <summary>
+    /// The country (C, two upper-case letters) written into the subject of the seeded signing certificates when the
+    /// environment is created; empty for no C. An existing environment keeps its own.
+    /// </summary>
+    public string SigningCountry { get; init; } = DefaultSigningCountry;
+
     /// <summary>A new environment in a temporary folder, deleted when the Sandbox stops.</summary>
     public bool Ephemeral { get; init; }
 
@@ -58,7 +67,7 @@ public sealed record SandboxOptions
     /// <summary>Reads the command line.</summary>
     /// <remarks>
     /// --port N, --https-port N, --ldap-port N, --name NAME, --public-base-url URL, --data-dir DIR, --ephemeral, --listen-any,
-    /// --allow-remote-admin. Anything else is ignored (--no-browser, from when the Sandbox had its own page, still works).
+    /// --allow-remote-admin, --signing-country XX (or "none"). Anything else is ignored (--no-browser, from when the Sandbox had its own page, still works).
     /// </remarks>
     public static SandboxOptions Parse(IReadOnlyList<string> args)
     {
@@ -91,6 +100,10 @@ public sealed record SandboxOptions
                     break;
                 case "--data-dir" when next is not null:
                     options = options with { DataDirectory = Path.GetFullPath(next) };
+                    i++;
+                    break;
+                case "--signing-country" when next is not null:
+                    options = options with { SigningCountry = next.Equals("none", StringComparison.OrdinalIgnoreCase) ? "" : next.ToUpperInvariant() };
                     i++;
                     break;
                 case "--ephemeral":

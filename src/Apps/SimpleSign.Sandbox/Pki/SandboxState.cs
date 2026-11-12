@@ -161,5 +161,11 @@ internal sealed record SandboxState
 
     public long NextSerial { get; init; } = 0x1000;
 
+    /// <summary>
+    /// The country (C) of the subject of the seeded signing certificates; empty for none. An environment created
+    /// before it was configurable has BR.
+    /// </summary>
+    public string SigningCountry { get; init; } = SandboxOptions.DefaultSigningCountry;
+
     public SandboxFaults Faults { get; init; } = new();
 }

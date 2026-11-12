@@ -349,6 +349,60 @@ internal sealed class SandboxPki : IDisposable
         }
     }
 
+    /// <summary>The id prefix of the certificates issued on request (<see cref="IssueCustom"/>).</summary>
+    public const string CustomPrefix = "custom-";
+
+    /// <summary>How many certificates issued on request an environment keeps (until <see cref="Reset"/>).</summary>
+    public const int MaxCustom = 200;
+
+    /// <summary>Whether <paramref name="id"/> is a certificate issued on request.</summary>
+    public static bool IsCustom(string id) => id.StartsWith(CustomPrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Issues a signing certificate with <paramref name="subject"/> under the intermediate CA, listed with the others:
+    /// revocable, downloadable as PFX and CER, answered by the CA's OCSP responder and CRLs. Kept until <see cref="Reset"/>.
+    /// </summary>
+    /// <param name="subject">The subject, already checked (<see cref="SandboxSubject"/>).</param>
+    /// <param name="title">What the UI shows; null for the subject's CN.</param>
+    /// <param name="keyType">The key.</param>
+    /// <param name="keyUsage">The key usage; null for digitalSignature and nonRepudiation.</param>
+    /// <param name="validity">How long it is valid from now (its validity starts a day back).</param>
+    /// <exception cref="InvalidOperationException">The environment already has <see cref="MaxCustom"/> of them.</exception>
+    public SandboxCertificate IssueCustom(X500DistinguishedName subject, string? title, SandboxKeyType keyType, X509KeyUsageFlags? keyUsage, TimeSpan validity)
+    {
+        ArgumentNullException.ThrowIfNull(subject);
+        lock (_gate)
+        {
+            if (_state.Certificates.Count(c => IsCustom(c.Id)) >= MaxCustom)
+            {
+                throw new InvalidOperationException($"The environment already has {MaxCustom} certificates issued on request; reset it to remove them.");
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            string id = CustomPrefix + Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();
+            string name = title is { Length: > 0 } ? title : subject.EnumerateRelativeDistinguishedNames()
+                .FirstOrDefault(r => !r.HasMultipleElements && r.GetSingleElementType().Value == "2.5.4.3")?.GetSingleElementValue() ?? subject.Name;
+            var seed = new SeedDefinition(id, name, $"Issued on request: {subject.Name}", keyType, KeyUsage: keyUsage);
+            _state = _state with
+            {
+                Certificates = [.. _state.Certificates, new StoredCertificate
+                {
+                    Id = id,
+                    Title = name,
+                    Description = seed.Description,
+                    KeyType = keyType,
+                    Usage = CertificateUsage.Signing,
+                    Pointers = seed.Pointers,
+                    Profile = seed.Profile,
+                    Pair = IssueLeaf(seed, now.AddDays(-1), now.Add(validity), subject),
+                    Publication = RevocationPublication.Both,
+                }],
+            };
+            Republish();
+            return _certificates.Single(c => c.Id == id);
+        }
+    }
+
     /// <summary>Keeps the serial number of a short-lived certificate (the last <see cref="ShortLivedKept"/>) for the OCSP responder.</summary>
     private void RememberShortLived(string issuerId, X509Certificate2 certificate)
     {
@@ -400,7 +454,7 @@ internal sealed class SandboxPki : IDisposable
             _state = _state with
             {
                 Faults = new SandboxFaults(),
-                Certificates = [.. _state.Certificates.Select(c => c with
+                Certificates = [.. _state.Certificates.Where(c => !IsCustom(c.Id)).Select(c => c with
                 {
                     RevokedAt = c.RevokedByDefault ? revokedAt : null,
                     RevocationReason = c.RevokedByDefault ? nameof(X509RevocationReason.KeyCompromise) : null,
@@ -556,6 +610,7 @@ internal sealed class SandboxPki : IDisposable
             UntrustedTsa = Pair(untrusted, untrustedKey),
             RogueOcspResponder = Pair(rogue, rogueKey),
             NextSerial = serial,
+            SigningCountry = options.SigningCountry is { Length: 2 } country && country.All(char.IsAsciiLetterUpper) ? country : "",
         };
     }
 
@@ -756,7 +811,7 @@ internal sealed class SandboxPki : IDisposable
         };
     }
 
-    private StoredKeyPair IssueLeaf(SeedDefinition seed, DateTimeOffset from, DateTimeOffset to)
+    private StoredKeyPair IssueLeaf(SeedDefinition seed, DateTimeOffset from, DateTimeOffset to, X500DistinguishedName? subjectName = null)
     {
         var issuer = Authority(seed.IssuerId);
         using AsymmetricAlgorithm key = seed.KeyType switch
@@ -771,9 +826,9 @@ internal sealed class SandboxPki : IDisposable
         };
         string holder = seed.Title.Split(" (")[0];
         var name = new X500DistinguishedNameBuilder();
-        if (seed.Usage == CertificateUsage.Signing)
+        if (seed.Usage == CertificateUsage.Signing && _state.SigningCountry.Length == 2)
         {
-            name.AddCountryOrRegion("BR");
+            name.AddCountryOrRegion(_state.SigningCountry);
         }
 
         name.AddOrganizationName("SimpleSign Sandbox");
@@ -789,7 +844,7 @@ internal sealed class SandboxPki : IDisposable
             CertificateUsage.TlsServer => BaseUrl.Host,
             _ => holder,
         });
-        var subject = name.Build();
+        var subject = subjectName ?? name.Build();
         var request = key switch
         {
             RSA rsa => new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1),
