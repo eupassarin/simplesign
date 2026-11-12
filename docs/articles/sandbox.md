@@ -65,6 +65,7 @@ Create another environment to use another address, for instance one a Docker con
 | `--ephemeral` | A new environment in a temporary folder, deleted on exit (CI) |
 | `--listen-any` | Listen on every interface (a lab network); the admin API still answers loopback only |
 | `--allow-remote-admin` | Let the admin API answer other machines too |
+| `--signing-country XX` | The country (C) of the seeded signers' subject when the environment is created (default `BR`; `none` for no C) |
 
 ## The PKI
 
@@ -88,6 +89,15 @@ An environment created before a CA was added gets it the next time it opens (its
 | `no-key-usage-extension` | No KeyUsage extension at all: refused by a policy that requires a signing key usage |
 | `no-nonrepudiation` | Signs; some validation policies flag it |
 | `tsa`, `tsa-revoked`, `tsa-expired` | The TSAs' certificates (`/tsa/tsr`, `/tsa/revoked`, `/tsa/expired`) |
+
+Signers with a chosen subject (`POST /api/certificates/custom`) are issued by the intermediate CA
+and listed with the others (id `custom-…`), so they can be revoked and downloaded the same way;
+**Back to normal** removes them. For instance, a Peruvian DNI signer:
+
+```bash
+curl -X POST http://localhost:5300/api/certificates/custom -H "Content-Type: application/json" \
+  -d '{"subject":"CN=Juan Pérez, serialNumber=PNOPE-12345678, C=PE","keyType":"EcdsaP256"}'
+```
 
 Every signer can be downloaded as a PKCS#12 (password in `GET /api/info`). **Revoke now** adds a
 certificate to its CA's CRL and OCSP answers at once (or to one of them only); **Back to normal**
@@ -125,6 +135,7 @@ drives the Sandbox the same way, with or without a TestBench, and what one clien
 | `GET /api/certificates/{id}/cer` | Its certificate (DER) | | `application/pkix-cert` |
 | `POST /api/certificates/{id}/revoke` | Revokes it now | `{"reason": "KeyCompromise", "publication": "Both" \| "CrlOnly" \| "OcspOnly"}` (both optional) | `CertificateView`, 400 for an unknown reason |
 | `POST /api/certificates/{id}/unrevoke` | Takes the revocation back | | `CertificateView` |
+| `POST /api/certificates/custom` | Issues a signer with a chosen subject under the intermediate CA (revocable, downloadable, removed by reset; at most 200) | `{"subject": "CN=…, serialNumber=…, C=PE"}` or `{"rdns": [{"type": "CN", "value": "…"}, …]}` (most specific first); optional `keyType` (`Rsa2048` default, `Rsa3072`, `Rsa4096`, `EcdsaP256/384/521`), `keyUsage` (`DigitalSignature`, `NonRepudiation`, `KeyEncipherment`, `DataEncipherment`, `KeyAgreement`; default the first two; `[]` for no extension), `title`, `validityDays` (1–825, default 365). Accepted attributes: `CN` (required), `serialNumber`, `C`, `O`, `OU`, `L`, `ST`, `T`, `G`/`GN`, `SN`, `organizationIdentifier`; 1–64 characters, 16 at most | 201 `CertificateView`, 400 for an invalid subject |
 | `POST /api/certificates/short-lived?seconds=3` | Issues a signer that expires in 1–3600 s (valid from two hours back, before the CRLs and OCSP responses it is checked against) | | `application/x-pkcs12` |
 | `GET /api/faults` | The failures | | `SandboxFaults` |
 | `PUT /api/faults` | Replaces every failure | `SandboxFaults` (fields left out take their default) | `SandboxFaults` |
@@ -132,7 +143,7 @@ drives the Sandbox the same way, with or without a TestBench, and what one clien
 | `DELETE /api/faults` | Every failure off (the delays and `ocspSigner` stay) | | `SandboxFaults` |
 | `GET /api/log` | Requests answered, oldest first | `after` (id), `limit` (1–500: the newest N), `service` (`AIA`, `CRL`, `CRL (LDAP)`, `OCSP`, `TSA`, `CSC`, `TL`) | `SandboxRequest[]` |
 | `DELETE /api/log` | Clears the request log | | 204 |
-| `POST /api/reset` | Back to the initial state: revocations, failures off, log cleared | | 204 |
+| `POST /api/reset` | Back to the initial state: revocations, failures off, log cleared, signers issued on request removed | | 204 |
 
 `SandboxFaults` fields: `tsa` (`None`, `Down`, `Slow`, `InvalidToken`, `Untrusted`), `crl` (`None`,
 `Down`, `Slow`, `Expired`, `WrongKey`, `Stale`, `NoNextUpdate`), `ocsp` (`None`, `Down`, `Slow`, `TryLater`, `Expired`,

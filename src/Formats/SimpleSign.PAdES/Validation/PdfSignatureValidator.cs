@@ -217,6 +217,15 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pdfStream);
+        return await SimpleSign.Core.Diagnostics.Telemetry.MeasureValidationAsync(
+            "PAdES", () => ValidateCoreAsync(pdfStream, operationId, cancellationToken), r => r.Select(x => x.Indication.ToString())).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<SignatureValidationResult>> ValidateCoreAsync(
+        Stream pdfStream,
+        string? operationId,
+        CancellationToken cancellationToken)
+    {
         operationId ??= System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N")[..8];
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -261,7 +270,13 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     {
         ArgumentNullException.ThrowIfNull(pdfStream);
         ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        return await SimpleSign.Core.Diagnostics.Telemetry.MeasureValidationAsync(
+            "PAdES", () => ValidateFieldCoreAsync(pdfStream, fieldName, cancellationToken),
+            r => r is null ? [] : [r.Indication.ToString()]).ConfigureAwait(false);
+    }
 
+    private async Task<SignatureValidationResult?> ValidateFieldCoreAsync(Stream pdfStream, string fieldName, CancellationToken cancellationToken)
+    {
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(pdfStream, logger: _logger, cancellationToken: cancellationToken).ConfigureAwait(false);
         var field = fields.FirstOrDefault(f => f.FieldName == fieldName);
         if (field is null)

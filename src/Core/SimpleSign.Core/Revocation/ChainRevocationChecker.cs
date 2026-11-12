@@ -294,9 +294,28 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
     /// <summary>Downloads a CRL; <paramref name="useCache"/> false skips the cached copies (the download still refreshes them).</summary>
     private async Task<byte[]?> DownloadCrlAsync(string url, bool useCache, CancellationToken cancellationToken)
     {
+        var telemetry = Diagnostics.Telemetry.Crl.Start();
+        string? host = telemetry.IsActive ? Diagnostics.Telemetry.HostOf(url) : null;
+        bool cacheHit = false;
+        byte[]? crl = null;
+        try
+        {
+            (crl, cacheHit) = await DownloadCrlCoreAsync(url, useCache, cancellationToken).ConfigureAwait(false);
+            return crl;
+        }
+        finally
+        {
+            telemetry.Complete(crl is null ? Diagnostics.SimpleSignTelemetry.Outcomes.Error : Diagnostics.SimpleSignTelemetry.Outcomes.Success,
+                [new(Diagnostics.SimpleSignTelemetry.Tags.ServerAddress, host), new(Diagnostics.SimpleSignTelemetry.Tags.CacheHit, Diagnostics.Telemetry.Boxed(cacheHit))]);
+        }
+    }
+
+    /// <summary>The CRL at <paramref name="url"/> and whether it came from a cache; null when it cannot be fetched.</summary>
+    private async Task<(byte[]? Crl, bool CacheHit)> DownloadCrlCoreAsync(string url, bool useCache, CancellationToken cancellationToken)
+    {
         if (useCache && Cache.TryGet(url, out var cached))
         {
-            return cached;
+            return (cached, true);
         }
 
         string? file = CacheDirectory is null
@@ -305,7 +324,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         if (useCache && file is not null && TryReadCurrent(file) is { } fromDisk)
         {
             Remember(url, fromDisk);
-            return fromDisk;
+            return (fromDisk, true);
         }
 
         try
@@ -322,7 +341,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
                 }
             }
 
-            return bytes;
+            return (bytes, false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -332,7 +351,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             or System.Net.Sockets.SocketException or IOException or InvalidDataException
             or System.Formats.Asn1.AsnContentException or System.Security.Authentication.AuthenticationException)
         {
-            return null;
+            return (null, false);
         }
     }
 

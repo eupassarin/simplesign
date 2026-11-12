@@ -72,6 +72,19 @@ never logged. For readers with a PIN pad, leave `Pin` null and the PIN is typed 
 common cases, and `ReturnValueName` gives the `CKR_*` name for the rest. Tokens lock the PIN after a
 few wrong attempts, so do not retry a wrong PIN automatically.
 
+Before asking for the PIN, `ListTokens` tells what the token reports about it (`CK_TOKEN_INFO.flags`), so the user
+can be warned before a typo locks the token:
+
+| Property | Flag | Meaning |
+|---|---|---|
+| `IsPinLocked` | `CKF_USER_PIN_LOCKED` | Locked; unlock it with the PUK in the vendor's tool |
+| `IsPinFinalTry` | `CKF_USER_PIN_FINAL_TRY` | One more wrong PIN locks it |
+| `IsPinCountLow` | `CKF_USER_PIN_COUNT_LOW` | A wrong PIN was typed since the last good one |
+| `IsPinToBeChanged` | `CKF_USER_PIN_TO_BE_CHANGED` | The PIN is the initial or issuer one and must be changed |
+| `IsUserPinInitialized` | `CKF_USER_PIN_INITIALIZED` | A user PIN is set |
+
+Drivers that do not count attempts (SoftHSM among them) never set `IsPinCountLow` or `IsPinFinalTry`.
+
 ## Supported algorithms
 
 | Key | Signature | PKCS#11 mechanism |

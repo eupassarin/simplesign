@@ -7,6 +7,7 @@ using System.Text.Json;
 using Shouldly;
 using SimpleSign.Agent.Server;
 using SimpleSign.Agent.Services;
+using SimpleSign.TestHelpers;
 
 namespace SimpleSign.Agent.Tests;
 
@@ -108,9 +109,62 @@ public sealed class AgentServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Certificates_TrustAndSigningOnly_ListOnlyMatchingCertificates()
+    {
+        using var pki = new SyntheticPki();
+        using var expired = Fixtures.RsaCertificate("CN=Expired", validDays: -1);
+        var services = new AgentServices(_services.Settings, _dialogs)
+        {
+            TrustFrameworks = new TrustFrameworks(
+                [new TrustFramework("lab", new Lazy<SimpleSign.Core.Extensions.ICountryExtension>(() => new TrustFrameworksTests.TestExtension("XX", pki)))]),
+        };
+        CertificateEntry[] entries =
+        [
+            new(CertificateSourceKind.File, _certificate, FilePath: "a.pfx"),
+            new(CertificateSourceKind.File, pki.Leaf, FilePath: "b.pfx"),
+            new(CertificateSourceKind.File, expired, FilePath: "c.pfx"),
+        ];
+        _dialogs.Site = ConsentDecision.AllowAlways;
+        int port = FreePort();
+        await using var agent = new AgentServer(services, new TokenSessionCache(), _ => Task.FromResult<IReadOnlyList<CertificateEntry>>(entries));
+        await agent.StartAsync(port);
+
+        async Task<string> List(string query)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"http://127.0.0.1:{port}/api/certificates{query}"));
+            request.Headers.Add("Origin", "https://portal.example.com");
+            using var response = await _http.SendAsync(request);
+            return $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}";
+        }
+
+        string byTrust = await List("?trust=lab");
+        string byCountry = await List("?country=xx");
+        string signingOnly = await List("?signingOnly=true");
+        string unknown = await List("?country=ZZ");
+
+        byTrust.ShouldStartWith("200");
+        byTrust.ShouldContain(pki.Leaf.Thumbprint);
+        byTrust.ShouldNotContain(_certificate.Thumbprint);
+        byCountry.ShouldBe(byTrust);
+        signingOnly.ShouldContain(_certificate.Thumbprint);
+        signingOnly.ShouldNotContain(expired.Thumbprint);
+        unknown.ShouldStartWith("400");
+        unknown.ShouldContain("lab (XX)");
+    }
+
+    [Fact]
+    public async Task Certificates_FilterIcpBrasil_StillLeavesOutOtherCertificates()
+    {
+        using var response = await Send(HttpMethod.Get, "/api/certificates?filterIcpBrasil=true", "https://portal.example.com");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldBe("[]");
+    }
+
+    [Fact]
     public async Task Sign_UserConsents_SignsWithTheOldHostSignerContract()
     {
-        byte[] attributes = Encoding.UTF8.GetBytes("signed attributes");
+        byte[] attributes = SelfTest.SignedAttributes(SHA256.HashData("contrato"u8));
         string body = $$"""{"thumbprint":"{{_certificate.Thumbprint}}","hashAlgorithm":"SHA256","documentName":"contrato.pdf","signRequests":[{"id":"7","authenticatedAttributeBase64":"{{Convert.ToBase64String(attributes)}}"}]}""";
 
         using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", body);
@@ -123,15 +177,57 @@ public sealed class AgentServerTests : IAsyncLifetime
         using var rsa = _certificate.GetRSAPublicKey()!;
         rsa.VerifyData(attributes, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1).ShouldBeTrue();
         _dialogs.Asked.Last().Message.ShouldContain("contrato.pdf");
+        _dialogs.Asked.Last().Message.ShouldContain(Convert.ToHexString(SHA256.HashData("contrato"u8))[..8]);
     }
+
+    [Fact]
+    public async Task Sign_SignedAttributesOfACadesSigner_SignsThem()
+    {
+        byte[]? attributes = null;
+        var capture = new SimpleSign.Core.Signing.DelegatingExternalSigner(data =>
+        {
+            attributes ??= data;
+            using var key = _certificate.GetRSAPrivateKey()!;
+            return Task.FromResult(key.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+        });
+        await SimpleSign.CAdES.CadesSigner.Document("contract"u8.ToArray()).WithExternalSigner(_certificate, capture)
+            .WithSigningPolicy(SimpleSign.TestHelpers.TestPolicies.SigningDatesOnly).SignAsync();
+
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", SignBody(attributes!));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("signedHashBase64");
+    }
+
+    [Fact]
+    public async Task Sign_RawBytes_BadRequestWithoutAsking()
+    {
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", SignBody(SHA256.HashData("document"u8)));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("SignedInfo");
+        _dialogs.Asked.ShouldAllBe(asked => string.IsNullOrEmpty(asked.CertificateHolder));
+    }
+
+    [Fact]
+    public async Task Sign_NotBase64_BadRequest()
+    {
+        string body = $$"""{"thumbprint":"{{_certificate.Thumbprint}}","signRequests":[{"id":"1","authenticatedAttributeBase64":"not base64!"}]}""";
+
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", body);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    private string SignBody(byte[] data) =>
+        $$"""{"thumbprint":"{{_certificate.Thumbprint}}","signRequests":[{"id":"1","authenticatedAttributeBase64":"{{Convert.ToBase64String(data)}}"}]}""";
 
     [Fact]
     public async Task Sign_UserRefuses_Forbidden()
     {
         _dialogs.Signature = ConsentDecision.Deny;
-        string body = $$"""{"thumbprint":"{{_certificate.Thumbprint}}","signRequests":[{"id":"1","authenticatedAttributeBase64":"AA=="}]}""";
 
-        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", body);
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", SignBody(SelfTest.Payload));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }

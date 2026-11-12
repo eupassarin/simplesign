@@ -50,6 +50,7 @@ internal static class CkConstants
     internal const ulong CkfUserPinCountLow = 0x10000;
     internal const ulong CkfUserPinFinalTry = 0x20000;
     internal const ulong CkfUserPinLocked = 0x40000;
+    internal const ulong CkfUserPinToBeChanged = 0x80000;
 
     // User types
     internal const ulong CkuUser = 1;

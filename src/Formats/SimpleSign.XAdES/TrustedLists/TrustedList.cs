@@ -218,6 +218,24 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
     /// <exception cref="InvalidDataException">The XML is not a trusted list, or its NextUpdate has passed.</exception>
     public static TrustedList Load(byte[] xml, TrustedListOptions options)
     {
+        var telemetry = SimpleSign.Core.Diagnostics.Telemetry.TrustedList.Start();
+        try
+        {
+            var list = LoadCore(xml, options);
+            telemetry.Complete(SimpleSign.Core.Diagnostics.SimpleSignTelemetry.Outcomes.Success,
+                [new(SimpleSign.Core.Diagnostics.SimpleSignTelemetry.Tags.TrustAnchors, telemetry.IsActive ? list.GetTrustAnchors().Count : null)]);
+            return list;
+        }
+        catch (Exception ex)
+        {
+            telemetry.Complete(ex is CryptographicException or InvalidDataException
+                ? SimpleSign.Core.Diagnostics.SimpleSignTelemetry.Outcomes.Refused : SimpleSign.Core.Diagnostics.SimpleSignTelemetry.Outcomes.Error);
+            throw;
+        }
+    }
+
+    private static TrustedList LoadCore(byte[] xml, TrustedListOptions options)
+    {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(options);
         if (options.SignerCertificates.Count == 0)
