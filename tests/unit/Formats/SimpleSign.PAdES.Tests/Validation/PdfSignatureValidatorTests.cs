@@ -417,6 +417,30 @@ public sealed class PdfSignatureValidatorTests
         results[0].ChainValidationRegion.ShouldBe("XX");
     }
 
+    [Fact]
+    public async Task ValidateAsync_ExpiredTrustedListInOptions_EvaluatesTrustedListConstraints()
+    {
+        using X509Certificate2 cert = CreateRsaCertWithKey();
+        byte[] pdfBytes = BuildMinimalPdfForSigning();
+        using MemoryStream outputStream = new MemoryStream();
+        await PadesSigner.Document(pdfBytes).WithCertificate(cert).SignAsync(outputStream);
+        var list = new TrustedListInfo("ZZ", null, "5", DateTimeOffset.UtcNow.AddMonths(-7), DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow, IsWellSigned: true, [cert]);
+
+        // No trust anchor provider: the list comes from the options alone, as the CLI gives it.
+        var validator = new PdfSignatureValidator(
+            new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false, TrustedRoots = [cert], TrustedLists = [list] },
+            httpClient: null,
+            logger: null);
+
+        using MemoryStream signedStream = new MemoryStream(outputStream.ToArray());
+        IReadOnlyList<SignatureValidationResult> results = await validator.ValidateAsync(signedStream);
+
+        // Default policy: TLNotExpired is a warning.
+        results.ShouldHaveSingleItem().Constraints
+            .ShouldContain(c => c.Id == "TrustedLists/TLNotExpired" && c.Status == ConstraintStatus.Warning);
+    }
+
     [Fact(DisplayName = "Providers receive the validation context with the parsed signature")]
     public async Task ValidateAsync_WithMatchingProvider_PassesContext()
     {

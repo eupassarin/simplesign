@@ -116,6 +116,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             CheckRevocation = !settings.NoRevocation,
             TrustSystemRoots = !settings.NoSystemRoots,
             TrustedRoots = roots.Count == 0 ? null : roots,
+            TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
             TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
             Policy = policy,
             Level = settings.ValidationLevel,

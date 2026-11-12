@@ -1341,10 +1341,16 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
     }
 
-    /// <summary>The trusted lists behind the trust anchor providers, for the eIDAS constraints of the policy.</summary>
+    /// <summary>
+    /// The trusted lists of <see cref="ValidationOptions.TrustedLists"/> and those behind the trust anchor providers, for
+    /// the eIDAS constraints of the policy; a list given both ways counts once.
+    /// </summary>
     private IReadOnlyList<TrustedListInfo>? TrustedListInfos()
     {
-        var lists = _trustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists).ToList();
+        var lists = (_options.TrustedLists ?? [])
+            .Concat(_trustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists))
+            .Distinct()
+            .ToList();
         return lists.Count == 0 ? null : lists;
     }
 

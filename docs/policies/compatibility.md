@@ -128,6 +128,6 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
-| `TLFreshness`, `TLNotExpired`, `TLWellSigned`, `TLVersion` | same | evaluated | PAdES reads the lists from its trust anchor providers; CAdES and XAdES from `ValidationOptions.TrustedLists`. |
+| `TLFreshness`, `TLNotExpired`, `TLWellSigned`, `TLVersion` | same | evaluated | Every validator reads the lists from `ValidationOptions.TrustedLists`; PAdES also from its trust anchor providers. |
 | `TLStructure` | same | evaluated | The list against the TS 119 612 schema (embedded); `TrustedListInfo.IsStructureValid`. |
 | `LoTEFreshness`, `LoTENotExpired`, `LoTEWellSigned`, `LoTEVersion`, `LoTEStructure` | same | removed | Lists of trusted entities (TS 119 602) of the EU identity wallet. |

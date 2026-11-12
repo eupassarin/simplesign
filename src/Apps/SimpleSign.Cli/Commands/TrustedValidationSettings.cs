@@ -211,9 +211,10 @@ internal class TrustedValidationSettings : CommonSettings
             anchors.AddRange(provider.GetIntermediateCertificates());
         }
 
+        // An expired list is kept: the TLNotExpired constraint of the policy judges it, as EU DSS does.
         if (TrustedList is not null)
         {
-            var options = new TrustedListOptions { SignerCertificates = [LoadCertificate(TrustedListSignerPath!)] };
+            var options = new TrustedListOptions { SignerCertificates = [LoadCertificate(TrustedListSignerPath!)], RejectExpired = false };
             var list = Uri.TryCreate(TrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"
                 ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, http, cancellationToken: cancellationToken)
                 : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(TrustedList, cancellationToken), options);
@@ -229,6 +230,7 @@ internal class TrustedValidationSettings : CommonSettings
                 LotlLocation = new Uri(Lotl),
                 LotlSignerCertificates = [LoadCertificate(LotlSignerPath!)],
                 Territories = LotlTerritories,
+                Services = new TrustedListOptions { RejectExpired = false },
             }, http, cancellationToken);
             anchors.AddRange(set.GetTrustAnchors());
             LoadedTrustedLists.AddRange(set.TrustedLists);

@@ -54,9 +54,12 @@ sections = [
          sign("tsl-expired", "Expired TSL: refused", ["F-2", "tsl"], refused("UntrustedRoot"), sandbox={"trustedList": "Expired"}, signingControls=TSL,
               desc="The published TSL has its NextUpdate in the past."),
          validate("v-tsl-ok", "Validate with anchors from the TSL", ["V-1", "V-3", "tsl"], "step:tsl-ok", {"outcome": "valid"}, trust=["SandboxTrustedList"]),
-         validate("v-tsl-wrong-signer", "Validate with a fake TSL", ["V-1", "tsl"], "step:tsl-ok", {"outcome": "indeterminate"},
+         # A list whose signature fails is not used: no anchor. An expired one is used, and IOFE's TLNotExpired (FAIL) judges it.
+         validate("v-tsl-wrong-signer", "Validate with a fake TSL", ["V-1", "tsl"], "step:tsl-ok",
+                  {"outcome": "indeterminate", "subIndication": "NO_CERTIFICATE_CHAIN_FOUND"},
                   sandbox={"trustedList": "WrongSigner"}, trust=["SandboxTrustedList"]),
-         validate("v-tsl-expired", "Validate with an expired TSL", ["V-2", "tsl"], "step:tsl-ok", {"outcome": "indeterminate"},
+         validate("v-tsl-expired", "Validate with an expired TSL", ["V-2", "tsl"], "step:tsl-ok",
+                  {"outcome": "indeterminate", "subIndication": "TRY_LATER"},
                   sandbox={"trustedList": "Expired"}, trust=["SandboxTrustedList"]),
      ]},
     {"id": "revocation", "title": "Revocation before signing (CRL and OCSP)", "steps": [

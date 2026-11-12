@@ -95,6 +95,31 @@ internal static class PlaybookExpectations
         };
     }
 
+    /// <summary>
+    /// Where the library and CLI runs of a step disagree: whether the run succeeded, the reason of a refusal, the
+    /// indication, sub-indication and level of the first signature. Empty unless the step ran through both engines.
+    /// </summary>
+    public static IReadOnlyList<PlaybookEngineDifference> EngineDifferences(IReadOnlyList<PlaybookEngineRun> runs)
+    {
+        var library = runs.FirstOrDefault(r => r.Engine == RunEngines.Library);
+        var cli = runs.FirstOrDefault(r => r.Engine == RunEngines.Cli);
+        if (library is null || cli is null)
+        {
+            return [];
+        }
+
+        (string What, string? Library, string? Cli)[] fields =
+        [
+            ("success", library.Success ? "true" : "false", cli.Success ? "true" : "false"),
+            ("reason", ReasonOf(library.ErrorType), ReasonOf(cli.ErrorType)),
+            ("indication", library.Indication, cli.Indication),
+            ("subIndication", library.SubIndication, cli.SubIndication),
+            ("level", library.AchievedLevel, cli.AchievedLevel),
+        ];
+        return [.. fields.Where(f => !string.Equals(f.Library, f.Cli, StringComparison.OrdinalIgnoreCase))
+            .Select(f => new PlaybookEngineDifference(f.What, f.Library, f.Cli))];
+    }
+
     /// <summary>signed, refused, error (a sign run) or valid, invalid, indeterminate (the first signature's verdict).</summary>
     internal static string OutcomeOf(RunView view, string? indication)
     {

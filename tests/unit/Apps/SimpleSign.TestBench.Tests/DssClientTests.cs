@@ -221,6 +221,27 @@ public sealed class DssClientTests
         DssClient.ReadConfig(text).ShouldBeNull();
 
     [Fact]
+    public void LastDownload_SummaryOfTwoLists_IsBothTimes() =>
+        DssClient.LastDownload("Trusted Lists Summary\n  Last download attempt \n\n   12-Nov-2026 22:57:12   Last success download 12-Nov-2026 22:57:12\n"
+            + "Last download attempt  Download result\n Last download attempt\n 12-Nov-2026 22:57:13")
+            .ShouldBe("12-Nov-2026 22:57:12 | 12-Nov-2026 22:57:13");
+
+    [Fact]
+    public void LastDownload_NoSuchLine_IsEmpty() =>
+        DssClient.LastDownload("Not found").ShouldBeEmpty();
+
+    [Fact]
+    public async Task WaitForTrustedListRefreshAsync_NoDss_SaysWhyAtOnce()
+    {
+        using var client = new DssClient(new SimpleSign.TestBench.Documents.DocumentStore()) { Settings = new DssSettings(true, "http://127.0.0.1:9") };
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        (await client.WaitForTrustedListRefreshAsync(TimeSpan.FromSeconds(30), default)).ShouldNotBeNull();
+
+        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
     public void Policy_Default_IsTheConstraintXmlSentWithoutWhatDss63DoesNotKnow()
     {
         var policy = DssClient.Policy();

@@ -253,6 +253,10 @@ internal sealed class RunService(
         return run;
     }
 
+    /// <summary>Waits, up to <paramref name="timeout"/>, until DSS has downloaded its trusted lists again: null when it did, otherwise why not.</summary>
+    public Task<string?> WaitForDssTrustedListsAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
+        dss.WaitForTrustedListRefreshAsync(timeout, cancellationToken);
+
     /// <summary>Runs to completion (used by the tests and the variants runner).</summary>
     public async Task<RunView> RunAsync(RunRequest request, CancellationToken cancellationToken)
     {
