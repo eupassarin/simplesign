@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Constants;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
@@ -419,6 +420,31 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
     /// </summary>
     internal static Task<byte[]> SignPreparedAsync(CredentialHandle credential, DeferredSigningPrepareResult prepared, SigningPlan plan, CancellationToken cancellationToken) =>
         SignToBeSignedAsync(credential, prepared.HashToSign, prepared.SignatureAlgorithmOid, plan, cancellationToken);
+
+    /// <summary>
+    /// The signer of a two-phase signature: signs the request phase one handed out (signed attributes or canonical
+    /// SignedInfo) with the credential — its external signer, or its local key.
+    /// </summary>
+    internal static async Task<byte[]> SignRequestAsync(CredentialHandle credential, ExternalSigningRequest request, CancellationToken cancellationToken) =>
+        credential.External is { } external
+            ? (await external.SignAsync(request, cancellationToken)).ToArray()
+            : SignWithLocalKey(credential, request.DataToSign.ToArray(), request.HashAlgorithm, request.SignatureAlgorithmOid == Oids.RsaPss);
+
+    /// <summary>Signs data (the key hashes it) with the credential's local key: RSA PKCS#1 v1.5 or PSS, or ECDSA as a DER sequence.</summary>
+    internal static byte[] SignWithLocalKey(CredentialHandle credential, byte[] toSign, HashAlgorithmName hash, bool pss)
+    {
+        var certificate = credential.Certificate;
+        if (certificate.GetRSAPrivateKey() is { } rsa)
+        {
+            using (rsa)
+            {
+                return rsa.SignData(toSign, hash, pss ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1);
+            }
+        }
+
+        using var ec = certificate.GetECDsaPrivateKey() ?? throw new CryptographicException("The certificate has no usable private key.");
+        return ec.SignData(toSign, hash, DSASignatureFormat.Rfc3279DerSequence);
+    }
 
     /// <summary>Signs DER signed attributes (the signer hashes them) with the credential: its local key or its external signer.</summary>
     internal static async Task<byte[]> SignToBeSignedAsync(CredentialHandle credential, byte[] toSign, string signatureAlgorithmOid, SigningPlan plan, CancellationToken cancellationToken)

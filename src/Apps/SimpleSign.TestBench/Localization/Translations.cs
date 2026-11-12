@@ -402,6 +402,9 @@ internal static class Translations
         // ── Runs through the CLI ───────────────────────────────────────
         ["The CLI ended with exit code {0}: {1}"] = "O CLI terminou com código de saída {0}: {1}",
         ["The CLI wrote no output file."] = "O CLI não gravou nenhum arquivo de saída.",
+        ["Between the two commands, the signer hashes {0}.tbs and signs it; signature.bin is the raw signature."] = "Entre os dois comandos, o signatário faz o hash de {0}.tbs e o assina; signature.bin é a assinatura bruta.",
+        ["Two phases"] = "Duas fases",
+        ["Prepare on the server, have the key sign the data elsewhere and complete from the session: the signing policy runs when the signature is prepared, and every option of one-call signing applies."] = "Prepara no servidor, a chave assina os dados em outro lugar e a sessão é concluída: a política de assinatura roda na preparação, e todas as opções da assinatura em uma chamada valem.",
         ["simplesign sign-dir draws no stamp: the CLI's --visible is on sign only."] = "O simplesign sign-dir não desenha carimbo: o --visible do CLI só existe no sign.",
         ["Choose a document first."] = "Escolha um documento primeiro.",
         ["No SimpleSign Sandbox is connected."] = "Nenhum SimpleSign Sandbox está conectado.",

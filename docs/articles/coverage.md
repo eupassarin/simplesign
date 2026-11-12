@@ -13,8 +13,8 @@ from the published standards; check them against the version you follow before q
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
 | PAdES | 115 | 114 | 1 |
-| CAdES | 63 | 62 | 1 |
-| XAdES | 71 | 67 | 4 |
+| CAdES | 64 | 63 | 1 |
+| XAdES | 72 | 68 | 4 |
 
 ## PAdES
 
@@ -200,6 +200,7 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signed attributes | Content description | ETSI EN 319 122-1 · §5.2.4 Attributes for identifying the signed data type<br>RFC 2634 · §2.9 Content hints | `WithContentHints(new CadesContentHints { Description })` | yes |
 | Signed attributes | Attribute certificate | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2<br>RFC 5755 · Attribute certificate profile | `WithAttributeCertificates(IReadOnlyList<ReadOnlyMemory<byte>>)` | yes |
 | Signed attributes | Signed assertion (SAML) | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2<br>ETSI EN 319 132-1 · §5.2.6 SignerRoleV2 | `WithSignedAssertions(…)` | yes |
+| Run and validation | Two phases |  | `CadesDeferredSigner / XadesDeferredSigner: From(builder)…PrepareAsync() → Resume(session, key)…CompleteWithDetailsAsync(signature)` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
 | Run and validation | Attempt refused signatures |  | `SigningException.Reason` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
@@ -278,6 +279,7 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signed attributes | Production place: state or province | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { StateOrProvince })` | yes |
 | Signed attributes | Production place: postal code | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { PostalCode })` | yes |
 | Signed attributes | Production place: country | ETSI EN 319 132-1 · §5.2.5 SignatureProductionPlaceV2 | `WithSignatureProductionPlace(new SignatureProductionPlace { CountryName })` | yes |
+| Run and validation | Two phases |  | `CadesDeferredSigner / XadesDeferredSigner: From(builder)…PrepareAsync() → Resume(session, key)…CompleteWithDetailsAsync(signature)` | yes |
 | Run and validation | Operation id |  | `WithOperationId(string)` | yes |
 | Run and validation | Attempt refused signatures |  | `SigningException.Reason` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |

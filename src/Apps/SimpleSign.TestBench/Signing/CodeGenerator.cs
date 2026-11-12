@@ -209,7 +209,7 @@ internal static class CodeGenerator
         }
     }
 
-    private static bool HasTsaCredentials(TimestampChoice choice) =>
+    internal static bool HasTsaCredentials(TimestampChoice choice) =>
         choice.Provider == TsaProvider.SandboxAuthenticated || choice.Auth != TsaAuth.None || !string.IsNullOrEmpty(choice.ClientCertificateUploadId);
 
     /// <summary>The level: the TSA (and its credentials), --ltv, --archival, a separate archive TSA, the revocation source.</summary>
