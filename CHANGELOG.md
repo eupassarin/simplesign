@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `DataToSignInspector`: what is about to be signed; the Agent signs only signature data
+
+- `DataToSignInspector.Inspect(data, certificate)` recognizes the two `ExternalSigningPayloadKind`s: DER CMS signed
+  attributes (one `contentType`, one `messageDigest`, and a `signingCertificateV2`/`signingCertificate` that must name
+  the given certificate) and a canonical XML-DSig `SignedInfo` (no declaration or DTD, its methods, at least one
+  reference with a digest). It returns the kind, the digests with their algorithm (`DataToSignDigest.ToShortString()`
+  for a consent dialog) or the reason for refusing (`DataToSignRefusal`).
+- **Behavior change — SimpleSign.Agent:** `POST /api/sign` now refuses, with 400 and before asking the user, any item
+  that is not signed attributes or a `SignedInfo` (a raw hash, a document, bytes of another protocol), and the
+  confirmation dialog shows the digest being signed. Token signatures carry the detected payload kind. The self-test
+  signs real signed attributes.
+
 ### Added — `SigningCertificateCheck`: will this certificate be accepted?
 
 - `SigningCertificateCheck.EvaluateAsync(certificate, SigningCertificateCheckOptions)` runs the checks the signers

@@ -53,7 +53,7 @@ keeps the former HostSigner contract, so existing integrations work:
 |----------|---|
 | `GET /api/health` | `{ "status": "ok", "version": "…", "app": "SimpleSign Agent" }` — no permission needed. |
 | `GET /api/certificates?source=all\|store\|pkcs11&filterIcpBrasil=true` | Store and token certificates (`source`, `tokenLabel` are new fields). |
-| `POST /api/sign` | `{ thumbprint, hashAlgorithm, documentName?, signRequests: [{ id, authenticatedAttributeBase64 }] }` → `[{ id, signedHashBase64 }]`. The bytes are hashed with `hashAlgorithm` and signed (RSA PKCS#1 v1.5; ECDSA as IEEE P1363, as before). |
+| `POST /api/sign` | `{ thumbprint, hashAlgorithm, documentName?, signRequests: [{ id, authenticatedAttributeBase64 }] }` → `[{ id, signedHashBase64 }]`. The bytes — CMS signed attributes or an XML-DSig `SignedInfo`, nothing else — are hashed with `hashAlgorithm` and signed (RSA PKCS#1 v1.5; ECDSA as IEEE P1363, as before). |
 
 ```js
 await fetch("http://127.0.0.1:21590/api/health");
@@ -78,7 +78,12 @@ Error messages (`{ "error": "…" }`) are in the agent's language; rely on the H
   allow once, always (saved, removable in **Sites**) or refuse. A blocked site is refused without
   asking. `null`, `file://` and other non-http(s) origins are refused. CORS echoes only the
   requesting site; Chrome's Private Network Access preflight is answered.
-- **Every signature is confirmed** in a dialog, showing the site, the document name and the certificate.
+- **Only signature data is signed.** Each item must be DER CMS signed attributes (with `contentType` and
+  `messageDigest`; a `signingCertificateV2` must name the chosen certificate) or a canonical XML-DSig `SignedInfo`
+  (`DataToSignInspector` in SimpleSign.Core). A raw hash or any other bytes are refused with 400 before the user is
+  asked.
+- **Every signature is confirmed** in a dialog, showing the site, the document name, the certificate and the digest
+  being signed (such as `SHA256 1A2B3C4D…5E6F7A8B`).
 - **The PIN never crosses the API.** Token PINs are typed in the agent's dialog (or on the reader's
   PIN pad) and kept in memory only for `pinCacheMinutes` (default 0: ask every time).
 - **The window has no HTTP API.** Settings, sites and the log are changed only in the app itself.

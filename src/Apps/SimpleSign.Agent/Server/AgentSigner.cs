@@ -107,9 +107,13 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
         var items = request.SignRequests ?? [];
         var entry = (await _certificates(cancellationToken)).FirstOrDefault(e => Same(e, request.Thumbprint))
             ?? throw new KeyNotFoundException(L.T("api.certificateNotFound", request.Thumbprint));
+        var payloads = Inspect(items, entry.Certificate);
         string what = request.DocumentName is { Length: > 0 } name ? $"“{Trim(name, 80)}”" : L.T("consent.sign.documents", items.Count);
+        string digest = payloads[0].Inspection.Digests[0].ToShortString();
+        string message = L.T("consent.sign.message", originLabel, what, entry.Holder) + " "
+            + (payloads.Count == 1 ? L.T("consent.sign.digest", digest) : L.T("consent.sign.digests", digest, payloads.Count - 1));
         var decision = await services.Dialogs.AskConsentAsync(new ConsentRequest(originLabel, L.T("consent.sign.title"),
-            L.T("consent.sign.message", originLabel, what, entry.Holder), entry.Holder, OfferRemember: false));
+            message, entry.Holder, OfferRemember: false));
         if (decision == ConsentDecision.Deny)
         {
             return null;
@@ -124,11 +128,47 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
                 return null;
             }
 
-            return [.. await Task.WhenAll(items.Select((item, i) => SignWithTokenAsync(signer, item, i, hash, cancellationToken)))];
+            return [.. await Task.WhenAll(payloads.Select(p => SignWithTokenAsync(signer, p, hash, cancellationToken)))];
         }
 
-        return [.. items.Select((item, i) => SignWithStore(entry.Certificate, item, i, hash))];
+        return [.. payloads.Select(p => SignWithStore(entry.Certificate, p, hash))];
     }
+
+    /// <summary>
+    /// Decodes and inspects every item before the user is asked: only CMS signed attributes (naming the chosen
+    /// certificate when they name one) or an XML-DSig SignedInfo are signed, never raw bytes.
+    /// </summary>
+    /// <exception cref="AgentRequestException">An item is not base64 or not data the agent signs.</exception>
+    internal static List<Payload> Inspect(IReadOnlyList<AgentSignRequestItem> items, X509Certificate2 certificate)
+    {
+        var payloads = new List<Payload>(items.Count);
+        for (int i = 0; i < items.Count; i++)
+        {
+            string id = items[i].Id ?? i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            byte[] data;
+            try
+            {
+                data = Convert.FromBase64String(items[i].AuthenticatedAttributeBase64 ?? "");
+            }
+            catch (FormatException)
+            {
+                throw new AgentRequestException(L.T("api.itemNotBase64", id));
+            }
+
+            var inspection = DataToSignInspector.Inspect(data, certificate);
+            if (!inspection.IsAccepted)
+            {
+                throw new AgentRequestException(L.T("api.itemRefused", id, inspection.Message ?? ""));
+            }
+
+            payloads.Add(new Payload(id, data, inspection));
+        }
+
+        return payloads;
+    }
+
+    /// <summary>An item of a request, decoded and inspected.</summary>
+    internal sealed record Payload(string Id, byte[] Data, DataToSignInspection Inspection);
 
     private async Task<Pkcs11Signer?> OpenTokenAsync(CertificateEntry entry)
     {
@@ -156,36 +196,32 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
         return signer;
     }
 
-    private static AgentSignResult SignWithStore(X509Certificate2 certificate, AgentSignRequestItem item, int index, HashAlgorithmName hash)
+    private static AgentSignResult SignWithStore(X509Certificate2 certificate, Payload payload, HashAlgorithmName hash)
     {
-        string id = item.Id ?? index.ToString(System.Globalization.CultureInfo.InvariantCulture);
         try
         {
-            byte[] data = Convert.FromBase64String(item.AuthenticatedAttributeBase64 ?? "");
             using var rsa = certificate.GetRSAPrivateKey();
             if (rsa is not null)
             {
-                return new AgentSignResult { Id = id, SignedHashBase64 = Convert.ToBase64String(rsa.SignData(data, hash, RSASignaturePadding.Pkcs1)) };
+                return new AgentSignResult { Id = payload.Id, SignedHashBase64 = Convert.ToBase64String(rsa.SignData(payload.Data, hash, RSASignaturePadding.Pkcs1)) };
             }
 
             using var ecdsa = certificate.GetECDsaPrivateKey();
             return ecdsa is not null
-                ? new AgentSignResult { Id = id, SignedHashBase64 = Convert.ToBase64String(ecdsa.SignData(data, hash)) }
-                : new AgentSignResult { Id = id, Error = L.T("api.unsupportedKey") };
+                ? new AgentSignResult { Id = payload.Id, SignedHashBase64 = Convert.ToBase64String(ecdsa.SignData(payload.Data, hash)) }
+                : new AgentSignResult { Id = payload.Id, Error = L.T("api.unsupportedKey") };
         }
-        catch (Exception ex) when (ex is FormatException or CryptographicException)
+        catch (CryptographicException ex)
         {
-            return new AgentSignResult { Id = id, Error = ex.Message };
+            return new AgentSignResult { Id = payload.Id, Error = ex.Message };
         }
     }
 
     private static async Task<AgentSignResult> SignWithTokenAsync(
-        Pkcs11Signer signer, AgentSignRequestItem item, int index, HashAlgorithmName hash, CancellationToken cancellationToken)
+        Pkcs11Signer signer, Payload payload, HashAlgorithmName hash, CancellationToken cancellationToken)
     {
-        string id = item.Id ?? index.ToString(System.Globalization.CultureInfo.InvariantCulture);
         try
         {
-            byte[] data = Convert.FromBase64String(item.AuthenticatedAttributeBase64 ?? "");
             bool rsa = signer.Certificate.GetRSAPublicKey() is { } key && Dispose(key);
             string algorithm = (rsa, hash.Name) switch
             {
@@ -197,14 +233,14 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
                 _ => Oids.EcdsaSha256,
             };
             var signature = await signer.SignAsync(
-                new ExternalSigningRequest(data, hash, algorithm, ExternalSigningPayloadKind.CmsSignedAttributes), cancellationToken);
+                new ExternalSigningRequest(payload.Data, hash, algorithm, payload.Inspection.Kind!.Value), cancellationToken);
             // The store path returns ECDSA as IEEE P1363 (r||s), like the former HostSigner; tokens give DER.
             byte[] value = rsa ? signature.ToArray() : DerToP1363(signature.Span, signer.Certificate);
-            return new AgentSignResult { Id = id, SignedHashBase64 = Convert.ToBase64String(value) };
+            return new AgentSignResult { Id = payload.Id, SignedHashBase64 = Convert.ToBase64String(value) };
         }
-        catch (Exception ex) when (ex is FormatException or CryptographicException or Pkcs11Exception or NotSupportedException)
+        catch (Exception ex) when (ex is CryptographicException or Pkcs11Exception or NotSupportedException)
         {
-            return new AgentSignResult { Id = id, Error = ex.Message };
+            return new AgentSignResult { Id = payload.Id, Error = ex.Message };
         }
     }
 
@@ -248,4 +284,22 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
         };
 
     private static string Trim(string value, int max) => value.Length <= max ? value : value[..max] + "…";
+}
+
+/// <summary>A request the agent refuses before asking the user (answered with 400).</summary>
+internal sealed class AgentRequestException : Exception
+{
+    public AgentRequestException()
+    {
+    }
+
+    public AgentRequestException(string message)
+        : base(message)
+    {
+    }
+
+    public AgentRequestException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

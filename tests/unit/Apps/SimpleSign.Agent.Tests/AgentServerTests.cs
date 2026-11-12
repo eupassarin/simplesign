@@ -110,7 +110,7 @@ public sealed class AgentServerTests : IAsyncLifetime
     [Fact]
     public async Task Sign_UserConsents_SignsWithTheOldHostSignerContract()
     {
-        byte[] attributes = Encoding.UTF8.GetBytes("signed attributes");
+        byte[] attributes = SelfTest.SignedAttributes(SHA256.HashData("contrato"u8));
         string body = $$"""{"thumbprint":"{{_certificate.Thumbprint}}","hashAlgorithm":"SHA256","documentName":"contrato.pdf","signRequests":[{"id":"7","authenticatedAttributeBase64":"{{Convert.ToBase64String(attributes)}}"}]}""";
 
         using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", body);
@@ -123,15 +123,57 @@ public sealed class AgentServerTests : IAsyncLifetime
         using var rsa = _certificate.GetRSAPublicKey()!;
         rsa.VerifyData(attributes, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1).ShouldBeTrue();
         _dialogs.Asked.Last().Message.ShouldContain("contrato.pdf");
+        _dialogs.Asked.Last().Message.ShouldContain(Convert.ToHexString(SHA256.HashData("contrato"u8))[..8]);
     }
+
+    [Fact]
+    public async Task Sign_SignedAttributesOfACadesSigner_SignsThem()
+    {
+        byte[]? attributes = null;
+        var capture = new SimpleSign.Core.Signing.DelegatingExternalSigner(data =>
+        {
+            attributes ??= data;
+            using var key = _certificate.GetRSAPrivateKey()!;
+            return Task.FromResult(key.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+        });
+        await SimpleSign.CAdES.CadesSigner.Document("contract"u8.ToArray()).WithExternalSigner(_certificate, capture)
+            .WithSigningPolicy(SimpleSign.TestHelpers.TestPolicies.SigningDatesOnly).SignAsync();
+
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", SignBody(attributes!));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("signedHashBase64");
+    }
+
+    [Fact]
+    public async Task Sign_RawBytes_BadRequestWithoutAsking()
+    {
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", SignBody(SHA256.HashData("document"u8)));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("SignedInfo");
+        _dialogs.Asked.ShouldAllBe(asked => string.IsNullOrEmpty(asked.CertificateHolder));
+    }
+
+    [Fact]
+    public async Task Sign_NotBase64_BadRequest()
+    {
+        string body = $$"""{"thumbprint":"{{_certificate.Thumbprint}}","signRequests":[{"id":"1","authenticatedAttributeBase64":"not base64!"}]}""";
+
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", body);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    private string SignBody(byte[] data) =>
+        $$"""{"thumbprint":"{{_certificate.Thumbprint}}","signRequests":[{"id":"1","authenticatedAttributeBase64":"{{Convert.ToBase64String(data)}}"}]}""";
 
     [Fact]
     public async Task Sign_UserRefuses_Forbidden()
     {
         _dialogs.Signature = ConsentDecision.Deny;
-        string body = $$"""{"thumbprint":"{{_certificate.Thumbprint}}","signRequests":[{"id":"1","authenticatedAttributeBase64":"AA=="}]}""";
 
-        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", body);
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", SignBody(SelfTest.Payload));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }

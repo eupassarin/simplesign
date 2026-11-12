@@ -38,7 +38,7 @@ const [result] = await (await fetch(`${agent}/api/sign`, {
 // result.signedHashBase64 goes back to the server; result.error says why an item failed.
 ```
 
-`authenticatedAttributeBase64` is the bytes to sign. The agent hashes them with `hashAlgorithm` (SHA256, SHA384 or SHA512) and signs: RSA with PKCS#1 v1.5, ECDSA in the IEEE P1363 format (r followed by s). `documentName` is shown to the user in the confirmation.
+`authenticatedAttributeBase64` is the bytes to sign: DER CMS signed attributes (PAdES, CAdES) or a canonical XML-DSig `SignedInfo` (XAdES). Anything else — a raw hash, a document — is refused with 400 before the user is asked, and so are signed attributes whose `signingCertificateV2` names another certificate. The confirmation shows the digest being signed (algorithm and the first and last bytes). The agent hashes them with `hashAlgorithm` (SHA256, SHA384 or SHA512) and signs: RSA with PKCS#1 v1.5, ECDSA in the IEEE P1363 format (r followed by s). `documentName` is shown to the user in the confirmation.
 
 ## On the server: deferred signing
 
@@ -70,7 +70,7 @@ also `CertificateRevoked` and `RevocationStatusUnknown`, and then the chain must
 | Status | Meaning |
 | --- | --- |
 | 200 | Done. For `/api/sign`, check `error` on each item. |
-| 400 | Bad request: invalid JSON, no `thumbprint`, or not 1 to 100 items. |
+| 400 | Bad request: invalid JSON, no `thumbprint`, not 1 to 100 items, or an item that is not signed attributes or a `SignedInfo`. |
 | 403 | The user refused, or the site is blocked. |
 | 404 | Unknown certificate or address. |
 | 429 | More than 20 calls a minute from the same site. |

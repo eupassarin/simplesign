@@ -210,6 +210,11 @@ internal sealed class AgentServer : IAsyncDisposable
         {
             await WriteErrorAsync(response, 404, ex.Message);
         }
+        catch (AgentRequestException ex)
+        {
+            _services.Log.Add("Agent", $"{label}: {ex.Message}", isError: true);
+            await WriteErrorAsync(response, 400, ex.Message);
+        }
 #pragma warning disable CA1031 // The agent must answer every request.
         catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031

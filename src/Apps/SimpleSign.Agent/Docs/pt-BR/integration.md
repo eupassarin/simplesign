@@ -38,7 +38,7 @@ const [result] = await (await fetch(`${agent}/api/sign`, {
 // result.signedHashBase64 volta para o servidor; result.error diz por que um item falhou.
 ```
 
-`authenticatedAttributeBase64` são os bytes a assinar. O agente calcula o hash com `hashAlgorithm` (SHA256, SHA384 ou SHA512) e assina: RSA com PKCS#1 v1.5, ECDSA no formato IEEE P1363 (r seguido de s). `documentName` aparece para o usuário na confirmação.
+`authenticatedAttributeBase64` são os bytes a assinar: atributos assinados CMS em DER (PAdES, CAdES) ou um `SignedInfo` XML-DSig canônico (XAdES). Qualquer outra coisa — um hash solto, um documento — é recusada com 400 antes de perguntar ao usuário, assim como atributos assinados cujo `signingCertificateV2` aponta outro certificado. A confirmação mostra o resumo que será assinado (algoritmo e os primeiros e últimos bytes). O agente calcula o hash com `hashAlgorithm` (SHA256, SHA384 ou SHA512) e assina: RSA com PKCS#1 v1.5, ECDSA no formato IEEE P1363 (r seguido de s). `documentName` aparece para o usuário na confirmação.
 
 ## No servidor: assinatura adiada
 
@@ -71,7 +71,7 @@ precisa ser passada com `.WithCertificate(certificate, chain)`. O `/api/certific
 | Status | Significado |
 | --- | --- |
 | 200 | Feito. Em `/api/sign`, confira `error` em cada item. |
-| 400 | Pedido inválido: JSON inválido, sem `thumbprint`, ou fora de 1 a 100 itens. |
+| 400 | Pedido inválido: JSON inválido, sem `thumbprint`, fora de 1 a 100 itens, ou um item que não é atributos assinados nem um `SignedInfo`. |
 | 403 | O usuário recusou, ou o site está bloqueado. |
 | 404 | Certificado ou endereço desconhecido. |
 | 429 | Mais de 20 chamadas por minuto do mesmo site. |

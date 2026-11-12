@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using SimpleSign.Agent.Server;
+using SimpleSign.Core.Constants;
 
 namespace SimpleSign.Agent.Services;
 
@@ -32,8 +34,39 @@ internal sealed class SelfTest : IDisposable
         _http.Timeout = TimeSpan.FromMinutes(5);
     }
 
-    /// <summary>The bytes the test asks the agent to sign.</summary>
-    public static byte[] Payload { get; } = Encoding.UTF8.GetBytes("SimpleSign Agent self-test");
+    /// <summary>
+    /// The bytes the test asks the agent to sign: DER CMS signed attributes (contentType id-data and the SHA-256 of a
+    /// short text as messageDigest), since the agent signs nothing else.
+    /// </summary>
+    public static byte[] Payload { get; } = SignedAttributes(SHA256.HashData(Encoding.UTF8.GetBytes("SimpleSign Agent self-test")));
+
+    /// <summary>Minimal DER signed attributes over <paramref name="messageDigest"/>.</summary>
+    internal static byte[] SignedAttributes(byte[] messageDigest)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSetOf())
+        {
+            using (writer.PushSequence())
+            {
+                writer.WriteObjectIdentifier(Oids.ContentType);
+                using (writer.PushSetOf())
+                {
+                    writer.WriteObjectIdentifier(Oids.Data);
+                }
+            }
+
+            using (writer.PushSequence())
+            {
+                writer.WriteObjectIdentifier(Oids.MessageDigest);
+                using (writer.PushSetOf())
+                {
+                    writer.WriteOctetString(messageDigest);
+                }
+            }
+        }
+
+        return writer.Encode();
+    }
 
     public Task<SelfTestStep> HealthAsync(CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Get, "/api/health", null, cancellationToken);
