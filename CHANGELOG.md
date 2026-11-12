@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Traces and metrics (`SimpleSignTelemetry`)
+
+- An `ActivitySource` and a `Meter` named `SimpleSign` (constants in `SimpleSign.Core.Diagnostics.SimpleSignTelemetry`):
+  activities, counters and duration histograms for signing (format, requested/achieved level, outcome, reason — every
+  signer, deferred included), TSA requests, OCSP requests, CRL fetches (cache hit), trusted-list loading and
+  validation (format, indication). Tags hold no payload, certificate data, full URL or personal data. Nothing is
+  measured when nobody listens. See `docs/articles/observability.md`.
+
 ### Added — Sandbox: signers with a chosen subject
 
 - `POST /api/certificates/custom` issues a signing certificate under the intermediate CA with a subject given as a DN

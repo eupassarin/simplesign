@@ -301,3 +301,6 @@ byte[] tsaResponse = await pool.GetTimestampAsync(
 services.AddLogging(b => b.AddConsole());
 var validator = new PdfSignatureValidator(options, logger: loggerFactory.CreateLogger<PdfSignatureValidator>());
 ```
+
+Traces and metrics (signing, TSA, OCSP, CRL, trusted lists, validation) are described in
+[Observability](observability.md).

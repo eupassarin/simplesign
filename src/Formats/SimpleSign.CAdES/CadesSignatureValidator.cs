@@ -199,7 +199,9 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         CancellationToken cancellationToken = default)
     {
         var anchors = trustAnchors?.ToList();
-        return await WithRevocationAsync(Validate(cmsBytes, originalData, anchors), cancellationToken).ConfigureAwait(false);
+        return await SimpleSign.Core.Diagnostics.Telemetry.MeasureValidationAsync(
+            "CAdES", () => WithRevocationAsync(Validate(cmsBytes, originalData, anchors), cancellationToken),
+            r => [r.Indication.ToString()]).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -211,11 +213,20 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     /// <param name="trustAnchors">The trust anchors; null uses the options.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The report, each signer with its revocation outcome.</returns>
-    public async Task<CadesValidationReport> ValidateAllAsync(
+    public Task<CadesValidationReport> ValidateAllAsync(
         byte[] cmsBytes,
         byte[]? originalData = null,
         IEnumerable<X509Certificate2>? trustAnchors = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        SimpleSign.Core.Diagnostics.Telemetry.MeasureValidationAsync(
+            "CAdES", () => ValidateAllCoreAsync(cmsBytes, originalData, trustAnchors, cancellationToken),
+            r => r.Signers.Select(s => s.Result.Indication.ToString()));
+
+    private async Task<CadesValidationReport> ValidateAllCoreAsync(
+        byte[] cmsBytes,
+        byte[]? originalData,
+        IEnumerable<X509Certificate2>? trustAnchors,
+        CancellationToken cancellationToken)
     {
         var report = ValidateAll(cmsBytes, originalData, trustAnchors?.ToList());
         if (!_options.ChecksRevocation)

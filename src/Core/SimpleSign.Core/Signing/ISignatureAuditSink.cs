@@ -95,7 +95,8 @@ internal static class SignatureAudit
 {
     /// <summary>
     /// Runs <paramref name="sign"/> and records its outcome with <paramref name="sink"/>: the signed artifact's hash and
-    /// achieved level, or the refusal. Without a sink, only runs it.
+    /// achieved level, or the refusal. Without a sink, only runs it. The operation is also measured
+    /// (<see cref="Diagnostics.SimpleSignTelemetry"/>) when something listens.
     /// </summary>
     internal static async Task<T> RunAsync<T>(
         ISignatureAuditSink? sink,
@@ -104,7 +105,8 @@ internal static class SignatureAudit
         Func<T, (byte[] Artifact, AdesBaselineLevel Achieved)> outcome,
         CancellationToken cancellationToken)
     {
-        if (sink is null)
+        var telemetry = Diagnostics.Telemetry.Signing.Start();
+        if (sink is null && !telemetry.IsActive)
         {
             return await sign().ConfigureAwait(false);
         }
@@ -116,23 +118,53 @@ internal static class SignatureAudit
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            await sink.RecordAsync(start() with
+            var refused = start() with
             {
                 Time = DateTimeOffset.UtcNow,
                 Reason = (ex as SigningException)?.Reason,
                 Message = ex.Message,
-            }, cancellationToken).ConfigureAwait(false);
+            };
+            Measure(telemetry, refused, ex is SigningException ? Diagnostics.SimpleSignTelemetry.Outcomes.Refused : Diagnostics.SimpleSignTelemetry.Outcomes.Error);
+            if (sink is not null)
+            {
+                await sink.RecordAsync(refused, cancellationToken).ConfigureAwait(false);
+            }
+
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            telemetry.Complete(Diagnostics.SimpleSignTelemetry.Outcomes.Error);
             throw;
         }
 
         var (artifact, achieved) = outcome(result);
-        await sink.RecordAsync(start() with
+        if (telemetry.IsActive)
         {
-            Time = DateTimeOffset.UtcNow,
-            Signed = true,
-            AchievedLevel = achieved,
-            OutputSha256 = Convert.ToHexString(SHA256.HashData(artifact)),
-        }, cancellationToken).ConfigureAwait(false);
+            Measure(telemetry, start() with { Signed = true, AchievedLevel = achieved }, Diagnostics.SimpleSignTelemetry.Outcomes.Success);
+        }
+
+        if (sink is not null)
+        {
+            await sink.RecordAsync(start() with
+            {
+                Time = DateTimeOffset.UtcNow,
+                Signed = true,
+                AchievedLevel = achieved,
+                OutputSha256 = Convert.ToHexString(SHA256.HashData(artifact)),
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
         return result;
     }
+
+    /// <summary>Records a signing operation's format, levels, outcome and reason — nothing about the certificate or the data.</summary>
+    private static void Measure(Diagnostics.Telemetry.Scope telemetry, SignatureAuditEvent e, string outcome) =>
+        telemetry.Complete(outcome,
+            [
+                new(Diagnostics.SimpleSignTelemetry.Tags.Format, e.Format),
+                new(Diagnostics.SimpleSignTelemetry.Tags.RequestedLevel, e.RequestedLevel.ToString()),
+                new(Diagnostics.SimpleSignTelemetry.Tags.AchievedLevel, e.AchievedLevel?.ToString()),
+                new(Diagnostics.SimpleSignTelemetry.Tags.Reason, e.Reason?.ToString()),
+            ]);
 }

@@ -40,11 +40,32 @@ public sealed class CrlClient : ICrlClient
 
     private async Task<byte[]> DownloadAsync(string crlUrl, CancellationToken ct)
     {
+        var telemetry = Diagnostics.Telemetry.Crl.Start();
+        string? host = telemetry.IsActive ? Diagnostics.Telemetry.HostOf(crlUrl) : null;
         if (Cache is not null && Cache.TryGet(crlUrl, out var cached))
         {
+            telemetry.Complete(Diagnostics.SimpleSignTelemetry.Outcomes.Success,
+                [new(Diagnostics.SimpleSignTelemetry.Tags.ServerAddress, host), new(Diagnostics.SimpleSignTelemetry.Tags.CacheHit, Diagnostics.Telemetry.Boxed(true))]);
             return cached;
         }
 
+        try
+        {
+            byte[] downloaded = await DownloadCoreAsync(crlUrl, ct).ConfigureAwait(false);
+            telemetry.Complete(Diagnostics.SimpleSignTelemetry.Outcomes.Success,
+                [new(Diagnostics.SimpleSignTelemetry.Tags.ServerAddress, host), new(Diagnostics.SimpleSignTelemetry.Tags.CacheHit, Diagnostics.Telemetry.Boxed(false))]);
+            return downloaded;
+        }
+        catch (Exception)
+        {
+            telemetry.Complete(Diagnostics.SimpleSignTelemetry.Outcomes.Error,
+                [new(Diagnostics.SimpleSignTelemetry.Tags.ServerAddress, host), new(Diagnostics.SimpleSignTelemetry.Tags.CacheHit, Diagnostics.Telemetry.Boxed(false))]);
+            throw;
+        }
+    }
+
+    private async Task<byte[]> DownloadCoreAsync(string crlUrl, CancellationToken ct)
+    {
         _logger.CrlDownloading(crlUrl);
         var crlBytes = CrlEncoding.ToDer(await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: OutboundPolicy, ct: ct).ConfigureAwait(false))
             ?? throw new HttpRequestException($"CRL download failed after retries: {crlUrl}");
