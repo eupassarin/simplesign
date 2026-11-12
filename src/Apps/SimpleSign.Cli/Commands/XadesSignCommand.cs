@@ -23,7 +23,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
     }
 
     /// <summary>XAdES sign command settings.</summary>
-    internal sealed class Settings : ExternalCredentialSettings
+    internal sealed class Settings : PreparableSigningSettings
     {
         /// <summary>Checks run before signing.</summary>
         [CommandOption("--signing-policy <PATH>")]
@@ -215,6 +215,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         [Description("MIME type of the signed data, written as its DataObjectFormat (e.g. application/xml)")]
         public string? DataMimeType { get; init; }
 
+        /// <summary>Keep the detached data out of the session (two-phase signing).</summary>
+        [CommandOption("--detached-data-outside-session")]
+        [Description("With --prepare: keep the detached document and the external data objects out of the session, which then holds only their SHA-256; give them again to 'deferred complete' with --detached-data and --external-object")]
+        public bool DetachedDataOutsideSession { get; init; }
+
         public override ValidationResult Validate()
         {
             if (!SigningPolicyOption.IsValid(SigningPolicy))
@@ -225,6 +230,12 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
             if (!File.Exists(InputPath))
             {
                 return ValidationResult.Error($"File not found: {InputPath}");
+            }
+
+            if ((ValidatePrepare(CertPath, otherCredential: false, Password, OutputPath)
+                ?? (DetachedDataOutsideSession && !Prepare ? "--detached-data-outside-session requires --prepare." : null)) is { } prepareError)
+            {
+                return ValidationResult.Error(prepareError);
             }
 
             if (ValidateExtras() is { } extrasError)
@@ -314,7 +325,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         byte[] xmlData = await CommonSettings.ReadInputBytesAsync(settings.InputPath, cancellationToken);
 
         using ExternalCredential? token = await ExternalCredentialSupport.OpenAsync(settings, cancellationToken);
-        using X509Certificate2? ownCert = token is null ? await LoadCertificateAsync(settings, cancellationToken) : null;
+        // Two phases: --cert is the signer's certificate and chain, without a private key.
+        var (publicCert, publicChain) = settings.Prepare
+            ? DeferredPrepareSupport.LoadCertificates(_certChainService, settings.CertPath!)
+            : (null, []);
+        using X509Certificate2? ownCert = publicCert ?? (token is null ? await LoadCertificateAsync(settings, cancellationToken) : null);
         X509Certificate2 cert = token?.Certificate ?? ownCert!;
 
         var level = ParseLevel(settings.Level) ?? AdesBaselineLevel.Basic;
@@ -365,7 +380,7 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         builder = ApplySigningOptions(builder, settings);
 
         // The chain: the other certificates of the PFX (as sign does) plus --chain.
-        List<X509Certificate2> pfxChain = token is null ? PfxChain(settings, cert) : [];
+        List<X509Certificate2> pfxChain = settings.Prepare ? publicChain : token is null ? PfxChain(settings, cert) : [];
         IReadOnlyList<X509Certificate2> extraChain = settings.ChainPath is null ? [] : LoadChainCertificates(settings.ChainPath);
         if (token is null && pfxChain.Count + extraChain.Count > 0)
         {
@@ -389,6 +404,16 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         if (CliNetwork.IsConfigured)
         {
             builder = builder.WithHttpClientProvider(CliNetwork.Provider);
+        }
+
+        if (settings.Prepare)
+        {
+            // Two phases: the same builder, prepared for a key that signs elsewhere.
+            var deferred = XadesDeferredSigner.From(builder).WithSessionIntegrityKey(DeferredSessionKey.Parse(settings.SessionKey)!);
+            var prepared = await (settings.DetachedDataOutsideSession ? deferred.WithDetachedDataOutsideSession() : deferred).PrepareAsync(cancellationToken);
+            return await DeferredPrepareSupport.WriteAsync(
+                settings, settings.InputPath, "xades", prepared.SessionData, prepared.DataToSign,
+                prepared.DigestAlgorithm, prepared.SignatureAlgorithmOid, settings.Json, cancellationToken);
         }
 
         var result = await builder.SignWithDetailsAsync(cancellationToken);
