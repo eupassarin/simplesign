@@ -52,7 +52,7 @@ keeps the former HostSigner contract, so existing integrations work:
 | Endpoint | |
 |----------|---|
 | `GET /api/health` | `{ "status": "ok", "version": "…", "app": "SimpleSign Agent" }` — no permission needed. |
-| `GET /api/certificates?source=all\|store\|pkcs11&filterIcpBrasil=true` | Store and token certificates (`source`, `tokenLabel` are new fields). |
+| `GET /api/certificates?source=all\|store\|pkcs11&country=XX&trust=ID&signingOnly=true&filterIcpBrasil=true` | Store and token certificates (`source`, `tokenLabel` are new fields). Optional filters: `country` (a region code: certificates that chain to the trust anchors of that country's frameworks), `trust` (one framework by id: `icp-brasil`, `govbr`), `signingOnly=true` (valid now, with digitalSignature or nonRepudiation). An unknown country or id answers 400 with the known ones. `filterIcpBrasil=true` keeps its former meaning (issuer name or ICP-Brasil policy OID); `trust=icp-brasil` checks the chain. |
 | `POST /api/sign` | `{ thumbprint, hashAlgorithm, documentName?, signRequests: [{ id, authenticatedAttributeBase64 }] }` → `[{ id, signedHashBase64 }]`. The bytes — CMS signed attributes or an XML-DSig `SignedInfo`, nothing else — are hashed with `hashAlgorithm` and signed (RSA PKCS#1 v1.5; ECDSA as IEEE P1363, as before). |
 
 ```js

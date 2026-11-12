@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Agent: certificates by country or trust framework
+
+- `GET /api/certificates?country=XX` lists the certificates that chain to the trust anchors (with the intermediates)
+  of that country's registered `ICountryExtension`s; `?trust=icp-brasil` or `?trust=govbr` names one framework, and
+  `?signingOnly=true` keeps those valid now with digitalSignature or nonRepudiation. The chain is checked with
+  `SigningCertificateCheck`. An unknown country or framework answers 400 with the known ones. `filterIcpBrasil=true`
+  keeps its former meaning (issuer name or ICP-Brasil policy OID).
+
 ### Added — Traces and metrics (`SimpleSignTelemetry`)
 
 - An `ActivitySource` and a `Meter` named `SimpleSign` (constants in `SimpleSign.Core.Diagnostics.SimpleSignTelemetry`):

@@ -7,7 +7,7 @@ O agente ouve só em `http://127.0.0.1:{port}`. A página chama com `fetch`; as 
 | Chamada | O que faz |
 | --- | --- |
 | `GET /api/health` | Diz que o agente está lá: `status`, `version`, `app`. Não pede permissão. |
-| `GET /api/certificates` | Lista os certificados de assinatura. Opcionais: `source=store` ou `source=pkcs11`, e `filterIcpBrasil=true`. |
+| `GET /api/certificates` | Lista os certificados de assinatura. Opcionais: `source=store` ou `source=pkcs11`; `country=BR` (os que encadeiam numa estrutura de confiança desse país) ou `trust=icp-brasil` / `trust=govbr` (uma estrutura); `signingOnly=true` (válidos agora e aptos a assinar); e `filterIcpBrasil=true`, o filtro ICP-Brasil anterior. |
 | `POST /api/sign` | Assina até 100 itens com um certificado, depois que o usuário confirma. |
 
 Um certificado tem `name`, `thumbprint`, `issuerName`, `notBefore`, `expireDate`, `signatureAlgorithm` (RSA ou ECDSA), `userCertificateBase64`, `source` (store ou pkcs11) e `tokenLabel`.
@@ -71,7 +71,7 @@ precisa ser passada com `.WithCertificate(certificate, chain)`. O `/api/certific
 | Status | Significado |
 | --- | --- |
 | 200 | Feito. Em `/api/sign`, confira `error` em cada item. |
-| 400 | Pedido inválido: JSON inválido, sem `thumbprint`, fora de 1 a 100 itens, ou um item que não é atributos assinados nem um `SignedInfo`. |
+| 400 | Pedido inválido: JSON inválido, sem `thumbprint`, fora de 1 a 100 itens, ou um item que não é atributos assinados nem um `SignedInfo`; `country` ou `trust` desconhecido. |
 | 403 | O usuário recusou, ou o site está bloqueado. |
 | 404 | Certificado ou endereço desconhecido. |
 | 429 | Mais de 20 chamadas por minuto do mesmo site. |

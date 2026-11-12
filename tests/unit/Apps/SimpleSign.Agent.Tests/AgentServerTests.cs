@@ -7,6 +7,7 @@ using System.Text.Json;
 using Shouldly;
 using SimpleSign.Agent.Server;
 using SimpleSign.Agent.Services;
+using SimpleSign.TestHelpers;
 
 namespace SimpleSign.Agent.Tests;
 
@@ -105,6 +106,59 @@ public sealed class AgentServerTests : IAsyncLifetime
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         _services.Settings.Current.AllowedOrigins.ShouldContain("https://portal.example.com:8443");
+    }
+
+    [Fact]
+    public async Task Certificates_TrustAndSigningOnly_ListOnlyMatchingCertificates()
+    {
+        using var pki = new SyntheticPki();
+        using var expired = Fixtures.RsaCertificate("CN=Expired", validDays: -1);
+        var services = new AgentServices(_services.Settings, _dialogs)
+        {
+            TrustFrameworks = new TrustFrameworks(
+                [new TrustFramework("lab", new Lazy<SimpleSign.Core.Extensions.ICountryExtension>(() => new TrustFrameworksTests.TestExtension("XX", pki)))]),
+        };
+        CertificateEntry[] entries =
+        [
+            new(CertificateSourceKind.File, _certificate, FilePath: "a.pfx"),
+            new(CertificateSourceKind.File, pki.Leaf, FilePath: "b.pfx"),
+            new(CertificateSourceKind.File, expired, FilePath: "c.pfx"),
+        ];
+        _dialogs.Site = ConsentDecision.AllowAlways;
+        int port = FreePort();
+        await using var agent = new AgentServer(services, new TokenSessionCache(), _ => Task.FromResult<IReadOnlyList<CertificateEntry>>(entries));
+        await agent.StartAsync(port);
+
+        async Task<string> List(string query)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"http://127.0.0.1:{port}/api/certificates{query}"));
+            request.Headers.Add("Origin", "https://portal.example.com");
+            using var response = await _http.SendAsync(request);
+            return $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}";
+        }
+
+        string byTrust = await List("?trust=lab");
+        string byCountry = await List("?country=xx");
+        string signingOnly = await List("?signingOnly=true");
+        string unknown = await List("?country=ZZ");
+
+        byTrust.ShouldStartWith("200");
+        byTrust.ShouldContain(pki.Leaf.Thumbprint);
+        byTrust.ShouldNotContain(_certificate.Thumbprint);
+        byCountry.ShouldBe(byTrust);
+        signingOnly.ShouldContain(_certificate.Thumbprint);
+        signingOnly.ShouldNotContain(expired.Thumbprint);
+        unknown.ShouldStartWith("400");
+        unknown.ShouldContain("lab (XX)");
+    }
+
+    [Fact]
+    public async Task Certificates_FilterIcpBrasil_StillLeavesOutOtherCertificates()
+    {
+        using var response = await Send(HttpMethod.Get, "/api/certificates?filterIcpBrasil=true", "https://portal.example.com");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldBe("[]");
     }
 
     [Fact]

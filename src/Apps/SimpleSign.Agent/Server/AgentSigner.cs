@@ -62,6 +62,14 @@ internal sealed class TokenSessionCache(TimeProvider? time = null) : IDisposable
     }
 }
 
+/// <summary>
+/// The filters of <c>GET /api/certificates</c>: <c>source</c>, <c>filterIcpBrasil</c> (the former ICP-Brasil filter,
+/// by issuer name and policy OID), the trust frameworks of <c>country</c>/<c>trust</c> (by chain to their anchors) and
+/// <c>signingOnly</c> (valid now, with a signing key usage).
+/// </summary>
+internal sealed record CertificateQuery(
+    string Source = "all", bool IcpBrasilOnly = false, IReadOnlyList<TrustFramework>? Frameworks = null, bool SigningOnly = false);
+
 /// <summary>Signs the agent's /api/sign requests with a store or token key, after the user consents.</summary>
 internal sealed class AgentSigner(AgentServices services, TokenSessionCache sessions, Func<CancellationToken, Task<IReadOnlyList<CertificateEntry>>>? certificates = null)
 {
@@ -73,18 +81,28 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
     public static async Task<IReadOnlyList<CertificateEntry>> AllCertificatesAsync(CancellationToken cancellationToken) =>
         [.. CertificateService.ListStore(), .. (await CertificateService.ListTokensAsync(cancellationToken)).Certificates];
 
-    /// <summary>The store and token certificates the agent exposes.</summary>
-    public async Task<List<AgentCertificate>> ListAsync(string source, bool icpBrasilOnly, CancellationToken cancellationToken)
+    /// <summary>The store and token certificates the agent exposes, filtered as <paramref name="query"/> asks.</summary>
+    public async Task<List<AgentCertificate>> ListAsync(CertificateQuery query, CancellationToken cancellationToken)
     {
-        var entries = (await _certificates(cancellationToken))
-            .Where(e => source switch
+        var entries = new List<CertificateEntry>();
+        foreach (var e in await _certificates(cancellationToken))
+        {
+            bool fromSource = query.Source switch
             {
                 "pkcs11" => e.Kind == CertificateSourceKind.Token,
                 "store" => e.Kind != CertificateSourceKind.Token,
                 _ => true,
-            });
+            };
+            if (fromSource
+                && (!query.IcpBrasilOnly || e.IsIcpBrasil)
+                && (!query.SigningOnly || TrustFrameworks.CanSignNow(e.Certificate))
+                && (query.Frameworks is null || await services.TrustFrameworks.AnyTrustsAsync(query.Frameworks, e.Certificate, cancellationToken)))
+            {
+                entries.Add(e);
+            }
+        }
+
         return [.. entries
-            .Where(e => !icpBrasilOnly || e.IsIcpBrasil)
             .Select(e => new AgentCertificate
             {
                 Name = e.Certificate.Subject,
