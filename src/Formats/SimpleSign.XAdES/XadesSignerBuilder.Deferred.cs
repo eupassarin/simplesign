@@ -30,21 +30,39 @@ public sealed partial class XadesSignerBuilder
             OperationId = session.OperationId,
             IsCounterSignature = session.CounterSignature,
             AdditionalDataObjects = session.ExternalDataObjects is { Length: > 0 } external
-                ? [.. external.Select(o => XadesDataObject.External(o.Uri, o.Content))]
+                ? [.. external.Where(o => o.Content is not null).Select(o => XadesDataObject.External(o.Uri, o.Content))]
                 : null,
         });
     }
+
+    /// <summary>The same builder with the detached document of a session that does not carry it.</summary>
+    internal XadesSignerBuilder WithDetachedDocument(byte[] document) => new((byte[])document.Clone(), _options);
+
+    /// <summary>The same builder with one more external data object of a session that does not carry it.</summary>
+    internal XadesSignerBuilder WithExternalDataObject(string uri, byte[] content) =>
+        With(_options with
+        {
+            AdditionalDataObjects =
+            [
+                .. (_options.AdditionalDataObjects ?? []).Where(o => o.Uri != uri),
+                XadesDataObject.External(uri, content),
+            ],
+        });
 
     /// <summary>
     /// Phase one: checks the certificate, chain and algorithms against the signing policy, assembles the
     /// document with an empty signature value and returns the canonical SignedInfo with the session. A refusal
     /// is recorded by the audit sink.
     /// </summary>
-    internal async Task<XadesDeferredPrepareResult> PrepareDeferredAsync(byte[] sessionIntegrityKey, CancellationToken cancellationToken)
+    /// <param name="sessionIntegrityKey">The HMAC key of the session.</param>
+    /// <param name="detachedDataInSession">Whether the session carries the detached document and the external data objects, or only their digests.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    internal async Task<XadesDeferredPrepareResult> PrepareDeferredAsync(
+        byte[] sessionIntegrityKey, bool detachedDataInSession, CancellationToken cancellationToken)
     {
         try
         {
-            return await PrepareDeferredCoreAsync(sessionIntegrityKey, cancellationToken).ConfigureAwait(false);
+            return await PrepareDeferredCoreAsync(sessionIntegrityKey, detachedDataInSession, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (_options.AuditSink is not null && ex is not OperationCanceledException)
         {
@@ -56,7 +74,8 @@ public sealed partial class XadesSignerBuilder
         }
     }
 
-    private async Task<XadesDeferredPrepareResult> PrepareDeferredCoreAsync(byte[] sessionIntegrityKey, CancellationToken cancellationToken)
+    private async Task<XadesDeferredPrepareResult> PrepareDeferredCoreAsync(
+        byte[] sessionIntegrityKey, bool detachedDataInSession, CancellationToken cancellationToken)
     {
         var credential = _options.Credential
             ?? throw new SigningException(
@@ -103,15 +122,19 @@ public sealed partial class XadesSignerBuilder
 
         var external = (_options.AdditionalDataObjects ?? [])
             .Where(o => o.Uri is not null)
-            .Select(o => new XadesDeferredExternalObject { Uri = o.Uri!, Content = o.Content.ToArray() })
+            .Select(o => detachedDataInSession
+                ? new XadesDeferredExternalObject { Uri = o.Uri!, Content = o.Content.ToArray() }
+                : new XadesDeferredExternalObject { Uri = o.Uri!, Sha256 = SHA256.HashData(o.Content.Span) })
             .ToArray();
+        bool detachedDocument = !_options.IsCounterSignature && _options.Form == XadesForm.Detached;
         var profile = _options.Profile;
         var session = new XadesDeferredSession
         {
             SignedInfo = signedInfo,
             PreparedXml = preparedXml,
             SignatureId = signatureId,
-            DetachedContent = !_options.IsCounterSignature && _options.Form == XadesForm.Detached ? _xmlData : null,
+            DetachedContent = detachedDocument && detachedDataInSession ? _xmlData : null,
+            DetachedContentSha256 = detachedDocument && !detachedDataInSession ? SHA256.HashData(_xmlData) : null,
             ExternalDataObjects = external.Length == 0 ? null : external,
             InputSha256 = Convert.ToHexString(SHA256.HashData(_xmlData)),
             CertificateDer = start.Certificate.RawData,

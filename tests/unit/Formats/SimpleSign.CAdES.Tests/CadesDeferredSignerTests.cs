@@ -445,6 +445,55 @@ public sealed class CadesDeferredSignerTests : IDisposable
         restored.ArchiveTimestamp.ShouldNotBeNull().Endpoint.ShouldBe(new Uri("http://198.51.100.1/archive-tsa"));
     }
 
+    // ── Content kept out of the session ───────────────────────────────────
+
+    [Theory]
+    [InlineData(CadesContentType.Detached)]
+    [InlineData(CadesContentType.Enveloped)]
+    public async Task WithContentOutsideSession_ContentIsGivenAgainAtResume(CadesContentType contentType)
+    {
+        byte[] large = RandomNumberGenerator.GetBytes(64 * 1024);
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_pki.Leaf);
+        var tsa = new TimestampOptions(new Uri(TsaUrl));
+        CadesDeferredPrepareResult prepared = await CadesDeferredSigner.Document(large)
+            .WithCertificate(publicCertificate, _pki.IntermediatesAndRoot())
+            .WithSessionIntegrityKey(s_key)
+            .WithContentType(contentType)
+            .WithContentOutsideSession()
+            .WithLevel(AdesBaselineProfile.Archive(tsa, new LongTermValidationOptions { RevocationPreference = RevocationPreference.CrlFirst }))
+            .PrepareAsync();
+        byte[] signature = RemoteKey.Sign(_pki.Leaf, prepared.ToSigningRequest());
+
+        // The session has the digest of the content, not the content.
+        prepared.SessionData.Length.ShouldBeLessThan(large.Length / 2);
+        CadesDeferredSession.Read(prepared.SessionData, s_key).Content.ShouldBeNull();
+        CadesDeferredSignerBuilder resumed = CadesDeferredSigner.Resume(prepared.SessionData, s_key).WithHttpClientProvider(Http);
+        await Should.ThrowAsync<InvalidOperationException>(() => resumed.CompleteAsync(signature));
+        Should.Throw<ArgumentException>(() => resumed.WithContent(RandomNumberGenerator.GetBytes(64 * 1024)));
+
+        CadesSigningResult result = await resumed.WithContent(large).CompleteWithDetailsAsync(signature);
+
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Archive);
+        var validated = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false })
+            .Validate(result.SignedArtifact, large, [_pki.IntermediateCa, _pki.RootCa]);
+        validated.IsValid.ShouldBeTrue(string.Join("; ", validated.Errors));
+        validated.HasValidArchiveTimestamp.ShouldBe(true);
+        CmsParser.ParseAll(result.SignedArtifact).EncapsulatedContent.ShouldBe(contentType == CadesContentType.Enveloped ? large : null);
+    }
+
+    [Fact]
+    public async Task WithContent_OnASessionThatCarriesItsContentOrOnABuilderNotResumed_Throws()
+    {
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_rsa);
+        CadesDeferredSignerBuilder builder = CadesDeferredSigner.Document(_data).WithCertificate(publicCertificate).WithSessionIntegrityKey(s_key);
+        CadesDeferredPrepareResult prepared = await builder.PrepareAsync();
+        CadesDeferredSignerBuilder resumed = CadesDeferredSigner.Resume(prepared.SessionData, s_key);
+
+        Should.Throw<InvalidOperationException>(() => builder.WithContent(_data));
+        Should.Throw<InvalidOperationException>(() => resumed.WithContent(_data));
+        Should.Throw<InvalidOperationException>(() => resumed.WithContentOutsideSession());
+    }
+
     // ── The signature ─────────────────────────────────────────────────────
 
     [Fact]

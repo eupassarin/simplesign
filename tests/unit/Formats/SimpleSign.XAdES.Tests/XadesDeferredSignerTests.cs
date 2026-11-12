@@ -395,6 +395,61 @@ public sealed class XadesDeferredSignerTests : IDisposable
     }
 
     [Fact]
+    public async Task WithDetachedDataOutsideSession_DocumentAndExternalObjectsAreGivenAgainAtResume()
+    {
+        byte[] terms = RandomNumberGenerator.GetBytes(48 * 1024);
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_pki.Leaf);
+        var tsa = new TimestampOptions(new Uri(TsaUrl));
+        XadesDeferredPrepareResult prepared = await XadesDeferredSigner.Document(_xml)
+            .WithCertificate(publicCertificate, _pki.IntermediatesAndRoot())
+            .WithSessionIntegrityKey(s_key)
+            .WithForm(XadesForm.Detached)
+            .WithDataUri(DataUri)
+            .WithAdditionalDataObject(XadesDataObject.External("terms.bin", terms))
+            .WithDetachedDataOutsideSession()
+            .WithLevel(AdesBaselineProfile.Archive(tsa, new LongTermValidationOptions { RevocationPreference = RevocationPreference.CrlFirst }))
+            .PrepareAsync();
+        byte[] signature = RemoteKey.Sign(_pki.Leaf, prepared.ToSigningRequest());
+
+        // The session has the digests of the detached data, not the data.
+        prepared.SessionData.Length.ShouldBeLessThan(terms.Length / 2);
+        XadesDeferredSession session = XadesDeferredSession.Read(prepared.SessionData, s_key);
+        session.DetachedContent.ShouldBeNull();
+        session.ExternalDataObjects.ShouldNotBeNull().ShouldHaveSingleItem().Content.ShouldBeNull();
+        XadesDeferredSignerBuilder resumed = XadesDeferredSigner.Resume(prepared.SessionData, s_key).WithHttpClientProvider(Http);
+        (await Should.ThrowAsync<InvalidOperationException>(() => resumed.CompleteAsync(signature))).Message.ShouldContain("WithDetachedData");
+        (await Should.ThrowAsync<InvalidOperationException>(() => resumed.WithDetachedData(_xml).CompleteAsync(signature))).Message.ShouldContain("terms.bin");
+        Should.Throw<ArgumentException>(() => resumed.WithDetachedData("<other/>"u8.ToArray()));
+        Should.Throw<ArgumentException>(() => resumed.WithExternalData("terms.bin", [1, 2, 3]));
+        Should.Throw<ArgumentException>(() => resumed.WithExternalData("unknown.bin", terms));
+
+        XadesSigningResult result = await resumed
+            .WithExternalData("terms.bin", terms)
+            .WithDetachedData(_xml)
+            .CompleteWithDetailsAsync(signature);
+
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Archive);
+        var external = new Dictionary<string, byte[]> { [DataUri] = _xml, ["terms.bin"] = terms };
+        XadesValidationResult validated = new XadesSignatureValidator().Validate(result.SignedArtifact, [_pki.IntermediateCa, _pki.RootCa], external);
+        validated.IsSignatureValid.ShouldBeTrue(string.Join("; ", validated.Errors));
+        validated.IsIntegrityValid.ShouldBeTrue();
+        validated.HasValidArchiveTimeStamp.ShouldBe(true);
+    }
+
+    [Fact]
+    public async Task WithDetachedDataOutsideSession_EnvelopedForm_HasNothingToLeaveOut()
+    {
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_rsa);
+        XadesDeferredPrepareResult prepared = await Prepare(publicCertificate).WithDetachedDataOutsideSession().PrepareAsync();
+        XadesDeferredSignerBuilder resumed = XadesDeferredSigner.Resume(prepared.SessionData, s_key);
+
+        Should.Throw<InvalidOperationException>(() => resumed.WithDetachedData(_xml));
+        byte[] signed = await resumed.CompleteAsync(RemoteKey.Sign(_rsa, prepared.ToSigningRequest()));
+
+        Validate(signed, XadesForm.Enveloped, _rsa).IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task PhaseOneMethods_OnAResumedBuilder_Throw()
     {
         using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_rsa);

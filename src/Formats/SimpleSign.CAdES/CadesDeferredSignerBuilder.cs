@@ -41,11 +41,20 @@ public sealed class CadesDeferredSignerBuilder
     private readonly CadesDeferredSession? _session;
     private readonly byte[]? _sessionIntegrityKey;
 
+    /// <summary>Phase one: whether the session carries the content. Phase two: whether the builder has it.</summary>
+    private readonly bool _hasContent;
+
     internal CadesDeferredSignerBuilder(CadesSignerBuilder inner, CadesDeferredSession? session, byte[]? sessionIntegrityKey)
+        : this(inner, session, sessionIntegrityKey, hasContent: session is null || session.Content is not null)
+    {
+    }
+
+    private CadesDeferredSignerBuilder(CadesSignerBuilder inner, CadesDeferredSession? session, byte[]? sessionIntegrityKey, bool hasContent)
     {
         _inner = inner;
         _session = session;
         _sessionIntegrityKey = sessionIntegrityKey;
+        _hasContent = hasContent;
     }
 
     /// <summary>The signer certificate given to <c>WithCertificate</c>, or <see langword="null"/> before it is called and on a resumed builder.</summary>
@@ -91,7 +100,20 @@ public sealed class CadesDeferredSignerBuilder
     {
         DeferredSessionEnvelope.ValidateKey(key, nameof(key));
         EnsurePhaseOne(nameof(WithSessionIntegrityKey));
-        return new CadesDeferredSignerBuilder(_inner, _session, [.. key]);
+        return new CadesDeferredSignerBuilder(_inner, _session, [.. key], _hasContent);
+    }
+
+    /// <summary>
+    /// Keeps the content out of the session, which then carries only its SHA-256. Use it when the content is
+    /// large or already stored: the builder that resumes the session is given it again with
+    /// <see cref="WithContent(byte[])"/>, for a detached and for an attached signature alike.
+    /// </summary>
+    /// <returns>A new builder that prepares a session without the content.</returns>
+    /// <exception cref="InvalidOperationException">The builder was resumed.</exception>
+    public CadesDeferredSignerBuilder WithContentOutsideSession()
+    {
+        EnsurePhaseOne(nameof(WithContentOutsideSession));
+        return new CadesDeferredSignerBuilder(_inner, _session, _sessionIntegrityKey, hasContent: false);
     }
 
     /// <summary>Explicitly sets the hash algorithm. Default: SHA-256.</summary>
@@ -315,6 +337,35 @@ public sealed class CadesDeferredSignerBuilder
         return With(_inner.WithLevel(DeferredProfile.WithTimestampOptions(_inner.Profile, timestamp, archiveTimestamp)));
     }
 
+    /// <summary>
+    /// Gives the content of a session prepared with <see cref="WithContentOutsideSession"/>. It must be the
+    /// content phase one signed: its SHA-256 is compared with the one the session carries.
+    /// </summary>
+    /// <param name="data">The content given to <see cref="CadesDeferredSigner.Document(byte[])"/> in phase one. The array is copied.</param>
+    /// <returns>A new builder with the content.</returns>
+    /// <exception cref="InvalidOperationException">The builder was not resumed, or its session carries the content.</exception>
+    /// <exception cref="ArgumentException">The data is not the content the session was prepared for.</exception>
+    public CadesDeferredSignerBuilder WithContent(byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        if (_session is null)
+        {
+            throw new InvalidOperationException("WithContent completes a resumed session; when preparing, the content is given to Document().");
+        }
+
+        if (_session.ContentSha256 is not { } expected)
+        {
+            throw new InvalidOperationException("The session carries its content: WithContent is for a session prepared with WithContentOutsideSession().");
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(data), expected))
+        {
+            throw new ArgumentException("The data is not the content this session was prepared for.", nameof(data));
+        }
+
+        return new CadesDeferredSignerBuilder(_inner.WithData(data), _session, _sessionIntegrityKey, hasContent: true);
+    }
+
     #endregion
 
     #region Execution
@@ -344,7 +395,7 @@ public sealed class CadesDeferredSignerBuilder
         byte[] sessionIntegrityKey = _sessionIntegrityKey ?? throw new SigningException(
             "A session integrity key is required. Call WithSessionIntegrityKey() before preparing a deferred signature.",
             SigningErrorReason.LevelDependenciesMissing);
-        return _inner.PrepareDeferredAsync(sessionIntegrityKey, cancellationToken);
+        return _inner.PrepareDeferredAsync(sessionIntegrityKey, _hasContent, cancellationToken);
     }
 
     /// <summary>
@@ -387,13 +438,19 @@ public sealed class CadesDeferredSignerBuilder
 
         CadesDeferredSession session = _session ?? throw new InvalidOperationException(
             "Only a builder returned by CadesDeferredSigner.Resume can complete a persisted session.");
+        if (!_hasContent)
+        {
+            throw new InvalidOperationException(
+                "The session was prepared without its content: give it with WithContent() before completing.");
+        }
+
         return _inner.CompleteDeferredAsync(session, rawSignature, cancellationToken);
     }
 
     #endregion
 
     private CadesDeferredSignerBuilder With(CadesSignerBuilder inner) =>
-        new(inner, _session, _sessionIntegrityKey);
+        new(inner, _session, _sessionIntegrityKey, _hasContent);
 
     private CadesDeferredSignerBuilder PhaseOne(Func<CadesSignerBuilder, CadesSignerBuilder> configure, [CallerMemberName] string method = "")
     {

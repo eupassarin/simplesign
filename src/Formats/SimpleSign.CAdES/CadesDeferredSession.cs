@@ -20,8 +20,14 @@ internal sealed class CadesDeferredSession
     /// <summary>The DER signed attributes: the bytes the external signer signs.</summary>
     public required byte[] SignedAttributes { get; init; }
 
-    /// <summary>The signed content: encapsulated in an attached signature, read back for a detached one.</summary>
-    public required byte[] Content { get; init; }
+    /// <summary>
+    /// The signed content: encapsulated in an attached signature, read back for a detached one. Null when it
+    /// was kept out of the session: phase two is then given it again, and <see cref="ContentSha256"/> checks it.
+    /// </summary>
+    public byte[]? Content { get; init; }
+
+    /// <summary>The SHA-256 of the content, when the content is not in the session.</summary>
+    public byte[]? ContentSha256 { get; init; }
 
     /// <summary>Whether the content is encapsulated in the signature (.p7m).</summary>
     public bool Attached { get; init; }

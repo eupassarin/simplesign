@@ -20,7 +20,7 @@ public sealed partial class CadesSignerBuilder
     /// <summary>A builder that completes <paramref name="session"/>: its content, level and unsigned additions.</summary>
     internal static CadesSignerBuilder ForDeferredCompletion(CadesDeferredSession session)
     {
-        var builder = new CadesSignerBuilder(session.Content, logger: null);
+        var builder = new CadesSignerBuilder(session.Content ?? [], logger: null);
         return builder.With(builder._options with
         {
             Profile = DeferredProfile.Restore(
@@ -35,15 +35,22 @@ public sealed partial class CadesSignerBuilder
         });
     }
 
+    /// <summary>The same builder over <paramref name="data"/>: the content of a session that does not carry it.</summary>
+    internal CadesSignerBuilder WithData(byte[] data) => new((byte[])data.Clone(), _options);
+
     /// <summary>
     /// Phase one: checks the certificate, chain and algorithms against the signing policy, builds the signed
     /// attributes and returns them with the session. A refusal is recorded by the audit sink.
     /// </summary>
-    internal async Task<CadesDeferredPrepareResult> PrepareDeferredAsync(byte[] sessionIntegrityKey, CancellationToken cancellationToken)
+    /// <param name="sessionIntegrityKey">The HMAC key of the session.</param>
+    /// <param name="contentInSession">Whether the session carries the content, or only its digest.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    internal async Task<CadesDeferredPrepareResult> PrepareDeferredAsync(
+        byte[] sessionIntegrityKey, bool contentInSession, CancellationToken cancellationToken)
     {
         try
         {
-            return await PrepareDeferredCoreAsync(sessionIntegrityKey, cancellationToken).ConfigureAwait(false);
+            return await PrepareDeferredCoreAsync(sessionIntegrityKey, contentInSession, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (_options.AuditSink is not null && ex is not OperationCanceledException)
         {
@@ -55,7 +62,8 @@ public sealed partial class CadesSignerBuilder
         }
     }
 
-    private async Task<CadesDeferredPrepareResult> PrepareDeferredCoreAsync(byte[] sessionIntegrityKey, CancellationToken cancellationToken)
+    private async Task<CadesDeferredPrepareResult> PrepareDeferredCoreAsync(
+        byte[] sessionIntegrityKey, bool contentInSession, CancellationToken cancellationToken)
     {
         var credential = _options.Credential
             ?? throw new SigningException(
@@ -75,7 +83,8 @@ public sealed partial class CadesSignerBuilder
         var session = new CadesDeferredSession
         {
             SignedAttributes = signedAttributes,
-            Content = _data,
+            Content = contentInSession ? _data : null,
+            ContentSha256 = contentInSession ? null : SHA256.HashData(_data),
             Attached = _options.ContentType == CadesContentType.Enveloped,
             CertificateDer = start.Certificate.RawData,
             ExtraCertificatesDer = start.Chain.Count == 0 ? null : [.. start.Chain.Select(c => c.RawData)],
@@ -159,7 +168,7 @@ public sealed partial class CadesSignerBuilder
         byte[] cms = CmsSignatureBuilder.BuildSignedData(
             CmsSignatureBuilder.GetDigestOid(algorithm.HashAlgorithm), algorithm.SignatureAlgorithmOid, algorithm.HashAlgorithm,
             session.SignedAttributes, rawSignature, certificate, [certificate, .. chain],
-            eContent: session.Attached ? session.Content : null);
+            eContent: session.Attached ? _data : null);
 
         // The policy store goes in before the timestamps, so an archive timestamp covers it.
         if (session.PolicyStoreAttribute is { } policyStore)
