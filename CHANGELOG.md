@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Two-phase (deferred) signing for CAdES and XAdES
+
+- `CadesDeferredSigner` and `XadesDeferredSigner`, with the shape of the PAdES `DeferredSigner`:
+  `Document(...).WithCertificate(publicCertificate).WithSessionIntegrityKey(key)…PrepareAsync()` runs the signing
+  policy and returns the bytes to sign (`DataToSign`: the DER signed attributes, or the canonical `ds:SignedInfo`) with
+  a session; `Resume(sessionData, key)…CompleteAsync(rawSignature)` verifies the raw signature against the certificate,
+  assembles the signature and finishes B-B to B-LTA, in the same process or in another one.
+- Every form: CAdES detached and attached; XAdES enveloped, enveloping and detached, with additional data objects.
+  The deferred builders take every option of `CadesSignerBuilder` / `XadesSignerBuilder` except `WithExternalSigner`.
+  What is signed (signing time, commitment type, signer roles, signature policy, content and data-objects timestamps…)
+  is fixed in phase one and throws on a resumed builder.
+- Phase one records a refusal of the signing policy with the audit sink; phase two records its outcome. The operation
+  id of phase one travels in the session.
+- On the resumed builder: `WithTimestampOptions` (TSA credentials, mutual-TLS certificate, expected TSA certificate),
+  `WithHttpClientProvider`, `WithSigningPolicy`, `WithTrustAnchors`, `WithChainRevocationChecker`, `WithAuditSink`,
+  `WithLogger`, `WithOperationId`. `CompleteWithDetailsAsync` returns the achieved level and the warnings.
+- The session is authenticated with HMAC-SHA256 over its stored bytes, so a session prepared by one version completes
+  in another. It holds the prepared artifact and the content, not the options (ADR 0028).
+- `ToSigningRequest()` on the prepare results of the three formats: the `ExternalSigningRequest` an `IExternalSigner`
+  receives (data, algorithms, operation id, RSASSA-PSS parameters).
+
+### Added — `DeferredSignerBuilder` (PAdES) takes the options of `PadesSignerBuilder`
+
+- New on the deferred builder: `WithOperationId`, `WithPdfAPreservation`, `WithSignaturePolicy`,
+  `WithCountryExtension` (and `CountryExtensions`), `WithSigningTime`, `WithMetadata`, `WithDocumentInfo`,
+  `WithDssArtifacts`, `WithFieldName`, `WithAppearance`, `AsCertification`, `WithExistingField`, `WithSubFilter`.
+  What the signature covers is set before `PrepareAsync`; these throw on a resumed builder. The operation id and the
+  country extensions are taken in both phases (an extension is not stored in the session: register it again).
+- The session gained `OperationId`, `DssArtifacts` and `LongTermClockSkewSeconds`, written only when used: sessions
+  prepared by earlier versions keep a valid HMAC and still complete.
+- `DeferredSigningPrepareResult.DataToSign` (the bytes of `HashToSign`, under the name CAdES and XAdES use).
+- Preparing now reads the PDF/A level of the document and shapes the signature field for it, as one-call signing does,
+  and `AsCertification` refuses a document that is already signed.
+- A contract test keeps the deferred builders of the three formats from falling behind the one-call builders.
+
+### Fixed — XAdES with an external ECDSA key
+
+- `XadesSigner…WithExternalSigner` (and `XadesSigner.CounterSign` with an external signer) wrote the ECDSA signature
+  as the DER SEQUENCE { r, s } the external signer returns. `ds:SignatureValue` takes `r || s` (W3C XMLDSig Core 1.1
+  §6.4.3), so signing failed its read-back verification. The value is now converted.
+
+### Fixed — Broken link in the `SimpleSign.Peru.Iofe` package readme
+
+- The docs link pointed to an article that does not exist; it now points to the articles folder.
+
 ### Fixed — IOFE: timestamping authorities that INDECOPI's list types as `unspecified`
 
 - INDECOPI's trusted list publishes some accredited TSAs as `Svctype/unspecified` (Llama.pe's

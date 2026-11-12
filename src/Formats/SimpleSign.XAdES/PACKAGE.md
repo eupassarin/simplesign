@@ -28,5 +28,8 @@ Also reads ETSI trusted lists (TS 119 612 / TS 102 231 v3) after checking their 
 `TrustedList.Load(xml, new TrustedListOptions { SignerCertificates = [schemeOperator] })` is an
 `ITrustAnchorProvider`.
 
+When the key is on another machine, sign in two phases: `XadesDeferredSigner.Document(xml)…PrepareAsync()` returns
+the bytes to sign and a session; `XadesDeferredSigner.Resume(session, key).CompleteAsync(signature)` finishes the signature.
+
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
 and the [docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles). MIT licensed.

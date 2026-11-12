@@ -196,6 +196,37 @@ the `ValidateAsync` methods of the CAdES and XAdES validators through `ChainRevo
 chain validators). CRL distribution points on `ldap://`/`ldaps://` are followed only with
 `OutboundHttpPolicy { AllowLdap = true }`, under the same host checks.
 
+## Two-phase signing
+
+When the key is on another machine (a token behind a browser or a local agent), prepare the signature
+on the server, have the key sign the bytes, and complete it afterwards — in the same process or in
+another one. `CadesDeferredSigner` and `XadesDeferredSigner` take every option of the builders above
+except `WithExternalSigner`:
+
+```csharp
+// CAdES: the bytes to sign are the DER signed attributes
+var prepared = await CadesDeferredSigner.Document(data)
+    .WithCertificate(publicCertificate, chain)
+    .WithSessionIntegrityKey(sessionIntegrityKey)      // 32 bytes or more, owned by the server
+    .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(tsa)))
+    .PrepareAsync();
+byte[] cms = await CadesDeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)
+    .CompleteAsync(rawSignature);
+
+// XAdES: the bytes to sign are the canonical ds:SignedInfo
+var preparedXml = await XadesDeferredSigner.Document(xml)
+    .WithCertificate(publicCertificate, chain)
+    .WithSessionIntegrityKey(sessionIntegrityKey)
+    .WithForm(XadesForm.Detached).WithDataUri("invoice.xml")
+    .PrepareAsync();
+byte[] signedXml = await XadesDeferredSigner.Resume(preparedXml.SessionData, sessionIntegrityKey)
+    .CompleteAsync(rawSignature);
+```
+
+Phase one runs the signing policy and fixes what is signed; phase two verifies the signature against
+the certificate and finishes the level. See [Deferred signing](deferred-signing.md) for what each
+phase decides, what is given again on the resumed builder, and the session.
+
 ## Signing Policy
 
 `CadesSigner` and `XadesSigner` check the certificate before signing like `PadesSigner`: `SigningPolicy.Default`
