@@ -1448,6 +1448,134 @@ public sealed class CliCommandTests : IDisposable
         validateExit.ShouldBe(0, validateOutput);
     }
 
+    /// <summary>Signs a prepared signature's data to sign with the test certificate's key, as the signer elsewhere would.</summary>
+    private async Task<string> SignOutsideAsync(string input)
+    {
+        byte[] toSign = await File.ReadAllBytesAsync(input + ".tbs");
+        using var rsa = _cert.GetRSAPrivateKey()!;
+        await File.WriteAllBytesAsync(input + ".sig", rsa.SignData(toSign,
+            System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1));
+        return input + ".sig";
+    }
+
+    [Fact]
+    public async Task SignPrepare_TakesTheOptionsOfSignAndDeferredCompleteFinishesIt()
+    {
+        string pdf = WritePdf("prepare.pdf");
+        string key = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var (prepareExit, prepareOutput) = await RunAsync("sign", pdf, "--cert", _cerPath, "--prepare", "--session-key", key,
+            "--reason", "Prepared with sign", "--field-name", "TwoPhases", "--doc-info", "Title=Prepared", "--operation-id", "cli-op", "--pdfa", "--json");
+        prepareExit.ShouldBe(0, prepareOutput);
+        prepareOutput.ShouldContain("\"format\": \"pades\"");
+        string signature = await SignOutsideAsync(pdf);
+
+        string signed = Path.Combine(_tempDir, "prepare-signed.pdf");
+        var (completeExit, completeOutput) = await RunAsync("deferred", "complete", pdf + ".session", "--session-key", key,
+            "--signature", signature, "-o", signed, "--json");
+
+        completeExit.ShouldBe(0, completeOutput);
+        completeOutput.ShouldContain("\"achievedLevel\": \"B-B\"");
+        var (validateExit, validateOutput) = await RunAsync("validate", signed, "--trust", _cerPath, "--no-revocation", "--json");
+        validateExit.ShouldBe(0, validateOutput);
+        string text = System.Text.Encoding.Latin1.GetString(await File.ReadAllBytesAsync(signed));
+        text.ShouldContain("Prepared with sign");
+        text.ShouldContain("TwoPhases");
+        text.ShouldContain("/Title (Prepared)");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task CadesSignPrepare_DeferredCompleteWritesACmsThatValidates(bool attached, bool contentOutside)
+    {
+        string data = Path.Combine(_tempDir, $"prepare-{attached}-{contentOutside}.bin");
+        await File.WriteAllBytesAsync(data, "content signed in two phases by the CLI"u8.ToArray());
+        string key = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        string[] options = [.. attached ? new[] { "--content-type", "enveloped" } : [], .. contentOutside ? new[] { "--content-outside-session" } : []];
+        var (prepareExit, prepareOutput) = await RunAsync(
+            ["cades", "sign", data, "--cert", _cerPath, "--prepare", "--session-key", key, "--commitment", "approval", "--json", .. options]);
+        prepareExit.ShouldBe(0, prepareOutput);
+        prepareOutput.ShouldContain("\"format\": \"cades\"");
+        string signature = await SignOutsideAsync(data);
+        string signed = data + (attached ? ".p7m" : ".p7s");
+        string[] complete = ["deferred", "complete", data + ".session", "--session-key", key, "--signature", signature, "-o", signed];
+
+        if (contentOutside)
+        {
+            var (missingExit, missingOutput) = await RunAsync(complete);
+            missingExit.ShouldNotBe(0);
+            missingOutput.ShouldContain("WithContent");
+            complete = [.. complete, "--content", data];
+        }
+
+        var (completeExit, completeOutput) = await RunAsync(complete);
+
+        completeExit.ShouldBe(0, completeOutput);
+        string[] validate = attached
+            ? ["cades", "validate", signed, "--trust", _cerPath, "--json"]
+            : ["cades", "validate", signed, "--data", data, "--trust", _cerPath, "--json"];
+        var (validateExit, validateOutput) = await RunAsync(validate);
+        validateExit.ShouldBe(0, validateOutput);
+    }
+
+    [Theory]
+    [InlineData("enveloped")]
+    [InlineData("enveloping")]
+    [InlineData("detached")]
+    public async Task XadesSignPrepare_DeferredCompleteWritesAnXmlThatValidates(string form)
+    {
+        string xml = Path.Combine(_tempDir, $"prepare-{form}.xml");
+        await File.WriteAllTextAsync(xml, "<?xml version=\"1.0\"?><order><id>7</id></order>");
+        string key = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        string[] formOptions = form == "detached" ? ["--form", form, "--data-uri", "order.xml", "--detached-data-outside-session"] : ["--form", form];
+        var (prepareExit, prepareOutput) = await RunAsync(
+            ["xades", "sign", xml, "--cert", _cerPath, "--prepare", "--session-key", key, "--signer-role", "Approver", "--json", .. formOptions]);
+        prepareExit.ShouldBe(0, prepareOutput);
+        prepareOutput.ShouldContain("\"format\": \"xades\"");
+        string signature = await SignOutsideAsync(xml);
+        string signed = xml + ".signed.xml";
+        string[] detachedData = form == "detached" ? ["--detached-data", xml] : [];
+
+        var (completeExit, completeOutput) = await RunAsync(
+            ["deferred", "complete", xml + ".session", "--session-key", key, "--signature", signature, "-o", signed, .. detachedData]);
+
+        completeExit.ShouldBe(0, completeOutput);
+        string[] data = form == "detached" ? ["--data", xml] : [];
+        var (validateExit, validateOutput) = await RunAsync(["xades", "validate", signed, "--trust", _cerPath, "--json", .. data]);
+        validateExit.ShouldBe(0, validateOutput);
+        (await File.ReadAllTextAsync(signed)).ShouldContain("Approver");
+    }
+
+    [Theory]
+    [InlineData(new[] { "--prepare" }, "--session-key is required")]
+    [InlineData(new[] { "--prepare", "--session-key", "00" }, "at least 32 bytes")]
+    [InlineData(new[] { "--session", "x.session" }, "require --prepare")]
+    [InlineData(new[] { "--prepare", "--session-key", "0000000000000000000000000000000000000000000000000000000000000000", "--password", "x" }, "--password is not used")]
+    [InlineData(new[] { "--prepare", "--session-key", "0000000000000000000000000000000000000000000000000000000000000000", "-o", "out.pdf" }, "--output is written by")]
+    public async Task SignPrepare_OptionsThatDoNotGoTogether_ReturnError(string[] options, string expected)
+    {
+        var (exit, output) = await RunAsync(["sign", WritePdf("prepare-bad.pdf"), "--cert", _cerPath, .. options]);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain(expected);
+    }
+
+    [Fact]
+    public async Task DeferredComplete_OptionOfAnotherFormat_ReturnsError()
+    {
+        string pdf = WritePdf("wrong-format.pdf");
+        string key = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        (await RunAsync("deferred", "prepare", pdf, "--cert", _cerPath, "--session-key", key)).Exit.ShouldBe(0);
+        string signature = await SignOutsideAsync(pdf);
+
+        var (exit, output) = await RunAsync("deferred", "complete", pdf + ".session", "--session-key", key,
+            "--signature", signature, "-o", pdf + ".out", "--content", pdf);
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("this one is PAdES");
+    }
+
     [Theory]
     [InlineData("00", "at least 32 bytes")]
     [InlineData(null, "--session-key is required")]

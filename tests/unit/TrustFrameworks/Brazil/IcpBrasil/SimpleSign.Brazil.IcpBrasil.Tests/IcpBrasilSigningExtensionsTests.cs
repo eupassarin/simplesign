@@ -136,6 +136,31 @@ public sealed class IcpBrasilSigningExtensionsTests
     }
 
     [Fact]
+    public async Task WithHealthDocument_TwoPhaseSignature_WritesTheSameEntries()
+    {
+        byte[] key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        using var cert = TestCertificateFactory.CreateSelfSignedCert();
+        using var publicCert = RemoteKey.PublicOnly(cert);
+
+        var prepared = await DeferredSigner.Document(PdfWithInfo())
+            .WithCertificate(publicCert)
+            .WithSessionIntegrityKey(key)
+            .WithIcpBrasilPolicy()
+            .WithHealthDocument(HealthDocumentType.Prescricao, new ProfessionalRegistration(ProfessionalCouncil.Cfm, "123456", "SP", null))
+            .PrepareAsync();
+        byte[] signed = await DeferredSigner.Resume(prepared.SessionData, key).CompleteAsync(RemoteKey.Sign(cert, prepared.ToSigningRequest()));
+
+        string text = Encoding.Latin1.GetString(signed);
+        string revision = text[text.LastIndexOf("%PDF", StringComparison.Ordinal)..];
+        revision.ShouldContain("/2.16.76.1.12.1.1 <FEFF");
+        revision.ShouldContain("/2.16.76.1.4.2.2.1 (123456)");
+        revision.ShouldContain("/2.16.76.1.4.2.2.2 (SP)");
+        revision.ShouldContain("/Title (Receita)");
+        text.ShouldContain("/SubFilter /PBAD.PAdES");
+        Should.Throw<ArgumentException>(() => DeferredSigner.Document(PdfWithInfo()).WithHealthDocument(HealthDocumentType.Atestado));
+    }
+
+    [Fact]
     public async Task WithHealthDocument_WritesOidKeysIntoInfoAndKeepsExistingEntries()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert();

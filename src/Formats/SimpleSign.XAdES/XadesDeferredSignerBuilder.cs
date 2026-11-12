@@ -33,7 +33,7 @@ namespace SimpleSign.XAdES;
 /// the TSA credentials.
 /// </para>
 /// <para>
-/// A countersignature is not built in two phases: use <see cref="XadesSigner.CounterSign"/> with an external signer.
+/// A countersignature is prepared with <see cref="XadesDeferredSigner.CounterSign"/>.
 /// </para>
 /// </remarks>
 [RequiresUnreferencedCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
@@ -44,11 +44,25 @@ public sealed class XadesDeferredSignerBuilder
     private readonly XadesDeferredSession? _session;
     private readonly byte[]? _sessionIntegrityKey;
 
+    /// <summary>Phase one: whether the session carries the detached document and the external data objects.</summary>
+    private readonly bool _detachedDataInSession;
+
+    /// <summary>Phase two: what the session does not carry and was given again ("" stands for the detached document).</summary>
+    private readonly IReadOnlySet<string> _supplied;
+
     internal XadesDeferredSignerBuilder(XadesSignerBuilder inner, XadesDeferredSession? session, byte[]? sessionIntegrityKey)
+        : this(inner, session, sessionIntegrityKey, detachedDataInSession: true, supplied: new HashSet<string>(StringComparer.Ordinal))
+    {
+    }
+
+    private XadesDeferredSignerBuilder(
+        XadesSignerBuilder inner, XadesDeferredSession? session, byte[]? sessionIntegrityKey, bool detachedDataInSession, IReadOnlySet<string> supplied)
     {
         _inner = inner;
         _session = session;
         _sessionIntegrityKey = sessionIntegrityKey;
+        _detachedDataInSession = detachedDataInSession;
+        _supplied = supplied;
     }
 
     /// <summary>The signer certificate given to <c>WithCertificate</c>, or <see langword="null"/> before it is called and on a resumed builder.</summary>
@@ -94,7 +108,22 @@ public sealed class XadesDeferredSignerBuilder
     {
         DeferredSessionEnvelope.ValidateKey(key, nameof(key));
         EnsurePhaseOne(nameof(WithSessionIntegrityKey));
-        return new XadesDeferredSignerBuilder(_inner, _session, [.. key]);
+        return new XadesDeferredSignerBuilder(_inner, _session, [.. key], _detachedDataInSession, _supplied);
+    }
+
+    /// <summary>
+    /// Keeps out of the session the data the signature references outside the document: the signed document of
+    /// the detached form and the external additional data objects. The session then carries only their SHA-256,
+    /// and the builder that resumes it is given them again with <see cref="WithDetachedData(byte[])"/> and
+    /// <see cref="WithExternalData(string, byte[])"/>. Data inside the signed document (enveloped and enveloping
+    /// forms, embedded data objects) is part of the prepared XML and always travels in the session.
+    /// </summary>
+    /// <returns>A new builder that prepares a session without the detached data.</returns>
+    /// <exception cref="InvalidOperationException">The builder was resumed.</exception>
+    public XadesDeferredSignerBuilder WithDetachedDataOutsideSession()
+    {
+        EnsurePhaseOne(nameof(WithDetachedDataOutsideSession));
+        return new XadesDeferredSignerBuilder(_inner, _session, _sessionIntegrityKey, detachedDataInSession: false, _supplied);
     }
 
     /// <summary>Explicitly sets the hash algorithm. Default: SHA-256.</summary>
@@ -347,6 +376,62 @@ public sealed class XadesDeferredSignerBuilder
         return With(_inner.WithLevel(DeferredProfile.WithTimestampOptions(_inner.Profile, timestamp, archiveTimestamp)));
     }
 
+    /// <summary>
+    /// Gives the signed document of a detached signature whose session was prepared with
+    /// <see cref="WithDetachedDataOutsideSession"/>. It must be the document phase one signed: its SHA-256 is
+    /// compared with the one the session carries.
+    /// </summary>
+    /// <param name="document">The document given to <see cref="XadesDeferredSigner.Document(byte[])"/> in phase one. The array is copied.</param>
+    /// <returns>A new builder with the document.</returns>
+    /// <exception cref="InvalidOperationException">The builder was not resumed, or its session does not wait for a detached document.</exception>
+    /// <exception cref="ArgumentException">The data is not the document the session was prepared for.</exception>
+    public XadesDeferredSignerBuilder WithDetachedData(byte[] document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        XadesDeferredSession session = _session ?? throw new InvalidOperationException(
+            "WithDetachedData completes a resumed session; when preparing, the document is given to Document().");
+        if (session.DetachedContentSha256 is not { } expected)
+        {
+            throw new InvalidOperationException(
+                "The session does not wait for a detached document: WithDetachedData is for a detached signature prepared with WithDetachedDataOutsideSession().");
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(document), expected))
+        {
+            throw new ArgumentException("The data is not the document this session was prepared for.", nameof(document));
+        }
+
+        return new XadesDeferredSignerBuilder(
+            _inner.WithDetachedDocument(document), _session, _sessionIntegrityKey, _detachedDataInSession, new HashSet<string>(_supplied, StringComparer.Ordinal) { string.Empty });
+    }
+
+    /// <summary>
+    /// Gives an external additional data object of a session prepared with
+    /// <see cref="WithDetachedDataOutsideSession"/>, by the URI of its reference. Its SHA-256 is compared with
+    /// the one the session carries.
+    /// </summary>
+    /// <param name="uri">The URI given to <see cref="XadesDataObject.External"/> in phase one.</param>
+    /// <param name="content">The data of the object. It is copied.</param>
+    /// <returns>A new builder with the data object.</returns>
+    /// <exception cref="InvalidOperationException">The builder was not resumed.</exception>
+    /// <exception cref="ArgumentException">The session does not wait for an object with that URI, or the data is not the one it was prepared for.</exception>
+    public XadesDeferredSignerBuilder WithExternalData(string uri, byte[] content)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(uri);
+        ArgumentNullException.ThrowIfNull(content);
+        XadesDeferredSession session = _session ?? throw new InvalidOperationException(
+            "WithExternalData completes a resumed session; when preparing, external data goes in WithAdditionalDataObject().");
+        byte[] expected = (session.ExternalDataObjects ?? []).FirstOrDefault(o => o.Uri == uri && o.Sha256 is not null)?.Sha256
+            ?? throw new ArgumentException($"The session does not wait for an external data object with the URI '{uri}'.", nameof(uri));
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(content), expected))
+        {
+            throw new ArgumentException($"The data is not the object '{uri}' this session was prepared for.", nameof(content));
+        }
+
+        return new XadesDeferredSignerBuilder(
+            _inner.WithExternalDataObject(uri, content), _session, _sessionIntegrityKey, _detachedDataInSession, new HashSet<string>(_supplied, StringComparer.Ordinal) { uri });
+    }
+
     #endregion
 
     #region Execution
@@ -377,7 +462,7 @@ public sealed class XadesDeferredSignerBuilder
         byte[] sessionIntegrityKey = _sessionIntegrityKey ?? throw new SigningException(
             "A session integrity key is required. Call WithSessionIntegrityKey() before preparing a deferred signature.",
             SigningErrorReason.LevelDependenciesMissing);
-        return _inner.PrepareDeferredAsync(sessionIntegrityKey, cancellationToken);
+        return _inner.PrepareDeferredAsync(sessionIntegrityKey, _detachedDataInSession, cancellationToken);
     }
 
     /// <summary>
@@ -420,13 +505,25 @@ public sealed class XadesDeferredSignerBuilder
 
         XadesDeferredSession session = _session ?? throw new InvalidOperationException(
             "Only a builder returned by XadesDeferredSigner.Resume can complete a persisted session.");
+        if (session.DetachedContentSha256 is not null && !_supplied.Contains(string.Empty))
+        {
+            throw new InvalidOperationException(
+                "The session was prepared without its detached document: give it with WithDetachedData() before completing.");
+        }
+
+        if ((session.ExternalDataObjects ?? []).FirstOrDefault(o => o.Sha256 is not null && !_supplied.Contains(o.Uri)) is { } missing)
+        {
+            throw new InvalidOperationException(
+                $"The session was prepared without the external data object '{missing.Uri}': give it with WithExternalData() before completing.");
+        }
+
         return _inner.CompleteDeferredAsync(session, rawSignature, cancellationToken);
     }
 
     #endregion
 
     private XadesDeferredSignerBuilder With(XadesSignerBuilder inner) =>
-        new(inner, _session, _sessionIntegrityKey);
+        new(inner, _session, _sessionIntegrityKey, _detachedDataInSession, _supplied);
 
     private XadesDeferredSignerBuilder PhaseOne(Func<XadesSignerBuilder, XadesSignerBuilder> configure, [CallerMemberName] string method = "")
     {

@@ -30,6 +30,12 @@ internal sealed class XadesDeferredSession
     /// <summary>The signed document of the detached form, which is not inside <see cref="PreparedXml"/>.</summary>
     public byte[]? DetachedContent { get; init; }
 
+    /// <summary>
+    /// The SHA-256 of the signed document of the detached form, when it was kept out of the session: phase
+    /// two is then given the document again, and this checks it.
+    /// </summary>
+    public byte[]? DetachedContentSha256 { get; init; }
+
     /// <summary>The additional data objects kept outside the signature, by the URI of their reference.</summary>
     public XadesDeferredExternalObject[]? ExternalDataObjects { get; init; }
 
@@ -75,6 +81,9 @@ internal sealed class XadesDeferredSession
     /// <summary>The operation id given in phase one, for the audit record and the logs of phase two.</summary>
     public string? OperationId { get; init; }
 
+    /// <summary>Whether the signature being made countersigns a signature of the document.</summary>
+    public bool CounterSignature { get; init; }
+
     /// <summary>Serializes the session, authenticated with <paramref name="key"/>.</summary>
     internal byte[] Protect(byte[] key) =>
         DeferredSessionEnvelope.Protect(this, XadesDeferredSessionJsonContext.Default.XadesDeferredSession, Format, key);
@@ -90,8 +99,11 @@ internal sealed class XadesDeferredExternalObject
     /// <summary>The URI of the ds:Reference.</summary>
     public required string Uri { get; init; }
 
-    /// <summary>The data the reference digests.</summary>
-    public required byte[] Content { get; init; }
+    /// <summary>The data the reference digests; null when it was kept out of the session.</summary>
+    public byte[]? Content { get; init; }
+
+    /// <summary>The SHA-256 of the data, when the data is not in the session.</summary>
+    public byte[]? Sha256 { get; init; }
 }
 
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault)]

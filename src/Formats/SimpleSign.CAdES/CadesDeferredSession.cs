@@ -20,8 +20,14 @@ internal sealed class CadesDeferredSession
     /// <summary>The DER signed attributes: the bytes the external signer signs.</summary>
     public required byte[] SignedAttributes { get; init; }
 
-    /// <summary>The signed content: encapsulated in an attached signature, read back for a detached one.</summary>
-    public required byte[] Content { get; init; }
+    /// <summary>
+    /// The signed content: encapsulated in an attached signature, read back for a detached one. Null when it
+    /// was kept out of the session: phase two is then given it again, and <see cref="ContentSha256"/> checks it.
+    /// </summary>
+    public byte[]? Content { get; init; }
+
+    /// <summary>The SHA-256 of the content, when the content is not in the session.</summary>
+    public byte[]? ContentSha256 { get; init; }
 
     /// <summary>Whether the content is encapsulated in the signature (.p7m).</summary>
     public bool Attached { get; init; }
@@ -67,6 +73,15 @@ internal sealed class CadesDeferredSession
 
     /// <summary>The operation id given in phase one, for the audit record and the logs of phase two.</summary>
     public string? OperationId { get; init; }
+
+    /// <summary>The existing signature the new signer is added to (co-signature), or null.</summary>
+    public byte[]? CoSignTarget { get; init; }
+
+    /// <summary>The existing signature one of whose signers is countersigned, or null. <see cref="Content"/> is then that signer's signature value.</summary>
+    public byte[]? CounterSignTarget { get; init; }
+
+    /// <summary>The signer of <see cref="CounterSignTarget"/> that is countersigned.</summary>
+    public int CounterSignIndex { get; init; }
 
     /// <summary>Serializes the session, authenticated with <paramref name="key"/>.</summary>
     internal byte[] Protect(byte[] key) =>

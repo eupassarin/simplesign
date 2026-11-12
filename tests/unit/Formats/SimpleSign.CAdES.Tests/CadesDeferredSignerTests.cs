@@ -219,6 +219,60 @@ public sealed class CadesDeferredSignerTests : IDisposable
         CmsParser.Parse(cms).SignatureAlgorithmOid.ShouldBe(Oids.RsaPss);
     }
 
+    // ── Co-signature and countersignature ─────────────────────────────────
+
+    [Theory]
+    [InlineData(CadesContentType.Detached)]
+    [InlineData(CadesContentType.Enveloped)]
+    public async Task CoSign_SecondSignerInTwoPhases_BothSignersValidate(CadesContentType contentType)
+    {
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_ecdsa);
+        byte[] first = await CadesSigner.Document(_data).WithCertificate(_rsa).WithContentType(contentType).SignAsync();
+
+        CadesDeferredPrepareResult prepared = await CadesDeferredSigner
+            .CoSign(first, contentType == CadesContentType.Detached ? _data : null)
+            .WithCertificate(publicCertificate)
+            .WithSessionIntegrityKey(s_key)
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(TsaUrl))))
+            .PrepareAsync();
+        CadesSigningResult result = await CadesDeferredSigner.Resume(prepared.SessionData, s_key)
+            .WithHttpClientProvider(Http)
+            .CompleteWithDetailsAsync(RemoteKey.Sign(_ecdsa, prepared.ToSigningRequest()));
+
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        var report = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false, TrustedRoots = [_rsa, _ecdsa] })
+            .ValidateAll(result.SignedArtifact, contentType == CadesContentType.Detached ? _data : null);
+        report.IsValid.ShouldBeTrue(string.Join("; ", report.Signers.SelectMany(s => s.Result.Errors)));
+        report.Signers.Select(s => s.Result.SignerCertificate!.Subject).ShouldBe([_rsa.Subject, _ecdsa.Subject]);
+        if (contentType == CadesContentType.Enveloped)
+        {
+            CadesSigner.ExtractContent(result.SignedArtifact).ShouldBe(_data);
+        }
+    }
+
+    [Fact]
+    public async Task CounterSign_InTwoPhases_IsStoredUnderTheSignerItCountersigns()
+    {
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_ecdsa);
+        byte[] signed = await CadesSigner.Document(_data).WithCertificate(_rsa).SignAsync();
+
+        CadesDeferredPrepareResult prepared = await CadesDeferredSigner.CounterSign(signed)
+            .WithCertificate(publicCertificate)
+            .WithSessionIntegrityKey(s_key)
+            .PrepareAsync();
+        byte[] countersigned = await CadesDeferredSigner.Resume(prepared.SessionData, s_key)
+            .CompleteAsync(RemoteKey.Sign(_ecdsa, prepared.ToSigningRequest()));
+
+        var report = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false, TrustedRoots = [_rsa, _ecdsa] })
+            .ValidateAll(countersigned, _data);
+        report.IsValid.ShouldBeTrue(string.Join("; ", report.Errors.Concat(report.Signers.SelectMany(s => s.Result.Errors))));
+        var signer = report.Signers.ShouldHaveSingleItem();
+        signer.CounterSignatures.ShouldHaveSingleItem().Result.SignerCertificate!.Subject.ShouldBe(_ecdsa.Subject);
+        // A countersignature has no content-type attribute (RFC 5652 §11.4).
+        new System.Formats.Asn1.AsnReader(prepared.DataToSign, System.Formats.Asn1.AsnEncodingRules.DER).ReadSetOf().ShouldNotBeNull();
+        Convert.ToHexString(prepared.DataToSign).ShouldNotContain("06092A864886F70D010903");
+    }
+
     // ── What is signed is fixed in phase one ──────────────────────────────
 
     [Fact]
@@ -389,6 +443,55 @@ public sealed class CadesDeferredSignerTests : IDisposable
         restored.LongTermValidation.ShouldNotBeNull().RevocationPreference.ShouldBe(RevocationPreference.CrlFirst);
         restored.LongTermValidation.ClockSkewTolerance.ShouldBe(TimeSpan.FromSeconds(42));
         restored.ArchiveTimestamp.ShouldNotBeNull().Endpoint.ShouldBe(new Uri("http://198.51.100.1/archive-tsa"));
+    }
+
+    // ── Content kept out of the session ───────────────────────────────────
+
+    [Theory]
+    [InlineData(CadesContentType.Detached)]
+    [InlineData(CadesContentType.Enveloped)]
+    public async Task WithContentOutsideSession_ContentIsGivenAgainAtResume(CadesContentType contentType)
+    {
+        byte[] large = RandomNumberGenerator.GetBytes(64 * 1024);
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_pki.Leaf);
+        var tsa = new TimestampOptions(new Uri(TsaUrl));
+        CadesDeferredPrepareResult prepared = await CadesDeferredSigner.Document(large)
+            .WithCertificate(publicCertificate, _pki.IntermediatesAndRoot())
+            .WithSessionIntegrityKey(s_key)
+            .WithContentType(contentType)
+            .WithContentOutsideSession()
+            .WithLevel(AdesBaselineProfile.Archive(tsa, new LongTermValidationOptions { RevocationPreference = RevocationPreference.CrlFirst }))
+            .PrepareAsync();
+        byte[] signature = RemoteKey.Sign(_pki.Leaf, prepared.ToSigningRequest());
+
+        // The session has the digest of the content, not the content.
+        prepared.SessionData.Length.ShouldBeLessThan(large.Length / 2);
+        CadesDeferredSession.Read(prepared.SessionData, s_key).Content.ShouldBeNull();
+        CadesDeferredSignerBuilder resumed = CadesDeferredSigner.Resume(prepared.SessionData, s_key).WithHttpClientProvider(Http);
+        await Should.ThrowAsync<InvalidOperationException>(() => resumed.CompleteAsync(signature));
+        Should.Throw<ArgumentException>(() => resumed.WithContent(RandomNumberGenerator.GetBytes(64 * 1024)));
+
+        CadesSigningResult result = await resumed.WithContent(large).CompleteWithDetailsAsync(signature);
+
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Archive);
+        var validated = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false })
+            .Validate(result.SignedArtifact, large, [_pki.IntermediateCa, _pki.RootCa]);
+        validated.IsValid.ShouldBeTrue(string.Join("; ", validated.Errors));
+        validated.HasValidArchiveTimestamp.ShouldBe(true);
+        CmsParser.ParseAll(result.SignedArtifact).EncapsulatedContent.ShouldBe(contentType == CadesContentType.Enveloped ? large : null);
+    }
+
+    [Fact]
+    public async Task WithContent_OnASessionThatCarriesItsContentOrOnABuilderNotResumed_Throws()
+    {
+        using X509Certificate2 publicCertificate = RemoteKey.PublicOnly(_rsa);
+        CadesDeferredSignerBuilder builder = CadesDeferredSigner.Document(_data).WithCertificate(publicCertificate).WithSessionIntegrityKey(s_key);
+        CadesDeferredPrepareResult prepared = await builder.PrepareAsync();
+        CadesDeferredSignerBuilder resumed = CadesDeferredSigner.Resume(prepared.SessionData, s_key);
+
+        Should.Throw<InvalidOperationException>(() => builder.WithContent(_data));
+        Should.Throw<InvalidOperationException>(() => resumed.WithContent(_data));
+        Should.Throw<InvalidOperationException>(() => resumed.WithContentOutsideSession());
     }
 
     // ── The signature ─────────────────────────────────────────────────────

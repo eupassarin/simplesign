@@ -119,17 +119,31 @@ public sealed class CompatibilityTests
         report.CanSign.ShouldBeFalse();
     }
 
-    [Theory]
-    [InlineData(RunMode.Deferred)]
-    [InlineData(RunMode.Batch)]
-    public void Evaluate_DeferredOrBatch_DisablesPoliciesAndBuilderOnlyOptions(RunMode mode)
+    [Fact]
+    public void Evaluate_Batch_DisablesPoliciesAndBuilderOnlyOptions()
     {
-        var report = Compatibility.Evaluate(new SigningOptions { Mode = mode, Kind = SignatureKind.CustomPolicy }, Plain, Rsa);
+        var report = Compatibility.Evaluate(new SigningOptions { Mode = RunMode.Batch, Kind = SignatureKind.CustomPolicy }, Plain, Rsa);
 
         report.Options["kind.CustomPolicy"].Disabled.ShouldNotBeNull();
         report.Options["documentInfo"].Disabled.ShouldNotBeNull();
         report.Options["details.signer"].Disabled.ShouldNotBeNull();
         report.CanSign.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_Deferred_TakesTheOptionsOfOneCallSigning()
+    {
+        // A two-phase signature takes every option of PadesSigner: the signature policy, the signer details,
+        // the signing time, the document information and a profile that may return a lower level.
+        var report = Compatibility.Evaluate(
+            new SigningOptions { Mode = RunMode.Deferred, Level = BaselineLevel.BT, Timestamp = new TimestampChoice { Provider = TsaProvider.DigiCert } }, Plain, Rsa);
+
+        report.Options["kind.CustomPolicy"].Disabled.ShouldBeNull();
+        report.Options["documentInfo"].Disabled.ShouldBeNull();
+        report.Options["details.signer"].Disabled.ShouldBeNull();
+        report.Options["details.signingTime"].Disabled.ShouldBeNull();
+        report.Options["returnLowerLevel"].Disabled.ShouldBeNull();
+        report.CanSign.ShouldBeTrue();
     }
 
     [Fact]

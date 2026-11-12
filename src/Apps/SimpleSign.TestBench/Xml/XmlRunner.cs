@@ -187,7 +187,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                     jobs.File(name, content);
                 }
 
-                var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands), cancellationToken);
+                // Two phases: the TestBench is the signer that is elsewhere, between the two commands.
+                var signOutside = o.TwoPhases
+                    ? TwoPhaseSupport.SignOutside(credential, plan.CliInput, SigningPlan.ToHash(o.Hash), credential.Facts.KeyAlgorithm == "RSA" && o.Padding == RsaPadding.Pss)
+                    : null;
+                var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands, signOutside), cancellationToken);
                 controls.Report(outcome.AuditTrail);
                 if (!outcome.Success)
                 {
@@ -208,7 +212,25 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                     builder = apply(builder);
                 }
 
-                var result = await builder.SignWithDetailsAsync(cancellationToken);
+                XadesSigningResult result;
+                if (o.TwoPhases)
+                {
+                    // Phase 1 (server): the same builder, prepared for a key that signs elsewhere.
+                    byte[] integrityKey = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+                    var prepared = await XadesDeferredSigner.From(builder).WithSessionIntegrityKey(integrityKey).PrepareAsync(cancellationToken);
+
+                    // Phase 2 (signer): the canonical SignedInfo, signed with the credential's key or external signer.
+                    byte[] raw = await SigningRunner.SignRequestAsync(credential, prepared.ToSigningRequest(), cancellationToken);
+
+                    // Phase 3 (server): resume from the session, verify the signature and finish the level.
+                    result = await plan.Resume(XadesDeferredSigner.Resume(prepared.SessionData, integrityKey).WithLogger(RunLog.Logger))
+                        .CompleteWithDetailsAsync(raw, cancellationToken);
+                }
+                else
+                {
+                    result = await builder.SignWithDetailsAsync(cancellationToken);
+                }
+
                 signed = result.SignedArtifact;
                 achieved = result.AchievedLevel switch
                 {
@@ -681,6 +703,24 @@ internal sealed class XadesPlan
 
     public IEnumerable<(string Code, Func<XadesSignerBuilder, XadesSignerBuilder> Apply)> Steps => _steps;
 
+    /// <summary>The file the CLI command signs: the document, or the signed document of a countersignature.</summary>
+    public string CliInput => _o.CounterSign ? XmlRunner.SignedFile : XmlRunner.DataFile;
+
+    /// <summary>What the builder that resumes a two-phase signature is given again.</summary>
+    private ResumeInputs ResumeInputs() =>
+        TwoPhaseSupport.Resume(_context, _o.SigningPolicyId, _o.Level == BaselineLevel.BB ? null : _context.BuildTimestamp(_o.Timestamp, "tsa"));
+
+    /// <summary>Gives the builder that resumes a two-phase signature what its session does not carry.</summary>
+    public XadesDeferredSignerBuilder Resume(XadesDeferredSignerBuilder builder)
+    {
+        var inputs = ResumeInputs();
+        builder = inputs.Http is null ? builder : builder.WithHttpClientProvider(inputs.Http);
+        builder = inputs.Policy is null ? builder : builder.WithSigningPolicy(inputs.Policy);
+        builder = inputs.Anchors.Count == 0 ? builder : builder.WithTrustAnchors([.. inputs.Anchors]);
+        builder = inputs.Audit is null ? builder : builder.WithAuditSink(inputs.Audit);
+        return inputs.Timestamp is null ? builder : builder.WithTimestampOptions(inputs.Timestamp);
+    }
+
     private void AddType()
     {
         if (_o.Kind == XadesKind.CustomPolicy)
@@ -738,23 +778,54 @@ internal sealed class XadesPlan
             sb.Append(line).Append('\n');
         }
 
-        sb.Append(_o.CounterSign
-            ? $"\n// xml is the signed document: the countersignature is embedded in the signature it signs.\nXadesSigningResult result = await XadesSigner.CounterSign(xml{(_o.CounterSignatureId is null ? "" : ", " + SigningPlan.Str(_o.CounterSignatureId))})\n"
-            : "\nXadesSigningResult result = await XadesSigner.Document(xml)\n");
-        foreach (var (code, _) in _steps)
+        string entry = _o.CounterSign
+            ? $"CounterSign(xml{(_o.CounterSignatureId is null ? "" : ", " + SigningPlan.Str(_o.CounterSignatureId))})"
+            : "Document(xml)";
+        if (_o.CounterSign)
         {
-            sb.Append("    ").Append(code).Append('\n');
+            sb.Append("\n// xml is the signed document: the countersignature is embedded in the signature it signs.");
         }
 
-        sb.Append("    .SignWithDetailsAsync();\n\n");
+        if (_o.TwoPhases)
+        {
+            TwoPhaseSupport.AppendCSharp(
+                sb, "XadesDeferredSigner." + entry, _steps.Select(s => s.Code), "XadesDeferredSigner.Resume", ResumeInputs(),
+                "XadesSigningResult", "the canonical ds:SignedInfo", SigningPlan.ToHash(_o.Hash).Name!,
+                credential.KeyAlgorithm == "RSA" && _o.Padding == RsaPadding.Pss);
+        }
+        else
+        {
+            sb.Append("\nXadesSigningResult result = await XadesSigner.").Append(entry).Append('\n');
+            foreach (var (code, _) in _steps)
+            {
+                sb.Append("    ").Append(code).Append('\n');
+            }
+
+            sb.Append("    .SignWithDetailsAsync();\n\n");
+        }
+
         sb.Append("File.WriteAllBytes(\"signed.xml\", result.SignedArtifact);\n");
         sb.Append("Console.WriteLine($\"Requested {result.RequestedLevel}, achieved {result.AchievedLevel}\");\n");
 
-        var cli = _o.CounterSign
-            ? new CliLine("xades", "sign", XmlRunner.SignedFile).Add("--countersign").Add("--output", "countersigned.xml")
-            : new CliLine("xades", "sign", XmlRunner.DataFile).Add("--output", XmlRunner.SignedFile);
+        string output = _o.CounterSign ? "countersigned.xml" : XmlRunner.SignedFile;
+        var cli = new CliLine("xades", "sign", CliInput);
+        if (_o.CounterSign)
+        {
+            cli.Add("--countersign");
+        }
+
         var notes = new List<string>();
-        CodeGenerator.CliCredential(credential, cli, notes);
+        if (_o.TwoPhases)
+        {
+            // The first phase is xades sign with --prepare: every option of xades sign, and the certificate without its key.
+            TwoPhaseSupport.Prepare(cli);
+        }
+        else
+        {
+            cli.Add("--output", output);
+            CodeGenerator.CliCredential(credential, cli, notes);
+        }
+
         if (_o.CounterSign)
         {
             cli.AddIf("--countersign-id", _o.CounterSignatureId);
@@ -834,6 +905,16 @@ internal sealed class XadesPlan
         AddPropertyAndDataObjectArgs(cli);
         cli.AddIf("--operation-id", _o.OperationId);
         _context.CliNetwork(cli);
+        if (_o.TwoPhases)
+        {
+            IReadOnlyList<CliLine> commands =
+            [
+                cli,
+                TwoPhaseSupport.Complete(CliInput, output, _context, _o.Level == BaselineLevel.BB ? null : _o.Timestamp, _o.SigningPolicyId, notes),
+            ];
+            return new CodeSnippets(sb.ToString(), CliLine.Join(commands), notes) { CliCommands = commands };
+        }
+
         return new CodeSnippets(sb.ToString(), cli.ToString(), notes) { CliCommands = [cli] };
     }
 

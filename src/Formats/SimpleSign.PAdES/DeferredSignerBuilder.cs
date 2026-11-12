@@ -38,8 +38,8 @@ namespace SimpleSign.PAdES;
 /// <para>
 /// Not available, because of what two-phase signing is: <c>WithExternalSigner</c> and
 /// <c>WithCertificateFile</c> (the key signs on another machine, between the phases; give the public
-/// certificate to <see cref="WithCertificate(X509Certificate2)"/>), signing to a stream, and
-/// <c>SignWithDetailsAsync</c> (completion returns the PDF and takes a strict profile only).
+/// certificate to <see cref="WithCertificate(X509Certificate2)"/>) and signing to a stream.
+/// <see cref="CompleteWithDetailsAsync(byte[], CancellationToken)"/> is the counterpart of <c>SignWithDetailsAsync</c>.
 /// </para>
 /// </remarks>
 public sealed class DeferredSignerBuilder
@@ -61,10 +61,45 @@ public sealed class DeferredSignerBuilder
         _state = new State([], [.. sessionData], [.. sessionIntegrityKey], profile) { OperationId = operationId };
     }
 
+    /// <summary>Initializes a deferred builder with the document, the certificate and the options of a one-call builder.</summary>
+    internal DeferredSignerBuilder(
+        byte[] pdfBytes, PadesSigningOptions options, X509Certificate2? certificate, IReadOnlyList<X509Certificate2> chain)
+    {
+        _state = new State(pdfBytes, SessionData: null, SessionIntegrityKey: null, options.Profile)
+        {
+            Certificate = certificate,
+            ExtraCertificates = [.. chain],
+            HashAlgorithm = options.HashAlgorithm,
+            HashAlgorithmExplicitlySet = options.HashAlgorithmExplicitlySet,
+            SignatureAlgorithmOid = options.SignatureAlgorithmOid,
+            Field = options.Field,
+            Logger = options.Dependencies.Logger,
+            HttpClientProvider = options.Dependencies.HttpClientProvider,
+            SigningPolicy = options.SigningPolicy,
+            ChainRevocationChecker = options.Dependencies.ChainRevocationChecker,
+            TrustAnchors = options.TrustAnchors,
+            CountryExtensions = options.CountryExtensions,
+            AuditSink = options.AuditSink,
+            OperationId = options.OperationId,
+            EnforcePdfA = options.EnforcePdfA,
+            SigningTime = options.SigningTime,
+            SignaturePolicy = options.SignaturePolicy,
+            Metadata = options.Metadata,
+            DocumentInfo = options.DocumentInfo,
+            DssArtifacts = options.DssArtifacts,
+        };
+    }
+
     private DeferredSignerBuilder(State state)
     {
         _state = state;
     }
+
+    /// <summary>The signer certificate given to <c>WithCertificate</c>, or <see langword="null"/> before it is called and on a resumed builder. Extensions read it to pick policies.</summary>
+    public X509Certificate2? SignerCertificate => _state.Certificate;
+
+    /// <summary>The certificate chain given with the signer certificate (empty when none was given).</summary>
+    public IReadOnlyList<X509Certificate2> SignerChain => _state.ExtraCertificates;
 
     /// <summary>
     /// The registered country extensions, whose trust anchors are used with the ones given to
@@ -416,7 +451,8 @@ public sealed class DeferredSignerBuilder
         }
 
         var prepared = await PrepareAsync(cancellationToken).ConfigureAwait(false);
-        return await CompleteCoreAsync(prepared.SessionData, signature, cancellationToken).ConfigureAwait(false);
+        PadesSigningResult result = await CompleteCoreAsync(prepared.SessionData, signature, cancellationToken).ConfigureAwait(false);
+        return result.SignedArtifact;
     }
 
     /// <summary>
@@ -471,9 +507,8 @@ public sealed class DeferredSignerBuilder
         }
     }
 
-    private async Task<byte[]> CompleteCoreAsync(byte[] sessionData, byte[] rawSignature, CancellationToken cancellationToken)
+    private async Task<PadesSigningResult> CompleteCoreAsync(byte[] sessionData, byte[] rawSignature, CancellationToken cancellationToken)
     {
-        EnsureStrictProfile();
         ArgumentNullException.ThrowIfNull(sessionData);
         ArgumentNullException.ThrowIfNull(rawSignature);
         if (sessionData.Length == 0)
@@ -493,6 +528,7 @@ public sealed class DeferredSignerBuilder
             SigningPolicy = _state.SigningPolicy,
             TrustAnchors = _state.AllTrustAnchors,
             ChainRevocationChecker = _state.ChainRevocationChecker,
+            OperationId = _state.OperationId,
         };
 
         return await SignatureAudit.RunAsync(
@@ -504,19 +540,38 @@ public sealed class DeferredSignerBuilder
                 return SignatureAuditEvent.Start(
                     "PAdES", _state.OperationId ?? session.OperationId, RequestedLevel, certificate, _state.SigningPolicy, default);
             },
-            () => DeferredSigner.CompleteAsync(
+            () => DeferredSigner.CompleteWithDetailsAsync(
                 sessionData, rawSignature, RequireSessionIntegrityKey(), completeOptions, _state.Logger, cancellationToken: cancellationToken),
-            signed => (signed, RequestedLevel),
+            result => (result.SignedArtifact, result.AchievedLevel),
             cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Completes the session supplied to <see cref="DeferredSigner.Resume(byte[], byte[])"/>.
+    /// Completes the session supplied to <see cref="DeferredSigner.Resume(byte[], byte[])"/>. Throws when the
+    /// profile allows a lower level: use <see cref="CompleteWithDetailsAsync(byte[], CancellationToken)"/> in that case.
     /// </summary>
     /// <param name="rawSignature">Raw signature bytes produced by the external signer.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The completed signed PDF.</returns>
-    public Task<byte[]> CompleteAsync(byte[] rawSignature, CancellationToken cancellationToken = default)
+    public async Task<byte[]> CompleteAsync(byte[] rawSignature, CancellationToken cancellationToken = default)
+    {
+        EnsureStrictProfile();
+        PadesSigningResult result = await CompleteWithDetailsAsync(rawSignature, cancellationToken).ConfigureAwait(false);
+        return result.SignedArtifact;
+    }
+
+    /// <summary>
+    /// Completes the session supplied to <see cref="DeferredSigner.Resume(byte[], byte[])"/> and returns the signed
+    /// PDF with the requested and achieved baseline levels, what the PDF holds and the warnings. It takes a profile
+    /// that may return a lower level (<see cref="SigningLevelFailureBehavior.ReturnLowerLevel"/>). The outcome,
+    /// signed or refused, is recorded by the audit sink.
+    /// </summary>
+    /// <param name="rawSignature">Raw signature bytes produced by the external signer.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The detailed PAdES signing result.</returns>
+    /// <exception cref="SigningException">The signature does not verify with the certificate, or the requested level could not be produced.</exception>
+    /// <exception cref="InvalidOperationException">The builder was not returned by <see cref="DeferredSigner.Resume(byte[], byte[])"/>.</exception>
+    public Task<PadesSigningResult> CompleteWithDetailsAsync(byte[] rawSignature, CancellationToken cancellationToken = default)
     {
         if (_state.SessionData is null)
         {
@@ -537,7 +592,7 @@ public sealed class DeferredSignerBuilder
         if (_state.Profile?.FailureBehavior == SigningLevelFailureBehavior.ReturnLowerLevel)
         {
             throw new SigningException(
-                "Deferred completion returns PDF bytes only. Use a strict baseline profile so successful completion cannot hide a level downgrade.",
+                "This call returns PDF bytes only. Use CompleteWithDetailsAsync() so the achieved level and warnings are reported, or a strict baseline profile.",
                 SigningErrorReason.DowngradeRequiresDetailedResult);
         }
     }

@@ -129,6 +129,12 @@ public sealed record XmlOptions
 
     public string? OperationId { get; init; }
 
+    /// <summary>
+    /// Sign in two phases (<c>XadesDeferredSigner</c>): prepare, have the key sign the canonical SignedInfo elsewhere,
+    /// complete from the session.
+    /// </summary>
+    public bool TwoPhases { get; init; }
+
     public bool Validate { get; init; } = true;
 
     public ValidationSettings? Validation { get; init; }

@@ -84,9 +84,58 @@ byte[] signedXml = await XadesDeferredSigner.Resume(prepared.SessionData, sessio
     .CompleteAsync(rawSignature);
 ```
 
-`CompleteWithDetailsAsync` (CAdES and XAdES) returns the same result as `SignWithDetailsAsync`: the
+`CompleteWithDetailsAsync`, in the three formats, returns the same result as `SignWithDetailsAsync`: the
 requested and achieved levels, what the artifact holds, and the warnings. It is the one to call with a
-profile that may return a lower level (`SigningLevelFailureBehavior.ReturnLowerLevel`).
+profile that may return a lower level (`SigningLevelFailureBehavior.ReturnLowerLevel`). `CompleteAsync`
+returns the bytes and takes a strict profile only, so a successful completion cannot hide a lower level.
+
+## From a configured one-call builder
+
+`From(builder)` turns a builder of one-call signing into the builder that prepares the same signature:
+its document, its certificate and chain, and every option. The private key of the certificate (or the
+external signer) is not used. An application configures a signature once and decides at the end how it
+is signed:
+
+```csharp
+PadesSignerBuilder builder = PadesSigner.Document(pdfBytes)
+    .WithCertificate(publicCertificate)
+    .WithLevel(profile)
+    .WithMetadata(metadata)
+    .WithCountryExtension(extension);
+
+// The key is here: one call.
+// PadesSigningResult result = await builder.SignWithDetailsAsync();
+
+// The key is elsewhere: two phases.
+var prepared = await DeferredSigner.From(builder)
+    .WithSessionIntegrityKey(sessionIntegrityKey)
+    .PrepareAsync();
+```
+
+`CadesDeferredSigner.From(CadesSignerBuilder)` and `XadesDeferredSigner.From(XadesSignerBuilder)` do the
+same, including for a builder created by `CadesSigner.CoSign` / `CounterSign` or `XadesSigner.CounterSign`.
+
+## Co-signatures and countersignatures
+
+| Signature | Prepare |
+| --- | --- |
+| CAdES co-signature (a new signer over the same content) | `CadesDeferredSigner.CoSign(existing, data?)` |
+| CAdES countersignature (RFC 5652 §11.4) | `CadesDeferredSigner.CounterSign(existing, signerIndex)` |
+| XAdES countersignature (`xades:CounterSignature`) | `XadesDeferredSigner.CounterSign(signedXml, signatureId?)` |
+
+They take the same options, session and completion as a first signature. The existing signature travels in
+the session, and the new signer is added to it when the session is completed. A further signature of a
+signed PDF needs nothing special: `DeferredSigner.Document(signedPdf)` adds it as an incremental update.
+
+```csharp
+var prepared = await CadesDeferredSigner.CoSign(existingP7s, data)
+    .WithCertificate(secondSigner, chain)
+    .WithSessionIntegrityKey(sessionIntegrityKey)
+    .PrepareAsync();
+
+byte[] cms = await CadesDeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)
+    .CompleteAsync(rawSignature);
+```
 
 ## What the signer receives
 
@@ -153,12 +202,49 @@ id. It never holds private keys, credentials, HTTP clients or loggers.
   needs the same key.
 - It includes the content: the PDF, the CAdES content (also for a detached signature, which phase two
   reads back and, at B-LTA, timestamps) and the XAdES detached document and external data objects. Its
-  size is about 4/3 of that content.
+  size is about 4/3 of that content. For CAdES and XAdES the content can stay out of the session: see
+  below.
 - A session prepared by one version completes in another. The CAdES and XAdES sessions authenticate
   the stored bytes, so a field added by a later version neither breaks an older session nor is a
   problem for an older reader, which ignores it. The PAdES session writes its newer fields
   (`OperationId`, `DssArtifacts`, the OCSP clock skew) only when the option is used, for the same
   reason.
+
+### Content outside the session
+
+When the content is large, or the server already stores it, the session can carry only its SHA-256.
+The builder that resumes is given the content again, and refuses data that is not what phase one signed:
+
+```csharp
+// CAdES: detached and attached alike.
+var prepared = await CadesDeferredSigner.Document(data)
+    .WithCertificate(certificate, chain)
+    .WithSessionIntegrityKey(sessionIntegrityKey)
+    .WithContentOutsideSession()
+    .PrepareAsync();
+
+byte[] cms = await CadesDeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)
+    .WithContent(data)
+    .CompleteAsync(rawSignature);
+
+// XAdES: the document of the detached form and the external data objects.
+var preparedXml = await XadesDeferredSigner.Document(document)
+    .WithCertificate(certificate, chain)
+    .WithSessionIntegrityKey(sessionIntegrityKey)
+    .WithForm(XadesForm.Detached).WithDataUri("order.xml")
+    .WithAdditionalDataObject(XadesDataObject.External("annex.pdf", annex))
+    .WithDetachedDataOutsideSession()
+    .PrepareAsync();
+
+byte[] signature = await XadesDeferredSigner.Resume(preparedXml.SessionData, sessionIntegrityKey)
+    .WithDetachedData(document)
+    .WithExternalData("annex.pdf", annex)
+    .CompleteAsync(rawSignature);
+```
+
+Completing such a session without its content throws `InvalidOperationException`. Data inside the signed
+XML (enveloped and enveloping forms, embedded data objects) is part of the prepared document and always
+travels in the session, as the PDF does.
 
 ## PAdES options
 
@@ -183,13 +269,48 @@ Not available, because of what two-phase signing is:
 
 - `WithExternalSigner`, `WithCertificateFile`: the key signs on another machine, between the phases.
   Give the public certificate to `WithCertificate`.
-- Signing to a stream and `SignWithDetailsAsync`: completion returns the PDF bytes and takes a strict
-  profile only, so a successful completion cannot hide a lower level.
+- Signing to a stream: completion returns the PDF in memory (`CompleteAsync`, or
+  `CompleteWithDetailsAsync` for the achieved level and the warnings).
 
 The CAdES and XAdES deferred builders take every option of `CadesSignerBuilder` and
-`XadesSignerBuilder` except `WithExternalSigner`. A co-signature or a countersignature is not built in
-two phases: use `CadesSigner.CoSign` / `CounterSign` and `XadesSigner.CounterSign` with an external
-signer.
+`XadesSignerBuilder` except `WithExternalSigner`.
+
+## Country packages
+
+The builder extensions of the Brazilian packages exist on the two-phase builders with the same names and
+effect; what they sign is fixed in phase one:
+
+| Package | On the two-phase builders |
+| --- | --- |
+| `SimpleSign.Brazil` | `WithAdvancedSignature` (PAdES) |
+| `SimpleSign.Brazil.IcpBrasil` | `WithIcpBrasilPolicy`, `ResolveIcpBrasilPolicy`, `WithHealthDocument` (PAdES); `WithIcpBrasilPolicy` (CAdES) |
+| `SimpleSign.Brazil.IcpBrasil.Xades` | `WithIcpBrasilPolicy` (XAdES) |
+
+```csharp
+var prepared = await CadesDeferredSigner.Document(data)
+    .WithCertificate(certificate, chain)           // before the policy: it picks the version for the signer's root
+    .WithSessionIntegrityKey(sessionIntegrityKey)
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt, new TimestampOptions(actUri))
+    .PrepareAsync();
+```
+
+An `ICountryExtension` (`WithCountryExtension`, PAdES) is not stored in the session: register it again
+on the resumed builder so the TSA is checked against its anchors.
+
+## Command line
+
+`simplesign sign`, `cades sign` and `xades sign` take `--prepare`: every option of the command, the
+signer's certificate without its key, and a session key. `deferred complete` finishes a session of any
+of the three formats:
+
+```bash
+simplesign cades sign contract.pdf --prepare --cert signer.cer --session-key env:SESSION_KEY \
+    --tsa https://tsa.example --level timestamped
+#   writes contract.pdf.session and contract.pdf.tbs; the signer hashes the .tbs and signs it
+simplesign deferred complete contract.pdf.session --session-key env:SESSION_KEY --signature contract.sig -o contract.p7s
+```
+
+See [CLI](cli.md). The TestBench runs the same flow from its Sign, CAdES and XML pages.
 
 ## Levels
 

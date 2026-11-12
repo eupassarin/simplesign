@@ -55,6 +55,11 @@ public sealed class DeferredSigningContractTests
 
         missing.ShouldBeEmpty($"{deferred.Name} lacks options of {oneCall.Name}");
         Options(deferred).ShouldAllBe(m => m.ReturnType == deferred);
+
+        // What the country packages read from a builder to pick a policy (the signer, its chain, the extensions).
+        var deferredProperties = deferred.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => $"{p.PropertyType} {p.Name}").ToList();
+        oneCall.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => $"{p.PropertyType} {p.Name}")
+            .ShouldBeSubsetOf(deferredProperties);
     }
 
     private static IEnumerable<MethodInfo> Options(Type builder) =>
@@ -179,6 +184,89 @@ public sealed class DeferredSigningContractTests
         completed.OperationId.ShouldBe("contract-op");
         completed.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
         completed.OutputSha256.ShouldBe(Convert.ToHexString(SHA256.HashData(signed)));
+    }
+
+    // ── From: a one-call builder, signed in two phases ────────────────────
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task From_ConfiguredOneCallBuilder_PreparesTheSignatureItWasConfiguredFor(string format)
+    {
+        // The one-call builder is given the certificate with its key; the deferred one must not use the key.
+        using var signer = ContractFixtures.CreateSignerCertificate();
+        using var tsaClient = ContractFixtures.BuildMockTsaClient();
+        var signingTime = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 300);
+        var profile = AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://mock-tsa.example.com")));
+        Prepared prepared;
+        switch (format)
+        {
+            case "pades":
+                {
+                    var oneCall = PadesSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+                        .WithCertificate(signer).WithLevel(profile).WithSigningTime(signingTime).WithOperationId("from-op")
+                        .WithFieldOptions(new SimpleSign.PAdES.Signing.SignatureFieldOptions { FieldName = "FromOneCall", Reason = "Configured once" });
+                    var result = await DeferredSigner.From(oneCall).WithSessionIntegrityKey(s_key).PrepareAsync();
+                    prepared = new Prepared(result.SessionData, result.ToSigningRequest());
+                    break;
+                }
+
+            case "cades":
+                {
+                    var oneCall = CadesSigner.Document(ContractFixtures.BinaryContent)
+                        .WithCertificate(signer).WithLevel(profile).WithSigningTime(signingTime).WithOperationId("from-op")
+                        .WithCommitmentType(CommitmentType.ProofOfApproval);
+                    var result = await CadesDeferredSigner.From(oneCall).WithSessionIntegrityKey(s_key).PrepareAsync();
+                    prepared = new Prepared(result.SessionData, result.ToSigningRequest());
+                    break;
+                }
+
+            default:
+                {
+                    var oneCall = XadesSigner.Document(ContractFixtures.XmlDocument)
+                        .WithCertificate(signer).WithLevel(profile).WithSigningTime(signingTime).WithOperationId("from-op")
+                        .WithSignerRole("Approver");
+                    var result = await XadesDeferredSigner.From(oneCall).WithSessionIntegrityKey(s_key).PrepareAsync();
+                    prepared = new Prepared(result.SessionData, result.ToSigningRequest());
+                    break;
+                }
+        }
+
+        byte[] signed = await Complete(format, prepared.SessionData, RemoteKey.Sign(signer, prepared.Request), tsaClient);
+
+        prepared.Request.OperationId.ShouldBe("from-op");
+        (bool valid, bool hasTimestamp) = await Validate(format, signed, signer);
+        valid.ShouldBeTrue();
+        hasTimestamp.ShouldBeTrue();
+        switch (format)
+        {
+            case "pades":
+                {
+                    using var stream = new MemoryStream(signed);
+                    var field = (await SimpleSign.PAdES.Inspection.PdfSignatureInspector.InspectAsync(stream)).Signatures[0];
+                    field.FieldName.ShouldBe("FromOneCall");
+                    field.Reason.ShouldBe("Configured once");
+                    field.PdfDeclaredSigningTime.ShouldBe(signingTime);
+                    break;
+                }
+
+            case "cades":
+                {
+                    var cms = SimpleSign.Core.Crypto.CmsParser.Parse(signed);
+                    cms.SigningTime.ShouldBe(signingTime);
+                    cms.CommitmentTypeOid.ShouldNotBeNull();
+                    break;
+                }
+
+            default:
+                {
+                    var result = new XadesSignatureValidator().Validate(signed, [signer]);
+                    result.SigningTime.ShouldBe(signingTime);
+                    result.ClaimedRoles.ShouldBe(["Approver"]);
+                    break;
+                }
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────
