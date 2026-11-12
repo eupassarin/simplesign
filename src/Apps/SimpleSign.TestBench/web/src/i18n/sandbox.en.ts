@@ -136,6 +136,7 @@ export const sandboxEn = {
       Expired: { title: "Expired", hint: "Its NextUpdate has passed: a validator that checks it (TLNotExpired) warns or refuses." },
       WrongSigner: { title: "Wrong signer", hint: "Signed by a certificate the LOTL does not name: the list is refused, so its CAs are not trusted." },
       Tampered: { title: "Tampered", hint: "Changed after signing: its signature no longer verifies, so the list is refused." },
+      WithdrawnAfterUse: { title: "Withdrawn after use", hint: "The root CA's service is withdrawn from now on and was granted before (service history): signatures proven to exist earlier stay trusted, new ones are not." },
     },
   },
   log: {

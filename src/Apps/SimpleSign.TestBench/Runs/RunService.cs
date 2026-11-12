@@ -474,6 +474,7 @@ internal sealed class RunService(
             TsaProvider.SandboxUntrusted when connection is not null => connection.UntrustedTsaUri,
             TsaProvider.SandboxExpired when connection is not null => connection.ExpiredTsaUri,
             TsaProvider.SandboxWrongName when connection is not null => connection.WrongNameTsaUri,
+            TsaProvider.SandboxShortLived when connection is not null => connection.ShortLivedTsaUri,
             TsaProvider.DigiCert => TimestampOptions.DigiCert.Endpoint,
             TsaProvider.Sectigo => TimestampOptions.Sectigo.Endpoint,
             TsaProvider.FreeTsa => TimestampOptions.FreeTsa.Endpoint,

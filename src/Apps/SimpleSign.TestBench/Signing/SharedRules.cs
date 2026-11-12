@@ -26,7 +26,8 @@ internal static class SharedRules
 
     /// <summary>Whether a provider is one of the connected Sandbox's TSAs.</summary>
     public static bool IsSandboxTsa(TsaProvider provider) =>
-        provider is TsaProvider.Sandbox or TsaProvider.SandboxAuthenticated or TsaProvider.SandboxUntrusted or TsaProvider.SandboxRevoked or TsaProvider.SandboxExpired or TsaProvider.SandboxWrongName;
+        provider is TsaProvider.Sandbox or TsaProvider.SandboxAuthenticated or TsaProvider.SandboxUntrusted or TsaProvider.SandboxRevoked or TsaProvider.SandboxExpired or TsaProvider.SandboxWrongName
+            or TsaProvider.SandboxShortLived;
 
     /// <summary>Checks one TSA choice (provider allowed, URL, authentication).</summary>
     public static void CheckTsa(TimestampChoice tsa, string label, IReadOnlyDictionary<string, OptionState> state, Action<string, string> error, string step)

@@ -117,6 +117,7 @@ export const ptBR: Messages = {
       SandboxRevoked: "Sandbox, ACT revogada",
       SandboxExpired: "Sandbox, ACT expirada",
       SandboxWrongName: "Sandbox, nome de ACT errado",
+      SandboxShortLived: "Sandbox, ACT de vida curta (30 s)",
       DigiCert: "DigiCert",
       Sectigo: "Sectigo",
       FreeTsa: "FreeTSA",

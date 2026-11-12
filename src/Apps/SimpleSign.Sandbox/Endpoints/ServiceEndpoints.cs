@@ -132,7 +132,8 @@ internal static class ServiceEndpoints
         // RFC 3161 TSA: /tsa/tsr (and /tsa/archive), /tsa/authenticated (HTTP Basic), /tsa/untrusted,
         // /tsa/revoked (its certificate is revoked), /tsa/expired (its certificate has expired) and
         // /tsa/wrong-name (the token names another TSA), /tsa/shifted?seconds=N (its clock is N seconds off, -86400 to 86400)
-        // and /tsa/no-accuracy (the TSTInfo gives no accuracy, which EN 319 422 asks for).
+        // /tsa/no-accuracy (the TSTInfo gives no accuracy, which EN 319 422 asks for) and /tsa/short-lived?seconds=N (a TSA
+        // certificate issued for the request, valid N more seconds, 1 to 3600: its tokens outlive it).
         app.MapPost("/tsa/{kind}", TimestampAsync);
 
         // CSC v2 (the simulated provider is an HttpMessageHandler: requests are passed through).
@@ -212,7 +213,7 @@ internal static class ServiceEndpoints
 
     private static async Task<IResult> TimestampAsync(string kind, HttpContext context, SandboxPki pki, CancellationToken ct)
     {
-        if (kind is not ("tsr" or "archive" or "authenticated" or "untrusted" or "revoked" or "expired" or "wrong-name" or "shifted" or "no-accuracy"))
+        if (kind is not ("tsr" or "archive" or "authenticated" or "untrusted" or "revoked" or "expired" or "wrong-name" or "shifted" or "no-accuracy" or "short-lived"))
         {
             return Results.NotFound();
         }
@@ -226,6 +227,17 @@ internal static class ServiceEndpoints
             }
 
             shift = TimeSpan.FromSeconds(seconds);
+        }
+
+        var lifetime = TimeSpan.Zero;
+        if (kind == "short-lived")
+        {
+            if (!int.TryParse(context.Request.Query["seconds"], NumberStyles.None, CultureInfo.InvariantCulture, out int seconds) || seconds is < 1 or > 3600)
+            {
+                return Results.Text("Give ?seconds=N, 1 to 3600: how long the TSA's certificate stays valid.", statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            lifetime = TimeSpan.FromSeconds(seconds);
         }
 
         if (kind == "authenticated")
@@ -259,7 +271,7 @@ internal static class ServiceEndpoints
         byte[] reply;
         try
         {
-            reply = Stamp(pki, faults.Tsa == TsaFault.Untrusted ? "untrusted" : kind, body.ToArray(), shift);
+            reply = Stamp(pki, faults.Tsa == TsaFault.Untrusted ? "untrusted" : kind, body.ToArray(), shift, lifetime);
         }
         catch (System.Formats.Asn1.AsnContentException)
         {
@@ -277,11 +289,18 @@ internal static class ServiceEndpoints
     }
 
     /// <summary>Answers a TimeStampReq with the TSA of an endpoint, built from the current certificates.</summary>
-    private static byte[] Stamp(SandboxPki pki, string kind, byte[] request, TimeSpan shift)
+    private static byte[] Stamp(SandboxPki pki, string kind, byte[] request, TimeSpan shift, TimeSpan lifetime)
     {
         if (kind == "untrusted")
         {
             return new SandboxTsa(pki.UntrustedTsa, pki.UntrustedTsaKey, []).Respond(request);
+        }
+
+        if (kind == "short-lived")
+        {
+            using var shortLived = pki.IssueShortLivedTsa(lifetime);
+            using var shortLivedKey = shortLived.GetRSAPrivateKey()!;
+            return new SandboxTsa(shortLived, shortLivedKey, [pki.Intermediate, pki.Root]).Respond(request);
         }
 
         var certificate = pki.Certificate(kind switch

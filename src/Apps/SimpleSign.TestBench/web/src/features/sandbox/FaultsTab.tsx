@@ -28,7 +28,7 @@ const rows: Row[] = [
   { field: "ocsp", title: "faults.ocsp", values: ["None", "Down", "Slow", "TryLater", "Expired", "Unauthorized", "Unknown"], prefix: "faults.ocspValues", delay: "ocspDelayMs" },
   { field: "ocspSigner", title: "faults.ocspSigner", values: ["Issuer", "Delegated"], prefix: "faults.signerValues", neutral: true },
   { field: "tsa", title: "faults.tsa", values: ["None", "Down", "Slow", "InvalidToken", "Untrusted"], prefix: "faults.tsaValues", delay: "tsaDelayMs" },
-  { field: "trustedList", title: "faults.trustedList", values: ["None", "Expired", "WrongSigner", "Tampered"], prefix: "faults.tlValues" },
+  { field: "trustedList", title: "faults.trustedList", values: ["None", "Expired", "WrongSigner", "Tampered", "WithdrawnAfterUse"], prefix: "faults.tlValues" },
 ]
 
 /** Switch failures of the CRL server (HTTP, HTTPS, LDAP), the OCSP responder, the TSA and the trusted list on and off, one at a time. */

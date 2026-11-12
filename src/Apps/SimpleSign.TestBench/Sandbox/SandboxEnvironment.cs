@@ -49,6 +49,12 @@ internal sealed class SandboxConnection : IDisposable
 
     public Uri WrongNameTsaUri => new(Info.Tsa.WrongNameUrl);
 
+    /// <summary>How long the certificate of <see cref="ShortLivedTsaUri"/> stays valid.</summary>
+    public const int ShortLivedTsaSeconds = 30;
+
+    /// <summary>The TSA whose certificate is issued for each request, valid <see cref="ShortLivedTsaSeconds"/> more seconds.</summary>
+    public Uri ShortLivedTsaUri => new(TsaUri, $"short-lived?seconds={ShortLivedTsaSeconds}");
+
     public Uri CscBaseUri => new(Info.Csc.BaseUrl);
 
     /// <summary>

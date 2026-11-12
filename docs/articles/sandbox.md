@@ -39,7 +39,7 @@ used for real signatures.
 | CRLs over HTTPS | `https://localhost:5301/crl/{ca}.crl` (TLS certificate issued by the Sandbox root) |
 | CRLs over LDAP | `ldap://localhost:5302/cn={ca},o=SimpleSign Sandbox?certificateRevocationList;binary` |
 | OCSP (RFC 6960) | `POST /ocsp/{ca}` and `GET /ocsp/{ca}/{request}` |
-| TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/expired`, `/tsa/wrong-name`, `/tsa/shifted?seconds=N` (its clock is N seconds off, -86400 to 86400), `/tsa/no-accuracy` (no accuracy in the TSTInfo; the others give one second, as EN 319 422 asks) |
+| TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/expired`, `/tsa/wrong-name`, `/tsa/shifted?seconds=N` (its clock is N seconds off, -86400 to 86400), `/tsa/no-accuracy` (no accuracy in the TSTInfo; the others give one second, as EN 319 422 asks), `/tsa/short-lived?seconds=N` (a TSA certificate issued for the request, valid N more seconds, 1 to 3600: its tokens outlive it) |
 | CSC v2 | `/csc/v2/…` (PIN, OTP, SCAL 1/2, OAuth with a login page that approves at once) |
 | Trusted lists (ETSI TS 119 612 v5) | `/tl/lotl.xml` (list of trusted lists), `/tl/tl.xml` (the trusted list), `/tl/lotl-signer.pem`, `/tl/tl-signer.pem` (the operators' certificates) |
 
@@ -137,7 +137,8 @@ drives the Sandbox the same way, with or without a TestBench, and what one clien
 `SandboxFaults` fields: `tsa` (`None`, `Down`, `Slow`, `InvalidToken`, `Untrusted`), `crl` (`None`,
 `Down`, `Slow`, `Expired`, `WrongKey`, `Stale`, `NoNextUpdate`), `ocsp` (`None`, `Down`, `Slow`, `TryLater`, `Expired`,
 `Unauthorized`, `Unknown`), `ocspSigner` (`Issuer`, `Delegated`), `trustedList` (`None`, `Expired`,
-`WrongSigner`, `Tampered`), and `tsaDelayMs`, `crlDelayMs`, `ocspDelayMs` (0–60000, used when `Slow`).
+`WrongSigner`, `Tampered`, `WithdrawnAfterUse`: the root CA's service withdrawn now and granted before, in its
+service history), and `tsaDelayMs`, `crlDelayMs`, `ocspDelayMs` (0–60000, used when `Slow`).
 
 ```bash
 # CRL server down, the other failures as they are

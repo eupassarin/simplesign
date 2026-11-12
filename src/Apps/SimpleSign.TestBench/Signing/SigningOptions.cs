@@ -42,6 +42,12 @@ public enum TsaProvider
     /// <summary>The connected Sandbox's TSA whose tokens name another TSA.</summary>
     SandboxWrongName,
 
+    /// <summary>
+    /// The connected Sandbox's TSA whose certificate is issued for each request and valid 30 more seconds: its tokens
+    /// outlive it (past signature validation with a later archive time-stamp).
+    /// </summary>
+    SandboxShortLived,
+
     DigiCert,
     Sectigo,
     FreeTsa,

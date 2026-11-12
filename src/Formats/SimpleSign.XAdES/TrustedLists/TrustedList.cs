@@ -19,7 +19,27 @@ public sealed record TrustedListService(
     string ServiceName,
     string ServiceType,
     string Status,
-    IReadOnlyList<X509Certificate2> Certificates);
+    IReadOnlyList<X509Certificate2> Certificates)
+{
+    /// <summary>When <see cref="Status"/> started (StatusStartingTime); null when the list does not say.</summary>
+    public DateTimeOffset? StatusStartingTime { get; init; }
+
+    /// <summary>The earlier statuses of the service (ServiceHistory), each with when it started.</summary>
+    public IReadOnlyList<TrustedListServiceStatus> History { get; init; } = [];
+
+    /// <summary>The status the service had at <paramref name="at"/>: the current one from its starting time, else the history's; null before any.</summary>
+    /// <param name="at">The time.</param>
+    /// <returns>The ServiceStatus URI, or null.</returns>
+    public string? StatusAt(DateTimeOffset at) =>
+        StatusStartingTime is not { } started || started <= at
+            ? Status
+            : History.Where(h => h.StartingTime <= at).OrderByDescending(h => h.StartingTime).FirstOrDefault()?.Status;
+}
+
+/// <summary>A status of a trust service and when it started (a ServiceHistoryInstance).</summary>
+/// <param name="Status">The ServiceStatus URI.</param>
+/// <param name="StartingTime">The StatusStartingTime.</param>
+public sealed record TrustedListServiceStatus(string Status, DateTimeOffset StartingTime);
 
 /// <summary>A pointer of a list of trusted lists (LOTL) to another trusted list (<c>OtherTSLPointer</c>).</summary>
 /// <param name="Territory">The territory of the pointed list.</param>
@@ -69,11 +89,12 @@ public sealed record TrustedListOptions
 /// signature has been checked against the scheme operator's certificate. It is an <see cref="ITrustAnchorProvider"/>:
 /// the certificates of the active services of the kept types are the trust anchors.
 /// </summary>
-public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
+public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoProvider
 {
     private const string Namespace = "http://uri.etsi.org/02231/v2#";
     private readonly List<X509Certificate2> _anchors;
     private readonly List<X509Certificate2> _intermediates;
+    private readonly TrustedListOptions _options;
 
     private TrustedList(
         string territory, string? operatorName, string? sequenceNumber, DateTimeOffset? issued, DateTimeOffset? nextUpdate,
@@ -87,18 +108,35 @@ public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
         IssueDate = issued;
         NextUpdate = nextUpdate;
         Services = services;
+        _options = options;
+        (_anchors, _intermediates) = Anchors(services, options, s => s.Status);
+    }
+
+    /// <summary>The anchors and intermediates of the services of a kept type whose status (at some time) is active.</summary>
+    private static (List<X509Certificate2> Anchors, List<X509Certificate2> Intermediates) Anchors(
+        IReadOnlyList<TrustedListService> services, TrustedListOptions options, Func<TrustedListService, string?> status)
+    {
         var kept = services
             .Where(s => options.ServiceTypes.Any(t => s.ServiceType.EndsWith(t, StringComparison.OrdinalIgnoreCase))
-                && options.ActiveStatuses.Any(t => s.Status.EndsWith(t, StringComparison.OrdinalIgnoreCase)))
+                && status(s) is { } current && options.ActiveStatuses.Any(t => current.EndsWith(t, StringComparison.OrdinalIgnoreCase)))
             .SelectMany(s => s.Certificates)
             .Where(c => !HasExtendedKeyUsage(c, options.ExcludedExtendedKeyUsages))
             .ToList();
-        _anchors = [.. kept.Where(IsSelfSigned)];
-        _intermediates = [.. kept.Where(c => !IsSelfSigned(c))];
+        List<X509Certificate2> anchors = [.. kept.Where(IsSelfSigned)];
+        List<X509Certificate2> intermediates = [.. kept.Where(c => !IsSelfSigned(c))];
 
         // A trust service identified by a CA certificate that is not self-signed is still an anchor of the list.
-        _anchors.AddRange(_intermediates);
+        anchors.AddRange(intermediates);
+        return (anchors, intermediates);
     }
+
+    /// <summary>
+    /// The anchors trusted at <paramref name="at"/>: the services whose status then (current or from their
+    /// ServiceHistory) was active. A service withdrawn after a signature was proven to exist still vouches for it.
+    /// </summary>
+    /// <param name="at">The time.</param>
+    /// <returns>The anchors.</returns>
+    public IReadOnlyList<X509Certificate2> GetTrustAnchors(DateTimeOffset at) => Anchors(Services, _options, s => s.StatusAt(at)).Anchors;
 
     /// <summary>The scheme territory (country code).</summary>
     public string Territory { get; }
@@ -151,6 +189,7 @@ public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
         StructureErrors = other.StructureErrors;
         _anchors = other._anchors;
         _intermediates = other._intermediates;
+        _options = other._options;
     }
 
     /// <summary>The errors of the list against the ETSI TS 119 612 XML schema; empty when it is valid.</summary>
@@ -234,12 +273,26 @@ public sealed class TrustedList : ITrustAnchorProvider, ITrustedListInfoProvider
                     }
                 }
 
+                var history = new List<TrustedListServiceStatus>();
+                foreach (XmlNode instance in service.SelectNodes("../tsl:ServiceHistory/tsl:ServiceHistoryInstance", ns)!)
+                {
+                    if (instance.SelectSingleNode("tsl:ServiceStatus", ns)?.InnerText.Trim() is { Length: > 0 } past
+                        && ReadDate(instance.SelectSingleNode("tsl:StatusStartingTime", ns)) is { } since)
+                    {
+                        history.Add(new TrustedListServiceStatus(past, since));
+                    }
+                }
+
                 services.Add(new TrustedListService(
                     providerName,
                     service.SelectSingleNode("tsl:ServiceName/tsl:Name", ns)?.InnerText.Trim() ?? string.Empty,
                     service.SelectSingleNode("tsl:ServiceTypeIdentifier", ns)?.InnerText.Trim() ?? string.Empty,
                     service.SelectSingleNode("tsl:ServiceStatus", ns)?.InnerText.Trim() ?? string.Empty,
-                    certificates));
+                    certificates)
+                {
+                    StatusStartingTime = ReadDate(service.SelectSingleNode("tsl:StatusStartingTime", ns)),
+                    History = history,
+                });
             }
         }
 

@@ -238,7 +238,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             bool isLast = i == fields.Count - 1;
             var (embeddedCrls, embeddedOcsps) = GetRevocationDataForField(fields[i], dssData);
             var facts = BuildPdfFacts(fields, i, dssData);
-            var result = await ValidateFieldAsync(pdfStream, fields[i], embeddedCrls, embeddedOcsps, cancellationToken, isLast, facts).ConfigureAwait(false);
+            var result = await ValidateFieldAsync(pdfStream, fields[i], embeddedCrls, embeddedOcsps, cancellationToken, isLast, facts,
+                LaterDocumentTimestamps(fields, fields[i])).ConfigureAwait(false);
             results.Add(result);
         }
 
@@ -356,7 +357,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IReadOnlyList<byte[]> embeddedOcsps,
         CancellationToken cancellationToken,
         bool isLastSignature = true,
-        PdfSignatureFacts? pdfFacts = null)
+        PdfSignatureFacts? pdfFacts = null,
+        IReadOnlyList<PdfSignatureField>? laterDocumentTimestamps = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -419,13 +421,22 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _cryptoVerifier.ValidateSigningCertV2(cmsData, errors, _logger);
 
         // 4. Certificate chain
+        int chainErrorsStart = errors.Count;
         var (chainValid, chainAnchored) = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
+        int chainErrorsCount = errors.Count - chainErrorsStart;
 
         // 4a. Signature timestamp: its genTime is the time the chain is validated at (B-T and above).
         // Below ValidationLevel.Timestamps the token is not looked at: no proof of existence.
         TimestampTokenValidationResult timestamp = _options.ValidatesTimestamps
             ? _timestampValidator.ValidateWithTrust(cmsData, warnings, ValidateCertificateChain, _logger)
             : new TimestampTokenValidationResult();
+        timestamp = TimedTrust.TrustTsaAtGenTime(timestamp, cmsData.SignatureTimestampToken, _options, warnings);
+        if (_options.ValidatesArchivalData && timestamp is { IsIntegrityValid: true, IsTsaTrusted: not true } && laterDocumentTimestamps is { Count: > 0 })
+        {
+            timestamp = await TrustTsaAtLaterDocumentTimestampAsync(
+                pdfStream, timestamp, cmsData.SignatureTimestampToken, laterDocumentTimestamps, warnings, cancellationToken).ConfigureAwait(false);
+        }
+
         if (_options.ChecksRevocation && _options.ValidatesTimestamps && cmsData.SignatureTimestampToken is { } signatureTimestampToken)
         {
             timestamp = await TimestampTsaChecks.CheckTsaRevocationAsync(
@@ -433,6 +444,23 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
                 TsaRevocationChecker, embeddedCrls, embeddedOcsps, allowOnline: true, warnings, cancellationToken).ConfigureAwait(false);
         }
         DateTimeOffset? provenTime = timestamp is { IsIntegrityValid: true, IsTsaTrusted: true } ? timestamp.GenTime : null;
+
+        // 4a'. Not anchored today: the anchors of the proof of existence (a trusted-list service withdrawn since).
+        if (!chainAnchored && provenTime is { } proven && TimedTrust.IsConfigured(_options) && cmsData.SignerCertificate is { } signerAtTime)
+        {
+            var timedErrors = new List<string>();
+            var timedWarnings = new List<string>();
+            bool timedValid = ValidateCertificateChain(
+                signerAtTime, cmsData.Certificates, timedErrors, timedWarnings, out bool timedAnchored, TimedTrust.AnchorsAt(_options, proven));
+            if (timedAnchored)
+            {
+                errors.RemoveRange(chainErrorsStart, chainErrorsCount);
+                errors.InsertRange(chainErrorsStart, timedErrors);
+                warnings.AddRange(timedWarnings);
+                warnings.Add(TimedTrust.SignerWarning(proven));
+                (chainValid, chainAnchored) = (timedValid, true);
+            }
+        }
 
         // 4b. Country-specific chain validation providers (enrich with policy level, signer ID, etc.)
         var chainValidationResult = await RunChainValidationProvidersAsync(
@@ -1066,7 +1094,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IReadOnlyList<X509Certificate2> embeddedCerts,
         List<string> errors,
         List<string> warnings,
-        out bool reachesAnchor)
+        out bool reachesAnchor,
+        IEnumerable<X509Certificate2>? anchorsAtTime = null)
     {
         reachesAnchor = false;
         if (signerCert is null)
@@ -1095,9 +1124,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         LoadBundledTrustAnchors(chain);
 
         // User-provided trusted roots
-        if (_options.TrustedRoots is not null)
+        if (_options.TrustedRoots is not null || anchorsAtTime is not null)
         {
-            foreach (var root in _options.TrustedRoots)
+            foreach (var root in (_options.TrustedRoots ?? []).Concat(anchorsAtTime ?? []))
             {
                 if (root.IsSelfSigned())
                 {
@@ -1235,6 +1264,66 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         return null;
+    }
+
+    /// <summary>The document time-stamps in revisions after <paramref name="field"/>'s: each covers it.</summary>
+    private static IReadOnlyList<PdfSignatureField> LaterDocumentTimestamps(IReadOnlyList<PdfSignatureField> fields, PdfSignatureField field)
+    {
+        long end = field.ByteRange.Offset2 + field.ByteRange.Length2;
+        return [.. fields.Where(f => f.IsDocumentTimestamp && f.IsSigned && f.ByteRange.Offset2 + f.ByteRange.Length2 > end)];
+    }
+
+    /// <summary>
+    /// Past signature validation (EN 319 102-1 §5.6): the signature time-stamp's TSA is not trusted today (its certificate
+    /// expired, say), but a later document time-stamp, intact and trusted, proves the token existed while the
+    /// certificate was valid. The result then has its TSA trusted.
+    /// </summary>
+    private async Task<TimestampTokenValidationResult> TrustTsaAtLaterDocumentTimestampAsync(
+        Stream pdfStream, TimestampTokenValidationResult timestamp, byte[]? signatureTimestampToken,
+        IReadOnlyList<PdfSignatureField> laterDocumentTimestamps, List<string> warnings, CancellationToken cancellationToken)
+    {
+        IEnumerable<X509Certificate2> anchors = [.. _trustAnchorProviders.SelectMany(p => p.GetTrustAnchors()), .. _options.TrustedRoots ?? []];
+        foreach (var later in laterDocumentTimestamps)
+        {
+            CmsSignedData token;
+            try
+            {
+                token = _cmsParser.Parse(later.ContentsBytes, _logger);
+            }
+            catch (CryptographicException)
+            {
+                continue;
+            }
+
+            var ignoredErrors = new List<string>();
+            var ignoredWarnings = new List<string>();
+            bool intact = token.TstMessageImprintHash is not null && token.TstMessageImprintHashAlgOid is not null
+                && await _integrityVerifier.ValidateTimestampByteRangeAsync(
+                    pdfStream, later, token.TstMessageImprintHashAlgOid, token.TstMessageImprintHash,
+                    ignoredErrors, ignoredWarnings, false, cancellationToken, _logger).ConfigureAwait(false)
+                && ValidateSignatureStep(token, ignoredErrors, out _);
+            if (intact && TimedTrust.TrustTsaAtLaterProof(
+                timestamp.GenTime, signatureTimestampToken, TokenBytes(later.ContentsBytes), anchors, _options, warnings))
+            {
+                return new TimestampTokenValidationResult { IsIntegrityValid = true, IsTsaTrusted = true, GenTime = timestamp.GenTime };
+            }
+        }
+
+        return timestamp;
+    }
+
+    /// <summary>The DER token in a /Contents value, without its zero padding.</summary>
+    private static byte[] TokenBytes(byte[] contents)
+    {
+        try
+        {
+            System.Formats.Asn1.AsnDecoder.ReadEncodedValue(contents, System.Formats.Asn1.AsnEncodingRules.BER, out _, out _, out int consumed);
+            return contents[..consumed];
+        }
+        catch (System.Formats.Asn1.AsnContentException)
+        {
+            return contents;
+        }
     }
 
     /// <summary>The trusted lists behind the trust anchor providers, for the eIDAS constraints of the policy.</summary>

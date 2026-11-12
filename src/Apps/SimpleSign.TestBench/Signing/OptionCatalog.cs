@@ -68,6 +68,7 @@ public static class OptionCatalog
         ["tsa.SandboxRevoked"] = new("Sandbox TSA, revoked", "A TSA whose certificate is revoked: the timestamp must not be trusted."),
         ["tsa.SandboxExpired"] = new("Sandbox TSA, expired", "A TSA whose certificate has expired: a timestamp it makes now is not valid at its own time."),
         ["tsa.SandboxWrongName"] = new("Sandbox TSA, wrong name", "Its tokens name another TSA in the tsa field: the name check fails."),
+        ["tsa.SandboxShortLived"] = new("Sandbox TSA, short-lived", "A TSA whose certificate is issued for the request and valid 30 more seconds: its time-stamp outlives it, and only a later archive time-stamp keeps it trusted."),
         ["tsa.DigiCert"] = new("DigiCert", "Free public TSA, trusted by Adobe and most validators.", null, null, "TimestampOptions.DigiCert"),
         ["tsa.Sectigo"] = new("Sectigo", "Free public TSA.", null, null, "TimestampOptions.Sectigo"),
         ["tsa.FreeTsa"] = new("FreeTSA", "Free community TSA (freetsa.org).", null, null, "TimestampOptions.FreeTsa"),

@@ -68,7 +68,9 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
                 <TSPInformationURI><URI xml:lang="en">{pki.BaseUrl}</URI></TSPInformationURI>
               </TSPInformation>
               <TSPServices>
-                {Service("CA/QC", "Sandbox root CA", pki.Root, "granted")}
+                {(fault == TlFault.WithdrawnAfterUse
+                    ? Service("CA/QC", "Sandbox root CA", pki.Root, "withdrawn", now.AddSeconds(-1), history: "granted")
+                    : Service("CA/QC", "Sandbox root CA", pki.Root, "granted"))}
                 {Service("TSA/QTST", "Sandbox time-stamping unit", pki.Tsa, "granted")}
                 {(revokedTsa is null ? "" : Service("TSA/QTST", "Sandbox revoked time-stamping unit", revokedTsa, "withdrawn"))}
               </TSPServices>
@@ -81,15 +83,26 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
         return Task.FromResult(fault == TlFault.Tampered ? Tamper(signed) : signed);
     }
 
-    /// <summary>A service of the trusted list, for one certificate.</summary>
-    private static string Service(string type, string name, X509Certificate2 certificate, string status) => $"""
+    /// <summary>
+    /// A service of the trusted list, for one certificate: its status since <paramref name="since"/> (the certificate's
+    /// NotBefore by default), and, with <paramref name="history"/>, the earlier status from NotBefore until then.
+    /// </summary>
+    private static string Service(string type, string name, X509Certificate2 certificate, string status, DateTimeOffset? since = null, string? history = null) => $"""
         <TSPService><ServiceInformation>
           <ServiceTypeIdentifier>{ServiceTypes}{type}</ServiceTypeIdentifier>
           <ServiceName><Name xml:lang="en">{Escape(name)}</Name></ServiceName>
           <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(certificate.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
           <ServiceStatus>{Statuses}{status}</ServiceStatus>
+          <StatusStartingTime>{Time((since ?? certificate.NotBefore).ToUniversalTime())}</StatusStartingTime>
+        </ServiceInformation>{(history is null ? "" : $"""
+        <ServiceHistory><ServiceHistoryInstance>
+          <ServiceTypeIdentifier>{ServiceTypes}{type}</ServiceTypeIdentifier>
+          <ServiceName><Name xml:lang="en">{Escape(name)}</Name></ServiceName>
+          <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(certificate.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
+          <ServiceStatus>{Statuses}{history}</ServiceStatus>
           <StatusStartingTime>{Time(certificate.NotBefore.ToUniversalTime())}</StatusStartingTime>
-        </ServiceInformation></TSPService>
+        </ServiceHistoryInstance></ServiceHistory>
+        """)}</TSPService>
         """;
 
     /// <summary>A pointer of the LOTL: where the list is, who signs it, its type, territory and media type.</summary>

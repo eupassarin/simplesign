@@ -54,6 +54,15 @@ public sealed class ValidationOptions
     /// </summary>
     public IReadOnlyList<Extensions.TrustedListInfo>? TrustedLists { get; init; }
 
+    /// <summary>
+    /// Trust anchors that depend on time, such as trusted lists with a service history (ETSI TS 119 612 §5.6, TS 119 615).
+    /// When a certificate does not reach today's anchors, the validators try again with the anchors of these providers at
+    /// the time that matters: the signature time-stamp's genTime for its TSA, the proof of existence of the signature for
+    /// the signer. A service withdrawn after the signature was proven to exist then still vouches for it. Null or empty:
+    /// only today's anchors count.
+    /// </summary>
+    public IReadOnlyList<Extensions.ITimedTrustAnchorProvider>? TimedTrustAnchors { get; init; }
+
     /// <summary>Whether signature timestamps are validated (and give a proof of existence).</summary>
     internal bool ValidatesTimestamps => Level >= ValidationLevel.Timestamps;
 

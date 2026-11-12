@@ -57,6 +57,39 @@ public sealed class TrustedListTests : IDisposable
     }
 
     [Fact]
+    public void GetTrustAnchors_WithdrawnWithGrantedHistory_TrustedOnlyBeforeTheWithdrawal()
+    {
+        var withdrawn = DateTimeOffset.UtcNow.AddHours(-1);
+        byte[] xml = Build([(CaQc, Withdrawn, _pki.RootCa)], since: withdrawn, history: (Granted, DateTimeOffset.UtcNow.AddYears(-1)));
+
+        var list = TrustedList.Load(xml, Options());
+
+        list.GetTrustAnchors().ShouldBeEmpty();
+        list.GetTrustAnchors(DateTimeOffset.UtcNow).ShouldBeEmpty();
+        list.GetTrustAnchors(withdrawn.AddHours(-1)).ShouldHaveSingleItem().Thumbprint.ShouldBe(_pki.RootCa.Thumbprint);
+        list.Services.ShouldHaveSingleItem().History.ShouldHaveSingleItem().Status.ShouldBe(Granted);
+    }
+
+    [Fact]
+    public void GetTrustAnchors_BeforeEveryStatus_None()
+    {
+        byte[] xml = Build([(CaQc, Granted, _pki.RootCa)], since: DateTimeOffset.UtcNow.AddDays(-1));
+
+        var list = TrustedList.Load(xml, Options());
+
+        list.GetTrustAnchors(DateTimeOffset.UtcNow).ShouldHaveSingleItem();
+        list.GetTrustAnchors(DateTimeOffset.UtcNow.AddYears(-1)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void StatusAt_NoStartingTime_CurrentStatus()
+    {
+        var service = new TrustedListService("Proveedor", "Servicio", CaQc, Granted, []);
+
+        service.StatusAt(DateTimeOffset.UtcNow.AddYears(-10)).ShouldBe(Granted);
+    }
+
+    [Fact]
     public void Load_ExcludedExtendedKeyUsage_CertificateIsNotAnAnchor()
     {
         using var key = RSA.Create(2048);
@@ -118,7 +151,8 @@ public sealed class TrustedListTests : IDisposable
 
     private TrustedListOptions Options() => new() { SignerCertificates = [_operator] };
 
-    private byte[] Build((string Type, string Status, X509Certificate2 Cert)[] services, DateTimeOffset? nextUpdate = null, bool sign = true)
+    private byte[] Build((string Type, string Status, X509Certificate2 Cert)[] services, DateTimeOffset? nextUpdate = null, bool sign = true,
+        DateTimeOffset? since = null, (string Status, DateTimeOffset Since)? history = null)
     {
         string serviceXml = string.Concat(services.Select(s => $"""
             <TSPService><ServiceInformation>
@@ -126,7 +160,18 @@ public sealed class TrustedListTests : IDisposable
               <ServiceName><Name xml:lang="es">Servicio</Name></ServiceName>
               <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(s.Cert.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
               <ServiceStatus>{s.Status}</ServiceStatus>
-            </ServiceInformation></TSPService>
+              {(since is { } start ? $"<StatusStartingTime>{start:yyyy-MM-ddTHH:mm:ssZ}</StatusStartingTime>" : "")}
+            </ServiceInformation>
+            {(history is { } h ? $"""
+              <ServiceHistory><ServiceHistoryInstance>
+                <ServiceTypeIdentifier>{s.Type}</ServiceTypeIdentifier>
+                <ServiceName><Name xml:lang="es">Servicio</Name></ServiceName>
+                <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(s.Cert.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
+                <ServiceStatus>{h.Status}</ServiceStatus>
+                <StatusStartingTime>{h.Since:yyyy-MM-ddTHH:mm:ssZ}</StatusStartingTime>
+              </ServiceHistoryInstance></ServiceHistory>
+              """ : "")}
+            </TSPService>
             """));
         string xml = $"""
             <TrustServiceStatusList xmlns="http://uri.etsi.org/02231/v2#" Id="tsl" TSLTag="http://uri.etsi.org/02231/TSLTag">

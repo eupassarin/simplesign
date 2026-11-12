@@ -78,8 +78,8 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **RFC 8933** | EdDSA in CMS | ⏳ | OIDs are recognized, but signing is deferred until raw external output is verifiable on every target |
 | **RFC 8032** | EdDSA algorithm | ⏳ | Ed25519/Ed448 signing is not advertised in v0.10.1 |
 | **RFC 8410** | EdDSA X.509 identifiers | ✅ | OIDs 1.3.101.112 (Ed25519) / 1.3.101.113 (Ed448) |
-| **ETSI EN 319 102-1** | Validation report | 🟡 | Indication and sub-indication (`SignatureSubIndication`), checks (`Constraints`), `ValidationPolicy` with algorithm dates and key sizes; proof of existence from the signature timestamp only (ADR 0022) |
-| **ETSI TS 119 612 / TS 102 231 v3** | Trusted lists | ✅ | `TrustedList`: signature checked against the scheme operator, active CA/TSA services as anchors, NextUpdate enforced |
+| **ETSI EN 319 102-1** | Validation report | 🟡 | Indication and sub-indication (`SignatureSubIndication`), checks (`Constraints`), `ValidationPolicy` with algorithm dates and key sizes; proof of existence from the signature time-stamp, and from a later archive or document time-stamp once the signature time-stamp's TSA is no longer trusted (past signature validation, ADR 0027) |
+| **ETSI TS 119 612 / TS 102 231 v3** | Trusted lists | ✅ | `TrustedList`: signature checked against the scheme operator, active CA/TSA services as anchors, NextUpdate enforced; service history gives the anchors at a time (`ValidationOptions.TimedTrustAnchors`, ADR 0026) |
 | **RFC 3161** | TSA checks | ✅ | TSA signature and critical exclusive timeStamping EKU at signing time; `tsa` name (§2.4.2) and TSA chain revocation at validation |
 | **RFC 4511 / RFC 4516** | LDAP CRL retrieval | ✅ | Read-only, opt-in (`OutboundHttpPolicy.AllowLdap`), same address checks as HTTP |
 | **IOFE** (Peru, Ley 27269) | Trust anchors and policies | 🟡 | `SimpleSign.Peru.Iofe` (anchors from INDECOPI's signed trusted list, `IofePolicies`) |

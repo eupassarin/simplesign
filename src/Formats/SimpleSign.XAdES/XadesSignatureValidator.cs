@@ -469,13 +469,16 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         bool? tsValid = null;
         bool? tsaTrusted = null;
         DateTimeOffset? provenTime = null;
+        DateTimeOffset? signatureTimestampTime = null;
         if (extraction.HasSignatureTimeStamp && _options.ValidatesTimestamps)
         {
-            TimestampTokenValidationResult timestamp = ValidateSignatureTimeStamp(
-                sigElement, ns, extraction.SigningTime, trustAnchors, warnings);
+            TimestampTokenValidationResult timestamp = TimedTrust.TrustTsaAtGenTime(
+                ValidateSignatureTimeStamp(sigElement, ns, extraction.SigningTime, trustAnchors, warnings),
+                SignatureTimeStampToken(sigElement, ns), _options, warnings);
             tsValid = timestamp.IsIntegrityValid;
             tsaTrusted = timestamp.IsTsaTrusted;
             provenTime = timestamp is { IsIntegrityValid: true, IsTsaTrusted: true } ? timestamp.GenTime : null;
+            signatureTimestampTime = timestamp.GenTime;
         }
 
         // AllDataObjectsTimeStamp: a signed property whose token covers the signed data objects
@@ -496,8 +499,34 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                 sigElement, ns, originalData, warnings);
         }
 
+        // Past signature validation (EN 319 102-1 §5.6): a trusted archive time-stamp proves the signature time-stamp
+        // existed while its TSA's certificate was valid.
+        if (tsValid == true && tsaTrusted != true && archiveTsValid == true && ArchiveTimeStampToken(sigElement, ns) is { } archiveToken
+            && TimedTrust.TrustTsaAtLaterProof(signatureTimestampTime, SignatureTimeStampToken(sigElement, ns), archiveToken,
+                trustAnchors ?? _options.TrustedRoots, _options, warnings))
+        {
+            tsaTrusted = true;
+            provenTime = signatureTimestampTime;
+        }
+
         // Certificate chain validation
+        int chainErrorsStart = errors.Count;
         bool chainValid = ValidateCertificateChain(signerCert, trustAnchors, sigElement, ns, errors, out bool chainAnchored);
+
+        // Not anchored today: the anchors of the proof of existence (a trusted-list service withdrawn since).
+        if (!chainAnchored && provenTime is { } proven && TimedTrust.IsConfigured(_options))
+        {
+            var timedErrors = new List<string>();
+            bool timedValid = ValidateCertificateChain(
+                signerCert, [.. trustAnchors ?? [], .. TimedTrust.AnchorsAt(_options, proven)], sigElement, ns, timedErrors, out bool timedAnchored);
+            if (timedAnchored)
+            {
+                errors.RemoveRange(chainErrorsStart, errors.Count - chainErrorsStart);
+                errors.AddRange(timedErrors);
+                warnings.Add(TimedTrust.SignerWarning(proven));
+                (chainValid, chainAnchored) = (timedValid, true);
+            }
+        }
         var (claimedRoles, attributeCertificates, signedAssertions) = ReadSignerRoles(sigElement, ns, warnings);
         var facts = new ValidationFacts
         {
@@ -615,7 +644,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             {
                 byte[] contentToken = Convert.FromBase64String(content.InnerText.Trim());
                 tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Content, contentToken, contentValid,
-                    TimestampTrust.ChainsTo(contentToken, trustAnchors ?? _options.TrustedRoots)));
+                    TimedTrust.TokenChains(contentToken, trustAnchors ?? _options.TrustedRoots, _options)));
             }
             catch (FormatException)
             {
@@ -628,26 +657,34 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid, tsaTrusted));
         }
 
-        const string Unsigned = "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties/";
-        if (archiveValid is not null
-            && sigElement.SelectSingleNode(Unsigned + "xades141:ArchiveTimeStamp/xades:EncapsulatedTimeStamp | " + Unsigned + "xades141:ArchiveTimeStamp/xades141:EncapsulatedTimeStamp | "
-                + Unsigned + "xades:ArchiveTimeStamp/xades:EncapsulatedTimeStamp", ns) is { } encapsulated)
+        // An unreadable archive timestamp is reported by its own validation.
+        if (archiveValid is not null && ArchiveTimeStampToken(sigElement, ns) is { } archiveToken
+            && TimedTrust.TokenChains(archiveToken, trustAnchors ?? _options.TrustedRoots, _options) is { } trusted)
         {
-            try
-            {
-                byte[] archiveToken = Convert.FromBase64String(encapsulated.InnerText.Trim());
-                if (TimestampTrust.ChainsTo(archiveToken, trustAnchors ?? _options.TrustedRoots) is { } trusted)
-                {
-                    tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Archive, archiveToken, archiveValid, trusted));
-                }
-            }
-            catch (FormatException)
-            {
-                // An unreadable archive timestamp is reported by its own validation.
-            }
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Archive, archiveToken, archiveValid, trusted));
         }
 
         return tokens.Count == 0 ? null : tokens;
+    }
+
+    /// <summary>The token of the (first) archive time-stamp, or null when there is none or it is not base64.</summary>
+    private static byte[]? ArchiveTimeStampToken(XmlElement sigElement, XmlNamespaceManager ns)
+    {
+        const string Unsigned = "ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties/";
+        if (sigElement.SelectSingleNode(Unsigned + "xades141:ArchiveTimeStamp/xades:EncapsulatedTimeStamp | " + Unsigned + "xades141:ArchiveTimeStamp/xades141:EncapsulatedTimeStamp | "
+            + Unsigned + "xades:ArchiveTimeStamp/xades:EncapsulatedTimeStamp", ns) is not { } encapsulated)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Convert.FromBase64String(encapsulated.InnerText.Trim());
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 
     /// <summary>How many elements of the document have the Id <paramref name="id"/>.</summary>
@@ -1617,7 +1654,10 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         }
 
         TimestampValidator.CertificateChainValidatorDelegate? validateTsaChain = null;
-        if (trustAnchors is not null)
+        // Without anchors given to this call, the TSA is judged against the configured roots (as the content and
+        // archive timestamps are), so the signature time-stamp can give a proof of existence.
+        IEnumerable<X509Certificate2>? tsaAnchors = trustAnchors ?? _options.TrustedRoots;
+        if (tsaAnchors is not null)
         {
             validateTsaChain = (tsaCert, embeddedCerts, tsaErrors, tsaWarnings) =>
             {
@@ -1635,7 +1675,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
                         RevocationMode = X509RevocationMode.NoCheck
                     }
                 };
-                foreach (var anchor in trustAnchors)
+                foreach (var anchor in tsaAnchors)
                 {
                     chain.ChainPolicy.CustomTrustStore.Add(anchor);
                 }
@@ -1686,7 +1726,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         return new TimestampTokenValidationResult
         {
             IsIntegrityValid = tsResult.IsIntegrityValid ?? false,
-            IsTsaTrusted = tsResult.IsTsaTrusted
+            IsTsaTrusted = tsResult.IsTsaTrusted,
+            GenTime = tsResult.GenTime,
         };
     }
 

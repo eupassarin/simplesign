@@ -285,6 +285,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         var roots = new List<X509Certificate2>();
         var providers = new List<ITrustAnchorProvider>();
         IReadOnlyList<Core.Extensions.TrustedListInfo>? trustedLists = null;
+        IReadOnlyList<Core.Extensions.ITimedTrustAnchorProvider>? timed = null;
         if (sandbox.Current is { } connection)
         {
             bool viaList = settings.Trust.Contains(TrustChoice.SandboxTrustedList) && connection.LotlUri is not null && connection.LotlSigner is not null;
@@ -293,6 +294,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
                 providers.Add(set);
                 roots.AddRange(set.GetTrustAnchors());
                 trustedLists = set.TrustedLists;
+                timed = [set];
             }
 
             // The root as a bare anchor: asked for, or the trusted list asked of a Sandbox that has none.
@@ -318,6 +320,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),
             TrustedRoots = roots.Count > 0 ? roots : null,
             TrustedLists = trustedLists,
+            TimedTrustAnchors = timed,
             NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 120)),
             Policy = PolicyUploads.Validation(settings.PolicyId, documents),
             Level = settings.Level,
@@ -573,6 +576,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             "// var lists = await TrustedListSet.LoadAsync(new() { LotlLocation = new Uri(\"http://localhost:5300/tl/lotl.xml\"), LotlSignerCertificates = [lotlSigner] });",
             "TrustedRoots = [.. lists.GetTrustAnchors()]",
             "TrustedLists = lists.TrustedLists",
+            "TimedTrustAnchors = [lists]",
         ]
         : [];
 

@@ -2,7 +2,7 @@
 
 export type SignatureKind = "Baseline" | "CustomPolicy"
 export type BaselineLevel = "BB" | "BT" | "BLT" | "BLTA"
-export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "SandboxUntrusted" | "SandboxRevoked" | "SandboxExpired" | "SandboxWrongName" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
+export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "SandboxUntrusted" | "SandboxRevoked" | "SandboxExpired" | "SandboxWrongName" | "SandboxShortLived" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
 export type TsaAuth = "None" | "Basic" | "Bearer"
 export type HashChoice = "Sha256" | "Sha384" | "Sha512" | "Sha3_256" | "Sha3_384" | "Sha3_512"
 export type RsaPadding = "Pkcs1" | "Pss"
