@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — IOFE: timestamping authorities that INDECOPI's list types as `unspecified`
+
+- INDECOPI's trusted list publishes some accredited TSAs as `Svctype/unspecified` (Llama.pe's
+  "Timestamping CA", BPO Advisors' and Girasol's TSUs), which `TrustedList` dropped by default. A Llama.pe
+  timestamp whose token carries the TSU certificate only then failed to chain to Llama.pe's root and was refused
+  under `IofePolicies.Signing` (`TimestampUntrusted`). `IofeExtension` now reads the list with
+  `IofeExtension.DefaultListOptions`: the usual CA/TSA types plus `unspecified`, leaving out code-signing
+  certificates (the same type holds the accredited signature software). `Load(byte[], …)` uses them too.
+- `TrustedListOptions.ExcludedExtendedKeyUsages`: extended key usages that keep a certificate of a kept service from
+  becoming a trust anchor.
+
 ### Added — Playbooks in the TestBench (the Playbook app is gone)
 
 - **TestBench → Playbook tab** (after Sign and Validate; it was the Certification page): loads a playbook (JSON,

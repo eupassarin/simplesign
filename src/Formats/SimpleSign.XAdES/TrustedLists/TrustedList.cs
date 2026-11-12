@@ -75,6 +75,13 @@ public sealed record TrustedListOptions
 
     /// <summary>Whether a list whose NextUpdate has passed is refused. Default: <see langword="true"/>.</summary>
     public bool RejectExpired { get; init; } = true;
+
+    /// <summary>
+    /// Extended key usages (OIDs) that keep a certificate of a kept service from becoming a trust anchor, e.g.
+    /// code signing (<c>1.3.6.1.5.5.7.3.3</c>) for lists that put signature software among their services.
+    /// Default: none.
+    /// </summary>
+    public IReadOnlyList<string> ExcludedExtendedKeyUsages { get; init; } = [];
 }
 
 /// <summary>
@@ -113,6 +120,7 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
             .Where(s => options.ServiceTypes.Any(t => s.ServiceType.EndsWith(t, StringComparison.OrdinalIgnoreCase))
                 && status(s) is { } current && options.ActiveStatuses.Any(t => current.EndsWith(t, StringComparison.OrdinalIgnoreCase)))
             .SelectMany(s => s.Certificates)
+            .Where(c => !HasExtendedKeyUsage(c, options.ExcludedExtendedKeyUsages))
             .ToList();
         List<X509Certificate2> anchors = [.. kept.Where(IsSelfSigned)];
         List<X509Certificate2> intermediates = [.. kept.Where(c => !IsSelfSigned(c))];
@@ -433,4 +441,9 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
 
     private static bool IsSelfSigned(X509Certificate2 certificate) =>
         certificate.SubjectName.RawData.AsSpan().SequenceEqual(certificate.IssuerName.RawData);
+
+    private static bool HasExtendedKeyUsage(X509Certificate2 certificate, IReadOnlyList<string> oids) =>
+        oids.Count > 0
+        && certificate.Extensions.OfType<X509EnhancedKeyUsageExtension>()
+            .Any(e => e.EnhancedKeyUsages.Cast<Oid>().Any(u => oids.Contains(u.Value, StringComparer.Ordinal)));
 }
