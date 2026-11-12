@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `AuditChain`: the audit hash chain for any store
+
+- `AuditChain.Canonicalize(SignatureAuditEvent)`, `AuditChain.Link(previousHash, content)`, `AuditChain.Append`,
+  `AuditChain.Genesis`, `AuditChain.Follows` and `AuditChain.Verify(IEnumerable<AuditChainRecord>)`: the content and
+  SHA-256 chaining of `JsonLinesAuditSink`, public so that a database-backed `ISignatureAuditSink` produces the same
+  chain and can be checked the same way. `JsonLinesAuditSink` uses them; its file format is unchanged and existing logs
+  keep verifying.
+
 ### Fixed — IOFE: timestamping authorities that INDECOPI's list types as `unspecified`
 
 - INDECOPI's trusted list publishes some accredited TSAs as `Svctype/unspecified` (Llama.pe's

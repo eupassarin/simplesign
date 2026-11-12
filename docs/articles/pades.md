@@ -130,6 +130,29 @@ The same in code: `SigningPolicy.Default.With("SigningCertificate/NotRevoked", n
 `WithSigningPolicy` is on the CAdES, XAdES, deferred and batch builders too. `WithChainRevocationChecker` replaces the
 checker used for the revocation check (by default it downloads through the builder's `IHttpClientProvider`).
 
+### Audit trail
+
+`WithAuditSink(ISignatureAuditSink)` records every signature made or refused. `JsonLinesAuditSink` appends one JSON
+line per record, chained by SHA-256 (`prev`, `hash`); `JsonLinesAuditSink.Verify` and `simplesign audit verify` find a
+line changed, removed or inserted later. A sink that writes to a database produces the same chain with `AuditChain`:
+
+```csharp
+sealed class DatabaseAuditSink(AuditDb db) : ISignatureAuditSink
+{
+    public async ValueTask RecordAsync(SignatureAuditEvent e, CancellationToken ct)
+    {
+        string previous = await db.LastHashAsync(ct) ?? AuditChain.Genesis;  // under the same lock or transaction
+        AuditChainRecord record = AuditChain.Append(previous, e);          // Content, PreviousHash, Hash
+        await db.InsertAsync(record.Content, record.PreviousHash, record.Hash, ct);
+    }
+}
+
+int broken = AuditChain.Verify(await db.ReadAllInOrderAsync());           // 0 = intact, else the 1-based record
+```
+
+`AuditChain.Canonicalize` is the content the file sink writes (without `prev` and `hash`) and `AuditChain.Link` its hash,
+so the records of both stores can be compared.
+
 ## Validation
 
 Signing revalidates the completed base signature and content integrity before

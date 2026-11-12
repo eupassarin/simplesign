@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -9,12 +7,11 @@ namespace SimpleSign.Core.Signing;
 /// An <see cref="ISignatureAuditSink"/> that appends each record to a file, one JSON object per line. Each line carries
 /// the SHA-256 of the previous line's hash and of its own content (<c>prev</c>, <c>hash</c>), so a line changed,
 /// removed or inserted later breaks the chain: <see cref="Verify"/> finds it. The chain shows tampering; it does not
-/// prevent it: keep the file where the application cannot rewrite it, or ship each line elsewhere as well.
+/// prevent it: keep the file where the application cannot rewrite it, or ship each line elsewhere as well. The content
+/// and hashes are those of <see cref="AuditChain"/>: a sink writing to another store can produce the same chain.
 /// </summary>
 public sealed class JsonLinesAuditSink : ISignatureAuditSink, IDisposable
 {
-    private const string Genesis = "0000000000000000000000000000000000000000000000000000000000000000";
-
     private readonly string _path;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private string? _last;
@@ -35,11 +32,10 @@ public sealed class JsonLinesAuditSink : ISignatureAuditSink, IDisposable
         try
         {
             _last ??= ReadLastHash(_path);
-            string content = Content(auditEvent);
-            string hash = Hash(_last, content);
-            string line = content[..^1] + $",\"prev\":\"{_last}\",\"hash\":\"{hash}\"}}" + "\n";
+            var record = AuditChain.Append(_last, auditEvent);
+            string line = record.Content[..^1] + $",\"prev\":\"{record.PreviousHash}\",\"hash\":\"{record.Hash}\"}}" + "\n";
             await File.AppendAllTextAsync(_path, line, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-            _last = hash;
+            _last = record.Hash;
         }
         finally
         {
@@ -54,7 +50,7 @@ public sealed class JsonLinesAuditSink : ISignatureAuditSink, IDisposable
     /// <returns>The 1-based number of the first line that breaks the chain, or 0 when the whole file is intact.</returns>
     public static int Verify(string path)
     {
-        string previous = Genesis;
+        string previous = AuditChain.Genesis;
         int number = 0;
         foreach (string line in File.ReadLines(path))
         {
@@ -83,7 +79,7 @@ public sealed class JsonLinesAuditSink : ISignatureAuditSink, IDisposable
                 return number;
             }
 
-            if (prev != previous || hash != Hash(prev, content))
+            if (!AuditChain.Follows(previous, new AuditChainRecord(content, prev, hash)))
             {
                 return number;
             }
@@ -97,60 +93,20 @@ public sealed class JsonLinesAuditSink : ISignatureAuditSink, IDisposable
     /// <inheritdoc />
     public void Dispose() => _gate.Dispose();
 
-    private static string Hash(string previous, string content) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(previous + "\n" + content)));
-
     private static string ReadLastHash(string path)
     {
         if (!File.Exists(path))
         {
-            return Genesis;
+            return AuditChain.Genesis;
         }
 
         string? last = File.ReadLines(path).LastOrDefault(l => l.Length > 0);
         if (last is null)
         {
-            return Genesis;
+            return AuditChain.Genesis;
         }
 
         using var document = JsonDocument.Parse(last);
-        return document.RootElement.GetProperty("hash").GetString() ?? Genesis;
-    }
-
-    /// <summary>The event as a compact JSON object, without the chain fields.</summary>
-    private static string Content(SignatureAuditEvent e)
-    {
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            writer.WriteString("time", e.Time.UtcDateTime.ToString("O", CultureInfo.InvariantCulture));
-            writer.WriteString("format", e.Format);
-            WriteOptional(writer, "operationId", e.OperationId);
-            writer.WriteString("requestedLevel", e.RequestedLevel.ToString());
-            WriteOptional(writer, "achievedLevel", e.AchievedLevel?.ToString());
-            writer.WriteBoolean("signed", e.Signed);
-            WriteOptional(writer, "reason", e.Reason?.ToString());
-            WriteOptional(writer, "message", e.Message);
-            WriteOptional(writer, "certificateSubject", e.CertificateSubject);
-            WriteOptional(writer, "certificateIssuer", e.CertificateIssuer);
-            WriteOptional(writer, "certificateSerialNumber", e.CertificateSerialNumber);
-            WriteOptional(writer, "certificateSha256", e.CertificateSha256);
-            WriteOptional(writer, "policyName", e.PolicyName);
-            WriteOptional(writer, "policyDigest", e.PolicyDigest);
-            WriteOptional(writer, "inputSha256", e.InputSha256);
-            WriteOptional(writer, "outputSha256", e.OutputSha256);
-            writer.WriteEndObject();
-        }
-
-        return Encoding.UTF8.GetString(buffer.ToArray());
-    }
-
-    private static void WriteOptional(Utf8JsonWriter writer, string name, string? value)
-    {
-        if (value is not null)
-        {
-            writer.WriteString(name, value);
-        }
+        return document.RootElement.GetProperty("hash").GetString() ?? AuditChain.Genesis;
     }
 }
