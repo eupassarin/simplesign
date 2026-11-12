@@ -156,6 +156,47 @@ internal sealed class SigningPlan
         return steps;
     }
 
+    /// <summary>
+    /// What the builder that resumes a two-phase signature is given again, because a session does not carry it:
+    /// the HTTP provider, the signing policy and anchors that check the TSA, the audit sink, the TSA credentials.
+    /// </summary>
+    public IReadOnlyList<(string Code, Func<DeferredSignerBuilder, DeferredSignerBuilder> Apply)> ResumeSteps()
+    {
+        var steps = new List<(string, Func<DeferredSignerBuilder, DeferredSignerBuilder>)>();
+        if (IsSandbox)
+        {
+            steps.Add((Context.HttpCode, b => b.WithHttpClientProvider(Http)));
+        }
+
+        if (_signingPolicy.Uploaded)
+        {
+            var policy = _signingPolicy.Policy;
+            steps.Add((PolicyUploads.SigningCode(_signingPolicy), b => b.WithSigningPolicy(policy)));
+        }
+
+        var controls = Context.Controls;
+        if (controls.TrustCode() is { } trustCode)
+        {
+            steps.Add((trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+        }
+
+        if (controls.Audit is { } audit)
+        {
+            steps.Add((controls.AuditCode()!, b => b.WithAuditSink(audit)));
+        }
+
+        if (Timestamp is { } tsa && (tsa.Authorization is not null || tsa.ClientCertificate is not null || tsa.ExpectedTsaCertificate is not null
+            || ArchiveTimestamp?.Authorization is not null))
+        {
+            // Secrets are never stored in the session: supply them again on resume.
+            var archive = ArchiveTimestamp;
+            steps.Add((archive is null ? ".WithTimestampOptions(tsa) // credentials are not stored in the session" : ".WithTimestampOptions(tsa, archiveTsa) // credentials are not stored in the session",
+                b => b.WithTimestampOptions(tsa, archive)));
+        }
+
+        return steps;
+    }
+
     private PlanStep CredentialStep()
     {
         string code = Context.CredentialCode();
@@ -210,7 +251,7 @@ internal sealed class SigningPlan
 
     private AdesBaselineProfile? BuildProfile()
     {
-        var failure = _o.ReturnLowerLevel && _o.Mode == RunMode.Sign ? SigningLevelFailureBehavior.ReturnLowerLevel : SigningLevelFailureBehavior.Throw;
+        var failure = _o.ReturnLowerLevel && _o.Mode != RunMode.Batch ? SigningLevelFailureBehavior.ReturnLowerLevel : SigningLevelFailureBehavior.Throw;
         switch (_o.Level)
         {
             case BaselineLevel.BB:
@@ -230,7 +271,7 @@ internal sealed class SigningPlan
 
     public string ProfileCode()
     {
-        string failure = _o.ReturnLowerLevel && _o.Mode == RunMode.Sign ? ", SigningLevelFailureBehavior.ReturnLowerLevel" : "";
+        string failure = _o.ReturnLowerLevel && _o.Mode != RunMode.Batch ? ", SigningLevelFailureBehavior.ReturnLowerLevel" : "";
         string ltv = Context.LongTermCode(_o.RevocationPreference);
         return _o.Level switch
         {

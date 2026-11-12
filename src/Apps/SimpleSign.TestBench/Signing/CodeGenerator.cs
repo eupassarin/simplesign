@@ -37,7 +37,7 @@ internal static class CodeGenerator
         switch (o.Mode)
         {
             case RunMode.Deferred:
-                Deferred(sb, plan);
+                Deferred(sb, plan, steps);
                 break;
             case RunMode.Batch:
                 Batch(sb, o, plan);
@@ -58,50 +58,37 @@ internal static class CodeGenerator
         return sb.ToString();
     }
 
-    private static void Deferred(StringBuilder sb, SigningPlan plan)
+    private static void Deferred(StringBuilder sb, SigningPlan plan, IReadOnlyList<PlanStep> steps)
     {
-        sb.Append("// Phase 1 — server: prepare the PDF and get the hash to sign.\n");
+        sb.Append("// Phase 1 — server: every option of PadesSigner, with the public certificate. The signing policy runs here.\n");
         sb.Append("byte[] sessionIntegrityKey = RandomNumberGenerator.GetBytes(32); // keep it server-side\n");
         sb.Append("var prepared = await DeferredSigner.Document(pdf)\n");
         sb.Append("    .WithCertificate(certificate, chain) // the public certificate is enough\n");
-        if (plan.IsSandbox)
+
+        // The first step is the credential; the others are the builder calls of one-call signing.
+        foreach (var step in steps.Skip(1))
         {
-            sb.Append("    .WithHttpClientProvider(sandboxHttp)\n");
+            sb.Append("    ").Append(step.Code).Append('\n');
         }
 
-        if (plan.HashAlgorithm.Name != "SHA256")
-        {
-            sb.Append(CultureInfo.InvariantCulture, $"    .WithHashAlgorithm(HashAlgorithmName.{plan.HashAlgorithm.Name})\n");
-        }
-
-        if (plan.SignatureAlgorithmOid is not null)
-        {
-            sb.Append("    .WithSignatureAlgorithm(Oids.RsaPss)\n");
-        }
-
-        sb.Append("    .WithFieldOptions(").Append(plan.FieldCode()).Append(")\n");
-        sb.Append("    .WithLevel(").Append(plan.ProfileCode()).Append(")\n");
         sb.Append("    .WithSessionIntegrityKey(sessionIntegrityKey)\n    .PrepareAsync();\n\n");
-        sb.Append("// Phase 2 — signer (browser + local agent, token, cloud…): HashToSign holds the DER signed attributes;\n");
+        sb.Append("// Phase 2 — signer (browser + local agent, token, cloud…): DataToSign holds the DER signed attributes;\n");
         sb.Append("// sign them as data (the signer hashes them) and return the raw signature.\n");
         sb.Append(plan.SignatureAlgorithmOid is not null
-            ? "byte[] signature = rsa.SignData(prepared.HashToSign, HashAlgorithmName." + plan.HashAlgorithm.Name + ", RSASignaturePadding.Pss);\n\n"
-            : "byte[] signature = rsa.SignData(prepared.HashToSign, HashAlgorithmName." + plan.HashAlgorithm.Name + ", RSASignaturePadding.Pkcs1);\n" +
-              "// ECDSA: ecdsa.SignData(prepared.HashToSign, hash, DSASignatureFormat.Rfc3279DerSequence)\n" +
-              "// Token / CSC: await externalSigner.SignAsync(new ExternalSigningRequest(prepared.HashToSign, hash, prepared.SignatureAlgorithmOid, ExternalSigningPayloadKind.CmsSignedAttributes), ct)\n\n");
-        sb.Append("// Phase 3 — server: resume and embed the signature (timestamps and LTV are added here).\n");
-        sb.Append("byte[] signed = await DeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)\n");
-        if (plan.IsSandbox)
+            ? "byte[] signature = rsa.SignData(prepared.DataToSign, HashAlgorithmName." + plan.HashAlgorithm.Name + ", RSASignaturePadding.Pss);\n\n"
+            : "byte[] signature = rsa.SignData(prepared.DataToSign, HashAlgorithmName." + plan.HashAlgorithm.Name + ", RSASignaturePadding.Pkcs1);\n" +
+              "// ECDSA: ecdsa.SignData(prepared.DataToSign, hash, DSASignatureFormat.Rfc3279DerSequence)\n" +
+              "// Token / CSC: await externalSigner.SignAsync(prepared.ToSigningRequest(), ct)\n\n");
+        sb.Append("// Phase 3 — server (any instance): resume, verify the signature, finish the level.\n");
+        sb.Append("PadesSigningResult result = await DeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)\n");
+        foreach (var (code, _) in plan.ResumeSteps())
         {
-            sb.Append("    .WithHttpClientProvider(sandboxHttp)\n");
+            sb.Append("    ").Append(code).Append('\n');
         }
 
-        if (plan.Timestamp?.Authorization is not null || plan.Timestamp?.ClientCertificate is not null)
-        {
-            sb.Append("    .WithTimestampOptions(tsa) // secrets are not stored in the session\n");
-        }
-
-        sb.Append("    .CompleteAsync(signature);\n");
+        sb.Append("    .CompleteWithDetailsAsync(signature);\n\n");
+        sb.Append("File.WriteAllBytes(\"signed.pdf\", result.SignedArtifact);\n");
+        sb.Append("Console.WriteLine($\"Requested {result.RequestedLevel}, achieved {result.AchievedLevel}\");\n");
     }
 
     private static void Batch(StringBuilder sb, SigningOptions o, SigningPlan plan)
@@ -139,13 +126,25 @@ internal static class CodeGenerator
         {
             case RunMode.Deferred:
                 {
-                    var prepare = new CliLine("deferred", "prepare", CliLine.Placeholders.Input)
+                    // The first phase is sign with --prepare: every option of sign, and the signer's certificate without its key.
+                    var prepare = new CliLine("sign", CliLine.Placeholders.Input)
+                        .Add("--prepare")
                         .Add("--cert", CliLine.Placeholders.SignerCertificate)
                         .Add("--chain", CliLine.Placeholders.Chain)
                         .Add("--session-key", CliLine.Placeholders.SessionKey);
                     Level(prepare, o, context);
+                    if (o.Level != BaselineLevel.BB && o.ReturnLowerLevel)
+                    {
+                        prepare.Add("--return-lower-level");
+                    }
+
                     Crypto(prepare, o, credential);
+                    Policy(prepare, o);
+                    context.Controls.Cli(prepare);
                     Field(prepare, o);
+                    Stamp(prepare, o);
+                    Document(prepare, o);
+                    prepare.AddIf("--operation-id", o.OperationId);
                     context.CliNetwork(prepare);
                     var complete = new CliLine("deferred", "complete", CliLine.Placeholders.Input + ".session")
                         .Add("--session-key", CliLine.Placeholders.SessionKey)
@@ -156,13 +155,15 @@ internal static class CodeGenerator
                         context.CliTimestamp(complete, o.Timestamp);
                     }
 
-                    context.CliNetwork(complete);
-                    notes.Add(L.T("Between the two commands, the signer hashes document.pdf.tbs and signs it; signature.bin is the raw signature."));
-                    if (o.Appearance.Visible)
+                    // The session does not carry the policy or the anchors that check the TSA: they are given again.
+                    if (o.SigningPolicyId is not null)
                     {
-                        notes.Add(L.T("simplesign deferred draws no stamp: the CLI's --visible is on sign only."));
+                        complete.Add("--signing-policy", PolicyUploads.SigningFileName);
                     }
 
+                    context.Controls.Cli(complete);
+                    context.CliNetwork(complete);
+                    notes.Add(L.T("Between the two commands, the signer hashes document.pdf.tbs and signs it; signature.bin is the raw signature."));
                     return ([prepare, complete], notes);
                 }
 
@@ -208,7 +209,7 @@ internal static class CodeGenerator
         }
     }
 
-    private static bool HasTsaCredentials(TimestampChoice choice) =>
+    internal static bool HasTsaCredentials(TimestampChoice choice) =>
         choice.Provider == TsaProvider.SandboxAuthenticated || choice.Auth != TsaAuth.None || !string.IsNullOrEmpty(choice.ClientCertificateUploadId);
 
     /// <summary>The level: the TSA (and its credentials), --ltv, --archival, a separate archive TSA, the revocation source.</summary>

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.CAdES;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
@@ -46,6 +47,30 @@ try
     await using var readerStream = new MemoryStream(signedPdf);
     var fields = await PdfStructureReader.ReadSignatureFieldsAsync(readerStream);
     Console.WriteLine($"[PASS] StructureReader: {fields.Count} field(s)");
+
+    // Two-phase signing — the sessions are written and read with source-generated JSON
+    byte[] sessionKey = RandomNumberGenerator.GetBytes(32);
+    var preparedPdf = await DeferredSigner.Document(pdf)
+        .WithCertificate(cert).WithSessionIntegrityKey(sessionKey).WithOperationId("aot").PrepareAsync();
+    byte[] deferredPdf = await DeferredSigner.Resume(preparedPdf.SessionData, sessionKey)
+        .CompleteAsync(SignRaw(cert, preparedPdf.DataToSign));
+    var deferredResults = await validator.ValidateAsync(new MemoryStream(deferredPdf));
+    if (deferredResults[0].Indication != SignatureIndication.Valid)
+    {
+        throw new InvalidOperationException($"Deferred PAdES signature is {deferredResults[0].Indication}");
+    }
+
+    var preparedCms = await CadesDeferredSigner.Document(pdf)
+        .WithCertificate(cert).WithSessionIntegrityKey(sessionKey).WithOperationId("aot").PrepareAsync();
+    byte[] deferredCms = await CadesDeferredSigner.Resume(preparedCms.SessionData, sessionKey)
+        .CompleteAsync(SignRaw(cert, preparedCms.DataToSign));
+    var cadesResult = new CadesSignatureValidator().Validate(deferredCms, pdf, [cert]);
+    if (!cadesResult.IsValid)
+    {
+        throw new InvalidOperationException($"Deferred CAdES signature is not valid: {string.Join("; ", cadesResult.Errors)}");
+    }
+
+    Console.WriteLine($"[PASS] Deferred: PAdES {deferredResults[0].Indication}, CAdES valid ({deferredCms.Length}B)");
 
     // PKCS#11 — exercises the native interop when a token is prepared (scripts/tests/pkcs11-run.sh)
     var pkcs11Module = Environment.GetEnvironmentVariable("PKCS11_SMOKE_MODULE");
@@ -122,6 +147,12 @@ static X509Certificate2 CreateSelfSignedCert()
 #else
     return new X509Certificate2(pfxBytes, "aot", X509KeyStorageFlags.Exportable);
 #endif
+}
+
+static byte[] SignRaw(X509Certificate2 certificate, byte[] dataToSign)
+{
+    using var rsa = certificate.GetRSAPrivateKey()!;
+    return rsa.SignData(dataToSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 }
 
 static byte[] CreateMinimalPdf()

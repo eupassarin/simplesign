@@ -99,6 +99,28 @@ public sealed class XadesSignerTests
     }
 
     [Fact]
+    public async Task SignAsync_WithExternalSigner_Ecdsa_WritesTheXmlDsigSignatureValue()
+    {
+        byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes("<?xml version=\"1.0\"?><doc><id>ecdsa</id></doc>");
+        using X509Certificate2 publicCertificate = X509CertificateLoader.LoadCertificate(s_ecdsaCert.RawData);
+
+        // An external signer returns ECDSA as a DER SEQUENCE { r, s }; ds:SignatureValue holds r || s (XMLDSig Core §6.4.3).
+        byte[] signed = await XadesSigner.Document(xmlBytes)
+            .WithExternalSigner(publicCertificate, new DelegatingExternalSigner(data =>
+            {
+                using ECDsa key = s_ecdsaCert.GetECDsaPrivateKey()!;
+                return Task.FromResult(key.SignData(data, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence));
+            }))
+            .SignAsync();
+
+        var result = new XadesSignatureValidator().Validate(signed, [s_ecdsaCert]);
+        result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        var document = new System.Xml.XmlDocument { PreserveWhitespace = true };
+        document.Load(new MemoryStream(signed));
+        Convert.FromBase64String(document.GetElementsByTagName("SignatureValue", "http://www.w3.org/2000/09/xmldsig#")[0]!.InnerText).Length.ShouldBe(64);
+    }
+
+    [Fact]
     public async Task SignAsync_WithExternalSigner_ReturnsValidSignature()
     {
         string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><doc>external</doc>";

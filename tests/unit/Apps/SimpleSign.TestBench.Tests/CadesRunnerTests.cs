@@ -1,5 +1,6 @@
 using Shouldly;
 using SimpleSign.TestBench.Cades;
+using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Signing;
 
 namespace SimpleSign.TestBench.Tests;
@@ -61,6 +62,59 @@ public sealed class CadesRunnerTests(TestBenchFixture fixture)
         var signer = result.Validation!.Signers.ShouldHaveSingleItem();
         signer.CounterSignatures.ShouldHaveSingleItem().Indication.ShouldBe("Valid");
         result.FileName.ShouldBe("countersigned.p7m");
+    }
+
+    [SkippableTheory]
+    [InlineData(RunEngines.Library, CadesContentChoice.Detached, BaselineLevel.BB)]
+    [InlineData(RunEngines.Library, CadesContentChoice.Enveloped, BaselineLevel.BT)]
+    [InlineData(RunEngines.Library, CadesContentChoice.Detached, BaselineLevel.BLTA)]
+    [InlineData(RunEngines.Cli, CadesContentChoice.Detached, BaselineLevel.BT)]
+    [InlineData(RunEngines.Cli, CadesContentChoice.Enveloped, BaselineLevel.BLT)]
+    public async Task RunAsync_TwoPhases_IsValidAndShowsTheThreePhases(string engine, CadesContentChoice content, BaselineLevel level)
+    {
+        var options = Options() with { TwoPhases = true, ContentType = content, Level = level, SignerRoles = ["Diretor"] };
+
+        var result = await fixture.Cades.RunAsync(options, engine, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message).Concat(result.Cli?.Select(c => c.Output) ?? [])));
+        result.Validation!.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors).Concat(result.Validation.Errors)));
+        result.Validation.Structure.IsDetached.ShouldBe(content == CadesContentChoice.Detached);
+        result.HasSignatureTimestamp.ShouldBe(level != BaselineLevel.BB);
+        result.Code.CSharp.ShouldContain("CadesDeferredSigner.Document(data)");
+        result.Code.CSharp.ShouldContain("CadesDeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)");
+        result.Code.CSharp.ShouldContain(".CompleteWithDetailsAsync(signature)");
+        result.Code.CSharp.ShouldNotContain("CadesSigner.Document");
+        result.Code.Cli.ShouldContain("simplesign cades sign document");
+        result.Code.Cli.ShouldContain("--prepare");
+        result.Code.Cli.ShouldContain("simplesign deferred complete document.session");
+    }
+
+    [SkippableTheory]
+    [InlineData(RunEngines.Library)]
+    [InlineData(RunEngines.Cli)]
+    public async Task RunAsync_TwoPhasesCoSign_AddsASecondSigner(string engine)
+    {
+        var sample = fixture.CadesSamples.Single(s => s.Id == "detached");
+        var options = Options("rsa-3072") with { TwoPhases = true, Operation = CadesOperation.CoSign, ExistingSignatureId = sample.FileId, DataId = sample.DataId };
+
+        var result = await fixture.Cades.RunAsync(options, engine, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message).Concat(result.Cli?.Select(c => c.Output) ?? [])));
+        result.Validation!.Signers.Count.ShouldBe(2);
+        result.Validation.Overall.ShouldBe("Valid", string.Join("; ", result.Validation.Signers.SelectMany(s => s.Errors)));
+        result.Code.CSharp.ShouldContain("CadesDeferredSigner.CoSign(existing, data)");
+    }
+
+    [SkippableFact]
+    public async Task RunAsync_TwoPhasesCounterSign_NestsUnderTheSigner()
+    {
+        var options = Options("rsa-4096") with { TwoPhases = true, Operation = CadesOperation.CounterSign, ExistingSignatureId = Sample("enveloped"), DataId = null };
+
+        var result = await fixture.Cades.RunAsync(options, default);
+
+        result.Error.ShouldBeNull(string.Join("; ", result.Issues.Select(i => i.Message)));
+        result.Validation!.Signers.ShouldHaveSingleItem().CounterSignatures.ShouldHaveSingleItem().Indication.ShouldBe("Valid");
+        result.Code.CSharp.ShouldContain("CadesDeferredSigner.CounterSign(existing, signerIndex: 0)");
     }
 
     [SkippableTheory]

@@ -78,6 +78,27 @@ public sealed class DeferredSigningSession
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public RevocationPreference RevocationPreference { get; init; }
 
+    /// <summary>
+    /// The OCSP clock skew tolerance, in seconds, used when collecting B-LT data in phase two; null for
+    /// the default. Not written when null, so sessions prepared before this field existed keep a valid HMAC.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? LongTermClockSkewSeconds { get; init; }
+
+    /// <summary>
+    /// The operation id given in phase one, for the audit record and the logs of phase two; null when
+    /// none was given. Not written when null.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OperationId { get; init; }
+
+    /// <summary>
+    /// The extra streams written to the Document Security Store with the B-LT data in phase two; null
+    /// when there are none. Not written when null.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<PdfDssArtifact>? DssArtifacts { get; init; }
+
     /// <summary>HMAC-SHA256 over the session payload, keyed with a server-side secret.</summary>
     public byte[]? Hmac { get; set; }
 

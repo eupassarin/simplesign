@@ -32,8 +32,8 @@ simplesign validate signed.pdf --trust my-root-ca.pem --json
 # Sign every PDF of a folder (BatchSigner), four at a time, into folder/signed
 simplesign sign-dir contracts/ --cert mycert.pfx --password secret --tsa http://timestamp.digicert.com --max-concurrency 4
 
-# Deferred signing: the key is elsewhere (browser, token, remote service)
-simplesign deferred prepare contract.pdf --cert signer.cer --session-key env:SESSION_KEY   # writes .session and .tbs
+# Two-phase signing: the key is elsewhere (browser, token, remote service). See "Two-Phase Signing" below.
+simplesign sign contract.pdf --prepare --cert signer.cer --session-key env:SESSION_KEY   # writes .session and .tbs
 #   ...the signer hashes contract.pdf.tbs with SHA-256 and signs it (RSA PKCS#1 v1.5, or ECDSA in DER)...
 simplesign deferred complete contract.pdf.session --session-key env:SESSION_KEY --signature contract.sig -o signed.pdf
 
@@ -200,6 +200,42 @@ simplesign xades validate signed.xml --trust root-ca.pem
 `xades validate` checks every `ds:Signature` of the document and their countersignatures. With `--json`,
 `signatures` lists them, each with its `counterSignatures`; the top-level fields are those of the first. The exit
 code is 0 only when all are valid.
+
+## Two-Phase Signing
+
+When the private key is on another machine, `sign`, `cades sign` and `xades sign` take `--prepare`: the command
+does not sign. It runs the signing policy and writes the session (`<input>.session`, or `--session`) and the data to
+sign (`<input>.tbs`, or `--to-sign`). Every other option of the command keeps its meaning — level, TSA, field and
+appearance, signed attributes, signature policy, co-signature and countersignature.
+
+```bash
+# Phase one. --cert is the signer's certificate without a key (DER or PEM); --chain adds its chain.
+simplesign sign contract.pdf --prepare --cert signer.cer --chain chain.pem --session-key env:SESSION_KEY \
+    --tsa http://timestamp.digicert.com --ltv --reason "Approved"
+simplesign cades sign report.pdf --prepare --cert signer.cer --session-key env:SESSION_KEY --content-type enveloped
+simplesign xades sign signed.xml --prepare --cert signer.cer --session-key env:SESSION_KEY --countersign
+
+# The signer hashes the .tbs file with the digest algorithm the command printed and signs it:
+# RSA PKCS#1 v1.5 or PSS, or ECDSA as a DER SEQUENCE { r, s }.
+
+# Phase two, for the three formats: the format is read from the session.
+simplesign deferred complete contract.pdf.session --session-key env:SESSION_KEY --signature contract.sig -o signed.pdf
+```
+
+| Option | On | What it does |
+|---|---|---|
+| `--prepare` | `sign`, `cades sign`, `xades sign` | Prepare instead of signing. Not with `--password`, a token, a cloud certificate or `--output`. |
+| `--session-key <KEY>` | prepare and complete | The HMAC key of the session: 32 bytes or more as hex or base64, or `env:NAME`. The same key completes it. |
+| `--session`, `--to-sign` | prepare | Where the session and the data to sign go. |
+| `--content-outside-session` | `cades sign --prepare` | Keep the content out of the session; give it to `deferred complete --content`. |
+| `--detached-data-outside-session` | `xades sign --prepare` | Keep the detached document and external data objects out of the session; give them to `deferred complete --detached-data` and `--external-object URI=PATH`. |
+| `--signature <PATH>` | `deferred complete` | The raw signature of the data to sign. |
+| `--tsa`, `--archive-tsa` with `--tsa-user`, `--tsa-token` or `--tsa-cert` | `deferred complete` | The TSA of phase one again, only to give its credentials: they are never stored in the session. |
+| `--signing-policy`, `--trust`, `--expected-tsa`, `--audit-log` | `deferred complete` | The checks of the TSA certificate; the signer was checked in phase one. |
+| `--json` | prepare and complete | The paths and algorithms of phase one; the requested and achieved levels of phase two. |
+
+The session is authenticated, not encrypted, and holds the document: keep it on the server. `deferred prepare` is the
+earlier, PDF-only form of `sign --prepare` and stays available.
 
 ## Validation Output
 

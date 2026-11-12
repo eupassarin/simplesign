@@ -22,7 +22,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
     }
 
     /// <summary>CAdES sign command settings.</summary>
-    internal sealed class Settings : ExternalCredentialSettings
+    internal sealed class Settings : PreparableSigningSettings
     {
         /// <summary>Checks run before signing.</summary>
         [CommandOption("--signing-policy <PATH>")]
@@ -194,6 +194,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         [Description("CAdES extended form (EN 319 122-2): complete-references (-C), extended-long (-X-L) or archive (-A)")]
         public string? ExtendedForm { get; init; }
 
+        /// <summary>Keep the content out of the session (two-phase signing).</summary>
+        [CommandOption("--content-outside-session")]
+        [Description("With --prepare: keep the content out of the session, which then holds only its SHA-256; give it again to 'deferred complete' with --content")]
+        public bool ContentOutsideSession { get; init; }
+
         /// <summary>The error for --cosign, --countersign and their companions, or null.</summary>
         private string? ValidateOperation()
         {
@@ -259,6 +264,12 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
                 return ValidationResult.Error(extrasError);
             }
 
+            if ((ValidatePrepare(CertPath, otherCredential: false, Password, OutputPath)
+                ?? (ContentOutsideSession && !Prepare ? "--content-outside-session requires --prepare." : null)) is { } prepareError)
+            {
+                return ValidationResult.Error(prepareError);
+            }
+
             if (ExternalCredentialSupport.Validate(this, CertPath is not null) is { } externalError)
             {
                 return ValidationResult.Error(externalError);
@@ -295,7 +306,11 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         byte[] data = await CommonSettings.ReadInputBytesAsync(settings.InputPath, cancellationToken);
 
         using ExternalCredential? token = await ExternalCredentialSupport.OpenAsync(settings, cancellationToken);
-        using X509Certificate2? ownCert = token is null ? await LoadCertificateAsync(settings, cancellationToken) : null;
+        // Two phases: --cert is the signer's certificate and chain, without a private key.
+        var (publicCert, publicChain) = settings.Prepare
+            ? DeferredPrepareSupport.LoadCertificates(_certChainService, settings.CertPath!)
+            : (null, []);
+        using X509Certificate2? ownCert = publicCert ?? (token is null ? await LoadCertificateAsync(settings, cancellationToken) : null);
         X509Certificate2 cert = token?.Certificate ?? ownCert!;
 
         var level = ParseLevel(settings.Level) ?? AdesBaselineLevel.Basic;
@@ -350,7 +365,7 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         builder = await ApplyExtrasAsync(builder, settings, cancellationToken);
         builder = ApplySigningOptions(builder, settings);
         // The chain: the other certificates of the PFX (as sign does) plus --chain.
-        List<X509Certificate2> pfxChain = token is null ? PfxChain(settings, cert) : [];
+        List<X509Certificate2> pfxChain = settings.Prepare ? publicChain : token is null ? PfxChain(settings, cert) : [];
         IReadOnlyList<X509Certificate2> extraChain = settings.ChainPath is null ? [] : LoadChainCertificates(settings.ChainPath);
         if (token is null && pfxChain.Count + extraChain.Count > 0)
         {
@@ -374,6 +389,16 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         if (CliNetwork.IsConfigured)
         {
             builder = builder.WithHttpClientProvider(CliNetwork.Provider);
+        }
+
+        if (settings.Prepare)
+        {
+            // Two phases: the same builder, prepared for a key that signs elsewhere.
+            var deferred = CadesDeferredSigner.From(builder).WithSessionIntegrityKey(DeferredSessionKey.Parse(settings.SessionKey)!);
+            var prepared = await (settings.ContentOutsideSession ? deferred.WithContentOutsideSession() : deferred).PrepareAsync(cancellationToken);
+            return await DeferredPrepareSupport.WriteAsync(
+                settings, settings.InputPath, "cades", prepared.SessionData, prepared.DataToSign,
+                prepared.DigestAlgorithm, prepared.SignatureAlgorithmOid, settings.Json, cancellationToken);
         }
 
         var result = await builder.SignWithDetailsAsync(cancellationToken);

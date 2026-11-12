@@ -20,7 +20,7 @@ namespace SimpleSign.CAdES;
 /// Created via <c>CadesSigner.Document(data)</c> and configured with
 /// <c>With*</c> methods that return a new builder instance.
 /// </summary>
-public sealed class CadesSignerBuilder
+public sealed partial class CadesSignerBuilder
 {
     private readonly byte[] _data;
     private readonly CadesSigningOptions _options;
@@ -527,6 +527,27 @@ public sealed class CadesSignerBuilder
             ?? throw new SigningException(
                 "Certificate not set. Call WithCertificate() or WithExternalSigner() before signing.",
                 SigningErrorReason.CredentialMissing);
+        SigningStart start = await BeginAsync(credential, cancellationToken).ConfigureAwait(false);
+
+        byte[] cms;
+        if (credential is CadesExternalCredential external)
+        {
+            cms = await SignExternalCoreAsync(external, start.Certificate, start.Chain, start.HashAlgorithm, start.SignatureAlgorithmOid, start.RsaPssParameters, start.ContentTimestamp, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            cms = SignLocalCore(start.Certificate, start.Chain, start.HashAlgorithm, start.SignatureAlgorithmOid, start.ContentTimestamp);
+        }
+
+        return await FinishAsync(cms, start.Certificate, start.Chain, start.HashAlgorithm, start.Warnings, start.Stopwatch, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The checks made before anything is signed: the certificate and its chain against the signing policy, the
+    /// options that cannot be combined, and the algorithms; then the content timestamp, which is a signed attribute.
+    /// </summary>
+    private async Task<SigningStart> BeginAsync(CadesSigningCredential credential, CancellationToken cancellationToken)
+    {
         var certificate = GetCertificate(credential);
         var chain = GetChain(credential);
         var profile = _options.Profile;
@@ -585,15 +606,25 @@ public sealed class CadesSignerBuilder
             contentTimestamp = await RequestContentTimestampAsync(contentTsa, hashAlg, operationId, cancellationToken).ConfigureAwait(false);
         }
 
-        byte[] cms;
-        if (credential is CadesExternalCredential external)
-        {
-            cms = await SignExternalCoreAsync(external, certificate, chain, hashAlg, sigAlgOid, resolvedAlgorithm.RsaPssParameters, contentTimestamp, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            cms = SignLocalCore(certificate, chain, hashAlg, sigAlgOid, contentTimestamp);
-        }
+        return new SigningStart(certificate, chain, hashAlg, sigAlgOid, resolvedAlgorithm.RsaPssParameters, contentTimestamp, warnings, stopwatch);
+    }
+
+    /// <summary>
+    /// Takes a CMS that holds the signer's signature to the requested level (policy store, signature timestamp,
+    /// validation data, extended form, archive timestamp), reads it back and reports what it holds.
+    /// </summary>
+    private async Task<CadesSigningResult> FinishAsync(
+        byte[] cms,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        HashAlgorithmName hashAlg,
+        List<SigningWarning> warnings,
+        Stopwatch stopwatch,
+        CancellationToken cancellationToken)
+    {
+        var profile = _options.Profile;
+        var logger = _options.Dependencies.Logger;
+        string operationId = _options.OperationId ?? "-";
 
         // The policy store goes in before the timestamps, so an archive timestamp covers it.
         if (_options.PolicyStore is { } policyStore)
@@ -910,13 +941,7 @@ public sealed class CadesSignerBuilder
         cancellationToken.ThrowIfCancellationRequested();
         var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
         string digestOid = CmsSignatureBuilder.GetDigestOid(hashAlg);
-
-        byte[] contentHash = CmsSignatureBuilder.ComputeHash(_data, hashAlg);
-        var extraAttributes = BuildSignedAttributesInternal(contentTimestamp);
-
-        byte[] signedAttrs = CmsSignatureBuilder.BuildSignedAttributes(
-            contentHash, digestOid, signingTime, certificate, extraAttributes,
-            padesAttributes: false, includeContentType: !_options.IsCounterSignature);
+        byte[] signedAttrs = BuildSignedAttributesToSign(certificate, hashAlg, signingTime, contentTimestamp);
 
         var request = new ExternalSigningRequest(
             signedAttrs,
@@ -937,6 +962,14 @@ public sealed class CadesSignerBuilder
             signature.ToArray(), certificate, allCerts,
             eContent: eContent);
     }
+
+    /// <summary>The DER signed attributes a key held elsewhere signs: the bytes handed to an external or a deferred signer.</summary>
+    private byte[] BuildSignedAttributesToSign(
+        X509Certificate2 certificate, HashAlgorithmName hashAlg, DateTimeOffset signingTime, CmsAttribute? contentTimestamp) =>
+        CmsSignatureBuilder.BuildSignedAttributes(
+            CmsSignatureBuilder.ComputeHash(_data, hashAlg), CmsSignatureBuilder.GetDigestOid(hashAlg), signingTime, certificate,
+            BuildSignedAttributesInternal(contentTimestamp),
+            padesAttributes: false, includeContentType: !_options.IsCounterSignature);
 
     /// <summary>
     /// Asks the TSA for a timestamp whose message imprint is the hash of the content
@@ -1193,6 +1226,17 @@ public sealed class CadesSignerBuilder
         With(_options with { Credential = credential });
 
     private sealed record CadesLtvEmbeddingResult(byte[] SignedCms, LtvCollectionResult Evidence);
+
+    /// <summary>What <see cref="BeginAsync"/> settles before the signature is made.</summary>
+    private sealed record SigningStart(
+        X509Certificate2 Certificate,
+        IReadOnlyList<X509Certificate2> Chain,
+        HashAlgorithmName HashAlgorithm,
+        string SignatureAlgorithmOid,
+        RsaPssParameters? RsaPssParameters,
+        CmsAttribute? ContentTimestamp,
+        List<SigningWarning> Warnings,
+        Stopwatch Stopwatch);
 
     /// <summary>Why the LTV data is incomplete: the certificates without revocation data, or a read-back failure.</summary>
     private static string LtvGap(LtvCollectionResult evidence) =>

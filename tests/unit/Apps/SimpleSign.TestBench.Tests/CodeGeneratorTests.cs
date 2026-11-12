@@ -96,7 +96,36 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
         var result = await fixture.Runner.RunAsync(fixture.Options() with { Mode = RunMode.Deferred }, default);
 
         result.Code.CSharp.ShouldContain("PrepareAsync()");
-        result.Code.CSharp.ShouldContain("SignData(prepared.HashToSign");
-        result.Code.CSharp.ShouldContain("CompleteAsync(signature)");
+        result.Code.CSharp.ShouldContain("SignData(prepared.DataToSign");
+        result.Code.CSharp.ShouldContain("CompleteWithDetailsAsync(signature)");
+        result.Code.Cli.ShouldContain("sign ");
+        result.Code.Cli.ShouldContain("--prepare");
+        result.Code.Cli.ShouldContain("deferred complete");
+    }
+
+    [SkippableFact]
+    public async Task Generate_DeferredWithOptionsOfOneCallSigning_PrintsThemInPhaseOne()
+    {
+        var options = fixture.Options() with
+        {
+            Mode = RunMode.Deferred,
+            Reason = "Two phases",
+            SigningTime = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
+            OperationId = "tb-deferred",
+            Kind = SignatureKind.CustomPolicy,
+            CustomPolicy = new CustomPolicyChoice { Oid = "1.2.3.4.5", HashHex = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData("policy"u8)) },
+        };
+
+        var result = await fixture.Runner.RunAsync(options, default);
+
+        result.Error.ShouldBeNull();
+        result.Deferred.ShouldNotBeNull();
+        string prepare = result.Code.CSharp[..result.Code.CSharp.IndexOf("PrepareAsync()", StringComparison.Ordinal)];
+        prepare.ShouldContain("DeferredSigner.Document(pdf)");
+        prepare.ShouldContain(".WithSignaturePolicy(");
+        prepare.ShouldContain(".WithSigningTime(");
+        prepare.ShouldContain(".WithOperationId(\"tb-deferred\")");
+        result.Code.Cli.ShouldContain("--policy-oid 1.2.3.4.5");
+        result.Code.Cli.ShouldContain("--operation-id tb-deferred");
     }
 }

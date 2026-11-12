@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Constants;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Inspection;
@@ -167,7 +168,7 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
             {
                 return effective.Mode switch
                 {
-                    RunMode.Deferred => await DeferredAsync(effective, plan, credential, pdf, report, code, watch, cancellationToken),
+                    RunMode.Deferred => await DeferredAsync(effective, plan, steps, credential, pdf, report, code, watch, cancellationToken),
                     RunMode.Batch => await BatchAsync(effective, plan, credential, pdf, report, code, watch, cancellationToken),
                     _ => await SignAsync(effective, plan, steps, pdf, report, code, watch, cancellationToken),
                 };
@@ -199,45 +200,39 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
             [.. result.Warnings.Select(w => $"{w.Code}: {w.Message}")], signMs, null, [], cancellationToken);
     }
 
-    private async Task<SigningResult> DeferredAsync(SigningOptions o, SigningPlan plan, CredentialHandle credential, byte[] pdf,
+    private async Task<SigningResult> DeferredAsync(SigningOptions o, SigningPlan plan, IReadOnlyList<PlanStep> steps, CredentialHandle credential, byte[] pdf,
         OptionsReport report, CodeSnippets code, Stopwatch watch, CancellationToken cancellationToken)
     {
         byte[] integrityKey = RandomNumberGenerator.GetBytes(32);
-        var builder = DeferredSigner.Document(pdf)
-            .WithCertificate(credential.Certificate, credential.Chain)
-            .WithHttpClientProvider(plan.Http)
-            .WithHashAlgorithm(plan.HashAlgorithm)
-            .WithFieldOptions(plan.Field)
-            .WithLevel(plan.Profile!)
-            .WithLogger(RunLog.Logger)
-            .WithSessionIntegrityKey(integrityKey);
-        if (plan.SignatureAlgorithmOid is { } oid)
+
+        // The same builder calls as one-call signing: a two-phase signature takes every option of PadesSigner.
+        var builder = PadesSigner.Document(pdf).WithLogger(RunLog.Logger);
+        foreach (var step in steps)
         {
-            builder = builder.WithSignatureAlgorithm(oid);
+            builder = step.Apply(builder);
         }
 
-        // Phase 1 (server): prepare the PDF and get the hash to sign. The session can be stored anywhere.
-        var prepared = await builder.PrepareAsync(cancellationToken);
+        // Phase 1 (server): run the signing policy, prepare the PDF and get the data to sign. The session can be stored anywhere.
+        var prepared = await DeferredSigner.From(builder).WithSessionIntegrityKey(integrityKey).PrepareAsync(cancellationToken);
 
         // Phase 2 (signer, e.g. a browser + local agent, a token or a cloud service): sign the DER
-        // signed attributes in HashToSign (the signer hashes them) and return the raw signature.
+        // signed attributes in DataToSign (the signer hashes them) and return the raw signature.
         byte[] raw = await SignPreparedAsync(credential, prepared, plan, cancellationToken);
 
-        // Phase 3 (server): resume the session and embed the signature (plus timestamps / LTV).
-        var resume = DeferredSigner.Resume(prepared.SessionData, integrityKey).WithHttpClientProvider(plan.Http).WithLogger(RunLog.Logger);
-        if (plan.Timestamp is { } tsa && (tsa.Authorization is not null || tsa.ClientCertificate is not null || plan.ArchiveTimestamp?.Authorization is not null))
+        // Phase 3 (server): resume the session, verify and embed the signature, finish the level.
+        var resume = DeferredSigner.Resume(prepared.SessionData, integrityKey).WithLogger(RunLog.Logger);
+        foreach (var (_, apply) in plan.ResumeSteps())
         {
-            // Secrets are never stored in the session: supply them again on resume.
-            resume = resume.WithTimestampOptions(tsa, plan.ArchiveTimestamp);
+            resume = apply(resume);
         }
 
-        byte[] signed = await resume.CompleteAsync(raw, cancellationToken);
+        var result = await resume.CompleteWithDetailsAsync(raw, cancellationToken);
         long signMs = watch.ElapsedMilliseconds;
-        var info = new DeferredInfo(Convert.ToHexString(prepared.HashToSign.AsSpan(0, Math.Min(prepared.HashToSign.Length, 96))) + "…", prepared.DigestAlgorithm, prepared.SignatureAlgorithmOid,
+        var info = new DeferredInfo(Convert.ToHexString(prepared.DataToSign.AsSpan(0, Math.Min(prepared.DataToSign.Length, 96))) + "…", prepared.DigestAlgorithm, prepared.SignatureAlgorithmOid,
             prepared.SessionData.Length, Convert.ToHexString(raw.AsSpan(0, Math.Min(raw.Length, 64))) + (raw.Length > 64 ? "…" : ""));
-        var level = plan.Profile!.Level;
-        return await FinishAsync(o, report, code, signed, LevelName(level), level >= AdesBaselineLevel.Timestamped,
-            level >= AdesBaselineLevel.LongTerm, level >= AdesBaselineLevel.Archive, [], signMs, info, [], cancellationToken);
+        return await FinishAsync(o, report, code, result.SignedArtifact, LevelName(result.AchievedLevel),
+            result.HasSignatureTimestamp, result.HasLongTermValidationMaterial, result.HasArchiveTimestamp,
+            [.. result.Warnings.Select(w => $"{w.Code}: {w.Message}")], signMs, info, [], cancellationToken);
     }
 
     private async Task<SigningResult> BatchAsync(SigningOptions o, SigningPlan plan, CredentialHandle credential, byte[] pdf,
@@ -425,6 +420,31 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
     /// </summary>
     internal static Task<byte[]> SignPreparedAsync(CredentialHandle credential, DeferredSigningPrepareResult prepared, SigningPlan plan, CancellationToken cancellationToken) =>
         SignToBeSignedAsync(credential, prepared.HashToSign, prepared.SignatureAlgorithmOid, plan, cancellationToken);
+
+    /// <summary>
+    /// The signer of a two-phase signature: signs the request phase one handed out (signed attributes or canonical
+    /// SignedInfo) with the credential — its external signer, or its local key.
+    /// </summary>
+    internal static async Task<byte[]> SignRequestAsync(CredentialHandle credential, ExternalSigningRequest request, CancellationToken cancellationToken) =>
+        credential.External is { } external
+            ? (await external.SignAsync(request, cancellationToken)).ToArray()
+            : SignWithLocalKey(credential, request.DataToSign.ToArray(), request.HashAlgorithm, request.SignatureAlgorithmOid == Oids.RsaPss);
+
+    /// <summary>Signs data (the key hashes it) with the credential's local key: RSA PKCS#1 v1.5 or PSS, or ECDSA as a DER sequence.</summary>
+    internal static byte[] SignWithLocalKey(CredentialHandle credential, byte[] toSign, HashAlgorithmName hash, bool pss)
+    {
+        var certificate = credential.Certificate;
+        if (certificate.GetRSAPrivateKey() is { } rsa)
+        {
+            using (rsa)
+            {
+                return rsa.SignData(toSign, hash, pss ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1);
+            }
+        }
+
+        using var ec = certificate.GetECDsaPrivateKey() ?? throw new CryptographicException("The certificate has no usable private key.");
+        return ec.SignData(toSign, hash, DSASignatureFormat.Rfc3279DerSequence);
+    }
 
     /// <summary>Signs DER signed attributes (the signer hashes them) with the credential: its local key or its external signer.</summary>
     internal static async Task<byte[]> SignToBeSignedAsync(CredentialHandle credential, byte[] toSign, string signatureAlgorithmOid, SigningPlan plan, CancellationToken cancellationToken)

@@ -23,7 +23,7 @@ namespace SimpleSign.PAdES;
 /// Immutable builder that accumulates PAdES signing configuration.
 /// Each method returns a new instance — no shared mutable state.
 /// </summary>
-public sealed class PadesSignerBuilder
+public sealed partial class PadesSignerBuilder
 {
     private readonly Stream _inputPdf;
     private readonly PadesSigningOptions _options;
@@ -333,56 +333,11 @@ public sealed class PadesSignerBuilder
     {
         ArgumentNullException.ThrowIfNull(metadata);
 
-        string? location = metadata.Location ?? metadata.InstitutionName;
-
-        string? contactInfo;
-        if (metadata.ContactInfo is not null)
+        return With(_options with
         {
-            contactInfo = metadata.ContactInfo;
-        }
-        else
-        {
-            var contactParts = new List<string>();
-            if (metadata.SignerId is not null)
-            {
-                string label = metadata.SignerIdType ?? "ID";
-                contactParts.Add($"{label}: {metadata.SignerId}");
-            }
-            if (metadata.Email is not null)
-            {
-                contactParts.Add($"Email: {metadata.Email}");
-            }
-            if (metadata.IpAddress is not null)
-            {
-                contactParts.Add($"IP: {metadata.IpAddress}");
-            }
-            if (metadata.AuthenticationMethod is not null)
-            {
-                contactParts.Add($"Auth: {metadata.AuthenticationMethod}");
-            }
-            if (metadata.InstitutionName is not null)
-            {
-                contactParts.Add($"Org: {metadata.InstitutionName}");
-            }
-            contactInfo = contactParts.Count == 0 ? null : string.Join(" | ", contactParts);
-        }
-
-        var currentField = _options.Field;
-        var updatedField = new SignatureFieldOptions
-        {
-            FieldName = currentField.FieldName,
-            SignerName = metadata.SignerName,
-            Reason = metadata.Reason,
-            Location = location,
-            ContactInfo = contactInfo,
-            ContentsReservedBytes = currentField.ContentsReservedBytes,
-            SubFilter = currentField.SubFilter,
-            Appearance = currentField.Appearance,
-            CertificationLevel = currentField.CertificationLevel,
-            ExistingFieldName = currentField.ExistingFieldName
-        };
-
-        return With(_options with { Field = updatedField, Metadata = CopyMetadata(metadata) });
+            Field = PadesSigningInputs.ApplyMetadata(_options.Field, metadata),
+            Metadata = PadesSigningInputs.CopyMetadata(metadata),
+        });
     }
 
     /// <summary>
@@ -408,17 +363,7 @@ public sealed class PadesSignerBuilder
     /// <exception cref="ArgumentException">The key is empty or not a valid PDF name.</exception>
     public PadesSignerBuilder WithDocumentInfo(string key, string value)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        ArgumentNullException.ThrowIfNull(value);
-        if (key.Any(c => c <= ' ' || c > '~' || "()<>[]{}/%#".Contains(c, StringComparison.Ordinal)))
-        {
-            throw new ArgumentException("The key must be printable ASCII without PDF delimiters.", nameof(key));
-        }
-
-        var info = new Dictionary<string, string>(_options.DocumentInfo ?? new Dictionary<string, string>(), StringComparer.Ordinal)
-        {
-            [key] = value,
-        };
+        var info = PadesSigningInputs.WithDocumentInfo(_options.DocumentInfo, key, value);
         return With(_options with { DocumentInfo = info });
     }
 
@@ -475,14 +420,7 @@ public sealed class PadesSignerBuilder
     /// <exception cref="ArgumentException">An artifact key is not usable.</exception>
     public PadesSignerBuilder WithDssArtifacts(IEnumerable<PdfDssArtifact> artifacts)
     {
-        ArgumentNullException.ThrowIfNull(artifacts);
-        var list = artifacts.ToList();
-        foreach (var artifact in list)
-        {
-            ArgumentNullException.ThrowIfNull(artifact, nameof(artifacts));
-            artifact.Validate();
-        }
-
+        var list = PadesSigningInputs.ValidatedArtifacts(artifacts);
         return With(_options with { DssArtifacts = [.. _options.DssArtifacts, .. list] });
     }
 
@@ -694,6 +632,29 @@ public sealed class PadesSignerBuilder
         var cms = useExternal
             ? await BuildExternalCmsAsync(signedBytes, effectiveHash, sigOid, resolvedAlgorithm.RsaPssParameters, certificate, chain, (ExternalCredential)credential, cancellationToken).ConfigureAwait(false)
             : BuildLocalCms(signedBytes, effectiveHash, sigOid, certificate, chain);
+
+        return await FinishAsync(
+            outputStream, prepareResult, cms, effectiveHash, pdfALevel, warnings, opId, sw, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Takes a prepared PDF and the CMS that holds the signer's signature to the requested level: signature
+    /// timestamp, the CMS written into the PDF, validation data, document timestamp; then reads the result back
+    /// and reports what it holds.
+    /// </summary>
+    private async Task<PadesSigningResult> FinishAsync(
+        Stream outputStream,
+        PdfSignaturePrepareResult prepareResult,
+        byte[] cms,
+        HashAlgorithmName effectiveHash,
+        PdfALevel? pdfALevel,
+        List<SigningWarning> warnings,
+        string opId,
+        System.Diagnostics.Stopwatch sw,
+        CancellationToken cancellationToken)
+    {
+        var profile = _options.Profile;
+        var logger = _options.Dependencies.Logger;
 
         byte[]? timestampTokenBytes = null;
         if (profile.Timestamp is not null)
@@ -1066,35 +1027,8 @@ public sealed class PadesSignerBuilder
             BuildExtraAttributes()?.Count ?? 0, _options.Dependencies.Logger);
     }
 
-    private IReadOnlyList<CmsAttribute>? BuildExtraAttributes()
-    {
-        var extraAttributes = new List<CmsAttribute>();
-        if (_options.Metadata is not null)
-        {
-            extraAttributes.Add(CmsAttribute.CommitmentTypeIndication(_options.Metadata.CommitmentType));
-            if (_options.Metadata.PolicyOid is not null && _options.SignaturePolicy is null)
-            {
-                extraAttributes.Add(CmsAttribute.SignaturePolicyIdentifier(
-                    _options.Metadata.PolicyOid, _options.Metadata.PolicyUri));
-            }
-            if (_options.Metadata.ExtraAttributes is not null)
-            {
-                extraAttributes.AddRange(_options.Metadata.ExtraAttributes);
-            }
-        }
-
-        if (_options.SignaturePolicy is not null)
-        {
-            extraAttributes.Add(CmsAttribute.SignaturePolicyIdentifier(_options.SignaturePolicy));
-        }
-
-        // A signed attribute may appear once (RFC 5652 §5.3): the last one of a type wins.
-        var distinct = extraAttributes
-            .GroupBy(a => a.Oid, StringComparer.Ordinal)
-            .Select(g => g.Last())
-            .ToList();
-        return distinct.Count > 0 ? distinct : null;
-    }
+    private IReadOnlyList<CmsAttribute>? BuildExtraAttributes() =>
+        PadesSigningInputs.ExtraSignedAttributes(_options.Metadata, _options.SignaturePolicy);
 
     private async Task<byte[]?> ApplyTimestampAsync(
         byte[] cms,
@@ -1331,27 +1265,6 @@ public sealed class PadesSignerBuilder
 
     private static IReadOnlyList<X509Certificate2> CopyChain(IReadOnlyList<X509Certificate2> chain) =>
         chain.ToList().AsReadOnly();
-
-    private static SignatureMetadata CopyMetadata(SignatureMetadata source) => new()
-    {
-        SignerName = source.SignerName,
-        SignerId = source.SignerId,
-        SignerIdType = source.SignerIdType,
-        Email = source.Email,
-        IpAddress = source.IpAddress,
-        AuthenticationMethod = source.AuthenticationMethod,
-        InstitutionName = source.InstitutionName,
-        InstitutionId = source.InstitutionId,
-        InstitutionIdType = source.InstitutionIdType,
-        CommitmentType = source.CommitmentType,
-        LegalBasis = source.LegalBasis,
-        PolicyOid = source.PolicyOid,
-        PolicyUri = source.PolicyUri,
-        Reason = source.Reason,
-        ContactInfo = source.ContactInfo,
-        Location = source.Location,
-        ExtraAttributes = source.ExtraAttributes?.ToArray()
-    };
 
     private static SignatureFieldOptions SnapshotField(SignatureFieldOptions source) => source.Snapshot();
 

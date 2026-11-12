@@ -71,6 +71,19 @@ public sealed partial class CliEquivalenceTests(TestBenchFixture fixture) : IDis
             CustomPolicy = new CustomPolicyChoice { Oid = "1.2.3.4.5", HashHex = Convert.ToHexString(SHA256.HashData("policy"u8)) },
         },
         ["deferred, B-T"] = o => o with { Mode = RunMode.Deferred, Level = BaselineLevel.BT },
+        ["deferred, explicit policy, details and stamp"] = o => o with
+        {
+            Mode = RunMode.Deferred,
+            Level = BaselineLevel.BB,
+            Reason = "Aprovação",
+            SignerName = "Maria",
+            DocumentInfo = [new("Title", "Contrato")],
+            SigningTime = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
+            OperationId = "cli-two-phases",
+            Kind = SignatureKind.CustomPolicy,
+            CustomPolicy = new CustomPolicyChoice { Oid = "1.2.3.4.5", HashHex = Convert.ToHexString(SHA256.HashData("policy"u8)) },
+            Appearance = o.Appearance with { Visible = true },
+        },
         ["batch, B-T"] = o => o with { Mode = RunMode.Batch, Level = BaselineLevel.BT, BatchCopies = 2, MaxConcurrency = 2 },
     };
 

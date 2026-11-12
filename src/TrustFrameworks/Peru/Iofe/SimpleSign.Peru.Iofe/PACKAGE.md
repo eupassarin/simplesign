@@ -31,4 +31,4 @@ var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 ```
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign) and the
-[docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles/indecopi-evidence.md). MIT licensed.
+[docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles). MIT licensed.

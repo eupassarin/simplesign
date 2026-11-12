@@ -110,8 +110,7 @@ public static class Compatibility
         bool isPdfA = document?.IsPdfA == true;
         bool isPdfA1 = document?.IsPdfA1 == true;
 
-        // ── 7. Mode (decided early: deferred and batch support fewer options) ─
-        bool deferred = o.Mode == RunMode.Deferred;
+        // ── 7. Mode (decided early: batch supports fewer options; two phases take every option of one call) ─
         bool batch = o.Mode == RunMode.Batch;
         Set("mode.Sign", OptionState.Shown);
         Set("mode.Deferred", OptionState.Shown);
@@ -127,11 +126,10 @@ public static class Compatibility
             Error(StepMode, L.T("Batch: max concurrency between 1 and 16."));
         }
 
-        string? policyUnsupported = deferred ? L.T("DeferredSigner has no signature policy option.")
-            : batch ? L.T("BatchSigner has no signature policy option.") : null;
+        string? policyUnsupported = batch ? L.T("BatchSigner has no signature policy option.") : null;
 
         // ── 3. Signature type ──────────────────────────────────────────
-        bool pdfA1Preserved = isPdfA1 && o.PreservePdfA && !deferred && !batch;
+        bool pdfA1Preserved = isPdfA1 && o.PreservePdfA && !batch;
         Set("kind.Baseline", OptionState.Shown);
         Set("kind.CustomPolicy", policyUnsupported is not null ? OptionState.Off(policyUnsupported) : OptionState.Shown);
 
@@ -176,7 +174,7 @@ public static class Compatibility
         Set("archiveTimestamp", needsArchive ? OptionState.Shown : OptionState.Hidden);
         Set("revocationPreference", effectiveLevel >= BaselineLevel.BLT ? OptionState.Shown : OptionState.Hidden);
         Set("returnLowerLevel", !needsTsa ? OptionState.Hidden
-            : o.Mode != RunMode.Sign ? OptionState.Off(L.T("Only SignWithDetailsAsync (Sign now) reports a lower achieved level; deferred and batch always throw."))
+            : batch ? OptionState.Off(L.T("SignWithDetailsAsync and CompleteWithDetailsAsync report a lower achieved level; batch always throws."))
             : OptionState.Shown);
         SharedRules.TsaProviders(sandboxConnected, Set);
         if (needsTsa)
@@ -203,9 +201,9 @@ public static class Compatibility
         };
 
         Set("pdfa", !isPdfA ? new OptionState(false, Note: L.T("The document is not PDF/A."))
-            : deferred || batch ? OptionState.Off(L.T("WithPdfAPreservation is a PadesSignerBuilder option (Sign now only)."))
+            : batch ? OptionState.Off(L.T("BatchSigner has no PDF/A preservation option."))
             : OptionState.Shown);
-        if (isPdfA && !o.PreservePdfA && !deferred && !batch)
+        if (isPdfA && !o.PreservePdfA && !batch)
         {
             Info(StepCrypto, L.T("This is a PDF/A document: turn on PDF/A preservation to have the library refuse options that would break conformance."));
         }
@@ -250,8 +248,7 @@ public static class Compatibility
         }
 
         // ── 6. Details ─────────────────────────────────────────────────
-        string? builderOnly = deferred ? L.T("DeferredSigner only takes SignatureFieldOptions (reason, location, contact, signer name).")
-            : batch ? L.T("BatchSigner only takes SignatureFieldOptions (reason, location, contact, signer name).") : null;
+        string? builderOnly = batch ? L.T("BatchSigner only takes SignatureFieldOptions (reason, location, contact, signer name).") : null;
         Set("details.basic", OptionState.Shown);
         Set("details.signingTime", builderOnly is not null ? OptionState.Off(builderOnly) : OptionState.Shown);
         Set("details.signer", builderOnly is not null ? OptionState.Off(builderOnly) : OptionState.Shown);

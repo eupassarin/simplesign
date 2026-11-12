@@ -30,30 +30,63 @@ public static class IcpBrasilCadesExtensions
         this CadesSignerBuilder builder, IcpBrasilPolicy policy = IcpBrasilPolicy.AdRb, TimestampOptions? timestamp = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        if (policy != IcpBrasilPolicy.AdRb && timestamp is null)
-        {
-            throw new ArgumentException($"{policy} requires a timestamp authority (an ICP-Brasil ACT).", nameof(timestamp));
-        }
-
-        var root = builder.SignerCertificate is { } signer
-            ? IcpBrasilChainValidator.FindBundledRoot(signer, builder.SignerChain)
-            : null;
-        var current = root is null
-            ? IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Cades)
-            : IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Cades, root);
-
+        IcpBrasilSignaturePolicy current = Version(builder.SignerCertificate, builder.SignerChain, policy, timestamp);
         builder = builder.WithSignaturePolicy(current.ToReference());
         if (timestamp is not null)
         {
             builder = builder.WithLevel(AdesBaselineProfile.Timestamped(timestamp));
         }
 
-        return builder.WithExtendedValidationData(policy switch
-        {
-            IcpBrasilPolicy.AdRv => CadesExtendedForm.CompleteReferences,
-            IcpBrasilPolicy.AdRc => CadesExtendedForm.ExtendedLong,
-            IcpBrasilPolicy.AdRa => CadesExtendedForm.Archive,
-            _ => CadesExtendedForm.None,
-        });
+        return builder.WithExtendedValidationData(ExtendedForm(policy));
     }
+
+    /// <summary>
+    /// Prepares a two-phase signature under an ICP-Brasil CAdES policy: the same policy version, sigPolicyHash
+    /// and attributes as <see cref="WithIcpBrasilPolicy(CadesSignerBuilder, IcpBrasilPolicy, TimestampOptions)"/>.
+    /// The policy identifier is fixed when the signature is prepared; the timestamp and the extended form are
+    /// added when the session is completed. Call after <c>WithCertificate</c>.
+    /// </summary>
+    /// <param name="builder">The deferred CAdES builder, before <c>PrepareAsync</c>.</param>
+    /// <param name="policy">AD-RB, AD-RT, AD-RV, AD-RC or AD-RA.</param>
+    /// <param name="timestamp">The TSA; required above AD-RB.</param>
+    /// <exception cref="ArgumentException">A policy above AD-RB without a TSA.</exception>
+    /// <exception cref="IcpBrasilPolicyException">No version of the policy accepts the signer's root.</exception>
+    public static CadesDeferredSignerBuilder WithIcpBrasilPolicy(
+        this CadesDeferredSignerBuilder builder, IcpBrasilPolicy policy = IcpBrasilPolicy.AdRb, TimestampOptions? timestamp = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        IcpBrasilSignaturePolicy current = Version(builder.SignerCertificate, builder.SignerChain, policy, timestamp);
+        builder = builder.WithSignaturePolicy(current.ToReference());
+        if (timestamp is not null)
+        {
+            builder = builder.WithLevel(AdesBaselineProfile.Timestamped(timestamp));
+        }
+
+        return builder.WithExtendedValidationData(ExtendedForm(policy));
+    }
+
+    private static IcpBrasilSignaturePolicy Version(
+        System.Security.Cryptography.X509Certificates.X509Certificate2? signer,
+        IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> chain,
+        IcpBrasilPolicy policy,
+        TimestampOptions? timestamp)
+    {
+        if (policy != IcpBrasilPolicy.AdRb && timestamp is null)
+        {
+            throw new ArgumentException($"{policy} requires a timestamp authority (an ICP-Brasil ACT).", nameof(timestamp));
+        }
+
+        var root = signer is null ? null : IcpBrasilChainValidator.FindBundledRoot(signer, chain);
+        return root is null
+            ? IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Cades)
+            : IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Cades, root);
+    }
+
+    private static CadesExtendedForm ExtendedForm(IcpBrasilPolicy policy) => policy switch
+    {
+        IcpBrasilPolicy.AdRv => CadesExtendedForm.CompleteReferences,
+        IcpBrasilPolicy.AdRc => CadesExtendedForm.ExtendedLong,
+        IcpBrasilPolicy.AdRa => CadesExtendedForm.Archive,
+        _ => CadesExtendedForm.None,
+    };
 }

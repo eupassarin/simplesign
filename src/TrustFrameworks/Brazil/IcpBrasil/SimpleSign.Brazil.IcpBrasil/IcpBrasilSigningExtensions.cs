@@ -79,6 +79,64 @@ public static class IcpBrasilSigningExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(options);
+        PadesPolicySetup setup = Setup(builder.SignerCertificate, builder.SignerChain, policy, options);
+        builder = builder
+            .WithSubFilter(PdfSignatureSubFilter.PbadPades)
+            .WithSignaturePolicy(setup.Version.ToReference());
+        builder = setup.Profile is null ? builder : builder.WithLevel(setup.Profile);
+        return setup.DssArtifacts is null ? builder : builder.WithDssArtifacts(setup.DssArtifacts);
+    }
+
+    /// <summary>
+    /// Prepares a two-phase signature under an ICP-Brasil PAdES signature policy, with the newest version that
+    /// accepts the signer's root: see <see cref="WithIcpBrasilPolicy(DeferredSignerBuilder, IcpBrasilPolicy, IcpBrasilPadesOptions)"/>.
+    /// </summary>
+    /// <param name="builder">The deferred PAdES builder, before <c>PrepareAsync</c>.</param>
+    /// <param name="policy">The policy; AD-RA also needs its artifacts, so it is refused here.</param>
+    /// <param name="timestamp">The TSA, required for every policy but AD-RB.</param>
+    /// <exception cref="ArgumentException">A timestamped policy without a TSA, or AD-RA.</exception>
+    /// <exception cref="IcpBrasilPolicyException">No version of the policy accepts the root of the signer certificate.</exception>
+    public static DeferredSignerBuilder WithIcpBrasilPolicy(
+        this DeferredSignerBuilder builder, IcpBrasilPolicy policy = IcpBrasilPolicy.AdRb, TimestampOptions? timestamp = null) =>
+        builder.WithIcpBrasilPolicy(policy, new IcpBrasilPadesOptions { Timestamp = timestamp });
+
+    /// <summary>
+    /// Prepares a two-phase signature under an ICP-Brasil PAdES signature policy (DOC-ICP-15.03): the same
+    /// policy identifier, PBAD signature dictionary and level as
+    /// <see cref="WithIcpBrasilPolicy(PadesSignerBuilder, IcpBrasilPolicy, IcpBrasilPadesOptions)"/>. The policy and
+    /// the dictionary are fixed when the signature is prepared; the level and the AD-RA artifacts travel in
+    /// the session and are finished when it is completed. Call after <c>WithCertificate</c>, so the version
+    /// can be chosen by the signer's root, and give the TSA credentials again on the resumed builder
+    /// (<c>WithTimestampOptions</c>).
+    /// </summary>
+    /// <param name="builder">The deferred PAdES builder, before <c>PrepareAsync</c>.</param>
+    /// <param name="policy">The policy.</param>
+    /// <param name="options">TSA, version and artifacts.</param>
+    /// <exception cref="ArgumentException">A missing TSA or AD-RA artifacts, or a version or artifacts for another policy.</exception>
+    /// <exception cref="IcpBrasilPolicyException">The version (chosen or given) is not in force or does not accept the signer's root.</exception>
+    public static DeferredSignerBuilder WithIcpBrasilPolicy(
+        this DeferredSignerBuilder builder, IcpBrasilPolicy policy, IcpBrasilPadesOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(options);
+        PadesPolicySetup setup = Setup(builder.SignerCertificate, builder.SignerChain, policy, options);
+        builder = builder
+            .WithSubFilter(PdfSignatureSubFilter.PbadPades)
+            .WithSignaturePolicy(setup.Version.ToReference());
+        builder = setup.Profile is null ? builder : builder.WithLevel(setup.Profile);
+        return setup.DssArtifacts is null ? builder : builder.WithDssArtifacts(setup.DssArtifacts);
+    }
+
+    /// <summary>What a policy asks of a PAdES signature: its version, the level and, for AD-RA, the DSS artifacts.</summary>
+    private sealed record PadesPolicySetup(
+        IcpBrasilSignaturePolicy Version, AdesBaselineProfile? Profile, IReadOnlyList<PdfDssArtifact>? DssArtifacts);
+
+    private static PadesPolicySetup Setup(
+        System.Security.Cryptography.X509Certificates.X509Certificate2? signer,
+        IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> chain,
+        IcpBrasilPolicy policy,
+        IcpBrasilPadesOptions options)
+    {
         if (policy is not (IcpBrasilPolicy.AdRb or IcpBrasilPolicy.AdRt or IcpBrasilPolicy.AdRc or IcpBrasilPolicy.AdRa))
         {
             throw new ArgumentException($"{policy} is not an ICP-Brasil PAdES policy.", nameof(policy));
@@ -102,9 +160,7 @@ public static class IcpBrasilSigningExtensions
             throw new ArgumentException("Policy artifacts are embedded only by AD-RA.", nameof(options));
         }
 
-        var root = builder.SignerCertificate is { } signer
-            ? IcpBrasilChainValidator.FindBundledRoot(signer, builder.SignerChain)
-            : null;
+        var root = signer is null ? null : IcpBrasilChainValidator.FindBundledRoot(signer, chain);
         var version = ResolveVersion(policy, options.Version ?? options.Artifacts?.Policy, root);
         if (options.Artifacts is { } artifacts && artifacts.Policy.Oid != version.Oid)
         {
@@ -112,22 +168,16 @@ public static class IcpBrasilSigningExtensions
                 $"The artifacts are for {artifacts.Policy.Oid}, but the signature uses {version.Oid}.", nameof(options));
         }
 
-        builder = builder
-            .WithSubFilter(PdfSignatureSubFilter.PbadPades)
-            .WithSignaturePolicy(version.ToReference());
         if (timestamp is null)
         {
-            return builder;
+            return new PadesPolicySetup(version, Profile: null, DssArtifacts: null);
         }
 
         var ltv = options.LongTermValidation ?? new LongTermValidationOptions();
-        builder = policy switch
-        {
-            IcpBrasilPolicy.AdRc or IcpBrasilPolicy.AdRa => builder.WithLevel(
-                AdesBaselineProfile.Archive(timestamp, ltv, options.ArchiveTimestamp)),
-            _ => builder.WithLevel(AdesBaselineProfile.Timestamped(timestamp)),
-        };
-        return options.Artifacts is { } embedded ? builder.WithDssArtifacts(embedded.ToDssArtifacts()) : builder;
+        AdesBaselineProfile profile = policy is IcpBrasilPolicy.AdRc or IcpBrasilPolicy.AdRa
+            ? AdesBaselineProfile.Archive(timestamp, ltv, options.ArchiveTimestamp)
+            : AdesBaselineProfile.Timestamped(timestamp);
+        return new PadesPolicySetup(version, profile, options.Artifacts?.ToDssArtifacts());
     }
 
     /// <summary>
@@ -139,6 +189,23 @@ public static class IcpBrasilSigningExtensions
     /// <param name="policy">The policy.</param>
     /// <exception cref="IcpBrasilPolicyException">No version accepts the signer's root.</exception>
     public static IcpBrasilSignaturePolicy ResolveIcpBrasilPolicy(this PadesSignerBuilder builder, IcpBrasilPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        var root = builder.SignerCertificate is { } signer
+            ? IcpBrasilChainValidator.FindBundledRoot(signer, builder.SignerChain)
+            : null;
+        return ResolveVersion(policy, requested: null, root);
+    }
+
+    /// <summary>
+    /// The version of <paramref name="policy"/> <see cref="WithIcpBrasilPolicy(DeferredSignerBuilder, IcpBrasilPolicy, IcpBrasilPadesOptions)"/>
+    /// would pick for this builder's signer: the newest in-force PAdES version that accepts the
+    /// signer's root. Use it to download the AD-RA artifacts of the right version.
+    /// </summary>
+    /// <param name="builder">The deferred PAdES builder, with the signer set.</param>
+    /// <param name="policy">The policy.</param>
+    /// <exception cref="IcpBrasilPolicyException">No version accepts the signer's root.</exception>
+    public static IcpBrasilSignaturePolicy ResolveIcpBrasilPolicy(this DeferredSignerBuilder builder, IcpBrasilPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(builder);
         var root = builder.SignerCertificate is { } signer
@@ -207,30 +274,62 @@ public static class IcpBrasilSigningExtensions
         this PadesSignerBuilder builder, HealthDocumentType type, params ProfessionalRegistration[] professionals)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        foreach (var (key, value) in HealthDocumentEntries(type, professionals))
+        {
+            builder = builder.WithDocumentInfo(key, value);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Marks the PDF of a two-phase signature as a health document for VALIDAR: the same entries as
+    /// <see cref="WithHealthDocument(PadesSignerBuilder, HealthDocumentType, ProfessionalRegistration[])"/>, written
+    /// in the signing revision when the signature is prepared.
+    /// </summary>
+    /// <param name="builder">The deferred PAdES builder, before <c>PrepareAsync</c>.</param>
+    /// <param name="type">The document type.</param>
+    /// <param name="professionals">The registration of the prescriber (CFM, CFO…) and, when relevant, the pharmacist (CFF).</param>
+    /// <exception cref="ArgumentException">No professional was given.</exception>
+    public static DeferredSignerBuilder WithHealthDocument(
+        this DeferredSignerBuilder builder, HealthDocumentType type, params ProfessionalRegistration[] professionals)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        foreach (var (key, value) in HealthDocumentEntries(type, professionals))
+        {
+            builder = builder.WithDocumentInfo(key, value);
+        }
+
+        return builder;
+    }
+
+    /// <summary>The document information entries of a health document: its type and each professional's registration, keyed by OID.</summary>
+    private static List<(string Key, string Value)> HealthDocumentEntries(HealthDocumentType type, ProfessionalRegistration[] professionals)
+    {
         ArgumentNullException.ThrowIfNull(professionals);
         if (professionals.Length == 0)
         {
             throw new ArgumentException("At least one professional registration is required.", nameof(professionals));
         }
 
-        builder = builder.WithDocumentInfo($"{BrazilOids.HealthDocumentArc}{(int)type}", DocumentTypeName(type));
+        var entries = new List<(string Key, string Value)> { ($"{BrazilOids.HealthDocumentArc}{(int)type}", DocumentTypeName(type)) };
         foreach (var registration in professionals)
         {
             ArgumentNullException.ThrowIfNull(registration);
             string arc = $"{BrazilOids.ProfessionalCouncilArc}{(int)registration.Council}.";
-            builder = builder.WithDocumentInfo(arc + "1", registration.RegistrationNumber);
+            entries.Add((arc + "1", registration.RegistrationNumber));
             if (registration.StateCode is not null)
             {
-                builder = builder.WithDocumentInfo(arc + "2", registration.StateCode);
+                entries.Add((arc + "2", registration.StateCode));
             }
 
             if (registration.Specialty is not null)
             {
-                builder = builder.WithDocumentInfo(arc + "3", registration.Specialty);
+                entries.Add((arc + "3", registration.Specialty));
             }
         }
 
-        return builder;
+        return entries;
     }
 
     /// <summary>The policy as a signature-policy-identifier reference (OID, sigPolicyHash, URI).</summary>

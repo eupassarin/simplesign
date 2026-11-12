@@ -92,7 +92,7 @@ hover it for every reference and the call.
 | Cryptography | Digest, RSA PKCS#1 v1.5 or PSS |
 | Signed attributes | Claimed signing time, commitment type, signer metadata, signer roles, MIME type |
 | PDF signature field | Sub-filter, field, certification (DocMDP), reason and location, PDF/A, document information |
-| Run and validation | Sign now, deferred or batch; whether and how the result is validated |
+| Run and validation | Sign now, deferred or batch (PDF), in two phases (CAdES, XAdES); whether and how the result is validated |
 
 The rules that say which options combine stay in `Signing/Compatibility.cs`,
 `Cades/CadesCompatibility.cs` and `Xml/XmlCompatibility.cs`: an option that cannot be chosen is

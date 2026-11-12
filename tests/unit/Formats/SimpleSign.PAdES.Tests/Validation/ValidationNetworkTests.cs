@@ -30,11 +30,19 @@ public sealed class ValidationNetworkTests
             TrustedRoots = [cert],
             NetworkTimeout = TimeSpan.FromMilliseconds(100)
         }, client);
-        using var stream = new MemoryStream(signed);
 
-        var results = await validator.ValidateAsync(stream).WaitAsync(TimeSpan.FromSeconds(10));
+        // The timeout covers the whole network stage, not only the request. The first use of the HTTP pipeline
+        // on a slow machine can take longer than it, and then no request is sent at all: validate again until
+        // one is, so the assertions below are about a request that was in flight when the time ran out.
+        IReadOnlyList<SignatureValidationResult> results = [];
+        for (int attempt = 0; attempt < 5 && handler.Requests == 0; attempt++)
+        {
+            using var stream = new MemoryStream(signed);
+            results = await validator.ValidateAsync(stream).WaitAsync(TimeSpan.FromSeconds(10));
+        }
 
-        handler.RequestCanceled.ShouldBeTrue();
+        handler.Requests.ShouldBeGreaterThan(0);
+        handler.CanceledRequests.ShouldBe(handler.Requests);
         client.Timeout.ShouldBe(Timeout.InfiniteTimeSpan);
         var result = results.ShouldHaveSingleItem();
         result.IsIntegrityValid.ShouldBeTrue();
@@ -138,17 +146,25 @@ public sealed class ValidationNetworkTests
 
     private sealed class BlockingHandler : HttpMessageHandler
     {
-        public bool RequestCanceled { get; private set; }
+        private int _requests;
+        private int _canceledRequests;
+
+        /// <summary>The requests that reached the handler.</summary>
+        public int Requests => Volatile.Read(ref _requests);
+
+        /// <summary>The requests that ended because their token was canceled.</summary>
+        public int CanceledRequests => Volatile.Read(ref _canceledRequests);
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _requests);
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             }
             catch (OperationCanceledException)
             {
-                RequestCanceled = true;
+                Interlocked.Increment(ref _canceledRequests);
                 throw;
             }
             return new HttpResponseMessage();

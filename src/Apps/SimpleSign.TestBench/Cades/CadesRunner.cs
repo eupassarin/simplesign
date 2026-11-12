@@ -202,7 +202,11 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
                 jobs.File(SignatureFile, existing);
             }
 
-            var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands), cancellationToken);
+            // Two phases: the TestBench is the signer that is elsewhere, between the two commands.
+            var signOutside = o.TwoPhases
+                ? TwoPhaseSupport.SignOutside(credential, plan.CliInput, SigningPlan.ToHash(o.Hash), credential.Facts.KeyAlgorithm == "RSA" && o.Padding == RsaPadding.Pss)
+                : null;
+            var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands, signOutside), cancellationToken);
             controls.Report(outcome.AuditTrail);
             if (!outcome.Success)
             {
@@ -230,7 +234,23 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
                 builder = step.Apply(builder);
             }
 
-            signed = await builder.SignWithDetailsAsync(cancellationToken);
+            if (o.TwoPhases)
+            {
+                // Phase 1 (server): the same builder, prepared for a key that signs elsewhere.
+                byte[] integrityKey = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+                var prepared = await CadesDeferredSigner.From(builder).WithSessionIntegrityKey(integrityKey).PrepareAsync(cancellationToken);
+
+                // Phase 2 (signer): the DER signed attributes, signed with the credential's key or external signer.
+                byte[] raw = await SigningRunner.SignRequestAsync(credential, prepared.ToSigningRequest(), cancellationToken);
+
+                // Phase 3 (server): resume from the session, verify the signature and finish the level.
+                signed = await plan.Resume(CadesDeferredSigner.Resume(prepared.SessionData, integrityKey).WithLogger(RunLog.Logger))
+                    .CompleteWithDetailsAsync(raw, cancellationToken);
+            }
+            else
+            {
+                signed = await builder.SignWithDetailsAsync(cancellationToken);
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -538,6 +558,24 @@ internal sealed class CadesPlan
 
     public IEnumerable<(string Code, Func<CadesSignerBuilder, CadesSignerBuilder> Apply)> Steps => _steps;
 
+    /// <summary>The file the CLI command signs: the data, or the existing signature of a co-signature or countersignature.</summary>
+    public string CliInput => _o.Operation == CadesOperation.Sign ? CadesRunner.DataFile : CadesRunner.SignatureFile;
+
+    /// <summary>What the builder that resumes a two-phase signature is given again.</summary>
+    private ResumeInputs ResumeInputs() =>
+        TwoPhaseSupport.Resume(_context, _o.SigningPolicyId, _o.Level == BaselineLevel.BB ? null : _context.BuildTimestamp(_o.Timestamp, "tsa"));
+
+    /// <summary>Gives the builder that resumes a two-phase signature what its session does not carry.</summary>
+    public CadesDeferredSignerBuilder Resume(CadesDeferredSignerBuilder builder)
+    {
+        var inputs = ResumeInputs();
+        builder = inputs.Http is null ? builder : builder.WithHttpClientProvider(inputs.Http);
+        builder = inputs.Policy is null ? builder : builder.WithSigningPolicy(inputs.Policy);
+        builder = inputs.Anchors.Count == 0 ? builder : builder.WithTrustAnchors([.. inputs.Anchors]);
+        builder = inputs.Audit is null ? builder : builder.WithAuditSink(inputs.Audit);
+        return inputs.Timestamp is null ? builder : builder.WithTimestampOptions(inputs.Timestamp);
+    }
+
     private void AddSignerAndContentAttributes()
     {
         if (_o.SignerCountry is not null || _o.SignerLocality is not null || _o.SignerPostalAddress.Count > 0)
@@ -653,24 +691,46 @@ internal sealed class CadesPlan
             sb.Append(line).Append('\n');
         }
 
-        sb.Append("\nCadesSigningResult result = await ").Append(_o.Operation switch
+        string entry = _o.Operation switch
         {
-            CadesOperation.CoSign => _o.ContentType == CadesContentChoice.Detached ? "CadesSigner.CoSign(existing, data)" : "CadesSigner.CoSign(existing) // the content comes from the .p7m",
-            CadesOperation.CounterSign => $"CadesSigner.CounterSign(existing, signerIndex: {_o.SignerIndex})",
-            _ => "CadesSigner.Document(data)",
-        }).Append('\n');
-        foreach (var (code, _) in _steps)
+            CadesOperation.CoSign => _o.ContentType == CadesContentChoice.Detached ? "CoSign(existing, data)" : "CoSign(existing) // the content comes from the .p7m",
+            CadesOperation.CounterSign => $"CounterSign(existing, signerIndex: {_o.SignerIndex})",
+            _ => "Document(data)",
+        };
+        if (_o.TwoPhases)
         {
-            sb.Append("    ").Append(code).Append('\n');
+            TwoPhaseSupport.AppendCSharp(
+                sb, "CadesDeferredSigner." + entry, _steps.Select(s => s.Code), "CadesDeferredSigner.Resume", ResumeInputs(),
+                "CadesSigningResult", "the DER signed attributes", SigningPlan.ToHash(_o.Hash).Name!,
+                credential.KeyAlgorithm == "RSA" && _o.Padding == RsaPadding.Pss);
+        }
+        else
+        {
+            sb.Append("\nCadesSigningResult result = await CadesSigner.").Append(entry).Append('\n');
+            foreach (var (code, _) in _steps)
+            {
+                sb.Append("    ").Append(code).Append('\n');
+            }
+
+            sb.Append("    .SignWithDetailsAsync();\n\n");
         }
 
-        sb.Append("    .SignWithDetailsAsync();\n\n");
         sb.Append(CultureInfo.InvariantCulture, $"File.WriteAllBytes(\"{OutputName()}\", result.SignedArtifact);\n");
         sb.Append("Console.WriteLine($\"Requested {result.RequestedLevel}, achieved {result.AchievedLevel}\");\n");
 
-        var cli = new CliLine("cades", "sign", _o.Operation == CadesOperation.Sign ? CadesRunner.DataFile : CadesRunner.SignatureFile).Add("--output", OutputName());
+        var cli = new CliLine("cades", "sign", CliInput);
         var notes = new List<string>();
-        CodeGenerator.CliCredential(credential, cli, notes);
+        if (_o.TwoPhases)
+        {
+            // The first phase is cades sign with --prepare: every option of cades sign, and the certificate without its key.
+            TwoPhaseSupport.Prepare(cli);
+        }
+        else
+        {
+            cli.Add("--output", OutputName());
+            CodeGenerator.CliCredential(credential, cli, notes);
+        }
+
         switch (_o.Operation)
         {
             case CadesOperation.CoSign:
@@ -752,6 +812,16 @@ internal sealed class CadesPlan
         AddSignedAttributeArgs(cli);
         cli.AddIf("--operation-id", _o.OperationId);
         _context.CliNetwork(cli);
+        if (_o.TwoPhases)
+        {
+            IReadOnlyList<CliLine> commands =
+            [
+                cli,
+                TwoPhaseSupport.Complete(CliInput, OutputName(), _context, _o.Level == BaselineLevel.BB ? null : _o.Timestamp, _o.SigningPolicyId, notes),
+            ];
+            return new CodeSnippets(sb.ToString(), CliLine.Join(commands), notes) { CliCommands = commands };
+        }
+
         return new CodeSnippets(sb.ToString(), cli.ToString(), notes) { CliCommands = [cli] };
     }
 

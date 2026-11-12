@@ -16,7 +16,7 @@ namespace SimpleSign.XAdES;
 /// <summary>Immutable fluent builder for XAdES signatures (ETSI EN 319 132).</summary>
 [RequiresUnreferencedCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
 [RequiresDynamicCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
-public sealed class XadesSignerBuilder
+public sealed partial class XadesSignerBuilder
 {
     private readonly byte[] _xmlData;
     private readonly XadesSigningOptions _options;
@@ -523,6 +523,47 @@ public sealed class XadesSignerBuilder
             ?? throw new SigningException(
                 "Certificate not set. Call WithCertificate() or WithExternalSigner() before signing.",
                 SigningErrorReason.CredentialMissing);
+        SigningStart start = await BeginAsync(credential, cancellationToken).ConfigureAwait(false);
+
+        // The Ids of the additional data objects are chosen once: with an external key the signature is assembled twice.
+        var additionalReferences = XadesSignatureBuilder.PlanAdditionalReferences(_options.AdditionalDataObjects);
+
+        byte[] signedXml;
+        string targetSignatureId;
+        if (_options.IsCounterSignature)
+        {
+            (signedXml, targetSignatureId) = await CounterSignCoreAsync(
+                credential, start.Certificate, start.Chain, start.HashAlgorithm, start.SignatureAlgorithmOid, start.RsaPssParameters, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            // The data objects timestamp is a signed property, so the TSA is asked before the signature is made.
+            XadesDataObjectsTimeStamp? dataObjectsTimeStamp = _options.DataObjectsTimestamp is { } dataTsa
+                ? await RequestDataObjectsTimeStampAsync(dataTsa, start.HashAlgorithm, _options.OperationId ?? "-", additionalReferences, cancellationToken).ConfigureAwait(false)
+                : null;
+
+            signedXml = credential is XadesExternalCredential external
+                ? await SignExternalCoreAsync(external, start.Certificate, start.Chain, start.HashAlgorithm, start.SignatureAlgorithmOid, start.RsaPssParameters, dataObjectsTimeStamp, additionalReferences, cancellationToken).ConfigureAwait(false)
+                : SignLocalCore(start.Certificate, start.Chain, start.HashAlgorithm, start.SignatureAlgorithmOid, dataObjectsTimeStamp, additionalReferences);
+            targetSignatureId = XadesSignatureBuilder.GetLastSignatureId(signedXml);
+        }
+
+        // The policy store goes in before the timestamps, so an archive timestamp covers it.
+        if (_options.PolicyStore is { } policyStore)
+        {
+            signedXml = XadesSignatureBuilder.EmbedSignaturePolicyStore(signedXml, policyStore, targetSignatureId);
+        }
+
+        return await FinishAsync(
+            signedXml, targetSignatureId, start.Certificate, start.Chain, start.HashAlgorithm, start.Warnings, start.Stopwatch, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The checks made before anything is signed: the certificate and its chain against the signing policy, the
+    /// options that cannot be combined, and the algorithms.
+    /// </summary>
+    private async Task<SigningStart> BeginAsync(XadesSigningCredential credential, CancellationToken cancellationToken)
+    {
         var certificate = GetCertificate(credential);
         var chain = GetChain(credential);
         var profile = _options.Profile;
@@ -593,35 +634,27 @@ public sealed class XadesSignerBuilder
             _options.ExtendedForm.ToString(), certificate.Subject, certificate.SerialNumber, credential is XadesExternalCredential);
         logger.AlgorithmResolved(hashAlg.Name ?? "?", sigAlgOid);
 
-        // The Ids of the additional data objects are chosen once: with an external key the signature is assembled twice.
-        var additionalReferences = XadesSignatureBuilder.PlanAdditionalReferences(_options.AdditionalDataObjects);
+        return new SigningStart(certificate, chain, hashAlg, sigAlgOid, resolvedAlgorithm.RsaPssParameters, warnings, stopwatch);
+    }
+
+    /// <summary>
+    /// Takes a document that holds the signer's signature to the requested level (signature timestamp, validation
+    /// data, extended form, archive timestamp), reads it back and reports what it holds.
+    /// </summary>
+    private async Task<XadesSigningResult> FinishAsync(
+        byte[] signedXml,
+        string targetSignatureId,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        HashAlgorithmName hashAlg,
+        List<SigningWarning> warnings,
+        Stopwatch stopwatch,
+        CancellationToken cancellationToken)
+    {
+        var profile = _options.Profile;
+        var logger = _options.Dependencies.Logger;
+        string operationId = _options.OperationId ?? "-";
         var detachedData = DetachedData();
-
-        byte[] signedXml;
-        string targetSignatureId;
-        if (_options.IsCounterSignature)
-        {
-            (signedXml, targetSignatureId) = await CounterSignCoreAsync(
-                credential, certificate, chain, hashAlg, sigAlgOid, resolvedAlgorithm.RsaPssParameters, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            // The data objects timestamp is a signed property, so the TSA is asked before the signature is made.
-            XadesDataObjectsTimeStamp? dataObjectsTimeStamp = _options.DataObjectsTimestamp is { } dataTsa
-                ? await RequestDataObjectsTimeStampAsync(dataTsa, hashAlg, operationId, additionalReferences, cancellationToken).ConfigureAwait(false)
-                : null;
-
-            signedXml = credential is XadesExternalCredential external
-                ? await SignExternalCoreAsync(external, certificate, chain, hashAlg, sigAlgOid, resolvedAlgorithm.RsaPssParameters, dataObjectsTimeStamp, additionalReferences, cancellationToken).ConfigureAwait(false)
-                : SignLocalCore(certificate, chain, hashAlg, sigAlgOid, dataObjectsTimeStamp, additionalReferences);
-            targetSignatureId = XadesSignatureBuilder.GetLastSignatureId(signedXml);
-        }
-
-        // The policy store goes in before the timestamps, so an archive timestamp covers it.
-        if (_options.PolicyStore is { } policyStore)
-        {
-            signedXml = XadesSignatureBuilder.EmbedSignaturePolicyStore(signedXml, policyStore, targetSignatureId);
-        }
 
         byte[]? timestampTokenBytes = null;
         if (profile.Timestamp is not null)
@@ -844,8 +877,34 @@ public sealed class XadesSignerBuilder
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
+        ExternalPreparation preparation = PrepareExternal(certificate, hashAlg, sigAlgOid, dataObjectsTimeStamp, additionalReferences);
 
+        var request = new ExternalSigningRequest(
+            preparation.SignedInfoCanonical,
+            hashAlg,
+            sigAlgOid,
+            ExternalSigningPayloadKind.XmlCanonicalizedSignedInfo,
+            _options.OperationId,
+            rsaPssParameters);
+        _options.Dependencies.Logger.ExternalSignerInvoked(preparation.SignedInfoCanonical.Length);
+        ReadOnlyMemory<byte> signature = await BaselineSigning
+            .SignExternallyAsync(external.Signer, request, certificate, cancellationToken).ConfigureAwait(false);
+        _options.Dependencies.Logger.ExternalSignatureReceived(signature.Length);
+
+        return AssembleExternal(
+            preparation, XadesSignatureBuilder.XmlSignatureValue(signature.ToArray(), certificate),
+            certificate, chain, hashAlg, sigAlgOid, dataObjectsTimeStamp, additionalReferences);
+    }
+
+    /// <summary>Builds the canonical SignedInfo a key held elsewhere signs: the bytes handed to an external or a deferred signer.</summary>
+    private ExternalPreparation PrepareExternal(
+        X509Certificate2 certificate,
+        HashAlgorithmName hashAlg,
+        string sigAlgOid,
+        XadesDataObjectsTimeStamp? dataObjectsTimeStamp,
+        IReadOnlyList<XadesAdditionalReference>? additionalReferences)
+    {
+        var signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
         byte[] signedInfoBytes = XadesSignatureBuilder.BuildSignedInfoToHash(
             _xmlData, certificate, hashAlg, signingTime, _options.Form,
             _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm,
@@ -854,25 +913,25 @@ public sealed class XadesSignerBuilder
             out byte[] signedInfoXml,
             out string? dataObjectId, _options.DataUri,
             XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization));
-
-        var request = new ExternalSigningRequest(
-            signedInfoBytes,
-            hashAlg,
-            sigAlgOid,
-            ExternalSigningPayloadKind.XmlCanonicalizedSignedInfo,
-            _options.OperationId,
-            rsaPssParameters);
-        _options.Dependencies.Logger.ExternalSignerInvoked(signedInfoBytes.Length);
-        ReadOnlyMemory<byte> signature = await BaselineSigning
-            .SignExternallyAsync(external.Signer, request, certificate, cancellationToken).ConfigureAwait(false);
-        _options.Dependencies.Logger.ExternalSignatureReceived(signature.Length);
-
-        return XadesSignatureBuilder.CompleteWithExternalSignature(
-            _xmlData, certificate, hashAlg, signingTime, chain,
-            _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm,
-            sigAlgOid, signedInfoXml, signature.ToArray(), signedPropertiesId,
-            _options.Roles, _options.DataObjectFormat, _options.ProductionPlace, dataObjectsTimeStamp, additionalReferences, _options.Form, _options.DataUri, dataObjectId);
+        return new ExternalPreparation(signingTime, signedInfoBytes, signedInfoXml, signedPropertiesId, dataObjectId);
     }
+
+    /// <summary>Assembles the signed document around the SignedInfo of <paramref name="preparation"/> and a signature value.</summary>
+    private byte[] AssembleExternal(
+        ExternalPreparation preparation,
+        byte[] signatureValue,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        HashAlgorithmName hashAlg,
+        string sigAlgOid,
+        XadesDataObjectsTimeStamp? dataObjectsTimeStamp,
+        IReadOnlyList<XadesAdditionalReference>? additionalReferences) =>
+        XadesSignatureBuilder.CompleteWithExternalSignature(
+            _xmlData, certificate, hashAlg, preparation.SigningTime, chain,
+            _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm,
+            sigAlgOid, preparation.SignedInfoXml, signatureValue, preparation.SignedPropertiesId,
+            _options.Roles, _options.DataObjectFormat, _options.ProductionPlace, dataObjectsTimeStamp, additionalReferences,
+            _options.Form, _options.DataUri, preparation.DataObjectId);
 
     /// <summary>
     /// The data the signature references outside the document: the document itself for the detached
@@ -955,7 +1014,7 @@ public sealed class XadesSignerBuilder
             ReadOnlyMemory<byte> signature = await BaselineSigning
                 .SignExternallyAsync(external.Signer, request, certificate, cancellationToken).ConfigureAwait(false);
             _options.Dependencies.Logger.ExternalSignatureReceived(signature.Length);
-            signatureValue = signature.ToArray();
+            signatureValue = XadesSignatureBuilder.XmlSignatureValue(signature.ToArray(), certificate);
         }
         else
         {
@@ -1176,6 +1235,24 @@ public sealed class XadesSignerBuilder
         With(_options with { Credential = credential });
 
     private sealed record XadesLtvEmbeddingResult(byte[] SignedXml, LtvEvidence Evidence);
+
+    /// <summary>What <see cref="BeginAsync"/> settles before the signature is made.</summary>
+    private sealed record SigningStart(
+        X509Certificate2 Certificate,
+        IReadOnlyList<X509Certificate2> Chain,
+        HashAlgorithmName HashAlgorithm,
+        string SignatureAlgorithmOid,
+        RsaPssParameters? RsaPssParameters,
+        List<SigningWarning> Warnings,
+        Stopwatch Stopwatch);
+
+    /// <summary>The SignedInfo built for a key held elsewhere, and what assembling the document around it needs.</summary>
+    private sealed record ExternalPreparation(
+        DateTimeOffset SigningTime,
+        byte[] SignedInfoCanonical,
+        byte[] SignedInfoXml,
+        string SignedPropertiesId,
+        string? DataObjectId);
 
     /// <summary>Why the LTV data is incomplete: the certificates without revocation data, or a read-back failure.</summary>
     private static string LtvGap(LtvEvidence evidence) =>

@@ -5,7 +5,8 @@ using SimpleSign.PAdES;
 namespace SimpleSign.Brazil.Signing;
 
 /// <summary>
-/// Extension methods that add Brazil-specific AEA signing capabilities to <see cref="PadesSignerBuilder"/>.
+/// Extension methods that add Brazil-specific AEA signing capabilities to <see cref="PadesSignerBuilder"/> and
+/// to the two-phase <see cref="DeferredSignerBuilder"/>.
 /// </summary>
 public static class SignerBuilderBrazilExtensions
 {
@@ -20,7 +21,25 @@ public static class SignerBuilderBrazilExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(info);
+        return builder.WithMetadata(ToMetadata(info));
+    }
 
+    /// <summary>
+    /// Configures an Advanced Electronic Signature (AEA) per Lei 14.063/2020 on a two-phase signature: the
+    /// same attributes and manifest as <see cref="WithAdvancedSignature(PadesSignerBuilder, AdvancedSignatureInfo)"/>,
+    /// fixed when the signature is prepared.
+    /// </summary>
+    /// <param name="builder">The deferred signer builder to configure, before <c>PrepareAsync</c>.</param>
+    /// <param name="info">AEA metadata with signer name, CPF, auth method, and optional policy.</param>
+    public static DeferredSignerBuilder WithAdvancedSignature(this DeferredSignerBuilder builder, AdvancedSignatureInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(info);
+        return builder.WithMetadata(ToMetadata(info));
+    }
+
+    private static SignatureMetadata ToMetadata(AdvancedSignatureInfo info)
+    {
         string maskedCpf = AdvancedSignatureInfo.MaskCpf(info.Cpf);
 
         // Build the signature manifest (tamper-proof signer evidence)
@@ -31,7 +50,7 @@ public static class SignerBuilderBrazilExtensions
         var extraAttributes = new List<CmsAttribute> { manifestAttr };
 
         // Map to generic SignatureMetadata
-        var metadata = new SignatureMetadata
+        return new SignatureMetadata
         {
             SignerName = info.SignerName,
             SignerId = maskedCpf,
@@ -50,7 +69,5 @@ public static class SignerBuilderBrazilExtensions
             Location = info.InstitutionName ?? string.Empty,
             ExtraAttributes = extraAttributes,
         };
-
-        return builder.WithMetadata(metadata);
     }
 }
