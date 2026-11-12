@@ -116,8 +116,11 @@ parameters — so the machine that holds the key can hand it to a PKCS#11 or clo
   timestamp): the TSA is asked in phase one;
 - the requested level and the TSA endpoints.
 
-These options are set on the builder that prepares. On a resumed CAdES or XAdES builder — and for the
-PAdES options listed under [PAdES options](#pades-options) — they throw `InvalidOperationException`.
+These options are set on the builder that prepares. On a resumed builder they throw
+`InvalidOperationException`. The PAdES builder keeps its earlier behaviour for the options it had
+before this rule: a resumed builder ignores `WithCertificate`, `WithHashAlgorithm`,
+`WithSignatureAlgorithm` and `WithFieldOptions`, and `WithLevel` there replaces the profile used to
+complete (prefer `WithTimestampOptions`, which keeps the level and checks the endpoints).
 
 **Phase two** verifies the raw signature against the certificate of the session before anything is
 assembled (a wrong key or algorithm fails with `ExternalSignerReturnedInvalidSignature`), then runs the

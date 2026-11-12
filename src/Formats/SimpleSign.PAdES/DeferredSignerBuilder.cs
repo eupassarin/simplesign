@@ -26,8 +26,9 @@ namespace SimpleSign.PAdES;
 /// Phase one (<see cref="PrepareAsync(CancellationToken)"/>) fixes everything the signature covers: the
 /// signature field and its appearance, the signing time, the document information entries, the signature
 /// policy and the other signed attributes. The prepared PDF and the signed attributes travel in the session,
-/// so these options are set before preparing; the ones added after the session format was first released
-/// throw <see cref="InvalidOperationException"/> on a resumed builder.
+/// so these options are set before preparing. On a resumed builder they throw
+/// <see cref="InvalidOperationException"/>, except <c>WithCertificate</c>, <c>WithHashAlgorithm</c>,
+/// <c>WithSignatureAlgorithm</c> and <c>WithFieldOptions</c>, which a resumed builder has always ignored.
 /// </para>
 /// <para>
 /// What a session cannot store is given again on the resumed builder: the HTTP provider, the signing policy,
