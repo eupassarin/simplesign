@@ -1,4 +1,5 @@
 using Shouldly;
+using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.Xml;
 
@@ -138,6 +139,49 @@ public sealed class XmlRunnerTests(TestBenchFixture fixture)
         result.Code.CSharp.ShouldContain("XadesSigner.CounterSign(xml)");
         result.Code.Cli.ShouldContain("simplesign xades sign signed.xml");
         result.Code.Cli.ShouldContain("--countersign");
+    }
+
+    [SkippableTheory]
+    [InlineData(RunEngines.Library, XadesFormChoice.Enveloped, BaselineLevel.BB)]
+    [InlineData(RunEngines.Library, XadesFormChoice.Detached, BaselineLevel.BT)]
+    [InlineData(RunEngines.Library, XadesFormChoice.Enveloping, BaselineLevel.BLTA)]
+    [InlineData(RunEngines.Cli, XadesFormChoice.Enveloped, BaselineLevel.BT)]
+    [InlineData(RunEngines.Cli, XadesFormChoice.Detached, BaselineLevel.BLT)]
+    public async Task RunAsync_TwoPhases_IsValidAndShowsTheThreePhases(string engine, XadesFormChoice form, BaselineLevel level)
+    {
+        var options = Xades() with { TwoPhases = true, Form = form, Level = level, SignerRoles = ["Diretor"] };
+
+        var result = await fixture.Xml.RunAsync(options, engine, default);
+
+        result.Success.ShouldBeTrue(Errors(result) + string.Join("; ", result.Cli?.Select(c => c.Output) ?? []));
+        result.Validation!.Overall.ShouldBe("Valid", Errors(result));
+        result.AchievedLevel.ShouldBe(result.RequestedLevel);
+        result.Code.CSharp.ShouldContain("XadesDeferredSigner.Document(xml)");
+        result.Code.CSharp.ShouldContain("XadesDeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)");
+        result.Code.CSharp.ShouldContain(".CompleteWithDetailsAsync(signature)");
+        result.Code.CSharp.ShouldNotContain("XadesSigner.Document");
+        result.Code.Cli.ShouldContain("simplesign xades sign document.xml");
+        result.Code.Cli.ShouldContain("--prepare");
+        result.Code.Cli.ShouldContain("simplesign deferred complete document.xml.session");
+    }
+
+    [SkippableTheory]
+    [InlineData(RunEngines.Library)]
+    [InlineData(RunEngines.Cli)]
+    public async Task RunAsync_TwoPhasesCounterSign_AddsACounterSignatureUnderTheSignature(string engine)
+    {
+        var signed = await fixture.Xml.RunAsync(Xades(), default);
+        signed.Success.ShouldBeTrue(Errors(signed));
+        var options = Xades("rsa-3072") with { TwoPhases = true, DataId = signed.OutputId, CounterSign = true, Level = BaselineLevel.BT };
+
+        var result = await fixture.Xml.RunAsync(options, engine, default);
+
+        result.Success.ShouldBeTrue(Errors(result) + string.Join("; ", result.Cli?.Select(c => c.Output) ?? []));
+        result.Validation!.Overall.ShouldBe("Valid", Errors(result));
+        result.Validation.Signatures.Count.ShouldBe(2);
+        result.Validation.Signatures[1].Level.ShouldBe("B-T");
+        result.Code.CSharp.ShouldContain("XadesDeferredSigner.CounterSign(xml)");
+        result.Code.Cli.ShouldContain("simplesign deferred complete signed.xml.session");
     }
 
     [SkippableFact]

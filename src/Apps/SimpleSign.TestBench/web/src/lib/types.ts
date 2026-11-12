@@ -500,6 +500,8 @@ export interface CadesOptions {
   mimeType?: string | null
   contentDescription?: string | null
   operationId?: string | null
+  /** Prepare, have the key sign elsewhere and complete from the session (CadesDeferredSigner / XadesDeferredSigner). */
+  twoPhases?: boolean
   validate: boolean
   validation?: ValidationSettings | null
 }
@@ -645,6 +647,8 @@ export interface XmlOptions {
   commitment?: string | null
   signingTime?: string | null
   operationId?: string | null
+  /** Prepare, have the key sign elsewhere and complete from the session (CadesDeferredSigner / XadesDeferredSigner). */
+  twoPhases?: boolean
   validate: boolean
   validation?: ValidationSettings | null
 }

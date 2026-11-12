@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="../../../src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj" />
     <ProjectReference Include="../../../src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj" />
     <ProjectReference Include="../../../src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj" />
   </ItemGroup>

@@ -81,7 +81,7 @@ internal sealed class CliExecutor
     private static readonly TimeSpan s_timeout = TimeSpan.FromMinutes(3);
 
     /// <summary>The commands that print one JSON object with <c>--json</c>.</summary>
-    private static readonly string[][] s_json = [["sign"], ["cades", "sign"], ["xades", "sign"]];
+    private static readonly string[][] s_json = [["sign"], ["cades", "sign"], ["xades", "sign"], ["deferred", "complete"]];
 
     /// <summary>The validate commands: <c>--json</c> and the two reports are added, and exit code 1 means "not valid", not a failure.</summary>
     private static readonly string[][] s_validate = [["validate"], ["cades", "validate"], ["xades", "validate"]];

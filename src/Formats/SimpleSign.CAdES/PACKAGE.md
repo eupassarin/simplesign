@@ -28,5 +28,8 @@ Console.WriteLine($"{result.Indication} {result.SubIndication}");
 Signing runs `SigningPolicy.Default` (chain validity, key usage, RSA ≥ 2048, SHA-2/SHA-3);
 `.WithSigningPolicy(SigningPolicy.Load("signing-policy.json"))` with `NotRevoked` at FAIL also checks the revocation of the chain.
 
+When the key is on another machine, sign in two phases: `CadesDeferredSigner.Document(data)…PrepareAsync()` returns
+the bytes to sign and a session; `CadesDeferredSigner.Resume(session, key).CompleteAsync(signature)` finishes the signature.
+
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
 and the [docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles). MIT licensed.

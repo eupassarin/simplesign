@@ -264,16 +264,22 @@ var builder = DeferredSigner.Document(pdfBytes)
 
 // Server: prepare the signed attributes
 var prepared = await builder.PrepareAsync();
-byte[] hashToSign = prepared.HashToSign;
+byte[] dataToSign = prepared.DataToSign;
 
-// Client: sign the hash with the private key (RSA PKCS#1 v1.5, ECDSA, etc.)
-byte[] signature = SignWithClientKey(hashToSign);
+// Client: sign them with the private key (RSA PKCS#1 v1.5, ECDSA, etc.)
+byte[] signature = SignWithClientKey(dataToSign);
 
 // Server: load the persisted session, then validate and embed the raw signature.
 byte[] signedPdf = await DeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)
     .WithHttpClientProvider(httpClientProvider)
     .CompleteAsync(signature);
 ```
+
+The deferred builder takes the options of `PadesSigner` (operation id, PDF/A preservation, signature
+policy, country extensions, metadata, document information, DSS artifacts…).
+`DeferredSigner.From(builder)` prepares the signature a `PadesSigner` builder is already configured for, and
+`CompleteWithDetailsAsync` returns the `PadesSigningResult` of one-call signing (the level achieved, the
+warnings). See [Deferred signing](deferred-signing.md), which also covers CAdES and XAdES.
 
 ## TSA Connection Pool
 

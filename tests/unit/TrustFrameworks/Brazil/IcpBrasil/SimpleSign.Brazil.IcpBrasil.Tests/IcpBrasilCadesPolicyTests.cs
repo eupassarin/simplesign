@@ -76,6 +76,32 @@ public sealed class IcpBrasilCadesPolicyTests : IDisposable
         check.Policy!.Info.Policy.ShouldBe(policy);
     }
 
+    [Theory]
+    [InlineData(IcpBrasilPolicy.AdRb)]
+    [InlineData(IcpBrasilPolicy.AdRt)]
+    [InlineData(IcpBrasilPolicy.AdRv)]
+    [InlineData(IcpBrasilPolicy.AdRc)]
+    [InlineData(IcpBrasilPolicy.AdRa)]
+    public async Task WithIcpBrasilPolicy_TwoPhaseSignature_HasEveryAttributeThePolicyMandates(IcpBrasilPolicy policy)
+    {
+        byte[] key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        using var publicLeaf = RemoteKey.PublicOnly(_pki.Leaf);
+        var prepared = await CadesDeferredSigner.Document(_data)
+            .WithCertificate(publicLeaf, _pki.IntermediatesAndRoot())
+            .WithSessionIntegrityKey(key)
+            .WithIcpBrasilPolicy(policy, policy == IcpBrasilPolicy.AdRb ? null : new TimestampOptions(new Uri("http://mock-tsa.example.com")))
+            .PrepareAsync();
+        byte[] p7s = await CadesDeferredSigner.Resume(prepared.SessionData, key)
+            .WithHttpClientProvider(new SingleClientProvider(_http))
+            .CompleteAsync(RemoteKey.Sign(_pki.Leaf, prepared.ToSigningRequest()));
+
+        var cms = CmsParser.ParseAll(p7s).Signers[0];
+        var check = IcpBrasilPolicyValidator.Validate(cms, DateTimeOffset.UtcNow, IcpBrasilPolicyFormat.Cades, signerRoot: null);
+        check.Status.ShouldBe(IcpBrasilPolicyStatus.Valid, string.Join("; ", check.Errors));
+        check.Policy!.Info.Policy.ShouldBe(policy);
+        Validator().Validate(p7s, _data).IsSignatureValid.ShouldBeTrue();
+    }
+
     [Fact]
     public async Task AdRv_EscTimeStampCoversSignatureAndReferences()
     {

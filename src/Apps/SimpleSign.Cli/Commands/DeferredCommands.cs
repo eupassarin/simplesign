@@ -1,9 +1,12 @@
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using SimpleSign.CAdES;
 using SimpleSign.Cli.Rendering;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
+using SimpleSign.XAdES;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -247,16 +250,9 @@ internal sealed class DeferredPrepareCommand(ICertificateChainService certChainS
             await File.WriteAllBytesAsync(sessionPath, prepared.SessionData, cancellationToken);
             await File.WriteAllBytesAsync(toSignPath, prepared.HashToSign, cancellationToken);
 
-            if (settings.Json)
-            {
-                WriteJson(sessionPath, toSignPath, prepared);
-                return 0;
-            }
-
-            AnsiConsole.MarkupLine($"[green]✓ Prepared:[/] {settings.InputPath.EscapeMarkup()}");
-            AnsiConsole.MarkupLine($"  Session:   {sessionPath.EscapeMarkup()}");
-            AnsiConsole.MarkupLine($"  To sign:   {toSignPath.EscapeMarkup()} ({prepared.HashToSign.Length} bytes)");
-            AnsiConsole.MarkupLine($"  Sign it with {prepared.DigestAlgorithm.EscapeMarkup()} and {prepared.SignatureAlgorithmOid.EscapeMarkup()} (the signer hashes the data), then run 'simplesign deferred complete'.");
+            DeferredPrepareSupport.Report(
+                settings.InputPath, "pades", sessionPath, toSignPath, prepared.HashToSign.Length,
+                prepared.DigestAlgorithm, prepared.SignatureAlgorithmOid, settings.Json);
             return 0;
         }
         finally
@@ -267,27 +263,14 @@ internal sealed class DeferredPrepareCommand(ICertificateChainService certChainS
             }
         }
     }
-
-    private static void WriteJson(string sessionPath, string toSignPath, DeferredSigningPrepareResult prepared)
-    {
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true }))
-        {
-            writer.WriteStartObject();
-            writer.WriteBoolean("success", true);
-            writer.WriteString("session", sessionPath);
-            writer.WriteString("toSign", toSignPath);
-            writer.WriteString("digestAlgorithm", prepared.DigestAlgorithm);
-            writer.WriteString("signatureAlgorithm", prepared.SignatureAlgorithmOid);
-            writer.WriteEndObject();
-        }
-
-        Console.Out.WriteLine(System.Text.Encoding.UTF8.GetString(buffer.ToArray()));
-    }
 }
 
-/// <summary>Deferred signing, step 2: embeds the signature made elsewhere into the prepared PDF.</summary>
-[Description("Embed a signature made elsewhere into a PDF prepared by 'deferred prepare'")]
+/// <summary>
+/// Deferred signing, step 2: completes with the signature made elsewhere a session written by
+/// <c>deferred prepare</c> or by <c>sign</c>, <c>cades sign</c> or <c>xades sign</c> with <c>--prepare</c>.
+/// The format (PAdES, CAdES or XAdES) is read from the session.
+/// </summary>
+[Description("Complete a prepared signature (PAdES, CAdES or XAdES) with the signature made elsewhere")]
 internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCommand.Settings>
 {
     /// <summary>Settings of <c>deferred complete</c>.</summary>
@@ -313,10 +296,30 @@ internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCom
         [Description("The raw signature of the data to sign (RSA, or ECDSA in DER)")]
         public string SignaturePath { get; init; } = null!;
 
-        /// <summary>The signed PDF.</summary>
+        /// <summary>The signed PDF, CMS or XML.</summary>
         [CommandOption("--output|-o <PATH>")]
-        [Description("The signed PDF")]
+        [Description("The signed PDF, CMS (.p7s/.p7m) or XML")]
         public string OutputPath { get; init; } = null!;
+
+        /// <summary>The content of a CAdES session prepared with --content-outside-session.</summary>
+        [CommandOption("--content <PATH>")]
+        [Description("CAdES: the signed content, for a session prepared with --content-outside-session")]
+        public string? ContentPath { get; init; }
+
+        /// <summary>The detached document of a XAdES session prepared with --detached-data-outside-session.</summary>
+        [CommandOption("--detached-data <PATH>")]
+        [Description("XAdES: the detached document, for a session prepared with --detached-data-outside-session")]
+        public string? DetachedDataPath { get; init; }
+
+        /// <summary>The external data objects of a XAdES session prepared with --detached-data-outside-session.</summary>
+        [CommandOption("--external-object <URI=PATH>")]
+        [Description("XAdES: an external data object by the URI of its reference, for a session prepared with --detached-data-outside-session (repeat for more)")]
+        public string[]? ExternalObjects { get; init; }
+
+        /// <summary>Print the result as JSON.</summary>
+        [CommandOption("--json")]
+        [Description("Print the result as JSON")]
+        public bool Json { get; init; }
 
         /// <summary>The TSA again, only when it needs credentials (they are not kept in the session).</summary>
         [CommandOption("--tsa|-t <URL>")]
@@ -345,6 +348,23 @@ internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCom
                 return ValidationResult.Error("--output is required.");
             }
 
+            foreach (string path in new[] { ContentPath, DetachedDataPath }.OfType<string>())
+            {
+                if (!File.Exists(path))
+                {
+                    return ValidationResult.Error($"File not found: {path}");
+                }
+            }
+
+            foreach (string entry in ExternalObjects ?? [])
+            {
+                int separator = entry.IndexOf('=', StringComparison.Ordinal);
+                if (separator <= 0 || !File.Exists(entry[(separator + 1)..]))
+                {
+                    return ValidationResult.Error($"--external-object takes URI=PATH with an existing file: {entry}");
+                }
+            }
+
             if ((TsaUrl is not null || ArchiveTsaUrl is not null) && !HasTsaCredentials)
             {
                 return ValidationResult.Error("--tsa and --archive-tsa are only needed with TSA credentials: the session keeps the TSA URL.");
@@ -358,29 +378,117 @@ internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCom
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        SignJson.Enabled = settings.Json;
         byte[] session = await File.ReadAllBytesAsync(settings.SessionPath, cancellationToken);
         byte[] signature = await File.ReadAllBytesAsync(settings.SignaturePath, cancellationToken);
-        var builder = DeferredSigner.Resume(session, DeferredSessionKey.Parse(settings.SessionKey)!);
-        if (settings.TsaUrl is not null)
+        byte[] key = DeferredSessionKey.Parse(settings.SessionKey)!;
+        var policy = SigningPolicyOption.Parse(settings.SigningPolicy);
+        var anchors = await settings.SigningTrustAnchorsAsync(cancellationToken);
+        var audit = settings.AuditSink();
+        TimestampOptions? timestamp = settings.TsaUrl is null ? null : settings.Timestamp(settings.TsaUrl);
+        ArchiveTimestampOptions? archiveTimestamp = settings.ArchiveTsaUrl is null ? null : settings.ArchiveTimestamp(settings.ArchiveTsaUrl);
+
+        string format = SessionFormat(session);
+        string? misplaced = format switch
         {
-            builder = builder.WithTimestampOptions(
-                settings.Timestamp(settings.TsaUrl),
-                settings.ArchiveTsaUrl is null ? null : settings.ArchiveTimestamp(settings.ArchiveTsaUrl));
+            "cades" => settings.DetachedDataPath is not null || settings.ExternalObjects is { Length: > 0 } ? "--detached-data and --external-object are for a XAdES session; this one is CAdES." : null,
+            "xades" => settings.ContentPath is not null ? "--content is for a CAdES session; this one is XAdES." : null,
+            _ => settings.ContentPath is not null || settings.DetachedDataPath is not null || settings.ExternalObjects is { Length: > 0 }
+                ? "--content, --detached-data and --external-object are for CAdES and XAdES sessions; this one is PAdES." : null,
+        };
+        if (misplaced is not null)
+        {
+            throw new InvalidOperationException(misplaced);
         }
 
-        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
-        if (settings.AuditSink() is { } audit)
+        ISigningResult result;
+        byte[] signed;
+        switch (format)
         {
-            builder = builder.WithAuditSink(audit);
-        }
-        if (CliNetwork.IsConfigured)
-        {
-            builder = builder.WithHttpClientProvider(CliNetwork.Provider);
+            case "cades":
+                {
+                    var builder = CadesDeferredSigner.Resume(session, key).WithSigningPolicy(policy).WithTrustAnchors(anchors);
+                    builder = timestamp is null ? builder : builder.WithTimestampOptions(timestamp, archiveTimestamp);
+                    builder = audit is null ? builder : builder.WithAuditSink(audit);
+                    builder = CliNetwork.IsConfigured ? builder.WithHttpClientProvider(CliNetwork.Provider) : builder;
+                    if (settings.ContentPath is not null)
+                    {
+                        builder = builder.WithContent(await File.ReadAllBytesAsync(settings.ContentPath, cancellationToken));
+                    }
+
+                    var details = await builder.CompleteWithDetailsAsync(signature, cancellationToken);
+                    (result, signed) = (details, details.SignedArtifact);
+                    break;
+                }
+
+            case "xades":
+                {
+                    var builder = XadesDeferredSigner.Resume(session, key).WithSigningPolicy(policy).WithTrustAnchors(anchors);
+                    builder = timestamp is null ? builder : builder.WithTimestampOptions(timestamp, archiveTimestamp);
+                    builder = audit is null ? builder : builder.WithAuditSink(audit);
+                    builder = CliNetwork.IsConfigured ? builder.WithHttpClientProvider(CliNetwork.Provider) : builder;
+                    if (settings.DetachedDataPath is not null)
+                    {
+                        builder = builder.WithDetachedData(await File.ReadAllBytesAsync(settings.DetachedDataPath, cancellationToken));
+                    }
+
+                    foreach (string entry in settings.ExternalObjects ?? [])
+                    {
+                        int separator = entry.IndexOf('=', StringComparison.Ordinal);
+                        builder = builder.WithExternalData(entry[..separator], await File.ReadAllBytesAsync(entry[(separator + 1)..], cancellationToken));
+                    }
+
+                    var details = await builder.CompleteWithDetailsAsync(signature, cancellationToken);
+                    (result, signed) = (details, details.SignedArtifact);
+                    break;
+                }
+
+            default:
+                {
+                    var builder = DeferredSigner.Resume(session, key).WithSigningPolicy(policy).WithTrustAnchors(anchors);
+                    builder = timestamp is null ? builder : builder.WithTimestampOptions(timestamp, archiveTimestamp);
+                    builder = audit is null ? builder : builder.WithAuditSink(audit);
+                    builder = CliNetwork.IsConfigured ? builder.WithHttpClientProvider(CliNetwork.Provider) : builder;
+                    var details = await builder.CompleteWithDetailsAsync(signature, cancellationToken);
+                    (result, signed) = (details, details.SignedArtifact);
+                    break;
+                }
         }
 
-        byte[] signed = await builder.CompleteAsync(signature, cancellationToken);
         await File.WriteAllBytesAsync(settings.OutputPath, signed, cancellationToken);
-        AnsiConsole.MarkupLine($"[green]✓ Signed:[/] {settings.OutputPath.EscapeMarkup()}");
+        if (settings.Json)
+        {
+            SignJson.WriteSuccess(format, settings.OutputPath, signer: string.Empty, result);
+            return 0;
+        }
+
+        AnsiConsole.MarkupLine($"[green]✓ Signed:[/] {settings.OutputPath.EscapeMarkup()} ({SignJson.Level(result.AchievedLevel)})");
+        foreach (var warning in result.Warnings)
+        {
+            AnsiConsole.MarkupLine($"  [yellow]![/] {warning.Message.EscapeMarkup()}");
+        }
+
         return 0;
+    }
+
+    /// <summary>
+    /// The format of a session: CAdES and XAdES sessions name theirs in the envelope; a PAdES session is the
+    /// session object itself.
+    /// </summary>
+    internal static string SessionFormat(byte[] session)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(session);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("format", out JsonElement format)
+                && format.ValueKind == JsonValueKind.String
+                ? format.GetString()!.ToLowerInvariant()
+                : "pades";
+        }
+        catch (JsonException)
+        {
+            return "pades";
+        }
     }
 }

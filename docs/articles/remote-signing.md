@@ -36,7 +36,8 @@ byte[] pdf = await PadesSigner.Document(input)
 ```
 
 The same `WithExternalSigner(certificate, signer, chain)` exists on `CadesSigner` and `XadesSigner`. For a service
-that answers later (a mobile approval, for instance), use `DeferredSigner` (see [deferred signing](deferred-signing.md)).
+that answers later (a mobile approval, for instance), use `DeferredSigner`, `CadesDeferredSigner` or
+`XadesDeferredSigner` (see [deferred signing](deferred-signing.md)).
 
 ## Providers in this repository
 

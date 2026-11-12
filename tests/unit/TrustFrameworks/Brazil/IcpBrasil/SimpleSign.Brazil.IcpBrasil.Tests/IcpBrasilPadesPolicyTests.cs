@@ -74,6 +74,63 @@ public sealed class IcpBrasilPadesPolicyTests : IDisposable
             })
             .SignAsync();
 
+    private static readonly byte[] s_sessionKey = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+
+    // The same policy on a two-phase signature: prepared with the public certificate, completed from the session.
+    private async Task<byte[]> SignInTwoPhases(IcpBrasilPolicy policy)
+    {
+        using var publicLeaf = RemoteKey.PublicOnly(_pki.Leaf);
+        var prepared = await DeferredSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+            .WithCertificate(publicLeaf, _pki.IntermediatesAndRoot())
+            .WithSessionIntegrityKey(s_sessionKey)
+            .WithIcpBrasilPolicy(policy, new IcpBrasilPadesOptions
+            {
+                Timestamp = policy == IcpBrasilPolicy.AdRb ? null : new TimestampOptions(new Uri("http://mock-tsa.example.com")),
+                Artifacts = policy == IcpBrasilPolicy.AdRa ? Artifacts() : null,
+            })
+            .PrepareAsync();
+        return await DeferredSigner.Resume(prepared.SessionData, s_sessionKey)
+            .WithHttpClientProvider(new SingleClientProvider(_http))
+            .CompleteAsync(RemoteKey.Sign(_pki.Leaf, prepared.ToSigningRequest()));
+    }
+
+    [Theory]
+    [InlineData(IcpBrasilPolicy.AdRb)]
+    [InlineData(IcpBrasilPolicy.AdRt)]
+    [InlineData(IcpBrasilPolicy.AdRc)]
+    [InlineData(IcpBrasilPolicy.AdRa)]
+    public async Task WithIcpBrasilPolicy_TwoPhaseSignature_PdfHasEveryStructureThePolicyMandates(IcpBrasilPolicy policy)
+    {
+        byte[] signed = await SignInTwoPhases(policy);
+
+        var (cms, facts) = await Inspect(signed);
+        var check = IcpBrasilPolicyValidator.Validate(cms, DateTimeOffset.UtcNow, signerRoot: null, facts);
+
+        check.Status.ShouldBe(IcpBrasilPolicyStatus.Valid, string.Join("; ", check.Errors));
+        check.Policy!.Info.Policy.ShouldBe(policy);
+        facts.Filter.ShouldBe("PBAD_PAdES");
+        facts.SubFilter.ShouldBe("PBAD.PAdES");
+        if (policy == IcpBrasilPolicy.AdRa)
+        {
+            facts.DssKeys.ShouldContain(IcpBrasilPolicyArtifacts.DssPolicyArtifacts);
+            facts.VriKeys.ShouldContain(IcpBrasilPolicyArtifacts.VriLpaSignature);
+            facts.HasLaterDocumentTimestamp.ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void ResolveIcpBrasilPolicy_DeferredBuilder_PicksTheSameVersionAsTheOneCallBuilder()
+    {
+        byte[] pdf = TestPdfFactory.CreateMinimalPdfWithPage();
+        using var publicLeaf = RemoteKey.PublicOnly(_pki.Leaf);
+
+        var deferred = DeferredSigner.Document(pdf).WithCertificate(publicLeaf, _pki.IntermediatesAndRoot()).ResolveIcpBrasilPolicy(IcpBrasilPolicy.AdRa);
+        var oneCall = PadesSigner.Document(pdf).WithCertificate(_pki.Leaf, _pki.IntermediatesAndRoot()).ResolveIcpBrasilPolicy(IcpBrasilPolicy.AdRa);
+
+        deferred.Oid.ShouldBe(oneCall.Oid);
+        Should.Throw<ArgumentException>(() => DeferredSigner.Document(pdf).WithCertificate(publicLeaf).WithIcpBrasilPolicy(IcpBrasilPolicy.AdRt));
+    }
+
     // Validates the PDF and returns, for the first (non-timestamp) signature, its CMS and the PDF
     // facts the validator hands to chain validation providers.
     private async Task<(CmsSignedData Cms, PdfSignatureFacts Facts)> Inspect(byte[] signed)

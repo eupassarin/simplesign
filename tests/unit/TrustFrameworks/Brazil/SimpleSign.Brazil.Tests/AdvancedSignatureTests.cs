@@ -215,6 +215,36 @@ public sealed class AdvancedSignatureTests
         sig.SignaturePolicyOid.ShouldBe("2.16.76.1.7.1.99.1");
     }
 
+    [Fact(DisplayName = "AEA on a two-phase signature carries the manifest and the commitment type")]
+    public async Task AeaSignature_TwoPhaseSignature_HasManifestAndAttributes()
+    {
+        byte[] key = RandomNumberGenerator.GetBytes(32);
+        using var cert = TestCertificateFactory.CreateSelfSignedCert();
+        using var publicCert = RemoteKey.PublicOnly(cert);
+
+        var prepared = await DeferredSigner.Document(CreateMinimalPdf())
+            .WithCertificate(publicCert)
+            .WithSessionIntegrityKey(key)
+            .WithAdvancedSignature(new AdvancedSignatureInfo
+            {
+                SignerName = "Test User",
+                Cpf = "12345678901",
+                AuthMethod = AuthenticationMethod.InstitutionalLogin,
+                InstitutionName = "TCE-ES",
+                CommitmentType = CommitmentType.ProofOfApproval,
+                PolicyOid = "2.16.76.1.7.1.99.1",
+            })
+            .PrepareAsync();
+        byte[] signed = await DeferredSigner.Resume(prepared.SessionData, key).CompleteAsync(RemoteKey.Sign(cert, prepared.ToSigningRequest()));
+
+        using var stream = new MemoryStream(signed);
+        var sig = (await PdfSignatureInspector.InspectAsync(stream)).Signatures.ShouldHaveSingleItem();
+        sig.CommitmentTypeOid.ShouldBe("1.2.840.113549.1.9.16.6.5");
+        sig.SignaturePolicyOid.ShouldBe("2.16.76.1.7.1.99.1");
+        sig.Reason.ShouldBe("ADVANCED ELECTRONIC SIGNATURE (Lei 14.063/2020)");
+        SignatureManifest.FromJsonUtf8(sig.ManifestJson.ShouldNotBeNull()).ShouldNotBeNull();
+    }
+
     [Fact(DisplayName = "AEA sets reason to Lei 14.063")]
     public async Task AeaSignature_SetsReasonToLei14063()
     {

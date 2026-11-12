@@ -103,6 +103,7 @@ var builder = DeferredSigner.Document(pdfBytes)
 var prepared = await builder.PrepareAsync();
 var signedPdf = await DeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)
     .CompleteAsync(signature);
+// Same shape for CAdES and XAdES: CadesDeferredSigner / XadesDeferredSigner (.Document → PrepareAsync, .Resume → CompleteAsync)
 
 // Batch
 var batch = BatchSigner.Create(cert)

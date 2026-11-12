@@ -1,6 +1,6 @@
 # ADR 0006: External Signer / Deferred Signing
 
-**Status:** Accepted
+**Status:** Accepted. Extended to CAdES and XAdES by ADR 0028.
 
 **Context:**
 Many real-world signing scenarios require the private key to remain on a separate device or service:
@@ -65,3 +65,8 @@ The `sessionData` is an opaque blob that encodes the PDF state between phases. T
 | **SignedInfo for pre-signed CMS** | Standards-compliant (RFC 5652) | More complex implementation, not supported by all HSMs | Rejected |
 
 **Status:** This decision is accepted. Both patterns will remain the primary way to sign with external/remote keys.
+
+**Amendment (ADR 0028):** deferred signing also exists for CAdES (`CadesDeferredSigner`) and XAdES
+(`XadesDeferredSigner`), and the session is authenticated with HMAC-SHA256 under a mandatory server-owned key
+(`WithSessionIntegrityKey`). ADR 0028 records what a session holds, how it stays readable across versions, and which
+options belong to each phase.

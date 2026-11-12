@@ -1,0 +1,237 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Signing;
+using SimpleSign.XAdES.Internal;
+
+namespace SimpleSign.XAdES;
+
+/// <content>
+/// The two phases of a deferred XAdES signature: phase one stops after the document is assembled with an
+/// empty ds:SignatureValue, phase two writes the signature made over the canonical SignedInfo and runs the
+/// same steps as one-call signing.
+/// </content>
+public sealed partial class XadesSignerBuilder
+{
+    /// <summary>The baseline profile configured on this builder.</summary>
+    internal AdesBaselineProfile Profile => _options.Profile;
+
+    /// <summary>A builder that completes <paramref name="session"/>: its detached data, level and extended form.</summary>
+    internal static XadesSignerBuilder ForDeferredCompletion(XadesDeferredSession session)
+    {
+        var builder = new XadesSignerBuilder(session.DetachedContent ?? [], logger: null);
+        return builder.With(builder._options with
+        {
+            Profile = DeferredProfile.Restore(
+                session.RequestedLevel, session.LevelFailureBehavior, session.TimestampEndpoint,
+                session.ArchiveTimestampEndpoint, session.RevocationPreference, session.ClockSkewSeconds),
+            ExtendedForm = session.ExtendedForm,
+            OperationId = session.OperationId,
+            IsCounterSignature = session.CounterSignature,
+            AdditionalDataObjects = session.ExternalDataObjects is { Length: > 0 } external
+                ? [.. external.Where(o => o.Content is not null).Select(o => XadesDataObject.External(o.Uri, o.Content))]
+                : null,
+        });
+    }
+
+    /// <summary>
+    /// The same builder for a signature prepared in two phases: its certificate and chain, with the key held
+    /// elsewhere. A builder without a certificate is returned as it is.
+    /// </summary>
+    internal XadesSignerBuilder ForDeferredPreparation() =>
+        _options.Credential is { } credential
+            ? With(_options with
+            {
+                Credential = new XadesExternalCredential(GetCertificate(credential), GetChain(credential), DeferredPlaceholderSigner.Instance),
+            })
+            : this;
+
+    /// <summary>The same builder with the detached document of a session that does not carry it.</summary>
+    internal XadesSignerBuilder WithDetachedDocument(byte[] document) => new((byte[])document.Clone(), _options);
+
+    /// <summary>The same builder with one more external data object of a session that does not carry it.</summary>
+    internal XadesSignerBuilder WithExternalDataObject(string uri, byte[] content) =>
+        With(_options with
+        {
+            AdditionalDataObjects =
+            [
+                .. (_options.AdditionalDataObjects ?? []).Where(o => o.Uri != uri),
+                XadesDataObject.External(uri, content),
+            ],
+        });
+
+    /// <summary>
+    /// Phase one: checks the certificate, chain and algorithms against the signing policy, assembles the
+    /// document with an empty signature value and returns the canonical SignedInfo with the session. A refusal
+    /// is recorded by the audit sink.
+    /// </summary>
+    /// <param name="sessionIntegrityKey">The HMAC key of the session.</param>
+    /// <param name="detachedDataInSession">Whether the session carries the detached document and the external data objects, or only their digests.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    internal async Task<XadesDeferredPrepareResult> PrepareDeferredAsync(
+        byte[] sessionIntegrityKey, bool detachedDataInSession, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await PrepareDeferredCoreAsync(sessionIntegrityKey, detachedDataInSession, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (_options.AuditSink is not null && ex is not OperationCanceledException)
+        {
+            var refused = SignatureAuditEvent.Start(
+                "XAdES", _options.OperationId, _options.Profile.Level, SignerCertificate, _options.SigningPolicy, _xmlData);
+            await _options.AuditSink.RecordAsync(
+                refused with { Reason = (ex as SigningException)?.Reason, Message = ex.Message }, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<XadesDeferredPrepareResult> PrepareDeferredCoreAsync(
+        byte[] sessionIntegrityKey, bool detachedDataInSession, CancellationToken cancellationToken)
+    {
+        var credential = _options.Credential
+            ?? throw new SigningException(
+                "Certificate is required. Call WithCertificate() before preparing a deferred signature.",
+                SigningErrorReason.CredentialMissing);
+        SigningStart start = await BeginAsync(credential, cancellationToken).ConfigureAwait(false);
+
+        byte[] signedInfo;
+        byte[] preparedXml;
+        string signatureId;
+        DateTimeOffset signingTime;
+        if (_options.IsCounterSignature)
+        {
+            // The countersignature is put in its place in the document with an empty signature value.
+            signingTime = _options.SigningTime ?? DateTimeOffset.UtcNow;
+            XadesCounterSignaturePreparation counter = XadesSignatureBuilder.PrepareCounterSignature(
+                _xmlData, _options.CounterSignTargetId, start.Certificate, start.HashAlgorithm, signingTime, start.Chain,
+                _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm, start.SignatureAlgorithmOid,
+                _options.Roles, _options.ProductionPlace, XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization));
+            (signedInfo, preparedXml, signatureId) = (counter.SignedInfoCanonical, counter.PreparedXml, counter.SignatureId);
+        }
+        else
+        {
+            var additionalReferences = XadesSignatureBuilder.PlanAdditionalReferences(_options.AdditionalDataObjects);
+            // The data objects timestamp is a signed property, so the TSA is asked before the bytes to sign exist.
+            XadesDataObjectsTimeStamp? dataObjectsTimeStamp = _options.DataObjectsTimestamp is { } dataTsa
+                ? await RequestDataObjectsTimeStampAsync(dataTsa, start.HashAlgorithm, _options.OperationId ?? "-", additionalReferences, cancellationToken).ConfigureAwait(false)
+                : null;
+
+            ExternalPreparation preparation = PrepareExternal(
+                start.Certificate, start.HashAlgorithm, start.SignatureAlgorithmOid, dataObjectsTimeStamp, additionalReferences);
+            preparedXml = AssembleExternal(
+                preparation, signatureValue: [], start.Certificate, start.Chain, start.HashAlgorithm, start.SignatureAlgorithmOid,
+                dataObjectsTimeStamp, additionalReferences);
+            (signedInfo, signatureId, signingTime) =
+                (preparation.SignedInfoCanonical, XadesSignatureBuilder.GetLastSignatureId(preparedXml), preparation.SigningTime);
+        }
+
+        // The policy store is an unsigned property: it goes in now, before the timestamps of phase two.
+        if (_options.PolicyStore is { } policyStore)
+        {
+            preparedXml = XadesSignatureBuilder.EmbedSignaturePolicyStore(preparedXml, policyStore, signatureId);
+        }
+
+        var external = (_options.AdditionalDataObjects ?? [])
+            .Where(o => o.Uri is not null)
+            .Select(o => detachedDataInSession
+                ? new XadesDeferredExternalObject { Uri = o.Uri!, Content = o.Content.ToArray() }
+                : new XadesDeferredExternalObject { Uri = o.Uri!, Sha256 = SHA256.HashData(o.Content.Span) })
+            .ToArray();
+        bool detachedDocument = !_options.IsCounterSignature && _options.Form == XadesForm.Detached;
+        var profile = _options.Profile;
+        var session = new XadesDeferredSession
+        {
+            SignedInfo = signedInfo,
+            PreparedXml = preparedXml,
+            SignatureId = signatureId,
+            DetachedContent = detachedDocument && detachedDataInSession ? _xmlData : null,
+            DetachedContentSha256 = detachedDocument && !detachedDataInSession ? SHA256.HashData(_xmlData) : null,
+            ExternalDataObjects = external.Length == 0 ? null : external,
+            InputSha256 = Convert.ToHexString(SHA256.HashData(_xmlData)),
+            CertificateDer = start.Certificate.RawData,
+            ExtraCertificatesDer = start.Chain.Count == 0 ? null : [.. start.Chain.Select(c => c.RawData)],
+            HashAlgorithm = start.HashAlgorithm.Name!,
+            SignatureAlgorithmOid = start.SignatureAlgorithmOid,
+            SigningTime = signingTime,
+            RequestedLevel = profile.Level,
+            LevelFailureBehavior = profile.FailureBehavior,
+            TimestampEndpoint = profile.Timestamp?.Endpoint.ToString(),
+            ArchiveTimestampEndpoint = profile.ArchiveTimestamp?.Endpoint?.ToString(),
+            RevocationPreference = profile.LongTermValidation?.RevocationPreference ?? RevocationPreference.OcspFirst,
+            ClockSkewSeconds = DeferredProfile.ClockSkewSecondsToRecord(profile),
+            ExtendedForm = _options.ExtendedForm,
+            OperationId = _options.OperationId,
+            CounterSignature = _options.IsCounterSignature,
+        };
+
+        byte[] sessionData = session.Protect(sessionIntegrityKey);
+        _options.Dependencies.Logger.DeferredPrepared(
+            _options.OperationId ?? "-", signatureId, signedInfo.Length, sessionData.Length);
+        return new XadesDeferredPrepareResult
+        {
+            DataToSign = signedInfo,
+            SessionData = sessionData,
+            DigestAlgorithm = start.HashAlgorithm.Name!,
+            SignatureAlgorithmOid = start.SignatureAlgorithmOid,
+            Warnings = start.Warnings.AsReadOnly(),
+            RsaPssParameters = start.RsaPssParameters,
+            OperationId = _options.OperationId,
+        };
+    }
+
+    /// <summary>
+    /// Phase two: verifies <paramref name="rawSignature"/> against the certificate of the session, writes it
+    /// into the prepared document and takes the signature to the requested level. The outcome, signed or
+    /// refused, is recorded by the audit sink.
+    /// </summary>
+    internal async Task<XadesSigningResult> CompleteDeferredAsync(
+        XadesDeferredSession session, byte[] rawSignature, CancellationToken cancellationToken)
+    {
+        using X509Certificate2 certificate = CertificateLoader.LoadCertificate(session.CertificateDer);
+        List<X509Certificate2> chain = [.. (session.ExtraCertificatesDer ?? []).Select(CertificateLoader.LoadCertificate)];
+        try
+        {
+            return await SignatureAudit.RunAsync(
+                _options.AuditSink,
+                () => SignatureAuditEvent.Start("XAdES", _options.OperationId, _options.Profile.Level, certificate, _options.SigningPolicy, default)
+                    with
+                { InputSha256 = session.InputSha256 },
+                () => CompleteDeferredCoreAsync(session, rawSignature, certificate, chain, cancellationToken),
+                result => (result.SignedArtifact, result.AchievedLevel),
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (X509Certificate2 extra in chain)
+            {
+                extra.Dispose();
+            }
+        }
+    }
+
+    private async Task<XadesSigningResult> CompleteDeferredCoreAsync(
+        XadesDeferredSession session,
+        byte[] rawSignature,
+        X509Certificate2 certificate,
+        IReadOnlyList<X509Certificate2> chain,
+        CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        ResolvedSigningAlgorithm algorithm = SigningAlgorithmResolver.Resolve(
+            certificate, new HashAlgorithmName(session.HashAlgorithm), hashAlgorithmExplicitlySet: true, session.SignatureAlgorithmOid);
+        if (!CmsSignatureBuilder.VerifyExternalSignature(
+                session.SignedInfo, rawSignature, certificate, algorithm.HashAlgorithm, algorithm.SignatureAlgorithmOid))
+        {
+            throw new SigningException(
+                "The external signature does not verify with the certificate of the session.",
+                SigningErrorReason.ExternalSignerReturnedInvalidSignature);
+        }
+
+        _options.Dependencies.Logger.DeferredCompleting(_options.OperationId ?? "-", session.SignatureId, rawSignature.Length);
+        byte[] signedXml = XadesSignatureBuilder.SetSignatureValue(
+            session.PreparedXml, session.SignatureId, XadesSignatureBuilder.XmlSignatureValue(rawSignature, certificate));
+        return await FinishAsync(
+            signedXml, session.SignatureId, certificate, chain, algorithm.HashAlgorithm, [], stopwatch, cancellationToken).ConfigureAwait(false);
+    }
+}

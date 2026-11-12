@@ -143,6 +143,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `contentDescription` | text |  | Content description: Describes the signed content (content-hints, with the content type id-data). Empty: none. |
 | `attributeCertificateId` | upload |  | Attribute certificate: An X.509 attribute certificate issued to the signer (DER): a role an Attribute Authority certifies. |
 | `signedAssertionId` | upload |  | Signed assertion (SAML): An assertion about the signer that a third party signed, for example a SAML assertion (an XML file). |
+| `twoPhases` | toggle |  | Two phases: Prepare on the server, have the key sign the data elsewhere and complete from the session: the signing policy runs when the signature is prepared, and every option of one-call signing applies. |
 | `operationId` | text |  | Operation id: A correlation id for logs and warnings. |
 | `attemptRefused` | toggle |  | Attempt refused signatures: Runs even when the signing policy is foreseen to refuse the signer, so the result shows the library's own refusal (SigningException and its reason) — what a certification needs as evidence. |
 | `validate` | toggle |  | Validate after signing: Validates the produced file with SimpleSign's own validator. |
@@ -192,6 +193,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `placeState` | text |  | Production place: state or province: The state or province of the production place. Empty: none. |
 | `placePostalCode` | text |  | Production place: postal code: The postal code of the production place. Empty: none. |
 | `placeCountry` | text |  | Production place: country: The country of the production place. Empty: none. |
+| `twoPhases` | toggle |  | Two phases: Prepare on the server, have the key sign the data elsewhere and complete from the session: the signing policy runs when the signature is prepared, and every option of one-call signing applies. |
 | `operationId` | text |  | Operation id: A correlation id for logs and warnings. |
 | `attemptRefused` | toggle |  | Attempt refused signatures: Runs even when the signing policy is foreseen to refuse the signer, so the result shows the library's own refusal (SigningException and its reason) — what a certification needs as evidence. |
 | `validate` | toggle |  | Validate after signing: Validates the produced file with SimpleSign's own validator. |

@@ -132,6 +132,27 @@ public sealed class XadesCounterSignatureTests : IDisposable
     }
 
     [Fact]
+    public async Task CounterSign_ExternalEcdsaSigner_Validates()
+    {
+        using var witness = TestCertificateFactory.CreateEcdsaCert(subject: "CN=ECDSA Witness, O=Tests");
+        byte[] signed = await XadesSigner.Document(s_xml).WithCertificate(s_signer).SignAsync();
+
+        // The external signer returns a DER SEQUENCE { r, s }; ds:SignatureValue takes r || s.
+        byte[] countersigned = await XadesSigner.CounterSign(signed)
+            .WithExternalSigner(witness, new DelegatingExternalSigner(data =>
+            {
+                using var ecdsa = witness.GetECDsaPrivateKey()!;
+                return Task.FromResult(ecdsa.SignData(data, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence));
+            }))
+            .SignAsync();
+
+        var result = new XadesSignatureValidator().Validate(countersigned, [.. s_trusted, witness]);
+        result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        var counter = result.CounterSignatures.ShouldHaveSingleItem();
+        counter.IsValid.ShouldBeTrue(string.Join("; ", counter.Errors));
+    }
+
+    [Fact]
     public async Task CounterSign_TwoCounterSignatures_AreBothUnderTheSignature()
     {
         byte[] signed = await XadesSigner.Document(s_xml).WithCertificate(s_signer).SignAsync();

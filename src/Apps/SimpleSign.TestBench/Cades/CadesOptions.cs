@@ -131,6 +131,12 @@ public sealed record CadesOptions
 
     public string? OperationId { get; init; }
 
+    /// <summary>
+    /// Sign in two phases (<c>CadesDeferredSigner</c>): prepare, have the key sign the signed attributes elsewhere,
+    /// complete from the session.
+    /// </summary>
+    public bool TwoPhases { get; init; }
+
     public bool Validate { get; init; } = true;
 
     /// <summary>Trust for the validation that follows the signature (null: the environment's default).</summary>
