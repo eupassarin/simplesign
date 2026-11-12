@@ -1,6 +1,6 @@
 # ADR 0022: Validation Policy and ETSI Sub-Indications
 
-**Status:** Accepted (first step; see "Not yet done")
+**Status:** Accepted (first step; see "Not yet done"). Proof of existence amended by ADR 0027 (archive time-stamps).
 
 **Context:**
 Validation results were booleans plus free-text errors. PAdES alone had an indication; CAdES and XAdES had only

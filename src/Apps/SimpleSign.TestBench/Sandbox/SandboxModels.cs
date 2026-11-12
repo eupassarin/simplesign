@@ -126,6 +126,9 @@ public enum TlFault
 
     /// <summary>Changed after signing.</summary>
     Tampered,
+
+    /// <summary>The root CA's service withdrawn from now on, granted before (a ServiceHistory instance).</summary>
+    WithdrawnAfterUse,
 }
 
 /// <summary>The failures of a Sandbox (its /api/faults).</summary>

@@ -107,7 +107,7 @@ otherwise a sign step produces the file.
 | VA-6 | Revoked after the signature timestamp (POE before revocation) | TOTAL_PASSED | P (B-T, then the step revokes, then validate) |
 | VA-7 | CA revoked | INDETERMINATE / REVOKED_CA_NO_POE | P (`under-revoked-ca`) |
 | VA-8 | Signer expired at validation, no POE | INDETERMINATE / OUT_OF_BOUNDS_NO_POE | P (`expired`) |
-| VA-9 | Expired after a valid B-LTA (long-term validation) | TOTAL_PASSED | P (`sandbox-short-lived:N` signer, B-LTA, `wait`, validate); the case where the signature TSA expired too needs past signature validation (open item) |
+| VA-9 | Expired after a valid B-LTA (long-term validation) | TOTAL_PASSED | P (`sandbox-short-lived:N` signer, B-LTA, `wait`, validate); and with the signature TSA expired too (`SandboxShortLived` TSA, archived at once, past signature validation, ADR 0027), PAdES and CAdES, against B-T only → INDETERMINATE |
 | VA-10 | Not yet valid at signing | NOT_YET_VALID (INDETERMINATE) | P (`not-yet-valid`) |
 | VA-11 | Revocation status unknown (OCSP unknown, CRL down) | INDETERMINATE / TRY_LATER or CHAIN_GENERAL_FAILURE | P (faults) |
 | VA-12 | Weak algorithm (RSA-1024, SHA-1 CA) per the crypto suite (TS 119 312 / TS 119 322) | INDETERMINATE / CRYPTO_CONSTRAINTS_FAILURE(_NO_POE) | P (`rsa-1024`, `under-sha1-ca`) |
@@ -121,8 +121,9 @@ otherwise a sign step produces the file.
 | VA-20 | Report per TS 119 102-2: XML well-formed, namespace v1.2.1, one SignatureValidationReport per signature, ValidationObjects with POE | schema-valid | P (`expect.etsiReport: valid`, checked against the TS 119 102-2 XSD embedded in SimpleSign: `ValidationReports.ValidateEtsiXml`) |
 | VA-21 | Agreement with EU DSS on all of the above | DSS agrees | P (`crossValidate` on every step; `expect.dssAgrees` once DSS trusts the same Sandbox) |
 
-**Not in EN 319 102-1 as implemented:** POE comes only from the signature timestamp (ADR 0022), so VA-6/VA-9 may show
-gaps. Sub-indications not produced today include EXPIRED, OUT_OF_BOUNDS_NOT_REVOKED and POLICY_PROCESSING_ERROR. These
+**Not in EN 319 102-1 as implemented:** POE comes from the signature time-stamp, and from a later archive or document
+time-stamp when the signature time-stamp's TSA is no longer trusted (ADR 0027); a chain of several renewals is not walked
+down. Sub-indications not produced today include EXPIRED, OUT_OF_BOUNDS_NOT_REVOKED and POLICY_PROCESSING_ERROR. These
 are known gaps and are listed in the evidence.
 
 ## 5. Trusted lists — TS 119 612 (and TS 119 615 for their use)
@@ -133,7 +134,7 @@ are known gaps and are listed in the evidence.
 | TL-2 | Expired list (NextUpdate passed) refused | P (`trustedList: Expired`) |
 | TL-3 | Signed by another key refused | P (`WrongSigner`) |
 | TL-4 | Tampered list refused | P (`Tampered`) |
-| TL-5 | Service status history: a withdrawn service after signing time | N (Sandbox TL case) |
+| TL-5 | Service status history: a withdrawn service after signing time | P |
 
 ## 6. Certificates and crypto — EN 319 412, TS 119 312
 
@@ -153,7 +154,5 @@ are known gaps and are listed in the evidence.
 
 ## Open items (N)
 
-Each in its own small change, before or alongside the playbook:
+None: every item a run can show is a step of the ETSI playbook.
 
-- past signature validation with archival data, when the signature time-stamp's TSA has expired too (VA-9, full case);
-- a Sandbox trusted list with a withdrawn service (TL-5).

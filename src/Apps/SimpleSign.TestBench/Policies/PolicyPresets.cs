@@ -23,6 +23,11 @@ internal static class PolicyPresets
         .With("SigningCertificate/NotRevoked", Fail).With("SigningCertificate/RevocationDataAvailable", Fail)
         .With("CACertificate/NotRevoked", Fail).With("CACertificate/RevocationDataAvailable", Fail);
 
+    /// <summary>The library's default plus a chain that must reach the trust anchors given to the signer (a trusted list, the Sandbox root).</summary>
+    internal static SigningPolicy Anchored { get; } = SigningPolicy.Default
+        .WithName("SimpleSign default + chain to the trust anchors")
+        .With("SigningCertificate/ProspectiveCertificateChain", Fail);
+
     /// <summary>Only the dates of the signing certificate (tests and migrations).</summary>
     internal static SigningPolicy Minimal { get; } = SigningPolicy.Default
         .WithName("Signing certificate dates only")
@@ -39,6 +44,7 @@ internal static class PolicyPresets
     [
         (PolicyViewer.Signing, "strict", () => Strict.ToJson(), Strict.Name),
         (PolicyViewer.Signing, "minimal", () => Minimal.ToJson(), Minimal.Name),
+        (PolicyViewer.Signing, "anchored", () => Anchored.ToJson(), Anchored.Name),
         (PolicyViewer.Signing, "iofe", () => IofePolicies.Signing.ToJson(), IofePolicies.Signing.Name),
         (PolicyViewer.Validation, "strict", () => StrictValidation.ToJson(), StrictValidation.Name),
         (PolicyViewer.Validation, "iofe", () => IofePolicies.Validation.ToJson(), IofePolicies.Validation.Name),

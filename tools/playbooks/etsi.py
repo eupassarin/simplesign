@@ -268,6 +268,22 @@ sections = [
          validate("va-key-usage", "Signer with neither digitalSignature nor nonRepudiation", ["VA-13", VAL], "step:va-key-usage-file", {"outcome": "indeterminate", "indication": "INDETERMINATE"},
                   policyId="preset:validation:iofe",
                   desc="The key usage a signer needs is a constraint of the validation policy (EN 319 102-1): the IOFE policy asks for digitalSignature or nonRepudiation."),
+         # VA-9, full case: the signature time-stamp's TSA expires too; only the later archive time-stamp keeps its POE.
+         *[step for fmt, data in (("pades", None), ("cades", "cades-sample:text")) for step in (
+             sign(f"va-pastsig-{fmt}", f"{fmt[0].upper()}AdES B-T: signer valid 40 s, TSA certificate valid 30 s", ["VA-9", STD[fmt], "past signature"],
+                  signed("BT"), fmt=fmt, level="BT", timestamp={"provider": "SandboxShortLived"}, credentialId="sandbox-short-lived:40"),
+             augment(f"va-pastsig-{fmt}-lta", f"{fmt[0].upper()}AdES: archived at once with the long-lived TSA", ["VA-9", STD[fmt], "past signature"],
+                     f"step:va-pastsig-{fmt}", "BLTA", data_id=data),
+             validate(f"va-pastsig-{fmt}-valid", f"{fmt[0].upper()}AdES: signer and signature TSA expired, archive time-stamp valid",
+                      ["VA-9", VAL, "past signature"], f"step:va-pastsig-{fmt}-lta", {"outcome": "valid", "indication": "TOTAL_PASSED"},
+                      data_id=data, wait=45,
+                      desc="Past signature validation (EN 319 102-1 §5.6): the archive time-stamp proves the signature time-stamp existed "
+                           "while its TSA's certificate was valid, and that time-stamp proves the signature existed while the signer's was."))],
+         sign("va-pastsig-bt-only", "B-T only: signer valid 40 s, TSA certificate valid 30 s", ["VA-9", PADES, "past signature"], signed("BT"),
+              level="BT", timestamp={"provider": "SandboxShortLived"}, credentialId="sandbox-short-lived:40"),
+         validate("va-pastsig-no-archive", "Signer and TSA expired, no archive time-stamp", ["VA-9", VAL, "past signature"],
+                  "step:va-pastsig-bt-only", {"outcome": "indeterminate", "indication": "INDETERMINATE"}, wait=45,
+                  desc="Nothing proves the signature time-stamp existed while its TSA's certificate was valid: no proof of existence."),
          *[validate(f"va-level-{lv.lower()}", f"B-LTA validated at level {lv}", ["VA-18", VAL], "step:pades-blta", {"outcome": "valid"}, level=lv)
            for lv in ("BasicSignatures", "Timestamps", "LongTermData", "ArchivalData")],
          sign("va-policy-file", "Signer without nonRepudiation (to validate)", ["VA-19"], {"outcome": "signed"}, credentialId="sandbox:no-nonrepudiation"),
@@ -282,6 +298,16 @@ sections = [
         validate("va-tl-ok", "Validate with anchors from the trusted list", ["TL-1", TLS, VAL], "step:tl-ok", {"outcome": "valid"}, trust=["SandboxTrustedList"]),
         validate("va-tl-wrong-signer", "Validate with a fake trusted list", ["TL-3", TLS, VAL], "step:tl-ok", {"outcome": "indeterminate"},
                  sandbox={"trustedList": "WrongSigner"}, trust=["SandboxTrustedList"]),
+        *[step for fmt in ("pades", "xades") for step in (
+            sign(f"tl-history-{fmt}", f"{fmt[0].upper()}AdES B-T while the root CA's service is granted", ["TL-5", TLS, STD[fmt]], signed("BT"),
+                 fmt=fmt, level="BT", timestamp=TSA, signingControls={"trust": ["SandboxTrustedList"]}),
+            validate(f"va-tl-history-{fmt}", f"{fmt[0].upper()}AdES: service withdrawn after the signature time-stamp", ["TL-5", TLS, VAL, "TS 119 615"],
+                     f"step:tl-history-{fmt}", {"outcome": "valid", "indication": "TOTAL_PASSED"}, wait=2,
+                     sandbox={"trustedList": "WithdrawnAfterUse"}, trust=["SandboxTrustedList"],
+                     desc="The trusted list now says withdrawn, with granted in the service history before: the anchors at the time-stamp's time vouch for the signature."))],
+        sign("tl-withdrawn", "Signing after the service was withdrawn: refused", ["TL-5", TLS], refused("UntrustedRoot"),
+             sandbox={"trustedList": "WithdrawnAfterUse"}, signingControls={"trust": ["SandboxTrustedList"]}, signingPolicyId="preset:signing:anchored",
+             desc="A signing policy that asks for a chain to the anchors: the root CA's service is withdrawn now."),
     ]},
 ]
 

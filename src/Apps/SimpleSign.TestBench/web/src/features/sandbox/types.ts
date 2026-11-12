@@ -59,7 +59,7 @@ export type TsaFault = "None" | "Down" | "Slow" | "InvalidToken" | "Untrusted"
 export type CrlFault = "None" | "Down" | "Slow" | "Expired" | "WrongKey" | "Stale" | "NoNextUpdate"
 export type OcspFault = "None" | "Down" | "Slow" | "TryLater" | "Expired" | "Unauthorized" | "Unknown"
 export type OcspSigner = "Issuer" | "Delegated"
-export type TlFault = "None" | "Expired" | "WrongSigner" | "Tampered"
+export type TlFault = "None" | "Expired" | "WrongSigner" | "Tampered" | "WithdrawnAfterUse"
 
 export interface SandboxFaults {
   tsa: TsaFault

@@ -409,7 +409,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         if (contentToken is not null && contentValid is not null)
         {
             tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Content, contentToken, contentValid,
-                TimestampTrust.ChainsTo(contentToken, trustAnchors ?? _options.TrustedRoots)));
+                TimedTrust.TokenChains(contentToken, trustAnchors ?? _options.TrustedRoots, _options)));
         }
 
         if (cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps)
@@ -417,12 +417,12 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             // Without anchors given to this call, the TSA is judged against the configured roots, as the content and
             // archive timestamps are, so the token's constraints are evaluated.
             tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, tsValid,
-                tsaTrusted ?? TimestampTrust.ChainsTo(signatureToken, trustAnchors ?? _options.TrustedRoots)));
+                tsaTrusted ?? TimedTrust.TokenChains(signatureToken, trustAnchors ?? _options.TrustedRoots, _options)));
         }
 
         // An archive timestamp whose TSA cannot be judged (no anchors) is left out rather than reported as untrusted.
         if (archiveToken is not null && archiveTsValid is not null
-            && TimestampTrust.ChainsTo(archiveToken, trustAnchors ?? _options.TrustedRoots) is { } archiveTrusted)
+            && TimedTrust.TokenChains(archiveToken, trustAnchors ?? _options.TrustedRoots, _options) is { } archiveTrusted)
         {
             tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Archive, archiveToken, archiveTsValid, archiveTrusted,
                 AtsHashIndexValid: archiveV3 ? archiveTsValid : null));
@@ -486,15 +486,19 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
 
         // 5. Certificate chain validation (intermediates come from the CMS certificates field)
+        int chainErrorsStart = errors.Count;
         bool chainValid = ValidateChain(cmsData.SignerCertificate!, errors, warnings, trustAnchors, cmsData.Certificates, out bool chainAnchored);
+        int chainErrorsCount = errors.Count - chainErrorsStart;
 
         // 6. Timestamp validation
         bool? tsValid = null;
         bool? tsaTrusted = null;
         DateTimeOffset? provenTime = null;
+        DateTimeOffset? signatureTimestampTime = null;
         if (cmsData.SignatureTimestampToken is not null && _options.ValidatesTimestamps)
         {
-            TimestampValidator.CertificateChainValidatorDelegate? tsaPolicy = trustAnchors is null ? null :
+            bool judgesTsa = trustAnchors is not null || _options.TrustedRoots is { Count: > 0 } || TimedTrust.IsConfigured(_options);
+            TimestampValidator.CertificateChainValidatorDelegate? tsaPolicy = !judgesTsa ? null :
                 (certificate, certificates, tsaErrors, tsaWarnings) =>
                 {
                     if (certificate is null)
@@ -505,11 +509,13 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
                     return ValidateChain(certificate, tsaErrors, tsaWarnings, trustAnchors, certificates, out _);
                 };
-            TimestampTokenValidationResult timestamp = _timestampValidator.ValidateWithTrust(
-                cmsData, warnings, tsaPolicy, _logger);
+            TimestampTokenValidationResult timestamp = TimedTrust.TrustTsaAtGenTime(
+                _timestampValidator.ValidateWithTrust(cmsData, warnings, tsaPolicy, _logger),
+                cmsData.SignatureTimestampToken, _options, warnings);
             tsValid = timestamp.IsIntegrityValid;
             tsaTrusted = timestamp.IsTsaTrusted;
             provenTime = timestamp is { IsIntegrityValid: true, IsTsaTrusted: true } ? timestamp.GenTime : null;
+            signatureTimestampTime = timestamp.GenTime;
         }
 
         // 6a. content-time-stamp: a signed attribute whose token covers the content itself
@@ -585,6 +591,34 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             else
             {
                 warnings.Add("The archive timestamp was not validated (it needs the signed content and is checked for the first signer only).");
+            }
+        }
+
+        // 8a. Past signature validation (EN 319 102-1 §5.6): a trusted archive time-stamp proves the signature
+        // time-stamp existed while its TSA's certificate was valid, so it keeps its proof of existence after that
+        // certificate expired.
+        if (tsValid == true && tsaTrusted != true && archiveTsValid == true && archiveToken is not null
+            && TimedTrust.TrustTsaAtLaterProof(signatureTimestampTime, cmsData.SignatureTimestampToken, archiveToken,
+                trustAnchors ?? _options.TrustedRoots, _options, warnings))
+        {
+            tsaTrusted = true;
+            provenTime = signatureTimestampTime;
+        }
+
+        // 8b. Not anchored today: the anchors of the proof of existence (a trusted-list service withdrawn since).
+        if (!chainAnchored && provenTime is { } proven && TimedTrust.IsConfigured(_options) && cmsData.SignerCertificate is { } signerAtTime)
+        {
+            var timedErrors = new List<string>();
+            var timedWarnings = new List<string>();
+            IEnumerable<X509Certificate2> anchorsThen = [.. trustAnchors ?? [], .. TimedTrust.AnchorsAt(_options, proven)];
+            bool timedValid = ValidateChain(signerAtTime, timedErrors, timedWarnings, anchorsThen, cmsData.Certificates, out bool timedAnchored);
+            if (timedAnchored)
+            {
+                errors.RemoveRange(chainErrorsStart, chainErrorsCount);
+                errors.InsertRange(chainErrorsStart, timedErrors);
+                warnings.AddRange(timedWarnings);
+                warnings.Add(TimedTrust.SignerWarning(proven));
+                (chainValid, chainAnchored) = (timedValid, true);
             }
         }
 

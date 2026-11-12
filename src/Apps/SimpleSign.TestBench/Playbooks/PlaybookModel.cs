@@ -120,7 +120,7 @@ public sealed record PlaybookSandbox
     /// <summary>TSA failure: None, Down, Slow, InvalidToken, Untrusted.</summary>
     public string? Tsa { get; init; }
 
-    /// <summary>Trusted list failure: None, Expired, WrongSigner, Tampered.</summary>
+    /// <summary>Trusted list failure: None, Expired, WrongSigner, Tampered, WithdrawnAfterUse.</summary>
     public string? TrustedList { get; init; }
 
     /// <summary>Sandbox certificates to revoke for the step.</summary>

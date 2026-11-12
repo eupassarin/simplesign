@@ -96,6 +96,12 @@ public enum TlFault
 
     /// <summary>A list changed after it was signed: its signature no longer verifies.</summary>
     Tampered,
+
+    /// <summary>
+    /// The root CA's service is withdrawn from now on, granted before (a ServiceHistory instance, TS 119 612 §5.6):
+    /// a signature proven to exist before the withdrawal is still trusted, a new one is not.
+    /// </summary>
+    WithdrawnAfterUse,
 }
 
 /// <summary>Failures switched on, to see how a client reacts. Kept with the environment.</summary>

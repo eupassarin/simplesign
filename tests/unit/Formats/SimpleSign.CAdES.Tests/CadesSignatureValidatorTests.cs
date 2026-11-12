@@ -275,4 +275,85 @@ public sealed class CadesSignatureValidatorTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task Validate_RootWithdrawnAfterTheTimestamp_TimedAnchorsTrustTheSignature()
+    {
+        using var pki = new SyntheticPki();
+        using var tsaCert = pki.IssueTimestampingCertificate();
+        using var tsa = new HttpClient(new MockHttpHandler(async request =>
+        {
+            byte[] body = await request.Content!.ReadAsByteArrayAsync().ConfigureAwait(false);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(TimestampTestResponseBuilder.CreateForRequest(body,
+                    new TimestampTokenOptions { TsaCertificate = tsaCert, ExtraCertificates = [pki.IntermediateCa], GenTime = DateTimeOffset.UtcNow }))
+                {
+                    Headers = { ContentType = new MediaTypeHeaderValue("application/timestamp-reply") },
+                },
+            };
+        }));
+        byte[] cms = await CadesSigner.Document(_data)
+            .WithCertificate(pki.Leaf, [pki.IntermediateCa])
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(tsa))))
+            .SignAsync();
+        var withdrawal = DateTimeOffset.UtcNow.AddSeconds(1);
+        var history = new WithdrawnAt(pki.RootCa, withdrawal);
+        await Task.Delay(TimeSpan.FromSeconds(1.5));
+
+        var withoutHistory = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false }).Validate(cms, _data);
+        var withHistory = new CadesSignatureValidator(
+            new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false, TimedTrustAnchors = [history] }).Validate(cms, _data);
+
+        withoutHistory.Indication.ShouldNotBe(SignatureIndication.Valid);
+        withHistory.IsCertificateChainValid.ShouldBeTrue(string.Join("; ", withHistory.Errors) + " W: " + string.Join("; ", withHistory.Warnings));
+        withHistory.Indication.ShouldBe(SignatureIndication.Valid, string.Join("; ", withHistory.Errors));
+        withHistory.Warnings.ShouldContain(w => w.Contains("proof of existence", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Validate_SignatureTsaExpiredWithArchiveTimestamp_TsaTrustedThroughPastSignatureValidation()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var expiredTsa = SelfSignedTsa("CN=Expired TSA", now.AddDays(-3), now.AddDays(-1));
+        using var archiveTsa = SelfSignedTsa("CN=Archive TSA", now.AddDays(-3), now.AddYears(1));
+        byte[] signed = await CadesSigner.Document(_data).WithCertificate(_cert).SignAsync();
+        byte[] signatureToken = TimestampTestResponseBuilder.CreateTokenForData(
+            TimestampClient.ExtractSignatureValue(signed), new TimestampTokenOptions { TsaCertificate = expiredTsa, GenTime = now.AddDays(-2) });
+        byte[] timestamped = TimestampClient.EmbedTimestampInCms(signed, signatureToken);
+        byte[] hashIndex = CadesArchiveTimestampV3.CreateHashIndex(timestamped, System.Security.Cryptography.HashAlgorithmName.SHA256);
+        byte[] input = CadesArchiveTimestampV3.CreateMessageImprintInput(timestamped, _data, System.Security.Cryptography.HashAlgorithmName.SHA256, hashIndex);
+        byte[] archiveToken = CadesArchiveTimestampV3.AddHashIndexToTimestampToken(
+            TimestampTestResponseBuilder.CreateTokenForData(input, new TimestampTokenOptions { TsaCertificate = archiveTsa, GenTime = now.AddDays(-1.5) }), hashIndex);
+        byte[] archived = CmsSignatureBuilder.AddUnsignedAttributes(timestamped, [CmsAttribute.Raw(Oids.ArchiveTimeStampV3, archiveToken)]);
+        var options = new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false, TrustedRoots = [_cert, expiredTsa, archiveTsa] };
+
+        var withoutArchive = new CadesSignatureValidator(options).Validate(timestamped, _data);
+        var withArchive = new CadesSignatureValidator(options).Validate(archived, _data);
+
+        withoutArchive.IsTsaTrusted.ShouldNotBe(true);
+        withArchive.IsTsaTrusted.ShouldBe(true, string.Join("; ", withArchive.Warnings));
+        withArchive.Warnings.ShouldContain(w => w.Contains("past signature validation", StringComparison.Ordinal));
+    }
+
+    private static X509Certificate2 SelfSignedTsa(string subject, DateTimeOffset notBefore, DateTimeOffset notAfter)
+    {
+        using var key = System.Security.Cryptography.RSA.Create(2048);
+        var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            subject, key, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new System.Security.Cryptography.Oid("1.3.6.1.5.5.7.3.8")], true));
+        return request.CreateSelfSigned(notBefore, notAfter);
+    }
+
+    /// <summary>A trusted list whose root CA service is granted until <paramref name="withdrawal"/>, withdrawn after.</summary>
+    private sealed class WithdrawnAt(X509Certificate2 root, DateTimeOffset withdrawal) : SimpleSign.Core.Extensions.ITimedTrustAnchorProvider
+    {
+        public string RegionCode => "XX";
+
+        public string DisplayName => "Withdrawn root";
+
+        public IReadOnlyList<X509Certificate2> GetTrustAnchors() => GetTrustAnchors(DateTimeOffset.UtcNow);
+
+        public IReadOnlyList<X509Certificate2> GetTrustAnchors(DateTimeOffset at) => at < withdrawal ? [root] : [];
+    }
 }

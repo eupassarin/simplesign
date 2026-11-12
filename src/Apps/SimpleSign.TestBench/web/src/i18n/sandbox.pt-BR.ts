@@ -136,6 +136,7 @@ export const sandboxPtBR: SandboxMessages = {
       Expired: { title: "Expirado", hint: "O NextUpdate já passou: um validador que confere (TLNotExpired) avisa ou recusa." },
       WrongSigner: { title: "Assinante errado", hint: "Assinado por um certificado que o LOTL não indica: a lista é recusada e as ACs dela deixam de ser confiáveis." },
       Tampered: { title: "Adulterado", hint: "Alterado depois de assinado: a assinatura não confere e a lista é recusada." },
+      WithdrawnAfterUse: { title: "Retirado após uso", hint: "O serviço da AC raiz está retirado a partir de agora e esteve concedido antes (histórico do serviço): assinaturas com prova de existência anterior continuam confiáveis; novas, não." },
     },
   },
   log: {

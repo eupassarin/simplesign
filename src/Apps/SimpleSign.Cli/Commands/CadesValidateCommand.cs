@@ -93,6 +93,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
                 Level = settings.ValidationLevel,
                 Verifier = settings.Verifier,
                 TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
+                TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
             },
             chainRevocationChecker: settings.RevocationCheckerFor(_httpClientProvider));
 

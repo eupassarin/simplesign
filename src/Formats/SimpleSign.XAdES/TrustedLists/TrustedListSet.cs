@@ -44,7 +44,7 @@ public sealed record TrustedListProblem(string Territory, Uri Location, string R
 /// certificates, each list it points to with the certificates the LOTL gives for it, and the anchors of every list loaded become trust anchors. A list that cannot be loaded is
 /// reported in <see cref="Problems"/> instead of failing the whole set.
 /// </summary>
-public sealed class TrustedListSet : ITrustAnchorProvider, ITrustedListInfoProvider
+public sealed class TrustedListSet : ITimedTrustAnchorProvider, ITrustedListInfoProvider
 {
     private const string XmlMimeType = "application/vnd.etsi.tsl+xml";
 
@@ -72,6 +72,11 @@ public sealed class TrustedListSet : ITrustAnchorProvider, ITrustedListInfoProvi
 
     /// <inheritdoc />
     public IReadOnlyList<X509Certificate2> GetTrustAnchors() => [.. Lists.SelectMany(l => l.GetTrustAnchors())];
+
+    /// <summary>The anchors of every list loaded at <paramref name="at"/>, from each service's history (TS 119 612 §5.6).</summary>
+    /// <param name="at">The time.</param>
+    /// <returns>The anchors.</returns>
+    public IReadOnlyList<X509Certificate2> GetTrustAnchors(DateTimeOffset at) => [.. Lists.SelectMany(l => l.GetTrustAnchors(at))];
 
     /// <inheritdoc />
     public IReadOnlyList<X509Certificate2> GetIntermediateCertificates() => [.. Lists.SelectMany(l => l.GetIntermediateCertificates())];

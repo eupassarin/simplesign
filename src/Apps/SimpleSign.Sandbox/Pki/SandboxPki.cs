@@ -322,6 +322,24 @@ internal sealed class SandboxPki : IDisposable
         }
     }
 
+    /// <summary>
+    /// A TSA certificate issued by the intermediate CA that is valid for <paramref name="lifetime"/> from now, with its
+    /// key: the TSA of <c>/tsa/short-lived</c>, whose tokens outlive its certificate (past signature validation, where a
+    /// later archive time-stamp proves the token existed while the certificate was valid). Not kept in the environment;
+    /// its validity starts two hours back, as for <see cref="IssueShortLived"/>.
+    /// </summary>
+    public X509Certificate2 IssueShortLivedTsa(TimeSpan lifetime)
+    {
+        lock (_gate)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var seed = new SeedDefinition("tsa-short-lived", "Short-lived TSA", "", Usage: CertificateUsage.Timestamping);
+            var pair = IssueLeaf(seed, now.AddHours(-2), now.Add(lifetime));
+            Save();
+            return X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
+        }
+    }
+
     /// <summary>The chain of a certificate, from its issuer up to the root.</summary>
     public IReadOnlyList<X509Certificate2> ChainOf(string id)
     {

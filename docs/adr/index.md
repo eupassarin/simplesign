@@ -28,3 +28,5 @@ SimpleSign, including their rationale, consequences, and alternatives.
 - [ADR 0023: Signing and Validation Policies in the Structure of the EU DSS](0023-policies-in-the-dss-structure.md) (superseded in part by 0024)
 - [ADR 0024: SimpleSign's Own Policy Format](0024-own-policy-format.md)
 - [ADR 0025: Augmenting Existing Signatures](0025-augmenting-existing-signatures.md)
+- [ADR 0026: Trust Anchors at a Time (Trusted-List Service History)](0026-trust-anchors-at-a-time.md)
+- [ADR 0027: Past Signature Validation with Archive Time-Stamps](0027-past-signature-validation.md)

@@ -2583,6 +2583,188 @@
           "description": "The key usage a signer needs is a constraint of the validation policy (EN 319 102-1): the IOFE policy asks for digitalSignature or nonRepudiation."
         },
         {
+          "id": "va-pastsig-pades",
+          "title": "PAdES B-T: signer valid 40 s, TSA certificate valid 30 s",
+          "tags": [
+            "VA-9",
+            "EN 319 142-1",
+            "past signature"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxShortLived"
+            },
+            "credentialId": "sandbox-short-lived:40"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "va-pastsig-pades-lta",
+          "kind": "augment",
+          "title": "PAdES: archived at once with the long-lived TSA",
+          "tags": [
+            "VA-9",
+            "EN 319 142-1",
+            "past signature"
+          ],
+          "options": {
+            "fileId": "step:va-pastsig-pades",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "va-pastsig-pades-valid",
+          "kind": "validate",
+          "title": "PAdES: signer and signature TSA expired, archive time-stamp valid",
+          "tags": [
+            "VA-9",
+            "EN 319 102-1",
+            "past signature"
+          ],
+          "options": {
+            "fileId": "step:va-pastsig-pades-lta",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          },
+          "wait": 45,
+          "description": "Past signature validation (EN 319 102-1 §5.6): the archive time-stamp proves the signature time-stamp existed while its TSA's certificate was valid, and that time-stamp proves the signature existed while the signer's was."
+        },
+        {
+          "id": "va-pastsig-cades",
+          "title": "CAdES B-T: signer valid 40 s, TSA certificate valid 30 s",
+          "tags": [
+            "VA-9",
+            "EN 319 122-1",
+            "past signature"
+          ],
+          "format": "cades",
+          "options": {
+            "dataId": "cades-sample:text",
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxShortLived"
+            },
+            "credentialId": "sandbox-short-lived:40"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "va-pastsig-cades-lta",
+          "kind": "augment",
+          "title": "CAdES: archived at once with the long-lived TSA",
+          "tags": [
+            "VA-9",
+            "EN 319 122-1",
+            "past signature"
+          ],
+          "options": {
+            "fileId": "step:va-pastsig-cades",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "dataId": "cades-sample:text"
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "va-pastsig-cades-valid",
+          "kind": "validate",
+          "title": "CAdES: signer and signature TSA expired, archive time-stamp valid",
+          "tags": [
+            "VA-9",
+            "EN 319 102-1",
+            "past signature"
+          ],
+          "options": {
+            "fileId": "step:va-pastsig-cades-lta",
+            "dataId": "cades-sample:text",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          },
+          "wait": 45,
+          "description": "Past signature validation (EN 319 102-1 §5.6): the archive time-stamp proves the signature time-stamp existed while its TSA's certificate was valid, and that time-stamp proves the signature existed while the signer's was."
+        },
+        {
+          "id": "va-pastsig-bt-only",
+          "title": "B-T only: signer valid 40 s, TSA certificate valid 30 s",
+          "tags": [
+            "VA-9",
+            "EN 319 142-1",
+            "past signature"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxShortLived"
+            },
+            "credentialId": "sandbox-short-lived:40"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "va-pastsig-no-archive",
+          "kind": "validate",
+          "title": "Signer and TSA expired, no archive time-stamp",
+          "tags": [
+            "VA-9",
+            "EN 319 102-1",
+            "past signature"
+          ],
+          "options": {
+            "fileId": "step:va-pastsig-bt-only",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate",
+            "indication": "INDETERMINATE"
+          },
+          "wait": 45,
+          "description": "Nothing proves the signature time-stamp existed while its TSA's certificate was valid: no proof of existence."
+        },
+        {
           "id": "va-level-basicsignatures",
           "kind": "validate",
           "title": "B-LTA validated at level BasicSignatures",
@@ -2841,6 +3023,138 @@
           },
           "sandbox": {
             "trustedList": "WrongSigner"
+          }
+        },
+        {
+          "id": "tl-history-pades",
+          "title": "PAdES B-T while the root CA's service is granted",
+          "tags": [
+            "TL-5",
+            "TS 119 612",
+            "EN 319 142-1"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "va-tl-history-pades",
+          "kind": "validate",
+          "title": "PAdES: service withdrawn after the signature time-stamp",
+          "tags": [
+            "TL-5",
+            "TS 119 612",
+            "EN 319 102-1",
+            "TS 119 615"
+          ],
+          "options": {
+            "fileId": "step:tl-history-pades",
+            "settings": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          },
+          "wait": 2,
+          "description": "The trusted list now says withdrawn, with granted in the service history before: the anchors at the time-stamp's time vouch for the signature.",
+          "sandbox": {
+            "trustedList": "WithdrawnAfterUse"
+          }
+        },
+        {
+          "id": "tl-history-xades",
+          "title": "XAdES B-T while the root CA's service is granted",
+          "tags": [
+            "TL-5",
+            "TS 119 612",
+            "EN 319 132-1"
+          ],
+          "format": "xades",
+          "options": {
+            "dataId": "xades-sample:order",
+            "level": "BT",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          }
+        },
+        {
+          "id": "va-tl-history-xades",
+          "kind": "validate",
+          "title": "XAdES: service withdrawn after the signature time-stamp",
+          "tags": [
+            "TL-5",
+            "TS 119 612",
+            "EN 319 102-1",
+            "TS 119 615"
+          ],
+          "options": {
+            "fileId": "step:tl-history-xades",
+            "settings": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          },
+          "wait": 2,
+          "description": "The trusted list now says withdrawn, with granted in the service history before: the anchors at the time-stamp's time vouch for the signature.",
+          "sandbox": {
+            "trustedList": "WithdrawnAfterUse"
+          }
+        },
+        {
+          "id": "tl-withdrawn",
+          "title": "Signing after the service was withdrawn: refused",
+          "tags": [
+            "TL-5",
+            "TS 119 612"
+          ],
+          "format": "pades",
+          "options": {
+            "signingControls": {
+              "trust": [
+                "SandboxTrustedList"
+              ]
+            },
+            "signingPolicyId": "preset:signing:anchored"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          },
+          "description": "A signing policy that asks for a chain to the anchors: the root CA's service is withdrawn now.",
+          "sandbox": {
+            "trustedList": "WithdrawnAfterUse"
           }
         }
       ]

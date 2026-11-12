@@ -173,7 +173,8 @@
             "None",
             "Expired",
             "WrongSigner",
-            "Tampered"
+            "Tampered",
+            "WithdrawnAfterUse"
           ]
         },
         "revoke": {

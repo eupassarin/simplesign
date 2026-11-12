@@ -82,6 +82,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `renew`; outcome `augmented`). The ETSI playbook raises a B-B of each format to B-LTA and renews a PAdES B-LTA.
 - The PAdES conformance detector counts a document time-stamp after a signature as its B-T time-stamp (EN 319 142-1).
 
+### Added — Past signature validation with archive time-stamps (ADR 0027)
+
+- When the signature time-stamp is intact but its TSA is no longer trusted (its certificate expired), a later trusted
+  time-stamp over it gives it back its trust: the archive-time-stamp of CAdES, the ArchiveTimeStamp of XAdES, a later
+  document time-stamp of PAdES. The earlier TSA's chain is built at the later token's time (EN 319 102-1 §5.6). A B-LTA
+  whose signer and signature TSA both expired stays TOTAL_PASSED.
+- Sandbox: `/tsa/short-lived?seconds=N`, a TSA whose certificate is issued per request and valid N more seconds.
+  TestBench: TSA provider `SandboxShortLived` (30 s). The ETSI playbook covers VA-9 with the signature TSA expired too,
+  for PAdES and CAdES; the checklist has no open items left.
+
+### Added — Trust anchors at a time: trusted-list service history (ADR 0026)
+
+- `TrustedList` reads each service's `StatusStartingTime` and `ServiceHistory` (`TrustedListService.StatusAt`) and
+  gives `GetTrustAnchors(DateTimeOffset at)`. New `ITimedTrustAnchorProvider`, implemented by `TrustedList` and
+  `TrustedListSet`.
+- `ValidationOptions.TimedTrustAnchors`: when today's anchors do not trust a certificate, the PAdES, CAdES and XAdES
+  validators use the anchors of the time-stamp's genTime (for its TSA) and of the signature's proof of existence (for
+  the signer). A signature time-stamped before its CA's service was withdrawn stays valid. The CLI passes `--tsl` and
+  `--lotl` lists this way.
+- Fixed: the CAdES and XAdES validators now judge the signature time-stamp's TSA with `ValidationOptions.TrustedRoots`
+  too (it gave no proof of existence without anchors passed to the call), and the XAdES time-stamp keeps its genTime.
+- Sandbox: trusted-list failure `WithdrawnAfterUse` (the root CA's service withdrawn now, granted before in its
+  history). TestBench: built-in signing policy `anchored` (the chain must reach the signer's trust anchors). The ETSI
+  playbook covers TL-5.
+
 ### Added — ETSI report schema and EN 319 422 time-stamp profile
 
 - `ValidationReports.ValidateEtsiXml`: checks a TS 119 102-2 report against its schema (v1.2.1), embedded with the

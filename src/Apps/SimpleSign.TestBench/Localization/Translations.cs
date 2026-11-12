@@ -833,6 +833,8 @@ internal static class Translations
         ["A TSA whose certificate is revoked: the timestamp must not be trusted."] = "Uma ACT com o certificado revogado: o carimbo do tempo não deve ser aceito.",
         ["Sandbox TSA, wrong name"] = "ACT do Sandbox, nome divergente",
         ["Its tokens name another TSA in the tsa field: the name check fails."] = "Os tokens dela trazem outra ACT no campo tsa: a verificação do nome falha.",
+        ["Sandbox TSA, short-lived"] = "ACT do Sandbox, de vida curta",
+        ["A TSA whose certificate is issued for the request and valid 30 more seconds: its time-stamp outlives it, and only a later archive time-stamp keeps it trusted."] = "Uma ACT cujo certificado é emitido para a requisição e vale mais 30 segundos: o carimbo dura mais que ele, e só um carimbo de arquivamento posterior o mantém confiável.",
         ["Issued by the Sandbox '{0}' ({1}). Validation in the TestBench trusts its root while it is connected; real validators will not."] = "Emitido pelo Sandbox '{0}' ({1}). A validação no TestBench confia na raiz dele enquanto estiver conectado; validadores reais não confiam.",
         ["The connected Sandbox's CSC v2 service (PIN {0}, OTP {1}; its OAuth page approves at once)."] = "O serviço CSC v2 do Sandbox conectado (PIN {0}, OTP {1}; a página OAuth dele aprova na hora).",
         ["Check which attributes each validator found (timestamps, DSS dictionary, archive timestamp): one of them reads the file differently."] = "Compare os atributos que cada validador encontrou (carimbos, dicionário DSS, carimbo de arquivo): um deles lê o arquivo de outro jeito.",
