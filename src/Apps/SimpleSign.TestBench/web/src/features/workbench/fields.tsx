@@ -16,6 +16,7 @@ import { PoliciesPage } from "../policies/PoliciesPage"
 import { TsaPicker } from "../shared/TsaPicker"
 import { Pill } from "../shared/ui"
 import { UploadButton } from "../shared/UploadButton"
+import { activeFramework, FrameworkMarker, frameworks, frameworkTrustValues, isTrustValueShown, type Framework } from "./framework"
 import { OptionRow, StandardBadge, type Explanation } from "./parts"
 import { asText, getPath, type Options, type SchemaOption, type SchemaValue } from "./schema"
 import { useWorkbench } from "./state"
@@ -79,7 +80,12 @@ export function OptionField({ option }: { option: SchemaOption }) {
       // The JSON policies: the one in use (the library's default until a file is uploaded), to view or change.
       const policy = path === "signingPolicyId" ? "signing" : path === "validation.policyId" ? "validation" : null
       if (policy) {
-        return <OptionRow {...row}><PolicyField kind={policy} uploadId={typeof value === "string" ? value : null} onChange={(id) => set(path, id)} /></OptionRow>
+        return (
+          <OptionRow {...row}>
+            <PolicyField kind={policy} uploadId={typeof value === "string" ? value : null} onChange={(id) => set(path, id)} framework={activeFramework(options)}
+              marker={<FrameworkMarker options={options} path={path} />} />
+          </OptionRow>
+        )
       }
       return (
         <OptionRow {...row}>
@@ -93,7 +99,7 @@ export function OptionField({ option }: { option: SchemaOption }) {
     case "tsa":
       return <OptionRow {...row}><Tsa value={value as TimestampChoice} onChange={(v) => set(path, v)} /></OptionRow>
     case "trust":
-      return <OptionRow {...row}><Trust option={option} value={Array.isArray(value) ? (value as string[]) : []} onChange={(v) => set(path, v)} /></OptionRow>
+      return <OptionRow {...row}><Trust option={option} value={Array.isArray(value) ? (value as string[]) : []} onChange={(v) => set(path, v)} framework={activeFramework(options)} /></OptionRow>
     case "keyValues":
       return <OptionRow {...row}><KeyValues value={Array.isArray(value) ? (value as { key: string; value: string }[]) : []} onChange={(v) => set(path, v)} /></OptionRow>
     case "document":
@@ -161,16 +167,26 @@ function Tsa({ value, onChange }: { value: TimestampChoice; onChange: (value: Ti
   return <TsaPicker value={value} onChange={onChange} state={state} env={env} />
 }
 
-function Trust({ option, value, onChange }: { option: SchemaOption; value: string[]; onChange: (value: string[]) => void }) {
+function Trust({ option, value, onChange, framework }: { option: SchemaOption; value: string[]; onChange: (value: string[]) => void; framework: Framework | null }) {
+  const t = useT()
   const { visibleValues } = useWorkbench()
+  // A framework's choices only while it is on; its own lists are one or the other (Peru: the real list or the Sandbox's).
+  const own = framework ? frameworkTrustValues[framework] : []
+  const check = (choice: string, on: boolean) => {
+    const others = own.includes(choice) ? own : [choice]
+    onChange(on ? [...value.filter((x) => !others.includes(x)), choice] : value.filter((x) => x !== choice))
+  }
   return (
     <div className="space-y-2">
-      {visibleValues(option).map((v) => (
+      {visibleValues(option).filter((v) => isTrustValueShown(v.value, framework)).map((v) => (
         <label key={v.value} className="flex items-start gap-2 text-sm">
-          <Checkbox className="mt-0.5" checked={value.includes(v.value)}
-            onCheckedChange={(on) => onChange(on === true ? [...value, v.value] : value.filter((x) => x !== v.value))} />
+          <Checkbox className="mt-0.5" checked={value.includes(v.value)} onCheckedChange={(on) => check(v.value, on === true)} />
           <span>
-            <span className="flex items-center gap-1.5">{v.title}</span>
+            <span className="flex items-center gap-1.5">{v.title}{framework && own.includes(v.value) && value.includes(v.value) && (
+              <span className="border-primary/40 bg-primary/10 text-primary rounded border px-1.5 py-0.5 text-[10px] font-medium" title={t("wb.framework.markerTrust")}>
+                {frameworks[framework].flag} {t("wb.framework.marker")}
+              </span>
+            )}</span>
             {v.summary && <span className="text-muted-foreground block text-xs">{v.summary}</span>}
           </span>
         </label>
@@ -321,7 +337,13 @@ function Credential() {
 }
 
 /** A policy option: the policy in use (the default until a file is uploaded), with a link to view it explained. */
-function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId: string | null; onChange: (id: string | null) => void }) {
+function PolicyField({ kind, uploadId, onChange, marker, framework }: {
+  kind: PolicyKind
+  uploadId: string | null
+  onChange: (id: string | null) => void
+  marker?: React.ReactNode
+  framework: Framework | null
+}) {
   const t = useT()
   const [name, setName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -332,6 +354,8 @@ function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId:
     return () => { current = false }
   }, [kind])
   const preset = presets.find((p) => p.id === uploadId)
+  // The framework's presets while one is on, the general ones otherwise; the current one stays so the select keeps it.
+  const shown = presets.filter((p) => (p.framework ?? null) === framework || p.id === uploadId)
   useEffect(() => {
     let current = true
     api.policies.view({ kind, uploadId }).then((v) => {
@@ -347,6 +371,7 @@ function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId:
         <Pill tone={error ? "danger" : uploadId ? "info" : "default"}>
           {t("policies.current", { name: name ?? "…" })}{!uploadId && ` (${t("policies.defaultName")})`}
         </Pill>
+        {marker}
         {error && <span className="text-destructive">{error}</span>}
       </div>
       {presets.length > 0 && (
@@ -354,7 +379,7 @@ function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId:
           <SelectTrigger className="w-full max-w-sm" aria-label={t("policies.preset")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__none">{t("policies.presetNone")}</SelectItem>
-            {presets.map((p) => <SelectItem key={p.id} value={p.id}>{p.title} ({p.name})</SelectItem>)}
+            {shown.map((p) => <SelectItem key={p.id} value={p.id}>{p.title} ({p.name})</SelectItem>)}
           </SelectContent>
         </Select>
       )}

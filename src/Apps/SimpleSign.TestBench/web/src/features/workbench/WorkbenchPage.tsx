@@ -8,10 +8,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useI18n, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { IssueList, Pill } from "../shared/ui"
+import { activeFramework, FrameworkMenu, FrameworkStrip } from "./framework"
 import { OptionForm } from "./OptionForm"
 import { StandardBadge } from "./parts"
 import { ResultPanel } from "./ResultPanel"
-import { asText } from "./schema"
+import { asText, type SchemaPreset } from "./schema"
 import { pairwise } from "./combinations"
 import { useWorkbench, type Strategy } from "./state"
 
@@ -36,11 +37,16 @@ export function WorkbenchPage() {
 }
 
 function TopBar() {
-  const { schema, format, setFormat, applyPreset, options, evaluation, evaluating, running, sign, reset } = useWorkbench()
+  const { schema, format, setFormat, applyPreset, options, evaluation, evaluating, running, sign, reset, updateAll } = useWorkbench()
   const t = useT()
   const current = schema.formats.find((f) => f.id === format)!
   const errors = evaluation?.issues.filter((i) => i.severity === "Error").length ?? 0
   const level = asText(options.level)
+  // With ICP-Brasil on, its policies (AD-RB…AD-RA) take the place of the baseline levels.
+  const icp = activeFramework(options) === "IcpBrasil"
+  const icpPolicy = asText(options.kind) === "IcpBrasil" ? asText(options.icpPolicy) : null
+  const presets = schema.presets.filter((p) => p.formats.includes(format) && (icp ? p.framework === "IcpBrasil" : !p.framework))
+  const pressed = (p: SchemaPreset) => (p.framework ? p.set.icpPolicy === icpPolicy : icpPolicy === null && p.set.level === level)
   return (
     <div className="space-y-2.5 border-b px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -53,16 +59,17 @@ function TopBar() {
           ))}
         </div>
         <div className="flex items-center gap-1" role="group" aria-label={t("wb.presets")}>
-          {schema.presets.filter((p) => p.formats.includes(format)).map((p) => (
+          {presets.map((p) => (
             <Tooltip key={p.id}>
               <TooltipTrigger asChild>
-                <Button variant={p.set.level === level ? "default" : "outline"} size="sm" className="h-8 px-2.5 font-mono text-xs" onClick={() => applyPreset(p)}>{p.title}</Button>
+                <Button variant={pressed(p) ? "default" : "outline"} size="sm" className="h-8 px-2.5 font-mono text-xs" onClick={() => applyPreset(p)}>{p.title}</Button>
               </TooltipTrigger>
               <TooltipContent>{p.summary}</TooltipContent>
             </Tooltip>
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <FrameworkMenu page="sign" options={options} update={(change) => updateAll((o) => change(o))} />
           <VaryControl />
           <HistoryDrawer />
           <Tooltip>
@@ -81,6 +88,7 @@ function TopBar() {
         {errors > 0 && <span className="text-destructive ml-auto flex items-center gap-1"><CircleAlert className="size-3.5" />{t("wb.errors", { n: errors })}</span>}
         {evaluating && <Loader2 className="text-muted-foreground size-3 animate-spin" />}
       </div>
+      <FrameworkStrip page="sign" options={options} />
     </div>
   )
 }

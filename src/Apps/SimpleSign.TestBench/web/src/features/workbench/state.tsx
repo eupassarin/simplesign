@@ -40,6 +40,10 @@ interface WorkbenchValue {
   /** The trust and revocation settings of the Validate task, shaped like the options ({ validation: … }). */
   validateOptions: Options
   setValidateOption: (path: string, value: unknown) => void
+  /** Changes the Validate task's settings at once (a trust framework sets the trust and the policy together). */
+  updateValidate: (change: (current: Options) => Options) => void
+  /** Changes the options of every format at once (a trust framework applies to PAdES, CAdES and XAdES alike). */
+  updateAll: (change: (current: Options, format: Format) => Options) => void
   validate: (target?: ValidateTarget) => Promise<RunView | null>
   /** Shows a file in the Validate task and validates it. */
   openInValidate: (target: ValidateTarget) => void
@@ -157,6 +161,9 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
     setModeState(next)
   }, [])
   const setValidateOption = useCallback((path: string, value: unknown) => setValidateOptions((o) => setPath(o, path, value)), [])
+  const updateValidate = useCallback((change: (current: Options) => Options) => setValidateOptions(change), [])
+  const updateAll = useCallback((change: (current: Options, format: Format) => Options) =>
+    setByFormat((all) => ({ pades: change(all.pades, "pades"), cades: change(all.cades, "cades"), xades: change(all.xades, "xades") })), [])
   const [history, setHistory] = useState<RunSummary[]>([])
   const [engine, setEngineState] = useState<RunEngine>(() => load<RunEngine>("wb.engine", "library") === "cli" ? "cli" : "library")
   const setEngine = useCallback((next: RunEngine) => {
@@ -377,11 +384,11 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
   const checkDss = useCallback(async () => setDssStatus(await api.dss.status()), [])
 
   const value = useMemo<WorkbenchValue>(() => ({
-    signWithSandbox, mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, validate, openInValidate,
+    signWithSandbox, mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, updateValidate, updateAll, validate, openInValidate,
     schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, credential: evaluation?.credential ?? null, isVisible, visibleValues,
     run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, variantValues, runVariants, stopVariants, engine, setEngine, dss, dssStatus, saveDss, checkDss,
-  }), [variantValues, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
+  }), [variantValues, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, updateValidate, updateAll, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, engine, setEngine, dss, dssStatus, saveDss, checkDss])
 
   return <Context.Provider value={value}>{children}</Context.Provider>

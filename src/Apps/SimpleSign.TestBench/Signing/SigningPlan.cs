@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
@@ -69,6 +70,23 @@ internal sealed class SigningPlan
 
     public ArchiveTimestampOptions? ArchiveTimestamp { get; private set; }
 
+    /// <summary>The PA, LPA and LPA signature an AD-RA signature embeds (<see cref="PrepareIcpArtifactsAsync"/>).</summary>
+    public IcpBrasilPolicyArtifacts? IcpArtifacts { get; private set; }
+
+    /// <summary>Downloads the artifacts of the AD-RA version that accepts the signer's root; nothing for the other policies.</summary>
+    /// <param name="pdf">The document (the builder needs one to resolve the version).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task PrepareIcpArtifactsAsync(byte[] pdf, CancellationToken cancellationToken)
+    {
+        if (_o.Kind != SignatureKind.IcpBrasil || _o.IcpPolicy != IcpBrasilPolicy.AdRa)
+        {
+            return;
+        }
+
+        var builder = CredentialStep().Apply(PadesSigner.Document(pdf));
+        IcpArtifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(Http.GetClient(), builder.ResolveIcpBrasilPolicy(IcpBrasilPolicy.AdRa), cancellationToken);
+    }
+
     /// <summary>Statements that must run before the builder chain (variables, clients).</summary>
     public IReadOnlyList<string> Setup => Context.Setup;
 
@@ -129,6 +147,9 @@ internal sealed class SigningPlan
                 steps.Add(new($".WithSignaturePolicy(new SignaturePolicyReference(\"{policy.Oid}\", \"{policy.HashAlgorithmOid}\", Convert.FromHexString(\"{_o.CustomPolicy.HashHex}\"), {Str(policy.Uri)}))",
                     b => b.WithSignaturePolicy(policy)));
                 steps.Add(new($".WithLevel({ProfileCode()})", b => b.WithLevel(Profile!)));
+                break;
+            case SignatureKind.IcpBrasil:
+                steps.Add(IcpStep());
                 break;
             default:
                 steps.Add(new($".WithLevel({ProfileCode()})", b => b.WithLevel(Profile!)));
@@ -195,6 +216,44 @@ internal sealed class SigningPlan
         }
 
         return steps;
+    }
+
+    /// <summary>The ICP-Brasil policy: its identifier, the PBAD.PAdES sub-filter and the level it sets.</summary>
+    private PlanStep IcpStep()
+    {
+        var policy = _o.IcpPolicy;
+        bool timestamped = policy != IcpBrasilPolicy.AdRb;
+        bool longTerm = policy is IcpBrasilPolicy.AdRc or IcpBrasilPolicy.AdRa;
+        var options = new IcpBrasilPadesOptions
+        {
+            Timestamp = timestamped ? Timestamp : null,
+            ArchiveTimestamp = longTerm ? ArchiveTimestamp : null,
+            LongTermValidation = longTerm ? Context.BuildLongTerm(_o.RevocationPreference) : null,
+            Artifacts = IcpArtifacts,
+        };
+        var parts = new List<string>();
+        if (timestamped)
+        {
+            parts.Add("Timestamp = tsa");
+        }
+
+        if (longTerm)
+        {
+            if (ArchiveTimestamp is not null)
+            {
+                parts.Add("ArchiveTimestamp = archiveTsa");
+            }
+
+            parts.Add($"LongTermValidation = {Context.LongTermCode(_o.RevocationPreference)}");
+        }
+
+        if (policy == IcpBrasilPolicy.AdRa)
+        {
+            parts.Add("Artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(http, builder.ResolveIcpBrasilPolicy(IcpBrasilPolicy.AdRa))");
+        }
+
+        string code = $".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}, new IcpBrasilPadesOptions {{ {string.Join(", ", parts)} }}) // DOC-ICP-15.03: the policy's OID and hash, the PBAD.PAdES sub-filter and its level";
+        return new(code, b => b.WithIcpBrasilPolicy(policy, options));
     }
 
     private PlanStep CredentialStep()

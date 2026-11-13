@@ -180,6 +180,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                     return Failure(report, unsupported, "CliUnsupported", code);
                 }
 
+                if (o.Kind == XadesKind.IcpBrasil)
+                {
+                    return Failure(report, L.T("The CLI signs under an ICP-Brasil policy for PAdES only (sign --icp-policy): run this one through the library."), "CliUnsupported", code);
+                }
+
                 var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents)
                     .File(o.CounterSign ? SignedFile : DataFile, data.Content);
                 foreach (var (name, content) in controls.CliFiles())
@@ -723,6 +728,16 @@ internal sealed class XadesPlan
 
     private void AddType()
     {
+        if (_o.Kind == XadesKind.IcpBrasil)
+        {
+            // The policy sets the level and the extended form (DOC-ICP-15.03); the TSA (an ACT) from AD-RT up.
+            var policy = _o.IcpPolicy;
+            var icpTsa = policy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb ? null : _context.BuildTimestamp(_o.Timestamp, "tsa");
+            _steps.Add(($".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}{(icpTsa is null ? "" : ", tsa")}) // DOC-ICP-15.03: the policy's OID and hash, and its level",
+                b => SimpleSign.Brazil.IcpBrasil.Xades.IcpBrasilXadesExtensions.WithIcpBrasilPolicy(b, policy, icpTsa)));
+            return;
+        }
+
         if (_o.Kind == XadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);

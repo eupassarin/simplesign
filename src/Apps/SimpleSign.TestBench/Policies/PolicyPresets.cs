@@ -10,7 +10,11 @@ namespace SimpleSign.TestBench.Policies;
 /// <param name="Kind"><c>signing</c> or <c>validation</c>.</param>
 /// <param name="Name">The short name (<c>iofe</c>), as the CLI knows it.</param>
 /// <param name="Title">The policy's own name.</param>
-public sealed record PolicyPreset(string Id, string Kind, string Name, string Title);
+public sealed record PolicyPreset(string Id, string Kind, string Name, string Title)
+{
+    /// <summary>The trust framework the preset belongs to (<c>Peru</c>, <c>IcpBrasil</c>, <c>GovBr</c>); null for the general ones.</summary>
+    public string? Framework { get; init; }
+}
 
 /// <summary>The built-in signing and validation policies, as the CLI's <c>--signing-policy</c> / <c>--policy</c> names them.</summary>
 internal static class PolicyPresets
@@ -50,11 +54,23 @@ internal static class PolicyPresets
         (PolicyViewer.Validation, "strict", () => StrictValidation.ToJson(), StrictValidation.Name),
         (PolicyViewer.Validation, "iofe", () => IofePolicies.Validation.ToJson(), IofePolicies.Validation.Name),
         (PolicyViewer.Validation, "iofe-nonrepudiation", () => IofePolicies.ValidationNonRepudiation.ToJson(), IofePolicies.ValidationNonRepudiation.Name),
+        (PolicyViewer.Signing, "icp-brasil", () => Brazil.IcpBrasil.IcpBrasilPolicies.Signing.ToJson(), Brazil.IcpBrasil.IcpBrasilPolicies.Signing.Name),
+        (PolicyViewer.Validation, "icp-brasil", () => Brazil.IcpBrasil.IcpBrasilPolicies.Validation.ToJson(), Brazil.IcpBrasil.IcpBrasilPolicies.Validation.Name),
+        (PolicyViewer.Validation, "govbr", () => Brazil.GovBr.GovBrPolicies.Validation.ToJson(), Brazil.GovBr.GovBrPolicies.Validation.Name),
     ];
 
     /// <summary>The presets.</summary>
     public static IReadOnlyList<PolicyPreset> All { get; } =
-        [.. s_all.Select(p => new PolicyPreset(Id(p.Kind, p.Name), p.Kind, p.Name, p.Title ?? p.Name))];
+        [.. s_all.Select(p => new PolicyPreset(Id(p.Kind, p.Name), p.Kind, p.Name, p.Title ?? p.Name) { Framework = FrameworkOf(p.Name) })];
+
+    /// <summary>The trust framework of a preset, by its name: the TestBench shows a framework's presets only while it is on.</summary>
+    private static string? FrameworkOf(string name) => name switch
+    {
+        "iofe" or "iofe-nonrepudiation" => "Peru",
+        "icp-brasil" => "IcpBrasil",
+        "govbr" => "GovBr",
+        _ => null,
+    };
 
     /// <summary>The document id of a preset.</summary>
     public static string Id(string kind, string name) => $"preset:{kind}:{name}";

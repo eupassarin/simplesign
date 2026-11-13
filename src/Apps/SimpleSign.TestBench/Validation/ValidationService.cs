@@ -40,6 +40,21 @@ public enum TrustChoice
     /// trust anchor. DSS (tools/dss) trusts the same roots.
     /// </summary>
     PublicTsas,
+
+    /// <summary>
+    /// The Peru (IOFE) trust framework: INDECOPI's real trusted list (<c>https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml</c>),
+    /// read as <c>IofeExtension</c> reads it. For real Peruvian certificates: the Sandbox's do not chain to it.
+    /// </summary>
+    Peru,
+
+    /// <summary>
+    /// The ICP-Brasil trust framework: the AC Raiz roots bundled with SimpleSign.Brazil.IcpBrasil and its chain validation
+    /// (certificate type, CPF/CNPJ). For real ICP-Brasil certificates.
+    /// </summary>
+    IcpBrasil,
+
+    /// <summary>The Gov.br trust framework: the roots bundled with SimpleSign.Brazil.GovBr and its chain validation.</summary>
+    GovBr,
 }
 
 /// <summary>How to validate.</summary>
@@ -89,8 +104,11 @@ public sealed record DetailedSignature(
 /// <summary>Trust settings turned into library objects.</summary>
 internal sealed record ValidationTrust(ValidationOptions Options)
 {
-    /// <summary>The trust anchor providers (the Sandbox's trusted lists), for the PAdES validator.</summary>
+    /// <summary>The trust anchor providers (the Sandbox's trusted lists, a trust framework's), for the PAdES validator.</summary>
     public IReadOnlyList<ITrustAnchorProvider> Providers { get; init; } = [];
+
+    /// <summary>The chain validation providers of the trust framework (ICP-Brasil, Gov.br), for the PAdES validator.</summary>
+    public IReadOnlyList<IChainValidationProvider> ChainValidation { get; init; } = [];
 }
 
 public sealed record DssView(int Certificates, int Crls, int Ocsps, bool HasVri, int VriEntries, IReadOnlyList<string> Warnings);
@@ -130,7 +148,7 @@ internal sealed record PadesVerdict(
     IReadOnlyDictionary<string, string>? ChainMetadata);
 
 /// <summary>Validates PDFs with PdfSignatureValidator and enriches the result with the inspector's facts.</summary>
-internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStore documents)
+internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStore documents, TrustFrameworks.FrameworkTrust? frameworks = null)
 {
     /// <summary>The per-signature verdicts (used by the signing result).</summary>
     public async Task<IReadOnlyList<SignatureReport>> ValidateAsync(byte[] pdf, ValidationSettings settings, CancellationToken cancellationToken)
@@ -236,7 +254,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     internal async Task<PdfSignatureValidator> CreateValidatorAsync(ValidationSettings settings, CancellationToken cancellationToken = default)
     {
         var trust = await TrustAsync(settings, cancellationToken);
-        return new PdfSignatureValidator(sandbox, trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), trust.Providers, []);
+        return new PdfSignatureValidator(sandbox, trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), trust.Providers, trust.ChainValidation);
     }
 
     /// <summary>The root of the connected Sandbox, to complete the chains of the SimpleSign report; null without a Sandbox.</summary>
@@ -329,6 +347,26 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             roots.AddRange(PublicTsaRoots.Certificates);
         }
 
+        // The trust framework (one at a time): its anchors, its trusted list and its chain validation.
+        IReadOnlyList<IChainValidationProvider> chainValidation = [];
+        if (FrameworkOf(settings) is { } framework
+            && await (frameworks ?? TrustFrameworks.FrameworkTrust.Shared).ResolveAsync(framework, sandbox, cancellationToken) is { } material)
+        {
+            providers.AddRange(material.Providers);
+            roots.AddRange(material.Anchors);
+            if (material.TrustedLists.Count > 0)
+            {
+                trustedLists = [.. trustedLists ?? [], .. material.TrustedLists];
+            }
+
+            if (material.Timed.Count > 0)
+            {
+                timed = [.. timed ?? [], .. material.Timed];
+            }
+
+            chainValidation = material.ChainValidation;
+        }
+
         var options = new ValidationOptions
         {
             TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),
@@ -340,8 +378,18 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             Level = settings.Level,
             Verifier = VerifierOptions.Default with { RevocationStrategy = settings.RevocationStrategy },
         };
-        return new ValidationTrust(options) { Providers = providers };
+        return new ValidationTrust(options) { Providers = providers, ChainValidation = chainValidation };
     }
+
+    /// <summary>The trust framework of the settings, or null; more than one is refused.</summary>
+    internal static TrustFrameworks.TrustFramework? FrameworkOf(ValidationSettings settings) =>
+        TrustFrameworks.FrameworkTrust.Single(settings.Trust.Select(t => t switch
+        {
+            TrustChoice.Peru => TrustFrameworks.TrustFramework.Peru,
+            TrustChoice.IcpBrasil => TrustFrameworks.TrustFramework.IcpBrasil,
+            TrustChoice.GovBr => (TrustFrameworks.TrustFramework?)TrustFrameworks.TrustFramework.GovBr,
+            _ => null,
+        }).OfType<TrustFrameworks.TrustFramework>());
 
     /// <summary>
     /// The Sandbox's trusted lists, read again for each validation so its trusted-list failures show at once. An expired
@@ -532,6 +580,12 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             line.Add("--tsl", iofe, "--tsl-signer", TlSignerFile, "--tsl-profile", "iofe");
         }
 
+        // Peru: INDECOPI's real list. ICP-Brasil and Gov.br need no flag: the CLI always trusts their roots.
+        if (s.Trust.Contains(TrustChoice.Peru))
+        {
+            line.Add("--tsl", TrustFrameworks.FrameworkTrust.IofeListUrl.AbsoluteUri, "--tsl-signer", TrustFrameworks.FrameworkTrust.IndecopiSignerFile, "--tsl-profile", "iofe");
+        }
+
         if (!s.Trust.Contains(TrustChoice.System))
         {
             line.Add("--no-system-roots");
@@ -605,6 +659,11 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             files[TlSignerFile] = Encoding.ASCII.GetBytes(tlSigner.ExportCertificatePem() + "\n");
         }
 
+        if (settings.Trust.Contains(TrustChoice.Peru))
+        {
+            files[TrustFrameworks.FrameworkTrust.IndecopiSignerFile] = Encoding.ASCII.GetBytes(TrustFrameworks.FrameworkTrust.IndecopiSigner.ExportCertificatePem() + "\n");
+        }
+
         if (settings.PolicyId is { } policyId && documents.TryGet(policyId, out var policy))
         {
             files[PolicyUploads.ValidationFileName] = policy!.Content;
@@ -642,6 +701,20 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         _ => [],
     };
 
+    /// <summary>The ValidationOptions lines (and the comment that creates it) of the trust framework, for the code snippets.</summary>
+    internal static IEnumerable<string> FrameworkOptionsCode(ValidationSettings s) => FrameworkOf(s) switch
+    {
+        TrustFrameworks.TrustFramework.Peru =>
+        [
+            "// var iofe = await IofeExtension.LoadAsync(new IofeExtensionOptions { TrustedListSigners = [indecopiSigner] }); // https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml",
+            "TrustedRoots = [.. iofe.TrustedList.GetTrustAnchors()]",
+            "TrustedLists = iofe.TrustedList.TrustedLists",
+        ],
+        TrustFrameworks.TrustFramework.IcpBrasil => ["// var framework = new IcpBrasilExtension(); // the bundled AC Raiz roots and the ICP-Brasil chain validation"],
+        TrustFrameworks.TrustFramework.GovBr => ["// var framework = new GovBrExtension(); // the bundled Gov.br roots and its chain validation"],
+        _ => [],
+    };
+
     internal CodeSnippets ValidationCode(ValidationSettings s)
     {
         var sb = new StringBuilder();
@@ -659,6 +732,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         options.AddRange(TrustedListOptionsCode(s));
+        options.AddRange(FrameworkOptionsCode(s));
 
         if (s.TimeoutSeconds != 10)
         {
@@ -668,7 +742,9 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         options.AddRange(PolicyOptionsCode(s));
         string optionsCode = options.Count == 0 ? "ValidationOptions.Default" : "new ValidationOptions\n{\n    " + string.Join(",\n    ", options) + ",\n}";
         sb.Append("var options = ").Append(optionsCode).Append(";\n");
-        sb.Append("var validator = new PdfSignatureValidator(options);\n");
+        sb.Append(FrameworkOf(s) is TrustFrameworks.TrustFramework.IcpBrasil or TrustFrameworks.TrustFramework.GovBr
+            ? "var validator = new PdfSignatureValidator(options, trustAnchorProviders: framework.TrustAnchorProviders, chainValidationProviders: framework.ChainValidationProviders);\n"
+            : "var validator = new PdfSignatureValidator(options);\n");
         sb.Append("\nIReadOnlyList<SignatureValidationResult> results = await validator.ValidateAsync(File.OpenRead(\"signed.pdf\"));\n");
         sb.Append("foreach (var r in results)\n{\n    Console.WriteLine($\"{r.FieldName}: {r.Indication} — {r.SignerName}\");\n");
         sb.Append("    foreach (var error in r.Errors) Console.WriteLine($\"  ✕ {error}\");\n}\n");

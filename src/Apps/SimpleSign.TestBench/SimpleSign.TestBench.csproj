@@ -26,6 +26,9 @@
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
     <ProjectReference Include="..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
     <ProjectReference Include="..\..\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil.Xades\SimpleSign.Brazil.IcpBrasil.Xades.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
     <!-- The CLI a run with engine "cli" starts (cli/simplesign.dll next to the TestBench): built first, not referenced. -->
     <ProjectReference Include="..\SimpleSign.Cli\SimpleSign.Cli.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
@@ -53,6 +56,8 @@
     <EmbeddedResource Include="..\..\..\docs\playbooks\*.json" LogicalName="SimpleSign.TestBench.Playbooks.Samples.%(Filename)%(Extension)" />
     <!-- The roots of the public TSAs (PublicTsaRoots); tools/dss mounts the same folder. -->
     <EmbeddedResource Include="TsaRoots/*.crt" LogicalName="TsaRoots/%(Filename)%(Extension)" />
+    <!-- The certificate INDECOPI signs Peru's trusted list with (FrameworkTrust; see TrustFrameworks/README.md). -->
+    <EmbeddedResource Include="TrustFrameworks/*.pem" LogicalName="TrustFrameworks/%(Filename)%(Extension)" />
     <Content Remove="web/**" />
     <None Remove="web/**" />
     <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Condition="Exists('web/dist')" />

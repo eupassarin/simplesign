@@ -33,7 +33,10 @@ public static class XmlCompatibility
         ArgumentNullException.ThrowIfNull(options);
         var state = new Dictionary<string, OptionState>(StringComparer.Ordinal);
         var issues = new List<OptionIssue>();
-        var o = options;
+        // An ICP-Brasil policy sets the level and the extended form (DOC-ICP-15.03): a timestamp from AD-RT up.
+        var o = options.Kind == XadesKind.IcpBrasil
+            ? options with { Level = options.IcpPolicy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb ? BaselineLevel.BB : BaselineLevel.BT, ExtendedForm = XadesExtendedChoice.None }
+            : options;
 
         void Set(string key, OptionState value) => state[key] = value;
         void Error(string step, string message) => issues.Add(new(IssueSeverity.Error, step, message));
@@ -98,6 +101,7 @@ public static class XmlCompatibility
         }
 
         Set("level", OptionState.Shown);
+        Set("icpPolicy", o.Kind == XadesKind.IcpBrasil ? OptionState.Shown : OptionState.Hidden);
         Set("customPolicy", o.Kind == XadesKind.CustomPolicy ? OptionState.Shown : OptionState.Hidden);
         if (o.Kind == XadesKind.CustomPolicy && !Compatibility.IsOid(o.PolicyOid))
         {

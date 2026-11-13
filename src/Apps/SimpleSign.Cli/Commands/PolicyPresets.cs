@@ -27,6 +27,7 @@ internal static class PolicyPresets
                 .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore)),
             ["iofe"] = () => IofePolicies.Signing,
             ["iofe-nonrepudiation"] = () => IofePolicies.SigningNonRepudiation,
+            ["icp-brasil"] = () => SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicies.Signing,
         };
 
     /// <summary>The validation policies by name.</summary>
@@ -39,6 +40,8 @@ internal static class PolicyPresets
                 .With("Timestamp/Coherence", Fail).With("SignatureConstraints/PolicyAvailable", Fail),
             ["iofe"] = () => IofePolicies.Validation,
             ["iofe-nonrepudiation"] = () => IofePolicies.ValidationNonRepudiation,
+            ["icp-brasil"] = () => SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicies.Validation,
+            ["govbr"] = () => SimpleSign.Brazil.GovBr.GovBrPolicies.Validation,
         };
 
     /// <summary>The names, for messages.</summary>

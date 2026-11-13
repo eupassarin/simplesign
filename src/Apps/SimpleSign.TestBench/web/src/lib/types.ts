@@ -372,7 +372,7 @@ export interface MatrixRunResult {
 }
 
 // ── Validation area ─────────────────────────────────────────────────
-export type TrustChoice = "Sandbox" | "System" | "SandboxTrustedList" | "SandboxIofeList" | "PublicTsas"
+export type TrustChoice = "Sandbox" | "System" | "SandboxTrustedList" | "SandboxIofeList" | "PublicTsas" | "Peru" | "IcpBrasil" | "GovBr"
 
 export interface ValidationSettings {
   trust: TrustChoice[]
@@ -751,6 +751,8 @@ export interface PolicyPreset {
   kind: PolicyKind
   name: string
   title: string
+  /** The trust framework the preset belongs to ("Peru", "IcpBrasil", "GovBr"); null for the general ones. */
+  framework?: string | null
 }
 
 export interface PolicyView {

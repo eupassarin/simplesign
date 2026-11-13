@@ -191,7 +191,7 @@ internal static class CodeGenerator
                     var sign = new CliLine("sign", CliLine.Placeholders.Input).Add("--output", CliLine.Placeholders.Output);
                     CliCredential(credential, sign, notes);
                     Level(sign, o, context);
-                    if (o.Level != BaselineLevel.BB && o.ReturnLowerLevel)
+                    if (o.Level != BaselineLevel.BB && o.ReturnLowerLevel && o.Kind != SignatureKind.IcpBrasil)
                     {
                         sign.Add("--return-lower-level");
                     }
@@ -215,6 +215,24 @@ internal static class CodeGenerator
     /// <summary>The level: the TSA (and its credentials), --ltv, --archival, a separate archive TSA, the revocation source.</summary>
     private static void Level(CliLine line, SigningOptions o, PlanContext context)
     {
+        if (o.Kind == SignatureKind.IcpBrasil)
+        {
+            // The policy sets the level (and the sub-filter): the TSA (an ACT) from AD-RT up.
+            if (o.IcpPolicy != SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb)
+            {
+                context.CliTimestamp(line, o.Timestamp);
+            }
+
+            line.Add("--icp-policy", o.IcpPolicy switch
+            {
+                SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb => "ad-rb",
+                SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRt => "ad-rt",
+                SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRc => "ad-rc",
+                _ => "ad-ra",
+            });
+            return;
+        }
+
         if (o.Level == BaselineLevel.BB)
         {
             return;

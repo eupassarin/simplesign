@@ -6,6 +6,7 @@ using SimpleSign.Peru.Iofe;
 using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
+using SimpleSign.TestBench.TrustFrameworks;
 using SimpleSign.XAdES.TrustedLists;
 
 namespace SimpleSign.TestBench.Signing;
@@ -24,6 +25,12 @@ public enum SigningTrustChoice
     /// and <c>unspecified</c> services (the CA of the <c>/tsa/iofe</c> TSA), never the code-signing certificate it lists.
     /// </summary>
     SandboxIofeList,
+
+    /// <summary>The Peru (IOFE) trust framework: INDECOPI's real trusted list. For real Peruvian certificates.</summary>
+    Peru,
+
+    /// <summary>The ICP-Brasil trust framework: the AC Raiz roots bundled with SimpleSign.Brazil.IcpBrasil. For real ICP-Brasil certificates.</summary>
+    IcpBrasil,
 }
 
 /// <summary>
@@ -55,16 +62,21 @@ internal sealed class SigningControls
     /// <summary>The expected TSA certificate a CLI command reads for <c>--expected-tsa</c>.</summary>
     public const string ExpectedTsaFile = "expected-tsa.cer";
 
+    /// <summary>The folder of the ICP-Brasil roots and intermediates a CLI command reads for <c>--trust-dir</c>.</summary>
+    public const string IcpBrasilFolder = "icp-brasil";
+
     private readonly X509Certificate2? _root;
     private readonly string? _trustedListUrl;
     private readonly X509Certificate2? _trustedListSigner;
     private readonly bool _iofe;
+    private readonly FrameworkMaterial? _framework;
 
     private SigningControls(
         IReadOnlyList<ITrustAnchorProvider> anchors, X509Certificate2? root, string? trustedListUrl, X509Certificate2? trustedListSigner,
-        X509Certificate2? expectedTsa, string? expectedTsaId, RecordingAuditSink? audit, bool iofe = false)
+        X509Certificate2? expectedTsa, string? expectedTsaId, RecordingAuditSink? audit, bool iofe = false, FrameworkMaterial? framework = null)
     {
         _iofe = iofe;
+        _framework = framework;
         Anchors = anchors;
         _root = root;
         _trustedListUrl = trustedListUrl;
@@ -93,7 +105,9 @@ internal sealed class SigningControls
     /// <param name="options">The options; null for none.</param>
     /// <param name="sandbox">The Sandbox connection.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public static async Task<SigningControls> ResolveAsync(SigningControlsOptions? options, SandboxEnvironment sandbox, CancellationToken cancellationToken)
+    /// <param name="frameworks">The trust frameworks' material; null for <see cref="FrameworkTrust.Shared"/>.</param>
+    public static async Task<SigningControls> ResolveAsync(SigningControlsOptions? options, SandboxEnvironment sandbox, CancellationToken cancellationToken,
+        FrameworkTrust? frameworks = null)
     {
         if (options is null || (options.Trust.Count == 0 && options.ExpectedTsa is null && !options.AuditLog))
         {
@@ -106,7 +120,22 @@ internal sealed class SigningControls
         X509Certificate2? listSigner = null;
         X509Certificate2? expected = null;
         bool iofe = false;
-        if (options.Trust.Count > 0 || options.ExpectedTsa is not null)
+        FrameworkMaterial? framework = null;
+        if (FrameworkOf(options) is { } chosen)
+        {
+            if (options.Trust.Contains(SigningTrustChoice.Peru)
+                && (options.Trust.Contains(SigningTrustChoice.SandboxTrustedList) || options.Trust.Contains(SigningTrustChoice.SandboxIofeList)))
+            {
+                throw new ArgumentException(L.T("Choose one trusted list: INDECOPI's (the Peru framework) or one of the Sandbox's."));
+            }
+
+            framework = await (frameworks ?? FrameworkTrust.Shared).ResolveAsync(chosen, sandbox, cancellationToken)
+                ?? throw new SigningException(L.T("INDECOPI's trusted list could not be read: the Peru framework has no anchors."), SigningErrorReason.UntrustedRoot);
+            anchors.AddRange(framework.Providers);
+        }
+
+        bool sandboxTrust = options.Trust.Any(t => t is SigningTrustChoice.SandboxRoot or SigningTrustChoice.SandboxTrustedList or SigningTrustChoice.SandboxIofeList);
+        if (sandboxTrust || options.ExpectedTsa is not null)
         {
             var connection = sandbox.Current ?? throw new ArgumentException(L.T("The trust anchors and the expected TSA come from the Sandbox: connect one."));
             var http = sandbox.GetClient();
@@ -145,15 +174,30 @@ internal sealed class SigningControls
             }
         }
 
-        return new SigningControls(anchors, root, listUrl, listSigner, expected, options.ExpectedTsa, options.AuditLog ? new RecordingAuditSink() : null, iofe);
+        return new SigningControls(anchors, root, listUrl, listSigner, expected, options.ExpectedTsa, options.AuditLog ? new RecordingAuditSink() : null, iofe, framework);
     }
+
+    /// <summary>The trust framework of the options (Peru or ICP-Brasil), or null; both are refused.</summary>
+    internal static TrustFramework? FrameworkOf(SigningControlsOptions options) =>
+        FrameworkTrust.Single(options.Trust.Select(t => t switch
+        {
+            SigningTrustChoice.Peru => TrustFramework.Peru,
+            SigningTrustChoice.IcpBrasil => (TrustFramework?)TrustFramework.IcpBrasil,
+            _ => null,
+        }).OfType<TrustFramework>());
 
     /// <summary>The C# of the trust anchors, or null when there are none.</summary>
     public string? TrustCode() =>
         Anchors.Count == 0 ? null
         : ".WithTrustAnchors(" + string.Join(", ",
             [.. _root is null ? Array.Empty<string>() : ["new DirectoryTrustAnchorProvider(\"trust\") /* the Sandbox root */"],
-             .. _trustedListUrl is null ? Array.Empty<string>() : [$"await TrustedList.DownloadAsync(new Uri({SigningPlan.Str(_trustedListUrl)}), {ListOptionsCode})"]])
+             .. _trustedListUrl is null ? Array.Empty<string>() : [$"await TrustedList.DownloadAsync(new Uri({SigningPlan.Str(_trustedListUrl)}), {ListOptionsCode})"],
+             .. _framework?.Framework switch
+             {
+                 TrustFramework.Peru => ["(await IofeExtension.LoadAsync(new IofeExtensionOptions { TrustedListSigners = [indecopiSigner] })).TrustedList"],
+                 TrustFramework.IcpBrasil => ["new IcpBrasilExtension().TrustAnchorProviders.Single() /* the AC Raiz roots */"],
+                 _ => Array.Empty<string>(),
+             }])
         + ") // the signing certificate and each TSA must chain to these anchors";
 
     private string ListOptionsCode => _iofe
@@ -183,6 +227,16 @@ internal sealed class SigningControls
             {
                 line.Add("--tsl-profile", "iofe");
             }
+        }
+
+        switch (_framework?.Framework)
+        {
+            case TrustFramework.Peru:
+                line.Add("--tsl", FrameworkTrust.IofeListUrl.AbsoluteUri, "--tsl-signer", FrameworkTrust.IndecopiSignerFile, "--tsl-profile", "iofe");
+                break;
+            case TrustFramework.IcpBrasil:
+                line.Add("--trust-dir", IcpBrasilFolder);
+                break;
         }
 
         if (Audit is not null)
@@ -216,6 +270,18 @@ internal sealed class SigningControls
         if (ExpectedTsa is not null)
         {
             yield return new(ExpectedTsaFile, ExpectedTsa.RawData);
+        }
+
+        if (_framework?.Framework == TrustFramework.Peru)
+        {
+            yield return new(FrameworkTrust.IndecopiSignerFile, Encoding.ASCII.GetBytes(FrameworkTrust.IndecopiSigner.ExportCertificatePem() + "\n"));
+        }
+        else if (_framework?.Framework == TrustFramework.IcpBrasil)
+        {
+            foreach (var certificate in _framework.Anchors.Concat(_framework.Intermediates))
+            {
+                yield return new($"{IcpBrasilFolder}/{certificate.Thumbprint[..16].ToLowerInvariant()}.cer", certificate.RawData);
+            }
         }
     }
 

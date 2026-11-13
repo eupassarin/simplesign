@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — CRL over LDAP when a host name has several addresses
+
+- `LdapCrlClient` tried only the first address a host name resolves to: `localhost` gives `::1` first, so a server
+  listening on `127.0.0.1` only (a container's published port, for one) was never reached and the CRL was reported
+  missing (RevocationStatusUnknown). It now tries each allowed address in turn, as an HTTP client does.
+- `ChainRevocationChecker` logs a CRL download that fails (event 2519, with the reason) instead of failing silently.
+
+### Added — ICP-Brasil and Gov.br policies
+
+- `IcpBrasilPolicies.Signing` / `.Validation` (SimpleSign.Brazil.IcpBrasil) and `GovBrPolicies.Validation`
+  (SimpleSign.Brazil.GovBr), on the model of `IofePolicies`; the CLI's `--policy icp-brasil` and `govbr`.
+
+### Added — TestBench: trust frameworks
+
+- Sign and Validate turn on one trust framework at a time: Peru (INDECOPI's real trusted list), ICP-Brasil (the bundled
+  AC Raiz roots and its chain validation) and, on Validate, Gov.br. A framework sets the trust choices and the policies
+  (each field shows a marker), and on Sign ICP-Brasil replaces B-B…B-LTA with its signature policies AD-RB…AD-RA
+  (`WithIcpBrasilPolicy`; the CLI's `sign --icp-policy` for PAdES). Turning it off puts the previous values back.
+- The Playbook header: a picker of the samples (and "Open a playbook file…") in place of the title; thin scrollbars in
+  the theme's colours.
+
 ### Changed — CLI: an expired trusted list is judged by the policy
 
 - `simplesign validate --tsl/--lotl` (and `validate-dir`, `cades validate`, `xades validate`) keep a trusted list whose
