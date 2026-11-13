@@ -19,7 +19,7 @@ internal class PolicyExportCommand : Command<PolicyExportCommand.Settings>
 
         /// <summary>A built-in policy to write instead of the default.</summary>
         [CommandOption("--preset <NAME>")]
-        [Description("A built-in policy instead of the default: signing default|strict|minimal|iofe; validation default|strict|iofe|iofe-nonrepudiation")]
+        [Description("A built-in policy instead of the default: signing default|strict|minimal|iofe|iofe-nonrepudiation; validation default|strict|iofe|iofe-nonrepudiation")]
         public string? Preset { get; init; }
 
         /// <summary>Output file; standard output when absent.</summary>

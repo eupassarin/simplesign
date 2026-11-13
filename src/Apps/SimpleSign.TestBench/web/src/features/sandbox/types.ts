@@ -11,7 +11,7 @@ export interface SandboxInfo {
   rootSubject: string
   urls: { rootCertificate: string; intermediateCertificate: string; rootPem: string; chainPem: string; rootCrl: string; intermediateCrl: string }
   authorities: { id: string; certificate: string; crl: string; httpsCrl: string; ldapCrl: string; ocsp: string }[]
-  tsa: { url: string; authenticatedUrl: string; untrustedUrl: string; revokedUrl: string; wrongNameUrl: string; wrongName: string; user: string; password: string }
+  tsa: { url: string; authenticatedUrl: string; untrustedUrl: string; revokedUrl: string; wrongNameUrl: string; wrongName: string; user: string; password: string; expiredUrl?: string | null; iofeUrl?: string | null }
   csc: {
     baseUrl: string
     clientId: string
@@ -23,7 +23,7 @@ export interface SandboxInfo {
   }
   pfxPassword: string
   loopbackOrigins: string[]
-  trustedLists?: { lotlUrl: string; tlUrl: string; lotlSignerUrl: string; tlSignerUrl: string; territory: string } | null
+  trustedLists?: { lotlUrl: string; tlUrl: string; lotlSignerUrl: string; tlSignerUrl: string; territory: string; iofeUrl?: string | null } | null
 }
 
 export interface CertificateView {

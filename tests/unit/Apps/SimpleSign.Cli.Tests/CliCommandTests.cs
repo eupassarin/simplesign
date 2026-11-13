@@ -453,6 +453,7 @@ public sealed class CliCommandTests : IDisposable
 
     [Theory]
     [InlineData("signing", "iofe")]
+    [InlineData("signing", "iofe-nonrepudiation")]
     [InlineData("validation", "iofe-nonrepudiation")]
     public async Task PolicyExport_Preset_WritesTheBuiltInPolicy(string kind, string preset)
     {

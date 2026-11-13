@@ -6,6 +6,7 @@ guide for signature software (v4.0).
 
 The certificate INDECOPI signs the trusted list with is **not** bundled: obtain it from INDECOPI and
 check its fingerprint out of band. The list is refused when it is signed by any other key.
+`IofeExtension.LoadRefreshableAsync` (or `services.AddSimpleSignIofe(options)`) keeps the list current.
 
 ## Quickstart
 
@@ -31,4 +32,4 @@ var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 ```
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign) and the
-[docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles). MIT licensed.
+[IOFE article](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles/iofe.md). MIT licensed.

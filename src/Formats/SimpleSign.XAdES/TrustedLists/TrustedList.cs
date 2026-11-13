@@ -77,9 +77,10 @@ public sealed record TrustedListOptions
     public bool RejectExpired { get; init; } = true;
 
     /// <summary>
-    /// Extended key usages (OIDs) that keep a certificate of a kept service from becoming a trust anchor, e.g.
-    /// code signing (<c>1.3.6.1.5.5.7.3.3</c>) for lists that put signature software among their services.
-    /// Default: none.
+    /// Extended key usages (OIDs) that keep an end-entity certificate of a kept service from becoming a trust anchor,
+    /// e.g. code signing (<c>1.3.6.1.5.5.7.3.3</c>) for lists that put signature software among their services. A CA
+    /// certificate (basicConstraints cA) is kept whatever its EKU: there the EKU constrains what the CA issues (INDECOPI's
+    /// list has a CA whose EKU names code signing among others). Default: none.
     /// </summary>
     public IReadOnlyList<string> ExcludedExtendedKeyUsages { get; init; } = [];
 }
@@ -387,6 +388,7 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
             throw new CryptographicException("The trusted list must carry exactly one enveloped signature.");
         }
 
+        DeclareSignatureNamespacesOnSignedInfo(signatureElement);
         var signedXml = new SignedXml(doc);
         signedXml.LoadXml(signatureElement);
 
@@ -402,6 +404,31 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
         if (!signers.Any(signer => signedXml.CheckSignature(signer, verifySignatureOnly: true)))
         {
             throw new CryptographicException("The trusted list is not signed by the scheme operator's certificate.");
+        }
+    }
+
+    /// <summary>
+    /// Declares on ds:SignedInfo the namespaces declared on ds:Signature itself. SignedXml canonicalizes SignedInfo with
+    /// the namespaces of the Signature's ancestors but not those of the Signature element, so a list whose Signature
+    /// declares one (INDECOPI's declares <c>xmlns:etsi</c> there) never verifies. A namespace already in scope declared
+    /// again leaves the canonical form of SignedInfo — what was signed — unchanged.
+    /// </summary>
+    private static void DeclareSignatureNamespacesOnSignedInfo(XmlElement signature)
+    {
+        if (signature["SignedInfo", SignedXml.XmlDsigNamespaceUrl] is not { } signedInfo)
+        {
+            return;
+        }
+
+        const string XmlnsNamespace = "http://www.w3.org/2000/xmlns/";
+        foreach (var declaration in signature.Attributes.Cast<XmlAttribute>().Where(a => a.NamespaceURI == XmlnsNamespace).ToList())
+        {
+            if (signedInfo.GetAttributeNode(declaration.LocalName, XmlnsNamespace) is null && signedInfo.GetAttributeNode(declaration.Name) is null)
+            {
+                var copy = signedInfo.OwnerDocument.CreateAttribute(declaration.Prefix, declaration.LocalName, XmlnsNamespace);
+                copy.Value = declaration.Value;
+                signedInfo.Attributes.Append(copy);
+            }
         }
     }
 
@@ -462,6 +489,7 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
 
     private static bool HasExtendedKeyUsage(X509Certificate2 certificate, IReadOnlyList<string> oids) =>
         oids.Count > 0
+        && certificate.Extensions.OfType<X509BasicConstraintsExtension>().FirstOrDefault() is not { CertificateAuthority: true }
         && certificate.Extensions.OfType<X509EnhancedKeyUsageExtension>()
             .Any(e => e.EnhancedKeyUsages.Cast<Oid>().Any(u => oids.Contains(u.Value, StringComparer.Ordinal)));
 }

@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — IOFE: INDECOPI's trusted list kept current
+
+- `IofeTrustedListSource` (`IofeExtension.LoadRefreshableAsync`, `new IofeExtension(source)`): reads INDECOPI's list
+  again on demand (`RefreshAsync`) or on a schedule (`StartAutoRefresh`). Each copy is verified like the first and
+  swapped in one step, so concurrent signers and validators see the old list or the new one. A copy that cannot be
+  downloaded or verified, or with a lower sequence number, is refused (`RefreshFailed`) and the last good copy is
+  served — from `CacheFile` after a restart, written atomically — until its NextUpdate passes, then no anchors.
+  `Current` gives the sequence number, issue time, NextUpdate and SHA-256; `Changed` gives the services added and
+  removed. It is an `ITimedTrustAnchorProvider` and `ITrustedListInfoProvider`.
+- `services.AddSimpleSignIofe(options, refreshInterval)` registers it with a hosted service that reads the list when the
+  host starts and every 6 hours by default (`Microsoft.Extensions.Hosting.Abstractions` dependency).
+
+### Added — Sandbox: a trusted list in INDECOPI's layout
+
+- `/tl/iofe.xml`: a trusted list laid out as INDECOPI's `tsl-pe.xml` (ETSI TS 102 231 v3, TSLType `generic`, statuses
+  `undersupervision` / `supervisionrevoked`, territory `PE`, one provider per service, no supply points), signed by the
+  TL operator, with the trusted-list failures applying to it. Its services: the root CA (CA/QC); a new self-signed
+  **Timestamping CA** (`tsa-ca`) typed `unspecified` — the CA of the new `/tsa/iofe` TSA (`tsa-iofe`), as INDECOPI lists
+  the Llama.pe Timestamping CA, so that TSA chains through the `unspecified` service only —; the revoked TSA
+  (`unspecified`, withdrawn); and a signature software listed with a new code-signing certificate (`code-signing`),
+  which must never become an anchor. `GET /api/info` gives `trustedLists.iofeUrl` and `tsa.iofeUrl`.
+- TestBench: the trust choice `SandboxIofeList` (signing controls and validation, read with
+  `IofeExtension.DefaultListOptions`) and the TSA `SandboxIofe`; the Sandbox panel shows both URLs.
+- CLI: `--tsl-profile iofe` on signing and validation reads `--tsl` as `IofeExtension` does.
+- Playbook `indecopi-guia-v4`: the `tsl` section uses the INDECOPI-layout list, with new steps for a TSA whose CA is
+  listed as `unspecified` (`tsl-tsa-unspecified`, `tsl-tsa-unlisted`, `v-tsl-tsa-unspecified`).
+
+### Added — IOFE article
+
+- `docs/articles/iofe.md`: what IOFE and INDECOPI's list are (and how the list differs from EU lists), loading it with
+  the out-of-band signer and the cache, keeping it current, the `IofePolicies` against the guide, TSAs, running the
+  `indecopi-guia-v4` playbook against the Sandbox and exporting the evidence, the checklist. Linked from the README,
+  the package's README and PACKAGE.md; IOFE is ✅ in
+  `docs/conformance.md`.
+
+### Added — IOFE: checklist of INDECOPI's accreditation guide
+
+- `docs/playbooks/indecopi-checklist.md`: every item of annex B of the *Guía de Acreditación de Aplicaciones de
+  Software* v4.0 — sections 4.2 (F-1…F-32), 4.3 (V-1…V-32), 4.4 (S-1…S-4) and 4.1 (E-1…E-19) — marked as shown by
+  the `indecopi-guia-v4` playbook, by tests, or left to the accredited product, with the step ids; a TestBench test
+  checks that every P item has a step and every step it names exists.
+- `IofePolicies.SigningNonRepudiation` (preset `iofe-nonrepudiation` for signing in the CLI and the TestBench,
+  `docs/policies/iofe-signing-nonrepudiation.json`): section 4.2 asks an automated agent for the nonRepudiation bit;
+  playbook step `no-nonrepudiation-agent`. The requirement numbers in the `IofePolicies` XML docs follow the guide.
+
+### Fixed — Trusted-list constraints in PAdES validation and the CLI
+
+- `PdfSignatureValidator` evaluates the TrustedLists constraints for the lists of `ValidationOptions.TrustedLists`
+  too, not only for those of its trust anchor providers: `simplesign validate --tsl/--lotl` judged no TrustedLists
+  constraint (an expired list validated as TOTAL-PASSED). `validate` and `validate-dir` now pass the lists they load.
+- `simplesign validate --tsl … --tsl-profile iofe`: a list not signed by the given certificate gives no anchors
+  (INDETERMINATE, with a warning) instead of stopping the command, as the library and `--lotl` do.
+
+### Fixed — Trusted lists: INDECOPI's real list
+
+- `TrustedList` verifies lists whose `ds:Signature` element declares a namespace (INDECOPI's declares `xmlns:etsi`
+  there): `SignedXml` left those declarations out of the canonical SignedInfo, so INDECOPI's list was always refused as
+  "not signed by the scheme operator's certificate" — `IofeExtension.LoadAsync` could not load it. They are now
+  declared on SignedInfo too, which leaves its canonical form unchanged.
+- `TrustedListOptions.ExcludedExtendedKeyUsages` applies to end-entity certificates only: a CA certificate whose EKU
+  names an excluded usage (INDECOPI lists Core Andina's Certisign Application CA, CA:TRUE with codeSigning among its
+  EKUs) stays an anchor.
+
+### Added — IOFE: tests against INDECOPI's real list
+
+- A copy of INDECOPI's list (sequence 25) and of the certificate it is signed with (TSL Suscriptor, SHA-256
+  `bc32323c…12ed`, **to be confirmed with INDECOPI**) in the IOFE tests' fixtures, with offline tests: the list
+  verifies, the five time-stamping services (Camerfirma, Acepta, Llama.pe, BPO, FirmEasy) are anchors, no end-entity
+  code-signing certificate is. An integration test checks the same on the live list.
+
+### Fixed — IOFE validation policy and INDECOPI's list version
+
+- `IofePolicies.Validation` / `ValidationNonRepudiation` accept a trusted list of version 3 (`TrustedLists/TLVersion`
+  3, 5, 6): INDECOPI publishes Peru's list in TS 102 231 v3, which the default constraint (5, 6) made INDETERMINATE.
 ### Added — Two-phase (deferred) signing for CAdES and XAdES
 
 - `CadesDeferredSigner` and `XadesDeferredSigner`, with the shape of the PAdES `DeferredSigner`:
@@ -138,7 +212,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Broken link in the `SimpleSign.Peru.Iofe` package readme
 
-- The docs link pointed to an article that does not exist; it now points to the articles folder.
+- The docs link pointed to an article that does not exist; it now points to the IOFE article (`docs/articles/iofe.md`).
 
 ### Fixed — IOFE: timestamping authorities that INDECOPI's list types as `unspecified`
 

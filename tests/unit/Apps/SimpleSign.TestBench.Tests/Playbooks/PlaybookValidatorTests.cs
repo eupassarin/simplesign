@@ -181,4 +181,28 @@ public sealed class PlaybookValidatorTests
         items.ShouldNotBeEmpty();
         items.Where(i => !tags.Contains(i)).ShouldBeEmpty("checklist items with P and no step");
     }
+
+    [Fact]
+    public void IndecopiSample_CoversEveryChecklistItemARunCanShow()
+    {
+        // Rows of docs/playbooks/indecopi-checklist.md (items of the Guía v4.0, annex B) whose "How" starts with P: each
+        // needs a step of indecopi-guia-v4 tagged with its id, and every step id the row names must exist.
+        var rows = File.ReadAllLines(RepositoryPaths.Get("docs", "playbooks", "indecopi-checklist.md"))
+            .Select(l => l.Split('|', StringSplitOptions.TrimEntries))
+            .Where(c => c.Length > 3 && System.Text.RegularExpressions.Regex.IsMatch(c[1], "^[FVS]-[0-9]+$"))
+            .ToList();
+        var steps = PlaybookValidator.Check(PlaybookSamples.Json("indecopi-guia-v4")!, sandbox: null).Playbook!.AllSteps().ToList();
+        var tags = steps.SelectMany(s => s.Step.Tags).ToHashSet(StringComparer.Ordinal);
+        var ids = steps.Select(s => s.Step.Id).ToHashSet(StringComparer.Ordinal);
+        var shown = rows.Where(c => c[^2].StartsWith('P')).ToList();
+
+        rows.Select(c => c[1]).ShouldContain("F-32");
+        rows.Select(c => c[1]).ShouldContain("V-32");
+        rows.Select(c => c[1]).ShouldContain("S-4");
+        shown.Where(c => !tags.Contains(c[1])).Select(c => c[1]).ShouldBeEmpty("checklist items with P and no step tagged with them");
+        shown.SelectMany(c => System.Text.RegularExpressions.Regex.Matches(c[^2], "`([a-z0-9-]+)`").Select(m => m.Groups[1].Value))
+            .Where(id => !ids.Contains(id)).ShouldBeEmpty("step ids the checklist names but the playbook does not have");
+        tags.Where(t => System.Text.RegularExpressions.Regex.IsMatch(t, "^[FVS]-[0-9]+$") && !shown.Any(c => c[1] == t))
+            .ShouldBeEmpty("playbook tags whose checklist item is not marked P");
+    }
 }

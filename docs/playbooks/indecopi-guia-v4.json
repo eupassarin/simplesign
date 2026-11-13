@@ -3,7 +3,7 @@
   "schema": 2,
   "id": "indecopi-guia-v4",
   "title": "INDECOPI software accreditation (Guide v4.0)",
-  "description": "The automated part of an INDECOPI (IOFE, Peru) accreditation of signing and verification software (Guía de Acreditación de Software v4.0, annex B): each step runs against the Sandbox with the IOFE policy, through the library and the CLI, cross-validated with EU DSS when one is connected. Tags name the items of the guide (F-n signing, V-n verification, S-n time-stamps) and a topic.",
+  "description": "The automated part of an INDECOPI (IOFE, Peru) accreditation of signing and verification software (Guía de Acreditación de Software v4.0, annex B): each step runs against the Sandbox with the IOFE policy, through the library and the CLI, cross-validated with EU DSS when one is connected. Tags name the items of annex B of the guide (F-n: section 4.2, signing by an automated agent; V-n: section 4.3, verification by automated agents; S-n: section 4.4, time-stamps) and a topic; docs/playbooks/indecopi-checklist.md maps every item to a step, a test or what is left to the accredited product.",
   "defaults": {
     "engine": "both",
     "format": "pades",
@@ -35,7 +35,7 @@
     {
       "id": "tsl",
       "title": "Trusted list (TSL)",
-      "description": "The trust anchors come from the Sandbox's trusted list, whose signature is checked against the operator's certificate.",
+      "description": "The trust anchors come from the Sandbox's list laid out as INDECOPI's (/tl/iofe.xml: TS 102 231 v3, TSLType generic, status undersupervision, TSAs and signature software typed unspecified), read as IofeExtension reads Peru's; its signature is checked against the operator's certificate.",
       "steps": [
         {
           "id": "tsl-ok",
@@ -49,7 +49,7 @@
           "options": {
             "signingControls": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ]
             }
           },
@@ -69,7 +69,7 @@
           "options": {
             "signingControls": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ]
             }
           },
@@ -93,7 +93,7 @@
           "options": {
             "signingControls": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ]
             }
           },
@@ -116,7 +116,7 @@
           "options": {
             "signingControls": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ]
             }
           },
@@ -128,6 +128,62 @@
           "sandbox": {
             "trustedList": "Expired"
           }
+        },
+        {
+          "id": "tsl-tsa-unspecified",
+          "title": "Time-stamp from a TSA whose CA the TSL lists as 'unspecified'",
+          "tags": [
+            "S-1",
+            "F-3",
+            "tsl",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxIofe"
+            },
+            "signingControls": {
+              "trust": [
+                "SandboxIofeList"
+              ]
+            },
+            "validation": {
+              "trust": [
+                "SandboxIofeList"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T"
+          },
+          "description": "As INDECOPI lists the Llama.pe Timestamping CA (not its TSU) with the service type 'unspecified', the TSL names the self-signed CA of the Sandbox's IOFE TSA: its time-stamp chains to that service and the signature is made. Not cross-validated: DSS reads the EU-style list, which does not name that CA.",
+          "crossValidate": false
+        },
+        {
+          "id": "tsl-tsa-unlisted",
+          "title": "Same TSA without the TSL: refused",
+          "tags": [
+            "S-1",
+            "tsl",
+            "tsa"
+          ],
+          "format": "pades",
+          "options": {
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxIofe"
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "TimestampUntrusted"
+          },
+          "description": "With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service is what makes it trusted.",
+          "crossValidate": false
         },
         {
           "id": "v-tsl-ok",
@@ -142,7 +198,7 @@
             "fileId": "step:tsl-ok",
             "settings": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ],
               "policyId": "preset:validation:iofe"
             }
@@ -163,7 +219,7 @@
             "fileId": "step:tsl-ok",
             "settings": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ],
               "policyId": "preset:validation:iofe"
             }
@@ -187,7 +243,7 @@
             "fileId": "step:tsl-ok",
             "settings": {
               "trust": [
-                "SandboxTrustedList"
+                "SandboxIofeList"
               ],
               "policyId": "preset:validation:iofe"
             }
@@ -197,6 +253,29 @@
           },
           "sandbox": {
             "trustedList": "Expired"
+          }
+        },
+        {
+          "id": "v-tsl-tsa-unspecified",
+          "kind": "validate",
+          "title": "Validate a time-stamp whose TSA's CA the TSL lists as 'unspecified'",
+          "tags": [
+            "V-3",
+            "S-1",
+            "tsl",
+            "tsa"
+          ],
+          "options": {
+            "fileId": "step:tsl-tsa-unspecified",
+            "settings": {
+              "trust": [
+                "SandboxIofeList"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "valid"
           }
         }
       ]
@@ -620,7 +699,25 @@
           "expect": {
             "outcome": "signed"
           },
-          "description": "Signing accepts digitalSignature or nonRepudiation; the file is used by the validation step that requires nonRepudiation."
+          "description": "The iofe signing policy accepts digitalSignature or nonRepudiation (as section 4.1 does for end-user software); the file is used by the validation step that requires nonRepudiation."
+        },
+        {
+          "id": "no-nonrepudiation-agent",
+          "title": "Automated agent: a certificate without nonRepudiation is refused",
+          "tags": [
+            "F-12",
+            "key-usage"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:no-nonrepudiation",
+            "signingPolicyId": "preset:signing:iofe-nonrepudiation"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "KeyUsageNotPermitted"
+          },
+          "description": "Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe-nonrepudiation policy refuses a certificate that has digitalSignature only."
         },
         {
           "id": "v-no-nonrepudiation",

@@ -83,6 +83,13 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>An intermediate CA whose certificate the root signed with SHA-1 (a hash no longer accepted for signatures).</summary>
     public const string Sha1IntermediateId = "intermediate-sha1";
 
+    /// <summary>
+    /// A self-signed CA that issues the TSA of <c>/tsa/iofe</c> only. The Sandbox's INDECOPI-layout list names it as an
+    /// <c>unspecified</c> service (as INDECOPI lists the Llama.pe Timestamping CA, not its TSU), so the TSA's chain closes
+    /// through that service alone.
+    /// </summary>
+    public const string TsaCaId = "tsa-ca";
+
     /// <summary>How many short-lived signers and TSAs the OCSP responder keeps answering good for (the latest ones).</summary>
     public const int ShortLivedKept = 256;
 
@@ -156,6 +163,9 @@ internal sealed class SandboxPki : IDisposable
     public X509Certificate2 Root => Authority(RootId).Certificate;
 
     public X509Certificate2 Intermediate => Authority(IntermediateId).Certificate;
+
+    /// <summary>The self-signed CA of the <c>/tsa/iofe</c> TSA.</summary>
+    public X509Certificate2 TsaCa => Authority(TsaCaId).Certificate;
 
     /// <summary>The TSA certificate (with its key) in the Sandbox's chain.</summary>
     public X509Certificate2 Tsa => Certificate("tsa").Certificate;
@@ -587,6 +597,7 @@ internal sealed class SandboxPki : IDisposable
             Intermediate(ExpiredIntermediateId, "Expired intermediate CA", "SimpleSign Sandbox CA 3 (expired)", now.AddYears(-3), now.AddDays(-1), "Expired"),
         };
         authorities.AddRange(MissingAuthorities(authorities, root, rootKey, baseUrl, name, NextSerial, now));
+        authorities.Add(TimestampingCa(name, now));
 
         using var untrustedKey = RSA.Create(2048);
         var untrustedRequest = new CertificateRequest("CN=TSA Outside the Chain, O=Outside", untrustedKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -649,7 +660,21 @@ internal sealed class SandboxPki : IDisposable
         rootKey.ImportFromPem(rootPair.Key);
         long serial = state.NextSerial;
         var added = MissingAuthorities(state.Authorities, root, rootKey, state.BaseUrl, state.Name, () => SerialBytes(++serial), DateTimeOffset.UtcNow).ToList();
+        if (!state.Authorities.Any(a => a.Id == TsaCaId))
+        {
+            added.Add(TimestampingCa(state.Name, DateTimeOffset.UtcNow));
+        }
+
         return added.Count == 0 ? state : state with { Authorities = [.. state.Authorities, .. added], NextSerial = serial };
+    }
+
+    /// <summary>The self-signed CA of the <c>/tsa/iofe</c> TSA (see <see cref="TsaCaId"/>).</summary>
+    private static StoredAuthority TimestampingCa(string name, DateTimeOffset now)
+    {
+        using var key = RSA.Create(3072);
+        using var certificate = CaRequest($"CN=SimpleSign Sandbox Timestamping CA ({name}), O=SimpleSign Sandbox", key, pathLength: 0)
+            .CreateSelfSigned(now.AddYears(-2), now.AddYears(20));
+        return new StoredAuthority { Id = TsaCaId, Title = "Timestamping CA (self-signed)", Pair = Pair(certificate, key) };
     }
 
     private static StoredAuthority IssueIntermediate(X509Certificate2 root, RSA rootKey, Uri baseUrl, string name, byte[] serial, IntermediateDefinition definition)
@@ -734,6 +759,10 @@ internal sealed class SandboxPki : IDisposable
             Problem: "Revoked", Usage: CertificateUsage.Timestamping, Revoked: true),
         new("tsa-expired", "Expired TSA", "The TSA of /tsa/expired: its certificate expired yesterday, so its tokens must not be trusted.",
             Problem: "Expired", Usage: CertificateUsage.Timestamping),
+        new("tsa-iofe", "TSA under its own CA", "The TSA of /tsa/iofe, issued by the self-signed Timestamping CA: trusted only through a list that names that CA (the Sandbox's INDECOPI-layout list, /tl/iofe.xml).",
+            Usage: CertificateUsage.Timestamping, IssuerId: TsaCaId),
+        new("code-signing", "Signature software", "A code-signing certificate, as INDECOPI lists the accredited signature software: listed in /tl/iofe.xml, it must never become a trust anchor.",
+            Usage: CertificateUsage.CodeSigning, Pointers: RevocationPointers.CrlHttp),
         new("ocsp-responder", "Delegated OCSP responder", "Signs the intermediate CA's OCSP responses when the delegated signer is chosen (OCSPSigning, id-pkix-ocsp-nocheck).",
             Usage: CertificateUsage.OcspSigning, Pointers: RevocationPointers.None),
         new("tls-server", "HTTPS endpoint", "The TLS certificate of the HTTPS endpoint (serverAuth, localhost and the public host).",
@@ -841,6 +870,7 @@ internal sealed class SandboxPki : IDisposable
         {
             CertificateUsage.Timestamping => $"SimpleSign Sandbox {holder} ({Name})",
             CertificateUsage.OcspSigning => $"SimpleSign Sandbox OCSP Responder ({Name})",
+            CertificateUsage.CodeSigning => $"SimpleSign Sandbox {holder} ({Name})",
             CertificateUsage.TlsServer => BaseUrl.Host,
             _ => holder,
         });
@@ -871,6 +901,7 @@ internal sealed class SandboxPki : IDisposable
             CertificateUsage.Timestamping => new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.8")], true),
             CertificateUsage.OcspSigning => new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.9")], false),
             CertificateUsage.TlsServer => new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false),
+            CertificateUsage.CodeSigning => new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.3")], false),
             _ => new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.2"), new Oid("1.3.6.1.5.5.7.3.4")], false),
         });
         if (seed.Usage == CertificateUsage.OcspSigning)

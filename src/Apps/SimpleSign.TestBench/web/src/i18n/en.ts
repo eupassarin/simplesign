@@ -120,6 +120,7 @@ export const en = {
       SandboxExpired: "Sandbox, expired TSA",
       SandboxWrongName: "Sandbox, wrong TSA name",
       SandboxShortLived: "Sandbox, short-lived TSA (30 s)",
+      SandboxIofe: "Sandbox, TSA under its own CA (IOFE list)",
       DigiCert: "DigiCert",
       Sectigo: "Sectigo",
       FreeTsa: "FreeTSA",

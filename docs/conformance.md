@@ -82,7 +82,7 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **ETSI TS 119 612 / TS 102 231 v3** | Trusted lists | ✅ | `TrustedList`: signature checked against the scheme operator, active CA/TSA services as anchors, NextUpdate enforced; service history gives the anchors at a time (`ValidationOptions.TimedTrustAnchors`, ADR 0026) |
 | **RFC 3161** | TSA checks | ✅ | TSA signature and critical exclusive timeStamping EKU at signing time; `tsa` name (§2.4.2) and TSA chain revocation at validation |
 | **RFC 4511 / RFC 4516** | LDAP CRL retrieval | ✅ | Read-only, opt-in (`OutboundHttpPolicy.AllowLdap`), same address checks as HTTP |
-| **IOFE** (Peru, Ley 27269) | Trust anchors and policies | 🟡 | `SimpleSign.Peru.Iofe` (anchors from INDECOPI's signed trusted list, `IofePolicies`) |
+| **IOFE** (Peru, Ley 27269) | Trust anchors and policies | ✅ | `SimpleSign.Peru.Iofe`: anchors from INDECOPI's signed trusted list (TS 102 231 v3, its `unspecified` TSAs, no code-signing certificate), kept current (`IofeTrustedListSource`), checked against the real list; `IofePolicies` for the *Guía de Acreditación* v4.0, every annex B item mapped in [indecopi-checklist.md](playbooks/indecopi-checklist.md) and the automated ones run by the `indecopi-guia-v4` playbook ([iofe.md](articles/iofe.md)). Not covered: data of Peruvian certificates (DNI/RUC) and the DNIe middleware |
 
 ## SubFilter Support
 

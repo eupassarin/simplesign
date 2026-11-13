@@ -2,6 +2,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Signing;
+using SimpleSign.Peru.Iofe;
 using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
@@ -17,6 +18,12 @@ public enum SigningTrustChoice
 
     /// <summary>The Sandbox's trusted list (its CA and TSA services), checked against its operator's certificate.</summary>
     SandboxTrustedList,
+
+    /// <summary>
+    /// The Sandbox's list laid out as INDECOPI's (<c>/tl/iofe.xml</c>), read as <c>IofeExtension</c> reads Peru's: its CA
+    /// and <c>unspecified</c> services (the CA of the <c>/tsa/iofe</c> TSA), never the code-signing certificate it lists.
+    /// </summary>
+    SandboxIofeList,
 }
 
 /// <summary>
@@ -51,11 +58,13 @@ internal sealed class SigningControls
     private readonly X509Certificate2? _root;
     private readonly string? _trustedListUrl;
     private readonly X509Certificate2? _trustedListSigner;
+    private readonly bool _iofe;
 
     private SigningControls(
         IReadOnlyList<ITrustAnchorProvider> anchors, X509Certificate2? root, string? trustedListUrl, X509Certificate2? trustedListSigner,
-        X509Certificate2? expectedTsa, string? expectedTsaId, RecordingAuditSink? audit)
+        X509Certificate2? expectedTsa, string? expectedTsaId, RecordingAuditSink? audit, bool iofe = false)
     {
+        _iofe = iofe;
         Anchors = anchors;
         _root = root;
         _trustedListUrl = trustedListUrl;
@@ -96,6 +105,7 @@ internal sealed class SigningControls
         string? listUrl = null;
         X509Certificate2? listSigner = null;
         X509Certificate2? expected = null;
+        bool iofe = false;
         if (options.Trust.Count > 0 || options.ExpectedTsa is not null)
         {
             var connection = sandbox.Current ?? throw new ArgumentException(L.T("The trust anchors and the expected TSA come from the Sandbox: connect one."));
@@ -106,15 +116,21 @@ internal sealed class SigningControls
                 anchors.Add(new FixedAnchors("Sandbox root", root));
             }
 
-            if (options.Trust.Contains(SigningTrustChoice.SandboxTrustedList))
+            if (options.Trust.Contains(SigningTrustChoice.SandboxTrustedList) && options.Trust.Contains(SigningTrustChoice.SandboxIofeList))
+            {
+                throw new ArgumentException(L.T("Choose one trusted list: the Sandbox's trusted list or its INDECOPI-layout list."));
+            }
+
+            iofe = options.Trust.Contains(SigningTrustChoice.SandboxIofeList);
+            if (iofe || options.Trust.Contains(SigningTrustChoice.SandboxTrustedList))
             {
                 var lists = connection.Info.TrustedLists ?? throw new ArgumentException(L.T("This Sandbox publishes no trusted list."));
-                listUrl = lists.TlUrl;
+                listUrl = iofe ? lists.IofeUrl ?? throw new ArgumentException(L.T("This Sandbox publishes no INDECOPI-layout list: update it.")) : lists.TlUrl;
                 listSigner = X509Certificate2.CreateFromPem(await http.GetStringAsync(new Uri(lists.TlSignerUrl), cancellationToken));
                 try
                 {
-                    anchors.Add(await TrustedList.DownloadAsync(
-                        new Uri(listUrl), new TrustedListOptions { SignerCertificates = [listSigner] }, sandbox, cancellationToken: cancellationToken));
+                    var listOptions = (iofe ? IofeExtension.DefaultListOptions : new TrustedListOptions()) with { SignerCertificates = [listSigner] };
+                    anchors.Add(await TrustedList.DownloadAsync(new Uri(listUrl), listOptions, sandbox, cancellationToken: cancellationToken));
                 }
                 catch (Exception ex) when (ex is InvalidDataException or System.Security.Cryptography.CryptographicException or HttpRequestException)
                 {
@@ -129,7 +145,7 @@ internal sealed class SigningControls
             }
         }
 
-        return new SigningControls(anchors, root, listUrl, listSigner, expected, options.ExpectedTsa, options.AuditLog ? new RecordingAuditSink() : null);
+        return new SigningControls(anchors, root, listUrl, listSigner, expected, options.ExpectedTsa, options.AuditLog ? new RecordingAuditSink() : null, iofe);
     }
 
     /// <summary>The C# of the trust anchors, or null when there are none.</summary>
@@ -137,8 +153,12 @@ internal sealed class SigningControls
         Anchors.Count == 0 ? null
         : ".WithTrustAnchors(" + string.Join(", ",
             [.. _root is null ? Array.Empty<string>() : ["new DirectoryTrustAnchorProvider(\"trust\") /* the Sandbox root */"],
-             .. _trustedListUrl is null ? Array.Empty<string>() : [$"await TrustedList.DownloadAsync(new Uri({SigningPlan.Str(_trustedListUrl)}), new TrustedListOptions {{ SignerCertificates = [tlSigner] }})"]])
+             .. _trustedListUrl is null ? Array.Empty<string>() : [$"await TrustedList.DownloadAsync(new Uri({SigningPlan.Str(_trustedListUrl)}), {ListOptionsCode})"]])
         + ") // the signing certificate and each TSA must chain to these anchors";
+
+    private string ListOptionsCode => _iofe
+        ? "IofeExtension.DefaultListOptions with { SignerCertificates = [tlSigner] }"
+        : "new TrustedListOptions { SignerCertificates = [tlSigner] }";
 
     /// <summary>The C# of the audit sink, or null.</summary>
     public string? AuditCode() =>
@@ -159,6 +179,10 @@ internal sealed class SigningControls
         if (_trustedListUrl is not null)
         {
             line.Add("--tsl", _trustedListUrl, "--tsl-signer", TrustedListSignerFile);
+            if (_iofe)
+            {
+                line.Add("--tsl-profile", "iofe");
+            }
         }
 
         if (Audit is not null)

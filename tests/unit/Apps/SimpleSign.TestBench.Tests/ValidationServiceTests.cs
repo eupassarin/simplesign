@@ -74,6 +74,23 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
     }
 
     [SkippableFact]
+    public async Task ReportAsync_SandboxIofeList_TrustsTheRootThroughTheListAndGivesTheCliItsProfile()
+    {
+        var sample = fixture.ValidationSamples.Single(s => s.Id == "valid");
+
+        var report = await fixture.Validation.ReportAsync(sample.FileId, new ValidationSettings
+        {
+            Trust = [TrustChoice.SandboxIofeList],
+            // The IOFE policy: the default one accepts trusted lists of version 5 and 6 only, INDECOPI's is version 3.
+            PolicyId = SimpleSign.TestBench.Policies.PolicyPresets.Id("validation", "iofe"),
+        }, default);
+
+        report.Overall.ShouldBe("Valid", string.Join(" | ", report.Signatures.SelectMany(x => x.Report.Findings ?? []).Where(f => f.Status == "fail").Select(f => f.Constraint)));
+        report.Code.Cli.ShouldContain("--tsl-profile iofe");
+        report.Code.Cli.ShouldContain("tl/iofe.xml");
+    }
+
+    [SkippableFact]
     public async Task ReportAsync_CustomRootUpload_TrustsIt()
     {
         var sample = fixture.ValidationSamples.Single(s => s.Id == "valid");

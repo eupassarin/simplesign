@@ -97,8 +97,30 @@ public sealed class IofePoliciesTests : IDisposable
         keyUsage.Ids.ShouldBe(["nonRepudiation"]);
     }
 
+    [Fact]
+    public void Validation_TrustedListVersion_AcceptsTheVersion3IndecopiPublishes()
+    {
+        foreach (var policy in new[] { IofePolicies.Validation, IofePolicies.ValidationNonRepudiation })
+        {
+            var version = policy.Find("TrustedLists/TLVersion").ShouldNotBeNull();
+            version.Level.ShouldBe(ConstraintLevel.Fail);
+            version.Ids.ShouldBe(["3", "5", "6"]);
+        }
+    }
+
+    [Fact]
+    public void SigningNonRepudiation_KeyUsage_RequiresNonRepudiationAndKeepsTheRestOfSigning()
+    {
+        var keyUsage = IofePolicies.SigningNonRepudiation.Find("SigningCertificate/KeyUsage").ShouldNotBeNull();
+        keyUsage.Level.ShouldBe(ConstraintLevel.Fail);
+        keyUsage.Ids.ShouldBe(["nonRepudiation"]);
+        IofePolicies.SigningNonRepudiation.Find("SigningCertificate/ProspectiveCertificateChain").ShouldNotBeNull().Level.ShouldBe(ConstraintLevel.Fail);
+        IofePolicies.Signing.Find("SigningCertificate/KeyUsage")!.Ids.ShouldBe(["digitalSignature", "nonRepudiation"]);
+    }
+
     [Theory]
     [InlineData("iofe-signing.json")]
+    [InlineData("iofe-signing-nonrepudiation.json")]
     [InlineData("iofe-validation.json")]
     [InlineData("iofe-validation-nonrepudiation.json")]
     public void Policies_MatchTheFilesInDocs(string fileName)
@@ -106,6 +128,7 @@ public sealed class IofePoliciesTests : IDisposable
         string json = fileName switch
         {
             "iofe-signing.json" => IofePolicies.Signing.ToJson(),
+            "iofe-signing-nonrepudiation.json" => IofePolicies.SigningNonRepudiation.ToJson(),
             "iofe-validation.json" => IofePolicies.Validation.ToJson(),
             _ => IofePolicies.ValidationNonRepudiation.ToJson(),
         };

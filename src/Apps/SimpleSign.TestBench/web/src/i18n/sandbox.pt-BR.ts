@@ -35,6 +35,7 @@ export const sandboxPtBR: SandboxMessages = {
     tsaUntrusted: "ACT fora da cadeia",
     tsaRevoked: "ACT com certificado revogado",
     tsaWrongName: "ACT cujo token nomeia outra ACT ({name})",
+    tsaIofe: "ACT sob AC própria, confiável só pela lista no formato do INDECOPI",
     userPassword: "Usuário / senha",
     csc: "API v2 do Cloud Signature Consortium",
     cscHint: "Um serviço de assinatura remota simulado, com as chaves do Sandbox. A página de login OAuth aprova na hora.",
@@ -62,6 +63,7 @@ export const sandboxPtBR: SandboxMessages = {
     tl: "Lista de confiança (TL)",
     lotlSigner: "Operador da LOTL (PEM)",
     tlSigner: "Operador da TL (PEM)",
+    iofeList: "Lista no formato do INDECOPI (PE, assinada pelo operador da TL)",
     clientsSummary: "O JSON de GET /api/info",
   },
   pki: {

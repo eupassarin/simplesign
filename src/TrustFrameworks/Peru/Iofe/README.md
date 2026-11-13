@@ -8,9 +8,15 @@
   obtain it from INDECOPI and check its fingerprint out of band. The list types several accredited TSAs as
   `Svctype/unspecified` (Llama.pe, BPO Advisors, Girasol): `IofeExtension.DefaultListOptions` keeps that type too,
   without the code-signing certificates of the signature software listed under it.
-- `IofePolicies.Signing` / `Validation` / `ValidationNonRepudiation`: the policies of INDECOPI's accreditation guide (v4.0),
-  also kept as files in `docs/policies/iofe-*.json`. Signing with `Signing` needs trust anchors (the extension or
-  `WithTrustAnchors`) and checks the whole chain's revocation and every TSA before signing.
+- `IofeTrustedListSource` (`IofeExtension.LoadRefreshableAsync`, `services.AddSimpleSignIofe(options)`): the list read
+  again on demand or on a schedule, swapped atomically, the last good copy kept until its NextUpdate, a `Changed`
+  event with the services added and removed.
+- `IofePolicies.Signing` / `SigningNonRepudiation` / `Validation` / `ValidationNonRepudiation`: the policies of
+  INDECOPI's accreditation guide (v4.0), also kept as files in `docs/policies/iofe-*.json`. Signing with them needs trust
+  anchors (the extension or `WithTrustAnchors`) and checks the whole chain's revocation and every TSA before signing.
+
+Documentation: [docs/articles/iofe.md](../../../../docs/articles/iofe.md); every item of the guide's annex B in
+[docs/playbooks/indecopi-checklist.md](../../../../docs/playbooks/indecopi-checklist.md).
 
 ```csharp
 var iofe = await IofeExtension.LoadAsync(new IofeExtensionOptions

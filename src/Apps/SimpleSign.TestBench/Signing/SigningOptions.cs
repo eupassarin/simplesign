@@ -48,6 +48,12 @@ public enum TsaProvider
     /// </summary>
     SandboxShortLived,
 
+    /// <summary>
+    /// The connected Sandbox's TSA under its own self-signed CA, which only the INDECOPI-layout list names (as an
+    /// <c>unspecified</c> service).
+    /// </summary>
+    SandboxIofe,
+
     DigiCert,
     Sectigo,
     FreeTsa,
