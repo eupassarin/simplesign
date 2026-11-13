@@ -44,14 +44,12 @@ export const profiles: Record<Profile, ProfileDefinition> = {
 
 const all = Object.keys(profiles) as Profile[]
 
-/** The profiles that read a trusted list, real or the Sandbox's: each is offered twice. */
+/** The profiles that read a trusted list, real or the Sandbox's: the list is chosen inside their entry. */
 const withSource: Profile[] = ["Iofe", "Eidas"]
 
-/** The menu's entries: Peru and the EU twice (the real list, the Sandbox's), Gov.br on Validate only. */
-function entries(page: ProfilePage): ProfileChoice[] {
-  return all
-    .filter((p) => page === "validate" || profiles[p].signs)
-    .flatMap((p): ProfileChoice[] => (withSource.includes(p) ? [{ profile: p, source: "Official" }, { profile: p, source: "Sandbox" }] : [{ profile: p, source: "Official" }]))
+/** The menu's profiles: one entry each (Peru's and the EU's list is chosen inside the entry), Gov.br on Validate only. */
+function entries(page: ProfilePage): Profile[] {
+  return all.filter((p) => page === "validate" || profiles[p].signs)
 }
 
 /** The fields the profile is written to on a page: the signing controls (Sign) and the validation. */
@@ -189,8 +187,13 @@ export function ProfileMenu({ page, options, update }: {
   const memory = useRef<ProfileMemory>({})
   const active = activeProfile(options)
   const extras = extraProfiles(options)
+  // The list of Peru and of the EU: the one on while the profile is on, else the last chosen (the Sandbox's at first:
+  // the TestBench's certificates).
+  const [pickedSources, setPickedSources] = useState<Partial<Record<Profile, ProfileSource>>>({})
+  const sourceOf = (profile: Profile): ProfileSource => active?.profile === profile ? active.source : pickedSources[profile] ?? "Sandbox"
   const choose = (next: ProfileChoice | null) => {
     setOpen(false)
+    if (next && withSource.includes(next.profile)) setPickedSources((picked) => ({ ...picked, [next.profile]: next.source }))
     if (same(next, active)) return
     if (!active) memory.current = rememberPolicies(options)
     update((current) => applyProfile(current, next, page, memory.current))
@@ -221,17 +224,36 @@ export function ProfileMenu({ page, options, update }: {
           </span>
         </button>
         <div className="bg-border -mx-1 my-1 h-px" />
-        {entries(page).map((choice) => (
-          <button key={`${choice.profile}-${choice.source}`} type="button" className={cn(item, same(active, choice) && "bg-accent/50")} onClick={() => choose(choice)}>
-            <Check className={cn("mt-0.5 size-4 shrink-0", same(active, choice) ? "opacity-100" : "opacity-0")} />
-            <span className="min-w-0">
-              <span className="block text-sm font-medium"><span aria-hidden>{profiles[choice.profile].flag}</span> {profileTitle(choice, t)}</span>
-              <span className="text-muted-foreground mt-0.5 block space-y-0.5 text-xs">
-                {effects(choice, page, t).map((line) => <span key={line} className="block">{line}</span>)}
-              </span>
-            </span>
-          </button>
-        ))}
+        {entries(page).map((profile) => {
+          const choice: ProfileChoice = { profile, source: withSource.includes(profile) ? sourceOf(profile) : "Official" }
+          const on = active?.profile === profile
+          return (
+            <div key={profile} className={cn("rounded-sm", on && "bg-accent/50")}>
+              <button type="button" className={item} onClick={() => choose(choice)}>
+                <Check className={cn("mt-0.5 size-4 shrink-0", on ? "opacity-100" : "opacity-0")} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium"><span aria-hidden>{profiles[profile].flag}</span> {t(profiles[profile].title)}</span>
+                  <span className="text-muted-foreground mt-0.5 block space-y-0.5 text-xs">
+                    {effects(choice, page, t).map((line) => <span key={line} className="block">{line}</span>)}
+                  </span>
+                </span>
+              </button>
+              {withSource.includes(profile) && (
+                <div className="flex items-center gap-1.5 pr-2 pb-1.5 pl-8 text-xs" role="radiogroup" aria-label={t("wb.profile.listLabel")}>
+                  <span className="text-muted-foreground">{t("wb.profile.listLabel")}</span>
+                  {(["Official", "Sandbox"] as const).map((source) => (
+                    <button key={source} type="button" role="radio" aria-checked={sourceOf(profile) === source}
+                      className={cn("rounded border px-1.5 py-0.5",
+                        sourceOf(profile) === source ? "border-primary/40 bg-primary/10 text-primary" : "hover:bg-accent text-muted-foreground")}
+                      onClick={() => choose({ profile, source })}>
+                      {t(source === "Sandbox" ? "wb.profile.listSandboxShort" : profile === "Eidas" ? "wb.profile.lotlEuShort" : "wb.profile.listIndecopiShort")}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
         <div className="bg-border -mx-1 my-1 h-px" />
         <div className="px-2 pt-1 pb-1.5">
           <p className="text-sm font-medium">{t("wb.profile.alsoTrust")}</p>

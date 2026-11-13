@@ -556,6 +556,65 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
         evaluation.Indication.ShouldBe(SignatureIndication.Valid);
     }
 
+    [Fact]
+    public void Evaluate_DocumentTimestampAndSignerExpired_DocumentTimestampIsTheProofOfExistence()
+    {
+        using var tsa = _pki.IssueTimestampingCertificate();
+        var genTime = DateTimeOffset.UtcNow.AddHours(-1);
+        byte[] token = TimestampTestResponseBuilder.CreateTokenForData([1, 2, 3], new TimestampTokenOptions
+        {
+            TsaCertificate = tsa,
+            ExtraCertificates = [_pki.IntermediateCa, _pki.RootCa],
+            TsaName = tsa.SubjectName,
+            GenTime = genTime,
+        });
+        var afterExpiry = _pki.Leaf.NotAfter.ToUniversalTime().AddDays(1);
+
+        // A PAdES B-B augmented with a document time-stamp (EN 319 142-1, level T), validated after the signer expired.
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with
+        {
+            ValidationTime = afterExpiry,
+            Timestamps = [new TimestampTokenFacts(TimestampTokenKind.Document, token, ImprintValid: true, Trusted: true)],
+        }, ValidationPolicy.Default);
+
+        evaluation.BestSignatureTime.ShouldBe(genTime);
+        evaluation.Constraints.ShouldContain(c => c.Id == "Timestamp/BestSignatureTimeBeforeExpirationDateOfSigningCertificate" && c.Status == ConstraintStatus.Passed);
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/NotExpired" && c.Status == ConstraintStatus.Passed);
+        evaluation.Indication.ShouldBe(SignatureIndication.Valid);
+    }
+
+    [Fact]
+    public void Evaluate_NoTimestampAndSignerExpired_OutOfBoundsNoPoe()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { ValidationTime = _pki.Leaf.NotAfter.ToUniversalTime().AddDays(1) },
+            ValidationPolicy.Default);
+
+        evaluation.BestSignatureTime.ShouldBeNull();
+        evaluation.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.OutOfBoundsNoPoe);
+    }
+
+    [Fact]
+    public void Evaluate_DocumentTimestampUntrusted_IsNotAProofOfExistence()
+    {
+        using var tsa = _pki.IssueTimestampingCertificate();
+        byte[] token = TimestampTestResponseBuilder.CreateTokenForData([1, 2, 3], new TimestampTokenOptions
+        {
+            TsaCertificate = tsa,
+            ExtraCertificates = [_pki.IntermediateCa, _pki.RootCa],
+            GenTime = DateTimeOffset.UtcNow.AddHours(-1),
+        });
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with
+        {
+            ValidationTime = _pki.Leaf.NotAfter.ToUniversalTime().AddDays(1),
+            Timestamps = [new TimestampTokenFacts(TimestampTokenKind.Document, token, ImprintValid: true, Trusted: false)],
+        }, ValidationPolicy.Default);
+
+        evaluation.BestSignatureTime.ShouldBeNull();
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.OutOfBoundsNoPoe);
+    }
+
     [Theory]
     [InlineData("1.2.3.4", ConstraintStatus.Passed)]
     [InlineData("9.9.9", ConstraintStatus.Failed)]

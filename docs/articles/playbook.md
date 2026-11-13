@@ -107,7 +107,12 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
 
 ## The samples
 
-- `sandbox-basics` — a good chain, B-LT through the Sandbox's TSA, and the cases a signer must refuse.
+- `sandbox-basics` — a full tour of the Sandbox: every signer of its good chain in PAdES, CAdES and XAdES up to B-LTA;
+  each of its TSAs; CRLs over HTTP, HTTPS and LDAP and its OCSP responder with every failure they can be switched to
+  (and the fallback from one to the other); revocations made for a step; short-lived certificates; its trusted list
+  and the IOFE profile read from it; the cases a signer must refuse and the samples a validator must not accept.
+  Through the library only, with a signing policy it declares (`sandbox-strict`: the strict preset plus the chain to
+  the Sandbox root, the TSA checks and CRLs with nextUpdate).
 - `indecopi-guia-v4` — the automated part of INDECOPI's guide v4.0, Annex B: signing (F-n) and verification (V-n) by
   automated agents and the time-stamp checks (S-n), with the IOFE policies and the Sandbox's list in INDECOPI's
   layout, through the library and the CLI. It covers the items [indecopi-checklist.md](../playbooks/indecopi-checklist.md)
