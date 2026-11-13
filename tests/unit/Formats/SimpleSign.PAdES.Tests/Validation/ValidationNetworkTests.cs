@@ -114,6 +114,43 @@ public sealed class ValidationNetworkTests
         await Should.ThrowAsync<OperationCanceledException>(() => validation.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
+    [Fact]
+    public async Task ValidateAsync_IssuerFoundOnlyThroughAia_RevocationCheckGetsTheIssuer()
+    {
+        // A RENIEC DNIe signature carries only the signer's certificate: its issuing CA comes from the AIA, and the
+        // revocation check needs it (OCSP request, CRL signature). Given only the CMS's certificates it could not
+        // decide, and the signature was INDETERMINATE although the chain was anchored.
+        using var pki = new SyntheticPki();
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
+            .WithCertificate(pki.Leaf, []).SignAsync();
+        using var client = new HttpClient();
+        var httpProvider = new Mock<IHttpClientProvider>();
+        httpProvider.Setup(p => p.GetClient()).Returns(client);
+        var chainService = new Mock<ICertificateChainService>();
+        chainService.Setup(s => s.DownloadAiaCertsAsync(client, It.IsAny<X509Certificate2>(),
+                It.IsAny<IReadOnlyList<X509Certificate2>>(), It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([pki.IntermediateCa]);
+        var checker = new Mock<IRevocationChecker>();
+        checker.Setup(s => s.CheckRevocationAsync(It.IsAny<X509Certificate2>(), It.IsAny<IReadOnlyList<X509Certificate2>>(),
+                It.IsAny<IReadOnlyList<byte[]>>(), It.IsAny<IReadOnlyList<byte[]>>(), It.IsAny<CancellationToken>(), It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync((X509Certificate2 cert, IReadOnlyList<X509Certificate2> chain, IReadOnlyList<byte[]> _, IReadOnlyList<byte[]> _, CancellationToken _, DateTimeOffset? _) =>
+                chain.Any(c => c.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData))
+                    ? (true, RevocationSource.OnlineOcsp)
+                    : throw new RevocationCheckException("The issuer of the signing certificate is unknown."));
+        var validator = new PdfSignatureValidator(httpProvider.Object, checker.Object, new ValidationOptions
+        {
+            TrustedRoots = [pki.RootCa],
+            CheckRevocation = true,
+        }, certChainService: chainService.Object);
+
+        using var stream = new MemoryStream(signed);
+        var result = (await validator.ValidateAsync(stream)).ShouldHaveSingleItem();
+
+        result.IsCertificateChainValid.ShouldBeTrue();
+        result.RevocationSource.ShouldBe(RevocationSource.OnlineOcsp);
+        result.Warnings.ShouldNotContain(w => w.Contains("Revocation check could not be completed"));
+    }
+
     private static X509Certificate2 CreateCertificate(string endpoint)
     {
         // A literal test IP keeps DNS resolution outside the timeout assertion.
