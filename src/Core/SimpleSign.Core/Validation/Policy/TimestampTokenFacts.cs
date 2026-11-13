@@ -14,10 +14,16 @@ internal enum TimestampTokenKind
 
     /// <summary>A content timestamp: taken over the signed data before the signature.</summary>
     Content,
+
+    /// <summary>
+    /// A PAdES document time-stamp over the signature's revision, standing for the signature timestamp it lacks (EN 319 142-1
+    /// gives level T with either): its time is the signature's proof of existence.
+    /// </summary>
+    Document,
 }
 
 /// <summary>A timestamp token of a signature, with what the format validator established about it.</summary>
-/// <param name="Kind">Signature or archive timestamp.</param>
+/// <param name="Kind">Signature, archive, content or document timestamp.</param>
 /// <param name="Token">The DER RFC 3161 token (a CMS SignedData).</param>
 /// <param name="ImprintValid">Whether the token covers what it should (its messageImprint); null when not checked.</param>
 /// <param name="Trusted">Whether the TSA chains to a trust anchor; null when not checked.</param>
@@ -29,6 +35,7 @@ internal sealed record TimestampTokenFacts(TimestampTokenKind Kind, byte[] Token
     {
         TimestampTokenKind.Signature => "signature timestamp",
         TimestampTokenKind.Archive => "archive timestamp",
+        TimestampTokenKind.Document => "document timestamp",
         _ => "content timestamp",
     };
 }

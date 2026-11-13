@@ -651,4 +651,158 @@ public sealed class PdfSignatureValidatorTests
         }
         return w.Encode();
     }
+    // ── A B-B augmented with a document time-stamp, validated after the signer expired ──────────────────────
+
+    private static readonly Lazy<Task<ExpiredSignerDocuments>> s_expired = new(ExpiredSignerDocuments.CreateAsync);
+
+    [Theory]
+    [InlineData(ValidationLevel.Timestamps)]
+    [InlineData(ValidationLevel.ArchivalData)]
+    public async Task ValidateAsync_BasicAugmentedWithDocumentTimestampAndSignerExpired_DocumentTimestampIsTheProofOfExistence(ValidationLevel level)
+    {
+        var documents = await s_expired.Value;
+
+        var result = await ValidateSignatureAsync(documents.TrustedTsa, documents.Root, level);
+
+        result.Indication.ShouldBe(SignatureIndication.Valid, string.Join("; ", result.Errors));
+        result.BestSignatureTime.ShouldBe(documents.GenTime);
+        result.Warnings.ShouldContain(w => w.Contains("is the signature's proof of existence", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_BasicAugmentedWithDocumentTimestampBelowTimestampLevel_OutOfBoundsNoPoe()
+    {
+        var documents = await s_expired.Value;
+
+        var result = await ValidateSignatureAsync(documents.TrustedTsa, documents.Root, ValidationLevel.BasicSignatures);
+
+        result.BestSignatureTime.ShouldBeNull();
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        result.SubIndication.ShouldBe(SignatureSubIndication.OutOfBoundsNoPoe);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_DocumentTimestampOfAnUntrustedTsaAndSignerExpired_OutOfBoundsNoPoe()
+    {
+        var documents = await s_expired.Value;
+
+        var result = await ValidateSignatureAsync(documents.UntrustedTsa, documents.Root, ValidationLevel.ArchivalData);
+
+        result.BestSignatureTime.ShouldBeNull();
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        result.SubIndication.ShouldBe(SignatureSubIndication.OutOfBoundsNoPoe);
+    }
+
+    private static async Task<SignatureValidationResult> ValidateSignatureAsync(byte[] pdf, X509Certificate2 root, ValidationLevel level)
+    {
+        var validator = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustedRoots = [root], Level = level });
+        using var stream = new MemoryStream(pdf);
+        var results = await validator.ValidateAsync(stream);
+        return results.Single(r => !r.IsDocumentTimestamp);
+    }
+
+    /// <summary>
+    /// A B-B signed with a certificate valid for a few seconds, raised to B-T with a document time-stamp of a TSA under the
+    /// same root (and of one under another root), returned once the certificate has expired.
+    /// </summary>
+    private sealed record ExpiredSignerDocuments(byte[] TrustedTsa, byte[] UntrustedTsa, X509Certificate2 Root, DateTimeOffset GenTime)
+    {
+        public static async Task<ExpiredSignerDocuments> CreateAsync()
+        {
+            using var rootKey = RSA.Create(2048);
+            var root = Ca("CN=Expiry Test Root", rootKey);
+            using var otherRootKey = RSA.Create(2048);
+            using var otherRoot = Ca("CN=Other Test Root", otherRootKey);
+            using var tsa = Issue("CN=Expiry Test TSA", root, rootKey, root.NotAfter, X509KeyUsageFlags.DigitalSignature, timestamping: true);
+            using var otherTsa = Issue("CN=Other TSA", otherRoot, otherRootKey, otherRoot.NotAfter, X509KeyUsageFlags.DigitalSignature, timestamping: true);
+            using var signerKey = RSA.Create(2048);
+            // The signer's lifetime starts after the keys are made; a busy machine gets a longer one.
+            foreach (int seconds in new[] { 3, 10, 30 })
+            {
+                var notAfter = DateTimeOffset.UtcNow.AddSeconds(seconds);
+                using var signer = Issue("CN=Short-lived Signer", root, rootKey, notAfter,
+                    X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, timestamping: false, signerKey);
+                var now = DateTimeOffset.UtcNow;
+                var genTime = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, TimeSpan.Zero);
+                byte[] signed;
+                try
+                {
+                    signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(signer).SignAsync();
+                }
+                catch (SimpleSign.Core.Signing.SigningException ex) when (ex.Reason == SimpleSign.Core.Signing.SigningErrorReason.CertificateExpired)
+                {
+                    continue;
+                }
+
+                byte[] trusted = await AugmentAsync(signed, tsa, root, genTime);
+                byte[] untrusted = await AugmentAsync(signed, otherTsa, otherRoot, genTime);
+                var wait = notAfter.AddSeconds(1.5) - DateTimeOffset.UtcNow;
+                if (wait > TimeSpan.Zero)
+                {
+                    await Task.Delay(wait);
+                }
+
+                return new ExpiredSignerDocuments(trusted, untrusted, root, genTime);
+            }
+
+            throw new InvalidOperationException("The short-lived signer expired before it could sign, even with 30 s.");
+        }
+
+        private static async Task<byte[]> AugmentAsync(byte[] signed, X509Certificate2 tsa, X509Certificate2 root, DateTimeOffset genTime)
+        {
+            using var client = new HttpClient(new MockHttpHandler(async request =>
+            {
+                byte[] body = await request.Content!.ReadAsByteArrayAsync().ConfigureAwait(false);
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(TimestampTestResponseBuilder.CreateForRequest(body, new TimestampTokenOptions
+                    {
+                        TsaCertificate = tsa,
+                        ExtraCertificates = [root],
+                        TsaName = tsa.SubjectName,
+                        GenTime = genTime,
+                    }))
+                    {
+                        Headers = { ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/timestamp-reply") },
+                    },
+                };
+            }));
+            var result = await PadesAugmenter.Document(signed)
+                .WithTimestamp(new SimpleSign.Core.Signing.TimestampOptions(new Uri("http://tsa.example.com"), new SimpleSign.Core.Http.SingleClientProvider(client)))
+                .ToLevel(SimpleSign.Core.Signing.AdesBaselineLevel.Timestamped)
+                .AugmentAsync();
+            return result.Document;
+        }
+
+        private static X509Certificate2 Ca(string subject, RSA key)
+        {
+            var request = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+            request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+            return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        }
+
+        private static X509Certificate2 Issue(
+            string subject, X509Certificate2 issuer, RSA issuerKey, DateTimeOffset notAfter, X509KeyUsageFlags usage, bool timestamping, RSA? subjectKey = null)
+        {
+            using var ownKey = subjectKey is null ? RSA.Create(2048) : null;
+            var key = subjectKey ?? ownKey!;
+            byte[] serial = RandomNumberGenerator.GetBytes(8);
+            serial[0] &= 0x7F;
+            var request = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(usage, true));
+            if (timestamping)
+            {
+                request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.8")], true));
+            }
+
+            request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer, true, false));
+            using var certificate = request.Create(issuer.SubjectName, X509SignatureGenerator.CreateForRSA(issuerKey, RSASignaturePadding.Pkcs1),
+                DateTimeOffset.UtcNow.AddHours(-1), notAfter, serial);
+            using var withKey = certificate.CopyWithPrivateKey(key);
+            return CertificateLoader.LoadPkcs12(withKey.Export(X509ContentType.Pfx, "export"), "export");
+        }
+    }
 }

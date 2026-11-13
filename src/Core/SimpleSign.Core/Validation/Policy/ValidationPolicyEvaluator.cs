@@ -320,12 +320,14 @@ internal static class ValidationPolicyEvaluator
                 }
             }
 
-            // The best signature time: the earliest accepted signature timestamp (EN 319 102-1 §5.6.2.4).
-            var signatureTimes = accepted.Where(t => t.Kind == TimestampTokenKind.Signature).Select(t => t.Time).ToList();
+            // The best signature time: the earliest accepted signature timestamp (EN 319 102-1 §5.6.2.4), or the PAdES
+            // document time-stamp that stands for it (EN 319 142-1, level T).
+            static bool OverSignature(TimestampTokenKind kind) => kind is TimestampTokenKind.Signature or TimestampTokenKind.Document;
+            var signatureTimes = accepted.Where(t => OverSignature(t.Kind)).Select(t => t.Time).ToList();
             _proofOfExistence = signatureTimes.Count > 0 ? signatureTimes.Min() : null;
 
             var contents = all.Where(t => t.Kind == TimestampTokenKind.Content).Select(t => t.Time).ToList();
-            var signatures = all.Where(t => t.Kind == TimestampTokenKind.Signature).Select(t => t.Time).ToList();
+            var signatures = all.Where(t => OverSignature(t.Kind)).Select(t => t.Time).ToList();
             var archives = all.Where(t => t.Kind == TimestampTokenKind.Archive).Select(t => t.Time).ToList();
             // Content timestamps, then signature timestamps, then archive timestamps (EN 319 102-1 §5.6.2.1).
             if ((contents.Count > 0 && (signatures.Count > 0 || archives.Count > 0)) || (signatures.Count > 0 && archives.Count > 0))
