@@ -17,7 +17,7 @@ them and the evidence groups by them.
 1. Start a Sandbox and the TestBench, and connect them (`tools/stack/up.sh`, or the two `dotnet run` lines of
    [testbench.md](testbench.md)). Start DSS too for steps with `crossValidate`.
 2. In the TestBench, open the **Playbook** tab (top bar, after Sign and Validate). Open a playbook file, or pick a
-   sample (`docs/playbooks/*.json` are bundled: `sandbox-basics`, `indecopi-guia-v4`).
+   sample (`docs/playbooks/*.json` are bundled: `sandbox-basics`, `indecopi-guia-v4`, `etsi-baseline`, `icp-brasil-pades`, `govbr-pades`).
 3. The playbook is checked when it loads: every Sandbox signer and certificate, failure, preset and step reference.
    Errors stop it; warnings do not.
 4. The page has three columns:
@@ -59,7 +59,7 @@ them and the evidence groups by them.
 | Kind | Runs | Expectation |
 |---|---|---|
 | `sign` | A TestBench signature (`options`: the Sign page's, see [options.md](../playbooks/options.md)) | `outcome` signed / refused / error, `reason` (the `SigningErrorReason` of a refusal), `level`, `indication`, `dssAgrees`, `etsiReport`, `logContains` |
-| `validate` | A validation of `options.fileId` (`step:ID` for a file an earlier step signed, or a sample) | `outcome` valid / invalid / indeterminate, `indication`, `subIndication`, `etsiReport` |
+| `validate` | A validation of `options.fileId` (`step:ID` for a file an earlier step signed, `input:ID` for a file you upload, or a sample) | `outcome` valid / invalid / indeterminate, `indication`, `subIndication`, `etsiReport` |
 | `augment` | Raises `options.fileId` to `options.level` (`BT`, `BLT`, `BLTA`) with the library's augmenter, through `options.timestamp` (`renew: true` renews a B-LTA), then validates the result; library engine only | `outcome` augmented / refused / error, `level`, `indication`, `subIndication` |
 
 `etsiReport: "valid"` checks the run's ETSI TS 119 102-2 report against the schema embedded in SimpleSign.
@@ -72,6 +72,28 @@ The files those runs produced stay in the TestBench's history.
 
 A validation of `step:ID` run on its own uses the file of that step's latest result; if it never ran, the step says
 to run it first.
+
+### Files you upload (`inputs`)
+
+A playbook can ask for files that only the person running it has: a PDF signed on Gov.br's portal, a signature made
+with a real ICP-Brasil certificate, a document of their own to sign. It declares them at the root, and steps name
+them as `input:ID` wherever a file goes (`fileId`, `documentId`, `dataId`):
+
+```json
+"inputs": [
+  { "id": "govbr-signed", "title": "A PDF signed on Gov.br's portal", "accept": ".pdf",
+    "description": "Sign any PDF at Gov.br and upload what it hands back." }
+],
+…
+{ "id": "v-portal", "kind": "validate", "title": "Validate the portal's signature", "tags": ["gov.br"],
+  "options": { "fileId": "input:govbr-signed", "settings": { "profile": "GovBr" } },
+  "expect": { "outcome": "valid" } }
+```
+
+The Playbook tab shows a **Files to upload** bar with each input: upload, replace or remove its file. A step whose
+input has no file yet is **skipped** (not failed), with a note saying which file it needs; uploading another file
+forgets the results of the steps that use it (and of the steps that use their files). The evidence lists each input
+with its file name, size and SHA-256, and the zip carries the file under `inputs/`.
 
 `sandbox` puts the Sandbox in the state the step needs (CRL, OCSP, TSA or trusted-list failure, certificates to
 revoke) and puts it back after the step. A run of several steps starts from a clean Sandbox.
@@ -126,6 +148,17 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
   AdESig-QC, AdESig) and of its time-stamps (`expect.timestampQualification`: QTSA, TSA), through the library and the
   CLI. It covers the items [eidas-checklist.md](../playbooks/eidas-checklist.md) marks P; see [eidas.md](eidas.md).
   Written by `tools/playbooks/eidas.py`.
+- `icp-brasil-pades` — PAdES under the ICP-Brasil policies (AD-RB, AD-RT, AD-RC, AD-RA; DOC-ICP-15.03) with the
+  `icp-brasil` profile and its policies, through the library and the CLI: the policies, two-phase signing, revocation of
+  the whole chain, the ACT checks, keys and digests (DOC-ICP-01.01), PDF fields and certification, validation and
+  augmentation. The Sandbox's trust is added to the profile's; AD-RA downloads its artifacts from ITI's repository.
+  Its inputs take a PDF signed with a real ICP-Brasil certificate (`icp-signed`, validated with the profile alone) and
+  a PDF of yours to sign under AD-RB and AD-RT (`document`).
+- `govbr-pades` — Gov.br signatures, which only Gov.br's portal makes (PAdES): validation with the `gov-br` profile and
+  its policy (integrity, trust, revocation, validity, key usage), the profile combined with ICP-Brasil's, and raising
+  the level of a received signature. The files are signed by the Sandbox, whose trust is added to the profile's.
+  Its input `govbr-signed` takes a PDF signed on the portal: validated with the `gov-br` profile alone, raised to
+  B-LTA, given a second signer.
 
 Tests: `tests/unit/Apps/SimpleSign.TestBench.Tests/Playbooks` checks the format, the kept results and the preview, and
 runs every sample against the Sandbox (and checks that the ETSI one covers every P item of its checklist). The schema is `docs/schemas/playbook.schema.json` (also

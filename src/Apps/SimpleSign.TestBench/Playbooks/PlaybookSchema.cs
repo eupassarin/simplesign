@@ -64,7 +64,7 @@ internal static class PlaybookSchema
             ["type"] = "object",
             ["description"] = "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), "
                 + "sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), "
-                + "step:ID (the file an earlier step signed). "
+                + "step:ID (the file an earlier step signed), input:ID (the file uploaded for an input declared in inputs). "
                 + "A validation takes { fileId, dataId?, settings? }.",
         };
 
@@ -158,6 +158,13 @@ internal static class PlaybookSchema
                         ["description"] = "The constraints changed, by path (SigningCertificate/KeyUsage), each as the policy file writes it: { \"Level\": \"FAIL\", \"Id\": [\"nonRepudiation\"] }.",
                     },
                 }, "id", "kind"), "Policies the steps adjust (a built-in one with some constraints changed)."),
+                ["inputs"] = Arr(Obj("A file the person running the playbook uploads on the Playbook tab, named input:ID by a step's options (a fileId to validate or augment, a documentId or dataId to sign). A step whose input has no file is skipped.", new JsonObject
+                {
+                    ["id"] = Str("Unique id."),
+                    ["title"] = Str("What to upload, as the page asks for it."),
+                    ["description"] = Str("Where the file comes from and what the steps do with it."),
+                    ["accept"] = Str("The file types the page offers, as an HTML accept value (.pdf, .xml, .p7s)."),
+                }, "id", "title"), "Files uploaded by the person running the playbook (a PDF signed elsewhere, a document to sign)."),
                 ["sections"] = Arr(Ref("section"), "The steps, grouped."),
             },
             ["$defs"] = defs,
@@ -181,6 +188,7 @@ internal static class PlaybookSchema
             .Append("| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: ")
             .Append(string.Join(", ", PolicyPresets.All.Select(p => $"`{p.Id}`"))).Append(". |\n")
             .Append("| `step:ID` | The file an earlier step signed, as `fileId` of a validation or as the input of a later signature. |\n")
+            .Append("| `input:ID` | The file uploaded on the Playbook tab for an input the playbook declares in `inputs` (a PDF signed elsewhere, a document to sign), wherever a file goes (`fileId`, `documentId`, `dataId`). A step whose input has no file is skipped. |\n")
             .Append("| `sandbox-short-lived:N` | A Sandbox signer issued when the step runs and valid for N seconds (1 to 3600), as `credentialId`: with a later step's `wait`, its certificate has expired by validation time. |\n")
             .Append("| `fixture:NAME` | A bundled file, as an upload option: ")
             .Append(string.Join(", ", Documents.Fixtures.All.Select(f => $"`{f.Id}` ({f.Title})"))).Append(". |\n\n")

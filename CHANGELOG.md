@@ -38,6 +38,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A list signer whose key the platform cannot load (a curve it does not support) checks nothing, instead of failing
   the whole `TrustedListSet` (found reading the real EU LOTL).
 
+### Fixed — The operating system no longer checks revocation during validation
+
+- `PdfSignatureValidator`, `CadesSignatureValidator` and `XadesSignatureValidator` built the platform `X509Chain` with
+  `X509RevocationMode.Online` when revocation was on: the operating system fetched each CRL itself, outside
+  `IHttpClientProvider` and its outbound HTTP policy (the SSRF guard, ADR 0020), with its own timeout (about 15 s per
+  URL on Linux and Windows; no `UrlRetrievalTimeout` was set for CAdES and XAdES). The chain is now built with
+  `NoCheck`; revocation is checked once, by `ValidateAsync`, through the library (CRL and OCSP, embedded data first),
+  as before. The chain's own downloads (AIA) are bounded by `ValidationOptions.NetworkTimeout`.
+- The synchronous `Validate` no longer reports chain errors from the platform's revocation check (a revoked
+  certificate, or on Linux/Windows an XAdES chain under system trust whose CRL could not be fetched): as documented,
+  it does not check revocation and says so in a warning; `ValidateAsync` does.
+
 ### Fixed — CRL over LDAP when a host name has several addresses
 
 - `LdapCrlClient` tried only the first address a host name resolves to: `localhost` gives `::1` first, so a server

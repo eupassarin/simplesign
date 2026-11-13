@@ -24,6 +24,9 @@ export const playbookApi = {
   clear: (stepId?: string | null) =>
     call<PlaybookStateView>("DELETE", stepId ? `/api/playbook/results/${encodeURIComponent(stepId)}` : "/api/playbook/results"),
   cancel: () => call<void>("POST", "/api/playbook/cancel"),
+  setInput: (inputId: string, fileId: string) =>
+    call<PlaybookStateView>("PUT", `/api/playbook/inputs/${encodeURIComponent(inputId)}`, { fileId }),
+  removeInput: (inputId: string) => call<PlaybookStateView>("DELETE", `/api/playbook/inputs/${encodeURIComponent(inputId)}`),
   preview: (stepId: string, engine?: string | null) =>
     call<PlaybookStepPreview>("GET", `/api/playbook/steps/${encodeURIComponent(stepId)}/preview${engine ? `?engine=${encodeURIComponent(engine)}` : ""}`),
   sandbox: () => call<PlaybookSandboxReference>("GET", "/api/playbook/sandbox"),

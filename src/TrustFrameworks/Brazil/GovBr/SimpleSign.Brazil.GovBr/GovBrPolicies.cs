@@ -10,14 +10,23 @@ namespace SimpleSign.Brazil.GovBr;
 public static class GovBrPolicies
 {
     private static readonly PolicyConstraint Fail = new(ConstraintLevel.Fail);
+    private static readonly PolicyConstraint Warn = new(ConstraintLevel.Warn);
 
     /// <summary>
-    /// Validation: the constraints of <see cref="ValidationPolicy.Default"/>, and a signing certificate without
-    /// digitalSignature or nonRepudiation fails. Validate with <see cref="GovBrExtension"/>, whose roots and chain
-    /// validation the policy relies on.
+    /// Validation: the constraints of <see cref="ValidationPolicy.Default"/>, with two changes:
+    /// <list type="bullet">
+    /// <item>a signing certificate without digitalSignature or nonRepudiation fails;</item>
+    /// <item>a signature without a signing-certificate attribute (ESS signing-certificate-v2) only warns
+    /// (<c>SigningCertificatePresent</c> and <c>CertDigestPresent</c> at WARN): Gov.br's portal signs in
+    /// <c>adbe.pkcs7.detached</c> without that attribute, and its signer is identified by the CMS signer identifier.
+    /// A reference that is present must still match the certificate (<c>CertDigestMatch</c> stays FAIL).</item>
+    /// </list>
+    /// Validate with <see cref="GovBrExtension"/>, whose roots and chain validation the policy relies on.
     /// </summary>
     public static ValidationPolicy Validation { get; } = ValidationPolicy.Default
         .WithName("Gov.br")
         .With("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage",
-            Fail with { Ids = ["digitalSignature", "nonRepudiation"] });
+            Fail with { Ids = ["digitalSignature", "nonRepudiation"] })
+        .With("SignatureConstraints/SignedAttributes/SigningCertificatePresent", Warn)
+        .With("SignatureConstraints/SignedAttributes/CertDigestPresent", Warn);
 }

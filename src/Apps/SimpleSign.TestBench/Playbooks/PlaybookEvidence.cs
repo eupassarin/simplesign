@@ -27,7 +27,7 @@ internal static class PlaybookEvidence
             .Append(E(playbook.Title)).Append("</title>\n<style>")
             .Append("body{font-family:system-ui,sans-serif;margin:24px auto;max-width:1100px;padding:0 16px;color:#1b1b1b;background:#fff}")
             .Append("table{border-collapse:collapse;width:100%;margin:8px 0 24px}td,th{border:1px solid #ccc;padding:6px 8px;text-align:left;vertical-align:top;font-size:.92em}")
-            .Append("th{background:#f4f4f4}.passed{color:#11663a;font-weight:700}.failed{color:#a51d1d;font-weight:700}.pending,.running{color:#8a5a00}")
+            .Append("th{background:#f4f4f4}.passed{color:#11663a;font-weight:700}.failed{color:#a51d1d;font-weight:700}.pending,.running,.skipped{color:#8a5a00}")
             .Append(".tag{display:inline-block;border:1px solid #bbb;border-radius:10px;padding:0 6px;margin:0 3px 2px 0;font-size:.85em}h2{margin-top:36px}")
             .Append("</style>\n</head>\n<body>\n");
         html.Append("<h1>").Append(E(playbook.Title)).Append("</h1>\n");
@@ -43,6 +43,28 @@ internal static class PlaybookEvidence
         Row(html, "EU DSS differs", Steps(view.Steps.Where(s => s.Result?.Runs.Any(r => r.DssAgrees == false) == true)));
         Row(html, "Library ≠ CLI", Steps(view.Steps.Where(s => s.Result?.EngineDifferences.Count > 0)));
         html.Append("</table>\n");
+
+        if (view.Inputs.Count > 0)
+        {
+            html.Append("<h2>Inputs</h2>\n<table>\n<tr><th>Input</th><th>File</th><th>SHA-256</th></tr>\n");
+            foreach (var input in view.Inputs)
+            {
+                html.Append("<tr><td><b>").Append(E(input.Id)).Append("</b> — ").Append(E(input.Title)).Append("</td><td>");
+                if (input.File is { } file)
+                {
+                    html.Append("<a href=\"").Append(E(InputPath(input.Id, file.FileName))).Append("\">").Append(E(file.FileName)).Append("</a> (")
+                        .Append(file.Size.ToString("N0", CultureInfo.InvariantCulture)).Append(" bytes, uploaded ")
+                        .Append(E(file.At.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture))).Append(")</td><td><code>")
+                        .Append(E(file.Sha256)).Append("</code></td></tr>\n");
+                }
+                else
+                {
+                    html.Append("<span class=\"skipped\">not uploaded</span></td><td>—</td></tr>\n");
+                }
+            }
+
+            html.Append("</table>\n");
+        }
 
         var tags = view.Steps.SelectMany(s => s.Tags.Select(t => (Tag: t, Step: s))).GroupBy(x => x.Tag, StringComparer.Ordinal).ToList();
         if (tags.Count > 0)
@@ -99,7 +121,7 @@ internal static class PlaybookEvidence
                     .Append(result.Ms).Append(" ms</p>\n");
                 if (result.Message is { } message)
                 {
-                    html.Append("<p class=\"failed\">").Append(E(message)).Append("</p>\n");
+                    html.Append("<p class=\"").Append(result.Status == PlaybookStatuses.Skipped ? "skipped" : "failed").Append("\">").Append(E(message)).Append("</p>\n");
                 }
 
                 if (result.EngineDifferences.Count > 0)
@@ -177,6 +199,14 @@ internal static class PlaybookEvidence
             Add(zip, written, "evidence.html", Encoding.UTF8.GetBytes(Html(session, documents)));
             Add(zip, written, "playbook.json", Encoding.UTF8.GetBytes(session.Json));
             Add(zip, written, "results.json", JsonSerializer.SerializeToUtf8Bytes(view, s_indented));
+            foreach (var input in view.Inputs)
+            {
+                if (input.File is { } file && documents.TryGet(file.FileId, out var uploaded))
+                {
+                    Add(zip, written, InputPath(input.Id, file.FileName), uploaded!.Content);
+                }
+            }
+
             foreach (var step in view.Steps)
             {
                 foreach (var engineRun in step.Result?.Runs ?? [])
@@ -209,6 +239,8 @@ internal static class PlaybookEvidence
     }
 
     private static string Folder(string stepId, string engine) => $"steps/{Safe(stepId)}/{engine}";
+
+    private static string InputPath(string inputId, string fileName) => $"inputs/{Safe(inputId)}/{Safe(fileName)}";
 
     private static string Safe(string name) => string.Concat(name.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '_'));
 
