@@ -97,7 +97,7 @@
     {
       "id": "preservation",
       "title": "Keeping a Gov.br signature",
-      "description": "The relying party raises the level of the B-B signature it received: a time-stamp and the validation data (B-LT), then a document time-stamp (B-LTA), and validates it at the archival level.",
+      "description": "The portal hands back a B-B signature: no time-stamp proves when it was made. The relying party raises its level (a document time-stamp and the validation data: B-LT, then B-LTA), so the signature can still be validated after the signer's certificate expires (EN 319 142-1 accepts a document time-stamp for level T).",
       "steps": [
         { "id": "aug-blt", "kind": "augment", "title": "Raised to B-LT", "tags": ["gov.br", "preservation", "augment"], "engine": "library",
           "options": { "fileId": "step:signed-etsi", "level": "BLT", "timestamp": { "provider": "Sandbox" } },
@@ -106,7 +106,19 @@
           "options": { "fileId": "step:aug-blt", "level": "BLTA", "timestamp": { "provider": "Sandbox" } },
           "expect": { "outcome": "augmented", "level": "B-LTA", "indication": "TOTAL_PASSED" } },
         { "id": "v-archival", "kind": "validate", "title": "Validated at the archival level", "tags": ["gov.br", "preservation", "validation"],
-          "options": { "fileId": "step:aug-blta", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr", "level": "ArchivalData" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } }
+          "options": { "fileId": "step:aug-blta", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr", "level": "ArchivalData" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
+        { "id": "short-lived", "title": "Signed by a certificate valid for 20 seconds", "tags": ["gov.br", "preservation"], "engine": "library",
+          "options": { "credentialId": "sandbox-short-lived:20" }, "expect": { "outcome": "signed", "level": "B-B" } },
+        { "id": "short-lived-blta", "kind": "augment", "title": "Raised to B-LTA at once", "tags": ["gov.br", "preservation", "augment"], "engine": "library",
+          "options": { "fileId": "step:short-lived", "level": "BLTA", "timestamp": { "provider": "Sandbox" } },
+          "expect": { "outcome": "augmented", "level": "B-LTA", "indication": "TOTAL_PASSED" } },
+        { "id": "v-after-expiry", "kind": "validate", "title": "Validated after the signer's certificate expired", "tags": ["gov.br", "preservation", "validation"],
+          "description": "The document time-stamp the augmentation added proves the signature existed while the certificate was valid.",
+          "wait": 25,
+          "options": { "fileId": "step:short-lived-blta", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr", "level": "ArchivalData" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
+        { "id": "v-expired-not-raised", "kind": "validate", "title": "The same signature not raised: no proof of existence", "tags": ["gov.br", "preservation", "validation"],
+          "options": { "fileId": "step:short-lived", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } },
+          "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE", "subIndication": "OUT_OF_BOUNDS_NO_POE" } }
       ]
     },
     {
