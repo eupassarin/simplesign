@@ -102,6 +102,42 @@ internal static class PlaybookValidator
             }
         }
 
+        // The files the person running it uploads: each declared once, each input:ID a step names declared.
+        var inputIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < playbook.Inputs.Count; i++)
+        {
+            var input = playbook.Inputs[i];
+            if (string.IsNullOrWhiteSpace(input.Id) || !inputIds.Add(input.Id))
+            {
+                Error($"$.inputs[{i}].id", $"Input id '{input.Id}' is empty or repeated.");
+            }
+
+            if (string.IsNullOrWhiteSpace(input.Title))
+            {
+                Error($"$.inputs[{i}].title", "Say what to upload (title).");
+            }
+        }
+
+        var usedInputs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (path, value) in Strings(playbook.Defaults.Options, "$.defaults.options")
+            .Concat(playbook.Sections.SelectMany((section, s) => section.Steps.SelectMany((step, n) => Strings(step.Options, $"$.sections[{s}].steps[{n}].options")))))
+        {
+            if (value.StartsWith(PlaybookRunner.InputPrefix, StringComparison.Ordinal))
+            {
+                string id = value[PlaybookRunner.InputPrefix.Length..];
+                usedInputs.Add(id);
+                if (!inputIds.Contains(id))
+                {
+                    Error(path, $"'{value}' names no input: declare it in inputs.");
+                }
+            }
+        }
+
+        foreach (string unused in inputIds.Where(id => !usedInputs.Contains(id)))
+        {
+            issues.Add(new("$.inputs", $"No step uses the input '{unused}'.", IsError: false));
+        }
+
         var stepIds = new HashSet<string>(StringComparer.Ordinal);
         var sectionIds = new HashSet<string>(StringComparer.Ordinal);
         for (int s = 0; s < playbook.Sections.Count; s++)
@@ -199,7 +235,7 @@ internal static class PlaybookValidator
         if (step.Kind is PlaybookStepKinds.Validate or PlaybookStepKinds.Augment
             && (step.Options is not { ValueKind: JsonValueKind.Object } options || !options.TryGetProperty("fileId", out _)))
         {
-            error(at + ".options.fileId", $"A{(step.Kind == PlaybookStepKinds.Augment ? "n augmentation" : " validation")} needs options.fileId (step:ID or a sample).");
+            error(at + ".options.fileId", $"A{(step.Kind == PlaybookStepKinds.Augment ? "n augmentation" : " validation")} needs options.fileId (step:ID, input:ID or a sample).");
         }
 
         if (step.Kind == PlaybookStepKinds.Augment && (step.Engine ?? playbook.Defaults.Engine) != PlaybookEngines.Library)

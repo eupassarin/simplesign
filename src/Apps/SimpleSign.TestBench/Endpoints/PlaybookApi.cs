@@ -11,6 +11,9 @@ public sealed record PlaybookLoadRequest(string Json);
 /// <summary>The loaded playbook and its problems.</summary>
 public sealed record PlaybookLoaded(Playbook? Playbook, IReadOnlyList<PlaybookIssue> Issues, bool CanRun);
 
+/// <summary>The file of a playbook input: an upload's id (<c>POST /api/uploads</c>).</summary>
+public sealed record PlaybookInputRequest(string FileId);
+
 /// <summary>A playbook bundled with the TestBench.</summary>
 public sealed record PlaybookSample(string Id, string Title, string? Description);
 
@@ -40,6 +43,9 @@ internal static class PlaybookApi
             _ = runner.Start(body);
             return Results.Ok(runner.State());
         }));
+        playbook.MapPut("/inputs/{inputId}", (string inputId, PlaybookInputRequest body, PlaybookRunner runner) =>
+            Guard(() => Results.Ok(runner.SetInput(inputId, body.FileId))));
+        playbook.MapDelete("/inputs/{inputId}", (string inputId, PlaybookRunner runner) => Guard(() => Results.Ok(runner.SetInput(inputId, null))));
         playbook.MapDelete("/results", (PlaybookRunner runner) => Guard(() => Results.Ok(runner.Clear(null))));
         playbook.MapDelete("/results/{stepId}", (string stepId, PlaybookRunner runner) => Guard(() => Results.Ok(runner.Clear(stepId))));
         playbook.MapPost("/cancel", (PlaybookRunner runner) =>

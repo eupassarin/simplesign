@@ -20,7 +20,7 @@ Paste the three attachments above, then:
 Write a SimpleSign playbook (JSON, schema 2) for the attached accreditation guide.
 
 Rules:
-- Root: only "schema", "id", "title", "description", "defaults" and "sections". Titles and descriptions in English.
+- Root: only "schema", "id", "title", "description", "defaults", "inputs" (when needed) and "sections". Titles and descriptions in English.
 - Only what a run can show: no step for manuals, code signing, real tokens or anything a person must check.
 - sections/steps: for every item of the guide a run can show, at least one step. Give each step "tags": the guide's
   item ids it helps with (as the guide numbers them) and a topic (crl, ocsp, tsa, levels…).
@@ -30,6 +30,8 @@ Rules:
 - Use only the option paths, values, Sandbox signer ids, failures, presets and symbolic values listed in options.md.
   Put what every step shares in "defaults.options.common" (policy preset, trust anchors, attemptRefused: true).
 - Use "sandbox" on a step to switch a failure on (crl, ocsp, tsa, trustedList) or revoke a certificate for that step.
+- A file only the person running the playbook has (a PDF signed elsewhere, their own document): declare it in "inputs"
+  ({ "id", "title", "description", "accept" }) and name it "input:ID" where a file goes.
 - Cover PAdES, CAdES and XAdES where the guide asks for formats or levels.
 Answer with the JSON file only.
 ```

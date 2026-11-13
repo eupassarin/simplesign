@@ -30,6 +30,12 @@ public sealed record Playbook
     /// </summary>
     public IReadOnlyList<PlaybookPolicy> Policies { get; init; } = [];
 
+    /// <summary>
+    /// Files the person running the playbook uploads (a PDF signed elsewhere, a document to sign), referenced by the steps
+    /// as <c>input:ID</c>. A step whose input has no file yet is skipped.
+    /// </summary>
+    public IReadOnlyList<PlaybookInput> Inputs { get; init; } = [];
+
     /// <summary>The steps, grouped in sections.</summary>
     public IReadOnlyList<PlaybookSection> Sections { get; init; } = [];
 
@@ -55,6 +61,22 @@ public sealed record PlaybookPolicy
 
     /// <summary>The constraints changed, by path (<c>SigningCertificate/KeyUsage</c>), each as the policy file writes it.</summary>
     public JsonElement? Set { get; init; }
+}
+
+/// <summary>A file the person running the playbook uploads, referenced as <c>input:ID</c> (a file to validate, augment or sign).</summary>
+public sealed record PlaybookInput
+{
+    /// <summary>The id, unique in the playbook.</summary>
+    public string Id { get; init; } = "";
+
+    /// <summary>What to upload, as the page asks for it.</summary>
+    public string Title { get; init; } = "";
+
+    /// <summary>Where the file comes from and what the steps do with it.</summary>
+    public string? Description { get; init; }
+
+    /// <summary>The file types the page offers, as an HTML <c>accept</c> value (<c>.pdf</c>); null for any.</summary>
+    public string? Accept { get; init; }
 }
 
 /// <summary>The values every step starts from.</summary>
@@ -122,7 +144,7 @@ public sealed record PlaybookStep
     /// <summary>
     /// The TestBench options of the run (the Sign page's for a signature, <c>fileId</c>/<c>dataId</c>/<c>settings</c> for a
     /// validation), with symbolic values: <c>sandbox:SIGNER</c>, <c>sample:ID</c>, <c>cades-sample:ID</c>,
-    /// <c>xades-sample:ID</c>, <c>preset:KIND:NAME</c>, <c>step:ID</c>.
+    /// <c>xades-sample:ID</c>, <c>preset:KIND:NAME</c>, <c>step:ID</c>, <c>input:ID</c>.
     /// </summary>
     public JsonElement? Options { get; init; }
 

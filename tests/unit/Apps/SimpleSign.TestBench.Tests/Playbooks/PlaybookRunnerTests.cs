@@ -38,12 +38,15 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
 
     private static string Failures(PlaybookStateView view) => string.Join("; ", view.Steps.Where(s => s.Status != PlaybookStatuses.Passed).Select(s =>
         $"{s.StepId}: {s.Status} {s.Result?.Message} " + string.Join(", ", (s.Result?.Runs ?? []).SelectMany(r => r.Checks).Where(c => !c.Passed)
-            .Select(c => $"{c.What} {c.Expected}≠{c.Found}"))));
+            .Select(c => $"{c.What} {c.Expected}≠{c.Found}")) + " " + string.Join(" | ", (s.Result?.Runs ?? []).Where(r => r.Error is not null)
+            .Select(r => $"{r.Engine}: {r.ErrorType} {r.Error}"))));
 
     [SkippableTheory]
     [InlineData("sandbox-basics")]
     [InlineData("indecopi-guia-v4")]
     [InlineData("etsi-baseline")]
+    [InlineData("icp-brasil-pades")]
+    [InlineData("govbr-pades")]
     public async Task RunToEnd_Sample_PassesEveryStep(string sample)
     {
         fixture.RequireSandbox();
@@ -52,7 +55,51 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
 
         var view = await runner.RunToEndAsync(new PlaybookRunRequest()).WaitAsync(TimeSpan.FromMinutes(15));
 
-        view.Steps.ShouldAllBe(s => s.Status == PlaybookStatuses.Passed, Failures(view));
+        // Steps that use a file to upload (input:ID) are skipped without it; every other step passes.
+        view.Steps.ShouldAllBe(s => s.Status == PlaybookStatuses.Passed || s.Status == PlaybookStatuses.Skipped, Failures(view));
+        var withInputs = runner.Session!.Playbook.Inputs.SelectMany(i => PlaybookRunner.UsersOf(runner.Session.Playbook, i.Id)).ToHashSet(StringComparer.Ordinal);
+        view.Steps.Where(s => s.Status == PlaybookStatuses.Skipped).Select(s => s.StepId).ShouldAllBe(id => withInputs.Contains(id));
+    }
+
+    [SkippableFact]
+    public async Task RunToEnd_InputUploaded_RunsTheStepsThatUseIt()
+    {
+        fixture.RequireSandbox();
+        const string json = """
+            {
+              "schema": 2, "id": "inputs", "title": "Inputs",
+              "inputs": [{ "id": "theirs", "title": "A signed PDF", "accept": ".pdf" }],
+              "sections": [
+                { "id": "s1", "title": "Theirs", "steps": [
+                  { "id": "check", "title": "Validate", "kind": "validate", "tags": ["input"],
+                    "options": { "fileId": "input:theirs", "settings": { "trust": ["Sandbox"] } }, "expect": { "outcome": "valid" } }
+                ] }
+              ]
+            }
+            """;
+        var runs = fixture.Runs();
+        using var runner = Runner(runs: runs);
+        runner.Load(json).CanRun.ShouldBeTrue();
+
+        var skipped = await runner.RunToEndAsync(new PlaybookRunRequest()).WaitAsync(TimeSpan.FromMinutes(1));
+        var first = skipped.Steps.Single();
+        first.Status.ShouldBe(PlaybookStatuses.Skipped);
+        first.Result!.Message.ShouldNotBeNull().ShouldContain("input:theirs");
+        skipped.Inputs.Single().File.ShouldBeNull();
+
+        string fileId = fixture.ValidationSamples.Single(s => s.Id == "valid").FileId;
+        var bound = runner.SetInput("theirs", fileId);
+        bound.Inputs.Single().File.ShouldNotBeNull().Sha256.Length.ShouldBe(64);
+        bound.Steps.Single().Result.ShouldBeNull("a new file drops the results of the steps that use the input");
+
+        var ran = await runner.RunToEndAsync(new PlaybookRunRequest()).WaitAsync(TimeSpan.FromMinutes(2));
+        ran.Steps.ShouldAllBe(s => s.Status == PlaybookStatuses.Passed, Failures(ran));
+        using var zip = new ZipArchive(new MemoryStream(PlaybookEvidence.Zip(runner.Session!, fixture.Documents, runs)));
+        zip.Entries.ShouldContain(e => e.FullName.StartsWith("inputs/theirs/", StringComparison.Ordinal));
+        PlaybookEvidence.Html(runner.Session!, fixture.Documents).ShouldContain(bound.Inputs.Single().File!.Sha256);
+
+        runner.SetInput("theirs", null).Inputs.Single().File.ShouldBeNull();
+        Should.Throw<KeyNotFoundException>(() => runner.SetInput("other", fileId));
     }
 
     [SkippableFact]
