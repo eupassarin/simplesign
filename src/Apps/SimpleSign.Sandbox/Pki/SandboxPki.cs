@@ -110,6 +110,7 @@ internal sealed class SandboxPki : IDisposable
     private SandboxState _state;
     private Dictionary<string, SandboxAuthority> _authorities = new(StringComparer.Ordinal);
     private List<SandboxCertificate> _certificates = [];
+    private Dictionary<string, StoredKeyPair> _loadedPairs = new(StringComparer.Ordinal);
     private Dictionary<string, byte[]> _crls = new(StringComparer.Ordinal);
     private Dictionary<string, byte[]> _previousCrls = new(StringComparer.Ordinal);
     private DateTimeOffset _crlsBuiltAt;
@@ -1000,22 +1001,42 @@ internal sealed class SandboxPki : IDisposable
         }, StringComparer.Ordinal);
     }
 
-    /// <summary>Loads the stored certificates with their keys.</summary>
+    /// <summary>
+    /// Loads the stored certificates with their keys. A certificate whose key pair has not changed keeps its loaded
+    /// object: a revocation or a reset changes only what is known about it, and loading a key is slow on some
+    /// platforms (about 250 ms per key on macOS, so every reset took seconds).
+    /// </summary>
     private void Materialize()
     {
-        // The previous objects may still be in use by a request in flight (TSA, CSC): disposed at the end.
-        _owned.AddRange(_certificates.Select(c => c.Certificate));
-
-        _certificates = [.. _state.Certificates.Select(c => new SandboxCertificate(
-            c.Id, c.Title, c.Description, c.KeyType, X509Certificate2.CreateFromPem(c.Pair.Certificate, c.Pair.Key), c.IssuerId, c.Usage, c.Pointers,
-            c.Problem, c.RevokedAt, c.RevocationReason, c.Publication))];
-        if (OperatingSystem.IsWindows())
+        var loaded = _certificates.ToDictionary(c => c.Id, StringComparer.Ordinal);
+        var kept = new HashSet<X509Certificate2>(ReferenceEqualityComparer.Instance);
+        _certificates = [.. _state.Certificates.Select(c =>
         {
-            // Ephemeral keys cannot sign everywhere on Windows: round-trip through PKCS#12.
-            _certificates = [.. _certificates.Select(c => c with
+            var certificate = loaded.TryGetValue(c.Id, out var previous) && _loadedPairs.TryGetValue(c.Id, out var pair) && pair == c.Pair
+                ? previous.Certificate
+                : Load(c.Pair);
+            kept.Add(certificate);
+            return new SandboxCertificate(c.Id, c.Title, c.Description, c.KeyType, certificate, c.IssuerId, c.Usage, c.Pointers,
+                c.Problem, c.RevokedAt, c.RevocationReason, c.Publication);
+        })];
+        _loadedPairs = _state.Certificates.ToDictionary(c => c.Id, c => c.Pair, StringComparer.Ordinal);
+
+        // The objects replaced or dropped may still be in use by a request in flight (TSA, CSC): disposed at the end.
+        _owned.AddRange(loaded.Values.Select(c => c.Certificate).Where(c => !kept.Contains(c)));
+
+        static X509Certificate2 Load(StoredKeyPair pair)
+        {
+            var certificate = X509Certificate2.CreateFromPem(pair.Certificate, pair.Key);
+            if (!OperatingSystem.IsWindows())
             {
-                Certificate = X509CertificateLoader.LoadPkcs12(c.Certificate.Export(X509ContentType.Pkcs12, PfxPassword)!, PfxPassword, X509KeyStorageFlags.Exportable),
-            })];
+                return certificate;
+            }
+
+            // Ephemeral keys cannot sign everywhere on Windows: round-trip through PKCS#12.
+            using (certificate)
+            {
+                return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pkcs12, PfxPassword)!, PfxPassword, X509KeyStorageFlags.Exportable);
+            }
         }
     }
 
