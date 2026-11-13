@@ -560,7 +560,8 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     public void Evaluate_DocumentTimestampAndSignerExpired_DocumentTimestampIsTheProofOfExistence()
     {
         using var tsa = _pki.IssueTimestampingCertificate();
-        var genTime = DateTimeOffset.UtcNow.AddHours(-1);
+        // Whole seconds: the token's genTime does not keep the clock's sub-second ticks.
+        var genTime = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds());
         byte[] token = TimestampTestResponseBuilder.CreateTokenForData([1, 2, 3], new TimestampTokenOptions
         {
             TsaCertificate = tsa,
