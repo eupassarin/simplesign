@@ -34,20 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `services.AddSimpleSignIofe(options, refreshInterval)` registers it with a hosted service that reads the list when the
   host starts and every 6 hours by default (`Microsoft.Extensions.Hosting.Abstractions` dependency).
 
-### Added — Sandbox: a trusted list in INDECOPI's layout
+### Added — Sandbox: the IOFE cases of INDECOPI's list
 
-- `/tl/iofe.xml`: a trusted list laid out as INDECOPI's `tsl-pe.xml` (ETSI TS 102 231 v3, TSLType `generic`, statuses
-  `undersupervision` / `supervisionrevoked`, territory `PE`, one provider per service, no supply points), signed by the
-  TL operator, with the trusted-list failures applying to it. Its services: the root CA (CA/QC); a new self-signed
-  **Timestamping CA** (`tsa-ca`) typed `unspecified` — the CA of the new `/tsa/iofe` TSA (`tsa-iofe`), as INDECOPI lists
-  the Llama.pe Timestamping CA, so that TSA chains through the `unspecified` service only —; the revoked TSA
-  (`unspecified`, withdrawn); and a signature software listed with a new code-signing certificate (`code-signing`),
-  which must never become an anchor. `GET /api/info` gives `trustedLists.iofeUrl` and `tsa.iofeUrl`.
-- TestBench: the trust choice `SandboxIofeList` (signing controls and validation, read with
-  `IofeExtension.DefaultListOptions`) and the TSA `SandboxIofe`; the Sandbox panel shows both URLs.
+- `/tl/tl.xml` lists two services typed `Svctype/unspecified`, as INDECOPI's list types them: a new self-signed
+  **Timestamping CA** (`tsa-ca`), the CA of the new `/tsa/iofe` TSA (`tsa-iofe`) — as INDECOPI lists the Llama.pe
+  Timestamping CA, not its TSU —, and a signature software listed with a new code-signing certificate (`code-signing`).
+  Read with `IofeExtension.DefaultListOptions`, the Timestamping CA is an anchor and the code-signing certificate never
+  is; with the default options neither is, so the `/tsa/iofe` TSA is untrusted. `GET /api/info` gives `tsa.iofeUrl`.
+- TestBench: the trust choice `SandboxIofeList` (signing controls and validation: `/tl/tl.xml` read with
+  `IofeExtension.DefaultListOptions`) and the TSA `SandboxIofe`; the Sandbox panel shows the TSA's URL.
 - CLI: `--tsl-profile iofe` on signing and validation reads `--tsl` as `IofeExtension` does.
-- Playbook `indecopi-guia-v4`: the `tsl` section uses the INDECOPI-layout list, with new steps for a TSA whose CA is
-  listed as `unspecified` (`tsl-tsa-unspecified`, `tsl-tsa-unlisted`, `v-tsl-tsa-unspecified`).
+- Playbook `indecopi-guia-v4`: the `tsl` section reads the list with the IOFE profile, with new steps for a TSA whose
+  CA is listed as `unspecified` (`tsl-tsa-unspecified`, `tsl-tsa-unlisted`, `v-tsl-tsa-unspecified`).
 
 ### Added — IOFE article
 

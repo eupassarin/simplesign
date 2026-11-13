@@ -24,17 +24,16 @@ public sealed record SandboxInfo(
 
 /// <summary>
 /// The Sandbox's trust scheme: its list of trusted lists, its trusted list and the operators' certificates (PEM). Null for
-/// a Sandbox without one. <paramref name="IofeUrl"/>: its list laid out as INDECOPI's (signed by the trusted list's
-/// operator); null for a Sandbox older than it.
+/// a Sandbox without one.
 /// </summary>
-public sealed record SandboxTrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory, string? IofeUrl = null);
+public sealed record SandboxTrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory);
 
 public sealed record SandboxTsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string User, string Password)
 {
     /// <summary>The TSA whose certificate has expired; null for a Sandbox older than it.</summary>
     public string? ExpiredUrl { get; init; }
 
-    /// <summary>The TSA under its own self-signed CA, trusted through the INDECOPI-layout list only; null for a Sandbox older than it.</summary>
+    /// <summary>The TSA under its own self-signed CA, trusted only through the trusted list read with the IOFE profile; null for a Sandbox older than it.</summary>
     public string? IofeUrl { get; init; }
 }
 

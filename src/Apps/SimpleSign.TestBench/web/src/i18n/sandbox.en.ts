@@ -35,7 +35,7 @@ export const sandboxEn = {
     tsaUntrusted: "TSA outside the chain",
     tsaRevoked: "TSA whose certificate is revoked",
     tsaWrongName: "TSA whose token names another TSA ({name})",
-    tsaIofe: "TSA under its own CA, trusted only through the INDECOPI-layout list",
+    tsaIofe: "TSA under its own CA, trusted only through the trusted list read with the IOFE profile",
     userPassword: "User / password",
     csc: "Cloud Signature Consortium API v2",
     cscHint: "A simulated remote signing service with the Sandbox's keys. The OAuth login page approves at once.",
@@ -63,7 +63,6 @@ export const sandboxEn = {
     tl: "Trusted list (TL)",
     lotlSigner: "LOTL operator (PEM)",
     tlSigner: "TL operator (PEM)",
-    iofeList: "List in INDECOPI's layout (PE, signed by the TL operator)",
     clientsSummary: "The raw JSON of GET /api/info",
   },
   pki: {

@@ -24,11 +24,9 @@ public sealed record SandboxInfo(
     TrustedListsInfo TrustedLists);
 
 /// <summary>
-/// The Sandbox's trust scheme: its list of trusted lists, its trusted list, and the operators' certificates (PEM); and
-/// <paramref name="IofeUrl"/>, a trusted list laid out as INDECOPI's (territory PE), signed by the same operator as the
-/// trusted list (<paramref name="TlSignerUrl"/>).
+/// The Sandbox's trust scheme: its list of trusted lists, its trusted list, and the operators' certificates (PEM).
 /// </summary>
-public sealed record TrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory, string IofeUrl);
+public sealed record TrustedListsInfo(string LotlUrl, string TlUrl, string LotlSignerUrl, string TlSignerUrl, string Territory);
 
 public sealed record SandboxUrls(string RootCertificate, string IntermediateCertificate, string RootPem, string ChainPem, string RootCrl, string IntermediateCrl);
 
@@ -193,8 +191,7 @@ internal static class AdminEndpoints
             SandboxPki.PfxPassword,
             // What a client puts in OutboundHttpPolicy.LoopbackOrigins to reach this Sandbox on this machine.
             [.. new[] { pki.BaseUrl, pki.HttpsBaseUrl, pki.LdapBaseUrl }.Select(u => u.GetLeftPart(UriPartial.Authority))],
-            new TrustedListsInfo(Url("tl/lotl.xml"), Url("tl/tl.xml"), Url("tl/lotl-signer.pem"), Url("tl/tl-signer.pem"), SandboxTrustedLists.Territory,
-                Url("tl/iofe.xml")));
+            new TrustedListsInfo(Url("tl/lotl.xml"), Url("tl/tl.xml"), Url("tl/lotl-signer.pem"), Url("tl/tl-signer.pem"), SandboxTrustedLists.Territory));
     }
 
     private const X509KeyUsageFlags LeafUsages = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation
