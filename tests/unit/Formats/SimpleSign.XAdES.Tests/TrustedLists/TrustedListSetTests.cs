@@ -115,6 +115,27 @@ public sealed class TrustedListSetTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadAsync_PivotOlderThanTheGivenKeys_IsSkipped()
+    {
+        // The LOTL names two pivots, newest first: the older one is signed by a key before the given ones and is skipped.
+        using var oldKey = RSA.Create(2048);
+        using var oldSigner = Operator("CN=EU LOTL 0", oldKey);
+        using var newKey = RSA.Create(2048);
+        using var newSigner = Operator("CN=EU LOTL 2", newKey);
+        const string OlderPivot = "https://198.51.100.7/eu-lotl-pivot-100.xml";
+        var lists = Lists();
+        lists[LotlUrl] = Lotl(newKey, newSigner, PivotUrl + "</URI><URI xml:lang=\"en\">" + OlderPivot);
+        lists[OlderPivot] = Sign(Document("EU", LotlPointer(_lotlSigner), ""), oldKey, oldSigner);
+        lists[PivotUrl] = Sign(Document("EU", LotlPointer(newSigner), ""), _lotlKey, _lotlSigner);
+        using var http = Server(lists);
+
+        var set = await TrustedListSet.LoadAsync(Options(), new SingleClientProvider(http));
+
+        set.PivotsFollowed.ShouldBe([new Uri(PivotUrl)]);
+        set.Lists.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task LoadAsync_PivotSignedByAnUnknownKey_Throws()
     {
         using var newKey = RSA.Create(2048);
@@ -126,7 +147,7 @@ public sealed class TrustedListSetTests : IDisposable
 
         var ex = await Should.ThrowAsync<CryptographicException>(() => TrustedListSet.LoadAsync(Options(), new SingleClientProvider(http)));
 
-        ex.Message.ShouldContain("pivot");
+        ex.Message.ShouldContain("pivot", Case.Insensitive);
     }
 
     [Fact]

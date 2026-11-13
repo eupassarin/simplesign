@@ -141,6 +141,12 @@ public sealed class SignatureValidationResult
     /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
     public DateTimeOffset? BestSignatureTime { get; init; }
 
+    /// <summary>
+    /// The qualification of the signature under a legal framework (QESig, AdESig-QC…), from
+    /// <see cref="ValidationOptions.SignatureQualifiers"/>; null when no qualifier applies.
+    /// </summary>
+    public SignatureQualification? Qualification { get; internal set; }
+
     /// <summary>The timestamps and revocation data the validation used, each with the outcome of its own evaluation.</summary>
     public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];
 
@@ -166,6 +172,7 @@ public sealed class SignatureValidationResult
         Errors = Errors,
         Warnings = Warnings,
         ValidationObjects = ValidationObjects,
+        Qualification = Qualification,
     };
 
     private SignatureIndication DetermineIndication()

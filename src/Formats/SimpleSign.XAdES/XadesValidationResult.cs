@@ -130,6 +130,7 @@ public sealed record XadesValidationResult
         Policy = AppliedPolicy,
         Errors = Errors,
         Warnings = Warnings,
+        Qualification = Qualification,
     };
 
     /// <summary>True when all fundamental checks pass, the validation policy's constraints included.</summary>
@@ -161,6 +162,9 @@ public sealed record XadesValidationResult
 
     /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
     public DateTimeOffset? BestSignatureTime { get; init; }
+
+    /// <summary>The qualification of the signature under a legal framework (QESig, AdESig-QC…), from <see cref="ValidationOptions.SignatureQualifiers"/>; null when no qualifier applies.</summary>
+    public SignatureQualification? Qualification { get; init; }
 
     /// <summary>The timestamps and revocation data the validation used, each with the outcome of its own evaluation.</summary>
     public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];

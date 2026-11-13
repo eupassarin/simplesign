@@ -165,6 +165,19 @@ public sealed class SigningPolicy
                 $"Certificate '{certificate.Subject}' has none of the extended key usages {string.Join(", ", extendedKeyUsage.Ids)}.");
         }
 
+        var statements = CertificateFacts.QcStatements(certificate);
+        if (!statements.Contains("0.4.0.1862.1.1"))
+        {
+            Add("SigningCertificate/QcCompliance", SigningErrorReason.CertificateNotQualified,
+                $"Certificate '{certificate.Subject}' is not a qualified certificate: it has no QcCompliance statement (ETSI EN 319 412-5).");
+        }
+
+        if (!statements.Contains("0.4.0.1862.1.4"))
+        {
+            Add("SigningCertificate/QcSSCD", SigningErrorReason.CertificateNotQualified,
+                $"Certificate '{certificate.Subject}' does not declare its key on a qualified signature creation device: it has no QcSSCD statement (ETSI EN 319 412-5).");
+        }
+
         if (CryptographicRules.KeyOf(certificate) is { } key)
         {
             foreach (var finding in Tree.Crypto("").CheckKey(key.Algorithm, key.Size, time))

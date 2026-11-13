@@ -71,6 +71,24 @@ public sealed class ValidationOptions
     public Extensions.TrustProfile? Profile { get; init; }
 
     /// <summary>
+    /// The qualifiers that give each validated signature its qualification under a legal framework
+    /// (<see cref="SignatureValidationResult.Qualification"/>); a <see cref="Profile"/>'s are added. Null or empty: none.
+    /// </summary>
+    public IReadOnlyList<Extensions.ISignatureQualifier>? SignatureQualifiers { get; init; }
+
+    /// <summary>The qualification of a validated signature: the first qualifier that gives one; null when none does.</summary>
+    internal SignatureQualification? Qualify(Extensions.SignatureQualificationContext context) =>
+        SignatureQualifiers is { Count: > 0 } qualifiers ? qualifiers.Select(q => q.Qualify(context)).FirstOrDefault(q => q is not null) : null;
+
+    /// <summary>These options with the qualifiers of <paramref name="extensions"/> added (the country-extension constructors).</summary>
+    internal ValidationOptions WithQualifiersFrom(IEnumerable<Extensions.ICountryExtension>? extensions)
+    {
+        // An extension written before SignatureQualifiers (or a mock) may give null.
+        var added = extensions?.SelectMany(e => e.SignatureQualifiers ?? []).ToList() ?? [];
+        return added.Count == 0 ? this : Copy([.. SignatureQualifiers ?? [], .. added]);
+    }
+
+    /// <summary>
     /// These options with <see cref="Profile"/> applied: its policy (when <see cref="Policy"/> is the default), its roots
     /// in <see cref="TrustedRoots"/>, its trusted lists and its timed anchors. The same instance without a profile.
     /// </summary>
@@ -82,6 +100,7 @@ public sealed class ValidationOptions
         }
 
         var anchors = profile.Anchors();
+        IReadOnlyList<Extensions.ISignatureQualifier> qualifiers = [.. SignatureQualifiers ?? [], .. profile.SignatureQualifiers];
         var lists = profile.TrustAnchorProviders.OfType<Extensions.ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists).ToList();
         var timed = profile.TrustAnchorProviders.OfType<Extensions.ITimedTrustAnchorProvider>().ToList();
         return new ValidationOptions
@@ -98,8 +117,26 @@ public sealed class ValidationOptions
             TrustedLists = lists.Count == 0 ? TrustedLists : [.. TrustedLists ?? [], .. lists],
             TimedTrustAnchors = timed.Count == 0 ? TimedTrustAnchors : [.. TimedTrustAnchors ?? [], .. timed],
             Profile = profile,
+            SignatureQualifiers = qualifiers,
         };
     }
+
+    private ValidationOptions Copy(IReadOnlyList<Extensions.ISignatureQualifier> qualifiers) => new()
+    {
+        CheckRevocation = CheckRevocation,
+        TrustSystemRoots = TrustSystemRoots,
+        TrustedRoots = TrustedRoots,
+        NetworkTimeout = NetworkTimeout,
+        Policy = Policy,
+        PolicyProvider = PolicyProvider,
+        SignaturePolicyDocuments = SignaturePolicyDocuments,
+        Verifier = Verifier,
+        Level = Level,
+        TrustedLists = TrustedLists,
+        TimedTrustAnchors = TimedTrustAnchors,
+        Profile = Profile,
+        SignatureQualifiers = qualifiers,
+    };
 
     /// <summary>Whether signature timestamps are validated (and give a proof of existence).</summary>
     internal bool ValidatesTimestamps => Level >= ValidationLevel.Timestamps;

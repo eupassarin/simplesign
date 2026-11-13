@@ -211,7 +211,10 @@ public sealed class TrustedListSet : ITimedTrustAnchorProvider, ITrustedListInfo
             throw new CryptographicException("The list of trusted lists is not signed by the given certificates, and it names no pivot LOTL to carry them forward.");
         }
 
+        // Pivots older than the given keys (signed by keys that came before them) are skipped; from the first one the
+        // given keys check, each must be checked by the keys the one before it named.
         IReadOnlyList<X509Certificate2> signers = options.LotlSignerCertificates;
+        var walked = new List<Uri>();
         foreach (var location in pivots)
         {
             TrustedList pivot;
@@ -223,7 +226,12 @@ public sealed class TrustedListSet : ITimedTrustAnchorProvider, ITrustedListInfo
             }
             catch (CryptographicException ex)
             {
-                throw new CryptographicException($"The pivot LOTL {location} is not signed by the keys known when it is read: {ex.Message}", ex);
+                if (walked.Count == 0)
+                {
+                    continue;
+                }
+
+                throw new CryptographicException($"The pivot LOTL {location} is not signed by the keys the pivot before it named: {ex.Message}", ex);
             }
 
             var next = pivot.Pointers.FirstOrDefault(p => p.TslType?.EndsWith("listofthelists", StringComparison.OrdinalIgnoreCase) == true
@@ -234,9 +242,15 @@ public sealed class TrustedListSet : ITimedTrustAnchorProvider, ITrustedListInfo
             }
 
             signers = next.SignerCertificates;
+            walked.Add(location);
         }
 
-        return (signers, pivots);
+        if (walked.Count == 0)
+        {
+            throw new CryptographicException("No pivot LOTL is signed by the given certificates: they cannot be carried forward to the LOTL's keys.");
+        }
+
+        return (signers, walked);
     }
 
     /// <summary>

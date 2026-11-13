@@ -18,4 +18,10 @@ public interface ICountryExtension
 
     /// <summary>Chain validation providers for this region.</summary>
     IReadOnlyList<IChainValidationProvider> ChainValidationProviders { get; }
+
+    /// <summary>
+    /// The qualifiers that say the qualification of a validated signature under this region's law (the eIDAS
+    /// package's). Default: none.
+    /// </summary>
+    IReadOnlyList<ISignatureQualifier> SignatureQualifiers => [];
 }
