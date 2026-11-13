@@ -437,7 +437,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // 4. Certificate chain
         int chainErrorsStart = errors.Count;
-        var (chainValid, chainAnchored) = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
+        var (chainValid, chainAnchored, chainCertificates) = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
         int chainErrorsCount = errors.Count - chainErrorsStart;
 
         // 4a. Signature timestamp: its genTime is the time the chain is validated at (B-T and above).
@@ -466,7 +466,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             var timedErrors = new List<string>();
             var timedWarnings = new List<string>();
             bool timedValid = ValidateCertificateChain(
-                signerAtTime, cmsData.Certificates, timedErrors, timedWarnings, out bool timedAnchored, TimedTrust.AnchorsAt(_options, proven));
+                signerAtTime, chainCertificates, timedErrors, timedWarnings, out bool timedAnchored, TimedTrust.AnchorsAt(_options, proven));
             if (timedAnchored)
             {
                 errors.RemoveRange(chainErrorsStart, chainErrorsCount);
@@ -504,7 +504,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         try
         {
             revocation = await ValidateRevocationIfEnabled(
-                field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainAnchored || chainTrustWarning, cancellationToken).ConfigureAwait(false);
+                field, cmsData, chainCertificates, embeddedCrls, embeddedOcsps, errors, warnings, chainAnchored || chainTrustWarning, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -519,7 +519,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         var chainCrls = new List<byte[]>();
         var chainOcsps = new List<byte[]>();
         if (await CheckChainRevocationAsync(
-            cmsData, embeddedCrls, embeddedOcsps, provenTime, revocationSource, chainAnchored || chainTrustWarning, warnings, cancellationToken).ConfigureAwait(false) is { } chainRevocation)
+            cmsData, chainCertificates, embeddedCrls, embeddedOcsps, provenTime, revocationSource, chainAnchored || chainTrustWarning, warnings, cancellationToken).ConfigureAwait(false) is { } chainRevocation)
         {
             chainCrls.AddRange(chainRevocation.Crls);
             chainOcsps.AddRange(chainRevocation.Ocsps);
@@ -648,7 +648,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         bool sigValid = ValidateSignatureStep(cmsData, errors, out bool signatureVerificationIndeterminate);
 
         // 3. TSA certificate chain
-        var (chainValid, chainAnchored) = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
+        var (chainValid, chainAnchored, chainCertificates) = await ValidateChainStep(cmsData, errors, warnings, cancellationToken).ConfigureAwait(false);
 
         // 3a. Country-specific chain validation providers (policy level, signer ID enrichment)
         var chainValidationResult = await RunChainValidationProvidersAsync(
@@ -686,7 +686,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         // 4. Revocation (optional)
         var (notRevoked, revocationSource) = await ValidateRevocationIfEnabled(
-            field, cmsData, embeddedCrls, embeddedOcsps, errors, warnings, chainAnchored || chainTrustWarning, cancellationToken).ConfigureAwait(false);
+            field, cmsData, chainCertificates, embeddedCrls, embeddedOcsps, errors, warnings, chainAnchored || chainTrustWarning, cancellationToken).ConfigureAwait(false);
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
         {
@@ -779,8 +779,13 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
     }
 
-    /// <summary>Validates the chain; also tells whether it reaches a trust anchor, even when it is invalid (revoked, expired).</summary>
-    private async Task<(bool Valid, bool Anchored)> ValidateChainStep(CmsSignedData cmsData, List<string> errors, List<string> warnings, CancellationToken ct = default)
+    /// <summary>
+    /// Validates the chain; also tells whether it reaches a trust anchor, even when it is invalid (revoked, expired),
+    /// and gives the certificates it was built from: the CMS's and those downloaded through AIA, which the revocation
+    /// checks need to find the issuer of a certificate the signature does not carry.
+    /// </summary>
+    private async Task<(bool Valid, bool Anchored, IReadOnlyList<X509Certificate2> Certificates)> ValidateChainStep(
+        CmsSignedData cmsData, List<string> errors, List<string> warnings, CancellationToken ct = default)
     {
         // Guard: signer cert can be null when CmsParser fails to identify it.
         // ValidateCertificateChain handles null correctly, but DownloadAiaCertsAsync requires
@@ -788,7 +793,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         if (cmsData.SignerCertificate is null || !_options.Verifier.UseAia)
         {
             bool valid = ValidateCertificateChain(cmsData.SignerCertificate, cmsData.Certificates, errors, warnings, out bool anchored);
-            return (valid, anchored);
+            return (valid, anchored, cmsData.Certificates);
         }
 
         try
@@ -812,7 +817,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
             bool chainValid = ValidateCertificateChain(cmsData.SignerCertificate, allCerts, errors, warnings, out bool chainAnchored);
             ct.ThrowIfCancellationRequested();
-            return (chainValid, chainAnchored);
+            return (chainValid, chainAnchored, allCerts);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -823,13 +828,18 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         {
             _logger.ChainError(ex);
             errors.Add($"Certificate chain validation error: {ex.Message}");
-            return (false, false);
+            return (false, false, cmsData.Certificates);
         }
     }
 
+    /// <summary>
+    /// Checks the revocation of the signing certificate, finding its issuer among <paramref name="certificates"/>: the
+    /// certificates the chain was built from (the CMS's and those found through AIA).
+    /// </summary>
     private async Task<(bool IsNotRevoked, RevocationSource Source)> ValidateRevocationIfEnabled(
         PdfSignatureField field,
         CmsSignedData cmsData,
+        IReadOnlyList<X509Certificate2> certificates,
         IReadOnlyList<byte[]> embeddedCrls,
         IReadOnlyList<byte[]> embeddedOcsps,
         List<string> errors,
@@ -852,7 +862,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(_options.NetworkTimeout);
             var (notRevoked, source) = await _revocationChecker.CheckRevocationAsync(
-                cmsData.SignerCertificate, cmsData.Certificates, embeddedCrls, embeddedOcsps, timeoutCts.Token, signingTime).ConfigureAwait(false);
+                cmsData.SignerCertificate, certificates, embeddedCrls, embeddedOcsps, timeoutCts.Token, signingTime).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             if (!notRevoked)
             {
@@ -883,6 +893,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     /// </summary>
     private async Task<ChainRevocationResult?> CheckChainRevocationAsync(
         CmsSignedData cmsData,
+        IReadOnlyList<X509Certificate2> certificates,
         IReadOnlyList<byte[]> embeddedCrls,
         IReadOnlyList<byte[]> embeddedOcsps,
         DateTimeOffset? provenTime,
@@ -896,7 +907,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             return null;
         }
 
-        var ordered = SimpleSign.Core.Signing.SignerAcceptance.OrderChain(signer, [.. cmsData.Certificates, .. TrustAnchorCertificates()]);
+        var ordered = SimpleSign.Core.Signing.SignerAcceptance.OrderChain(signer, [.. certificates, .. TrustAnchorCertificates()]);
         if (!ordered[^1].IsSelfSigned())
         {
             return null;
