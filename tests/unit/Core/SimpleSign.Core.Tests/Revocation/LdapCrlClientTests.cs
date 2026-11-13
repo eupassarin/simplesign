@@ -131,7 +131,8 @@ public sealed class LdapCrlClientTests
         var policy = new OutboundHttpPolicy { AllowLdap = true, LoopbackOrigins = [new Uri($"ldap://localhost:{port}")] };
 
         // As "localhost" resolves on most machines: ::1 first, where nothing listens (a container's port published on IPv4 only).
-        byte[]? value = await LdapCrlClient.GetCrlAsync($"ldap://localhost:{port}/cn=CA,c=PE", policy, TimeSpan.FromSeconds(5), CancellationToken.None,
+        // Windows does not refuse at once: it retries the SYN for a few seconds, more on a busy CI runner, hence the long timeout.
+        byte[]? value = await LdapCrlClient.GetCrlAsync($"ldap://localhost:{port}/cn=CA,c=PE", policy, TimeSpan.FromSeconds(30), CancellationToken.None,
             (_, _) => Task.FromResult(new[] { IPAddress.IPv6Loopback, IPAddress.Loopback }));
 
         value.ShouldBe(crl);
