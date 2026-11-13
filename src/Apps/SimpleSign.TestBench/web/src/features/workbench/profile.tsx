@@ -43,11 +43,9 @@ export const profiles: Record<Profile, ProfileDefinition> = {
 
 const all = Object.keys(profiles) as Profile[]
 
-/** The menu's entries: Peru twice (INDECOPI's real list, the Sandbox's list), Gov.br on Validate only. */
-function entries(page: ProfilePage): ProfileChoice[] {
-  return all
-    .filter((p) => page === "validate" || profiles[p].signs)
-    .flatMap((p): ProfileChoice[] => (p === "Iofe" ? [{ profile: p, source: "Indecopi" }, { profile: p, source: "Sandbox" }] : [{ profile: p, source: "Indecopi" }]))
+/** The menu's profiles: one entry each (Peru's list is chosen inside its entry), Gov.br on Validate only. */
+function entries(page: ProfilePage): Profile[] {
+  return all.filter((p) => page === "validate" || profiles[p].signs)
 }
 
 /** The fields the profile is written to on a page: the signing controls (Sign) and the validation. */
@@ -182,8 +180,12 @@ export function ProfileMenu({ page, options, update }: {
   const memory = useRef<ProfileMemory>({})
   const active = activeProfile(options)
   const extras = extraProfiles(options)
+  // Peru's list: the one on while IOFE is on, else the last chosen (the Sandbox's at first: the TestBench's certificates).
+  const [pickedSource, setPickedSource] = useState<ProfileSource>("Sandbox")
+  const iofeSource: ProfileSource = active?.profile === "Iofe" ? active.source : pickedSource
   const choose = (next: ProfileChoice | null) => {
     setOpen(false)
+    if (next?.profile === "Iofe") setPickedSource(next.source)
     if (same(next, active)) return
     if (!active) memory.current = rememberPolicies(options)
     update((current) => applyProfile(current, next, page, memory.current))
@@ -214,17 +216,36 @@ export function ProfileMenu({ page, options, update }: {
           </span>
         </button>
         <div className="bg-border -mx-1 my-1 h-px" />
-        {entries(page).map((choice) => (
-          <button key={`${choice.profile}-${choice.source}`} type="button" className={cn(item, same(active, choice) && "bg-accent/50")} onClick={() => choose(choice)}>
-            <Check className={cn("mt-0.5 size-4 shrink-0", same(active, choice) ? "opacity-100" : "opacity-0")} />
-            <span className="min-w-0">
-              <span className="block text-sm font-medium"><span aria-hidden>{profiles[choice.profile].flag}</span> {profileTitle(choice, t)}</span>
-              <span className="text-muted-foreground mt-0.5 block space-y-0.5 text-xs">
-                {effects(choice, page, t).map((line) => <span key={line} className="block">{line}</span>)}
-              </span>
-            </span>
-          </button>
-        ))}
+        {entries(page).map((profile) => {
+          const choice: ProfileChoice = { profile, source: profile === "Iofe" ? iofeSource : "Indecopi" }
+          const on = active?.profile === profile
+          return (
+            <div key={profile} className={cn("rounded-sm", on && "bg-accent/50")}>
+              <button type="button" className={item} onClick={() => choose(choice)}>
+                <Check className={cn("mt-0.5 size-4 shrink-0", on ? "opacity-100" : "opacity-0")} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium"><span aria-hidden>{profiles[profile].flag}</span> {t(profiles[profile].title)}</span>
+                  <span className="text-muted-foreground mt-0.5 block space-y-0.5 text-xs">
+                    {effects(choice, page, t).map((line) => <span key={line} className="block">{line}</span>)}
+                  </span>
+                </span>
+              </button>
+              {profile === "Iofe" && (
+                <div className="flex items-center gap-1.5 pr-2 pb-1.5 pl-8 text-xs" role="radiogroup" aria-label={t("wb.profile.listLabel")}>
+                  <span className="text-muted-foreground">{t("wb.profile.listLabel")}</span>
+                  {(["Indecopi", "Sandbox"] as const).map((source) => (
+                    <button key={source} type="button" role="radio" aria-checked={iofeSource === source}
+                      className={cn("rounded border px-1.5 py-0.5",
+                        iofeSource === source ? "border-primary/40 bg-primary/10 text-primary" : "hover:bg-accent text-muted-foreground")}
+                      onClick={() => choose({ profile, source })}>
+                      {t(source === "Sandbox" ? "wb.profile.listSandboxShort" : "wb.profile.listIndecopiShort")}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
         <div className="bg-border -mx-1 my-1 h-px" />
         <div className="px-2 pt-1 pb-1.5">
           <p className="text-sm font-medium">{t("wb.profile.alsoTrust")}</p>
