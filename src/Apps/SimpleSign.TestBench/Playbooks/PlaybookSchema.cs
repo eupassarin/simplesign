@@ -83,6 +83,7 @@ internal static class PlaybookSchema
                 ["ocsp"] = Str("OCSP failure.", Enum.GetNames<OcspFault>()),
                 ["tsa"] = Str("TSA failure.", Enum.GetNames<TsaFault>()),
                 ["trustedList"] = Str("Trusted list failure.", Enum.GetNames<TlFault>()),
+                ["lotl"] = Str("List of trusted lists failure.", Enum.GetNames<LotlFault>()),
                 ["revoke"] = Arr(Str("A Sandbox certificate id."), "Certificates to revoke for the step."),
             }),
             ["expect"] = Obj("What the run must show; every field given is checked, for each engine.", new JsonObject
@@ -94,6 +95,8 @@ internal static class PlaybookSchema
                 ["level"] = Str("Level achieved (signature) or detected (validation).", ["B-B", "B-T", "B-LT", "B-LTA"]),
                 ["failedConstraints"] = Arr(Str("A constraint name (AccuracyPresent)."),
                     "Constraints of the validation policy that must fail, by name, in the signature or what it carries (a time-stamp, revocation data)."),
+                ["qualification"] = Str("The qualification of the first signature under the profile's framework (eIDAS: QESig, QESeal, AdESig-QC, AdESeal-QC, AdESig, AdESeal, Indeterminate …, Not AdES, N/A)."),
+                ["timestampQualification"] = Str("The qualification of its first timestamp: QTSA (qualified electronic time-stamp), TSA or N/A."),
                 ["etsiReport"] = Str("valid: the run's ETSI TS 119 102-2 validation report must be valid against its schema (embedded in SimpleSign).", ["valid"]),
                 ["dssAgrees"] = Bool("Whether EU DSS must agree with SimpleSign. Needs crossValidate on the step or in the defaults, and a run that produces a file (a refusal is never sent to DSS); when DSS is unavailable this check fails."),
                 ["logContains"] = Arr(Str("Text."), "Texts the run's log must contain."),
@@ -200,7 +203,8 @@ internal static class PlaybookSchema
             .Append("the TestBench checks them when it loads a playbook. Failures: crl ").Append(string.Join("/", Enum.GetNames<CrlFault>()))
             .Append(", ocsp ").Append(string.Join("/", Enum.GetNames<OcspFault>()))
             .Append(", tsa ").Append(string.Join("/", Enum.GetNames<TsaFault>()))
-            .Append(", trustedList ").Append(string.Join("/", Enum.GetNames<TlFault>())).Append(".\n");
+            .Append(", trustedList ").Append(string.Join("/", Enum.GetNames<TlFault>()))
+            .Append(", lotl ").Append(string.Join("/", Enum.GetNames<LotlFault>())).Append(".\n");
         return md.ToString();
     }
 
@@ -222,6 +226,7 @@ internal static class PlaybookSchema
                 ["ocsp"] = Enum.GetNames<OcspFault>(),
                 ["tsa"] = Enum.GetNames<TsaFault>(),
                 ["trustedList"] = Enum.GetNames<TlFault>(),
+                ["lotl"] = Enum.GetNames<LotlFault>(),
             });
 
     private static string Cell(string text) => text.Replace("|", "\\|", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);

@@ -212,6 +212,16 @@
             "WithdrawnAfterUse"
           ]
         },
+        "lotl": {
+          "type": "string",
+          "description": "List of trusted lists failure.",
+          "enum": [
+            "None",
+            "Expired",
+            "WrongSigner",
+            "Tampered"
+          ]
+        },
         "revoke": {
           "type": "array",
           "description": "Certificates to revoke for the step.",
@@ -269,7 +279,8 @@
             "TimestampUntrusted",
             "TimestampCertificateNotValid",
             "TimestampCertificateRevoked",
-            "TimestampRevocationStatusUnknown"
+            "TimestampRevocationStatusUnknown",
+            "CertificateNotQualified"
           ]
         },
         "indication": {
@@ -302,6 +313,14 @@
             "type": "string",
             "description": "A constraint name (AccuracyPresent)."
           }
+        },
+        "qualification": {
+          "type": "string",
+          "description": "The qualification of the first signature under the profile\u0027s framework (eIDAS: QESig, QESeal, AdESig-QC, AdESeal-QC, AdESig, AdESeal, Indeterminate \u2026, Not AdES, N/A)."
+        },
+        "timestampQualification": {
+          "type": "string",
+          "description": "The qualification of its first timestamp: QTSA (qualified electronic time-stamp), TSA or N/A."
         },
         "etsiReport": {
           "type": "string",

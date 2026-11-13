@@ -30,6 +30,12 @@ public sealed record XmlSignatureReport(
     string? SubIndication = null,
     IReadOnlyList<FindingView>? Findings = null)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry of this signature and the certificates next to it, for the SimpleSign report (not sent to the UI).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public Reports.ReportSource? Source { get; init; }
@@ -61,6 +67,12 @@ internal sealed record XmlVerdict(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<XmlVerdict> CounterSignatures)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry, for the SimpleSign report; null from the CLI.</summary>
     public Reports.ReportSource? Source { get; init; }
 }
@@ -391,6 +403,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         [.. r.CounterSignatures.Select(Verdict)])
     {
         Source = new Reports.ReportSource(r.ToReportEntry(), []),
+        Qualification = r.Qualification?.Level,
+        TimestampQualifications = ValidationService.TimestampLevels(r.Qualification),
     };
 
     /// <summary>The verdict on a signature the CLI validated, with its countersignatures.</summary>
@@ -398,7 +412,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         s.Id, s.Signer, s.Indication, s.SubIndication, s.DetectedLevel, s.SigningTime, s.IsSignatureValid, s.IsIntegrityValid, s.IsCertificateChainValid,
         s.HasValidSignatureTimeStamp, s.IsTsaTrusted, s.HasValidDataObjectsTimeStamp, s.DataObjectsTimeStampTime, s.HasValidCompleteReferences,
         s.HasValidSigAndRefsTimeStamp, s.IsLtvDataValid, s.HasValidArchiveTimeStamp, s.NotRevoked, s.RevocationSource ?? "",
-        CliValidation.Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [], [.. (s.CounterSignatures ?? []).Select(Verdict)]);
+        CliValidation.Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [], [.. (s.CounterSignatures ?? []).Select(Verdict)])
+    {
+        Qualification = s.Qualification,
+        TimestampQualifications = s.TimestampQualifications ?? [],
+    };
 
     /// <summary>The reports of the signatures, whichever validated them: a countersignature right after the signature it signs, saying so.</summary>
     private static List<XmlSignatureReport> Reports(IEnumerable<XmlVerdict> verdicts)
@@ -446,6 +464,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                 v.SubIndication, ValidationService.Findings(v.Constraints))
             {
                 Source = v.Source,
+                Qualification = v.Qualification,
+                TimestampQualifications = v.TimestampQualifications,
             });
             foreach (var counter in v.CounterSignatures)
             {

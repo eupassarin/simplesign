@@ -18,7 +18,8 @@ public static class EidasPolicies
     /// <summary>
     /// Signing: the checks of <see cref="SigningPolicy.Default"/>, plus the signer and each TSA chain to the EU trusted
     /// lists (the anchors given to the signer: <see cref="EidasProfile"/>), the revocation of the whole chain (refused
-    /// when revoked or unknown), and a warning when the signing certificate is not qualified (QcCompliance).
+    /// when revoked or unknown), and a warning when the signing certificate is not qualified (QcCompliance). QcSSCD is
+    /// there at IGNORE, to be raised by a policy that requires the key on a QSCD.
     /// </summary>
     public static SigningPolicy Signing { get; } = SigningPolicy.Default
         .WithName(Name)
@@ -26,6 +27,7 @@ public static class EidasPolicies
         .With("SigningCertificate/NotRevoked", Fail)
         .With("SigningCertificate/RevocationDataAvailable", Fail)
         .With("SigningCertificate/QcCompliance", new PolicyConstraint(ConstraintLevel.Warn))
+        .With("SigningCertificate/QcSSCD", new PolicyConstraint(ConstraintLevel.Ignore))
         .With("CACertificate/NotRevoked", Fail)
         .With("CACertificate/RevocationDataAvailable", Fail)
         .With("Timestamp/ProspectiveCertificateChain", Fail)

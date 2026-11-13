@@ -56,6 +56,9 @@ internal sealed class ValidateSignatureDto
     /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…), with --profile eidas; null otherwise.</summary>
     public string? Qualification { get; init; }
 
+    /// <summary>The qualification of each timestamp (QTSA, TSA, N/A), with --profile eidas.</summary>
+    public List<string>? TimestampQualifications { get; init; }
+
     public bool IsDocumentTimestamp { get; init; }
     public string? Signer { get; init; }
     public string? Level { get; init; }
@@ -289,6 +292,9 @@ internal sealed class CadesSignerDto
     /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…), with --profile eidas; null otherwise.</summary>
     public string? Qualification { get; init; }
 
+    /// <summary>The qualification of each timestamp (QTSA, TSA, N/A), with --profile eidas.</summary>
+    public List<string>? TimestampQualifications { get; init; }
+
     public string? SubIndication { get; init; }
     public List<ConstraintDto> Constraints { get; init; } = [];
     public bool IsSignatureValid { get; init; }
@@ -353,6 +359,9 @@ internal sealed class XadesSignatureDto
 
     /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…), with --profile eidas; null otherwise.</summary>
     public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (QTSA, TSA, N/A), with --profile eidas.</summary>
+    public List<string>? TimestampQualifications { get; init; }
 
     public string? SubIndication { get; init; }
     public List<ConstraintDto> Constraints { get; init; } = [];

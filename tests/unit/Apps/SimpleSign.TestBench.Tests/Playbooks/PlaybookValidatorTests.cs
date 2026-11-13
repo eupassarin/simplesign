@@ -182,7 +182,7 @@ public sealed class PlaybookValidatorTests
     [Fact]
     public void Samples_AreValidPlaybooks()
     {
-        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["etsi-baseline", "indecopi-guia-v4", "sandbox-basics"]);
+        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["eidas-baseline", "etsi-baseline", "indecopi-guia-v4", "sandbox-basics"]);
         foreach (var sample in PlaybookSamples.All)
         {
             var check = PlaybookValidator.Check(PlaybookSamples.Json(sample.Id)!, sandbox: null);
@@ -228,6 +228,28 @@ public sealed class PlaybookValidatorTests
         shown.SelectMany(c => System.Text.RegularExpressions.Regex.Matches(c[^2], "`([a-z0-9-]+)`").Select(m => m.Groups[1].Value))
             .Where(id => !ids.Contains(id)).ShouldBeEmpty("step ids the checklist names but the playbook does not have");
         tags.Where(t => System.Text.RegularExpressions.Regex.IsMatch(t, "^[FVS]-[0-9]+$") && !shown.Any(c => c[1] == t))
+            .ShouldBeEmpty("playbook tags whose checklist item is not marked P");
+    }
+
+    [Fact]
+    public void EidasSample_CoversEveryChecklistItemARunCanShow()
+    {
+        // Rows of docs/playbooks/eidas-checklist.md whose "How" is P: each needs a step of eidas-baseline tagged with its
+        // id, and every step id the row names must exist.
+        var rows = File.ReadAllLines(RepositoryPaths.Get("docs", "playbooks", "eidas-checklist.md"))
+            .Select(l => l.Split('|', StringSplitOptions.TrimEntries))
+            .Where(c => c.Length > 4 && System.Text.RegularExpressions.Regex.IsMatch(c[1], "^[LQT]-[0-9]+$"))
+            .ToList();
+        var steps = PlaybookValidator.Check(PlaybookSamples.Json("eidas-baseline")!, sandbox: null).Playbook!.AllSteps().ToList();
+        var tags = steps.SelectMany(s => s.Step.Tags).ToHashSet(StringComparer.Ordinal);
+        var ids = steps.Select(s => s.Step.Id).ToHashSet(StringComparer.Ordinal);
+        var shown = rows.Where(c => c[3] == "P").ToList();
+
+        shown.ShouldNotBeEmpty();
+        shown.Where(c => !tags.Contains(c[1])).Select(c => c[1]).ShouldBeEmpty("checklist items with P and no step tagged with them");
+        shown.SelectMany(c => System.Text.RegularExpressions.Regex.Matches(c[4], "`([a-z0-9-]+)`").Select(m => m.Groups[1].Value))
+            .Where(id => !ids.Contains(id)).ShouldBeEmpty("step ids the checklist names but the playbook does not have");
+        tags.Where(t => System.Text.RegularExpressions.Regex.IsMatch(t, "^[LQT]-[0-9]+$") && !shown.Any(c => c[1] == t))
             .ShouldBeEmpty("playbook tags whose checklist item is not marked P");
     }
 }

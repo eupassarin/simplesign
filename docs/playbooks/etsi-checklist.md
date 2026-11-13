@@ -141,7 +141,7 @@ are known gaps and are listed in the evidence.
 | # | What to validate | How |
 |---|---|---|
 | CE-1 | Signer certificate profile: key usage, validity, chain | P (signers above) |
-| CE-2 | QC statements and qualification (EN 319 412-5, eIDAS) | X (qualification decision removed on purpose) |
+| CE-2 | QC statements and qualification (EN 319 412-5, eIDAS) | U + P in the eIDAS package (`EidasQualifier`; the `eidas-baseline` playbook, [eidas-checklist.md](eidas-checklist.md)) |
 | CE-3 | Crypto suite with dates (algorithm valid at signing time vs now) | P + U (`CryptographicSuite`) |
 
 ## 7. Out of scope (stated, not tested)

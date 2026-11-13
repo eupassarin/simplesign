@@ -53,6 +53,9 @@ internal sealed class SandboxConnection : IDisposable
     /// <exception cref="InvalidOperationException">The Sandbox is older than that TSA.</exception>
     public Uri IofeTsaUri => new(Info.Tsa.IofeUrl ?? throw new InvalidOperationException("This Sandbox has no IOFE TSA: update it."));
 
+    /// <summary>The Sandbox's non-qualified TSA (a TSA service of its trusted list, not TSA/QTST).</summary>
+    public Uri NonQualifiedTsaUri => new(Info.Tsa.NonQualifiedUrl ?? throw new InvalidOperationException("This Sandbox has no non-qualified TSA: update it."));
+
     /// <summary>The Sandbox's trusted list, read directly (not through the LOTL); null for a Sandbox without one.</summary>
     public Uri? TlUri => Info.TrustedLists is { } lists ? new Uri(lists.TlUrl) : null;
 

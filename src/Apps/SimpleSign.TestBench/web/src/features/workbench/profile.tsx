@@ -12,8 +12,8 @@ import { asText, getPath, setPath, type Options } from "./schema"
 // its own, `profile` (with `profileSource` for IOFE and `trustProfiles` for the others' trust), on the signing controls and
 // on the validation. Only one profile sets the policies: the menu writes its presets in the policy fields, where they show.
 
-export type Profile = "Sandbox" | "Iofe" | "IcpBrasil" | "GovBr"
-export type ProfileSource = "Indecopi" | "Sandbox"
+export type Profile = "Sandbox" | "Iofe" | "Eidas" | "IcpBrasil" | "GovBr"
+export type ProfileSource = "Official" | "Sandbox"
 
 /** The profile on: which one, and for IOFE which list it reads. */
 export interface ProfileChoice {
@@ -37,17 +37,21 @@ interface ProfileDefinition {
 export const profiles: Record<Profile, ProfileDefinition> = {
   Sandbox: { signs: true, flag: "🧪", title: "wb.profile.sandbox" },
   Iofe: { signing: "preset:signing:iofe", validation: "preset:validation:iofe", signs: true, flag: "🇵🇪", title: "wb.profile.peru" },
+  Eidas: { signing: "preset:signing:eidas", validation: "preset:validation:eidas", signs: true, flag: "🇪🇺", title: "wb.profile.eidas" },
   IcpBrasil: { signing: "preset:signing:icp-brasil", validation: "preset:validation:icp-brasil", signs: true, flag: "🇧🇷", title: "wb.profile.icpBrasil" },
   GovBr: { validation: "preset:validation:govbr", signs: false, flag: "🇧🇷", title: "wb.profile.govBr" },
 }
 
 const all = Object.keys(profiles) as Profile[]
 
-/** The menu's entries: Peru twice (INDECOPI's real list, the Sandbox's list), Gov.br on Validate only. */
+/** The profiles that read a trusted list, real or the Sandbox's: each is offered twice. */
+const withSource: Profile[] = ["Iofe", "Eidas"]
+
+/** The menu's entries: Peru and the EU twice (the real list, the Sandbox's), Gov.br on Validate only. */
 function entries(page: ProfilePage): ProfileChoice[] {
   return all
     .filter((p) => page === "validate" || profiles[p].signs)
-    .flatMap((p): ProfileChoice[] => (p === "Iofe" ? [{ profile: p, source: "Indecopi" }, { profile: p, source: "Sandbox" }] : [{ profile: p, source: "Indecopi" }]))
+    .flatMap((p): ProfileChoice[] => (withSource.includes(p) ? [{ profile: p, source: "Official" }, { profile: p, source: "Sandbox" }] : [{ profile: p, source: "Official" }]))
 }
 
 /** The fields the profile is written to on a page: the signing controls (Sign) and the validation. */
@@ -60,7 +64,7 @@ export function activeProfile(options: Options): ProfileChoice | null {
   for (const holder of ["validation", "signingControls"]) {
     const profile = asText(getPath(options, `${holder}.profile`))
     if (profile && profile !== "None" && profile in profiles) {
-      return { profile: profile as Profile, source: asText(getPath(options, `${holder}.profileSource`)) === "Sandbox" ? "Sandbox" : "Indecopi" }
+      return { profile: profile as Profile, source: asText(getPath(options, `${holder}.profileSource`)) === "Sandbox" ? "Sandbox" : "Official" }
     }
   }
   return null
@@ -74,8 +78,9 @@ export function extraProfiles(options: Options): Profile[] {
 
 /** The name of a profile on: "Peru (IOFE) · Sandbox's list". */
 export function profileTitle(choice: ProfileChoice, t: ReturnType<typeof useT>): string {
-  if (choice.profile !== "Iofe") return t(profiles[choice.profile].title)
-  return `${t("wb.profile.peru")} · ${t(choice.source === "Sandbox" ? "wb.profile.listSandbox" : "wb.profile.listIndecopi")}`
+  if (choice.profile === "Iofe") return `${t("wb.profile.peru")} · ${t(choice.source === "Sandbox" ? "wb.profile.listSandbox" : "wb.profile.listIndecopi")}`
+  if (choice.profile === "Eidas") return `${t("wb.profile.eidas")} · ${t(choice.source === "Sandbox" ? "wb.profile.lotlSandbox" : "wb.profile.lotlEu")}`
+  return t(profiles[choice.profile].title)
 }
 
 /** The policy preset the profile puts at <paramref name="path"/>, or null (SimpleSign's default). */
@@ -113,7 +118,7 @@ export function applyProfile(options: Options, next: ProfileChoice | null, page:
   let o = options
   for (const holder of holders(o, page)) {
     o = setPath(o, `${holder}.profile`, next?.profile ?? "None")
-    o = setPath(o, `${holder}.profileSource`, next?.source ?? "Indecopi")
+    o = setPath(o, `${holder}.profileSource`, next?.source ?? "Official")
     const extras = getPath(o, `${holder}.trustProfiles`)
     if (next && Array.isArray(extras)) o = setPath(o, `${holder}.trustProfiles`, (extras as string[]).filter((p) => p !== next.profile))
   }
@@ -154,18 +159,20 @@ function effects(choice: ProfileChoice, page: ProfilePage, t: ReturnType<typeof 
   const trust: Record<Profile, MessageKey> = {
     Sandbox: "wb.profile.effect.trustSandbox",
     Iofe: choice.source === "Sandbox" ? "wb.profile.effect.trustPeruSandbox" : "wb.profile.effect.trustPeru",
+    Eidas: choice.source === "Sandbox" ? "wb.profile.effect.trustEidasSandbox" : "wb.profile.effect.trustEidas",
     IcpBrasil: "wb.profile.effect.trustIcp",
     GovBr: "wb.profile.effect.trustGovBr",
   }
   lines.push(t(trust[choice.profile]))
   if (page === "sign" && choice.profile === "IcpBrasil") lines.push(t("wb.profile.effect.levels"))
-  const test = choice.profile === "Sandbox" || choice.source === "Sandbox" && choice.profile === "Iofe"
+  if (choice.profile === "Eidas") lines.push(t("wb.profile.effect.qualification"))
+  const test = choice.profile === "Sandbox" || choice.source === "Sandbox" && withSource.includes(choice.profile)
   lines.push(t(test ? "wb.profile.effect.sandboxCertificates" : "wb.profile.effect.realCertificates"))
   return lines
 }
 
 const same = (a: ProfileChoice | null, b: ProfileChoice | null) =>
-  a?.profile === b?.profile && (a?.profile !== "Iofe" || a?.source === b?.source)
+  a?.profile === b?.profile && (!a || !withSource.includes(a.profile) || a.source === b?.source)
 
 /**
  * The trust profiles of a page as one menu button (as the Playbook menu): Default or one profile, each saying what it

@@ -84,7 +84,7 @@ public sealed class SigningControlsTests(TestBenchFixture fixture) : IDisposable
         var options = Timestamped(TsaProvider.SandboxIofe) with
         {
             SigningPolicyId = IofeSigning,
-            SigningControls = new SigningControlsOptions { Trust = [], Profile = TrustProfileChoice.Iofe, ProfileSource = IofeListSource.Sandbox },
+            SigningControls = new SigningControlsOptions { Trust = [], Profile = TrustProfileChoice.Iofe, ProfileSource = ProfileListSource.Sandbox },
         };
 
         var (result, _) = await RunAsync(options, engine);

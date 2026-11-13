@@ -53,6 +53,12 @@ public sealed record PlaybookEngineRun(
     /// <summary>Why DSS gave no verdict (unreachable, an error); null when it answered or was not asked.</summary>
     public string? DssError { get; init; }
 
+    /// <summary>The qualification of the (first) signature (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of its first timestamp (QTSA, TSA, N/A); null when none.</summary>
+    public string? TimestampQualification { get; init; }
+
     /// <summary>Whether every check passed.</summary>
     public bool Passed => Checks.All(c => c.Passed);
 }
@@ -468,7 +474,7 @@ internal sealed class PlaybookRunner(
             // DSS downloads the trusted lists every few seconds (every hour with the EU lists): it validates against the
             // list the step changed only once it has downloaded it again. Until then its verdict is not compared.
             string? dssStale = null;
-            if (changedSandbox && Parse(step.Sandbox!.TrustedList, TlFault.None) != TlFault.None
+            if (changedSandbox && (Parse(step.Sandbox!.TrustedList, TlFault.None) != TlFault.None || Parse(step.Sandbox!.Lotl, LotlFault.None) != LotlFault.None)
                 && (step.CrossValidate ?? session.Playbook.Defaults.CrossValidate))
             {
                 dssStale = await WaitForDssTrustedListsAsync(step, session.Token).ConfigureAwait(false);
@@ -573,7 +579,8 @@ internal sealed class PlaybookRunner(
             Tsa: Parse(box.Tsa, TsaFault.None),
             Crl: Parse(box.Crl, CrlFault.None),
             Ocsp: Parse(box.Ocsp, OcspFault.None),
-            TrustedList: Parse(box.TrustedList, TlFault.None));
+            TrustedList: Parse(box.TrustedList, TlFault.None),
+            Lotl: Parse(box.Lotl, LotlFault.None));
         if (faults.Any)
         {
             await sandbox.SetFaultsAsync(faults, cancellationToken).ConfigureAwait(false);
@@ -825,6 +832,7 @@ internal sealed class PlaybookRunner(
         Add("ocsp", "OCSP", box.Ocsp);
         Add("tsa", "TSA", box.Tsa);
         Add("trustedList", "Trusted list", box.TrustedList);
+        Add("lotl", "List of trusted lists", box.Lotl);
         foreach (string id in box.Revoke)
         {
             rows.Add(new("revoke", "Revoke", id));
@@ -925,16 +933,21 @@ internal sealed class PlaybookRunner(
         var extras = holder?["trustProfiles"] is JsonArray list
             ? list.OfType<JsonValue>().Select(v => v.TryGetValue(out string? t) && Enum.TryParse<TrustFrameworks.TrustProfileChoice>(t, true, out var c) ? c : TrustFrameworks.TrustProfileChoice.None).ToList()
             : [];
-        string text = ProfileText(Read("profile", TrustFrameworks.TrustProfileChoice.None), Read("profileSource", TrustFrameworks.IofeListSource.Indecopi), extras);
+        string text = ProfileText(Read("profile", TrustFrameworks.TrustProfileChoice.None), Read("profileSource", TrustFrameworks.ProfileListSource.Official), extras);
         return text == "—" ? null : text;
     }
 
     /// <summary>The profile as the preview and the evidence show it: <c>iofe (Sandbox's list) + gov-br</c>; "—" for none.</summary>
-    internal static string ProfileText(TrustFrameworks.TrustProfileChoice profile, TrustFrameworks.IofeListSource source,
+    internal static string ProfileText(TrustFrameworks.TrustProfileChoice profile, TrustFrameworks.ProfileListSource source,
         IReadOnlyList<TrustFrameworks.TrustProfileChoice> extras)
     {
         string main = TrustFrameworks.ProfileTrust.Name(profile) is { } name
-            ? name + (profile == TrustFrameworks.TrustProfileChoice.Iofe ? source == TrustFrameworks.IofeListSource.Sandbox ? " (Sandbox's list)" : " (INDECOPI's list)" : "")
+            ? name + profile switch
+            {
+                TrustFrameworks.TrustProfileChoice.Iofe => source == TrustFrameworks.ProfileListSource.Sandbox ? " (Sandbox's list)" : " (INDECOPI's list)",
+                TrustFrameworks.TrustProfileChoice.Eidas => source == TrustFrameworks.ProfileListSource.Sandbox ? " (Sandbox's LOTL)" : " (EU LOTL)",
+                _ => "",
+            }
             : "default";
         var others = extras.Select(TrustFrameworks.ProfileTrust.Name).OfType<string>().Distinct().ToList();
         return profile == TrustFrameworks.TrustProfileChoice.None && others.Count == 0 ? "—" : main + string.Concat(others.Select(o => " + " + o));

@@ -35,6 +35,9 @@ public sealed record SandboxTsaInfo(string Url, string AuthenticatedUrl, string 
 
     /// <summary>The TSA under its own self-signed CA, trusted only through the trusted list read with the IOFE profile; null for a Sandbox older than it.</summary>
     public string? IofeUrl { get; init; }
+
+    /// <summary>The TSA the Sandbox's trusted list names as a TSA service, not TSA/QTST; null on an older Sandbox.</summary>
+    public string? NonQualifiedUrl { get; init; }
 }
 
 public sealed record SandboxCscInfo(string BaseUrl, string ClientId, string ClientSecret, string ServiceToken, string Pin, string Otp, IReadOnlyList<SandboxCscCredential> Credentials);
@@ -137,6 +140,22 @@ public enum TlFault
     WithdrawnAfterUse,
 }
 
+/// <summary>What the Sandbox's list of trusted lists (/tl/lotl.xml) looks like.</summary>
+public enum LotlFault
+{
+    /// <summary>Current, signed by its operator.</summary>
+    None,
+
+    /// <summary>Its NextUpdate has passed.</summary>
+    Expired,
+
+    /// <summary>Signed by a certificate other than its operator's.</summary>
+    WrongSigner,
+
+    /// <summary>Changed after signing.</summary>
+    Tampered,
+}
+
 /// <summary>The failures of a Sandbox (its /api/faults).</summary>
 public sealed record SandboxFaults(
     TsaFault Tsa = TsaFault.None,
@@ -146,10 +165,11 @@ public sealed record SandboxFaults(
     OcspFault Ocsp = OcspFault.None,
     int OcspDelayMs = 3000,
     OcspSigner OcspSigner = OcspSigner.Issuer,
-    TlFault TrustedList = TlFault.None)
+    TlFault TrustedList = TlFault.None,
+    LotlFault Lotl = LotlFault.None)
 {
     /// <summary>Whether any failure is on.</summary>
-    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None;
+    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None || Lotl != LotlFault.None;
 }
 
 /// <summary>No Sandbox is connected, and the option or sample needs one.</summary>

@@ -116,6 +116,11 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
   319 132-1), the extended forms, time-stamps, EN 319 102-1 validation (indication and sub-indication) and trusted
   lists, cross-validated with EU DSS. It covers the items [etsi-checklist.md](../playbooks/etsi-checklist.md) marks P;
   each step is tagged with its item id and standard. Written by `tools/playbooks/etsi.py`.
+- `eidas-baseline` — the eIDAS profile on the Sandbox's list of trusted lists: the faults of the LOTL and the TL
+  (`sandbox.lotl`, `sandbox.trustedList`), the qualification of each signature (`expect.qualification`: QESig, QESeal,
+  AdESig-QC, AdESig) and of its time-stamps (`expect.timestampQualification`: QTSA, TSA), through the library and the
+  CLI. It covers the items [eidas-checklist.md](../playbooks/eidas-checklist.md) marks P; see [eidas.md](eidas.md).
+  Written by `tools/playbooks/eidas.py`.
 
 Tests: `tests/unit/Apps/SimpleSign.TestBench.Tests/Playbooks` checks the format, the kept results and the preview, and
 runs every sample against the Sandbox (and checks that the ETSI one covers every P item of its checklist). The schema is `docs/schemas/playbook.schema.json` (also

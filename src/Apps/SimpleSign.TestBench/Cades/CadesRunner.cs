@@ -27,6 +27,12 @@ public sealed record CadesSignerReport(
     string? SubIndication = null,
     IReadOnlyList<FindingView>? Findings = null)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry of this signature and the certificates next to it, for the SimpleSign report (not sent to the UI).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public Reports.ReportSource? Source { get; init; }
@@ -56,6 +62,12 @@ internal sealed record CadesVerdict(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<CadesVerdict> CounterSignatures)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry, for the SimpleSign report; null from the CLI.</summary>
     public Reports.ReportSource? Source { get; init; }
 }
@@ -366,6 +378,8 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             [.. s.CounterSignatures.Select((c, i) => Verdict(c, $"{id}.{i + 1}"))])
         {
             Source = new Reports.ReportSource(r.ToReportEntry(id), []),
+            Qualification = r.Qualification?.Level,
+            TimestampQualifications = ValidationService.TimestampLevels(r.Qualification),
         };
     }
 
@@ -374,7 +388,11 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         s.Index, s.Signer, s.Indication, s.SubIndication, s.SigningTime, s.IsIntegrityValid, s.IsSignatureValid, s.IsCertificateChainValid,
         s.HasValidTimestamp, s.IsTsaTrusted, s.HasValidContentTimestamp, s.ContentTimestampTime, s.IsLtvDataValid, s.HasValidEscTimestamp,
         s.HasValidArchiveTimestamp, s.NotRevoked, s.RevocationSource ?? "", CliValidation.Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [],
-        [.. (s.CounterSignatures ?? []).Select(Verdict)]);
+        [.. (s.CounterSignatures ?? []).Select(Verdict)])
+    {
+        Qualification = s.Qualification,
+        TimestampQualifications = s.TimestampQualifications ?? [],
+    };
 
     private static IEnumerable<CadesSignerReport> Flatten(IEnumerable<CadesSignerReport> signers) =>
         signers.SelectMany(s => new[] { s }.Concat(Flatten(s.CounterSignatures)));
@@ -408,6 +426,8 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             [.. v.CounterSignatures.Select(Signer)], v.SubIndication, ValidationService.Findings(v.Constraints))
         {
             Source = v.Source,
+            Qualification = v.Qualification,
+            TimestampQualifications = v.TimestampQualifications,
         };
     }
 

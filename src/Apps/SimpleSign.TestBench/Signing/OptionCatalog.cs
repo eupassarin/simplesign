@@ -69,6 +69,7 @@ public static class OptionCatalog
         ["tsa.SandboxExpired"] = new("Sandbox TSA, expired", "A TSA whose certificate has expired: a timestamp it makes now is not valid at its own time."),
         ["tsa.SandboxWrongName"] = new("Sandbox TSA, wrong name", "Its tokens name another TSA in the tsa field: the name check fails."),
         ["tsa.SandboxIofe"] = new("Sandbox TSA under its own CA (IOFE)", "A TSA issued by a self-signed Timestamping CA that the Sandbox's trusted list names as an 'unspecified' service (as INDECOPI lists the Llama.pe Timestamping CA): trusted when the list is read with the IOFE profile, untrusted otherwise."),
+        ["tsa.SandboxNonQualified"] = new("Sandbox TSA, non-qualified (eIDAS)", "A TSA the Sandbox's trusted list names as a 'TSA' service, not 'TSA/QTST': its time-stamps are trusted but are not qualified electronic time-stamps."),
         ["tsa.SandboxShortLived"] = new("Sandbox TSA, short-lived", "A TSA whose certificate is issued for the request and valid 30 more seconds: its time-stamp outlives it, and only a later archive time-stamp keeps it trusted."),
         ["tsa.DigiCert"] = new("DigiCert", "Free public TSA, trusted by Adobe and most validators.", null, null, "TimestampOptions.DigiCert"),
         ["tsa.Sectigo"] = new("Sectigo", "Free public TSA.", null, null, "TimestampOptions.Sectigo"),

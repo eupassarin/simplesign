@@ -44,6 +44,7 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
     [InlineData("sandbox-basics")]
     [InlineData("indecopi-guia-v4")]
     [InlineData("etsi-baseline")]
+    [InlineData("eidas-baseline")]
     public async Task RunToEnd_Sample_PassesEveryStep(string sample)
     {
         fixture.RequireSandbox();
