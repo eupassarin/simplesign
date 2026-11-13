@@ -57,6 +57,57 @@ public sealed class CadesSignatureValidatorRevocationTests
     }
 
     [Fact]
+    public async Task ValidateAsync_CrlNotFound_IndeterminateThroughLibraryHttpOnly()
+    {
+        using var pki = NewPki();
+        byte[] cms = await Sign(pki);
+        int requests = 0;
+        using var http = new HttpClient(new MockHttpHandler(_ =>
+        {
+            Interlocked.Increment(ref requests);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }));
+
+        var result = await Validator(http).ValidateAsync(cms, Content, [pki.RootCa]);
+
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        result.SubIndication.ShouldBe(SignatureSubIndication.CertificateChainGeneralFailure);
+        requests.ShouldBeGreaterThan(0);
+        // The platform chain does not look for the CRLs itself: no X509Chain revocation status in the result.
+        PlatformRevocationMessages(result).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ValidateAsync_CrlUnreachable_NoPlatformRevocationStatus()
+    {
+        using var pki = NewPki();
+        byte[] cms = await Sign(pki);
+        using var http = MockHttpHandler.Failing();
+
+        var result = await Validator(http).ValidateAsync(cms, Content, [pki.RootCa]);
+
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        result.IsCertificateChainValid.ShouldBeTrue();
+        PlatformRevocationMessages(result).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Validate_RevocationOn_PlatformChainDoesNotCheckRevocation()
+    {
+        using var pki = NewPki();
+        byte[] cms = await Sign(pki);
+        using var http = MockHttpHandler.Failing();
+
+        // CRLs at an unroutable address: only the library would fetch them, and the synchronous method does not.
+        var result = Validator(http).Validate(cms, Content, [pki.RootCa]);
+
+        result.Indication.ShouldBe(SignatureIndication.Valid);
+        result.IsCertificateChainValid.ShouldBeTrue();
+        result.Warnings.ShouldContain(SimpleSign.Core.Validation.Policy.RevocationStep.NotCheckedWarning);
+        PlatformRevocationMessages(result).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task ValidateAsync_RevocationOff_NotChecked()
     {
         using var pki = NewPki();
@@ -115,6 +166,12 @@ public sealed class CadesSignatureValidatorRevocationTests
         result.Indication.ShouldBe(SignatureIndication.Valid);
         result.IsNotRevoked.ShouldBeNull();
     }
+
+    /// <summary>Messages carrying an X509Chain revocation status (what an online platform chain reports when it cannot fetch a CRL).</summary>
+    private static List<string> PlatformRevocationMessages(CadesValidationResult result) =>
+        [.. result.Errors.Concat(result.Warnings).Where(m =>
+            m.Contains(nameof(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.RevocationStatusUnknown), StringComparison.Ordinal)
+            || m.Contains(nameof(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.OfflineRevocation), StringComparison.Ordinal))];
 
     private static CadesSignatureValidator Validator(HttpClient http) =>
         new(new ValidationOptions { CheckRevocation = true, TrustSystemRoots = false },
