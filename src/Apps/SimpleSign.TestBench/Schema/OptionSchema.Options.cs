@@ -199,7 +199,7 @@ public static partial class OptionSchema
             [
                 V("SandboxRoot", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, its signature checked against the operator's certificate: its CA and TSA services become the anchors. A list that is expired or signed by another key refuses the signature."),
-                V("SandboxIofeList", "Sandbox list in INDECOPI's layout", "The sandbox's list laid out as INDECOPI's (/tl/iofe.xml), read as IofeExtension reads Peru's: its CA services and its 'unspecified' services (the CA of the Sandbox's IOFE TSA) become the anchors, never the code-signing certificate it lists. A list that is expired or signed by another key refuses the signature."),
+                V("SandboxIofeList", "Sandbox trusted list, IOFE profile", "The sandbox's trusted list (/tl/tl.xml), read as IofeExtension reads INDECOPI's: its CA services and its 'unspecified' services (the CA of the Sandbox's IOFE TSA) become the anchors, never the code-signing certificate it lists. A list that is expired or signed by another key refuses the signature."),
             ]),
         O("common.expectedTsa", "crypto", s_all, "choice", "signingControls.expectedTsa", "Expected TSA",
             "The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted).",
@@ -437,7 +437,7 @@ public static partial class OptionSchema
             values:
             [
                 V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, read through its list of trusted lists: its CAs with their service type and status, as DSS trusts them."),
-                V("SandboxIofeList", "Sandbox list in INDECOPI's layout", "The sandbox's list laid out as INDECOPI's (/tl/iofe.xml), read with IofeExtension.DefaultListOptions: its CA and 'unspecified' services with their status, so the TrustedLists constraints are evaluated. DSS does not read it."),
+                V("SandboxIofeList", "Sandbox trusted list, IOFE profile", "The sandbox's trusted list (/tl/tl.xml), read directly with IofeExtension.DefaultListOptions: its CA and 'unspecified' services with their status, so the TrustedLists constraints are evaluated. DSS reads the same list through the LOTL and trusts every granted service in it, whatever its type."),
                 V("Sandbox", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("System", "Operating system roots", "The roots the operating system trusts."),
                 V("PublicTsas", "Public TSA roots", "The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA), so their timestamps reach a trust anchor. DSS trusts the same roots."),

@@ -45,9 +45,9 @@ IOFE_VALIDATION = {"trust": ["SandboxIofeList"], "policyId": "preset:validation:
 
 sections = [
     {"id": "tsl", "title": "Trusted list (TSL)",
-     "description": "The trust anchors come from the Sandbox's list laid out as INDECOPI's (/tl/iofe.xml: TS 102 231 v3, TSLType generic, "
-                    "status undersupervision, TSAs and signature software typed unspecified), read as IofeExtension reads Peru's; its "
-                    "signature is checked against the operator's certificate.",
+     "description": "The trust anchors come from the Sandbox's trusted list (/tl/tl.xml), read as IofeExtension reads INDECOPI's "
+                    "(IofeExtension.DefaultListOptions: the CA services and the services typed 'unspecified', as INDECOPI types its TSAs "
+                    "and signature software, never a code-signing certificate); its signature is checked against the operator's certificate.",
      "steps": [
          sign("tsl-ok", "Sign with a root listed in the TSL", ["F-1", "F-3", "tsl"], {"outcome": "signed"}, signingControls=TSL,
               desc="The Sandbox's TSL is downloaded, its signature is checked with the operator's certificate, and the signer's root is listed: the signature is made."),
@@ -61,7 +61,8 @@ sections = [
                  validation=IOFE_VALIDATION,
                  desc="As INDECOPI lists the Llama.pe Timestamping CA (not its TSU) with the service type 'unspecified', the TSL names the "
                       "self-signed CA of the Sandbox's IOFE TSA: its time-stamp chains to that service and the signature is made. "
-                      "Not cross-validated: DSS reads the EU-style list, which does not name that CA."),
+                      "Not cross-validated: DSS trusts every granted service of the list whatever its type, so it does not show the "
+                      "'unspecified' rule this step is about."),
             "crossValidate": False},
          {**sign("tsl-tsa-unlisted", "Same TSA without the TSL: refused", ["S-1", "tsl", "tsa"], refused("TimestampUntrusted"), level="BT",
                  timestamp={"provider": "SandboxIofe"},

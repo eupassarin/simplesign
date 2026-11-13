@@ -94,7 +94,6 @@ export function EnvironmentTab({ info }: { info: SandboxInfo }) {
               <KeyValue stacked mono label={t("environment.tl")} copy={info.trustedLists.tlUrl}>{link(info.trustedLists.tlUrl)}</KeyValue>
               <KeyValue stacked mono label={t("environment.lotlSigner")} copy={info.trustedLists.lotlSignerUrl}>{link(info.trustedLists.lotlSignerUrl)}</KeyValue>
               <KeyValue stacked mono label={t("environment.tlSigner")} copy={info.trustedLists.tlSignerUrl}>{link(info.trustedLists.tlSignerUrl)}</KeyValue>
-              {info.trustedLists.iofeUrl && <KeyValue stacked mono label={t("environment.iofeList")} copy={info.trustedLists.iofeUrl}>{link(info.trustedLists.iofeUrl)}</KeyValue>}
             </Fold>
           )}
 

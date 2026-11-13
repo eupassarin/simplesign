@@ -11,8 +11,8 @@ namespace SimpleSign.Sandbox.Tests;
 /// <summary>
 /// The Sandbox's trust scheme (/tl/lotl.xml and /tl/tl.xml), read by the library's own trusted-list reader as a
 /// validator would: valid against the TS 119 612 schema, signed by the operators it publishes, its services the
-/// Sandbox's root and TSA, and the trusted-list failures; and /tl/iofe.xml, laid out as INDECOPI's list and read with the
-/// options of <see cref="IofeExtension"/>.
+/// Sandbox's root and TSA, and the trusted-list failures; and the same list read with the options of
+/// <see cref="IofeExtension"/>, which keep its 'unspecified' services (as INDECOPI types its TSAs and software).
 /// </summary>
 [Collection(SandboxCollection.Name)]
 [Trait("Category", "Unit")]
@@ -67,21 +67,20 @@ public sealed class SandboxTrustedListTests(SandboxFixture fixture)
     }
 
     [Fact]
-    public async Task IofeList_LoadedWithTheIofeOptions_HasTheLayoutOfIndecopi()
+    public async Task TrustedList_DefaultOptions_LeaveTheUnspecifiedServicesOut()
     {
-        var list = await LoadIofeAsync();
+        var set = await LoadAsync();
+        var list = set.Lists.ShouldHaveSingleItem();
+        var tsa = await CertificateAsync("tsa-iofe");
+        var software = await CertificateAsync("code-signing");
 
-        list.StructureErrors.ShouldBeEmpty();
-        list.Version.ShouldBe("3");
-        list.Territory.ShouldBe("PE");
-        list.Pointers.ShouldBeEmpty();
-        list.Services.ShouldAllBe(s => s.Status.StartsWith("http://uri.etsi.org/TrstSvc/eSigDir-1999-93-EC-TrustedList/Svcstatus/", StringComparison.Ordinal));
-        list.Services.Count(s => s.ServiceType.EndsWith("/unspecified", StringComparison.Ordinal)).ShouldBe(3);
-        (await Http.GetAsync(fixture.Info.TrustedLists.IofeUrl)).Content.Headers.ContentType!.MediaType.ShouldBe("application/vnd.etsi.tsl+xml");
+        list.Services.Count(s => s.ServiceType.EndsWith("/unspecified", StringComparison.Ordinal)).ShouldBe(2);
+        set.GetTrustAnchors().ShouldNotContain(c => c.Subject == tsa.Issuer, "the default options keep CA and TSA services only");
+        set.GetTrustAnchors().ShouldNotContain(c => c.Thumbprint == software.Thumbprint);
     }
 
     [Fact]
-    public async Task IofeList_Anchors_AreTheRootAndTheTimestampingCaButNeitherTheSoftwareNorTheRevokedTsa()
+    public async Task TrustedList_IofeOptions_AnchorTheTimestampingCaButNeitherTheSoftwareNorTheRevokedTsa()
     {
         var list = await LoadIofeAsync();
         var anchors = list.GetTrustAnchors();
@@ -99,13 +98,11 @@ public sealed class SandboxTrustedListTests(SandboxFixture fixture)
     }
 
     [Fact]
-    public async Task IofeTsa_ChainsOnlyThroughTheIofeList()
+    public async Task IofeTsa_ChainsOnlyThroughTheIofeOptions()
     {
         var tsa = await CertificateAsync("tsa-iofe");
-        var euStyle = await LoadAsync();
 
         tsa.Issuer.ShouldNotBe(fixture.Root.Subject);
-        euStyle.GetTrustAnchors().ShouldNotContain(c => c.Subject == tsa.Issuer, "the EU-style list does not know the Timestamping CA");
         (await LoadIofeAsync()).GetTrustAnchors().ShouldContain(c => c.Subject == tsa.Issuer);
         fixture.Info.Tsa.IofeUrl.ShouldBe(new Uri(fixture.BaseUrl, "tsa/iofe").AbsoluteUri);
 
@@ -124,7 +121,7 @@ public sealed class SandboxTrustedListTests(SandboxFixture fixture)
     [InlineData(TlFault.WrongSigner)]
     [InlineData(TlFault.Tampered)]
     [InlineData(TlFault.Expired)]
-    public async Task IofeList_Fault_IsRefused(TlFault fault)
+    public async Task TrustedList_IofeOptionsAndFault_IsRefused(TlFault fault)
     {
         await WithFaultsAsync(new SandboxFaults(TrustedList: fault), async () =>
         {
@@ -134,7 +131,7 @@ public sealed class SandboxTrustedListTests(SandboxFixture fixture)
     }
 
     [Fact]
-    public async Task IofeList_WithdrawnAfterUse_KeepsTheRootTrustedBeforeTheWithdrawal()
+    public async Task TrustedList_IofeOptionsAndWithdrawnAfterUse_KeepTheRootTrustedBeforeTheWithdrawal()
     {
         var list = await WithFaultsAsync(new SandboxFaults(TrustedList: TlFault.WithdrawnAfterUse), LoadIofeAsync);
 
@@ -142,11 +139,12 @@ public sealed class SandboxTrustedListTests(SandboxFixture fixture)
         list.GetTrustAnchors(DateTimeOffset.UtcNow.AddHours(-1)).ShouldContain(c => c.Thumbprint == fixture.Root.Thumbprint);
     }
 
+    /// <summary>/tl/tl.xml read directly, as <see cref="IofeExtension"/> reads INDECOPI's list.</summary>
     private async Task<TrustedList> LoadIofeAsync()
     {
         var signer = X509Certificate2.CreateFromPem(await Http.GetStringAsync(fixture.Info.TrustedLists.TlSignerUrl));
         return await TrustedList.DownloadAsync(
-            new Uri(fixture.Info.TrustedLists.IofeUrl),
+            new Uri(fixture.Info.TrustedLists.TlUrl),
             IofeExtension.DefaultListOptions with { SignerCertificates = [signer] },
             new Provider(fixture.Client, fixture.Policy));
     }
