@@ -81,13 +81,13 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
         var report = await fixture.Validation.ReportAsync(sample.FileId, new ValidationSettings
         {
             Trust = [TrustChoice.SandboxIofeList],
-            // The IOFE policy: the default one accepts trusted lists of version 5 and 6 only, INDECOPI's is version 3.
+            // The IOFE policy, as the playbook validates with it.
             PolicyId = SimpleSign.TestBench.Policies.PolicyPresets.Id("validation", "iofe"),
         }, default);
 
         report.Overall.ShouldBe("Valid", string.Join(" | ", report.Signatures.SelectMany(x => x.Report.Findings ?? []).Where(f => f.Status == "fail").Select(f => f.Constraint)));
         report.Code.Cli.ShouldContain("--tsl-profile iofe");
-        report.Code.Cli.ShouldContain("tl/iofe.xml");
+        report.Code.Cli.ShouldContain("--tsl " + fixture.Sandbox.Connection.Info.TrustedLists!.TlUrl);
     }
 
     [SkippableFact]

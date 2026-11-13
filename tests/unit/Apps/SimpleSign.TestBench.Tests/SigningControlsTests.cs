@@ -94,6 +94,23 @@ public sealed class SigningControlsTests(TestBenchFixture fixture) : IDisposable
     [SkippableTheory]
     [InlineData(RunEngines.Library)]
     [InlineData(RunEngines.Cli)]
+    public async Task IofeTsaWithTheTrustedListReadWithTheDefaultOptions_IsRefusedAsUntrusted(string engine)
+    {
+        // The same list as SandboxIofeList: without the IOFE profile its 'unspecified' service is no anchor.
+        var options = Timestamped(TsaProvider.SandboxIofe) with
+        {
+            SigningPolicyId = IofeSigning,
+            SigningControls = new SigningControlsOptions { Trust = [SigningTrustChoice.SandboxTrustedList] },
+        };
+
+        var (result, _) = await RunAsync(options, engine);
+
+        result.ErrorType.ShouldBe("SigningException (TimestampUntrusted)", result.Error);
+    }
+
+    [SkippableTheory]
+    [InlineData(RunEngines.Library)]
+    [InlineData(RunEngines.Cli)]
     public async Task IofeTsaWithTheSandboxRootOnly_IsRefusedAsUntrusted(string engine)
     {
         var options = Timestamped(TsaProvider.SandboxIofe) with

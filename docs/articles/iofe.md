@@ -139,10 +139,10 @@ the automated part of annex B, about 70 steps through the library and the CLI ag
 
 1. Start a Sandbox and the TestBench and connect them ([testbench.md](testbench.md)); start DSS for cross-validation.
 2. Open the **Playbook** tab and pick the `indecopi-guia-v4` sample; run everything.
-3. The `tsl` section reads the Sandbox's list **laid out as INDECOPI's** (`/tl/iofe.xml`: version 3, `generic`,
-   `undersupervision`, a self-signed Timestamping CA as `unspecified` and a code-signing certificate as signature
-   software — see [sandbox.md](sandbox.md#the-list-in-indecopis-layout)), with the trust choice `SandboxIofeList` and
-   the TSA `SandboxIofe`, and switches on its failures (signed by another key, tampered, expired).
+3. The `tsl` section reads the Sandbox's trusted list **as `IofeExtension` reads INDECOPI's** (`/tl/tl.xml` with
+   `IofeExtension.DefaultListOptions`: a self-signed Timestamping CA and a code-signing certificate are listed as
+   `unspecified` — see [sandbox.md](sandbox.md#reading-it-as-indecopis-list)), with the trust choice `SandboxIofeList`
+   and the TSA `SandboxIofe`, and switches on its failures (signed by another key, tampered, expired).
 4. **Evidence**: export the page and the zip (per step the signed file, the SimpleSign and ETSI reports, the CLI
    commands and the logs, a summary by item id): see [playbook.md](playbook.md).
 

@@ -84,9 +84,9 @@ internal sealed class SandboxPki : IDisposable
     public const string Sha1IntermediateId = "intermediate-sha1";
 
     /// <summary>
-    /// A self-signed CA that issues the TSA of <c>/tsa/iofe</c> only. The Sandbox's INDECOPI-layout list names it as an
+    /// A self-signed CA that issues the TSA of <c>/tsa/iofe</c> only. The Sandbox's trusted list (<c>/tl/tl.xml</c>) names it as an
     /// <c>unspecified</c> service (as INDECOPI lists the Llama.pe Timestamping CA, not its TSU), so the TSA's chain closes
-    /// through that service alone.
+    /// through that service alone: only a reader that keeps <c>unspecified</c> services (<c>IofeExtension.DefaultListOptions</c>) trusts it.
     /// </summary>
     public const string TsaCaId = "tsa-ca";
 
@@ -759,9 +759,9 @@ internal sealed class SandboxPki : IDisposable
             Problem: "Revoked", Usage: CertificateUsage.Timestamping, Revoked: true),
         new("tsa-expired", "Expired TSA", "The TSA of /tsa/expired: its certificate expired yesterday, so its tokens must not be trusted.",
             Problem: "Expired", Usage: CertificateUsage.Timestamping),
-        new("tsa-iofe", "TSA under its own CA", "The TSA of /tsa/iofe, issued by the self-signed Timestamping CA: trusted only through a list that names that CA (the Sandbox's INDECOPI-layout list, /tl/iofe.xml).",
+        new("tsa-iofe", "TSA under its own CA", "The TSA of /tsa/iofe, issued by the self-signed Timestamping CA: trusted only through /tl/tl.xml read as IofeExtension reads INDECOPI's list, which keeps that CA's 'unspecified' service.",
             Usage: CertificateUsage.Timestamping, IssuerId: TsaCaId),
-        new("code-signing", "Signature software", "A code-signing certificate, as INDECOPI lists the accredited signature software: listed in /tl/iofe.xml, it must never become a trust anchor.",
+        new("code-signing", "Signature software", "A code-signing certificate, as INDECOPI lists the accredited signature software: listed in /tl/tl.xml as an 'unspecified' service, it must never become a trust anchor.",
             Usage: CertificateUsage.CodeSigning, Pointers: RevocationPointers.CrlHttp),
         new("ocsp-responder", "Delegated OCSP responder", "Signs the intermediate CA's OCSP responses when the delegated signer is chosen (OCSPSigning, id-pkix-ocsp-nocheck).",
             Usage: CertificateUsage.OcspSigning, Pointers: RevocationPointers.None),

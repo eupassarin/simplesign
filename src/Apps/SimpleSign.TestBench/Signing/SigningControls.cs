@@ -21,8 +21,8 @@ public enum SigningTrustChoice
     SandboxTrustedList,
 
     /// <summary>
-    /// The Sandbox's list laid out as INDECOPI's (<c>/tl/iofe.xml</c>), read as <c>IofeExtension</c> reads Peru's: its CA
-    /// and <c>unspecified</c> services (the CA of the <c>/tsa/iofe</c> TSA), never the code-signing certificate it lists.
+    /// The Sandbox's trusted list (<c>/tl/tl.xml</c>), read as <c>IofeExtension</c> reads INDECOPI's: its CA and
+    /// <c>unspecified</c> services (the CA of the <c>/tsa/iofe</c> TSA), never the code-signing certificate it lists.
     /// </summary>
     SandboxIofeList,
 
@@ -147,14 +147,14 @@ internal sealed class SigningControls
 
             if (options.Trust.Contains(SigningTrustChoice.SandboxTrustedList) && options.Trust.Contains(SigningTrustChoice.SandboxIofeList))
             {
-                throw new ArgumentException(L.T("Choose one trusted list: the Sandbox's trusted list or its INDECOPI-layout list."));
+                throw new ArgumentException(L.T("Choose one reading of the Sandbox's trusted list: the default one or the IOFE profile."));
             }
 
             iofe = options.Trust.Contains(SigningTrustChoice.SandboxIofeList);
             if (iofe || options.Trust.Contains(SigningTrustChoice.SandboxTrustedList))
             {
                 var lists = connection.Info.TrustedLists ?? throw new ArgumentException(L.T("This Sandbox publishes no trusted list."));
-                listUrl = iofe ? lists.IofeUrl ?? throw new ArgumentException(L.T("This Sandbox publishes no INDECOPI-layout list: update it.")) : lists.TlUrl;
+                listUrl = lists.TlUrl;
                 listSigner = X509Certificate2.CreateFromPem(await http.GetStringAsync(new Uri(lists.TlSignerUrl), cancellationToken));
                 try
                 {

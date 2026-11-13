@@ -30,8 +30,9 @@ public enum TrustChoice
     SandboxTrustedList,
 
     /// <summary>
-    /// The connected Sandbox's list laid out as INDECOPI's (/tl/iofe.xml), read with <c>IofeExtension.DefaultListOptions</c>:
-    /// its CA and <c>unspecified</c> services with their statuses, so the TrustedLists constraints are evaluated.
+    /// The connected Sandbox's trusted list (/tl/tl.xml), read directly with <c>IofeExtension.DefaultListOptions</c>, as
+    /// <c>IofeExtension</c> reads INDECOPI's: its CA and <c>unspecified</c> services with their statuses, so the
+    /// TrustedLists constraints are evaluated.
     /// </summary>
     SandboxIofeList,
 
@@ -420,14 +421,14 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     }
 
     /// <summary>
-    /// The Sandbox's INDECOPI-layout list, read again for each validation, with the options of <c>IofeExtension</c>. An
+    /// The Sandbox's trusted list, read again for each validation, with the options of <c>IofeExtension</c>. An
     /// expired list is kept (the policy's TLNotExpired judges it); a list that cannot be read or verified gives no anchors.
     /// </summary>
     private async Task<XAdES.TrustedLists.TrustedList?> SandboxIofeListAsync(SandboxConnection connection, CancellationToken cancellationToken)
     {
-        if (connection.IofeListUri is not { } url || connection.TlSigner is not { } signer)
+        if (connection.TlUri is not { } url || connection.TlSigner is not { } signer)
         {
-            RunLog.Logger.LogWarning("The Sandbox publishes no INDECOPI-layout list: update it.");
+            RunLog.Logger.LogWarning("The Sandbox publishes no trusted list: update it.");
             return null;
         }
 
@@ -438,7 +439,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Security.Cryptography.CryptographicException or InvalidDataException or System.Xml.XmlException)
         {
-            RunLog.Logger.LogWarning("The Sandbox's INDECOPI-layout list could not be read: {Reason}", ex.Message);
+            RunLog.Logger.LogWarning("The Sandbox's trusted list could not be read with the IOFE profile: {Reason}", ex.Message);
             return null;
         }
     }
@@ -573,10 +574,10 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             line.Add("--lotl", lotl, "--lotl-signer", LotlSignerFile);
         }
 
-        // The INDECOPI-layout list: read directly, as IofeExtension reads Peru's.
+        // The trusted list with the IOFE profile: read directly, as IofeExtension reads INDECOPI's.
         if (s.Trust.Contains(TrustChoice.SandboxIofeList))
         {
-            string iofe = sandbox.Current?.IofeListUri?.AbsoluteUri ?? "http://localhost:5300/tl/iofe.xml";
+            string iofe = sandbox.Current?.TlUri?.AbsoluteUri ?? "http://localhost:5300/tl/tl.xml";
             line.Add("--tsl", iofe, "--tsl-signer", TlSignerFile, "--tsl-profile", "iofe");
         }
 
@@ -675,7 +676,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     /// <summary>The LOTL signer certificate a generated <c>validate</c> command reads.</summary>
     internal const string LotlSignerFile = "lotl-signer.pem";
 
-    /// <summary>The certificate the INDECOPI-layout list is signed with, as a generated <c>validate</c> command reads it.</summary>
+    /// <summary>The certificate the trusted list is signed with, as a generated <c>validate</c> command reads it.</summary>
     internal const string TlSignerFile = "tl-signer.pem";
 
     /// <summary>Whether the settings read the Sandbox's trusted list (the snippets then load it).</summary>
@@ -693,7 +694,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         ],
         (false, true) =>
         [
-            "// var iofe = await TrustedList.DownloadAsync(new Uri(\"http://localhost:5300/tl/iofe.xml\"), IofeExtension.DefaultListOptions with { SignerCertificates = [tlSigner] });",
+            "// var iofe = await TrustedList.DownloadAsync(new Uri(\"http://localhost:5300/tl/tl.xml\"), IofeExtension.DefaultListOptions with { SignerCertificates = [tlSigner] });",
             "TrustedRoots = [.. iofe.GetTrustAnchors()]",
             "TrustedLists = iofe.TrustedLists",
             "TimedTrustAnchors = [iofe]",

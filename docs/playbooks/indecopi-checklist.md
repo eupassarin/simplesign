@@ -25,7 +25,7 @@ the application…"), and the applicant justifies in annex B each item it says d
 **How**, for each item:
 
 - **P** — a step of the `indecopi-guia-v4` playbook shows it: a signature or a validation against the Sandbox (its
-  INDECOPI-layout list `/tl/iofe.xml` for the trusted-list items), through the library and the CLI, kept as evidence;
+  trusted list `/tl/tl.xml`, read with the IOFE profile, for the trusted-list items), through the library and the CLI, kept as evidence;
 - **U** — covered by unit or integration tests of the library, not by a run;
 - **N** — needs something new first;
 - **X** — outside the library: the accredited product, its operation or its documentation must show it (the column

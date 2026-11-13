@@ -52,8 +52,8 @@ public enum TsaProvider
     SandboxShortLived,
 
     /// <summary>
-    /// The connected Sandbox's TSA under its own self-signed CA, which only the INDECOPI-layout list names (as an
-    /// <c>unspecified</c> service).
+    /// The connected Sandbox's TSA under its own self-signed CA, which the Sandbox's trusted list names as an
+    /// <c>unspecified</c> service: trusted only when the list is read with the IOFE profile.
     /// </summary>
     SandboxIofe,
 
