@@ -240,11 +240,16 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 
     private static void AddBrasilNode(TreeNode sigNode, SignatureValidationResult result, byte[]? manifestJson)
     {
-        var level = Lei14063.Classify(result, manifestJson);
-        if (result.ChainValidationRegion != "BR" && level is null)
+        // Lei 14.063 is Brazilian: show it only for a signature validated under the Brazilian
+        // framework, or one carrying an advanced-signature (AEA) manifest, which is Brazilian too.
+        // Classify falls through to Simples for any valid signature, so without this guard a
+        // Peruvian (IOFE) signature would get a "Lei 14.063: Simples" node.
+        if (result.ChainValidationRegion != "BR" && manifestJson is not { Length: > 0 })
         {
             return;
         }
+
+        var level = Lei14063.Classify(result, manifestJson);
 
         var node = sigNode.AddNode($"Brasil:       [blue]{(level is null ? "—" : $"Lei 14.063: {level}")}[/]");
         var metadata = result.ChainValidationMetadata ?? new Dictionary<string, string>();

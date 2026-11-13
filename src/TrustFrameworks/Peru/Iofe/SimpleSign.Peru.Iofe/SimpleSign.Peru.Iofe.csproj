@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Peru.Iofe</PackageId>
     <Description>IOFE (Peru, Ley 27269) for SimpleSign: trust anchors from INDECOPI's signed trusted list, the signing and validation policies of the INDECOPI accreditation guide.</Description>
     <PackageTags>iofe;indecopi;peru;digital-signature;trusted-list</PackageTags>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 

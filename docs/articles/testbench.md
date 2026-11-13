@@ -1,5 +1,7 @@
 # SimpleSign TestBench
 
+> Part of [the apps that ship with SimpleSign](apps.md): the CLI, the Agent, the TestBench and the Sandbox.
+
 The TestBench is a local web app for signing **PAdES, CAdES and XAdES** with every option the
 library has, on one screen, and for seeing what happened: the result, the verdict of two
 validators, the log of every step and the code that does the same.
@@ -239,8 +241,8 @@ tag, run one, a section or all), everything the selected step will do before it 
 every setting by group, the Sandbox changes, the expectation, the C# and CLI commands), and its latest result with
 every detail (expected and found per engine, the report in a dialog, files, CLI commands, log). Results stay while the
 TestBench runs (**Clear result** forgets one, **Restart** all of them); the evidence (an HTML page and a zip) is built
-from them. Samples: `sandbox-basics` and INDECOPI's
-guide v4.0. The **Options reference** button opens, in the UI's language, what a step can hold: the option paths of
+from them. Samples: `sandbox-basics`, INDECOPI's
+guide v4.0 and `etsi-baseline` (the ETSI standards, cross-validated with EU DSS). The **Options reference** button opens, in the UI's language, what a step can hold: the option paths of
 each format, the symbolic values (`sandbox:`, `sample:`, `preset:`, `step:`…) and the Sandbox failures and ids; its
 Markdown version ([options.md](../playbooks/options.md)) is the one to attach for an LLM.
 

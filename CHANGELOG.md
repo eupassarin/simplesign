@@ -7,1012 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed — CLI: an expired trusted list is judged by the policy
-
-- `simplesign validate --tsl/--lotl` (and `validate-dir`, `cades validate`, `xades validate`) keep a trusted list whose
-  NextUpdate has passed, with or without `--tsl-profile`: the policy's `TLNotExpired` judges it, as the library in the
-  TestBench and EU DSS do. With the default policy (`TLNotExpired` WARN) such a list now gives TOTAL-PASSED with a
-  warning instead of NO_CERTIFICATE_CHAIN_FOUND; the `iofe` policy (FAIL) gives INDETERMINATE / TRY_LATER. Signing is
-  unchanged: an expired list gives no anchors.
-
-### Added — TestBench: "Lib ≠ CLI" in the Playbook tab
-
-- Each step result lists where its library and CLI runs disagree (success, refusal reason, indication, sub-indication,
-  level): a filter, a row badge, a table in the result panel and a count on the evidence page.
-- A step that changes the Sandbox's trusted list waits for DSS to download it again; when DSS cannot have seen it (the
-  EU lists make it refresh every hour), its verdict on the step is marked not comparable instead of "DSS differs".
-
-### Added — IOFE: INDECOPI's trusted list kept current
-
-- `IofeTrustedListSource` (`IofeExtension.LoadRefreshableAsync`, `new IofeExtension(source)`): reads INDECOPI's list
-  again on demand (`RefreshAsync`) or on a schedule (`StartAutoRefresh`). Each copy is verified like the first and
-  swapped in one step, so concurrent signers and validators see the old list or the new one. A copy that cannot be
-  downloaded or verified, or with a lower sequence number, is refused (`RefreshFailed`) and the last good copy is
-  served — from `CacheFile` after a restart, written atomically — until its NextUpdate passes, then no anchors.
-  `Current` gives the sequence number, issue time, NextUpdate and SHA-256; `Changed` gives the services added and
-  removed. It is an `ITimedTrustAnchorProvider` and `ITrustedListInfoProvider`.
-- `services.AddSimpleSignIofe(options, refreshInterval)` registers it with a hosted service that reads the list when the
-  host starts and every 6 hours by default (`Microsoft.Extensions.Hosting.Abstractions` dependency).
-
-### Added — Sandbox: a trusted list in INDECOPI's layout
-
-- `/tl/iofe.xml`: a trusted list laid out as INDECOPI's `tsl-pe.xml` (ETSI TS 102 231 v3, TSLType `generic`, statuses
-  `undersupervision` / `supervisionrevoked`, territory `PE`, one provider per service, no supply points), signed by the
-  TL operator, with the trusted-list failures applying to it. Its services: the root CA (CA/QC); a new self-signed
-  **Timestamping CA** (`tsa-ca`) typed `unspecified` — the CA of the new `/tsa/iofe` TSA (`tsa-iofe`), as INDECOPI lists
-  the Llama.pe Timestamping CA, so that TSA chains through the `unspecified` service only —; the revoked TSA
-  (`unspecified`, withdrawn); and a signature software listed with a new code-signing certificate (`code-signing`),
-  which must never become an anchor. `GET /api/info` gives `trustedLists.iofeUrl` and `tsa.iofeUrl`.
-- TestBench: the trust choice `SandboxIofeList` (signing controls and validation, read with
-  `IofeExtension.DefaultListOptions`) and the TSA `SandboxIofe`; the Sandbox panel shows both URLs.
-- CLI: `--tsl-profile iofe` on signing and validation reads `--tsl` as `IofeExtension` does.
-- Playbook `indecopi-guia-v4`: the `tsl` section uses the INDECOPI-layout list, with new steps for a TSA whose CA is
-  listed as `unspecified` (`tsl-tsa-unspecified`, `tsl-tsa-unlisted`, `v-tsl-tsa-unspecified`).
-
-### Added — IOFE article
-
-- `docs/articles/iofe.md`: what IOFE and INDECOPI's list are (and how the list differs from EU lists), loading it with
-  the out-of-band signer and the cache, keeping it current, the `IofePolicies` against the guide, TSAs, running the
-  `indecopi-guia-v4` playbook against the Sandbox and exporting the evidence, the checklist. Linked from the README,
-  the package's README and PACKAGE.md; IOFE is ✅ in
-  `docs/conformance.md`.
-
-### Added — IOFE: checklist of INDECOPI's accreditation guide
-
-- `docs/playbooks/indecopi-checklist.md`: every item of annex B of the *Guía de Acreditación de Aplicaciones de
-  Software* v4.0 — sections 4.2 (F-1…F-32), 4.3 (V-1…V-32), 4.4 (S-1…S-4) and 4.1 (E-1…E-19) — marked as shown by
-  the `indecopi-guia-v4` playbook, by tests, or left to the accredited product, with the step ids; a TestBench test
-  checks that every P item has a step and every step it names exists.
-- `IofePolicies.SigningNonRepudiation` (preset `iofe-nonrepudiation` for signing in the CLI and the TestBench,
-  `docs/policies/iofe-signing-nonrepudiation.json`): section 4.2 asks an automated agent for the nonRepudiation bit;
-  playbook step `no-nonrepudiation-agent`. The requirement numbers in the `IofePolicies` XML docs follow the guide.
-
-### Fixed — Trusted-list constraints in PAdES validation and the CLI
-
-- `PdfSignatureValidator` evaluates the TrustedLists constraints for the lists of `ValidationOptions.TrustedLists`
-  too, not only for those of its trust anchor providers: `simplesign validate --tsl/--lotl` judged no TrustedLists
-  constraint (an expired list validated as TOTAL-PASSED). `validate` and `validate-dir` now pass the lists they load.
-- `simplesign validate --tsl … --tsl-profile iofe`: a list not signed by the given certificate gives no anchors
-  (INDETERMINATE, with a warning) instead of stopping the command, as the library and `--lotl` do.
-
-### Fixed — Trusted lists: INDECOPI's real list
-
-- `TrustedList` verifies lists whose `ds:Signature` element declares a namespace (INDECOPI's declares `xmlns:etsi`
-  there): `SignedXml` left those declarations out of the canonical SignedInfo, so INDECOPI's list was always refused as
-  "not signed by the scheme operator's certificate" — `IofeExtension.LoadAsync` could not load it. They are now
-  declared on SignedInfo too, which leaves its canonical form unchanged.
-- `TrustedListOptions.ExcludedExtendedKeyUsages` applies to end-entity certificates only: a CA certificate whose EKU
-  names an excluded usage (INDECOPI lists Core Andina's Certisign Application CA, CA:TRUE with codeSigning among its
-  EKUs) stays an anchor.
-
-### Added — IOFE: tests against INDECOPI's real list
-
-- A copy of INDECOPI's list (sequence 25) and of the certificate it is signed with (TSL Suscriptor, SHA-256
-  `bc32323c…12ed`, **to be confirmed with INDECOPI**) in the IOFE tests' fixtures, with offline tests: the list
-  verifies, the five time-stamping services (Camerfirma, Acepta, Llama.pe, BPO, FirmEasy) are anchors, no end-entity
-  code-signing certificate is. An integration test checks the same on the live list.
-
-### Fixed — IOFE validation policy and INDECOPI's list version
-
-- `IofePolicies.Validation` / `ValidationNonRepudiation` accept a trusted list of version 3 (`TrustedLists/TLVersion`
-  3, 5, 6): INDECOPI publishes Peru's list in TS 102 231 v3, which the default constraint (5, 6) made INDETERMINATE.
-### Added — Two-phase (deferred) signing for CAdES and XAdES
-
-- `CadesDeferredSigner` and `XadesDeferredSigner`, with the shape of the PAdES `DeferredSigner`:
-  `Document(...).WithCertificate(publicCertificate).WithSessionIntegrityKey(key)…PrepareAsync()` runs the signing
-  policy and returns the bytes to sign (`DataToSign`: the DER signed attributes, or the canonical `ds:SignedInfo`) with
-  a session; `Resume(sessionData, key)…CompleteAsync(rawSignature)` verifies the raw signature against the certificate,
-  assembles the signature and finishes B-B to B-LTA, in the same process or in another one.
-- Every form: CAdES detached and attached; XAdES enveloped, enveloping and detached, with additional data objects.
-  The deferred builders take every option of `CadesSignerBuilder` / `XadesSignerBuilder` except `WithExternalSigner`.
-  What is signed (signing time, commitment type, signer roles, signature policy, content and data-objects timestamps…)
-  is fixed in phase one and throws on a resumed builder.
-- Phase one records a refusal of the signing policy with the audit sink; phase two records its outcome. The operation
-  id of phase one travels in the session.
-- On the resumed builder: `WithTimestampOptions` (TSA credentials, mutual-TLS certificate, expected TSA certificate),
-  `WithHttpClientProvider`, `WithSigningPolicy`, `WithTrustAnchors`, `WithChainRevocationChecker`, `WithAuditSink`,
-  `WithLogger`, `WithOperationId`. `CompleteWithDetailsAsync` returns the achieved level and the warnings.
-- The session is authenticated with HMAC-SHA256 over its stored bytes, so a session prepared by one version completes
-  in another. It holds the prepared artifact and the content, not the options (ADR 0028).
-- `ToSigningRequest()` on the prepare results of the three formats: the `ExternalSigningRequest` an `IExternalSigner`
-  receives (data, algorithms, operation id, RSASSA-PSS parameters).
-
-### Added — Two-phase signing: co-signatures, countersignatures, `From(builder)`, content outside the session
-
-- `CadesDeferredSigner.CoSign(existing, data?)`, `CadesDeferredSigner.CounterSign(existing, signerIndex)` and
-  `XadesDeferredSigner.CounterSign(signedXml, signatureId?)` prepare a co-signature or a countersignature for a key
-  that is elsewhere, with the options, session and completion of a first signature.
-- `DeferredSigner.From(PadesSignerBuilder)`, `CadesDeferredSigner.From(CadesSignerBuilder)` and
-  `XadesDeferredSigner.From(XadesSignerBuilder)` turn a configured one-call builder into the builder that prepares
-  the same signature: configure once, choose one call or two phases at the end.
-- `DeferredSignerBuilder.CompleteWithDetailsAsync` (PAdES) returns the `PadesSigningResult` of one-call signing —
-  requested and achieved levels, warnings — and takes a profile that may return a lower level. Completion now runs the
-  pipeline of `PadesSignerBuilder`. `DeferredSigningCompleteOptions.OperationId`.
-- A CAdES or XAdES session can leave the content out and carry its SHA-256 instead:
-  `WithContentOutsideSession()` → `WithContent(data)` on the resumed builder (CAdES);
-  `WithDetachedDataOutsideSession()` → `WithDetachedData(document)` and `WithExternalData(uri, content)` (XAdES).
-  Content that is not what phase one signed is refused. A session without these options is unchanged.
-- The Brazilian builder extensions on the two-phase builders: `WithAdvancedSignature` (`SimpleSign.Brazil`);
-  `WithIcpBrasilPolicy`, `ResolveIcpBrasilPolicy`, `WithHealthDocument` for PAdES and `WithIcpBrasilPolicy` for CAdES
-  (`SimpleSign.Brazil.IcpBrasil`); `WithIcpBrasilPolicy` for XAdES (`SimpleSign.Brazil.IcpBrasil.Xades`).
-  `DeferredSignerBuilder`, `CadesDeferredSignerBuilder` and `XadesDeferredSignerBuilder` expose `SignerCertificate`
-  and `SignerChain` for them.
-- CLI: `--prepare` on `sign`, `cades sign` and `xades sign` (with `--session-key`, `--session`, `--to-sign`,
-  `--content-outside-session`, `--detached-data-outside-session`) takes every option of the command and writes the
-  session and the data to sign; `deferred complete` finishes a session of any of the three formats (`--content`,
-  `--detached-data`, `--external-object`, `--json`) and reports the achieved level.
-- TestBench: the deferred mode of the Sign page takes every option of one-call signing, and the CAdES and XML pages
-  have **Two phases**. Both show the C# of the three phases and the two CLI commands, and run through the library or
-  the CLI.
-
-### Added — `DeferredSignerBuilder` (PAdES) takes the options of `PadesSignerBuilder`
-
-- New on the deferred builder: `WithOperationId`, `WithPdfAPreservation`, `WithSignaturePolicy`,
-  `WithCountryExtension` (and `CountryExtensions`), `WithSigningTime`, `WithMetadata`, `WithDocumentInfo`,
-  `WithDssArtifacts`, `WithFieldName`, `WithAppearance`, `AsCertification`, `WithExistingField`, `WithSubFilter`.
-  What the signature covers is set before `PrepareAsync`; these throw on a resumed builder. The operation id and the
-  country extensions are taken in both phases (an extension is not stored in the session: register it again).
-- The session gained `OperationId`, `DssArtifacts` and `LongTermClockSkewSeconds`, written only when used: sessions
-  prepared by earlier versions keep a valid HMAC and still complete.
-- `DeferredSigningPrepareResult.DataToSign` (the bytes of `HashToSign`, under the name CAdES and XAdES use).
-- Preparing now reads the PDF/A level of the document and shapes the signature field for it, as one-call signing does,
-  and `AsCertification` refuses a document that is already signed.
-- A contract test keeps the deferred builders of the three formats from falling behind the one-call builders.
-
-### Added — Agent: certificates by country or trust framework
-
-- `GET /api/certificates?country=XX` lists the certificates that chain to the trust anchors (with the intermediates)
-  of that country's registered `ICountryExtension`s; `?trust=icp-brasil` or `?trust=govbr` names one framework, and
-  `?signingOnly=true` keeps those valid now with digitalSignature or nonRepudiation. The chain is checked with
-  `SigningCertificateCheck`. An unknown country or framework answers 400 with the known ones. `filterIcpBrasil=true`
-  keeps its former meaning (issuer name or ICP-Brasil policy OID).
-
-### Added — Traces and metrics (`SimpleSignTelemetry`)
-
-- An `ActivitySource` and a `Meter` named `SimpleSign` (constants in `SimpleSign.Core.Diagnostics.SimpleSignTelemetry`):
-  activities, counters and duration histograms for signing (format, requested/achieved level, outcome, reason — every
-  signer, deferred included), TSA requests, OCSP requests, CRL fetches (cache hit), trusted-list loading and
-  validation (format, indication). Tags hold no payload, certificate data, full URL or personal data. Nothing is
-  measured when nobody listens. See `docs/articles/observability.md`.
-
-### Added — Sandbox: signers with a chosen subject
-
-- `POST /api/certificates/custom` issues a signing certificate under the intermediate CA with a subject given as a DN
-  string or a list of attributes (`CN`, `serialNumber`, `C`, `O`, `OU`, `L`, `ST`, `T`, `G`, `SN`,
-  `organizationIdentifier`; checked for length and characters), an optional key type, key usage and validity. It is
-  listed with the other certificates (`custom-…`): revocable, downloadable as PFX/CER, answered by OCSP and the CRLs;
-  `POST /api/reset` removes it.
-- `--signing-country XX` (or `none`) sets the country of the seeded signers' subject when an environment is created;
-  `BR` stays the default and existing environments keep theirs.
-
-### Added — `DataToSignInspector`: what is about to be signed; the Agent signs only signature data
-
-- `DataToSignInspector.Inspect(data, certificate)` recognizes the two `ExternalSigningPayloadKind`s: DER CMS signed
-  attributes (one `contentType`, one `messageDigest`, and a `signingCertificateV2`/`signingCertificate` that must name
-  the given certificate) and a canonical XML-DSig `SignedInfo` (no declaration or DTD, its methods, at least one
-  reference with a digest). It returns the kind, the digests with their algorithm (`DataToSignDigest.ToShortString()`
-  for a consent dialog) or the reason for refusing (`DataToSignRefusal`).
-- **Behavior change — SimpleSign.Agent:** `POST /api/sign` now refuses, with 400 and before asking the user, any item
-  that is not signed attributes or a `SignedInfo` (a raw hash, a document, bytes of another protocol), and the
-  confirmation dialog shows the digest being signed. Token signatures carry the detected payload kind. The self-test
-  signs real signed attributes.
-
-### Added — `SigningCertificateCheck`: will this certificate be accepted?
-
-- `SigningCertificateCheck.EvaluateAsync(certificate, SigningCertificateCheckOptions)` runs the checks the signers
-  make before signing — validity of the certificate and its chain, key usage, key and algorithms, chain to the trust
-  anchors (`SigningCertificate/ProspectiveCertificateChain`) and revocation of the chain (`IChainRevocationChecker`) —
-  without signing, and returns every finding with the `SigningErrorReason` a signer would refuse with. It never throws
-  for a refused certificate. Same code path as the signers (`SignerAcceptance`), not a copy.
-
-### Added — PKCS#11: PIN warning flags of a token
-
-- `Pkcs11TokenInfo.IsPinCountLow`, `IsPinFinalTry`, `IsPinToBeChanged` and `IsUserPinInitialized`, read from
-  `CK_TOKEN_INFO.flags` by `Pkcs11Signer.ListTokens` with `IsPinLocked`: warn the user before a wrong PIN locks the
-  token. Init-only properties; the positional constructor is unchanged.
-
-### Added — `AuditChain`: the audit hash chain for any store
-
-- `AuditChain.Canonicalize(SignatureAuditEvent)`, `AuditChain.Link(previousHash, content)`, `AuditChain.Append`,
-  `AuditChain.Genesis`, `AuditChain.Follows` and `AuditChain.Verify(IEnumerable<AuditChainRecord>)`: the content and
-  SHA-256 chaining of `JsonLinesAuditSink`, public so that a database-backed `ISignatureAuditSink` produces the same
-  chain and can be checked the same way. `JsonLinesAuditSink` uses them; its file format is unchanged and existing logs
-  keep verifying.
-
-### Fixed — XAdES with an external ECDSA key
-
-- `XadesSigner…WithExternalSigner` (and `XadesSigner.CounterSign` with an external signer) wrote the ECDSA signature
-  as the DER SEQUENCE { r, s } the external signer returns. `ds:SignatureValue` takes `r || s` (W3C XMLDSig Core 1.1
-  §6.4.3), so signing failed its read-back verification. The value is now converted.
-
-### Fixed — Broken link in the `SimpleSign.Peru.Iofe` package readme
-
-- The docs link pointed to an article that does not exist; it now points to the IOFE article (`docs/articles/iofe.md`).
-
-### Fixed — IOFE: timestamping authorities that INDECOPI's list types as `unspecified`
-
-- INDECOPI's trusted list publishes some accredited TSAs as `Svctype/unspecified` (Llama.pe's
-  "Timestamping CA", BPO Advisors' and Girasol's TSUs), which `TrustedList` dropped by default. A Llama.pe
-  timestamp whose token carries the TSU certificate only then failed to chain to Llama.pe's root and was refused
-  under `IofePolicies.Signing` (`TimestampUntrusted`). `IofeExtension` now reads the list with
-  `IofeExtension.DefaultListOptions`: the usual CA/TSA types plus `unspecified`, leaving out code-signing
-  certificates (the same type holds the accredited signature software). `Load(byte[], …)` uses them too.
-- `TrustedListOptions.ExcludedExtendedKeyUsages`: extended key usages that keep a certificate of a kept service from
-  becoming a trust anchor.
-
-### Added — Playbooks in the TestBench (the Playbook app is gone)
-
-- **TestBench → Playbook tab** (after Sign and Validate; it was the Certification page): loads a playbook (JSON,
-  schema 2, `docs/schemas/playbook.schema.json`) written beforehand — sections of steps, each with free tags — checks
-  it against the connected Sandbox and runs one step, a section or all, through the library, the CLI or both. Three
-  columns: the steps (filter by tag), everything the selected step will do before it runs (what is signed and by
-  whom, every setting by group, Sandbox changes, expectation, C# and CLI commands), and its latest result with every
-  detail (report in a dialog, files, CLI commands, log). The latest result of each step is kept while the TestBench
-  runs. Evidence: an HTML page (steps by section, summary by tag) and a zip with the playbook, the results, and per
-  step the signed file, reports and log. API under `/api/playbook`.
-- **Playbook tab details:** a two-row toolbar; a tag filter with autocomplete (several tags at once); C# and CLI in
-  their own tabs with syntax colors; before a step runs, column 3 shows its JSON as written (and the defaults,
-  collapsed); **Clear result** for one step and **Restart** for all; the loaded playbook can be viewed (colored JSON) or
-  downloaded; **Options reference**, a dialog in the UI's language with every option path per format, the symbolic
-  values and the Sandbox's failures and ids (`/api/playbook/sandbox`; the Markdown stays for LLMs).
-- **EU DSS cross-validation in a playbook:** `crossValidate` in `defaults` or on a step; the preview shows it (Run card),
-  results and evidence say "DSS unavailable" when DSS does not answer (the step still runs; it fails only with
-  `expect.dssAgrees`), and the validator warns about `dssAgrees` without `crossValidate` or on a refusal. The INDECOPI
-  playbook turns it on.
-- **Samples:** `docs/playbooks/sandbox-basics.json` (the old Playbook app's sample) and `indecopi-guia-v4.json` (the
-  automated part of INDECOPI's guide v4.0, Annex B, in English, tagged with the guide's item ids; written by
-  `tools/playbooks/indecopi.py`). `AUTHORING.md` is the kit to have an LLM write one; `options.md` is generated from
-  the TestBench.
-- **Built-in policies:** `strict`, `minimal`, `iofe` (signing) and `iofe`, `iofe-nonrepudiation` (validation), in the
-  TestBench's policy fields and as names for the CLI's `--signing-policy` / `--policy` and `policy export --preset`.
-- **IOFE:** `IofePolicies.Signing` turns on the trust anchor, CRL nextUpdate, chain cryptography and TSA checks;
-  `IofePolicies.Validation` refuses an expired or badly signed trusted list; new `ValidationNonRepudiation` (Req. 23).
-  Written out in `docs/policies/iofe-*.json`.
-- **CLI sign commands:** `--trust`, `--trust-dir`, `--tsl/--tsl-signer` (trust anchors before signing),
-  `--expected-tsa`, `--audit-log`; `--signing-policy` on `sign-dir` and `deferred`; `simplesign audit verify`.
-- **TestBench options:** trust anchors before signing, expected TSA, audit trail (shown in the log), and *Attempt
-  refused signatures*. CLI runs against the Sandbox now pass `--allow-ldap`, its HTTPS origin and `--tls-trust` with
-  its root, so CRLs over HTTPS and LDAP work through the CLI too.
-- **TestBench and the new Sandbox cases:** the TSA choice *Sandbox, expired TSA* (`SandboxExpired`) and the CRL failure
-  `NoNextUpdate`; the INDECOPI playbook uses them, the SHA-1 CA and the signer without KeyUsage, so the expired TSA, the
-  SHA-1 chain and the CRL without nextUpdate are automated steps.
-
-### Added — ETSI conformance playbook
-
-- `docs/playbooks/etsi-checklist.md`: what a run must show for each ETSI standard (PAdES, CAdES, XAdES baseline and
-  extended, RFC 3161 / EN 319 422, EN 319 102-1 validation, TS 119 612, EN 319 412 / TS 119 312), each item marked as
-  shown by a playbook, by unit tests, needing something new, or out of scope.
-- `docs/playbooks/etsi-baseline.json` (bundled sample, written by `tools/playbooks/etsi.py`): 115 steps covering every
-  item a run can show, tagged with the item ids and standards, cross-validated with EU DSS.
-- Playbooks: `sandbox-short-lived:N` (a Sandbox signer valid for N seconds, issued when the step runs), `fixture:NAME`
-  (bundled signature-policy document, attribute certificate and SAML assertion) and a step's `wait`. New CAdES samples
-  `v-ts-order` (content time-stamp later than the signature time-stamp) and `v-wrong-cert-ref`; built-in validation
-  policy `strict` (TestBench and CLI `--policy strict`). Sandbox: `/tsa/shifted?seconds=N`, a TSA whose clock is off;
-  short-lived signers are valid from two hours back, so their CRL and OCSP data is not older than them.
-
-### Fixed
-
-- Validation: a time-stamp whose TSA could not be judged still counts for the order of the time-stamps
-  (TIMESTAMP_ORDER_FAILURE), and a signing-certificate reference that is missing, repeated or does not match is
-  INDETERMINATE / NO_SIGNING_CERTIFICATE_FOUND (EN 319 102-1 §5.2.3), as in EU DSS, instead of SIG_CONSTRAINTS_FAILURE.
-- CAdES validation: the signature time-stamp is evaluated in the policy's Timestamp context also when no trust
-  anchors are passed to the call (its TSA is judged against the configured roots, as the content and archive
-  time-stamps already were).
-- Validation: a detached CAdES or XAdES signature validated without its data is INDETERMINATE / SIGNED_DATA_NOT_FOUND
-  (it was INVALID, or for CAdES a result with no evaluation); the data's integrity is not judged without it.
-- Validation: a signature that names a signature policy whose document it does not carry now has `PolicyAvailable`
-  false, so a validation policy that requires it (`PolicyAvailable` FAIL, as the `strict` preset) gives
-  INDETERMINATE / SIGNATURE_POLICY_NOT_AVAILABLE. New `ValidationOptions.SignaturePolicyDocuments`
-  (`ISignaturePolicyDocumentProvider`) supplies policy documents from elsewhere. The default policy only informs.
-
-### Added — Augmenting existing signatures (ADR 0025)
-
-- `PadesAugmenter`, `CadesAugmenter` and `XadesAugmenter` raise a signed file to B-T, B-LT or B-LTA without touching
-  what is signed, and `RenewArchive` adds a new archive (or document) time-stamp to a B-LTA. A level that cannot be
-  reached throws `SigningException` (`LevelNotAchievable`).
-- CLI: `simplesign augment <file> --level BT|BLT|BLTA --tsa URL [--data] [--signature-id] [--renew] [--json]`.
-- TestBench: run kind `augment`; playbook steps of kind `augment` (options `fileId`, `dataId`, `level`, `timestamp`,
-  `renew`; outcome `augmented`). The ETSI playbook raises a B-B of each format to B-LTA and renews a PAdES B-LTA.
-- The PAdES conformance detector counts a document time-stamp after a signature as its B-T time-stamp (EN 319 142-1).
-
-### Added — Past signature validation with archive time-stamps (ADR 0027)
-
-- When the signature time-stamp is intact but its TSA is no longer trusted (its certificate expired), a later trusted
-  time-stamp over it gives it back its trust: the archive-time-stamp of CAdES, the ArchiveTimeStamp of XAdES, a later
-  document time-stamp of PAdES. The earlier TSA's chain is built at the later token's time (EN 319 102-1 §5.6). A B-LTA
-  whose signer and signature TSA both expired stays TOTAL_PASSED.
-- Sandbox: `/tsa/short-lived?seconds=N`, a TSA whose certificate is issued per request and valid N more seconds.
-  TestBench: TSA provider `SandboxShortLived` (30 s). The ETSI playbook covers VA-9 with the signature TSA expired too,
-  for PAdES and CAdES; the checklist has no open items left.
-
-### Added — Trust anchors at a time: trusted-list service history (ADR 0026)
-
-- `TrustedList` reads each service's `StatusStartingTime` and `ServiceHistory` (`TrustedListService.StatusAt`) and
-  gives `GetTrustAnchors(DateTimeOffset at)`. New `ITimedTrustAnchorProvider`, implemented by `TrustedList` and
-  `TrustedListSet`.
-- `ValidationOptions.TimedTrustAnchors`: when today's anchors do not trust a certificate, the PAdES, CAdES and XAdES
-  validators use the anchors of the time-stamp's genTime (for its TSA) and of the signature's proof of existence (for
-  the signer). A signature time-stamped before its CA's service was withdrawn stays valid. The CLI passes `--tsl` and
-  `--lotl` lists this way.
-- Fixed: the CAdES and XAdES validators now judge the signature time-stamp's TSA with `ValidationOptions.TrustedRoots`
-  too (it gave no proof of existence without anchors passed to the call), and the XAdES time-stamp keeps its genTime.
-- Sandbox: trusted-list failure `WithdrawnAfterUse` (the root CA's service withdrawn now, granted before in its
-  history). TestBench: built-in signing policy `anchored` (the chain must reach the signer's trust anchors). The ETSI
-  playbook covers TL-5.
-
-### Added — ETSI report schema and EN 319 422 time-stamp profile
-
-- `ValidationReports.ValidateEtsiXml`: checks a TS 119 102-2 report against its schema (v1.2.1), embedded with the
-  schemas it imports; nothing is fetched (the schema test is offline now).
-- Validation policy constraints `Timestamp/AccuracyPresent`, `Timestamp/OrderingFalse` and
-  `Timestamp/AcceptablePolicies` (the EN 319 422 profile of a time-stamp: accuracy given, no ordering, an accepted
-  TSA policy). Not in the default policy, so nothing changes until a policy sets them.
-- TestBench: library runs also produce the ETSI report (`etsi-report.xml`); playbooks can expect `etsiReport: valid`.
-  Sandbox TSAs give their accuracy (one second); `/tsa/no-accuracy` does not.
-- TestBench: the files of a playbook's kept results (signed output, reports) are no longer forgotten when more than
-  200 files are produced, so a long playbook's validation steps and evidence keep finding them.
-
-### Removed — The Playbook app
-
-- `src/Apps/SimpleSign.Playbook` and its tests: its sample is now a playbook, run by the TestBench's Playbook tab.
-
-### Added — Signing controls you can turn on in the signing policy, an audit trail and a readable report
-
-Every new check is off in `SigningPolicy.Default`, so signing is unchanged until a policy turns it on.
-
-- **Trust anchor before signing:** `SigningCertificate/ProspectiveCertificateChain` refuses a signing certificate
-  that does not chain to a given anchor (`SigningErrorReason.UntrustedRoot`). The anchors come from
-  `WithTrustAnchors(...)` on the PAdES, CAdES, XAdES, deferred and batch builders, and on PAdES also from
-  `WithCountryExtension` (stored before but never read). Anchors also complete a chain given without its root for
-  the revocation check.
-- **TSA checked while signing (B-T, B-LT, B-LTA):** a new `Timestamp` section of the signing policy
-  (`ProspectiveCertificateChain`, `NotExpired` at genTime, `NotRevoked`, `RevocationDataAvailable`), and
-  `TimestampOptions.ExpectedTsaCertificate` / `ArchiveTimestampOptions.ExpectedTsaCertificate` to pin the TSA.
-  A refusal (`TimestampUntrusted`, `TimestampCertificateNotValid`, `TimestampCertificateRevoked`,
-  `TimestampRevocationStatusUnknown`) is never downgraded by `SigningLevelFailureBehavior.ReturnLowerLevel`.
-- **CRL without nextUpdate:** `SigningCertificate/CRLNextUpdatePresent` and `CACertificate/CRLNextUpdatePresent`.
-  `ChainRevocationChecker.CheckCurrentAsync` now returns the CRLs and OCSP responses it used.
-- **Audit trail:** `ISignatureAuditSink` gets a `SignatureAuditEvent` for every signature made or refused
-  (certificate, policy, input and output SHA-256, level, reason). Set it with `WithAuditSink(...)`.
-  `JsonLinesAuditSink` writes a hash-chained JSON-lines file, and `JsonLinesAuditSink.Verify` finds a changed,
-  removed or inserted line. The signing start log events (1000, 7000, 7100) now include the certificate serial.
-- **Readable report:** `ValidationReports.ToHtml(entries, language)` returns one HTML page in `en`, `pt` or `es`.
-  The CLI's validate commands take `--html-report <file>` and `--report-language <code>`. `ToSimpleJson` adds
-  `signerPublicKey` (SPKI, base64) and `signerCertificateSha256`.
-
-### Changed — PFX private keys are loaded as non-exportable
-
-- `CertificateLoader` (and so the CLI's `--cert`) no longer sets `X509KeyStorageFlags.Exportable`. Keys are
-  ephemeral except on macOS, whose key store has no ephemeral keys. Nothing in SimpleSign exported them. On Linux,
-  .NET does not enforce non-exportable keys.
-
-### Fixed — CAdES/XAdES synchronous validation says it did not check revocation
-
-- `Validate` / `ValidateAll` never checked revocation, neither of the signer chain nor of the TSA chain, yet a TSA
-  could show as trusted. With `ValidationOptions.CheckRevocation` on, the result now carries a warning saying so;
-  `ValidateAsync` replaces it with the checks' outcome.
-
-### Added — Sandbox: an expired TSA, a SHA-1 CA, a signer without KeyUsage, CRLs without nextUpdate
-
-- **`tsa-expired`** (Timestamping, expired yesterday), served at `POST /tsa/expired`; `GET /api/info` gives its
-  address in `tsa.expiredUrl`.
-- **`intermediate-sha1`**, an intermediate CA whose certificate the root signs with sha1WithRSAEncryption, and
-  **`under-sha1-ca`**, a signer under it. An environment created before this CA existed gets it the next time it
-  opens. Its root and the certificates it already issued stay the same.
-- **`no-key-usage-extension`**: a signer with no KeyUsage extension at all. `no-signing-key-usage` has one, with
-  keyEncipherment only.
-- **`CrlFault.NoNextUpdate`**: while it is on, the CRLs (HTTP, HTTPS, LDAP) have no nextUpdate field. They are still
-  signed by their CA. The TestBench's Sandbox control lists it with the other CRL failures.
-
-### Fixed — PAdES: the B-LT/B-LTA DSS update no longer overwrites the stamp's font object
-
-- **`LtvEmbedder`:** to add `/DSS` to the catalog it searched backwards for `"N 0 obj"` as plain text, so catalog
-  `1 0 obj` matched `21 0 obj`. A visible stamp appends its font as objects 20–21 after the catalog, so the DSS
-  revision wrote the font descriptor as the new catalog. The AcroForm and the signature field were lost, and
-  validation reported "Form field removed" (a DocMDP violation when certified). It now uses
-  `PdfStructureParser.FindObjectBytes`, which rejects suffix matches.
-- **TestBench matrix:** the `appearance` dimension is back (invisible, visible, styled+QR, auto+image).
-
-### Changed — TestBench: Sandbox and DSS on/off, the DSS drawer, a faster Sandbox connection
-
-- **Sandbox and DSS on or off:** each control in the top bar opens a popup to turn it on when it is off (the address
-  and how to start it) and a drawer with everything once it is on, with a switch to turn it off. The controls are
-  back on the right of the top bar, after Sign and Validate.
-- **The DSS drawer**, in three tabs:
-  - **Overview:** one table of every server setting (how the Sandbox is trusted, EU lists, refresh, lists with a bad
-    signature, trust anchors, revocation cache, policy), with what each means next to SimpleSign's verdicts and the
-    variable that changes it.
-  - **Trust:** how DSS trusts the Sandbox and the lists, then every trusted certificate by group, in a searchable
-    table (name, organization and country read from the subject, UTF-8 escapes decoded).
-  - **Policy:** the validation policy DSS receives, in the same explained tree as the Policies panel. The constraints
-    left out of its `constraint.xml` (DSS 6.3 does not know them) are marked, and the XML can be read or downloaded
-    (`GET /api/dss/policy`, `/api/dss/constraint.xml`).
-- **`tools/dss` `config.json`:** also the forwarded Sandbox ports and the Peruvian list's address.
-- **Connecting to the Sandbox takes about 2 s instead of 15 s:**
-  - the signed samples are built in the background, each list readable as soon as it is done (the "expired" sample
-    waits ~10 s for a certificate to expire);
-  - connecting or disconnecting stops a build still running first, which also fixes "m_safeCertContext is an invalid
-    handle" on a quick reconnect;
-  - the signers' keys are loaded in parallel.
-- **Edit the stamp** no longer opens the first explanation's hover card: drawers do not move the focus when they open.
-- **`.env.example`** in `tools/stack` and `tools/dss`: every variable with its default and what it does. A local
-  `.env` (git-ignored) keeps a machine's choices, such as `DSS_LOAD_EU_TRUSTED_LISTS=cached`.
-
-### Changed — The Sandbox is API only; its UI is the TestBench's Sandbox control
-
-- **Sandbox:** no page of its own (`web/` removed, no Node.js in its build or its Docker image). `/` says it is
-  API only, where `/api/info` is and how to open the TestBench; unknown `/api/…` routes still answer JSON 404.
-  The services and the admin API are unchanged: the CLI, playbooks, DSS and `curl` use it without a TestBench.
-  `--no-browser` is still accepted (and ignored).
-- **TestBench, one Sandbox control:** the **Sandbox** button opens a popup to connect (and how to start one) when
-  none is connected, and everything when one is: overview and signers, environment, PKI (revoke, take back,
-  downloads), failures and request log. It turns red while a failure is on. The admin API is passed through at
-  `/api/sandbox/admin/{**path}`; the Sandbox keeps the state.
-- **TestBench top bar:** the engine (Library/CLI), Policies, Reference, Environment, Sandbox and DSS sit right after
-  Sign/Validate; language and theme stay on the right.
-- **DSS setup in the DSS popup:** `tools/dss` writes `/simplesign/config.json` (how the Sandbox is trusted, EU lists,
-  ICP-Brasil, Gov.br, Peru, TSA roots, revocation cache, every trusted certificate) and the popup shows it.
-- **Playbook:** the Sandbox link opens its `/api/info`.
-
-### Added — TestBench: the Stamp page (visible signature with a live preview)
-
-- **Stamp page:** a drawer opened from the Sign page ("Edit the stamp"). The stamp's options are on the left. On the right is the PDF,
-  signed with the stamp by the library itself (a throwaway B-B signature, `POST /api/stamp/preview`) a moment after
-  each change.
-- **Placing it:** drag the rectangle to move it, drag its corner to resize it, or click the page to place it. With
-  automatic placement the rectangle shows where the library put the stamp.
-- **Signing with it:** the stamp is part of the PAdES options, so the Sign page signs with it, through the library or
-  the CLI, and the C# and CLI snippets include it.
-- The appearance options, their rules and their code generation come back from before `b4f12709`.
-
-### Added — CLI: more stamp options
-
-- `--vertical-align`, `--no-shrink-to-fit`, `--max-text-length`, `--date-culture`, `--signer-display-name`,
-  `--extra-line` (repeatable), `--hide-reason` and `--hide-location`.
-- `--background-image` reads PNG or JPEG by its content, not its extension.
-- The AEA lines (`--brasil`) are added after the `--extra-line` ones instead of replacing them.
-
-### Changed — `cades validate` and `xades validate` check every signature
-
-- **Every signature:** both commands validate every signer, co-signer and countersignature (`ValidateAllAsync`), not
-  only the first. `--json` adds `signatures`, one entry per signature with its `counterSignatures` and every check
-  (timestamps, LTV data, revocation source…). The top-level fields stay those of the first signature. The exit code
-  is 0 only when all are valid.
-- **System roots:** with `--trust`, the operating system's roots stay trusted, as in `validate`; `--no-system-roots`
-  turns them off. Before, `--trust` replaced them.
-- **Attached CAdES:** `cades validate` no longer requires `--data`; the signed content is read from the signature.
-- **Trusted lists on the CLI's network:** `--lotl` and `--tsl` are downloaded through the CLI's HTTP client, so
-  `--allow-origin` and the proxy apply to them. Before, a list on `localhost` (the Sandbox's) was refused.
-- **`validate --json`:** each signature also has `warnings`, `subFilter`, `notRevoked`, `revocationSource`,
-  `hasValidTimestamp`, `isTsaTrusted`, `chainTrustWarning`, `chainRegion` and `chainMetadata`.
-
-### Added — TestBench: validate through the CLI
-
-- **The engine for the whole app:** the Library / CLI selector moved to the top bar and applies to signing and
-  validating, in PAdES, CAdES and XAdES.
-- **Validation through the CLI:** with CLI selected, a validation runs `simplesign validate`, `cades validate` or
-  `xades validate` with `--json`, and the verdicts shown are the CLI's.
-- **Reports:** the ETSI and simple reports are the ones the CLI wrote.
-- **Signing through the CLI:** the signed file is validated through the CLI too.
-
-### Added — the public TSAs' roots are trusted (TestBench and `tools/dss`)
-
-- **TestBench:** new trust choice "Public TSA roots" (`TrustChoice.PublicTsas`), on by default. It trusts the roots of
-  the public TSAs offered (DigiCert Trusted Root G4, Sectigo Public Time Stamping Root R46, FreeTSA Root CA), kept in
-  `src/Apps/SimpleSign.TestBench/TsaRoots`. A FreeTSA timestamp no longer fails with "[signature timestamp] The
-  certificate chain could not be validated to a trust anchor".
-- **`tools/dss`:** DSS trusts the same roots at start (`DSS_TRUST_TSA_ROOTS`, default `true`; the folder is mounted),
-  so it no longer reports "The certificate chain for time-stamp is not trusted" for these TSAs.
-
-### Added — Windows versions of the TestBench scripts
-
-- `tools/stack/up.ps1`, `down.ps1`, `testbench.ps1`, `softhsm-provision.ps1` and `scripts/tests/pkcs11.ps1`
-  (PowerShell 7.2+): the same options, environment variables and `.softhsm/` files as the bash scripts.
-- `softhsm-provision.ps1` reads the PFX files with .NET, so it needs neither OpenSSL nor jq. It finds SoftHSM2 for
-  Windows (`C:\SoftHSM2`) and OpenSC.
-- On Windows the token is optional: without SoftHSM2 and OpenSC, `up.ps1` starts the Sandbox and DSS and warns.
-- New CI job `windows-scripts`: lints every script and fills a token on `windows-latest`.
-
-### Added — `tools/stack/down.sh`
-
-- Stops the stack `up.sh` started, with the same project name: `down.sh` keeps the Sandbox's PKI and the DSS download
-  cache, `--drop-pki` drops the PKI only, `--volumes` drops every volume.
-
-### Fixed — CRLs served as PEM
-
-- A CRL downloaded over HTTP that comes PEM-encoded (`-----BEGIN X509 CRL-----`) instead of DER (RFC 5280 §4.2.1.13)
-  is now read: it is turned into DER as it is downloaded (`CrlClient`, `ChainRevocationChecker`, LTV collection in
-  `LtvEvidenceCollector` and `LtvEmbedder`), so what is cached and embedded stays DER. FreeTSA serves its CRL this
-  way; its timestamps were reported as "the revocation status of the TSA certificate chain could not be established".
-
-### Added — the Sandbox as a trust scheme (trusted list + LOTL)
-
-- **Sandbox endpoints:**
-  - `/tl/lotl.xml` and `/tl/tl.xml` publish a list of trusted lists and a trusted list (ETSI TS 119 612 v5, territory
-    `ZZ`), each signed by its own scheme operator. The trusted list's services are the root CA (CA/QC, granted), the TSA
-    (TSA/QTST, granted) and the revoked TSA (withdrawn). The operators' certificates are `/tl/lotl-signer.pem` and
-    `/tl/tl-signer.pem`; `/api/info` lists the URLs (`trustedLists`).
-  - The signatures follow TS 119 612 §5.7.1: enveloped, whose only transforms are the enveloped one and exclusive
-    canonicalization.
-- **New Sandbox failure `TlFault`:** an expired list, a list signed by a certificate the LOTL does not name, or a list
-  changed after signing. It is in the Sandbox UI and the Playbook (`faults.trustedList`).
-- **TestBench:** new trust choice "Sandbox trusted list", now the default. The validators trust the Sandbox through its
-  LOTL (`TrustedListSet`), so the `TrustedLists` constraints are evaluated. "Sandbox root" (a bare anchor) is still
-  there.
-- **`tools/dss`:** DSS trusts the Sandbox through its LOTL by default (`DSS_SANDBOX_TRUST=list`, or `anchor` for the
-  root alone). With the EU lists off it uses the EU slot; with them on, the second slot. The lists are downloaded again
-  every `DSS_TL_REFRESH_SECONDS` (10 s with the Sandbox's list alone). A list whose signature fails is not used
-  (TS 119 615, as in SimpleSign): a Spring component compiled into the image sets the TL job's
-  `ExpirationAndSignatureCheckStrategy`; `DSS_ACCEPT_INVALID_TRUSTED_LISTS=true` restores the demo's default.
-- **`DssScenarioCrossValidationTests`:** the trusted-list failures are compared too, and the test waits for DSS to load
-  the Sandbox's list.
-
-### Changed — TestBench: a readable Validation tab
-
-- The tab opens with a summary per signature: SimpleSign's verdict and DSS's side by side. Each difference says:
-  - what DSS concluded, in plain words (the ETSI sub-indications, in English and Portuguese);
-  - whether the cause is DSS's setup (it does not trust the Sandbox root, it cannot reach the Sandbox's CRL/OCSP)
-    or a real disagreement;
-  - what to do.
-- The points where they agree fit on one line, and DSS's raw messages are folded away.
-- SimpleSign's warnings are grouped by constraint of the validation policy, with its name in plain words and a
-  count. A check repeated for each certificate or token shows once.
-
-### Fixed — validation against DSS 6.3 (every Sandbox scenario cross-validated)
-
-- **PAdES no longer accepts a signature under a revoked CA.** The validator checked online revocation for the
-  signing certificate only, and the failed chain status was waived because the chain reaches its anchor. It now checks
-  the CA certificates of the chain too (`ChainRevocationChecker`, as CAdES and XAdES do), with the data it used going to
-  the policy.
-- PAdES validation reads CRLs published only over LDAP when the outbound policy allows LDAP (`AllowLdap`), like CAdES and
-  XAdES: the signing certificate's own check falls back to the chain checker when it cannot decide.
-- **Revocation sub-indications follow EN 319 102-1 §5.2.6:** a revoked signing certificate gives INDETERMINATE /
-  `RevokedNoPoe` (no longer TOTAL_FAILED / `Revoked`) and PASSES when a proof of existence predates the revocation; a
-  revoked CA gives INDETERMINATE / `RevokedCaNoPoe` (`CACertificate/NotRevoked` is now evaluated). No revocation data, or
-  none acceptable, gives `CertificateChainGeneralFailure`; `TryLater` is kept for data that is not fresh and for
-  certificates on hold. New `SignatureSubIndication` values: `CertificateChainGeneralFailure`, `RevokedCaNoPoe`.
-- XAdES: a changed `ds:SignatureValue` gives `SigCryptoFailure` (was `HashFailure`); a changed reference still gives
-  `HashFailure`.
-- CAdES and XAdES B-LT can be made when the OCSP responses come from a delegated responder: its certificate
-  (id-pkix-ocsp-nocheck) needs no revocation data of its own (RFC 6960 §4.2.2.2.1).
-- CAdES and XAdES B-LTA send the TSA's credentials (Basic/bearer, client certificate) with the archive timestamp request
-  too, as PAdES does (`ArchiveTimestampOptions.Resolve`).
-- TestBench: past its limit, the in-memory store forgets the least recently used files, not the oldest, so an uploaded
-  policy or PFX that runs keep reading is not lost after about a hundred runs.
-- `tools/dss`: DSS reaches a default Sandbox (`localhost` ports forwarded inside the container), trusts its root for TLS
-  (CRLs over HTTPS), keeps no revocation cache (`DSS_REVOCATION_CACHE`), waits for the Sandbox at start, and the image is
-  rebuilt on every `up`. New test `DssScenarioCrossValidationTests` requires the same indication and sub-indication from
-  SimpleSign and DSS for every Sandbox scenario (222 of 226 agree; the other cases are documented in the test).
-
-### Changed — configurable signing and validation policies (ADR 0023, ADR 0024)
-
-- **Migration of validation policy files:** rename the root `ConstraintsParameters` to `ValidationConstraints` and
-  `eIDAS` to `TrustedLists`, and drop the elements SimpleSign's format no longer has (ASiC containers, PDF/A,
-  evidence records, attestations and key binding signatures, JSON-signature headers, EU qualification and PSD2
-  statements, `OCSPCertHash*`, lists of trusted entities, `SunsetDate`, `ManifestEntry*`, `PdfVisualDifference`). The
-  reader names each one; `docs/policies/compatibility.md` lists them with the reason.
-- **Stricter default validation policy:** the certificate checks now follow the policy's levels, and some are FAIL by
-  default. Notably, a chain whose CA certificate has no Subject Key Identifier
-  (`CACertificate/SubjectKeyIdentifierPresent`, FAIL in every context: signature, timestamp, revocation,
-  countersignature) now makes the signature INDETERMINATE; a missing Authority Key Identifier is only a warning.
-  Signatures from test or private PKIs that validated before may not validate now. A policy can lower these checks
-  to WARN.
-- `ValidationPolicy` (now `SimpleSign.Core.Policies`) reads and writes JSON in SimpleSign's own format (root
-  `ValidationConstraints`; contexts `SignatureConstraints`, `CounterSignatureConstraints`, `Timestamp`, `Revocation`,
-  `Cryptographic`, `Model`, `TrustedLists`), one FAIL/WARN/INFORM/IGNORE level per constraint. Names outside the
-  format are refused, with a pointer to `docs/policies/compatibility.md` (how the names correspond to other
-  validators' policies). Constraints SimpleSign does not evaluate yet are reported as `NotChecked`; INFORM gives
-  `ConstraintStatus.Information`. Constraint ids are paths
-  (`SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage`).
-- Validation policy, signature context: the levels of the policy now apply to the RFC 5280 certificate checks
-  (`IssuerName`, `MaxPathLength`, `NameConstraints`, `PolicyTree`, `SupportedCriticalExtensions`,
-  `ForbiddenExtensions`, AIA, CRL/OCSP locations, AKI, SKI, `SerialNumberPresent`, `NoRevAvail`,
-  `RevocationDataSkip`), the subject attributes (`CommonName`, `Country`…), the PDF ByteRange checks, the CMS
-  SignerInfo count, the signature Id (XAdES), the signed attributes (signing-certificate references, content type,
-  hints and identifier, commitment, location, roles), the unsigned attributes (timestamps, countersignatures, valid
-  T/LTA timestamp) and `AcceptableFormats`, `FullScope`, `PolicyAvailable`, `SignaturePolicyStorePresent`. A check
-  that does not apply to the format is not reported. `PolicyCoverage` says what SimpleSign evaluates, by path;
-  `SignatureSubIndication` gains `SignedDataNotFound` and `SignaturePolicyNotAvailable`.
-- Validation policy, timestamp and revocation contexts: each signature timestamp is evaluated in the `Timestamp`
-  context (the token, the TSA certificate at the timestamp's time and its chain, the signed attributes,
-  `TimestampValid`, `TSAGeneralName*`); one that fails there is not a proof of existence. Each CRL and OCSP response
-  the signature carries is evaluated in the `Revocation` context (`UnknownStatus`, `ThisUpdatePresent`, issuer known
-  and valid when it produced it, `OCSPResponderIdMatch`, `SelfIssuedOCSP`, the issuer certificate); one that fails
-  there is not acceptable revocation data. The certificates gain `AcceptableRevocationDataFound`,
-  `CRL/OCSPNextUpdatePresent`, `RevocationFreshnessNextUpdate`, `RevocationIssuerNotExpired` and `NotOnHold`, and the
-  signature `BestSignatureTimeBeforeExpirationDateOfSigningCertificate` and `RevocationTimeAgainstBestSignatureTime`.
-  Messages of a token name it (`[OCSP of 'Leaf'] …`).
-- Validation policy: each countersignature (CAdES, XAdES) is evaluated in the `CounterSignatureConstraints`
-  context, with its own result. `ValidationOptions.TrustedLists` gives the CAdES and XAdES validators the trusted lists
-  the anchors come from, for the `TrustedLists` constraints (the CLI passes those of `--tsl` and `--lotl`).
-- Validation policy: archive timestamps are evaluated as tokens too (`Coherence`, `AtsHashIndex`); the CRLs and OCSP
-  responses fetched online are kept and evaluated like the ones the signature carries (CAdES, XAdES; PAdES: OCSP
-  responses); `TrustServiceTypeIdentifier`/`TrustServiceStatus` read the service of the anchor in its trusted list
-  (`TrustedListInfo.Services`); `PdfSignatureDictionary` checks that later PDF revisions keep the signature dictionary's
-  ByteRange and Contents. `ChainRevocationResult` gains `Crls`/`Ocsps` (the data the statuses came from).
-- Validation results (`SignatureValidationResult`, `CadesValidationResult`, `XadesValidationResult`) gain
-  `ValidationObjects`: the timestamps and revocation data used, each with the outcome of its own evaluation; the ETSI
-  TS 119 102-2 report lists them as validation objects (with the POE of each timestamp), the simple report as
-  `timestamps` and `revocationData` with their own indication. `BestSignatureTime` is the earliest accepted
-  signature timestamp.
-- Validation policy: `RevocationHasInformationAboutCertificate` (revocation data issued after the certificate expired
-  counts only with expiredCertsOnCRL or archiveCutoff from before the expiry); `ContentTimeStamp` and
-  `ContentTimeStampMessageImprint` (CAdES content-time-stamp, XAdES data objects timestamps), the content timestamp
-  being judged in the Timestamp context and ordered before the signature timestamps (`Coherence`).
-- Validation policy, PAdES: the revision a signature (or document timestamp) covers is compared with the final one.
-  `PdfPageDifference`, `PdfAnnotationOverlap`, `DocMDP` (the changes the certification's P forbids), `FieldMDP` and
-  `SigFieldLock` (locked fields whose value changed), `FormFillChanges`, `AnnotationChanges` and `UndefinedChanges`
-  (page content, resources, the catalog, fields added or removed) are evaluated; the messages name the changes.
-  Validation data (DSS) and document timestamps added later are not changes (ETSI EN 319 142-1).
-- Validation policy: `StructuralValidation` (XAdES: the signature against the XML Signature and XAdES schemas;
-  CAdES/PAdES: the CMS decoded) and `TLStructure` (`TrustedList.StructureErrors`, `TrustedListInfo.IsStructureValid`:
-  the list against the ETSI TS 119 612 schema). The schemas are embedded in SimpleSign.XAdES; nothing is fetched.
-  Every constraint of the validation policy format is now evaluated.
-- `SigningPolicy` (now `SimpleSign.Core.Policies`) reads JSON (`SigningConstraints`) with the names of the validation
-  policy for the signing and CA certificates and the cryptography; WARN constraints give `SigningWarningCode.PolicyConstraint`.
-  `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed: set `NotRevoked`/`RevocationDataAvailable` to FAIL,
-  or the constraints to IGNORE. `SigningPolicy.Evaluate` gives the local checks of a certificate.
-- `CryptographicSuite`: ETSI TS 119 322 cryptographic suites (JSON), globally or per context
-  (`WithCryptographicSuite`).
-- JSON Schemas of the policy files (`docs/schemas/`, `GetJsonSchema()`, `simplesign policy schema`); `ToJson` writes
-  `$schema`.
-- `IPolicyProvider`/`StaticPolicyProvider`: the validation policy chosen by the signature policy OID;
-  `ValidationOptions.PolicyProvider`, DI (`SimpleSignOptions.SigningPolicy`), `AppliedPolicy` on the results.
-- `ChainRevocationResult.IssuedAt`, `CrlEvaluator.ReadThisUpdate`, `OcspClient.ReadProducedAt`: the freshness of
-  revocation data (`RevocationFreshness`).
-- TestBench: a policy viewer (**Policies** in the top bar) shows the signing and validation policies as an explained
-  tree — what each constraint checks, its clause, its level, and whether SimpleSign evaluates it — lets the levels be
-  changed, and downloads the result or uses it in the next runs (`POST /api/policies/view`).
-- TestBench: the signing and validation policies are uploaded as JSON files (the Default/Strict/Minimal choice is
-  gone), with a download of each default; the validation options gain the validation level and the revocation
-  strategy. The option check evaluates the signer against the chosen signing policy, and DSS validates with the
-  chosen validation policy, translated to its format. The generated CLI passes the policy files
-  (`--signing-policy signing-policy.json`, `--policy validation-policy.json`) instead of `--signing-policy strict`,
-  which the CLI no longer reads.
-- `ValidationOptions.Verifier` (`VerifierOptions`: revocation strategy, now OCSP first everywhere, fallback, AIA,
-  revocation of untrusted chains — off) and `ValidationOptions.Level` (`ValidationLevel`); CLI `--level`, `--revocation-strategy`, `--revocation-for-untrusted`.
-- `ValidationReports`: the ETSI TS 119 102-2 validation report (XML) and a simple report (JSON);
-  `ToReportEntry()` on the PAdES, CAdES and XAdES results, `BestSignatureTime` on them; CLI `--etsi-report`,
-  `--simple-report`.
-- `TrustedListSet`: trusted lists loaded from a LOTL (EU or other), with per-list problems and a disk cache;
-  `TrustedList.Version`/`Pointers`; `TrustedListInfo`/`ITrustedListInfoProvider` and the `TrustedLists` constraints
-  (`TLFreshness`, `TLNotExpired`, `TLWellSigned`, `TLVersion`); CLI `--lotl`, `--lotl-signer`, `--lotl-territory`.
-- CAdES and XAdES revocation uses the CRLs and OCSP responses the signature carries.
-- `DeferredSigningPrepareResult.Warnings`. CLI: `--signing-policy` takes a JSON file; `policy export validation|signing` writes the defaults. `IofePolicies` derive from the
-  defaults. The Agent's `policyIssue` comes from `SigningPolicy.Default`.
-
-### Added — SimpleSign Sandbox and loopback origins
-
-- `src/Apps/SimpleSign.Sandbox`: a test PKI and its services on real HTTP endpoints (AIA, CRLs, RFC 3161 TSA,
-  CSC v2), with failures to switch on, revocation, a request log, an admin API and a UI. Environments are kept by
-  name; the URL written into the certificates is fixed when an environment is created.
-- `OutboundHttpPolicy.LoopbackOrigins`: services on this machine listed by exact origin (scheme, host, port) pass
-  the SSRF guard, for local test environments; empty by default. HTTP, LDAP and the TSA TCP transport honor it.
-- `TimestampClient` no longer refuses a loopback TSA URL in its constructor: it is refused when the request is
-  sent, unless its origin is listed (private and link-local URLs are still refused at once).
-
-### Added — SimpleSign Playbook
-
-- `src/Apps/SimpleSign.Playbook`: a web app (127.0.0.1:5400, en/pt-BR) that runs a playbook — a JSON file of
-  SimpleSign CLI commands in sections — in a workspace folder (playbook.json, assets/, secrets.json, runs/). Before a
-  step it can change a SimpleSign Sandbox (failures, revocations, certificates as PKCS#12); after it, it checks the exit
-  code, paths in the JSON on stdout, text, files and the requests the Sandbox answered. Manual steps wait for the
-  operator's result, note and attachments. Each run is recorded (machine, CLI version, Sandbox and root, playbook
-  SHA-256, each step's command, output, checks, requests and files) with report.md, report.html and a zip; runs can be
-  compared. The playbook is edited as a form or as JSON, checked by the server as you type. A neutral sample
-  (`Sandbox basics`) signs and validates with a Sandbox's certificates.
-- `docs/articles/playbook.md`; tests in `tests/unit/Apps/SimpleSign.Playbook.Tests`, including the sample run with the
-  real CLI against a running Sandbox.
-
-### Added — CLI: the signing options the library has
-- `sign` (PAdES) gains the options it lacked:
-  - `--signing-time`;
-  - `--doc-info KEY=VALUE` (repeatable);
-  - `--contents-size`;
-  - `--archive-tsa`, a separate archive TSA;
-  - `--return-lower-level`;
-  - `--policy-hash` (and `--policy-hash-algorithm`), for an explicit signature policy;
-  - structured signer metadata without `--brasil`: `--signer-id`, `--signer-id-type`, `--ip-address`,
-    `--institution-id`, `--institution-id-type`, `--legal-basis`, plus `--signer-email`, `--institution`,
-    `--auth-method` and `--commitment` (origin, receipt, delivery, sender, approval, creation).
-- `sign`, `cades sign` and `xades sign` reach a TSA that asks for credentials, through `--tsa-user`/`--tsa-password`
-  (HTTP Basic), `--tsa-token` (bearer) or `--tsa-cert`/`--tsa-cert-password` (TLS client certificate). Secrets
-  accept `env:NAME`.
-- `validate`, `validate-dir`, `cades validate` and `xades validate --no-system-roots`: trust only `--trust`,
-  `--trust-dir` and the trusted lists.
-- `sign-dir`: signs every PDF of a directory with one certificate (`BatchSigner`). It takes `--max-concurrency`,
-  `--recursive`, the level, TSA and field options, a PFX or an external credential.
-- `deferred prepare` / `deferred complete`: deferred signing (`DeferredSigner`).
-  - `prepare` writes the session and the data to sign; the session is protected by `--session-key`.
-  - `complete` embeds the signature made elsewhere.
-- `cades sign --cosign [--data]` and `--countersign [--signer-index]` add a signer to an existing signature, or
-  countersign one of its signers.
-- `cades sign` and `xades sign` take `--signing-time`, `--signature-algorithm rsassa-pss` and
-  `--extended-form complete-references|extended-long|archive`.
-- `xades sign` gains:
-  - `--signing-certificate-v1` and `--data-mime-type` (DataObjectFormat);
-  - the external credentials of `sign` and `cades sign`: PKCS#11, PSC and CSC.
-- `sign`, `cades sign` and `xades sign` take `--operation-id`.
-- `cades sign` and `xades sign` with `--cert` now embed the other certificates of the PFX as the chain, as `sign`
-  already did. Before, the chain came only from `--chain`, and without it a signature that is valid with the library
-  validated as INDETERMINATE.
-- TestBench: the CLI line in the Code tab now covers every option the CLI has:
-  - the new flags;
-  - the Sandbox's `--allow-origin`;
-  - `deferred prepare`/`complete` and `sign-dir` for the deferred and batch modes;
-  - `--check-revocation` for CAdES and XAdES validation.
-
-  It also fixes `--sub-filter`, `--signature-algorithm`, `--certify` and `--thumbprint`, which the CLI did not accept
-  as written. `CliEquivalenceTests` runs the generated lines through the CLI against the Sandbox and checks that their
-  signatures validate like the library's (25 PAdES, CAdES and XAdES cases).
-
-### Added — CLI: network options and JSON result for signing
-
-- Every command accepts `--allow-origin <URL>` (repeatable), `--allow-ldap` and `--tls-trust <PEM>` (also
-  `SIMPLESIGN_ALLOW_ORIGINS`, `SIMPLESIGN_ALLOW_LDAP`, `SIMPLESIGN_TLS_TRUST`): the HTTP provider lets the listed
-  loopback origins through the SSRF guard, reads CRLs over LDAP and accepts the given root (and intermediates) for
-  HTTPS. `sign`, `cades sign` and `xades sign` now use that provider for the TSA, LTV and the Strict revocation check.
-- `sign`, `cades sign` and `xades sign --json`: `{ success, format, output, signer, requestedLevel, achievedLevel,
-  warnings, error: { type, reason, message } }`; a refusal carries its `SigningErrorReason`.
-
-### Changed — CI, DSS and docs use the Sandbox
-
-- CI starts an ephemeral SimpleSign Sandbox on each OS before the tests (`--ephemeral`, waits for `/api/info`,
-  keeps `sandbox.log` with the test results) and sets `SIMPLESIGN_REQUIRE_SANDBOX=true`, so a missing Sandbox fails
-  the TestBench tests instead of skipping them.
-- `tools/dss`: the container trusts the Sandbox's root (`SANDBOX_URL`, default `http://host.docker.internal:5300`);
-  `TESTBENCH_URL` is optional. The README explains `--public-base-url` for DSS to reach the CRLs and OCSP.
-- Docs: new `docs/articles/sandbox.md`; the TestBench article (real network plus a connected Sandbox).
-- Sandbox: OCSP responses start an hour back (`thisUpdate`). They started five minutes back, the same instant the
-  TestBench's "time" option claims as signing time, and embedded OCSP evidence is checked with no clock-skew
-  tolerance against it, so CAdES/XAdES matrix cases failed "incomplete LTV" whenever a second boundary fell between.
-
-### Changed — opening the OAuth page on Windows
-
-- `LoopbackAuthorizationHandler.OpenInSystemBrowser` starts `explorer.exe` with the URL as its argument on Windows,
-  like `open`/`xdg-open` elsewhere, instead of shell-executing the URL itself (CodeQL `cs/command-line-injection`).
-
-### Fixed — Strict signing no longer trusts a CRL cached before a revocation
-
-- `SigningPolicy.Strict` asked a shared `ChainRevocationChecker` (DI, `WithChainRevocationChecker`) for the status
-  "now", and the checker answered from a CRL cached up to its nextUpdate: a certificate revoked after that CRL was
-  cached could still sign. New `IChainRevocationChecker.CheckCurrentAsync`
-  (a default interface method, so existing implementations still compile): `ChainRevocationChecker` asks each OCSP
-  responder first and then downloads the CRL again, refreshing the cache. Signing uses it; validation is unchanged.
-- CAdES/XAdES: "does not contain complete LTV" now says why (the certificates without revocation data and the
-  reason, or that the embedded data did not validate when the signature was read back).
-- TestBench: the "expired" validation sample no longer fails on a busy machine (its certificate lived 3 seconds).
-- TestBench: `SandboxScenarioTests` sign with Strict against a running SimpleSign Sandbox for each case
-  (CRLs over HTTP, HTTPS and LDAP, OCSP only, revoked CA, expired and wrongly signed CRLs, unusable OCSP answers,
-  a stale CRL after a revocation, expired and not-yet-valid certificates, expired CA).
-
-### Added — apps, DI and packaging follow the new checks
-
-- `SimpleSign.Peru.Iofe` is packed and released (pack lists, `PACKAGE.md`); RELEASING lists it and the signer packages.
-- DI: `AddSimpleSignRevocation()` registers `IRevocationCache` and `IChainRevocationChecker` on the registered
-  `IHttpClientProvider`; `AddSimpleSignCades`/`AddSimpleSignXades` build their validators with it (they used the
-  default HTTP client); `SimpleSignOptions.ValidationPolicy`.
-- `CadesSignatureValidator.ValidateAllAsync`, `XadesSignatureValidator.ValidateAllAsync` and
-  `XadesSignatureValidator.ValidateAsync(…, externalData)`: revocation for every signer and countersignature.
-  `CadesSignerValidationResult.IsValid` follows the signer's indication.
-- `SignatureSubIndication.ToEtsiName()`.
-- CLI: `--signing-policy` on the sign commands, refusal reasons with a hint, `validate-dir` with the policy/trust
-  options and sub-indications, three-state CAdES/XAdES output, `explain` for the ETSI terms.
-- TestBench: signing policy option, sub-indications and policy checks in the reports, real revocation for
-  CAdES/XAdES, weak-key and no-key-usage sandbox signers.
-- Agent: `/api/certificates` reports `policyIssue` (keyUsage, weakKey), shown in the Overview; `/api/sign` refuses an
-  unsupported `hashAlgorithm` with 400 instead of signing SHA-256.
-- Docs: README, conformance, PAdES/CAdES/XAdES, validation, getting started, deferred, PKCS#11, cloud and TestBench
-  articles; ADRs 0009, 0011, 0013, 0018 and 0020 point to ADRs 0021/0022; CLAUDE.md, CONTRIBUTING, SECURITY.
-
-### Removed (TestBench) — ETSI only
-
-The TestBench now covers the ETSI standards only; trust frameworks and the visible stamp will get apps of their own.
-The libraries are unchanged (the Brazil and Peru packages, `PadesSignerBuilder.WithAppearance`).
-
-- Visible signature stamp: the appearance options, the stamp preview (`/api/preview`) and the matrix dimension.
-- Trust frameworks: the frameworks bar and the `framework` tags of the option schema; the ICP-Brasil policies
-  (AD-RB…AD-RA, versions, `/api/icp/versions`), the PBAD.PAdES sub-filter, the AEA of Lei 14.063, health documents,
-  the fiscal XML-DSig layouts and their samples, the ICP-Brasil/Gov.br roots and rules in validation, the Lei 14.063
-  classification and the IOFE validation policy choice.
-- The simulated ICP-Brasil PSC and the PSC signer (CSC v2 stays).
-- The sandbox PKI is generic: no CPF/CNPJ (SAN otherName 2.16.76.*), no e-CNPJ signer, neutral subjects.
-
-### Added — signing policy: checks before signing
-
-- `SigningPolicy` (`Default`, `Strict`, `Minimal`) with `WithSigningPolicy(...)` on the PAdES, CAdES, XAdES,
-  deferred and batch builders. Before anything is signed it checks the validity of every certificate of the
-  chain, the key usage of the signing certificate (digitalSignature or nonRepudiation), the RSA key size
-  (2048 bits or more), the elliptic curve and the hash algorithm (SHA-2 and SHA-3 only).
-  `SigningPolicy.Strict` also checks the revocation of the whole chain (CRL and OCSP) and refuses a revoked
-  certificate or one whose status cannot be established.
-- `IChainRevocationChecker` and `ChainRevocationChecker` are now public in `SimpleSign.Core.Revocation`
-  (moved from the Brazil package), with `WithChainRevocationChecker(...)` on the builders.
-- New `SigningErrorReason` values: `CertificateRevoked`, `RevocationStatusUnknown`, `ChainCertificateNotValid`,
-  `KeyUsageNotPermitted`, `AlgorithmNotPermitted`, `KeyTooWeak`.
-
-### Added — revocation: LDAP CRLs, cache, verified online CRLs
-
-- CRLs from `ldap://` and `ldaps://` distribution points (read-only LDAPv3 on the BCL), used when a certificate
-  has no HTTP distribution point and `OutboundHttpPolicy.AllowLdap` is set. LDAP hosts get the same address checks
-  as HTTP.
-- `IRevocationCache` and `InMemoryRevocationCache`: CRLs are kept until their nextUpdate.
-  `ChainRevocationChecker.Cache` (15 minutes by default) and `CrlClient.Cache`.
-- `CrlClient.CheckCrlAsync(cert, issuer, url, ct)` and `ICrlClient` default member: the CRL is checked against the
-  issuer (signature, issuer name, validity). `RevocationChecker` uses it whenever the issuer is in the chain.
-- ADR 0021.
-
-### Added — timestamp authority checks
-
-- `TimestampTsaChecks.TsaNameMatches`: the `tsa` name of TSTInfo must name the TSA certificate (RFC 3161 §2.4.2);
-  `TimestampValidator.ValidateWithTrust` makes a mismatching TSA untrusted.
-- `TimestampTsaChecks.CheckTsaRevocationAsync`: the revocation of the TSA chain at genTime, with the embedded
-  evidence and online CRL/OCSP. A revoked or unknown status makes the TSA untrusted. PAdES validation runs it when
-  `ValidationOptions.CheckRevocation` is on.
-- At signing time a token received from the TSA (or from an injected client) must be validly signed by a
-  certificate with the critical, exclusive timeStamping EKU; otherwise `TimestampException`.
-
-### Added — policy enforcement tests
-
-- `PolicyEnforcementContractTests`: refusals at signing time (revoked chain, CRL with a bad
-  signature, expired CRL, expired intermediate, missing key usage, SHA-1, MD5, RSA-1024, tampered TSA token), an
-  altered document is INVALID, signatures by PFX and by a remote signer are VALID, a revoked TSA is untrusted.
-- `Pkcs11RealDeviceTests`: the three formats on a real token or HSM, set with `SIMPLESIGN_PKCS11_MODULE`.
-- Test helpers: `SyntheticPki.IssueTimestampingCertificate`, `BuildCrlRevoking`, `BuildLeafCrl(thisUpdate, nextUpdate)`,
-  `ConstraintTestCertificates`, `TimestampTokenOptions` (TSA certificate, tsa name, genTime, tampered signature).
-- Article: `remote-signing.md`.
-
-### Added — CLI verification report
-
-- `validate`, `cades validate` and `xades validate`: `--policy`, `--policy-signer`, `--trust-dir`,
-  `--trust-dir-signer`, `--tsl`, `--tsl-signer`, `--lang es`; `cades validate --check-revocation`.
-- A verification report per signature: indication, ETSI sub-indication, public key (algorithm, size, SPKI SHA-256,
-  PEM) and every check; in JSON as `subIndication`, `publicKey` and `constraints`.
-- `timestamp verify` shows whether the TSA name in the token matches its certificate
-  (`TimestampTsaChecks.TsaNameMatches(byte[])`).
-
-### Added — trust store, trusted lists and the Peru extension
-
-- `DirectoryTrustAnchorProvider` (Core): trust anchors from a folder of certificates, changeable without a rebuild,
-  optionally protected by a signed manifest (`manifest.json` + `manifest.json.p7s`) with the SHA-256 of every file.
-- `TrustedList` (XAdES, `SimpleSign.XAdES.TrustedLists`): ETSI TS 119 612 and TS 102 231 v3 trusted lists, read
-  after their XML signature is checked against the scheme operator's certificate; active CA and TSA services become
-  trust anchors; an expired list is refused; `DownloadAsync` keeps the last good copy.
-- New package `SimpleSign.Peru.Iofe`: `IofeExtension` (anchors from INDECOPI's trusted list), `IofePolicies.Signing`
-  and `IofePolicies.Validation`, `AddSimpleSignIofe`.
-
-### Added — validation policy and ETSI sub-indications
-
-- `ValidationPolicy` on `ValidationOptions.Policy`: accepted digest algorithms with dates, minimum RSA size,
-  accepted curves, key usage of the signing certificate, each with a `fail`/`warn`/`ignore` level. Loaded from JSON
-  at run time (`ValidationPolicy.Load`, `FromJson`, `ToJson`); `ValidationPolicy.LoadSigned` checks a detached CMS
-  signature over the file first.
-- `SignatureSubIndication` (ETSI EN 319 102-1 names), `ValidationConstraintResult` and `ConstraintStatus`.
-  `SignatureValidationResult`, `CadesValidationResult` and `XadesValidationResult` expose `Indication`,
-  `SubIndication` and `Constraints`.
-- `CadesSignatureValidator.ValidateAsync` and `XadesSignatureValidator.ValidateAsync`: revocation of the signer chain
-  and of the TSA chain through `IChainRevocationChecker`; results expose `IsNotRevoked` and `RevocationSource`
-  (new value `CertificateChain`). `CadesValidationResult` and `XadesValidationResult` are now records.
-- ADR 0022.
-
-### Changed
-
-- **Breaking:** with the default policy a SHA-1 or MD5 signature without a timestamp proving it existed before the
-  algorithm's limit, or a signing key under 2048 bits, is INDETERMINATE (`CryptoConstraintsFailureNoPoe`) instead of
-  VALID with a warning. `IsValid` of CAdES and XAdES results follows the indication.
-- **Breaking:** `CrlClient.CheckCrlAsync(cert, url, ct)` without the issuer no longer reports "not revoked" from a
-  CRL whose signature it cannot check; it throws `RevocationCheckException`. A revocation is still reported.
-- OCSP and caIssuers locations other than HTTP(S) are skipped instead of failing the request.
-- **Breaking:** signing now refuses, by default, a certificate without the key usage extension or without
-  digitalSignature/nonRepudiation, an RSA key under 2048 bits and a chain with an expired certificate.
-  Use `WithSigningPolicy(SigningPolicy.Minimal)` to keep the previous behaviour.
-
-### Added — B-LT behind corporate proxies (#215)
-
-- `LongTermValidationOptions.ClockSkewTolerance` (default 5 minutes, `OcspClient.DefaultClockSkewTolerance`):
-  OCSP responses fetched during LTV collection are accepted when `thisUpdate` is up to this much ahead
-  of the local clock, or `nextUpdate` up to this much behind it. Previously a responder a fraction of a
-  second ahead had its fresh response rejected. Also settable on `OcspClient` and `LtvEmbedder`.
-  Embedded evidence checked against a signing time keeps no tolerance.
-- `OutboundHttpPolicy.PrivateNetworkHosts`: hosts allowed to resolve to private (RFC 1918) addresses,
-  for split-DNS networks. Exposed by `IHttpClientProvider.OutboundPolicy` (default member) and settable on
-  `SingleClientProvider`, `HttpClientFactoryProvider`, `OcspClient`, `CrlClient` and `TimestampClient`.
-  Loopback, link-local and literal IP addresses stay blocked. New overloads:
-  `ResilientHttp.GetBytesAsync(HttpClient, Uri, OutboundHttpPolicy, …)`,
-  `ICertificateChainService.DownloadAiaCertsAsync(…, OutboundHttpPolicy, …)`,
-  `LtvDataCollector.CollectAsync(IHttpClientProvider, …, LongTermValidationOptions, …)`.
-
-### Added — more of the ETSI standards in CAdES and XAdES
-
-CAdES (ETSI EN 319 122-1), on `CadesSignerBuilder`:
-
-- `WithSignerLocation(CadesSignerLocation)` (§5.2.5), `WithContentHints(CadesContentHints)` and
-  `WithMimeType(string)` (§5.2.4). A countersignature refuses the last two.
-- `WithSignerRoles` / `WithSignerRole`, `WithAttributeCertificates` and `WithSignedAssertions`
-  (§5.2.6.1, signer-attributes-v2). Attribute certificates and signed assertions are embedded as given
-  and read back, not verified. `CadesSignedAttributes.Read` reads all of these from a signature.
-- `WithContentTimestamp(TimestampOptions)` (§5.2.8): a timestamp over the content, taken before
-  signing. `CadesValidationResult.HasValidContentTimestamp` and `ContentTimestampTime` report it.
-- `WithSignaturePolicyStore(SignaturePolicyStore)` (§5.2.10), read with `CadesSignaturePolicyStore.Read`.
-  Signing fails unless the policy is declared with its hash.
-
-XAdES (ETSI EN 319 132-1), on `XadesSignerBuilder`:
-
-- `WithSignatureProductionPlace(SignatureProductionPlace)` (§5.2.5). With
-  `XadesSigningCertificateForm.V1` it is written as the XAdES 1.3.2 `SignatureProductionPlace`, which
-  has no street address: signing fails when one is set.
-- `WithAttributeCertificates` and `WithSignedAssertions` (§5.2.6, CertifiedRolesV2 and SignedAssertions),
-  embedded as given and read back, not verified.
-- `WithDataObjectsTimestamp(TimestampOptions)` (§5.2.8.1, AllDataObjectsTimeStamp).
-- `WithSignaturePolicyStore(SignaturePolicyStore)` (§5.2.10).
-- `WithCanonicalization(XadesCanonicalization)`: Exclusive C14N 1.0 (default) or Canonical XML 1.0 for
-  SignedInfo and the references.
-- `WithAdditionalDataObject(XadesDataObject)`: more files signed with the document, carried inside the
-  signature (`XadesDataObject.Embedded`) or kept outside it (`XadesDataObject.External`), each with
-  its DataObjectFormat.
-- `XadesSigner.CounterSign(signedXml, signatureId)` (§5.2.7.2): an enveloped countersignature, at B-B or B-T.
-- `XadesValidationResult` gains `CounterSignatures`, `HasValidDataObjectsTimeStamp`,
-  `DataObjectsTimeStampTime`, `SignaturePolicyStore`, `ClaimedRoles`, `AttributeCertificates` and
-  `SignedAssertions`. `XadesSignatureValidator.Validate` and `ValidateAll` have overloads that take the
-  content of each external reference by URI (`IReadOnlyDictionary<string, byte[]>`).
-
-All formats:
-
-- `LongTermValidationOptions.RevocationPreference` (`RevocationPreference.OcspFirst`, the default, or
-  `CrlFirst`): which revocation source is tried first when collecting B-LT data. Also on `LtvEmbedder`
-  and `LtvDataCollector.CollectAsync`; a deferred PAdES session carries it.
-- `ILtvEmbedder.EmbedLtvDataAsync(…, LongTermValidationOptions, …)`: the PAdES signer now calls this
-  overload, so an injected embedder receives the signature's options. It is a default interface member
-  that forwards to the overload without options; `LtvEmbedder` overrides it, and the signature's
-  revocation preference and clock skew replace the ones the embedder was created with (before, an
-  embedder injected into `PadesSignerBuilder`, such as the one `AddSimpleSign()` registers, ignored
-  them).
-- `SignaturePolicyStore` (`SimpleSign.Core.Crypto`): the policy document, or the URI of a local copy,
-  with `MatchesHash(SignaturePolicyReference)`.
-
-CLI:
-
-- `simplesign cades sign`: `--signer-country`, `--signer-locality`, `--signer-postal-address`,
-  `--signer-role`, `--attribute-certificate`, `--signed-assertion`, `--mime-type`,
-  `--content-description`, `--content-timestamp`, `--policy-document` with `--policy-specification`.
-- `simplesign xades sign`: `--place-city`, `--place-street`, `--place-state`, `--place-postal-code`,
-  `--place-country`, `--canonicalization`, `--data-objects-timestamp`, `--attribute-certificate`,
-  `--signed-assertion`, `--embed-object`, `--external-object`, `--policy-document` with
-  `--policy-specification`, and `--countersign` with `--countersign-id`.
-- `simplesign xades validate --external-object URI=PATH` for signatures with external data objects.
-- `--revocation-preference ocsp|crl` on `sign`, `cades sign` and `xades sign`.
-
-Tests: `DssCrossValidationTests` sends signatures that use these options to a local EU DSS
-(`tools/dss`) and asserts what it reads from them; it is skipped when no DSS is running. The TestBench
-combination matrices for CAdES and XAdES include the new options.
-
-### Changed — XAdES output and validation
-
-- Every signature now has a `DataObjectFormat` for the document (`text/xml`, pointing to an `Id` on the
-  document's `ds:Reference`), as ETSI EN 319 132-1 §6.3 requires for each signed data object. Not
-  written for a countersignature or with `XadesSigningCertificateForm.V1`, unless a format or an
-  additional data object is asked for. A `DataObjectFormat` given without an `ObjectReference` now
-  points to the document reference; it had no `ObjectReference` attribute before.
-- Claimed signer roles are written in `SignerRoleV2`, as ETSI EN 319 132-1 requires. The `SignerRole` it
-  obsoletes is written only with `XadesSigningCertificateForm.V1`.
-- Every new signature has an `Id` on `ds:SignatureValue`, which is what a countersignature references.
-- The validator reports a countersignature under `XadesValidationResult.CounterSignatures` of the
-  signature it signs. `ValidateAll` no longer lists it as one more signature of the document, and
-  `Validate` accepts a document with one signature and its countersignatures.
-- The validator canonicalizes SignedInfo with the algorithm it declares (it used Exclusive C14N for every
-  signature), and canonicalizes Canonical XML 1.0 subsets with the namespace context of their ancestors.
-- `validator.Validate(xml, anchors, null)` is now ambiguous between the two overloads: drop the
-  argument, name it (`originalData: null`) or cast the `null`.
-
-### Fixed
-
-- `TimestampClient.EmbedTimestampInCms` wrapped the values of every unsigned attribute already in the
-  SignerInfo in a second SET. It affected a CMS that had an unsigned attribute before the signature
-  timestamp was embedded; such attributes are now kept octet for octet.
-- `TimestampToken.Verify` and `VerifyHash` did not recognize SHA-3 message imprints and reported a
-  valid token as not covering the data.
-
-### Changed (Breaking) — SimpleSign.Brasil split into SimpleSign.Brazil, .IcpBrasil and .GovBr
+## [0.11.0] - 2026-11-13
+
+The first release since 0.10.1 (2026-11-04), and a large one. **It contains breaking changes**: the
+Brazilian packages were split and renamed, `SimpleSign.Pdf` was merged into `SimpleSign.PAdES`, and
+`SimpleSign.HostSigner` was replaced by the SimpleSign Agent. See
+[Changed (Breaking)](#changed-breaking) and the
+[v0.10 → v0.11 migration guide](docs/articles/icp-brasil.md#upgrading-from-v010-to-v011).
+
+### Highlights
+
+- **Two-phase (deferred) signing in all three formats.** `CadesDeferredSigner` and
+  `XadesDeferredSigner` join `DeferredSigner`, with co-signatures, countersignatures,
+  `From(builder)` and content that can stay outside the session (ADR 0028).
+- **Augmenting existing signatures.** `PadesAugmenter`, `CadesAugmenter` and `XadesAugmenter` raise
+  a signed file to B-T, B-LT or B-LTA, and renew an archive time-stamp, without touching what is
+  signed (ADR 0025).
+- **ETSI EN 319 102-1 validation.** Trusted-list service history gives the trust anchors *at a time*
+  (ADR 0026), and past signature validation gives a signature back its trust from a later archive
+  time-stamp when its own TSA is no longer trusted (ADR 0027).
+- **Configurable signing and validation policies** in SimpleSign's own JSON format, with a level per
+  constraint, the ETSI TS 119 102-2 validation report and a readable HTML report (ADR 0023, 0024).
+- **IOFE (Peru) is complete.** `SimpleSign.Peru.Iofe` takes its anchors from INDECOPI's signed
+  trusted list and keeps it current (`IofeTrustedListSource`), with the policies of INDECOPI's
+  accreditation guide v4.0, its checklist, a playbook and an article.
+- **Before you sign, and what you sign.** `SigningCertificateCheck` answers "will this certificate
+  be accepted?" before asking for a PIN; `DataToSignInspector` says what a payload actually is;
+  `AuditChain` exposes the audit hash chain for any store.
+- **Observability.** An `ActivitySource` and a `Meter` named `SimpleSign` publish traces and metrics
+  for signing, TSA, OCSP, CRL, trusted lists and validation (`SimpleSignTelemetry`).
+- **Tooling.** The **Sandbox** is a test PKI on real HTTP/HTTPS/LDAP endpoints with failures you can
+  switch on; the **TestBench** gained a Playbook tab that runs scripted steps against it and exports
+  the evidence; the **Agent** replaces HostSigner. See [the apps](docs/articles/apps.md).
+
+### Changed (Breaking)
+
+#### `SimpleSign.Brasil` split into `SimpleSign.Brazil`, `.IcpBrasil` and `.GovBr`
 
 `SimpleSign.Brasil` is discontinued. Each Brazilian hierarchy is now its own package, under
 `src/TrustFrameworks/Brazil/`. `SimpleSign.Brazil.IcpBrasil` and `SimpleSign.Brazil.GovBr` depend on
@@ -1043,10 +73,11 @@ var validator = new PdfSignatureValidator(options, httpClient,
     countryExtensions: [new IcpBrasilExtension(), new GovBrExtension()]);
 ```
 
-`src/TrustFrameworks/Europe/Eidas/` and `src/TrustFrameworks/Peru/Iofe/` are placeholders for
-planned eIDAS and IOFE extensions.
+`HealthProfessionalInfo` and `HealthProfessionalCouncil` are gone; health documents moved into
+`SimpleSign.Brazil.IcpBrasil`, and professional registrations are read with
+`ExtractProfessionalRegistrations` / `ProfessionalRegistration` (see Fixed).
 
-### Changed (Breaking) — SimpleSign.Pdf merged into SimpleSign.PAdES
+#### `SimpleSign.Pdf` merged into `SimpleSign.PAdES`
 
 The PDF structure parser is now part of `SimpleSign.PAdES`; the `SimpleSign.Pdf` package is
 discontinued and no longer published.
@@ -1057,421 +88,457 @@ discontinued and no longer published.
 - Type names are unchanged (`PdfStructureReader`, `PdfSignatureField`, `PdfByteRange`,
   `PdfVersion`, `PdfALevel`, `PdfStructureException`, `EncryptedPdfException`, …).
 
-### Changed (Breaking) — SimpleSign.Brasil no longer uses Core internals
+#### `SimpleSign.Core.Constants.Oids`: one constant changed value, two were removed
 
-`SimpleSign.Brasil`, `.Fiscal` and `.Xades` now build against the public API of Core, PAdES,
-CAdES and XAdES only (no `InternalsVisibleTo`).
+- **`Oids.SignatureManifest` has a new value.** The Lei 14.063 manifest used `2.16.76.1.12.1.1`, the
+  ITI's OID for the "prescrição de medicamento" document type; it now uses a SimpleSign UUID OID
+  (`2.25.203506691189164941140958961231912791013`). The old value stays as
+  `Oids.SignatureManifestLegacy`, and signatures made with it are still read. Because this is a
+  `const`, code compiled against 0.10.1 keeps the old literal inlined until it is recompiled.
+- **Removed:** `Oids.IcpBrasilSanHolderData` and `Oids.IcpBrasilSanCnpj`. Use the literal OIDs
+  `2.16.76.1.3.1` and `2.16.76.1.3.3`, or let `IcpBrasilChainValidator` read them for you.
 
-- **Removed:** `Oids.IcpBrasilSanHolderData` and `Oids.IcpBrasilSanCnpj` from `SimpleSign.Core`
-  (use the literal OIDs `2.16.76.1.3.1` and `2.16.76.1.3.3`; `IcpBrasilChainValidator` reads them for you).
-- **Now public**, for country extensions:
-  - `CrlEvaluator.Evaluate` / `ReadNextUpdate` and `CrlStatus`
-  - `CrlClient.GetCrlUri` and `OcspClient.GetOcspUri`
-  - `ResilientHttp.GetBytesAsync(HttpClient, Uri, …)` and `ResilientHttp.DefaultChainRetrievalTimeout`
-  - `SignerCertificate` / `SignerChain` on `PadesSignerBuilder`, `CadesSignerBuilder` and `XadesSignerBuilder`
-- The ICP-Brasil and Gov.br log events (3110, 3113, 3210) moved from Core to `SimpleSign.Brasil`
+#### `SimpleSign.Brasil` no longer uses Core internals
+
+`SimpleSign.Brazil`, `.Fiscal` and `.Xades` now build against the public API of Core, PAdES, CAdES
+and XAdES only (no `InternalsVisibleTo`).
+
+- **Now public**, for country extensions: `CrlEvaluator.Evaluate` / `ReadNextUpdate` and `CrlStatus`;
+  `CrlClient.GetCrlUri` and `OcspClient.GetOcspUri`;
+  `ResilientHttp.GetBytesAsync(HttpClient, Uri, …)` and `ResilientHttp.DefaultChainRetrievalTimeout`;
+  `SignerCertificate` / `SignerChain` on `PadesSignerBuilder`, `CadesSignerBuilder` and
+  `XadesSignerBuilder`.
+- The ICP-Brasil and Gov.br log events (3110, 3113, 3210) moved from Core to `SimpleSign.Brazil`
   with the same event IDs.
 
-### Removed (repository)
+#### `SimpleSign.HostSigner` removed
 
-- `samples/`, `bench/`, `interop/` and the interop tests, the fuzz harness, Stryker, the docfx site,
-  migration guides, `llms*.txt`, `AGENTS.md` and `.github/copilot-instructions.md`. The README now
-  links to `docs/articles/`.
-- `tests/unit/` now mirrors `src/` (`Core/`, `Formats/`, `TrustFrameworks/Brazil/…`, `Signers/`,
-  `Extras/`, `Apps/`), the CLI tests moved there and into `SimpleSign.sln` (so CI runs them on every
-  PR), every test class has a `Category` trait, and `dss-1443.pdf` (a byte-identical copy of
-  `pades-lta.pdf`) is gone. New tests cover `ResilientHttp` (SSRF refusal, retries) and the
-  ICP-Brasil and Gov.br extensions registered together.
-- The `simplesign-<rid>.zip` CLI archives on GitHub Releases and `scripts/install/install-cli.sh` /
-  `.ps1`. They were framework-dependent, so they needed .NET anyway: install the CLI with
-  `dotnet tool install -g SimpleSign.Cli`. The release workflow now runs the CLI tests before
-  pushing to NuGet.
+Replaced by **SimpleSign Agent** (`src/Apps/SimpleSign.Agent`), a cross-platform tray / menu-bar app.
+The agent keeps the `/api/health`, `/api/certificates` and `/api/sign` contract. Its
+`/api/sign-file`, `/api/inspect` and `/api/validate` endpoints, which took local file paths, are
+**not** in the new agent.
 
-### Changed — SimpleSign.XAdES no longer depends on SimpleSign.CAdES
+#### `CadesValidationResult` and `XadesValidationResult` are now records
 
-The LTV collection and revocation-evidence helpers that XAdES borrowed from CAdES (internals)
-moved into `SimpleSign.Core`. `LtvDataCollector` and `LtvCollectionResult` stay public in CAdES,
-with the same behavior. Installing `SimpleSign.XAdES` no longer pulls in `SimpleSign.CAdES`.
+Both were `sealed class` and are now `sealed record`. Every member survives and both only gained
+properties, but reference equality, `Equals` and `ToString` behave differently.
 
-### Fixed
+#### Validation and signing are stricter by default
 
-- **XAdES B-LTA was not recognized as LTA by other validators.** The `EncapsulatedTimeStamp` of
-  `xades141:ArchiveTimeStamp` was written in the XAdES v1.4.1 namespace; its type is
-  `xades:XAdESTimeStampType`, so the child belongs to v1.3.2. EU DSS did not find the token and
-  reported XAdES-BASELINE-LT. It is now written in the v1.3.2 namespace, and DSS reports
-  XAdES-BASELINE-LTA (and XAdES-A for the extended form). Signatures made by earlier versions are
-  still read and validated by SimpleSign. Found with the TestBench's DSS cross-validation.
-
-- Log EventId 2401 was used by two different events (Core "certificate revoked in embedded CRL"
-  and PAdES "revocation check failed"); the PAdES event is now 2032. The never-emitted event 2712
-  was removed, and 1023 ("LTV embedded, no archival timestamp") is now emitted for B-LT.
-
-- `AddSimpleSignIcpBrasil()` / `AddSimpleSignGovBr()` (before: `AddSimpleSignBrasil()`) registered
-  `IcpBrasilChainValidator` and `GovBrChainValidator` so that the container could not build them
-  (two ambiguous constructors): resolving either one threw. They are now created from the registered
-  `IHttpClientProvider` and `ILoggerFactory`, and the extensions use them too.
-
-- HtmlToPdf: deeply nested HTML crashed the process with a stack overflow. Layout recurses once
-  or more per nesting level, and the 256 levels the parser allows overflowed small thread stacks
-  (512 KiB for .NET 8 secondary threads on macOS; flex, inline-block, float and list nesting
-  already at about 128 levels). Layout now checks the remaining stack and, when it runs low,
-  continues on a fresh thread-pool stack, so the document renders in full on any thread.
-- CAdES validation: on SHA-3 signatures the escTimeStamp (CAdES-X) and archive-time-stamp v2
-  (CAdES-A) were checked against a SHA-256 imprint, so they were reported as not covering the
-  signature, and signing with `WithExtendedValidationData(CadesExtendedForm.Archive)` on B-LTA
-  failed its own archive check. The imprint now uses the signer's SHA-3 digest.
-- CAdES: `WithExtendedValidationData` combined with B-LT or B-LTA. The extended form was applied
-  before the B-LT certificate and revocation values, so with `CadesExtendedForm.Archive` the
-  archive-time-stamp v2 did not cover them (B-LT: the signature failed validation; B-LTA: signing
-  threw because the archive-time-stamp-v3 did not validate). The extended form now goes after the
-  LT values and before the archive-time-stamp-v3; every form works on B-T, B-LT and B-LTA.
-
-- `CadesSignatureValidator` now builds the signer's chain with the certificates embedded in the
-  CMS, as it already did for the TSA. Before, a signer under an intermediate CA was reported with
-  `PartialChain` (chain not valid) unless the intermediate was itself passed as a trust anchor or
-  was in the OS store.
-- `XadesSignatureValidator` builds the signer's chain with the certificates in `KeyInfo/X509Data`
-  (it already did for the TSA) and honours `ValidationOptions.TrustedRoots` and
-  `TrustSystemRoots = false`, like the CAdES validator (including its tolerance of unknown
-  revocation status under custom roots). Before, a signer under an intermediate CA
-  failed with `PartialChain`, and `TrustedRoots` was ignored (only the `trustAnchors` argument
-  counted).
-
-### Security
-
-- `LoopbackAuthorizationHandler.OpenInSystemBrowser` only opens absolute http(s) URLs; other
-  schemes (e.g. `file:`), which the OS shell would hand to other programs, throw `ArgumentException`.
-
-### Added (diagnostic logging)
-
-- **XAdES** signing now logs every step (events 7000–7028): start and completion, resolved
-  algorithm, SignedProperties, reference digests, SignedInfo canonicalization, SignatureValue,
-  external signer, timestamps, validation data, extended forms and the read-back check. The logger
-  given to `WithLogger` was accepted but ignored before.
-- `XadesSignatureValidator` accepts an `ILogger` (new optional constructor parameter) and logs the
-  verdict of each signature (7050, 7051).
-- **CAdES** signing logs its own steps (events 7100–7131): start and completion, algorithm, signed
-  attributes, timestamps, validation data, extended forms, archive-time-stamp-v3, co-signatures and
-  countersignatures.
-- **PAdES** logs the resolved algorithm, the PDF/A level, the field configuration, the read-back
-  check (1002–1005) and the DocTimeStamp writer steps (5010, 5011).
-- **Signers:** `Pkcs11SignerOptions.Logger`, `CscClientOptions.Logger` and `PscClientOptions.Logger`
-  receive diagnostics of token, CSC and PSC signatures (events 72xx, 73xx). PINs, OTPs, tokens and
-  client secrets are never logged.
-
-### Changed (SimpleSign TestBench) — one workbench for PAdES, CAdES and XAdES
-
-- The PDF wizard and the separate CAdES and XML pages are replaced by a single **workbench**: pick
-  the format, set any option, sign, and read the result, the verdicts, the log and the code on the
-  same screen. Baseline presets (B-B…B-LTA) and **Vary** (sign once per value of one option) make
-  many combinations quick; every run is kept in a history.
-- **Every option names its standard.** The form is drawn from one option schema
-  (`/api/schema`): each option carries its explanation, the clause that defines it (ETSI EN 319
-  142-1, 122-1, 132-1, 102-1, RFC 5652/3161/6960/5280, ISO 32000-1, XMLDSig) and the library call it
-  becomes. Options the standards define and SimpleSign does not implement are listed too, disabled;
-  the new **Coverage** page shows them for each format.
-- **Logs.** Each run passes a logger to every builder and validator and shows the library events
-  and the network requests live, grouped by signing stage; each stage names its clause.
-- **Cross-validation with the EU DSS** (off by default): each run is also sent to the DSS REST
-  validation service and the two verdicts are shown side by side. `tools/dss/` runs DSS in Docker
-  and makes it trust the sandbox root, which the TestBench now keeps between runs
-  (`--ephemeral-sandbox` for a new root every start).
-- **Trust frameworks are off by default.** The Brazil chip shows the ICP-Brasil, Gov.br, health
-  and fiscal options in their own color and turns the Brazilian validation rules on.
-- The run matrix reports cases as they finish and can be stopped.
-- **No side menu: two tasks, Sign and Validate**, on the same screen. Reference (coverage) and
-  Environment (sandbox) open as panels; the run matrix opens from Vary.
-- **Combinations** replaces the run matrix page: one or several options, all combinations or
-  pairwise, each line a normal run with its log; summary per value and filters. The fixed matrix
-  stays in the CI tests only, and its endpoints are removed.
-- **Environment is a sandbox lab:** the PKI as a tree with downloads, run-time revocation of a
-  signer, and failures to switch on (TSA down, slow, invalid token or outside the chain; CRL
-  server down or serving expired CRLs), to see how signing and validation react.
-- **Reference by standard**, and a generated [coverage page](docs/articles/coverage.md) that a test
-  keeps in step with the option schema.
-- **Environment follows the mode.** In Real it shows the trusted roots, the public TSAs, the
-  tokens and the OS store of this machine instead of the sandbox; sandbox failures only show and
-  act in Sandbox.
-- **PSC and CSC are explained** in the signer picker, step by step, and in Sandbox one click opens
-  a credential of the simulated provider. Cloud and token signers now log into the run (they were
-  opened without a logger, so events 72xx and 73xx never reached the Logs tab).
-- **Values are no longer cut:** URLs, names, OIDs and hex wrap, with a copy button; the signer
-  tabs no longer overlap their content.
-- **Validate is one screen for the three formats.** The format is read from the file; a validation
-  is a run like a signature, with the same result panel, log, DSS comparison and history.
-  "Validate all samples" checks every sample against its expected verdict. The separate PDF, CAdES
-  and XML validation pages and `/api/validation`, `/api/cades/validate` and `/api/xml/validate`
-  are replaced by `/api/runs` with `kind: "validate"`.
-- The UI and the server texts are in English and Portuguese; Spanish was removed.
-- API: `/api/options`, `/api/sign`, `/api/cades/options|sign` and `/api/xml/options|sign` are
-  replaced by `/api/workbench/options` and `/api/runs` (with a server-sent events stream).
-
-### Added (SimpleSign TestBench)
-
-- TestBench **XML** page: XAdES (enveloped, detached, enveloping; B-B…B-LTA, ICP-Brasil XML
-  policies, custom policy, extended forms, roles, DataObjectFormat, SigningCertificate V1) and the
-  fiscal XML-DSig layouts (NF-e, events, voiding, CT-e, MDF-e, NFS-e DPS, eSocial, EFD-Reinf; sign
-  one or all), with validation, the Signature element, generated C# and CLI, broken samples and an
-  XML run matrix.
-
-- TestBench **CAdES** page: sign, co-sign and countersign any file (detached .p7s or enveloped
-  .p7m) at every CAdES baseline level, ICP-Brasil CAdES policy (AD-RB…AD-RA) or custom policy,
-  with RFC 5126 extended forms; validation tree with countersignatures, CMS structure, generated
-  C# and CLI, broken samples, and a CAdES run matrix. The signer picker is shared with PDF signing.
-- Validation samples are no longer evicted from the in-memory store after 200 uploads.
-
-- TestBench **Validation** page: full report per signature (checks, PAdES and Lei 14.063 levels,
-  certificates, timestamp, ByteRange coverage, DSS) with configurable trust, bulk validation
-  (`BulkValidator`), structural inspection (`PdfStructureDumper`, CMS download), and sample PDFs
-  broken in specific ways (tampered content or CMS, appended bytes, revoked or expired signer,
-  unknown root, untrusted TSA). The signing result links to it.
-
-- The TestBench is available in English (en-US), Portuguese (pt-BR) and Spanish (es): browser
-  language by default, with a selector in the top bar. Server texts (explanations, compatibility
-  messages, samples) follow `Accept-Language`; a test checks every text has its translations.
-
-- New `src/SimpleSign.TestBench`: a local web app (ASP.NET Core minimal API + React, Vite,
-  Tailwind and shadcn/ui) to try every PDF signing option, explained, in a step-by-step flow that
-  only offers compatible options. Signers: sandbox A1, PFX, OS store, A3 tokens (PKCS#11), ICP-Brasil
-  PSC and CSC v2. Signature types: PAdES B-B…B-LTA, every ICP-Brasil PAdES policy and version, or a
-  custom policy. Live stamp preview (pdf.js), validation report, and the matching C# and CLI code.
-- **Sandbox** mode: offline test PKI (every key type and the edge cases), RFC 3161 TSA (plain and
-  with Basic auth), CRLs, and simulated PSC and CSC v2 services, served through an in-process
-  `IHttpClientProvider`. **Real** mode uses your certificates and real services.
-- **Run matrix**: cases generated from the compatibility rules (every value, plus pairwise
-  combinations), signed and validated in the sandbox; part of the CI (`testbench` job). See
-  `docs/articles/testbench.md`.
-
-### Added (ICP-Brasil PAdES AD-RC and AD-RA)
-
-- `WithIcpBrasilPolicy(policy, IcpBrasilPadesOptions)` signs PAdES under AD-RB, AD-RT, **AD-RC**
-  (signature timestamp, DSS with VRI, document timestamp) and **AD-RA** (AD-RC plus the PA, LPA and
-  LPA signature in the DSS), with an optional specific policy `Version`, archive TSA and revocation
-  settings. `ResolveIcpBrasilPolicy` returns the version that would be used.
-- `IcpBrasilPolicyArtifacts.DownloadAsync` downloads and verifies the AD-RA artifacts from the ITI.
-- `IcpBrasilPolicyValidator.Validate(cms, time, root, PdfSignatureFacts)` checks the PDF structures
-  the PAdES PAs mandate (`2.16.76.1.8.1`–`.3`); the ICP-Brasil provider runs it for PDF signatures.
-- PAdES: `PdfSignatureSubFilter.PbadPades`, `PadesSignerBuilder.WithDssArtifacts` and
-  `PdfDssArtifact` (custom DSS arrays and VRI entries, kept when a later signature rewrites the
-  DSS); `ChainValidationContext.Pdf` (`PdfSignatureFacts`) and `PdfSignatureField.Filter`.
-- `ArchiveTimestampOptions.Authorization`, `ClientCertificate` and `Resolve`; without its own
-  endpoint the archive timestamp now uses the signature TSA's credentials and client certificate.
-- `DeferredSignerBuilder.WithTimestampOptions` supplies the TSA credentials a resumed session
-  cannot store.
-- CLI: `--icp-policy ad-rc|ad-ra`; the version follows the signer's root.
-
-### Changed
-
-- ICP-Brasil PAdES signatures use `/Filter /PBAD_PAdES /SubFilter /PBAD.PAdES`, as the PAs mandate
-  (previously `ETSI.CAdES.detached`). Same CMS; PDF/A-1 preservation refuses it like ETSI.
-- DocMDP: only P=1 blocks further signatures; P=2 and P=3 documents can be signed again
-  (ISO 32000-1 §12.8.2.2.2). Certifying a document that is already signed is refused.
-- `WithExistingField` draws the configured appearance in the field's rectangle (it was ignored);
-  an appearance on a field without a visible rectangle is refused.
-- CLI: `--archival` requires `--tsa` (it silently produced B-B); `--icp-policy` rejects
-  `--sub-filter`, `--ltv` and `--archival` (the policy sets them).
-
-### Added (SimpleSign Agent — replaces SimpleSign.HostSigner)
-
-- New cross-platform tray / menu-bar app (Avalonia; macOS, Windows, Linux), `src/SimpleSign.Agent`:
-  the **local signing agent** web pages call to sign with the OS store or an A3 token. The menu
-  pauses the agent, lists and revokes authorized sites, and starts it at login. See
-  `docs/articles/agent.md`.
-- **Local signing agent** (127.0.0.1:21590), compatible with the HostSigner
-  `/api/health`, `/api/certificates` and `/api/sign` contract, now with A3 tokens, per-site
-  authorization, a consent dialog for every signature, the PIN asked by the app, Chrome Private
-  Network Access, rate and size limits.
-
-### Removed
-
-- `SimpleSign.HostSigner` (Windows-only tray app), its web UI and install scripts. Its
-  `/api/sign-file`, `/api/inspect` and `/api/validate` endpoints, which took local file paths,
-  are not in the new agent.
-
-### Added (SimpleSign.Signers.Pkcs11 — driver detection)
-
-- `Pkcs11Drivers`: catalog of the token middlewares used in Brazil with their install paths per OS
-  (`Known`), `DetectInstalled()`, `FindTokensAsync()` and `FindLibraryAsync(tokenLabel)`; extra paths
-  through `SIMPLESIGN_PKCS11_LIBRARY`.
-- CLI: `pkcs11 list` without `--lib` lists the tokens of every installed driver; `pkcs11 drivers`;
-  `--pkcs11-lib auto` when signing.
-
-### Added (new package SimpleSign.Brasil.Xades)
-
-- `XadesSignerBuilder.WithIcpBrasilPolicy(policy, tsa)`: XAdES AD-RB, AD-RT, AD-RV, AD-RC and AD-RA
-  under the XML PAs, root-aware, with SigningCertificate (XAdES 1.3.2) and every mandated property.
-- `IcpBrasilXadesPolicyValidator.Validate(signedXml, result)`: hash, period, roots, mandated
-  properties, algorithm and key size.
-- `IcpBrasilXadesPolicies.RefreshAsync`: downloads `LPA_XAdES.xml` and verifies its ITI XML signature
-  with a strict verifier (the ITI's KeyInfo reference cannot be verified by `SignedXml`).
-
-### Added (XAdES)
-
-- `WithSigningCertificateForm(XadesSigningCertificateForm.V1)`: XAdES 1.3.2 SigningCertificate; the
-  validator now resolves the signer from SigningCertificate as well as SigningCertificateV2 (it
-  failed on signatures from other ICP-Brasil signers).
-- `WithExtendedValidationData(XadesExtendedForm)`: CompleteCertificateRefs, CompleteRevocationRefs,
-  SigAndRefsTimeStamp, CertificateValues/RevocationValues and ArchiveTimeStamp (XAdES-C/X/X-L/A);
-  `XadesValidationResult.HasValidSigAndRefsTimeStamp` and `HasValidCompleteReferences`.
-
-### Added (SimpleSign.Brasil — XML policies, timestamps)
-
-- Rules of the 45 XML PAs in the catalog; `IcpBrasilPolicyRules.ParseXml`,
-  `IcpBrasilSignaturePolicies.FromXmlPolicyDocument`, `IcpBrasilLpa.ParseXml`.
-- `IcpBrasilTimestamp.Verify` / `VerifyHash`: standalone timestamps from ICP-Brasil ACTs.
-
-### Added (Core — standalone timestamps)
-
-- `TimestampToken.CreateAsync` / `CreateForHashAsync` / `Verify` / `VerifyHash` (`.tst` files,
-  RFC 3161) and `TimestampClient.GetTimestampForHashAsync`. CLI: `simplesign timestamp create|verify`.
-
-### Added (SimpleSign.Brasil — complete signature policies)
-
-- **PA rules:** `IcpBrasilPolicyRules` (accepted roots, mandatory signed/unsigned attributes,
-  signature algorithms and key sizes) for the 55 CAdES/PAdES PAs, via
-  `IcpBrasilSignaturePolicies.TryGetRules`; `IcpBrasilPolicyRules.Parse`; `RefreshAsync` parses the
-  rules of new PAs.
-- **Root-aware policy selection:** `Current(policy, format, signerRoot)` and `WithIcpBrasilPolicy`
-  pick the newest PA that accepts the signer's AC Raiz (v12 signers get CAdES ≥ 2.4 / PAdES ≥ 1.2)
-  and throw `IcpBrasilPolicyException` when none does. `IcpBrasilChainValidator.FindBundledRoot`.
-- **Policy validation:** `IcpBrasilPolicyValidator.Validate(cms, time, format, signerRoot)` checks
-  roots, attributes and algorithms; the ICP-Brasil provider passes the chain root.
-  `Validate(SignaturePolicyReference, time, hasTimestamp, format)` validates XAdES (and other) references.
-- **CAdES AD-RV, AD-RC and AD-RA:** `CadesSignerBuilder.WithIcpBrasilPolicy(policy, tsa)`.
-- **XAdES:** the 45 XML policies of `LPA_XAdES.xml` in the catalog (no refresh, no rules).
-
-### Added (CAdES / XAdES)
-
-- `CadesSignerBuilder.WithExtendedValidationData(CadesExtendedForm)`: complete certificate and
-  revocation references, escTimeStamp, certificate and revocation values, archive-time-stamp v2
-  (RFC 5126). `CadesSignatureValidator` verifies escTimeStamp and archive v2 imprints.
-- `XadesSignerBuilder.WithSignaturePolicy(SignaturePolicyReference)` writes the policy's hash in
-  `SigPolicyHash` and the OID as `urn:oid:` (`Qualifier="OIDAsURN"`);
-  `XadesValidationResult.SignaturePolicy` exposes the declared policy.
-
-### Changed
-
-- CAdES signatures now always include the signing-certificate-v2 signed attribute (it was
-  PAdES-only); every ICP-Brasil PA mandates it.
-
-### Added (CAdES — several signers)
-
-- `CadesSigner.CoSign(existing, data?)` (parallel signers, .p7s or .p7m) and
-  `CadesSigner.CounterSign(existing, signerIndex)` (RFC 5652 §11.4, no content-type).
-- `CadesSignatureValidator.ValidateAll` → `CadesValidationReport` with every signer and
-  countersigner; `ValidateWithHash(cms, hash, oid)`; `Validate(cms, null)` validates an attached
-  signature's encapsulated content (passing null used to throw).
-- `CadesSigner.ExtractContent(p7m)`; Core: `CmsParser.ParseAll` / `CmsSignedDataSet`,
-  `CmsSignedData.EncapsulatedContent` and `CounterSignatures`, `Oids.CounterSignature`.
-
-### Added (new package SimpleSign.Brasil.Fiscal)
-
-- `FiscalXmlSigner` / `FiscalXmlValidator`: XMLDSig of NF-e/NFC-e, CT-e, MDF-e, events and
-  inutilização, NFS-e Nacional (DPS), eSocial and EFD-Reinf (`FiscalDocumentProfile`), local key or
-  `IExternalSigner`; validation of digest, signature value and ICP-Brasil chain, rejecting
-  duplicate Ids. CLI: `simplesign fiscal sign|validate`.
-
-### Added (SimpleSign.Brasil — ICP-Brasil infrastructure)
-
-- **Bundled intermediate ACs:** the ~176 ICP-Brasil intermediates from the ITI's `ACcompactado.zip`
-  (`IcpBrasilChainValidator.LoadBundledIntermediateCerts()`), used for offline chain building by the
-  ICP-Brasil validator and trust anchor provider. Regenerate with `scripts/update-icp-intermediates.sh`.
-- **LPA refresh:** `IcpBrasilSignaturePolicies.RefreshAsync(httpClient, format)` downloads the
-  PAdES/CAdES LPA, verifies its ITI signature (`LPA_*.p7s`) and chain, applies new revocation dates
-  and adds new PAs checked against the LPA digest. `IcpBrasilLpa.Parse` reads an LPA.
-- **LCR disk cache:** `CrlCacheDirectory` on `IcpBrasilChainValidator`, `GovBrChainValidator` and the
-  new `BrasilExtensionOptions`; LCRs are reused until their nextUpdate.
-- **ACT authentication and TCP (Core):** `TimestampOptions.Authorization` (Basic/bearer, per request),
-  `TimestampOptions.ClientCertificate` (mutual TLS) and `tcp://host:port` endpoints (RFC 3161 §3.3
-  socket transport); `TimestampClient.Create(options, provider)`.
-
-### Fixed (SimpleSign.Brasil — see the [v0.10 → v0.11 migration guide](docs/articles/icp-brasil.md#upgrading-from-v010-to-v011))
-
-- **Professional registrations:** CRM/CRO were read from `2.16.76.1.3.4`/`3.5`/`3.6`, which hold
-  the e-CNPJ responsible person's data, the voter registration and the CEI. Registrations are now
-  read from `2.16.76.1.4.2.{council}` (registration, UF, specialty) for all 16 councils:
-  `ExtractProfessionalRegistrations` and `ProfessionalRegistration` replace `ExtractHealthProfessional`.
-- **Signature manifest OID:** the Lei 14.063 manifest used `2.16.76.1.12.1.1`, the ITI's OID for the
-  "prescrição de medicamento" document type. It now uses a SimpleSign UUID OID; old signatures are
-  still read.
-- **Certificate types:** S1–S4 are policy types 101–104 (were 11–14); T3, T4, A CF-e-SAT and OM-BR
-  added. Policy OIDs are decoded instead of matched by bytes.
-- **Signature policies:** `DetectPolicy(certificate)` is obsolete (policies are signature
-  attributes); new `IcpBrasilPolicyInfo.TryParse` maps CAdES, XAdES and PAdES policy OIDs. The false
-  "policy OID not found" warning on every ICP-Brasil certificate is gone.
-- **CNPJ:** alphanumeric CNPJs (IN RFB 2.229/2024) are accepted.
-- **VALIDAR:** `ValidarItiUrlBuilder.ForDocument` is obsolete (`?document=` is not a VALIDAR
-  parameter). New `ValidarItiQrEndpoint` implements the documented QR protocol
-  (`_format`, `_secretCode`, JSON with the signed files, 401/404).
-- **Chain validation time and revocation:** the ICP-Brasil and Gov.br providers validate at the
-  trusted signature timestamp time and check LCRs/OCSP (embedded in the DSS first, then online) for
-  the certificate and every AC, instead of the OS check at the current time that treated unknown
-  revocation as success. B-LT/B-LTA signatures stay valid after the certificate expires. Results
-  report `RevocationStatus` and `ValidationTime`; the Certisign/ITI "verify manually" links are gone.
-- **Gov.br anchors:** only the AC Raiz is a trust anchor; the intermediate ACs are chain-building help.
-- **Duplicate policy attribute:** `WithAdvancedSignature` with a `PolicyOid` wrote the
-  signature-policy-identifier twice; signed attributes are now unique per type.
-
-### Added (SimpleSign.Brasil)
-
-- **ICP-Brasil signature policies with hash:** `IcpBrasilSignaturePolicies` embeds the ITI's
-  LPA_PAdES and LPA_CAdES (55 policies: OID, PA URI, signPolicyHash, signing period, revocation);
-  `Current(policy, format)` picks the version in force (PAdES AD-RB/AD-RT v1.3, CAdES v2.4).
-  `PadesSignerBuilder.WithIcpBrasilPolicy(AdRb | AdRt, tsa?)` signs under them; previously the
-  signature-policy-identifier carried an empty hash.
-- `IcpBrasilPolicyValidator`: checks sigPolicyHash, signing period/revocation and the timestamp
-  AD-RT requires; the ICP-Brasil provider reports `BR.SignaturePolicy`/`BR.SignaturePolicyStatus`.
-- `WithHealthDocument(type, registrations…)`: VALIDAR health-document OIDs (document type, CFM/CFF/CFO
-  registration and UF) in the PDF document information dictionary.
-- `Cpf` / `Cnpj`: public `IsValid`, `Format`, `Normalize` (and `Cpf.Mask`), alphanumeric CNPJ included.
-- `IcpBrasilRoots`: bundled roots, `ExpiringWithin`, `DownloadAsync`/`FromPinnedBytes` (SHA-256
-  pinned) for new AC Raiz versions; `IcpBrasilChainValidator.AdditionalTrustAnchors` and
-  `new BrasilExtension(httpClient, logger, additionalIcpRoots)`.
-- CLI: `sign --icp-policy ad-rb|ad-rt`, `--health-document`, `--registration COUNCIL:NUMBER/UF`;
-  `validate`/`validate-dir` run the ICP-Brasil and Gov.br providers and print the Lei 14.063 level,
-  certificate data, policy status and revocation status (`--json`: `lei14063`, `brasil`).
-- Core/PAdES/CAdES: `SignaturePolicyReference`, `CmsAttribute.SignaturePolicyIdentifier(reference)`,
-  `CmsAttribute.ReadSignaturePolicy`, `PadesSignerBuilder.WithSignaturePolicy(reference)`,
-  `CadesSignerBuilder.WithSignaturePolicy(reference)`, `PadesSignerBuilder.WithDocumentInfo(key, value)`.
-
-- `IChainValidationProvider.ValidateAsync(ChainValidationContext, CancellationToken)`: providers
-  receive the validation time, the embedded CRLs/OCSP responses and the parsed signature. Default
-  implementation delegates to the existing overloads. `ChainValidationResult.RevocationStatus`,
-  `TimestampTokenValidationResult.GenTime`, `TimestampValidator.ReadGenTime`,
-  `ITrustAnchorProvider.GetIntermediateCertificates()`.
-- `Lei14063.Classify(result, manifestJson?)`: simples / avançada / qualificada (art. 4); the providers
-  also fill `ChainValidationMetadata["BR.Lei14063"]`.
-- `IcpBrasilCertificateData`: all DOC-ICP-04 SubjectAltName fields (PF birth date, CPF, NIS, RG,
-  voter registration, CEI; PJ responsible name and CPF, CNPJ, company name). Gov.br CPF extraction
-  shares the same parser.
+- With the default validation policy, a SHA-1 or MD5 signature without a time-stamp proving it
+  existed before the algorithm's limit, or a signing key under 2048 bits, is INDETERMINATE
+  (`CryptoConstraintsFailureNoPoe`) instead of VALID with a warning.
+- A chain whose CA certificate has no Subject Key Identifier
+  (`CACertificate/SubjectKeyIdentifierPresent`, FAIL in every context) now makes the signature
+  INDETERMINATE. Signatures from test or private PKIs that validated before may not validate now; a
+  policy can lower the check to WARN.
+- Signing refuses, by default, a certificate without the key usage extension or without
+  digitalSignature/nonRepudiation, an RSA key under 2048 bits, and a chain with an expired
+  certificate. `WithSigningPolicy(SigningPolicy.Minimal)` keeps the previous behaviour.
+- `CrlClient.CheckCrlAsync(cert, url, ct)` without the issuer no longer reports "not revoked" from a
+  CRL whose signature it cannot check; it throws `RevocationCheckException`. A revocation is still
+  reported.
+- `SigningPolicy.Strict` and `SigningPolicy.Minimal` are removed as presets: set `NotRevoked` /
+  `RevocationDataAvailable` to FAIL, or the constraints to IGNORE.
+- Validation policy files migrate by renaming the root `ConstraintsParameters` to
+  `ValidationConstraints` and `eIDAS` to `TrustedLists`, and dropping the elements SimpleSign's
+  format no longer has. The reader names each one; `docs/policies/compatibility.md` lists them.
+- `XadesSignatureValidator.Validate(xml, anchors, null)` is now ambiguous between two overloads:
+  drop the argument, name it (`originalData: null`) or cast the `null`.
+- PFX private keys are loaded as non-exportable (`CertificateLoader`, and so the CLI's `--cert`).
 
 ### Added
 
-- **One-call signing:** `PadesSigner.SignFileAsync(input, output, pfxPath, password, level?)`
-  signs a PDF file with a PKCS#12 file and writes the result. The first certificate with a
-  private key signs; the other certificates in the file are embedded as its chain.
-- `PadesSignerBuilder.WithCertificateFile(pfxPath, password)` loads the signer and its chain from
-  a PKCS#12 file, for the fluent API.
-- **Well-known TSAs:** `TimestampOptions.DigiCert`, `TimestampOptions.Sectigo` and
-  `TimestampOptions.FreeTsa`, e.g. `AdesBaselineProfile.Timestamped(TimestampOptions.DigiCert)`.
-- **New package `SimpleSign.Signers.Pkcs11`:** sign with A3 tokens, smartcards and HSMs through
-  their PKCS#11 driver (`Pkcs11Signer.Open(...)`, an `IExternalSigner` for PAdES, CAdES and XAdES;
-  `Pkcs11Signer.ListTokens(...)`). Own minimal interop: no third-party dependencies, no `unsafe`,
-  Native AOT compatible. Tested against SoftHSM2 (`scripts/tests/pkcs11.sh` runs it in Docker).
-- **New package `SimpleSign.Signers.Cloud`:** sign with cloud certificates. `PscSigner`/`PscClient`
-  implement the ICP-Brasil PSC API ("API v0", DOC-ICP-17.01: OAuth 2.0 with PKCE or CPF + OTP,
-  certificate discovery, RAW signatures) for BirdID, VIDaaS, NeoID, SafeID, RemoteID and similar;
-  field names are configurable through `PscWireFormat`. `CscSigner`/`CscClient` implement the
-  Cloud Signature Consortium API v2 (service OAuth, credentials list/info/authorize, signHash;
-  SCAL 1/2, PIN/OTP or OAuth credential authorization; RSA, RSASSA-PSS and ECDSA).
-  `LoopbackAuthorizationHandler` completes OAuth logins in the browser for desktop and CLI apps.
-  Validated against in-process simulators; real-provider tests run when sandbox credentials are set.
-- CLI: `sign` and `cades sign` accept `--psc-*` and `--csc-*` options (secrets accept `env:NAME`);
-  `psc certificates` and `csc list` show the available certificates.
-- CLI: `sign` and `cades sign` accept `--pkcs11-lib`, `--pkcs11-token`, `--pkcs11-key` and `--pin`;
-  `pkcs11 list --lib <path>` lists tokens and certificates.
-- **Brasil:** `BrasilExtension.CreateValidator(options?, httpClient?, logger?)` returns a PAdES
-  validator that trusts the ICP-Brasil and Gov.br roots, without positional `null` arguments.
+#### Two-phase (deferred) signing, in all three formats (ADR 0028)
+
+- `CadesDeferredSigner` and `XadesDeferredSigner`, with the shape of the PAdES `DeferredSigner`:
+  `Document(...).WithCertificate(cert).WithSessionIntegrityKey(key)…PrepareAsync()` runs the signing
+  policy and returns the bytes to sign (`DataToSign`: the DER signed attributes, or the canonical
+  `ds:SignedInfo`) with a session; `Resume(sessionData, key)…CompleteAsync(rawSignature)` verifies
+  the raw signature against the certificate, assembles the signature and finishes B-B to B-LTA, in
+  the same process or another one.
+- Every form: CAdES detached and attached; XAdES enveloped, enveloping and detached, with additional
+  data objects. The deferred builders take every option of their one-call builder except
+  `WithExternalSigner`; a contract test keeps them from falling behind.
+- `CadesDeferredSigner.CoSign` / `CounterSign` and `XadesDeferredSigner.CounterSign` prepare a
+  co-signature or countersignature for a key that is elsewhere.
+- `DeferredSigner.From(PadesSignerBuilder)`, `CadesDeferredSigner.From(...)` and
+  `XadesDeferredSigner.From(...)`: configure once, choose one call or two phases at the end.
+- Content can stay out of the session, which then carries its SHA-256 instead:
+  `WithContentOutsideSession()` → `WithContent(data)` (CAdES); `WithDetachedDataOutsideSession()` →
+  `WithDetachedData` / `WithExternalData(uri, content)` (XAdES). Content that is not what phase one
+  signed is refused.
+- On the resumed builder: `WithTimestampOptions` (TSA credentials, mutual-TLS certificate, expected
+  TSA certificate), `WithHttpClientProvider`, `WithSigningPolicy`, `WithTrustAnchors`,
+  `WithChainRevocationChecker`, `WithAuditSink`, `WithLogger`, `WithOperationId`.
+  `CompleteWithDetailsAsync` returns the achieved level and the warnings, in all three formats.
+- The session is authenticated with HMAC-SHA256 over its stored bytes, so a session prepared by one
+  version completes in another. New PAdES session fields (`OperationId`, `DssArtifacts`,
+  `LongTermClockSkewSeconds`) are written only when used, so older sessions still complete.
+- `DeferredSignerBuilder` (PAdES) gained the options of `PadesSignerBuilder`: `WithOperationId`,
+  `WithPdfAPreservation`, `WithSignaturePolicy`, `WithCountryExtension`, `WithSigningTime`,
+  `WithMetadata`, `WithDocumentInfo`, `WithDssArtifacts`, `WithFieldName`, `WithAppearance`,
+  `AsCertification`, `WithExistingField`, `WithSubFilter`. Preparing now reads the document's PDF/A
+  level and shapes the field for it. A country extension is code, not data: register it again on the
+  resumed builder.
+- `ToSigningRequest()` on the prepare results of the three formats returns the
+  `ExternalSigningRequest` an `IExternalSigner` receives.
+- The Brazilian builder extensions work on the two-phase builders (`WithAdvancedSignature`,
+  `WithIcpBrasilPolicy` ×3 formats, `ResolveIcpBrasilPolicy`, `WithHealthDocument`).
+- CLI: `--prepare` on `sign`, `cades sign` and `xades sign` (with `--session-key`, `--session`,
+  `--to-sign`, `--content-outside-session`, `--detached-data-outside-session`); `deferred complete`
+  finishes a session of any of the three formats.
+
+#### Augmenting existing signatures (ADR 0025)
+
+- `PadesAugmenter.Document(signedPdf)`, `CadesAugmenter.Signature(cms, detachedContent?)` and
+  `XadesAugmenter.Document(signedXml, detachedData?)` raise a signed file to B-T, B-LT or B-LTA
+  without touching what is signed; `RenewArchive()` adds a new archive (or document) time-stamp to a
+  B-LTA. A level that cannot be reached throws `SigningException` (`LevelNotAchievable`).
+  `CadesAugmenter.LevelOf` and `XadesAugmenter.LevelOf` report a signature's current level.
+- CLI: `simplesign augment <file> --level BT|BLT|BLTA --tsa URL [--data] [--signature-id] [--renew] [--json]`.
+- TestBench run kind `augment`, and playbook steps of kind `augment`.
+
+#### ETSI EN 319 102-1: anchors at a time, and past signature validation (ADR 0026, ADR 0027)
+
+- `TrustedList` reads each service's `StatusStartingTime` and `ServiceHistory`
+  (`TrustedListService.StatusAt`) and gives `GetTrustAnchors(DateTimeOffset at)`. New
+  `ITimedTrustAnchorProvider`, implemented by `TrustedList` and `TrustedListSet`.
+- `ValidationOptions.TimedTrustAnchors`: when today's anchors do not trust a certificate, the PAdES,
+  CAdES and XAdES validators use the anchors of the time-stamp's genTime (for its TSA) and of the
+  signature's proof of existence (for the signer). A signature time-stamped before its CA's service
+  was withdrawn stays valid. The CLI passes `--tsl` and `--lotl` lists this way.
+- When the signature time-stamp is intact but its TSA is no longer trusted, a later trusted
+  time-stamp over it gives it back its trust: the archive-time-stamp of CAdES, the ArchiveTimeStamp
+  of XAdES, a later document time-stamp of PAdES. The earlier TSA's chain is built at the later
+  token's time (EN 319 102-1 §5.6). A B-LTA whose signer and signature TSA both expired stays
+  TOTAL_PASSED.
+
+#### Signing and validation policies (ADR 0023, ADR 0024)
+
+- `ValidationPolicy` and `SigningPolicy` (now in `SimpleSign.Core.Policies`) read and write JSON in
+  SimpleSign's own format, one FAIL/WARN/INFORM/IGNORE level per constraint, with constraint ids as
+  paths (`SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage`). Names outside
+  the format are refused, pointing at `docs/policies/compatibility.md`. `PolicyCoverage` says what
+  SimpleSign evaluates. **Every constraint of the format is now evaluated**, across the signature,
+  countersignature, timestamp, revocation, cryptographic, model and trusted-list contexts, including
+  the RFC 5280 certificate checks, the PDF revision checks (`DocMDP`, `FieldMDP`, `SigFieldLock`,
+  `FormFillChanges`, `AnnotationChanges`, `UndefinedChanges`), `StructuralValidation` and
+  `TLStructure`.
+- Built-in presets: `default`, `strict`, `minimal`, `anchored`, `iofe` (signing) and `default`,
+  `strict`, `iofe`, `iofe-nonrepudiation` (validation).
+- `ValidationOptions` gained `Policy`, `Level` (`ValidationLevel`), `Verifier` (`VerifierOptions`:
+  revocation strategy, now OCSP first everywhere, fallback, AIA, revocation of untrusted chains),
+  `TrustedLists`, `PolicyProvider` (`IPolicyProvider`, the policy chosen by the signature policy OID)
+  and `SignaturePolicyDocuments` (`ISignaturePolicyDocumentProvider`).
+- Validation results gained `ValidationObjects` (the time-stamps and revocation data used, each with
+  its own outcome) and `BestSignatureTime`.
+- `ValidationReports`: the ETSI TS 119 102-2 validation report (XML), a simple report (JSON), and
+  `ToHtml(entries, language)` — one readable HTML page in `en`, `pt` or `es`.
+  `ValidationReports.ValidateEtsiXml` checks a report against its embedded schema (v1.2.1).
+- `CryptographicSuite`: ETSI TS 119 322 cryptographic suites (JSON), globally or per context.
+- JSON Schemas of the policy files (`docs/schemas/`, `GetJsonSchema()`, `simplesign policy schema`).
+- Validation policy constraints for the EN 319 422 time-stamp profile: `Timestamp/AccuracyPresent`,
+  `Timestamp/OrderingFalse` and `Timestamp/AcceptablePolicies`. Not in the default policy.
+- CLI: `--policy`, `--policy-signer`, `--level`, `--revocation-strategy`, `--revocation-for-untrusted`,
+  `--etsi-report`, `--simple-report`, `--html-report`, `--report-language`;
+  `simplesign policy export|schema`.
+
+#### Signing controls, an audit trail and the certificate pre-check
+
+Every new signing check is off in `SigningPolicy.Default`, so signing is unchanged until a policy
+turns it on.
+
+- **Trust anchor before signing:** `SigningCertificate/ProspectiveCertificateChain` refuses a signing
+  certificate that does not chain to a given anchor (`SigningErrorReason.UntrustedRoot`). Anchors
+  come from `WithTrustAnchors(...)` on every builder, and on PAdES also from `WithCountryExtension`.
+- **TSA checked while signing:** a `Timestamp` section of the signing policy, and
+  `TimestampOptions.ExpectedTsaCertificate` / `ArchiveTimestampOptions.ExpectedTsaCertificate` to pin
+  the TSA. A refusal is never downgraded by `SigningLevelFailureBehavior.ReturnLowerLevel`.
+- **CRL without nextUpdate:** `SigningCertificate/CRLNextUpdatePresent` and
+  `CACertificate/CRLNextUpdatePresent`.
+- **`SigningCertificateCheck.EvaluateAsync(certificate, SigningCertificateCheckOptions)`** runs the
+  checks the signers make — validity of the certificate and its chain, key usage, key and algorithms,
+  chain to the trust anchors, revocation of the chain — *without signing*, and returns every finding
+  with the `SigningErrorReason` a signer would refuse with. It never throws for a refused
+  certificate, and uses the same code path as the signers. Call it before asking for a PIN.
+- **Audit trail:** `ISignatureAuditSink` gets a `SignatureAuditEvent` for every signature made or
+  refused. `JsonLinesAuditSink` writes a hash-chained JSON-lines file. **`AuditChain`**
+  (`Canonicalize`, `Link`, `Append`, `Genesis`, `Follows`, `Verify`) exposes that content and
+  SHA-256 chaining, so a database-backed sink produces the same chain and can be checked the same
+  way. CLI: `--audit-log` and `simplesign audit verify`.
+
+#### `DataToSignInspector`: what is about to be signed
+
+- `DataToSignInspector.Inspect(data, certificate)` recognizes the two `ExternalSigningPayloadKind`s:
+  DER CMS signed attributes (one `contentType`, one `messageDigest`, and a
+  `signingCertificateV2`/`signingCertificate` that must name the given certificate) and a canonical
+  XML-DSig `SignedInfo`. It returns the kind, the digests with their algorithm
+  (`DataToSignDigest.ToShortString()` for a consent dialog) or the reason for refusing
+  (`DataToSignRefusal`).
+
+#### Traces and metrics (`SimpleSignTelemetry`)
+
+- An `ActivitySource` and a `Meter` named `SimpleSign` (constants in
+  `SimpleSign.Core.Diagnostics.SimpleSignTelemetry`): activities, counters and duration histograms
+  for signing (format, requested/achieved level, outcome, reason — every signer, deferred included),
+  TSA requests, OCSP requests, CRL fetches, trusted-list loading and validation. Tags hold no
+  payload, certificate data, full URL or personal data, and nothing is measured when nobody listens.
+  See [observability.md](docs/articles/observability.md).
+
+#### Trusted lists
+
+- `TrustedList` (`SimpleSign.XAdES.TrustedLists`): ETSI TS 119 612 and TS 102 231 v3 trusted lists,
+  read after their XML signature is checked against the scheme operator's certificate; active CA and
+  TSA services become trust anchors. `TrustedListSet` loads the lists of a LOTL, with per-list
+  problems and a disk cache. `TrustedListInfo` / `ITrustedListInfoProvider` and the `TrustedLists`
+  constraints (`TLFreshness`, `TLNotExpired`, `TLWellSigned`, `TLVersion`, `TLStructure`).
+- `TrustedListOptions`: `SignerCertificates`, `ServiceTypes`, `ActiveStatuses`, `RejectExpired` and
+  `ExcludedExtendedKeyUsages` (extended key usages that keep a certificate of a kept service from
+  becoming a trust anchor; applied to end-entity certificates only).
+- CLI: `--tsl`, `--tsl-signer`, `--tsl-profile`, `--lotl`, `--lotl-signer`, `--lotl-territory`.
+- `DirectoryTrustAnchorProvider` (Core): trust anchors from a folder of certificates, optionally
+  protected by a signed manifest.
+
+#### IOFE (Peru) — `SimpleSign.Peru.Iofe`
+
+- `IofeExtension` takes its anchors from INDECOPI's signed trusted list, and `IofePolicies`
+  (`Signing`, `SigningNonRepudiation`, `Validation`, `ValidationNonRepudiation`) implement the
+  *Guía de Acreditación de Aplicaciones de Software* v4.0.
+- **`IofeTrustedListSource`** (`IofeExtension.LoadRefreshableAsync`, `new IofeExtension(source)`)
+  reads the list again on demand (`RefreshAsync`) or on a schedule (`StartAutoRefresh`). Each copy is
+  verified like the first and swapped in one step, so concurrent signers and validators see the old
+  list or the new one. A copy that cannot be downloaded or verified, or with a lower sequence
+  number, is refused (`RefreshFailed`) and the last good copy is served — from `CacheFile` after a
+  restart, written atomically — until its NextUpdate passes, then no anchors. `Current` gives the
+  sequence number, issue time, NextUpdate and SHA-256; `Changed` gives the services added and
+  removed. It is an `ITimedTrustAnchorProvider` and `ITrustedListInfoProvider`.
+- `services.AddSimpleSignIofe(options, refreshInterval)` registers it with a hosted service that
+  reads the list when the host starts and every 6 hours by default.
+- Tested against a copy of INDECOPI's real list (sequence 25) offline, and against the live list in
+  an integration test: the list verifies, the five time-stamping services are anchors, and no
+  end-entity code-signing certificate is.
+- `docs/playbooks/indecopi-checklist.md` maps every item of annex B of the guide (sections 4.1–4.4)
+  to the playbook step, test, or product responsibility that shows it; a test checks that every P
+  item has a step and every step it names exists.
+- [`docs/articles/iofe.md`](docs/articles/iofe.md) covers all of it; IOFE is ✅ in
+  [conformance.md](docs/conformance.md).
+
+#### More of the ETSI standards in CAdES and XAdES
+
+CAdES (EN 319 122-1), on `CadesSignerBuilder`: `WithSignerLocation` (§5.2.5), `WithContentHints` and
+`WithMimeType` (§5.2.4), `WithSignerRoles` / `WithSignerRole`, `WithAttributeCertificates` and
+`WithSignedAssertions` (§5.2.6.1), `WithContentTimestamp` (§5.2.8), `WithSignaturePolicyStore`
+(§5.2.10), `WithExtendedValidationData(CadesExtendedForm)` (RFC 5126: complete references,
+escTimeStamp, values, archive-time-stamp v2), `CoSign` and `CounterSign`.
+
+XAdES (EN 319 132-1), on `XadesSignerBuilder`: `WithSignatureProductionPlace` (§5.2.5),
+`WithAttributeCertificates` and `WithSignedAssertions` (§5.2.6), `WithDataObjectsTimestamp`
+(§5.2.8.1), `WithSignaturePolicyStore` (§5.2.10), `WithCanonicalization(XadesCanonicalization)`,
+`WithAdditionalDataObject(XadesDataObject)` (embedded or external), `WithSigningCertificateForm`,
+`WithExtendedValidationData(XadesExtendedForm)`, and `XadesSigner.CounterSign` (§5.2.7.2).
+
+All formats: `LongTermValidationOptions.RevocationPreference` (`OcspFirst`, the default, or
+`CrlFirst`) and `ClockSkewTolerance`; `ILtvEmbedder.EmbedLtvDataAsync(…, LongTermValidationOptions, …)`
+so an injected embedder receives the signature's options; `SignaturePolicyStore`
+(`SimpleSign.Core.Crypto`); `TimestampToken.CreateAsync` / `Verify` for standalone `.tst` files.
+
+XAdES output follows the standard more closely: every signature has a `DataObjectFormat` for the
+document (§6.3) and an `Id` on `ds:SignatureValue`; claimed roles are written in `SignerRoleV2`; a
+countersignature is reported under `XadesValidationResult.CounterSignatures` rather than as another
+signature of the document; and SignedInfo is canonicalized with the algorithm it declares.
+
+#### Revocation, timestamps and outbound HTTP
+
+- CRLs from `ldap://` and `ldaps://` distribution points (read-only LDAPv3 on the BCL), used when a
+  certificate has no HTTP distribution point and `OutboundHttpPolicy.AllowLdap` is set (ADR 0021).
+- `IRevocationCache` / `InMemoryRevocationCache`: CRLs kept until their nextUpdate.
+  `IChainRevocationChecker` and `ChainRevocationChecker` are public in `SimpleSign.Core.Revocation`,
+  with `WithChainRevocationChecker(...)` on the builders, and gained `CheckCurrentAsync`.
+- `TimestampTsaChecks.TsaNameMatches` (RFC 3161 §2.4.2) and `CheckTsaRevocationAsync`. At signing
+  time a token must be validly signed by a certificate with the critical, exclusive timeStamping EKU.
+- `TimestampOptions.Authorization` (Basic/bearer), `ClientCertificate` (mutual TLS) and
+  `tcp://host:port` endpoints (RFC 3161 §3.3); `TimestampOptions.DigiCert`, `Sectigo` and `FreeTsa`.
+- `OutboundHttpPolicy.LoopbackOrigins` (services on this machine, by exact origin) and
+  `PrivateNetworkHosts` (hosts allowed to resolve to RFC 1918 addresses, for split-DNS networks).
+- New `SigningErrorReason` values: `CertificateRevoked`, `RevocationStatusUnknown`,
+  `ChainCertificateNotValid`, `KeyUsageNotPermitted`, `AlgorithmNotPermitted`, `KeyTooWeak`.
+
+#### Signers
+
+- **`SimpleSign.Signers.Pkcs11`**: sign with A3 tokens, smartcards and HSMs through their PKCS#11
+  driver (`Pkcs11Signer.Open`, `ListTokens`). Own minimal interop: no third-party dependencies, no
+  `unsafe`, Native AOT compatible. `Pkcs11Drivers` catalogs the middlewares used in Brazil with their
+  install paths per OS (`Known`, `DetectInstalled`, `FindTokensAsync`, `FindLibraryAsync`).
+  **PIN warning flags** on `Pkcs11TokenInfo`: `IsPinCountLow`, `IsPinFinalTry`, `IsPinToBeChanged`
+  and `IsUserPinInitialized`, read from `CK_TOKEN_INFO.flags` alongside `IsPinLocked`, so a user can
+  be warned before a wrong PIN locks the token.
+- **`SimpleSign.Signers.Cloud`**: `PscSigner`/`PscClient` for the ICP-Brasil PSC API (DOC-ICP-17.01)
+  and `CscSigner`/`CscClient` for the Cloud Signature Consortium API v2 (SCAL 1/2, RSA, RSASSA-PSS,
+  ECDSA). `LoopbackAuthorizationHandler` completes OAuth logins in the browser.
+
+#### ICP-Brasil
+
+- PAdES **AD-RC** and **AD-RA** (`WithIcpBrasilPolicy(policy, IcpBrasilPadesOptions)`), CAdES AD-RV,
+  AD-RC and AD-RA, and the 45 XAdES XML policies. `ResolveIcpBrasilPolicy` returns the version that
+  would be used; policy selection is root-aware.
+- `IcpBrasilSignaturePolicies` embeds the ITI's LPA_PAdES and LPA_CAdES with `signPolicyHash`;
+  `RefreshAsync` downloads and verifies a new LPA. `IcpBrasilPolicyRules` holds the rules of the 55
+  CAdES/PAdES PAs. `IcpBrasilPolicyArtifacts.DownloadAsync` fetches the AD-RA artifacts.
+- The ~176 bundled intermediate ACs for offline chain building, LCR disk cache, ACT timestamps, and
+  `IcpBrasilCertificateData` with every DOC-ICP-04 SubjectAltName field.
+- `SimpleSign.Brazil.Fiscal`: XMLDSig of NF-e/NFC-e, CT-e, MDF-e, events, NFS-e Nacional (DPS),
+  eSocial and EFD-Reinf. CLI: `simplesign fiscal sign|validate`.
+- `PdfSignatureSubFilter.PbadPades`, `PadesSignerBuilder.WithDssArtifacts` and `PdfDssArtifact`.
+
+#### The apps
+
+Four apps now ship beside the library. [apps.md](docs/articles/apps.md) says what each is for and
+when to use which; each has its own article.
+
+- **SimpleSign Sandbox** — a test PKI and its services on real endpoints: AIA, CRLs over HTTP,
+  HTTPS and LDAP, an RFC 3161 TSA, OCSP and CSC v2, with failures to switch on, revocation, a
+  request log and an admin API. It publishes trusted lists in both the TS 119 612 and INDECOPI
+  TS 102 231 v3 layouts, and offers TSAs that are expired, revoked, short-lived, clock-shifted,
+  wrongly named or without accuracy, a SHA-1 intermediate CA, signers without KeyUsage and CRLs
+  without nextUpdate. `POST /api/certificates/custom` issues a signer with a subject you choose.
+  It is **API only**; its UI is the TestBench's Sandbox control.
+- **SimpleSign TestBench** — one local web app for the three formats, where every option names the
+  clause that defines it. Sign, Validate and **Playbook** tasks; an engine switch that runs
+  everything through the library *or* the CLI; panels for the policies, the standards reference, the
+  environment, the Sandbox and EU DSS cross-validation; a Stamp drawer with a live preview.
+- **The Playbook tab** loads a playbook (JSON, schema 2) written beforehand — sections of tagged
+  steps — checks it against the connected Sandbox, and runs one step, a section or all of them,
+  through the library, the CLI or both. It shows everything a step will do before it runs, keeps each
+  step's latest result, and exports the evidence as an HTML page and a zip. It reports where the
+  library and the CLI disagree ("Lib ≠ CLI") and where EU DSS disagrees. Bundled samples:
+  `sandbox-basics`, `indecopi-guia-v4` (70 steps) and `etsi-baseline` (115 steps).
+- **SimpleSign Agent** — a cross-platform tray / menu-bar app (Avalonia) that web pages call to sign
+  with the OS store or an A3 token, on `127.0.0.1:21590`, with per-site authorization, a consent
+  dialog for every signature and the PIN asked by the app.
+  `GET /api/certificates?country=XX` (or `?trust=icp-brasil|govbr`, `?signingOnly=true`) lists the
+  certificates that chain to that country's registered `ICountryExtension`s, checked with
+  `SigningCertificateCheck`.
+- **CLI** — `augment`, `sign-dir`, `deferred prepare|complete`, `cades sign|validate`,
+  `xades sign|validate`, `timestamp create|verify`, `policy export|schema`, `audit verify`,
+  `pkcs11 list|drivers`, `psc certificates`, `csc list`, `fiscal sign|validate` and `explain`, plus
+  the signing options the library has, `--allow-origin` / `--allow-ldap` / `--tls-trust`, and
+  `--json` on the signing commands.
+
+### Changed
+
+- **CLI: an expired trusted list is judged by the policy.** `simplesign validate --tsl/--lotl` (and
+  `validate-dir`, `cades validate`, `xades validate`) keep a trusted list whose NextUpdate has
+  passed, with or without `--tsl-profile`: the policy's `TLNotExpired` judges it, as the library in
+  the TestBench and EU DSS do.
+  - *Before:* such a list gave `NO_CERTIFICATE_CHAIN_FOUND`.
+  - *After:* with the default policy (`TLNotExpired` WARN) it gives TOTAL-PASSED with a warning; the
+    `iofe` policy (FAIL) gives INDETERMINATE / TRY_LATER.
+  - Signing is unchanged: an expired list gives no anchors.
+- **`cades validate` and `xades validate` check every signature** (`ValidateAllAsync`), not only the
+  first. `--json` adds `signatures`, one entry per signature with its `counterSignatures`; the exit
+  code is 0 only when all are valid. With `--trust`, the operating system's roots stay trusted
+  (`--no-system-roots` turns them off); before, `--trust` replaced them. `cades validate` no longer
+  requires `--data` for an attached signature.
+- ICP-Brasil PAdES signatures use `/Filter /PBAD_PAdES /SubFilter /PBAD.PAdES`, as the PAs mandate.
+- DocMDP: only P=1 blocks further signatures; P=2 and P=3 documents can be signed again
+  (ISO 32000-1 §12.8.2.2.2). Certifying a document that is already signed is refused.
+- CAdES signatures always include the signing-certificate-v2 signed attribute (it was PAdES-only).
+- `SimpleSign.XAdES` no longer depends on `SimpleSign.CAdES`; the shared LTV internals moved to Core.
+- CLI: `--archival` requires `--tsa` (it silently produced B-B); `--icp-policy` rejects
+  `--sub-filter`, `--ltv` and `--archival` (the policy sets them).
+- `LoopbackAuthorizationHandler.OpenInSystemBrowser` starts `explorer.exe` with the URL as an
+  argument on Windows instead of shell-executing the URL (CodeQL `cs/command-line-injection`), and
+  only opens absolute http(s) URLs.
+- The repository was reorganized into `src/Core`, `src/Formats`, `src/Signers`,
+  `src/TrustFrameworks` and `src/Apps`, with `tests/unit/` mirroring it (ADR 0018). `samples/`,
+  `bench/`, `interop/`, the fuzz harness, Stryker, the docfx site and the `simplesign-<rid>.zip` CLI
+  archives are gone; install the CLI with `dotnet tool install -g SimpleSign.Cli`.
+
+### Fixed
+
+- **PAdES accepted a signature under a revoked CA.** The validator checked online revocation for the
+  signing certificate only, and the failed chain status was waived because the chain reaches its
+  anchor. It now checks the CA certificates of the chain too, as CAdES and XAdES do.
+- **Revocation sub-indications follow EN 319 102-1 §5.2.6:** a revoked signing certificate gives
+  INDETERMINATE / `RevokedNoPoe` (no longer TOTAL_FAILED / `Revoked`) and PASSES when a proof of
+  existence predates the revocation; a revoked CA gives INDETERMINATE / `RevokedCaNoPoe`. No
+  revocation data, or none acceptable, gives `CertificateChainGeneralFailure`.
+- **The B-LT/B-LTA DSS update overwrote the stamp's font object.** `LtvEmbedder` searched backwards
+  for `"N 0 obj"` as plain text, so catalog `1 0 obj` matched `21 0 obj`: with a visible stamp the
+  DSS revision wrote the font descriptor as the new catalog, losing the AcroForm and the signature
+  field. It now uses `PdfStructureParser.FindObjectBytes`, which rejects suffix matches.
+- **XAdES B-LTA was not recognized as LTA by other validators.** The `EncapsulatedTimeStamp` of
+  `xades141:ArchiveTimeStamp` was written in the XAdES v1.4.1 namespace instead of v1.3.2, so EU DSS
+  did not find the token. Signatures made by earlier versions are still read.
+- **XAdES with an external ECDSA key never worked.** `WithExternalSigner` (and `CounterSign` with
+  one) wrote the DER `SEQUENCE { r, s }` the external signer returns into `ds:SignatureValue`, which
+  takes `r || s` (XMLDSig Core 1.1 §6.4.3), so signing failed its own read-back verification.
+- **INDECOPI's real trusted list could not be loaded.** `TrustedList` now verifies lists whose
+  `ds:Signature` element declares a namespace (INDECOPI's declares `xmlns:etsi` there): `SignedXml`
+  left those declarations out of the canonical SignedInfo, so the list was always refused as "not
+  signed by the scheme operator's certificate".
+- **IOFE: timestamping authorities typed `unspecified`.** INDECOPI publishes some accredited TSAs as
+  `Svctype/unspecified`, which `TrustedList` dropped by default, so their timestamps were refused
+  under `IofePolicies.Signing`. `IofeExtension` now reads the list with
+  `IofeExtension.DefaultListOptions`. `IofePolicies.Validation` also accepts a trusted list of
+  version 3, which is what INDECOPI publishes.
+- `PdfSignatureValidator` evaluates the TrustedLists constraints for the lists of
+  `ValidationOptions.TrustedLists` too, not only for those of its trust anchor providers: an expired
+  list passed to `simplesign validate --tsl/--lotl` validated as TOTAL-PASSED.
+- A detached CAdES or XAdES signature validated without its data is INDETERMINATE /
+  `SIGNED_DATA_NOT_FOUND`; the data's integrity is not judged without it.
+- A time-stamp whose TSA could not be judged still counts for the order of the time-stamps, and a
+  signing-certificate reference that is missing, repeated or mismatched is INDETERMINATE /
+  `NO_SIGNING_CERTIFICATE_FOUND` (EN 319 102-1 §5.2.3), as in EU DSS.
+- CAdES/XAdES synchronous `Validate` / `ValidateAll` never checked revocation, yet a TSA could show
+  as trusted; with `CheckRevocation` on, the result now carries a warning saying so.
+- `CadesSignatureValidator` and `XadesSignatureValidator` build the signer's chain with the
+  certificates embedded in the signature, as they already did for the TSA; before, a signer under an
+  intermediate CA was reported with `PartialChain`.
+- CRLs served as PEM over HTTP are read (FreeTSA serves its CRL this way); CAdES/XAdES B-LT can be
+  built when OCSP responses come from a delegated responder (RFC 6960 §4.2.2.2.1); CAdES/XAdES
+  B-LTA send the TSA's credentials with the archive timestamp request too.
+- CAdES: `WithExtendedValidationData` combined with B-LT or B-LTA, and SHA-3 imprints in the
+  escTimeStamp and archive-time-stamp v2.
+- `TimestampClient.EmbedTimestampInCms` wrapped the values of unsigned attributes already in the
+  SignerInfo in a second SET; `TimestampToken.Verify` did not recognize SHA-3 message imprints.
+- Strict signing no longer trusts a CRL cached before a revocation
+  (`IChainRevocationChecker.CheckCurrentAsync`).
+- HtmlToPdf: deeply nested HTML overflowed small thread stacks; layout now continues on a fresh
+  thread-pool stack when it runs low.
+- `AddSimpleSignIcpBrasil()` / `AddSimpleSignGovBr()` registered chain validators the container could
+  not build (two ambiguous constructors), so resolving either one threw.
+- **ICP-Brasil** (see the [migration guide](docs/articles/icp-brasil.md#upgrading-from-v010-to-v011)):
+  professional registrations are read from `2.16.76.1.4.2.{council}` for all 16 councils instead of
+  the e-CNPJ responsible person's fields; certificate types S1–S4 are policy types 101–104 (were
+  11–14), with T3, T4, A CF-e-SAT and OM-BR added; `DetectPolicy(certificate)` is obsolete in favour
+  of `IcpBrasilPolicyInfo.TryParse`; alphanumeric CNPJs (IN RFB 2.229/2024) are accepted; chains are
+  validated at the trusted signature timestamp time with real revocation checks instead of an OS
+  check at the current time that treated unknown revocation as success; only the Gov.br AC Raiz is a
+  trust anchor; and `WithAdvancedSignature` no longer writes the signature-policy attribute twice.
+- Log EventId 2401 was used by two different events; the PAdES one is now 2032.
+- **CLI:** `simplesign validate --help` (and nine other help screens) crashed on unescaped
+  Spectre.Console markup — a literal `[--preset NAME]` in the `--policy` and `--signing-policy`
+  descriptions was parsed as a style tag.
+- **CLI:** `validate --json` reported `"lei14063": "Simples"` for any valid signature outside the
+  Brazilian framework, including Peruvian (IOFE) ones, and the human-readable tree printed a
+  `Brasil: Lei 14.063` node for them. The level is now reported only for a signature validated under
+  the Brazilian framework or carrying an AEA manifest.
+
+### Documentation
+
+- New [apps.md](docs/articles/apps.md) (the CLI, Agent, TestBench and Sandbox, with screenshots),
+  [iofe.md](docs/articles/iofe.md), [sandbox.md](docs/articles/sandbox.md),
+  [playbook.md](docs/articles/playbook.md), [observability.md](docs/articles/observability.md) and
+  [remote-signing.md](docs/articles/remote-signing.md).
+- Augmentation and past signature validation are documented in
+  [pades.md](docs/articles/pades.md), [cades-xades.md](docs/articles/cades-xades.md) and
+  [inspection-validation.md](docs/articles/inspection-validation.md).
+- ADRs 0021–0028; `docs/playbooks/etsi-checklist.md` and `indecopi-checklist.md`;
+  `docs/policies/compatibility.md`; `docs/schemas/`.
+- `RELEASING.md` now states that while SimpleSign is on 0.x, breaking changes ship in a MINOR bump
+  and `x.0.0` is reserved for 1.0.
 
 ## [0.10.1] - 2026-11-04
 

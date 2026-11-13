@@ -1,5 +1,7 @@
 # SimpleSign Sandbox
 
+> Part of [the apps that ship with SimpleSign](apps.md): the CLI, the Agent, the TestBench and the Sandbox.
+
 The Sandbox is a test PKI with its services on real network endpoints: certificate authorities,
 CRLs over HTTP, HTTPS and LDAP, an OCSP responder, RFC 3161 timestamping authorities and a CSC v2
 cloud-signing service, with failures you can switch on. It runs on its own, apart from the

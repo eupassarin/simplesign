@@ -10,7 +10,7 @@ implementation delivered in a particular package version.
 
 ## ISO 32000-1:2008 Compliance
 
-SimpleSign implements PDF digital signatures in strict conformance with ISO 32000-1. Compliance is verified by **46 automated unit tests**, each mapping to a specific section of the standard:
+SimpleSign implements PDF digital signatures in strict conformance with ISO 32000-1. Compliance is verified by automated unit tests, each mapping to a specific section of the standard:
 
 | ISO Section | Requirement | Tests |
 |---|---|---|
@@ -76,7 +76,7 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **ETSI EN 319 132-1** | XAdES B-B, B-T, B-LT, B-LTA | ✅ | ETSI archive preimage; XMLDSig reference processing; same-document distributed unsigned properties and counter-signatures; augmentation (`XadesAugmenter`); two-phase signing (`XadesDeferredSigner`) |
 | **RFC 9688** | SHA-3 OIDs and parameters in CMS | ✅ | id-sha3-256/384/512, id-rsassa-pkcs1-v1_5-with-sha3-256/384/512, id-ecdsa-with-sha3-256/384/512 |
 | **RFC 8933** | EdDSA in CMS | ⏳ | OIDs are recognized, but signing is deferred until raw external output is verifiable on every target |
-| **RFC 8032** | EdDSA algorithm | ⏳ | Ed25519/Ed448 signing is not advertised in v0.10.1 |
+| **RFC 8032** | EdDSA algorithm | ⏳ | Ed25519/Ed448 signing is not advertised in v0.11.0 |
 | **RFC 8410** | EdDSA X.509 identifiers | ✅ | OIDs 1.3.101.112 (Ed25519) / 1.3.101.113 (Ed448) |
 | **ETSI EN 319 102-1** | Validation report | 🟡 | Indication and sub-indication (`SignatureSubIndication`), checks (`Constraints`), `ValidationPolicy` with algorithm dates and key sizes; proof of existence from the signature time-stamp, and from a later archive or document time-stamp once the signature time-stamp's TSA is no longer trusted (past signature validation, ADR 0027) |
 | **ETSI TS 119 612 / TS 102 231 v3** | Trusted lists | ✅ | `TrustedList`: signature checked against the scheme operator, active CA/TSA services as anchors, NextUpdate enforced; service history gives the anchors at a time (`ValidationOptions.TimedTrustAnchors`, ADR 0026) |
@@ -104,7 +104,7 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **PDF/A** | 1a, 1b, 2a, 2b, 2u, 3a, 3b, 3u, 4a, 4b, 4u, 4e (detection + preservation) |
 
 ¹ SHA-3 signature and digest OIDs defined in RFC 8702; CMS encoding defined in RFC 8933.
-² EdDSA algorithm identifiers remain recognized, but v0.10.1 rejects EdDSA signing rather than producing external output that net8.0 cannot verify.
+² EdDSA algorithm identifiers remain recognized, but v0.11.0 rejects EdDSA signing rather than producing external output that net8.0 cannot verify.
 
 ## CAdES and XAdES archival boundaries
 

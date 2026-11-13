@@ -334,7 +334,8 @@ Signatures carry the PA's own `signPolicyHash` in `sigPolicyHash` (not the diges
 that the LPA lists): a production PAdES AD-RB signature in the integration tests confirms it.
 XAdES signatures likewise carry the XML PA's own `SignPolicyDigest` in `SigPolicyHash`, with the
 identifier written as `urn:oid:…` (`Qualifier="OIDAsURN"`), as the ITI's XML PAs and `LPA_XAdES.xml` write it; this has not
-been checked against VALIDAR yet.
+been checked against VALIDAR yet. To check a signature against the ITI's own validator by hand, see
+[Checking ICP-Brasil signatures on VALIDAR](icp-brasil-validar-check.md).
 
 ### Check a signature against its policy
 

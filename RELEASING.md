@@ -39,7 +39,7 @@ Update `<Version>` in all `.csproj` files:
 
 ```bash
 VERSION="X.Y.Z"
-OLD="0.10.1"
+OLD="0.11.0"
 sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   Directory.Build.props \
   src/Formats/SimpleSign/SimpleSign.csproj \
@@ -65,15 +65,22 @@ These files contain version strings that do NOT come from `<Version>` and must b
 
 | File | Location | What to update |
 |------|----------|----------------|
-| `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.10.1]` | Example version |
-| `RELEASING.md` | `OLD="0.10.1"` and `Current version: \`0.10.1\`` | Update both—this file |
+| `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.11.0]` | Example version |
+| `RELEASING.md` | `OLD="0.11.0"` and `Current version: \`0.11.0\`` | Update both—this file |
+| `docs/conformance.md` | the `vX.Y.Z` sentences about EdDSA (the status table and footnote ²) | Both read as "the current version" |
+| `docs/articles/agent.md` | the `scripts/package-agent.sh osx-arm64 X.Y.Z` example | Example version |
 
-Run to find any missed occurrences:
+Run to find any missed occurrences (the `.props`/`.csproj` includes matter—they hold the real
+`<Version>`):
 
 ```bash
-grep -r "$OLD" --include="*.md" --include="*.cs" --include="*.tsx" --include="*.yml" . \
+grep -r "$OLD" --include="*.md" --include="*.cs" --include="*.tsx" --include="*.yml" \
+  --include="*.props" --include="*.csproj" . \
   | grep -v node_modules | grep -v obj/ | grep -v bin/ | grep -v CHANGELOG.md
 ```
+
+A hit in a test comment that records where a fixture came from (for example "Captured from version
+X.Y.Z") is history, not a version string: leave it alone.
 
 ### Signing agent
 
@@ -166,8 +173,14 @@ NOTES
 
 ## Versioning Policy
 
-- **PATCH** (0.5.x): Bug fixes, performance, internal improvements, new non-breaking features
-- **MINOR** (0.x.0): New public API surface, deprecations
-- **MAJOR** (x.0.0): Breaking changes to public API
+While SimpleSign is on **0.x**, the public API is not yet declared stable, and SemVer allows a
+breaking change in a minor bump:
 
-Current version: `0.10.1`
+- **PATCH** (0.x.Y): Bug fixes, performance, internal improvements, new non-breaking features
+- **MINOR** (0.X.0): New public API surface, deprecations, **and breaking changes**—described under
+  `### Changed (Breaking)` in CHANGELOG.md, with a before/after and a migration guide when the
+  change is wide (as 0.11.0 did for the `SimpleSign.Brasil` → `SimpleSign.Brazil.*` split)
+- **MAJOR** (x.0.0): reserved for 1.0, which is when the public API becomes stable; after that,
+  breaking changes move to MAJOR
+
+Current version: `0.11.0`

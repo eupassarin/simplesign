@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Brazil.IcpBrasil</PackageId>
     <Description>ICP-Brasil for SimpleSign: bundled AC Raiz and intermediates, chain validation (DOC-ICP-04), signature policies AD-RB to AD-RA (DOC-ICP-15), standalone ACT timestamps and the Lei 14.063 level of each signature.</Description>
     <PackageTags>icp-brasil;brazil;digital-signature;certificate;signature-policy;native-aot</PackageTags>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

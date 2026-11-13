@@ -49,7 +49,7 @@ internal static class JsonMapper
                     Chain = r.IsCertificateChainValid,
                     Revoked = r.RevocationSource is RevocationSource.None or RevocationSource.Indeterminate ? null : !r.IsNotRevoked,
                     SigningTime = r.SigningTime,
-                    Lei14063 = Lei14063.Classify(r, manifests?.GetValueOrDefault(r.FieldName))?.ToString(),
+                    Lei14063 = MapLei14063(r, manifests?.GetValueOrDefault(r.FieldName)),
                     Brasil = MapBrasil(r),
                     Errors = [.. r.Errors],
                     Warnings = [.. r.Warnings],
@@ -139,6 +139,17 @@ internal static class JsonMapper
             CounterSignatures = [.. r.CounterSignatures.Select(MapXadesSignature)],
         };
     }
+
+    /// <summary>
+    /// The Lei 14.063 level, which is a Brazilian concept: only for a signature validated under the
+    /// Brazilian framework, or one carrying an advanced-signature (AEA) manifest, which is Brazilian
+    /// too. Without this guard <see cref="Lei14063.Classify"/> falls through to <c>Simples</c> for
+    /// any valid signature, so a Peruvian (IOFE) one would report a Brazilian level.
+    /// </summary>
+    private static string? MapLei14063(SignatureValidationResult r, byte[]? manifestJson) =>
+        r.ChainValidationRegion == "BR" || manifestJson is { Length: > 0 }
+            ? Lei14063.Classify(r, manifestJson)?.ToString()
+            : null;
 
     private static ValidateBrasilDto? MapBrasil(SignatureValidationResult r)
     {

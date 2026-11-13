@@ -1,5 +1,7 @@
 # CLI
 
+> Part of [the apps that ship with SimpleSign](apps.md): the CLI, the Agent, the TestBench and the Sandbox.
+
 Install with `dotnet tool install -g SimpleSign.Cli`.
 
 ## PDF Signatures
@@ -296,11 +298,6 @@ What the policy checks against comes from these options:
 | `--expected-tsa <file>` | The certificate the TSA must sign with; a timestamp from another is refused (`TimestampUntrusted`) |
 | `--audit-log <file>` | Appends a hash-chained record of each signature made or refused; `simplesign audit verify <file>` checks the chain |
 
-`augment <file> --level BT|BLT|BLTA --tsa URL` raises an existing PAdES, CAdES or XAdES signature (the format is read
-from the file): a document time-stamp, a DSS and a new document time-stamp for a PDF; the signature time-stamp,
-validation data and archive time-stamp for CAdES and XAdES. `--data` gives a detached signature's data (B-LTA needs
-it), `--signature-id` picks a ds:Signature, `--renew` renews a B-LTA, `--json` prints the levels before and after.
-
 `validate --policy` takes a file or `default`, `strict` (time-stamps out of order and an unavailable signature policy fail), `iofe` or `iofe-nonrepudiation`.
 
 A refusal prints the reason (`KeyTooWeak`, `KeyUsageNotPermitted`, `ChainCertificateNotValid`, `CertificateRevoked`,
@@ -319,6 +316,51 @@ test runners:
 
 A refusal is `"success": false` with `"error": { "type": "SigningException", "reason": "CertificateRevoked",
 "message": "…" }`; the exit code is not 0.
+
+## Augmenting a Signature
+
+`augment` raises a signature that already exists to a higher baseline level, without touching what is
+signed. The format is read from the file: a document time-stamp, a DSS and a new document time-stamp
+for a PDF; the signature time-stamp, validation data and archive time-stamp for CAdES and XAdES.
+
+```bash
+simplesign augment signed.pdf --level BLTA --tsa http://timestamp.digicert.com
+simplesign augment data.p7s --level BLT --tsa http://timestamp.digicert.com --data data.bin
+simplesign augment signed.xml --level BLTA --tsa http://timestamp.digicert.com --json
+```
+
+| Option | Means |
+|---|---|
+| `--level BT\|BLT\|BLTA` | The level to reach (default `BLTA`). A level that cannot be reached fails with `LevelNotAchievable` instead of writing a lower one |
+| `--tsa <url>` | The TSA for the time-stamps the level needs |
+| `--data <file>` | A detached signature's data; B-LT and B-LTA need it to build the evidence |
+| `--signature-id <id>` | Which `ds:Signature` to raise, in an XML document with several |
+| `--renew` | Adds a new archive time-stamp to a B-LTA, before the current one's TSA certificate expires |
+| `--json` | Prints the level before and after instead of text |
+
+## Other Commands
+
+| Command | What it does | More |
+|---|---|---|
+| `timestamp create` | A standalone RFC 3161 time-stamp (`.tst`) over a file or a hash | |
+| `timestamp verify` | Checks a `.tst` against a file or a hash, and whether the token's `tsa` name matches its certificate | |
+| `policy export` | Writes the default signing or validation policy as JSON, to edit (`--preset NAME` for `strict`, `minimal`, `iofe`…) | [Policies](../policies/compatibility.md) |
+| `policy schema` | Writes the JSON Schema of the policy files, for an editor's completion and validation | `docs/schemas/` |
+| `audit verify` | Checks the hash chain of an audit trail written by `--audit-log` | |
+| `pkcs11 list`, `pkcs11 drivers` | The tokens and certificates of a PKCS#11 driver, or of every installed driver | [PKCS#11](pkcs11.md) |
+| `psc certificates` | Logs in to an ICP-Brasil cloud provider (PSC) and lists its certificates | [Cloud signing](cloud-signing.md) |
+| `csc list` | The credentials of a Cloud Signature Consortium (CSC v2) service | [Cloud signing](cloud-signing.md) |
+| `fiscal sign`, `fiscal validate` | XMLDSig of NF-e, CT-e, MDF-e, events, NFS-e, eSocial and EFD-Reinf | [Fiscal XML](fiscal-xml.md) |
+| `inspect`, `extract`, `explain` | Signature metadata without validating, the CMS out of a PDF, and what an ETSI term means | |
+| `html-to-pdf` | Renders an HTML file to PDF (no signing) | [HTML to PDF](html-to-pdf.md) |
+
+```bash
+simplesign timestamp create contract.pdf --tsa http://timestamp.digicert.com --output contract.tst
+simplesign timestamp verify contract.pdf --token contract.tst
+
+simplesign policy export validation --preset strict --output validation-policy.json
+simplesign policy schema validation --output validation.schema.json
+```
 
 ## Network
 

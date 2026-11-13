@@ -241,6 +241,10 @@ resumed builder, and the session.
 (chain validity, key usage, RSA ≥ 2048, SHA-2/SHA-3) or a JSON signing policy (`SigningPolicy.Load`), set with
 `.WithSigningPolicy(...)`. See [PAdES signing](pades.md#signing-policy).
 
+> Several signers of the same content, countersignatures, attached content (`.p7m`) and validating
+> with the hash alone are covered end to end in
+> [CAdES: several signers, attached content and hash](cades-multiple-signers.md).
+
 ## Validate CAdES Signatures
 
 ```csharp
@@ -485,3 +489,54 @@ validation. A malformed timestamp can report `Timestamped` while
 outcomes for the required baseline level; `IsValid` combines fundamental
 signature, integrity, and signer-chain checks with `Indication == Valid` (so the validation policy counts). `IsTsaTrusted` reports the separate
 signature-TSA trust outcome.
+
+## Augmenting an existing signature
+
+`CadesAugmenter` and `XadesAugmenter` raise a signature that already exists to a higher baseline
+level without touching what is signed (ADR 0025), the same way
+[`PadesAugmenter`](pades.md#augmenting-an-existing-signature) does for PDFs.
+
+```csharp
+using SimpleSign.CAdES;
+
+// A detached signature needs the content it signed, to build its LTV evidence.
+var result = await CadesAugmenter
+    .Signature(await File.ReadAllBytesAsync("data.p7s"), detachedContent)
+    .ToLevel(AdesBaselineLevel.LongTerm)
+    .WithTimestamp(TimestampOptions.DigiCert)
+    .AugmentAsync();
+
+Console.WriteLine($"{result.InitialLevel} -> {result.Level}");
+await File.WriteAllBytesAsync("data.p7s", result.Signature);
+```
+
+```csharp
+using SimpleSign.XAdES;
+
+var result = await XadesAugmenter
+    .Document(await File.ReadAllBytesAsync("signed.xml"))
+    .ForSignature("Signature-1a2b3c4d")     // optional: which signature, in a multi-signature document
+    .ToLevel(AdesBaselineLevel.Archive)
+    .WithTimestamp(TimestampOptions.DigiCert)
+    .AugmentAsync();
+```
+
+`XadesAugmenter.Document` also takes the detached data (`Document(signedXml, detachedData)`) or a
+dictionary of external data objects by URI (`Document(signedXml, externalData)`), for signatures
+that do not carry what they signed.
+
+`RenewArchive()` adds a new archive timestamp to a B-LTA before the current one's TSA certificate
+expires. `LevelOf` reports a signature's current level without changing it:
+
+```csharp
+AdesBaselineLevel level = CadesAugmenter.LevelOf(cms);
+AdesBaselineLevel xmlLevel = XadesAugmenter.LevelOf(signedXml);
+```
+
+A level that cannot be reached throws `SigningException` with
+`SigningErrorReason.LevelNotAchievable`. From the CLI:
+
+```bash
+simplesign augment data.p7s --level BLT --tsa http://timestamp.digicert.com --data data.bin
+simplesign augment signed.xml --level BLTA --tsa http://timestamp.digicert.com
+```
