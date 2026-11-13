@@ -59,10 +59,27 @@ internal static class InvalidSamples
         byte[] revoked = await Sign(connection.Signer("revoked").Certificate, chain, AdesBaselineProfile.Basic());
         // The library refuses to sign with a certificate that is not valid now, so the "expired"
         // sample is signed with a certificate that lives a few seconds and has expired by validation time.
-        // Long enough to sign on a busy machine; then wait until it has really expired.
-        using var shortLived = await sandbox.IssueShortLivedAsync(TimeSpan.FromSeconds(10), cancellationToken);
-        byte[] expired = await Sign(shortLived, chain, AdesBaselineProfile.Basic());
-        var remaining = new DateTimeOffset(shortLived.NotAfter.ToUniversalTime(), TimeSpan.Zero) - DateTimeOffset.UtcNow;
+        // A busy machine (a CI runner) can take longer than the lifetime between issuing and signing: then it is issued
+        // again, living longer. Once signed, wait until it has really expired.
+        X509Certificate2? shortLived = null;
+        byte[]? expired = null;
+        foreach (int seconds in (int[])[10, 30, 90])
+        {
+            shortLived?.Dispose();
+            shortLived = await sandbox.IssueShortLivedAsync(TimeSpan.FromSeconds(seconds), cancellationToken);
+            try
+            {
+                expired = await Sign(shortLived, chain, AdesBaselineProfile.Basic());
+                break;
+            }
+            catch (SigningException ex) when (ex.Reason == SigningErrorReason.CertificateExpired && seconds < 90)
+            {
+                // Expired before it was used: try a longer lifetime.
+            }
+        }
+
+        using var signer = shortLived!;
+        var remaining = new DateTimeOffset(signer.NotAfter.ToUniversalTime(), TimeSpan.Zero) - DateTimeOffset.UtcNow;
         if (remaining > TimeSpan.Zero)
         {
             await Task.Delay(remaining + TimeSpan.FromSeconds(1), cancellationToken);
@@ -86,7 +103,7 @@ internal static class InvalidSamples
             Add("tampered-cms", "cms-alterado.pdf", tamperedCms, "Signature value changed", "One hex digit inside /Contents was changed: the CMS no longer verifies.", "Invalid", "signature"),
             Add("appended", "alterado-depois.pdf", appended, "Bytes appended after signing", "The file grew after the signature with no new revision: the signature still verifies, and the validator reports that the ByteRange does not cover the whole file.", "Valid", "coverage"),
             Add("revoked", "revogado.pdf", revoked, "Revoked signer", "The signer is in the intermediate CA's CRL, fetched by the validator. Nothing proves the signature was made before the revocation, so the result is INDETERMINATE / REVOKED_NO_POE (EN 319 102-1 §5.2.6). (The library refuses to build B-LT for a revoked signer.)", "Indeterminate", "revocation"),
-            Add("expired", "expirado.pdf", expired, "Expired signer", "Signed while the certificate was valid; it has expired since, and a B-B signature has no timestamp to prove when it was made.", "Indeterminate", "chain"),
+            Add("expired", "expirado.pdf", expired!, "Expired signer", "Signed while the certificate was valid; it has expired since, and a B-B signature has no timestamp to prove when it was made.", "Indeterminate", "chain"),
             Add("untrusted-root", "raiz-desconhecida.pdf", untrustedRoot, "Root outside the trust anchors", "Signed with a self-signed certificate that no trusted root vouches for.", "Indeterminate", "chain"),
             Add("untrusted-tsa", "tsa-desconhecida.pdf", untrustedTsa, "Untrusted TSA", "The signature timestamp comes from a TSA under an unknown CA. The validator keeps the signature Valid and reports the untrusted TSA chain as a warning.", "Valid", "timestamp"),
         ];
