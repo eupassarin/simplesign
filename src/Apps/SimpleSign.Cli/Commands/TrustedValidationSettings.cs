@@ -221,15 +221,11 @@ internal class TrustedValidationSettings : CommonSettings
             anchors.AddRange(provider.GetIntermediateCertificates());
         }
 
+        // An expired list is kept: the TLNotExpired constraint of the policy judges it, as EU DSS does.
         if (TrustedList is not null)
         {
-            var options = TrustedListProfiles.Options(TrustedListProfile, LoadCertificate(TrustedListSignerPath!));
+            var options = TrustedListProfiles.Options(TrustedListProfile, LoadCertificate(TrustedListSignerPath!)) with { RejectExpired = false };
             bool iofe = TrustedListProfile is not null && TrustedListProfile.Equals("iofe", StringComparison.OrdinalIgnoreCase);
-            if (iofe)
-            {
-                // As the IOFE validation policy expects: an expired list is read, and its TLNotExpired constraint judges it.
-                options = options with { RejectExpired = false };
-            }
 
             try
             {
@@ -254,6 +250,7 @@ internal class TrustedValidationSettings : CommonSettings
                 LotlLocation = new Uri(Lotl),
                 LotlSignerCertificates = [LoadCertificate(LotlSignerPath!)],
                 Territories = LotlTerritories,
+                Services = new TrustedListOptions { RejectExpired = false },
             }, http, cancellationToken);
             anchors.AddRange(set.GetTrustAnchors());
             LoadedTrustedLists.AddRange(set.TrustedLists);

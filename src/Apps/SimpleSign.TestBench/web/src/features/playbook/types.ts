@@ -92,12 +92,21 @@ export interface PlaybookEngineRun {
   passed: boolean
 }
 
+/** A field on which the library and CLI runs of a step disagree. */
+export interface PlaybookEngineDifference {
+  what: string
+  library?: string | null
+  cli?: string | null
+}
+
 export interface PlaybookStepResult {
   status: PlaybookStatus
   message?: string | null
   runs: PlaybookEngineRun[]
   ms: number
   at: string
+  /** Where the library and CLI runs disagree; empty with one engine or when they agree. */
+  engineDifferences?: PlaybookEngineDifference[]
 }
 
 export interface PlaybookStepView {

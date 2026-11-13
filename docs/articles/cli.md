@@ -348,8 +348,8 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 | `--policy-signer <cert>` | The policy must be signed with this certificate (detached CMS in `<policy>.p7s`) |
 | `--trust-dir <dir>` | Folder of trust anchor certificates (`.cer`, `.crt`, `.der`, `.pem`) |
 | `--trust-dir-signer <cert>` | The folder must carry `manifest.json` (SHA-256 of every file) signed with this certificate |
-| `--tsl <url\|file>` + `--tsl-signer <cert>` | Trusted list (ETSI TS 119 612 / TS 102 231): its active CA and TSA services become trust anchors |
-| `--tsl-profile iofe` | Read `--tsl` as INDECOPI's list (`IofeExtension.DefaultListOptions`): its `unspecified` TSAs become anchors too, code-signing certificates never; an expired list is kept for the policy's `TLNotExpired` to judge |
+| `--tsl <url\|file>` + `--tsl-signer <cert>` | Trusted list (ETSI TS 119 612 / TS 102 231): its active CA and TSA services become trust anchors. An expired list (here or under `--lotl`) is kept: the policy's `TLNotExpired` judges it (WARN by default, FAIL in `iofe`), as EU DSS does |
+| `--tsl-profile iofe` | Read `--tsl` as INDECOPI's list (`IofeExtension.DefaultListOptions`): its `unspecified` TSAs become anchors too, code-signing certificates never |
 | `--lotl <url>` + `--lotl-signer <cert>` | List of trusted lists (e.g. the EU LOTL): the national lists it points to are checked with the certificates it gives and their CA and TSA services become trust anchors; `--lotl-territory PT` (repeatable) loads only some |
 | `--lang es` | Write the verification report in Spanish |
 | `--check-revocation` (CAdES, XAdES) | Check the revocation of the signer and TSA chains |

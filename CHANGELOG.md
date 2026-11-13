@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — CLI: an expired trusted list is judged by the policy
+
+- `simplesign validate --tsl/--lotl` (and `validate-dir`, `cades validate`, `xades validate`) keep a trusted list whose
+  NextUpdate has passed, with or without `--tsl-profile`: the policy's `TLNotExpired` judges it, as the library in the
+  TestBench and EU DSS do. With the default policy (`TLNotExpired` WARN) such a list now gives TOTAL-PASSED with a
+  warning instead of NO_CERTIFICATE_CHAIN_FOUND; the `iofe` policy (FAIL) gives INDETERMINATE / TRY_LATER. Signing is
+  unchanged: an expired list gives no anchors.
+
+### Added — TestBench: "Lib ≠ CLI" in the Playbook tab
+
+- Each step result lists where its library and CLI runs disagree (success, refusal reason, indication, sub-indication,
+  level): a filter, a row badge, a table in the result panel and a count on the evidence page.
+- A step that changes the Sandbox's trusted list waits for DSS to download it again; when DSS cannot have seen it (the
+  EU lists make it refresh every hour), its verdict on the step is marked not comparable instead of "DSS differs".
+
 ### Added — IOFE: INDECOPI's trusted list kept current
 
 - `IofeTrustedListSource` (`IofeExtension.LoadRefreshableAsync`, `new IofeExtension(source)`): reads INDECOPI's list

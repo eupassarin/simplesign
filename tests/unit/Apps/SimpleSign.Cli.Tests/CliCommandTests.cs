@@ -221,6 +221,39 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_ExpiredTslUnderIofePolicy_IsTryLater()
+    {
+        string signed = await SignAsync("tsl-expired-iofe.pdf");
+        var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddDays(-1));
+
+        // The list is kept, and the policy's TLNotExpired (FAIL in IOFE) judges it.
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--no-system-roots",
+            "--tsl", tsl, "--tsl-signer", signer, "--policy", "iofe", "--json");
+
+        exit.ShouldBe(1, output);
+        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
+        var signature = json.RootElement.GetProperty("signatures")[0];
+        signature.GetProperty("indication").GetString().ShouldBe("Indeterminate");
+        signature.GetProperty("subIndication").GetString().ShouldBe("TRY_LATER");
+    }
+
+    [Fact]
+    public async Task Validate_ExpiredTslUnderDefaultPolicy_IsValidWithTlNotExpiredWarning()
+    {
+        string signed = await SignAsync("tsl-expired-default.pdf");
+        var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddDays(-1));
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--no-system-roots",
+            "--tsl", tsl, "--tsl-signer", signer, "--json");
+
+        exit.ShouldBe(0, output);
+        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
+        json.RootElement.GetProperty("signatures")[0].GetProperty("constraints").EnumerateArray()
+            .ShouldContain(c => c.GetProperty("id").GetString() == "TrustedLists/TLNotExpired"
+                && c.GetProperty("status").GetString() == "Warning");
+    }
+
+    [Fact]
     public async Task Validate_UntrustedSignature_IsIndeterminateWithExitCode1()
     {
         string signed = await SignAsync("untrusted.pdf");
@@ -955,6 +988,53 @@ public sealed class CliCommandTests : IDisposable
         var (exit, text) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", output);
         exit.ShouldBe(0, text);
         return output;
+    }
+
+    /// <summary>A trusted list naming the test signer as a granted CA/QC service, signed by a scheme operator, and the operator's certificate.</summary>
+    private (string List, string Signer) WriteTrustedList(DateTimeOffset nextUpdate)
+    {
+        using var operatorKey = System.Security.Cryptography.RSA.Create(2048);
+        using var schemeOperator = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                "CN=Scheme Operator, C=ZZ", operatorKey, System.Security.Cryptography.HashAlgorithmName.SHA256,
+                System.Security.Cryptography.RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        string xml = $"""
+            <TrustServiceStatusList xmlns="http://uri.etsi.org/02231/v2#" Id="tsl" TSLTag="http://uri.etsi.org/02231/TSLTag">
+              <SchemeInformation>
+                <TSLVersionIdentifier>5</TSLVersionIdentifier>
+                <TSLSequenceNumber>1</TSLSequenceNumber>
+                <SchemeOperatorName><Name xml:lang="en">Operator</Name></SchemeOperatorName>
+                <SchemeTerritory>ZZ</SchemeTerritory>
+                <ListIssueDateTime>{nextUpdate.AddMonths(-6):yyyy-MM-ddTHH:mm:ssZ}</ListIssueDateTime>
+                <NextUpdate><dateTime>{nextUpdate:yyyy-MM-ddTHH:mm:ssZ}</dateTime></NextUpdate>
+              </SchemeInformation>
+              <TrustServiceProviderList><TrustServiceProvider>
+                <TSPInformation><TSPName><Name xml:lang="en">Provider</Name></TSPName></TSPInformation>
+                <TSPServices><TSPService><ServiceInformation>
+                  <ServiceTypeIdentifier>http://uri.etsi.org/TrstSvc/Svctype/CA/QC</ServiceTypeIdentifier>
+                  <ServiceName><Name xml:lang="en">Service</Name></ServiceName>
+                  <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(_cert.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
+                  <ServiceStatus>http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted</ServiceStatus>
+                </ServiceInformation></TSPService></TSPServices>
+              </TrustServiceProvider></TrustServiceProviderList>
+            </TrustServiceStatusList>
+            """;
+        var doc = new System.Xml.XmlDocument { PreserveWhitespace = true };
+        doc.LoadXml(xml);
+        var signedXml = new System.Security.Cryptography.Xml.SignedXml(doc) { SigningKey = operatorKey };
+        var reference = new System.Security.Cryptography.Xml.Reference("#tsl") { DigestMethod = System.Security.Cryptography.Xml.SignedXml.XmlDsigSHA256Url };
+        reference.AddTransform(new System.Security.Cryptography.Xml.XmlDsigEnvelopedSignatureTransform());
+        reference.AddTransform(new System.Security.Cryptography.Xml.XmlDsigExcC14NTransform());
+        signedXml.SignedInfo!.SignatureMethod = System.Security.Cryptography.Xml.SignedXml.XmlDsigRSASHA256Url;
+        signedXml.AddReference(reference);
+        signedXml.ComputeSignature();
+        doc.DocumentElement!.AppendChild(doc.ImportNode(signedXml.GetXml(), true));
+
+        string list = Path.Combine(_tempDir, $"tsl-{Guid.NewGuid():N}.xml");
+        string signer = Path.Combine(_tempDir, $"tsl-signer-{Guid.NewGuid():N}.cer");
+        File.WriteAllText(list, doc.OuterXml);
+        File.WriteAllBytes(signer, schemeOperator.Export(X509ContentType.Cert));
+        return (list, signer);
     }
 
     private string WriteCss(string css)

@@ -40,6 +40,8 @@ internal static class PlaybookEvidence
         Row(html, "Playbook", playbook.Id);
         Row(html, "Exported", DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture));
         Row(html, "Summary", string.Join(" · ", view.Steps.GroupBy(s => s.Status).Select(g => $"{g.Key}: {g.Count()}")));
+        Row(html, "EU DSS differs", Steps(view.Steps.Where(s => s.Result?.Runs.Any(r => r.DssAgrees == false) == true)));
+        Row(html, "Library ≠ CLI", Steps(view.Steps.Where(s => s.Result?.EngineDifferences.Count > 0)));
         html.Append("</table>\n");
 
         var tags = view.Steps.SelectMany(s => s.Tags.Select(t => (Tag: t, Step: s))).GroupBy(x => x.Tag, StringComparer.Ordinal).ToList();
@@ -93,6 +95,18 @@ internal static class PlaybookEvidence
                 if (result.Message is { } message)
                 {
                     html.Append("<p class=\"failed\">").Append(E(message)).Append("</p>\n");
+                }
+
+                if (result.EngineDifferences.Count > 0)
+                {
+                    html.Append("<p class=\"failed\">The library and the CLI reached different verdicts.</p>\n<table>\n<tr><th>Field</th><th>Library</th><th>CLI</th></tr>\n");
+                    foreach (var difference in result.EngineDifferences)
+                    {
+                        html.Append("<tr><td>").Append(E(difference.What)).Append("</td><td>").Append(E(difference.Library ?? "—"))
+                            .Append("</td><td>").Append(E(difference.Cli ?? "—")).Append("</td></tr>\n");
+                    }
+
+                    html.Append("</table>\n");
                 }
 
                 foreach (var engineRun in result.Runs)
@@ -203,6 +217,13 @@ internal static class PlaybookEvidence
         var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
         using var stream = entry.Open();
         stream.Write(content);
+    }
+
+    /// <summary>How many steps, and which: <c>2: v-tsl-expired, v-tsl-wrong-signer</c>, or <c>0</c>.</summary>
+    private static string Steps(IEnumerable<PlaybookStepView> steps)
+    {
+        var ids = steps.Select(s => s.StepId).ToList();
+        return ids.Count == 0 ? "0" : $"{ids.Count}: {string.Join(", ", ids)}";
     }
 
     private static void Row(StringBuilder html, string name, string value) =>

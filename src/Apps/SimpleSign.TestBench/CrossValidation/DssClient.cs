@@ -102,7 +102,7 @@ public sealed record DssComparison(
 /// be checked against an independent ETSI EN 319 102-1 implementation. Off by default; start the
 /// service with <c>tools/dss/docker-compose.yml</c> or point <see cref="DssSettings.Url"/> at one.
 /// </summary>
-internal sealed class DssClient(DocumentStore documents) : IDisposable
+internal sealed partial class DssClient(DocumentStore documents) : IDisposable
 {
     public const string DefaultUrl = "http://localhost:8080";
     private const string ValidatePath = "services/rest/validation/validateSignature";
@@ -135,6 +135,71 @@ internal sealed class DssClient(DocumentStore documents) : IDisposable
             return new DssStatus(settings.Enabled, settings.Url, false, Unreachable(settings, ex), watch.ElapsedMilliseconds);
         }
     }
+
+    /// <summary>
+    /// Waits until DSS has downloaded its trusted lists again (a "Last download attempt" of its tl-info page changes), so
+    /// that a trusted-list failure just switched on or off in the Sandbox is what DSS validates against. DSS downloads
+    /// them every DSS_TL_REFRESH_SECONDS: 10 s with the Sandbox's list alone, one hour with the EU lists (tools/dss/README.md).
+    /// </summary>
+    /// <returns>Null once DSS downloaded them again; otherwise why its verdict may be on the previous list (it downloads
+    /// them less often than <paramref name="timeout"/>, its tl-info page cannot be read, or it did not in time).</returns>
+    public async Task<string?> WaitForTrustedListRefreshAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        using var quick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        quick.CancelAfter(TimeSpan.FromSeconds(4));
+        if (await ConfigAsync(Settings, quick.Token) is { TlRefreshSeconds: > 0 and var every } && TimeSpan.FromSeconds(every) > timeout)
+        {
+            return L.T("DSS downloads the trusted lists every {0} s (DSS_TL_REFRESH_SECONDS, one hour with the EU lists): it has not seen the list this step changed.", every);
+        }
+
+        string before = LastDownload(await TrustedListSummaryAsync(cancellationToken));
+        if (before.Length == 0)
+        {
+            return L.T("DSS's trusted lists page (tl-info) could not be read: it may not have seen the list this step changed.");
+        }
+
+        var watch = Stopwatch.StartNew();
+        while (watch.Elapsed < timeout)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            if (LastDownload(await TrustedListSummaryAsync(cancellationToken)) is { Length: > 0 } now && now != before)
+            {
+                return null;
+            }
+        }
+
+        return L.T("DSS did not download the trusted lists again within {0} s: it has not seen the list this step changed.", (int)timeout.TotalSeconds);
+    }
+
+    /// <summary>The text of the DSS "Trusted Lists Summary" page (tl-info), tags removed; empty when it cannot be read.</summary>
+    internal async Task<string> TrustedListSummaryAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(4));
+            string page = await _http.GetStringAsync(new Uri(BaseUri(Settings), "tl-info"), timeout.Token);
+            return System.Net.WebUtility.HtmlDecode(Tags().Replace(page, " "));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return "";
+        }
+    }
+
+    /// <summary>Every "Last download attempt" time of the tl-info page (one per list), joined; empty when it has none.</summary>
+    internal static string LastDownload(string summary) =>
+        string.Join(" | ", LastDownloads().Matches(Spaces().Replace(summary, " ")).Select(m => m.Groups[1].Value));
+
+    [System.Text.RegularExpressions.GeneratedRegex("<[^>]+>")]
+    private static partial System.Text.RegularExpressions.Regex Tags();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\s+")]
+    private static partial System.Text.RegularExpressions.Regex Spaces();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"Last download attempt (\d{1,2}-\w{3}-\d{4} \d{2}:\d{2}:\d{2})")]
+    private static partial System.Text.RegularExpressions.Regex LastDownloads();
 
     /// <summary>What DSS is given as its policy for <paramref name="policy"/> (null: SimpleSign's default), exactly as a request sends it.</summary>
     internal static DssPolicyView Policy(SimpleSign.Core.Policies.ValidationPolicy? policy = null)

@@ -225,7 +225,8 @@
             }
           },
           "expect": {
-            "outcome": "indeterminate"
+            "outcome": "indeterminate",
+            "subIndication": "NO_CERTIFICATE_CHAIN_FOUND"
           },
           "sandbox": {
             "trustedList": "WrongSigner"
@@ -249,7 +250,8 @@
             }
           },
           "expect": {
-            "outcome": "indeterminate"
+            "outcome": "indeterminate",
+            "subIndication": "TRY_LATER"
           },
           "sandbox": {
             "trustedList": "Expired"

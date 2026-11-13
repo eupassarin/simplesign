@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BookCheck, CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, Circle, Clock, Download, Eraser, ExternalLink, FileJson, FolderOpen, ListTree, Loader2, Play, RotateCcw, Search, Square, Tag, X, XCircle } from "lucide-react"
+import { AlertTriangle, BookCheck, CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, Circle, Clock, Download, Eraser, ExternalLink, FileJson, FolderOpen, GitCompareArrows, ListTree, Loader2, Play, RotateCcw, Search, Square, Tag, X, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -20,7 +20,7 @@ import type { Format, RunView } from "../workbench/schema"
 import { playbookApi } from "./api"
 import { OptionsReferenceDialog } from "./OptionsReference"
 import { PlaybookFileMenu } from "./PlaybookFileMenu"
-import type { PlaybookEngineRun, PlaybookLoaded, PlaybookSample, PlaybookStateView, PlaybookStatus, PlaybookStep, PlaybookStepPreview, PlaybookStepView, PreviewItem } from "./types"
+import type { PlaybookEngineDifference, PlaybookEngineRun, PlaybookLoaded, PlaybookSample, PlaybookStateView, PlaybookStatus, PlaybookStep, PlaybookStepPreview, PlaybookStepView, PreviewItem } from "./types"
 
 const emptyState: PlaybookStateView = { running: false, version: 0, steps: [] }
 
@@ -47,6 +47,11 @@ function dssDiffers(view?: PlaybookStepView): boolean {
   return !!view?.result?.runs.some((r) => r.dssAgrees === false)
 }
 
+/** Whether the library and CLI runs of the step's latest run reached different verdicts. */
+function enginesDiffer(view?: PlaybookStepView): boolean {
+  return (view?.result?.engineDifferences?.length ?? 0) > 0
+}
+
 /** Lower case without accents, so "assinatura" finds "Assinatura" and "validacao" finds "validação". */
 function fold(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
@@ -68,6 +73,7 @@ export function PlaybookPage() {
   const [titleQuery, setTitleQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [dssOnly, setDssOnly] = useState(false)
+  const [enginesOnly, setEnginesOnly] = useState(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [confirmRestart, setConfirmRestart] = useState(false)
   const [stepJson, setStepJson] = useState<Map<string, string>>(new Map())
@@ -105,6 +111,7 @@ export function PlaybookPage() {
     setTitleQuery("")
     setStatusFilter("all")
     setDssOnly(false)
+    setEnginesOnly(false)
   }, [])
 
   const onLoaded = useCallback((result: PlaybookLoaded) => {
@@ -177,21 +184,25 @@ export function PlaybookPage() {
   const isShown = (s: PlaybookStep) => {
     const view = views.get(s.id)
     return narrowed.has(s.id) && (statusFilter === "all" || statusOf(view) === statusFilter) && (!dssOnly || dssDiffers(view))
+      && (!enginesOnly || enginesDiffer(view))
   }
   const shownCount = steps.filter(isShown).length
-  const filtering = chosenTags.length > 0 || titleQuery.trim() !== "" || statusFilter !== "all" || dssOnly
+  const filtering = chosenTags.length > 0 || titleQuery.trim() !== "" || statusFilter !== "all" || dssOnly || enginesOnly
   // Each count is what clicking it would show, given the other filters.
   const filterCounts = useMemo(() => {
-    const c = { all: 0, passed: 0, failed: 0, notRun: 0, dss: 0 }
+    const c = { all: 0, passed: 0, failed: 0, notRun: 0, dss: 0, engines: 0 }
     for (const s of steps) {
       if (!narrowed.has(s.id)) continue
       const view = views.get(s.id)
-      const differs = dssDiffers(view)
-      if (!dssOnly || differs) { c.all++; c[statusOf(view)]++ }
-      if (differs && (statusFilter === "all" || statusOf(view) === statusFilter)) c.dss++
+      const dss = dssDiffers(view)
+      const engines = enginesDiffer(view)
+      const status = statusFilter === "all" || statusOf(view) === statusFilter
+      if ((!dssOnly || dss) && (!enginesOnly || engines)) { c.all++; c[statusOf(view)]++ }
+      if (dss && status && (!enginesOnly || engines)) c.dss++
+      if (engines && status && (!dssOnly || dss)) c.engines++
     }
     return c
-  }, [steps, narrowed, views, dssOnly, statusFilter])
+  }, [steps, narrowed, views, dssOnly, enginesOnly, statusFilter])
   const step = steps.find((s) => s.id === selected) ?? null
   const errors = loaded?.issues.filter((i) => i.isError) ?? []
   const warnings = loaded?.issues.filter((i) => !i.isError) ?? []
@@ -201,6 +212,7 @@ export function PlaybookPage() {
       passed: all.filter((s) => s.status === "passed").length,
       failed: all.filter((s) => s.status === "failed").length,
       dss: all.filter(dssDiffers).length,
+      engines: all.filter(enginesDiffer).length,
       total: steps.length,
     }
   }, [views, steps])
@@ -253,6 +265,12 @@ export function PlaybookPage() {
                   <AlertTriangle className="text-warning size-3.5" />{t("playbook.filter.dssCount", { count: counts.dss })}
                 </button>
               )}
+              {counts.engines > 0 && (
+                <button type="button" aria-pressed={enginesOnly} title={t("playbook.filter.enginesHint")} onClick={() => setEnginesOnly((on) => !on)}
+                  className={cn("hover:text-foreground flex items-center gap-1 rounded px-1", enginesOnly && "bg-warning/15 text-foreground")}>
+                  <GitCompareArrows className="text-warning size-3.5" />{t("playbook.filter.enginesCount", { count: counts.engines })}
+                </button>
+              )}
               <span>{t("playbook.countsOf", { total: counts.total })}</span>
             </span>
           )}
@@ -295,16 +313,21 @@ export function PlaybookPage() {
         <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">{t("playbook.noPlaybook")}</div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <aside className="flex w-[340px] shrink-0 flex-col border-r">
+          <aside className="flex w-[460px] shrink-0 flex-col border-r">
             <div className="space-y-2 border-b p-2">
               <TitleFilter value={titleQuery} onChange={setTitleQuery} />
               {tags.length > 0 && <TagFilter tags={tags} chosen={chosenTags} onChange={setChosenTags} />}
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1">
                 <StatusFilterControl value={statusFilter} counts={filterCounts} onChange={setStatusFilter} />
                 <button type="button" aria-pressed={dssOnly} title={t("playbook.filter.dssHint")} onClick={() => setDssOnly((on) => !on)}
-                  className={cn("flex items-center gap-1 rounded-md border px-2 py-1 text-xs tabular-nums transition-colors",
+                  className={cn("flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-1 text-xs tabular-nums transition-colors",
                     dssOnly ? "border-warning/60 bg-warning/15 font-medium" : "text-muted-foreground hover:text-foreground")}>
                   <AlertTriangle className="text-warning size-3.5" />{t("playbook.filter.dss")} {filterCounts.dss}
+                </button>
+                <button type="button" aria-pressed={enginesOnly} title={t("playbook.filter.enginesHint")} onClick={() => setEnginesOnly((on) => !on)}
+                  className={cn("flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-1 text-xs tabular-nums transition-colors",
+                    enginesOnly ? "border-warning/60 bg-warning/15 font-medium" : "text-muted-foreground hover:text-foreground")}>
+                  <GitCompareArrows className="text-warning size-3.5" />{t("playbook.filter.engines")} {filterCounts.engines}
                 </button>
               </div>
               {filtering && (
@@ -329,7 +352,7 @@ export function PlaybookPage() {
                       </div>
                       {shown.map((s) => (
                         <StepRow key={s.id} step={s} view={views.get(s.id)} active={selected === s.id} canRun={canRun} defaultFormat={playbook.defaults.format}
-                          chosenTags={chosenTags} onSelect={() => select(s.id)} onRun={() => start({ stepId: s.id })} onTag={addTag} onDss={() => setDssOnly(true)} />
+                          chosenTags={chosenTags} onSelect={() => select(s.id)} onRun={() => start({ stepId: s.id })} onTag={addTag} onDss={() => setDssOnly(true)} onEngines={() => setEnginesOnly(true)} />
                       ))}
                     </div>
                   )
@@ -398,7 +421,7 @@ function StatusFilterControl({ value, counts, onChange }: {
     { id: "notRun", icon: <Circle className="text-muted-foreground size-3.5" /> },
   ]
   return (
-    <div className="bg-muted flex rounded-md p-0.5 text-xs" role="radiogroup" aria-label={t("playbook.filter.status")}>
+    <div className="bg-muted flex shrink-0 rounded-md p-0.5 text-xs" role="radiogroup" aria-label={t("playbook.filter.status")}>
       {options.map(({ id, icon }) => {
         const name = t(`playbook.filter.${id}` as MessageKey)
         return (
@@ -476,7 +499,7 @@ function TagFilter({ tags, chosen, onChange }: { tags: string[]; chosen: string[
   )
 }
 
-function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSelect, onRun, onTag, onDss }: {
+function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSelect, onRun, onTag, onDss, onEngines }: {
   step: PlaybookStep
   view?: PlaybookStepView
   active: boolean
@@ -487,6 +510,7 @@ function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSele
   onRun: () => void
   onTag: (tag: string) => void
   onDss: () => void
+  onEngines: () => void
 }) {
   const t = useT()
   return (
@@ -501,6 +525,12 @@ function StepRow({ step, view, active, canRun, defaultFormat, chosenTags, onSele
               <span role="button" tabIndex={-1} title={t("playbook.filter.dssRow")} onClick={(e) => { e.stopPropagation(); onDss() }}
                 className="border-warning/50 bg-warning/10 hover:bg-warning/20 flex items-center gap-0.5 rounded border px-1 font-mono text-[10px]">
                 <AlertTriangle className="text-warning size-2.5" />DSS
+              </span>
+            )}
+            {enginesDiffer(view) && (
+              <span role="button" tabIndex={-1} title={t("playbook.filter.enginesRow")} onClick={(e) => { e.stopPropagation(); onEngines() }}
+                className="border-warning/50 bg-warning/10 hover:bg-warning/20 flex items-center gap-0.5 whitespace-nowrap rounded border px-1 font-mono text-[10px]">
+                <GitCompareArrows className="text-warning size-2.5" />LIB≠CLI
               </span>
             )}
             {step.tags.map((x) => (
@@ -777,7 +807,36 @@ function StepResultPanel({ step, view, defaultFormat, json, defaultsJson, canCle
         <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={!canClear} onClick={onClear} title={t("playbook.clearResultHint")}><Eraser /> {t("playbook.clearResult")}</Button>
       </div>
       {result.message && <p className="text-destructive text-sm">{result.message}</p>}
+      {result.engineDifferences && result.engineDifferences.length > 0 && <EngineDifferences differences={result.engineDifferences} />}
       {result.runs.map((r) => <EngineRunCard key={r.engine + r.runId} result={r} format={(step.format as Format) ?? defaultFormat} />)}
+    </div>
+  )
+}
+
+/** Where the library and the CLI reached different verdicts on the same step. */
+function EngineDifferences({ differences }: { differences: PlaybookEngineDifference[] }) {
+  const t = useT()
+  return (
+    <div className="border-warning/50 bg-warning/10 space-y-2 rounded-lg border p-3">
+      <p className="flex items-center gap-2 text-sm font-medium"><GitCompareArrows className="text-warning size-4" />{t("playbook.enginesDiffer")}</p>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t("playbook.enginesWhat")}</TableHead>
+            <TableHead>{t("playbook.engineLibrary")}</TableHead>
+            <TableHead>{t("playbook.engineCli")}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {differences.map((d) => (
+            <TableRow key={d.what}>
+              <TableCell className="font-mono text-xs">{d.what}</TableCell>
+              <TableCell className="font-mono text-xs break-all whitespace-normal">{d.library ?? "—"}</TableCell>
+              <TableCell className="font-mono text-xs break-all whitespace-normal">{d.cli ?? "—"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }

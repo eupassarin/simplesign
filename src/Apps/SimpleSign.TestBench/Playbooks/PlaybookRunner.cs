@@ -57,8 +57,15 @@ public sealed record PlaybookEngineRun(
     public bool Passed => Checks.All(c => c.Passed);
 }
 
+/// <summary>A field on which the library and CLI runs of a step disagree, with what each one found.</summary>
+public sealed record PlaybookEngineDifference(string What, string? Library, string? Cli);
+
 /// <summary>The latest result of a step: kept until the step runs again or another playbook is loaded.</summary>
-public sealed record PlaybookStepResult(string Status, string? Message, IReadOnlyList<PlaybookEngineRun> Runs, long Ms, DateTimeOffset At);
+public sealed record PlaybookStepResult(string Status, string? Message, IReadOnlyList<PlaybookEngineRun> Runs, long Ms, DateTimeOffset At)
+{
+    /// <summary>Where the library and CLI runs disagree (outcome, reason, indication, sub-indication, level); empty with one engine or when they agree.</summary>
+    public IReadOnlyList<PlaybookEngineDifference> EngineDifferences { get; init; } = [];
+}
 
 /// <summary>A step as the page shows it: its definition's summary, its status and its latest result.</summary>
 public sealed record PlaybookStepView(string SectionId, string StepId, string Title, string Kind, IReadOnlyList<string> Tags, string Status, PlaybookStepResult? Result);
@@ -111,7 +118,8 @@ public sealed record PlaybookStepPreview(
 internal sealed class PlaybookRunner(
     RunService runs, SandboxEnvironment sandbox, DocumentStore documents, CredentialStore credentials, CredentialFactory factory,
     SigningRunner signing, CadesRunner cades, XmlRunner xml, ValidationService validation,
-    CadesSampleStore? cadesSamples = null, XmlSampleStore? xmlSamples = null, ValidationSampleStore? validationSamples = null) : IDisposable
+    CadesSampleStore? cadesSamples = null, XmlSampleStore? xmlSamples = null, ValidationSampleStore? validationSamples = null,
+    ILogger<PlaybookRunner>? logger = null) : IDisposable
 {
     private readonly Lock _gate = new();
     private readonly Lock _pinGate = new();
@@ -438,6 +446,7 @@ internal sealed class PlaybookRunner(
         var results = new List<PlaybookEngineRun>();
         string? message = null;
         bool changedSandbox = false;
+        bool dssTrustedList = false;
         try
         {
             // The wait comes first: time passes (a certificate expires, a time-stamp ages) before the Sandbox changes.
@@ -450,6 +459,16 @@ internal sealed class PlaybookRunner(
             changedSandbox = step.Sandbox is { Any: true } && sandbox.IsConnected;
             await ApplySandboxAsync(step.Sandbox, session.Token).ConfigureAwait(false);
             string format = step.Format ?? session.Playbook.Defaults.Format;
+
+            // DSS downloads the trusted lists every few seconds (every hour with the EU lists): it validates against the
+            // list the step changed only once it has downloaded it again. Until then its verdict is not compared.
+            string? dssStale = null;
+            if (changedSandbox && Parse(step.Sandbox!.TrustedList, TlFault.None) != TlFault.None
+                && (step.CrossValidate ?? session.Playbook.Defaults.CrossValidate))
+            {
+                dssStale = await WaitForDssTrustedListsAsync(step, session.Token).ConfigureAwait(false);
+                dssTrustedList = dssStale is null;
+            }
 
             var missing = new List<string>();
             var stepOptions = Merge(session.Playbook.Defaults.Options, format, step.Options);
@@ -471,8 +490,9 @@ internal sealed class PlaybookRunner(
                         _ => RunKinds.Sign,
                     }, runEngine);
                 var view = await runs.RunAsync(request, session.Token).ConfigureAwait(false);
-                results.Add(PlaybookExpectations.Evaluate(runEngine, view, step.Expect ?? new PlaybookExpectation(),
-                    id => documents.TryGet(id, out var file) ? file!.Content : null));
+                var result = PlaybookExpectations.Evaluate(runEngine, view, step.Expect ?? new PlaybookExpectation(),
+                    id => documents.TryGet(id, out var file) ? file!.Content : null);
+                results.Add(dssStale is not null && result.DssAgrees is not null ? result with { DssAgrees = null, DssError = dssStale } : result);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -492,6 +512,18 @@ internal sealed class PlaybookRunner(
                 {
                     message ??= $"The Sandbox could not be put back: {ex.Message}";
                 }
+
+                // So that the next step is not validated by DSS against the list this one changed (when DSS keeps up).
+                if (dssTrustedList && !session.Token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await WaitForDssTrustedListsAsync(step, session.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                }
             }
         }
 
@@ -499,8 +531,26 @@ internal sealed class PlaybookRunner(
         session.Results.TryGetValue(step.Id, out var previous);
         Release(previous is null ? null : [previous]);
         Keep(results);
-        session.Done(step.Id, new PlaybookStepResult(passed ? PlaybookStatuses.Passed : PlaybookStatuses.Failed, message, results, watch.ElapsedMilliseconds, DateTimeOffset.Now));
+        session.Done(step.Id, new PlaybookStepResult(passed ? PlaybookStatuses.Passed : PlaybookStatuses.Failed, message, results, watch.ElapsedMilliseconds, DateTimeOffset.Now)
+        {
+            EngineDifferences = PlaybookExpectations.EngineDifferences(results),
+        });
     }
+
+    /// <summary>Waits until DSS has downloaded the Sandbox's trusted list again: null when it did, otherwise why not (also logged).</summary>
+    private async Task<string?> WaitForDssTrustedListsAsync(PlaybookStep step, CancellationToken cancellationToken)
+    {
+        string? why = await runs.WaitForDssTrustedListsAsync(DssTrustedListWait, cancellationToken).ConfigureAwait(false);
+        if (why is not null)
+        {
+            logger?.LogWarning("Step {Step}: {Why}", step.Id, why);
+        }
+
+        return why;
+    }
+
+    /// <summary>How long a step waits for DSS to download the trusted lists again (it does every 10 s with the Sandbox's alone).</summary>
+    private static readonly TimeSpan DssTrustedListWait = TimeSpan.FromSeconds(30);
 
     private async Task ApplySandboxAsync(PlaybookSandbox? box, CancellationToken cancellationToken)
     {

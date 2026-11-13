@@ -345,37 +345,17 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
     /// <summary>Waits until DSS has downloaded the Sandbox's trusted list again (its "Last download attempt" changes), up to a minute.</summary>
     private async Task WaitForTrustedListAsync(DssSettings dss)
     {
-        string before = LastDownload(await TrustedListSummaryAsync(dss));
-        for (int i = 0; i < 60; i++)
+        using var client = new DssClient(fixture.Documents) { Settings = dss };
+        if (await client.WaitForTrustedListRefreshAsync(TimeSpan.FromMinutes(1), default) is { } why)
         {
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            if (LastDownload(await TrustedListSummaryAsync(dss)) != before)
-            {
-                return;
-            }
+            output.WriteLine(why);
         }
-
-        output.WriteLine("DSS did not download the Sandbox's trusted list again within a minute (DSS_TL_REFRESH_SECONDS).");
     }
 
     /// <summary>The text of the DSS "Trusted Lists Summary" page (tl-info), tags removed.</summary>
-    private static async Task<string> TrustedListSummaryAsync(DssSettings dss)
+    private async Task<string> TrustedListSummaryAsync(DssSettings dss)
     {
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
-            string page = await http.GetStringAsync(new Uri(dss.Url.TrimEnd('/') + "/tl-info"));
-            return System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(page, "<[^>]+>", " "));
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            return "";
-        }
-    }
-
-    private static string LastDownload(string summary)
-    {
-        int at = summary.IndexOf("Last download attempt", StringComparison.Ordinal);
-        return at < 0 ? "" : summary.Substring(at, Math.Min(60, summary.Length - at));
+        using var client = new DssClient(fixture.Documents) { Settings = dss };
+        return await client.TrustedListSummaryAsync(default);
     }
 }
