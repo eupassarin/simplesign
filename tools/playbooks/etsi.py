@@ -288,7 +288,7 @@ sections = [
            for lv in ("BasicSignatures", "Timestamps", "LongTermData", "ArchivalData")],
          sign("va-policy-file", "Signer without nonRepudiation (to validate)", ["VA-19"], {"outcome": "signed"}, credentialId="sandbox:no-nonrepudiation"),
          validate("va-policy", "A validation policy that requires nonRepudiation", ["VA-19", VAL, "TS 119 172-1"], "step:va-policy-file",
-                  {"outcome": "indeterminate", "indication": "INDETERMINATE"}, policyId="preset:validation:iofe-nonrepudiation"),
+                  {"outcome": "indeterminate", "indication": "INDETERMINATE"}, policyId="playbook:requires-non-repudiation"),
      ]},
     {"id": "trusted-lists", "title": "Trusted lists (TS 119 612)", "steps": [
         sign("tl-ok", "Anchors from the Sandbox's trusted list", ["TL-1", TLS], signed("BB"), signingControls={"trust": ["SandboxTrustedList"]}),
@@ -329,6 +329,9 @@ playbook = {
             "pades": {"documentId": "sample:contract"},
         },
     },
+    # A validation policy that requires the nonRepudiation bit (VA-19): the default one with that constraint changed.
+    "policies": [{"id": "requires-non-repudiation", "kind": "validation", "base": "default",
+                  "set": {"SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage": {"Level": "FAIL", "Id": ["nonRepudiation"]}}}],
     "sections": sections,
 }
 

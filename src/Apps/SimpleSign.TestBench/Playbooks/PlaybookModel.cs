@@ -24,6 +24,12 @@ public sealed record Playbook
     /// <summary>What every step starts from.</summary>
     public PlaybookDefaults Defaults { get; init; } = new();
 
+    /// <summary>
+    /// Policies the playbook adjusts: a built-in one (or the default) with some constraints changed, referenced by its steps
+    /// as <c>playbook:ID</c> (for example IOFE's signing policy that also requires nonRepudiation).
+    /// </summary>
+    public IReadOnlyList<PlaybookPolicy> Policies { get; init; } = [];
+
     /// <summary>The steps, grouped in sections.</summary>
     public IReadOnlyList<PlaybookSection> Sections { get; init; } = [];
 
@@ -33,6 +39,22 @@ public sealed record Playbook
 
     /// <summary>A step by id, or null.</summary>
     public PlaybookStep? Step(string id) => AllSteps().Select(s => s.Step).FirstOrDefault(s => s.Id == id);
+}
+
+/// <summary>A policy the playbook adjusts, referenced as <c>playbook:ID</c> by <c>signingPolicyId</c> or <c>validation.policyId</c>.</summary>
+public sealed record PlaybookPolicy
+{
+    /// <summary>The id, unique in the playbook.</summary>
+    public string Id { get; init; } = "";
+
+    /// <summary><c>signing</c> or <c>validation</c>.</summary>
+    public string Kind { get; init; } = "";
+
+    /// <summary>The policy it starts from: a built-in name (<c>iofe</c>, <c>strict</c>…) or <c>default</c>.</summary>
+    public string Base { get; init; } = "default";
+
+    /// <summary>The constraints changed, by path (<c>SigningCertificate/KeyUsage</c>), each as the policy file writes it.</summary>
+    public JsonElement? Set { get; init; }
 }
 
 /// <summary>The values every step starts from.</summary>

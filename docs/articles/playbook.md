@@ -88,6 +88,13 @@ The options that matter most for a certification:
   the TSA expected (`expectedTsa`), and the audit trail (`auditLog`);
 - `attemptRefused: true` — run even when the TestBench foresees the policy will refuse the signer, so the evidence is
   the library's own refusal (`SigningException` and its reason), not the TestBench's warning.
+- `profile` (on `signingControls`, `validation` and a validation's `settings`) — a trust profile, as the Profile menu
+  and the CLI's `--profile` set it: `Iofe` (with `profileSource`: `Indecopi`, INDECOPI's real list, or `Sandbox`, the
+  Sandbox's list read the same way), `IcpBrasil`, `GovBr` (validation only) or `Sandbox`; `trustProfiles` adds others'
+  trust. A step with a profile and no policy takes the profile's; the preview and the evidence show it;
+- `policies` (top level) — adjusted policies, `{ "id", "kind", "base", "set" }`, named `playbook:ID` in
+  `signingPolicyId` / `policyId`; an explicit policy wins over the profile's (the INDECOPI playbook's
+  `playbook:iofe-agent` asks for the nonRepudiation bit of an automated agent).
 
 ### Cross-validation with EU DSS
 

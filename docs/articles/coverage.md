@@ -12,9 +12,9 @@ from the published standards; check them against the version you follow before q
 
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
-| PAdES | 115 | 114 | 1 |
-| CAdES | 64 | 63 | 1 |
-| XAdES | 72 | 68 | 4 |
+| PAdES | 134 | 133 | 1 |
+| CAdES | 84 | 83 | 1 |
+| XAdES | 92 | 88 | 4 |
 
 ## PAdES
 
@@ -27,6 +27,7 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Signature type | ETSI EN 319 142-1 · §6 PAdES baseline signatures |  | yes |
 | Signature level | Signature type: Baseline | ETSI EN 319 102-1 · Annex B Signature classes | `WithLevel(AdesBaselineProfile.…)` | yes |
 | Signature level | Signature type: Explicit signature policy | ETSI EN 319 122-1 · §5.2.9 signature-policy-identifier | `WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))` | yes |
+| Signature level | Signature type: ICP-Brasil signature policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy)` | yes |
 | Signature level | Baseline level | ETSI EN 319 142-1 · §6.2 Signature levels<br>ETSI EN 319 142-1 · §6.3 Requirements | `WithLevel(AdesBaselineProfile)` | yes |
 | Signature level | Baseline level: B-B (basic) | ETSI EN 319 142-1 · §6.3 PAdES-B-B | `AdesBaselineProfile.Basic()` | yes |
 | Signature level | Baseline level: B-T (timestamp) | ETSI EN 319 142-1 · §6.3 PAdES-B-T<br>RFC 3161 · Time-Stamp Protocol | `AdesBaselineProfile.Timestamped(tsa)` | yes |
@@ -43,6 +44,11 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Policy hash (hex) | ETSI EN 319 122-1 · §5.2.9 sigPolicyHash |  | yes |
 | Signature level | Policy URI | ETSI EN 319 122-1 · §5.2.9 sigPolicyQualifiers |  | yes |
 | Signature level | If the TSA or revocation fails | ETSI EN 319 142-1 · §6.2 Signature levels | `SigningLevelFailureBehavior.ReturnLowerLevel` | yes |
+| Signature level | ICP-Brasil policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy, IcpBrasilPadesOptions)` | yes |
+| Signature level | ICP-Brasil policy: AD-RB | DOC-ICP-15.03 · AD-RB | `IcpBrasilPolicy.AdRb` | yes |
+| Signature level | ICP-Brasil policy: AD-RT | DOC-ICP-15.03 · AD-RT | `IcpBrasilPolicy.AdRt` | yes |
+| Signature level | ICP-Brasil policy: AD-RC | DOC-ICP-15.03 · AD-RC | `IcpBrasilPolicy.AdRc` | yes |
+| Signature level | ICP-Brasil policy: AD-RA | DOC-ICP-15.03 · AD-RA | `IcpBrasilPolicy.AdRa` | yes |
 | Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness | `new LongTermValidationOptions { RevocationPreference }` | yes |
 | Signature level | Prefer OCSP or CRL: OCSP first |  | `RevocationPreference.OcspFirst` | yes |
 | Signature level | Prefer OCSP or CRL: CRL first |  | `RevocationPreference.CrlFirst` | yes |
@@ -51,6 +57,12 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Timestamps | Archive TSA | ETSI EN 319 142-1 · §5.4.3 Document time-stamp<br>RFC 3161 · Time-Stamp Protocol | `new ArchiveTimestampOptions(Uri)` | yes |
 | Cryptography | Signing policy (JSON) | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy.Load(path))` | yes |
 | Cryptography | Trust anchors before signing | RFC 5280 · §6.1 Basic path validation<br>ETSI TS 119 612 · Trusted lists | `WithTrustAnchors(params ITrustAnchorProvider[])` | yes |
+| Cryptography | Trust profile | ETSI TS 119 612 · Trusted lists | `WithProfile(TrustProfile)` | yes |
+| Cryptography | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
+| Cryptography | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Cryptography | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
+| Cryptography | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Cryptography | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
 | Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
@@ -134,6 +146,13 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Attempt refused signatures |  | `SigningException.Reason` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
+| Run and validation | Trust profile | ETSI TS 119 612 · Trusted lists | `ValidationOptions.Profile` | yes |
+| Run and validation | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
+| Run and validation | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Run and validation | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
+| Run and validation | Trust profile: Gov.br |  | `GovBrProfile.Create()` | yes |
+| Run and validation | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Run and validation | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |
 | Run and validation | Revocation strategy | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL | `ValidationOptions.Verifier.RevocationStrategy` | yes |
@@ -156,6 +175,7 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Signature type | ETSI EN 319 122-1 · §6 CAdES baseline signatures |  | yes |
 | Signature level | Signature type: Baseline | ETSI EN 319 102-1 · Annex B Signature classes | `WithLevel(AdesBaselineProfile.…)` | yes |
 | Signature level | Signature type: Explicit signature policy | ETSI EN 319 122-1 · §5.2.9 signature-policy-identifier | `WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))` | yes |
+| Signature level | Signature type: ICP-Brasil signature policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy)` | yes |
 | Signature level | Baseline level | ETSI EN 319 122-1 · §6.2 Signature levels<br>ETSI EN 319 122-1 · §6.3 Requirements | `WithLevel(AdesBaselineProfile)` | yes |
 | Signature level | Baseline level: B-B (basic) | ETSI EN 319 122-1 · §6.3 CAdES-B-B | `AdesBaselineProfile.Basic()` | yes |
 | Signature level | Baseline level: B-T (timestamp) | ETSI EN 319 122-1 · §5.3 signature-time-stamp (CAdES-B-T)<br>RFC 3161 · Time-Stamp Protocol | `AdesBaselineProfile.Timestamped(tsa)` | yes |
@@ -169,6 +189,12 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Extended form: C / X — complete references | RFC 5126 · §6.2 complete-certificate-references and complete-revocation-references | `CadesExtendedForm.CompleteReferences` | yes |
 | Signature level | Extended form: X-L — references and values | RFC 5126 · §6.3 certificate-values and revocation-values | `CadesExtendedForm.ExtendedLong` | yes |
 | Signature level | Extended form: A — archive | RFC 5126 · §6.4.1 archive-time-stamp | `CadesExtendedForm.Archive` | yes |
+| Signature level | ICP-Brasil policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy, TimestampOptions)` | yes |
+| Signature level | ICP-Brasil policy: AD-RB | DOC-ICP-15.03 · AD-RB | `IcpBrasilPolicy.AdRb` | yes |
+| Signature level | ICP-Brasil policy: AD-RT | DOC-ICP-15.03 · AD-RT | `IcpBrasilPolicy.AdRt` | yes |
+| Signature level | ICP-Brasil policy: AD-RV | DOC-ICP-15.03 · AD-RV | `IcpBrasilPolicy.AdRv` | yes |
+| Signature level | ICP-Brasil policy: AD-RC | DOC-ICP-15.03 · AD-RC | `IcpBrasilPolicy.AdRc` | yes |
+| Signature level | ICP-Brasil policy: AD-RA | DOC-ICP-15.03 · AD-RA | `IcpBrasilPolicy.AdRa` | yes |
 | Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness | `new LongTermValidationOptions { RevocationPreference }` | yes |
 | Signature level | Prefer OCSP or CRL: OCSP first |  | `RevocationPreference.OcspFirst` | yes |
 | Signature level | Prefer OCSP or CRL: CRL first |  | `RevocationPreference.CrlFirst` | yes |
@@ -176,6 +202,12 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Timestamps | Content timestamp | ETSI EN 319 122-1 · §5.2.8 content-time-stamp | `WithContentTimestamp(TimestampOptions)` | yes |
 | Cryptography | Signing policy (JSON) | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy.Load(path))` | yes |
 | Cryptography | Trust anchors before signing | RFC 5280 · §6.1 Basic path validation<br>ETSI TS 119 612 · Trusted lists | `WithTrustAnchors(params ITrustAnchorProvider[])` | yes |
+| Cryptography | Trust profile | ETSI TS 119 612 · Trusted lists | `WithProfile(TrustProfile)` | yes |
+| Cryptography | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
+| Cryptography | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Cryptography | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
+| Cryptography | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Cryptography | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
 | Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
@@ -205,6 +237,13 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Attempt refused signatures |  | `SigningException.Reason` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
+| Run and validation | Trust profile | ETSI TS 119 612 · Trusted lists | `ValidationOptions.Profile` | yes |
+| Run and validation | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
+| Run and validation | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Run and validation | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
+| Run and validation | Trust profile: Gov.br |  | `GovBrProfile.Create()` | yes |
+| Run and validation | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Run and validation | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |
 | Run and validation | Revocation strategy | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL | `ValidationOptions.Verifier.RevocationStrategy` | yes |
@@ -228,6 +267,7 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Signature type | ETSI EN 319 132-1 · §6 XAdES baseline signatures |  | yes |
 | Signature level | Signature type: Baseline | ETSI EN 319 102-1 · Annex B Signature classes | `WithLevel(AdesBaselineProfile.…)` | yes |
 | Signature level | Signature type: Explicit signature policy | ETSI EN 319 132-1 · §5.2.9 SignaturePolicyIdentifier | `WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))` | yes |
+| Signature level | Signature type: ICP-Brasil signature policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy)` | yes |
 | Signature level | Baseline level | ETSI EN 319 132-1 · §6.2 Signature levels<br>ETSI EN 319 132-1 · §6.3 Requirements | `WithLevel(AdesBaselineProfile)` | yes |
 | Signature level | Baseline level: B-B (basic) | ETSI EN 319 132-1 · §6.3 XAdES-B-B | `AdesBaselineProfile.Basic()` | yes |
 | Signature level | Baseline level: B-T (timestamp) | ETSI EN 319 132-1 · §5.3 SignatureTimeStamp (XAdES-B-T)<br>RFC 3161 · Time-Stamp Protocol | `AdesBaselineProfile.Timestamped(tsa)` | yes |
@@ -241,6 +281,12 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Extended form: C / X — complete references | ETSI TS 101 903 · §7.4 CompleteCertificateRefs and CompleteRevocationRefs | `XadesExtendedForm.CompleteReferences` | yes |
 | Signature level | Extended form: X-L — references and values | ETSI TS 101 903 · §7.6 CertificateValues and RevocationValues | `XadesExtendedForm.ExtendedLong` | yes |
 | Signature level | Extended form: A — archive | ETSI TS 101 903 · §7.7 ArchiveTimeStamp | `XadesExtendedForm.Archive` | yes |
+| Signature level | ICP-Brasil policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy, TimestampOptions)` | yes |
+| Signature level | ICP-Brasil policy: AD-RB | DOC-ICP-15.03 · AD-RB | `IcpBrasilPolicy.AdRb` | yes |
+| Signature level | ICP-Brasil policy: AD-RT | DOC-ICP-15.03 · AD-RT | `IcpBrasilPolicy.AdRt` | yes |
+| Signature level | ICP-Brasil policy: AD-RV | DOC-ICP-15.03 · AD-RV | `IcpBrasilPolicy.AdRv` | yes |
+| Signature level | ICP-Brasil policy: AD-RC | DOC-ICP-15.03 · AD-RC | `IcpBrasilPolicy.AdRc` | yes |
+| Signature level | ICP-Brasil policy: AD-RA | DOC-ICP-15.03 · AD-RA | `IcpBrasilPolicy.AdRa` | yes |
 | Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness | `new LongTermValidationOptions { RevocationPreference }` | yes |
 | Signature level | Prefer OCSP or CRL: OCSP first |  | `RevocationPreference.OcspFirst` | yes |
 | Signature level | Prefer OCSP or CRL: CRL first |  | `RevocationPreference.CrlFirst` | yes |
@@ -249,6 +295,12 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Timestamps | Individual data objects timestamp | ETSI EN 319 132-1 · §5.2.8.2 IndividualDataObjectsTimeStamp |  | **no** |
 | Cryptography | Signing policy (JSON) | ETSI TS 119 312 · Cryptographic suites<br>RFC 5280 · §4.2.1.3 Key usage<br>RFC 5280 · §6.3 CRL validation | `WithSigningPolicy(SigningPolicy.Load(path))` | yes |
 | Cryptography | Trust anchors before signing | RFC 5280 · §6.1 Basic path validation<br>ETSI TS 119 612 · Trusted lists | `WithTrustAnchors(params ITrustAnchorProvider[])` | yes |
+| Cryptography | Trust profile | ETSI TS 119 612 · Trusted lists | `WithProfile(TrustProfile)` | yes |
+| Cryptography | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
+| Cryptography | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Cryptography | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
+| Cryptography | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Cryptography | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
 | Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
 | Cryptography | Digest algorithm | ETSI TS 119 312 · Hash functions<br>RFC 5652 · §5.4 Message digest calculation<br>W3C XMLDSig Core 1.1 · §6.2 Message digests | `WithHashAlgorithm(HashAlgorithmName)` | yes |
@@ -284,6 +336,13 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Attempt refused signatures |  | `SigningException.Reason` | yes |
 | Run and validation | Validate after signing | ETSI EN 319 102-1 · §5 Validation process | `PdfSignatureValidator / CadesSignatureValidator / XadesSignatureValidator` | yes |
 | Run and validation | Trusted roots | ETSI EN 319 102-1 · §5.2.6 X.509 certificate validation<br>RFC 5280 · §6.1 Basic path validation | `ValidationOptions.TrustedRoots / TrustedLists / TrustSystemRoots` | yes |
+| Run and validation | Trust profile | ETSI TS 119 612 · Trusted lists | `ValidationOptions.Profile` | yes |
+| Run and validation | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
+| Run and validation | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Run and validation | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
+| Run and validation | Trust profile: Gov.br |  | `GovBrProfile.Create()` | yes |
+| Run and validation | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Run and validation | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |
 | Run and validation | Revocation strategy | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL | `ValidationOptions.Verifier.RevocationStrategy` | yes |
@@ -291,6 +350,18 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 ## By standard
 
 Each clause and the options that implement it.
+
+### DOC-ICP-15.03
+
+| Clause | Option | Formats | Implemented |
+|---|---|---|---|
+| AD-RA | ICP-Brasil policy: AD-RA | PAdES, CAdES, XAdES | yes |
+| AD-RB | ICP-Brasil policy: AD-RB | PAdES, CAdES, XAdES | yes |
+| AD-RC | ICP-Brasil policy: AD-RC | PAdES, CAdES, XAdES | yes |
+| AD-RT | ICP-Brasil policy: AD-RT | PAdES, CAdES, XAdES | yes |
+| AD-RV | ICP-Brasil policy: AD-RV | CAdES, XAdES | yes |
+| Signature policies of ICP-Brasil | ICP-Brasil policy | PAdES, CAdES, XAdES | yes |
+| Signature policies of ICP-Brasil | Signature type: ICP-Brasil signature policy | PAdES, CAdES, XAdES | yes |
 
 ### ETSI EN 319 102-1
 
@@ -459,6 +530,7 @@ Each clause and the options that implement it.
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
 | Trusted lists | Trust anchors before signing | PAdES, CAdES, XAdES | yes |
+| Trusted lists | Trust profile | PAdES, CAdES, XAdES | yes |
 
 ### FIPS 180-4
 

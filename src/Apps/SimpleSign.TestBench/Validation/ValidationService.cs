@@ -30,17 +30,11 @@ public enum TrustChoice
     SandboxTrustedList,
 
     /// <summary>
-    /// The connected Sandbox's trusted list (/tl/tl.xml), read directly with <c>IofeExtension.DefaultListOptions</c>, as
-    /// <c>IofeExtension</c> reads INDECOPI's: its CA and <c>unspecified</c> services with their statuses, so the
-    /// TrustedLists constraints are evaluated.
-    /// </summary>
-    SandboxIofeList,
-
-    /// <summary>
     /// The roots of the public TSAs the TestBench offers (DigiCert, Sectigo, FreeTSA), so their timestamps reach a
     /// trust anchor. DSS (tools/dss) trusts the same roots.
     /// </summary>
     PublicTsas,
+
 }
 
 /// <summary>How to validate.</summary>
@@ -51,6 +45,15 @@ public sealed record ValidationSettings
 
     /// <summary>Uploaded root certificates (DER or PEM) to trust as well.</summary>
     public IReadOnlyList<string> CustomRootUploadIds { get; init; } = [];
+
+    /// <summary>The trust profile (Sign/Validate menu): its trust is added; its policy is the one <see cref="PolicyId"/> names.</summary>
+    public TrustFrameworks.TrustProfileChoice Profile { get; init; }
+
+    /// <summary>Which list the IOFE profile reads: INDECOPI's or the Sandbox's (test).</summary>
+    public TrustFrameworks.IofeListSource ProfileSource { get; init; }
+
+    /// <summary>Other profiles whose trust is added (their policies are not used).</summary>
+    public IReadOnlyList<TrustFrameworks.TrustProfileChoice> TrustProfiles { get; init; } = [];
 
     public int TimeoutSeconds { get; init; } = 10;
 
@@ -90,8 +93,11 @@ public sealed record DetailedSignature(
 /// <summary>Trust settings turned into library objects.</summary>
 internal sealed record ValidationTrust(ValidationOptions Options)
 {
-    /// <summary>The trust anchor providers (the Sandbox's trusted lists), for the PAdES validator.</summary>
+    /// <summary>The trust anchor providers (the Sandbox's trusted lists, a trust framework's), for the PAdES validator.</summary>
     public IReadOnlyList<ITrustAnchorProvider> Providers { get; init; } = [];
+
+    /// <summary>The chain validation providers of the trust framework (ICP-Brasil, Gov.br), for the PAdES validator.</summary>
+    public IReadOnlyList<IChainValidationProvider> ChainValidation { get; init; } = [];
 }
 
 public sealed record DssView(int Certificates, int Crls, int Ocsps, bool HasVri, int VriEntries, IReadOnlyList<string> Warnings);
@@ -131,7 +137,7 @@ internal sealed record PadesVerdict(
     IReadOnlyDictionary<string, string>? ChainMetadata);
 
 /// <summary>Validates PDFs with PdfSignatureValidator and enriches the result with the inspector's facts.</summary>
-internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStore documents)
+internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStore documents, TrustFrameworks.ProfileTrust? profiles = null)
 {
     /// <summary>The per-signature verdicts (used by the signing result).</summary>
     public async Task<IReadOnlyList<SignatureReport>> ValidateAsync(byte[] pdf, ValidationSettings settings, CancellationToken cancellationToken)
@@ -237,7 +243,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     internal async Task<PdfSignatureValidator> CreateValidatorAsync(ValidationSettings settings, CancellationToken cancellationToken = default)
     {
         var trust = await TrustAsync(settings, cancellationToken);
-        return new PdfSignatureValidator(sandbox, trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), trust.Providers, []);
+        return new PdfSignatureValidator(sandbox, trust.Options, new RunLogger<PdfSignatureValidator>(RunLog.Logger), trust.Providers, trust.ChainValidation);
     }
 
     /// <summary>The root of the connected Sandbox, to complete the chains of the SimpleSign report; null without a Sandbox.</summary>
@@ -304,14 +310,6 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
                 timed = [set];
             }
 
-            if (settings.Trust.Contains(TrustChoice.SandboxIofeList) && await SandboxIofeListAsync(connection, cancellationToken) is { } iofe)
-            {
-                providers.Add(iofe);
-                roots.AddRange(iofe.GetTrustAnchors());
-                trustedLists = [.. trustedLists ?? [], .. iofe.TrustedLists];
-                timed = [.. timed ?? [], iofe];
-            }
-
             // The root as a bare anchor: asked for, or the trusted list asked of a Sandbox that has none.
             if (settings.Trust.Contains(TrustChoice.Sandbox)
                 || (settings.Trust.Contains(TrustChoice.SandboxTrustedList) && connection.LotlUri is null))
@@ -330,6 +328,28 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             roots.AddRange(PublicTsaRoots.Certificates);
         }
 
+        // The trust profile (and the trust of others): its anchors, its trusted lists and its chain validation.
+        IReadOnlyList<IChainValidationProvider> chainValidation = [];
+        if (await (profiles ?? TrustFrameworks.ProfileTrust.Shared).ResolveAsync(settings.Profile, settings.ProfileSource, settings.TrustProfiles, sandbox, cancellationToken)
+            is { } profile)
+        {
+            providers.AddRange(profile.TrustAnchorProviders);
+            roots.AddRange(profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()));
+            var lists = profile.TrustAnchorProviders.OfType<Core.Extensions.ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists).ToList();
+            if (lists.Count > 0)
+            {
+                trustedLists = [.. trustedLists ?? [], .. lists];
+            }
+
+            var history = profile.TrustAnchorProviders.OfType<Core.Extensions.ITimedTrustAnchorProvider>().ToList();
+            if (history.Count > 0)
+            {
+                timed = [.. timed ?? [], .. history];
+            }
+
+            chainValidation = profile.ChainValidationProviders;
+        }
+
         var options = new ValidationOptions
         {
             TrustSystemRoots = settings.Trust.Contains(TrustChoice.System),
@@ -341,8 +361,9 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             Level = settings.Level,
             Verifier = VerifierOptions.Default with { RevocationStrategy = settings.RevocationStrategy },
         };
-        return new ValidationTrust(options) { Providers = providers };
+        return new ValidationTrust(options) { Providers = providers, ChainValidation = chainValidation };
     }
+
 
     /// <summary>
     /// The Sandbox's trusted lists, read again for each validation so its trusted-list failures show at once. An expired
@@ -372,29 +393,6 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
     }
 
-    /// <summary>
-    /// The Sandbox's trusted list, read again for each validation, with the options of <c>IofeExtension</c>. An
-    /// expired list is kept (the policy's TLNotExpired judges it); a list that cannot be read or verified gives no anchors.
-    /// </summary>
-    private async Task<XAdES.TrustedLists.TrustedList?> SandboxIofeListAsync(SandboxConnection connection, CancellationToken cancellationToken)
-    {
-        if (connection.TlUri is not { } url || connection.TlSigner is not { } signer)
-        {
-            RunLog.Logger.LogWarning("The Sandbox publishes no trusted list: update it.");
-            return null;
-        }
-
-        try
-        {
-            return await XAdES.TrustedLists.TrustedList.DownloadAsync(
-                url, Peru.Iofe.IofeExtension.DefaultListOptions with { SignerCertificates = [signer], RejectExpired = false }, sandbox, cancellationToken: cancellationToken);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Security.Cryptography.CryptographicException or InvalidDataException or System.Xml.XmlException)
-        {
-            RunLog.Logger.LogWarning("The Sandbox's trusted list could not be read with the IOFE profile: {Reason}", ex.Message);
-            return null;
-        }
-    }
 
     internal static SignatureReport ToReport(SignatureValidationResult r) =>
         ToReport(new PadesVerdict(
@@ -492,7 +490,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     /// <summary>The <c>ValidationOptions</c> initializers for the policy, level and revocation strategy that differ from the defaults.</summary>
     internal static IEnumerable<string> PolicyOptionsCode(ValidationSettings s)
     {
-        if (s.PolicyId is not null)
+        // The profile's own preset: ValidationOptions.Profile sets it.
+        if (s.PolicyId is not null && !ProfileSetsPolicy(s))
         {
             yield return $"Policy = ValidationPolicy.Load(\"{PolicyUploads.ValidationFileName}\")";
         }
@@ -527,18 +526,15 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         // The trusted list with the IOFE profile: read directly, as IofeExtension reads INDECOPI's.
-        if (s.Trust.Contains(TrustChoice.SandboxIofeList))
-        {
-            string iofe = sandbox.Current?.TlUri?.AbsoluteUri ?? "http://localhost:5300/tl/tl.xml";
-            line.Add("--tsl", iofe, "--tsl-signer", TlSignerFile, "--tsl-profile", "iofe");
-        }
+        // The trust profile: --profile (and --sandbox for the Sandbox's lists), the others' trust with --trust-profile.
+        ProfileCli(line, s, sandbox);
 
         if (!s.Trust.Contains(TrustChoice.System))
         {
             line.Add("--no-system-roots");
         }
 
-        if (s.PolicyId is not null)
+        if (s.PolicyId is not null && !ProfileSetsPolicy(s))
         {
             line.Add("--policy", PolicyUploads.ValidationFileName);
         }
@@ -601,12 +597,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             files[LotlSignerFile] = Encoding.ASCII.GetBytes(signer.ExportCertificatePem() + "\n");
         }
 
-        if (settings.Trust.Contains(TrustChoice.SandboxIofeList) && sandbox.Current?.TlSigner is { } tlSigner)
-        {
-            files[TlSignerFile] = Encoding.ASCII.GetBytes(tlSigner.ExportCertificatePem() + "\n");
-        }
-
-        if (settings.PolicyId is { } policyId && documents.TryGet(policyId, out var policy))
+        if (settings.PolicyId is { } policyId && !ProfileSetsPolicy(settings) && documents.TryGet(policyId, out var policy))
         {
             files[PolicyUploads.ValidationFileName] = policy!.Content;
         }
@@ -617,37 +608,76 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     /// <summary>The LOTL signer certificate a generated <c>validate</c> command reads.</summary>
     internal const string LotlSignerFile = "lotl-signer.pem";
 
-    /// <summary>The certificate the trusted list is signed with, as a generated <c>validate</c> command reads it.</summary>
-    internal const string TlSignerFile = "tl-signer.pem";
+    /// <summary>
+    /// Whether the profile sets the policy the settings name (its own preset): the command then says <c>--profile</c>
+    /// alone, without <c>--policy</c>.
+    /// </summary>
+    internal static bool ProfileSetsPolicy(ValidationSettings s) =>
+        s.PolicyId is not null && s.PolicyId == TrustFrameworks.ProfileTrust.PolicyPresetId(s.Profile, Policies.PolicyViewer.Validation);
+
+    /// <summary>The CLI flags of the trust profile: <c>--profile NAME</c>, <c>--sandbox URL</c> for the Sandbox's lists, <c>--trust-profile</c>.</summary>
+    internal static void ProfileCli(CliLine line, ValidationSettings s, SandboxEnvironment sandbox)
+    {
+        if (TrustFrameworks.ProfileTrust.Name(s.Profile) is { } name)
+        {
+            line.Add("--profile", name);
+        }
+
+        foreach (string extra in s.TrustProfiles.Select(TrustFrameworks.ProfileTrust.Name).OfType<string>().Distinct())
+        {
+            line.Add("--trust-profile", extra);
+        }
+
+        if (s.Profile == TrustFrameworks.TrustProfileChoice.Sandbox || s.TrustProfiles.Contains(TrustFrameworks.TrustProfileChoice.Sandbox)
+            || (s.Profile == TrustFrameworks.TrustProfileChoice.Iofe && s.ProfileSource == TrustFrameworks.IofeListSource.Sandbox))
+        {
+            line.Add("--sandbox", sandbox.Current?.Url.AbsoluteUri ?? "http://localhost:5300/");
+        }
+    }
 
     /// <summary>Whether the settings read the Sandbox's trusted list (the snippets then load it).</summary>
     internal static bool UsesSandboxTrustedList(ValidationSettings s) => s.Trust.Contains(TrustChoice.SandboxTrustedList);
 
     /// <summary>The ValidationOptions lines that trust the Sandbox through its trusted list, for the code snippets.</summary>
-    internal static IEnumerable<string> TrustedListOptionsCode(ValidationSettings s) => (UsesSandboxTrustedList(s), s.Trust.Contains(TrustChoice.SandboxIofeList)) switch
+    internal static IEnumerable<string> TrustedListOptionsCode(ValidationSettings s) => UsesSandboxTrustedList(s) switch
     {
-        (true, _) =>
+        true =>
         [
-            "// var lists = await TrustedListSet.LoadAsync(new() { LotlLocation = new Uri(\"http://localhost:5300/tl/lotl.xml\"), LotlSignerCertificates = [lotlSigner] });",
+            "// var lists = await TrustedListSet.LoadAsync(new() { LotlLocation = new Uri(\"http://localhost:5300/tl/lotl.xml\"), LotlSignerCertificates = [lotlSigner] })",
             "TrustedRoots = [.. lists.GetTrustAnchors()]",
             "TrustedLists = lists.TrustedLists",
             "TimedTrustAnchors = [lists]",
         ],
-        (false, true) =>
-        [
-            "// var iofe = await TrustedList.DownloadAsync(new Uri(\"http://localhost:5300/tl/tl.xml\"), IofeExtension.DefaultListOptions with { SignerCertificates = [tlSigner] });",
-            "TrustedRoots = [.. iofe.GetTrustAnchors()]",
-            "TrustedLists = iofe.TrustedLists",
-            "TimedTrustAnchors = [iofe]",
-        ],
         _ => [],
     };
+
+    /// <summary>The ValidationOptions line of the trust profile (with the comment that creates it), for the code snippets.</summary>
+    internal static IEnumerable<string> ProfileOptionsCode(ValidationSettings s)
+    {
+        string? create = s.Profile switch
+        {
+            TrustFrameworks.TrustProfileChoice.Iofe => s.ProfileSource == TrustFrameworks.IofeListSource.Sandbox
+                ? "await IofeProfile.LoadAsync(new IofeExtensionOptions { TrustedListUrl = new Uri(\"http://localhost:5300/tl/tl.xml\"), TrustedListSigners = [tlSigner] })"
+                : "await IofeProfile.LoadAsync() /* INDECOPI's list, checked against the bundled signer */",
+            TrustFrameworks.TrustProfileChoice.IcpBrasil => "IcpBrasilProfile.Create()",
+            TrustFrameworks.TrustProfileChoice.GovBr => "GovBrProfile.Create()",
+            TrustFrameworks.TrustProfileChoice.Sandbox => "new TrustProfile(\"sandbox\", \"Sandbox\", SigningPolicy.Default, ValidationPolicy.Default, [lists], [])",
+            _ => null,
+        };
+        if (create is null)
+        {
+            return [];
+        }
+
+        string extras = string.Concat(s.TrustProfiles.Select(TrustFrameworks.ProfileTrust.Name).OfType<string>().Select(n => $".WithTrustFrom({n})"));
+        return [$"// var profile = {create}{extras}", "Profile = profile"];
+    }
 
     internal CodeSnippets ValidationCode(ValidationSettings s)
     {
         var sb = new StringBuilder();
         sb.Append("using SimpleSign.PAdES.Validation;\nusing SimpleSign.Core.Validation;\n");
-        sb.Append(s.PolicyId is null ? "\n" : "using SimpleSign.Core.Policies;\n\n");
+        sb.Append(s.PolicyId is null || ProfileSetsPolicy(s) ? "\n" : "using SimpleSign.Core.Policies;\n\n");
         var options = new List<string>();
         if (!s.Trust.Contains(TrustChoice.System))
         {
@@ -660,6 +690,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         options.AddRange(TrustedListOptionsCode(s));
+        options.AddRange(ProfileOptionsCode(s));
 
         if (s.TimeoutSeconds != 10)
         {
@@ -667,7 +698,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         options.AddRange(PolicyOptionsCode(s));
-        string optionsCode = options.Count == 0 ? "ValidationOptions.Default" : "new ValidationOptions\n{\n    " + string.Join(",\n    ", options) + ",\n}";
+        string optionsCode = options.Count == 0 ? "ValidationOptions.Default"
+            : "new ValidationOptions\n{\n" + string.Concat(options.Select(o => o.StartsWith("//", StringComparison.Ordinal) ? $"    {o}\n" : $"    {o},\n")) + "}";
         sb.Append("var options = ").Append(optionsCode).Append(";\n");
         sb.Append("var validator = new PdfSignatureValidator(options);\n");
         sb.Append("\nIReadOnlyList<SignatureValidationResult> results = await validator.ValidateAsync(File.OpenRead(\"signed.pdf\"));\n");

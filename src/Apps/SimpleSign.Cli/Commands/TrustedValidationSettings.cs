@@ -12,8 +12,23 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, iofe, iofe-nonrepudiation). Write one with 'simplesign policy export validation [--preset NAME]'")]
+    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, iofe, icp-brasil, govbr). Write one with 'simplesign policy export validation [--preset NAME]'")]
     public string? PolicyPath { get; init; }
+
+    /// <summary>The trust profile: its validation policy (unless --policy) and its trust (unless --tsl/--lotl).</summary>
+    [CommandOption("--profile <NAME>")]
+    [Description("Trust profile: sandbox, iofe, icp-brasil or gov-br. Sets the validation policy (unless --policy) and the trust (unless --tsl or --lotl); see 'simplesign profiles'")]
+    public string? Profile { get; init; }
+
+    /// <summary>Profiles whose trust is added (their policies are not used).</summary>
+    [CommandOption("--trust-profile <NAME>")]
+    [Description("Also trust what this profile trusts (repeatable, e.g. --profile icp-brasil --trust-profile gov-br); the policy stays --profile's")]
+    public string[] TrustProfiles { get; init; } = [];
+
+    /// <summary>A running SimpleSign Sandbox (its origins are also allowed).</summary>
+    [CommandOption("--sandbox <URL>")]
+    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and --profile iofe reads its list instead of INDECOPI's")]
+    public string? Sandbox { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>
     [CommandOption("--policy-signer <PATH>")]
@@ -186,9 +201,14 @@ internal class TrustedValidationSettings : CommonSettings
             return Spectre.Console.ValidationResult.Error($"Unknown --tsl-profile '{TrustedListProfile}': use {TrustedListProfiles.Names}.");
         }
 
-        if (TrustedList is not null && TrustedListSignerPath is null)
+        if (TrustedList is not null && TrustedListSignerPath is null && !TrustedListProfiles.IsIofe(TrustedListProfile))
         {
-            return Spectre.Console.ValidationResult.Error("--tsl needs --tsl-signer: the certificate the list must be signed with.");
+            return Spectre.Console.ValidationResult.Error("--tsl needs --tsl-signer: the certificate the list must be signed with (with --tsl-profile iofe, INDECOPI's bundled one is used).");
+        }
+
+        if (CliProfiles.Check(Profile, TrustProfiles, Sandbox, signing: false) is { } profileError)
+        {
+            return Spectre.Console.ValidationResult.Error(profileError);
         }
 
         return Language is "en" or "es" or "es-PE"
@@ -213,6 +233,22 @@ internal class TrustedValidationSettings : CommonSettings
             : ValidationPolicy.LoadSigned(PolicyPath, PolicyPath + ".p7s", LoadCertificate(PolicySignerPath));
 
         var anchors = new List<X509Certificate2>();
+
+        // The trust profile: its policy unless --policy, its trust unless a trusted list is given explicitly.
+        if (await CliProfiles.ResolveAsync(Profile, TrustProfiles, Sandbox, http ?? CliNetwork.Provider, cancellationToken) is { } profile)
+        {
+            if (PolicyPath is null)
+            {
+                policy = profile.ValidationPolicy;
+            }
+
+            if (TrustedList is null && Lotl is null)
+            {
+                anchors.AddRange(profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()));
+                LoadedTrustedLists.AddRange(profile.TrustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists));
+                LoadedTimedAnchors.AddRange(profile.TrustAnchorProviders.OfType<ITimedTrustAnchorProvider>());
+            }
+        }
         if (TrustDirectory is not null)
         {
             var provider = new DirectoryTrustAnchorProvider(
@@ -224,7 +260,7 @@ internal class TrustedValidationSettings : CommonSettings
         // An expired list is kept: the TLNotExpired constraint of the policy judges it, as EU DSS does.
         if (TrustedList is not null)
         {
-            var options = TrustedListProfiles.Options(TrustedListProfile, LoadCertificate(TrustedListSignerPath!)) with { RejectExpired = false };
+            var options = TrustedListProfiles.Options(TrustedListProfile, TrustedListSignerPath is null ? null : LoadCertificate(TrustedListSignerPath)) with { RejectExpired = false };
             bool iofe = TrustedListProfile is not null && TrustedListProfile.Equals("iofe", StringComparison.OrdinalIgnoreCase);
 
             try

@@ -212,7 +212,7 @@ internal sealed class SignDirCommand(ICertificateChainService certChainService) 
                 builder = builder.WithOperationId(settings.OperationId);
             }
 
-            builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
+            builder = builder.WithSigningPolicy(await settings.SigningPolicyAsync(settings.SigningPolicy, cancellationToken)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
             if (settings.AuditSink() is { } audit)
             {
                 builder = builder.WithAuditSink(audit);

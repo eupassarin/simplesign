@@ -9,7 +9,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `sandbox:SIGNER` | A Sandbox signer, as `credentialId` (see the Sandbox signers below). |
 | `sample:ID` | A sample PDF as `documentId` (`contract`, …), or a PAdES validation sample as a validation's `fileId` (`valid`, `revoked`, `expired`, `tampered-content`, `untrusted-root`, `untrusted-tsa`…). |
 | `cades-sample:ID` / `xades-sample:ID` | A CAdES or XAdES sample: data to sign as `dataId` (`text`, `json`, `pdf` / `order`), or a signed file as a validation's `fileId` (`v-valid`, `v-tampered`… / `v-xades`, `v-changed`…); `ID#data` is the data a detached sample signature is checked against, as a validation's `dataId`. |
-| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: `preset:signing:strict`, `preset:signing:minimal`, `preset:signing:anchored`, `preset:signing:iofe`, `preset:signing:iofe-nonrepudiation`, `preset:validation:strict`, `preset:validation:iofe`, `preset:validation:iofe-nonrepudiation`. |
+| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: `preset:signing:strict`, `preset:signing:minimal`, `preset:signing:anchored`, `preset:signing:iofe`, `preset:validation:strict`, `preset:validation:iofe`, `preset:signing:icp-brasil`, `preset:validation:icp-brasil`, `preset:validation:govbr`. |
 | `step:ID` | The file an earlier step signed, as `fileId` of a validation or as the input of a later signature. |
 | `sandbox-short-lived:N` | A Sandbox signer issued when the step runs and valid for N seconds (1 to 3600), as `credentialId`: with a later step's `wait`, its certificate has expired by validation time. |
 | `fixture:NAME` | A bundled file, as an upload option: `fixture:signature-policy` (A signature-policy document (for the signature-policy-store)), `fixture:attribute-certificate` (An X.509 attribute certificate (RFC 5755) with the role 'Legal representative'), `fixture:saml-assertion` (A SAML 2.0 assertion about the signer), `fixture:validation-policy-en319422` (A validation policy with the EN 319 422 time-stamp profile: accuracy given, no ordering, the Sandbox TSA's policy). |
@@ -24,19 +24,23 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 |---|---|---|---|
 | `documentId` | document |  | Document: The PDF to sign. Its facts decide what the next steps offer. |
 | `credentialId` | credential |  | Certificate and key: A sandbox certificate, a PFX, the OS store, a PKCS#11 token or a cloud certificate. |
-| `kind` | choice | `Baseline`, `CustomPolicy` | Signature type: Baseline levels, or a signature policy. |
+| `kind` | choice | `Baseline`, `CustomPolicy`, `IcpBrasil` | Signature type: Baseline levels, or a signature policy. |
 | `level` | choice | `BB`, `BT`, `BLT`, `BLTA` | Baseline level: Each level adds what a validator needs later. |
 | `customPolicy.oid` | text |  | Policy OID: The object identifier of the signature policy. |
 | `customPolicy.hashAlgorithm` | choice | `Sha256`, `Sha384`, `Sha512`, `Sha3_256`, `Sha3_384`, `Sha3_512` | Policy hash algorithm: The algorithm of the policy document hash. |
 | `customPolicy.hashHex` | text |  | Policy hash (hex): The hash of the policy document, in hexadecimal. |
 | `customPolicy.uri` | text |  | Policy URI: Where the policy document can be downloaded (SPuri qualifier). Optional. |
 | `returnLowerLevel` | toggle |  | If the TSA or revocation fails: Throw (default), or sign at the highest level reached. |
+| `icpPolicy` | choice | `AdRb`, `AdRt`, `AdRc`, `AdRa` | ICP-Brasil policy: The ICP-Brasil signature policy: it writes the policy's identifier and hash, the PBAD.PAdES sub-filter the policies mandate, and the level it needs. The newest version that accepts the signer's root is chosen. |
 | `revocationPreference` | choice | `OcspFirst`, `CrlFirst` | Prefer OCSP or CRL: Which revocation source is tried first when collecting the validation data; the other one is the fallback. |
 | `timestamp` | tsa |  | Time-stamping authority (TSA): Who signs the trusted time of the signature. |
 | `separateArchiveTsa` | toggle |  | Different TSA for the archive timestamp: By default the document timestamp comes from the signature TSA. |
 | `archiveTimestamp` | tsa |  | Archive TSA: The TSA of the document timestamp (B-LTA). |
 | `signingPolicyId` | upload |  | Signing policy (JSON): The checks made before signing: a JSON file with root SigningConstraints. Without a file, the library's default: validity of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. A constraint at FAIL stops the signature, at WARN it becomes a warning. |
-| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList`, `SandboxIofeList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.profile` | choice | `None`, `Sandbox`, `Iofe`, `IcpBrasil` | Trust profile: A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust. |
+| `signingControls.profileSource` | choice | `Indecopi`, `Sandbox` | IOFE list: Which list the Peru (IOFE) profile reads. |
+| `signingControls.trustProfiles` | trust | `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Also trust: Other profiles whose trust is added; their policies are not used. |
 | `signingControls.expectedTsa` | choice | `""`, `tsa`, `tsa-revoked` | Expected TSA: The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted). |
 | `signingControls.auditLog` | toggle |  | Audit trail: Records each signature made or refused (certificate, policy, hashes, reason) in a hash-chained trail; the Logs tab shows the records and whether the chain holds. |
 | `hash` | choice | `Sha256`, `Sha384`, `Sha512`, `Sha3_256`, `Sha3_384`, `Sha3_512` | Digest algorithm: Hash of the document bytes and of the signed attributes. |
@@ -102,7 +106,10 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `operationId` | text |  | Operation id: A correlation id for logs and warnings. |
 | `attemptRefused` | toggle |  | Attempt refused signatures: Runs even when the signing policy is foreseen to refuse the signer, so the result shows the library's own refusal (SigningException and its reason) — what a certification needs as evidence. |
 | `validate` | toggle |  | Validate after signing: Validates the produced file with SimpleSign's own validator. |
-| `validation.trust` | trust | `SandboxTrustedList`, `SandboxIofeList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.trust` | trust | `SandboxTrustedList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.profile` | choice | `None`, `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Trust profile: A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust. |
+| `validation.profileSource` | choice | `Indecopi`, `Sandbox` | IOFE list: Which list the Peru (IOFE) profile reads. |
+| `validation.trustProfiles` | trust | `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Also trust: Other profiles whose trust is added; their policies are not used. |
 | `validation.policyId` | upload |  | Validation policy (JSON): The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on. |
 | `validation.level` | choice | `BasicSignatures`, `Timestamps`, `LongTermData`, `ArchivalData` | Validation level: How much of each signature is validated. |
 | `validation.revocationStrategy` | choice | `OcspFirst`, `CrlFirst` | Revocation strategy: Which revocation source is asked first; the other one is the fallback. |
@@ -117,18 +124,22 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `signerIndex` | number |  | Signer to countersign: The index (0-based) of the signer whose signature value is signed. |
 | `contentType` | choice | `Detached`, `Enveloped` | Content: Whether the signed content travels inside the signature. |
 | `credentialId` | credential |  | Certificate and key: A sandbox certificate, a PFX, the OS store, a PKCS#11 token or a cloud certificate. |
-| `kind` | choice | `Baseline`, `CustomPolicy` | Signature type: Baseline levels, or a signature policy. |
+| `kind` | choice | `Baseline`, `CustomPolicy`, `IcpBrasil` | Signature type: Baseline levels, or a signature policy. |
 | `level` | choice | `BB`, `BT`, `BLT`, `BLTA` | Baseline level: Each level adds what a validator needs later. |
 | `policyOid` | text |  | Policy OID: The object identifier of the signature policy. |
 | `policyUri` | text |  | Policy URI: Where the policy document can be downloaded (SPuri qualifier). Optional. |
 | `policyDocumentId` | upload |  | Policy document (policy store): The signature policy file. Its SHA-256 goes into the policy identifier and the file is embedded in the signature, so the policy can be read offline. |
 | `policySpecification` | text |  | Policy document specification: The OID or URI of the specification that defines the syntax of the policy document (SPDocSpecification). Used with a policy document. |
 | `extendedForm` | choice | `None`, `CompleteReferences`, `ExtendedLong`, `Archive` | Extended form: The older CAdES forms with references to the validation data, still required by some policies. |
+| `icpPolicy` | choice | `AdRb`, `AdRt`, `AdRv`, `AdRc`, `AdRa` | ICP-Brasil policy: The ICP-Brasil signature policy: it writes the policy's identifier and hash, and the level and extended form it needs. The newest version that accepts the signer's root is chosen. |
 | `revocationPreference` | choice | `OcspFirst`, `CrlFirst` | Prefer OCSP or CRL: Which revocation source is tried first when collecting the validation data; the other one is the fallback. |
 | `timestamp` | tsa |  | Time-stamping authority (TSA): Who signs the trusted time of the signature. |
 | `contentTimestamp` | toggle |  | Content timestamp: A timestamp over the content, asked from the signature TSA before signing: proves the content existed before the signature. |
 | `signingPolicyId` | upload |  | Signing policy (JSON): The checks made before signing: a JSON file with root SigningConstraints. Without a file, the library's default: validity of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. A constraint at FAIL stops the signature, at WARN it becomes a warning. |
-| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList`, `SandboxIofeList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.profile` | choice | `None`, `Sandbox`, `Iofe`, `IcpBrasil` | Trust profile: A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust. |
+| `signingControls.profileSource` | choice | `Indecopi`, `Sandbox` | IOFE list: Which list the Peru (IOFE) profile reads. |
+| `signingControls.trustProfiles` | trust | `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Also trust: Other profiles whose trust is added; their policies are not used. |
 | `signingControls.expectedTsa` | choice | `""`, `tsa`, `tsa-revoked` | Expected TSA: The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted). |
 | `signingControls.auditLog` | toggle |  | Audit trail: Records each signature made or refused (certificate, policy, hashes, reason) in a hash-chained trail; the Logs tab shows the records and whether the chain holds. |
 | `hash` | choice | `Sha256`, `Sha384`, `Sha512`, `Sha3_256`, `Sha3_384`, `Sha3_512` | Digest algorithm: Hash of the document bytes and of the signed attributes. |
@@ -147,7 +158,10 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `operationId` | text |  | Operation id: A correlation id for logs and warnings. |
 | `attemptRefused` | toggle |  | Attempt refused signatures: Runs even when the signing policy is foreseen to refuse the signer, so the result shows the library's own refusal (SigningException and its reason) — what a certification needs as evidence. |
 | `validate` | toggle |  | Validate after signing: Validates the produced file with SimpleSign's own validator. |
-| `validation.trust` | trust | `SandboxTrustedList`, `SandboxIofeList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.trust` | trust | `SandboxTrustedList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.profile` | choice | `None`, `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Trust profile: A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust. |
+| `validation.profileSource` | choice | `Indecopi`, `Sandbox` | IOFE list: Which list the Peru (IOFE) profile reads. |
+| `validation.trustProfiles` | trust | `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Also trust: Other profiles whose trust is added; their policies are not used. |
 | `validation.policyId` | upload |  | Validation policy (JSON): The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on. |
 | `validation.level` | choice | `BasicSignatures`, `Timestamps`, `LongTermData`, `ArchivalData` | Validation level: How much of each signature is validated. |
 | `validation.revocationStrategy` | choice | `OcspFirst`, `CrlFirst` | Revocation strategy: Which revocation source is asked first; the other one is the fallback. |
@@ -164,18 +178,22 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `externalObjectId` | upload |  | Additional data object (external): A file signed together with the document and kept outside the signature: its ds:Reference points to the file name and digests the file as it is. |
 | `counterSign` | toggle |  | XAdES countersignature: Countersign a signature the document already has: the new signature signs its SignatureValue and is stored in its CounterSignature unsigned property. |
 | `counterSignatureId` | text |  | Signature to countersign: The Id of the ds:Signature to countersign. Empty: the only signature of the document. |
-| `kind` | choice | `Baseline`, `CustomPolicy` | Signature type: Baseline levels, or a signature policy. |
+| `kind` | choice | `Baseline`, `CustomPolicy`, `IcpBrasil` | Signature type: Baseline levels, or a signature policy. |
 | `level` | choice | `BB`, `BT`, `BLT`, `BLTA` | Baseline level: Each level adds what a validator needs later. |
 | `policyOid` | text |  | Policy OID: The object identifier of the signature policy. |
 | `policyUri` | text |  | Policy URI: Where the policy document can be downloaded (SPuri qualifier). Optional. |
 | `policyDocumentId` | upload |  | Policy document (policy store): The signature policy file. Its SHA-256 goes into the policy identifier and the file is embedded in the signature, so the policy can be read offline. |
 | `policySpecification` | text |  | Policy document specification: The OID or URI of the specification that defines the syntax of the policy document (SPDocSpecification). Used with a policy document. |
 | `extendedForm` | choice | `None`, `CompleteReferences`, `ExtendedLong`, `Archive` | Extended form: The older XAdES forms with references to the validation data, still required by some policies. |
+| `icpPolicy` | choice | `AdRb`, `AdRt`, `AdRv`, `AdRc`, `AdRa` | ICP-Brasil policy: The ICP-Brasil signature policy: it writes the policy's identifier and hash, and the level and extended form it needs. The newest version that accepts the signer's root is chosen. |
 | `revocationPreference` | choice | `OcspFirst`, `CrlFirst` | Prefer OCSP or CRL: Which revocation source is tried first when collecting the validation data; the other one is the fallback. |
 | `timestamp` | tsa |  | Time-stamping authority (TSA): Who signs the trusted time of the signature. |
 | `dataObjectsTimestamp` | toggle |  | Data objects timestamp: A timestamp over the signed data, asked from the signature TSA before signing (AllDataObjectsTimeStamp). |
 | `signingPolicyId` | upload |  | Signing policy (JSON): The checks made before signing: a JSON file with root SigningConstraints. Without a file, the library's default: validity of the chain, key usage digitalSignature or nonRepudiation, RSA of 2048 bits or more, SHA-2 or SHA-3. A constraint at FAIL stops the signature, at WARN it becomes a warning. |
-| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList`, `SandboxIofeList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.trust` | trust | `SandboxRoot`, `SandboxTrustedList` | Trust anchors before signing: Where the signing certificate and each TSA must chain to when the signing policy's ProspectiveCertificateChain constraints are not IGNORE. They also complete a chain given without its root for the revocation check. |
+| `signingControls.profile` | choice | `None`, `Sandbox`, `Iofe`, `IcpBrasil` | Trust profile: A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust. |
+| `signingControls.profileSource` | choice | `Indecopi`, `Sandbox` | IOFE list: Which list the Peru (IOFE) profile reads. |
+| `signingControls.trustProfiles` | trust | `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Also trust: Other profiles whose trust is added; their policies are not used. |
 | `signingControls.expectedTsa` | choice | `""`, `tsa`, `tsa-revoked` | Expected TSA: The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted). |
 | `signingControls.auditLog` | toggle |  | Audit trail: Records each signature made or refused (certificate, policy, hashes, reason) in a hash-chained trail; the Logs tab shows the records and whether the chain holds. |
 | `hash` | choice | `Sha256`, `Sha384`, `Sha512`, `Sha3_256`, `Sha3_384`, `Sha3_512` | Digest algorithm: Hash of the document bytes and of the signed attributes. |
@@ -197,7 +215,10 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `operationId` | text |  | Operation id: A correlation id for logs and warnings. |
 | `attemptRefused` | toggle |  | Attempt refused signatures: Runs even when the signing policy is foreseen to refuse the signer, so the result shows the library's own refusal (SigningException and its reason) — what a certification needs as evidence. |
 | `validate` | toggle |  | Validate after signing: Validates the produced file with SimpleSign's own validator. |
-| `validation.trust` | trust | `SandboxTrustedList`, `SandboxIofeList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.trust` | trust | `SandboxTrustedList`, `Sandbox`, `System`, `PublicTsas` | Trusted roots: Which roots the validator trusts. |
+| `validation.profile` | choice | `None`, `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Trust profile: A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust. |
+| `validation.profileSource` | choice | `Indecopi`, `Sandbox` | IOFE list: Which list the Peru (IOFE) profile reads. |
+| `validation.trustProfiles` | trust | `Sandbox`, `Iofe`, `IcpBrasil`, `GovBr` | Also trust: Other profiles whose trust is added; their policies are not used. |
 | `validation.policyId` | upload |  | Validation policy (JSON): The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on. |
 | `validation.level` | choice | `BasicSignatures`, `Timestamps`, `LongTermData`, `ArchivalData` | Validation level: How much of each signature is validated. |
 | `validation.revocationStrategy` | choice | `OcspFirst`, `CrlFirst` | Revocation strategy: Which revocation source is asked first; the other one is the fallback. |

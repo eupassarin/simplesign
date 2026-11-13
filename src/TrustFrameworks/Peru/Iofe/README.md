@@ -11,8 +11,8 @@
 - `IofeTrustedListSource` (`IofeExtension.LoadRefreshableAsync`, `services.AddSimpleSignIofe(options)`): the list read
   again on demand or on a schedule, swapped atomically, the last good copy kept until its NextUpdate, a `Changed`
   event with the services added and removed.
-- `IofePolicies.Signing` / `SigningNonRepudiation` / `Validation` / `ValidationNonRepudiation`: the policies of
-  INDECOPI's accreditation guide (v4.0), also kept as files in `docs/policies/iofe-*.json`. Signing with them needs trust
+- `IofePolicies.Signing` / `Validation`: the policies of INDECOPI's accreditation guide (v4.0); `simplesign policy
+  export --preset iofe` writes them out as JSON. Signing with them needs trust
   anchors (the extension or `WithTrustAnchors`) and checks the whole chain's revocation and every TSA before signing.
 
 Documentation: [docs/articles/iofe.md](../../../../docs/articles/iofe.md); every item of the guide's annex B in

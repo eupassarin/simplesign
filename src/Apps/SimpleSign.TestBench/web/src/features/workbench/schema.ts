@@ -71,6 +71,8 @@ export interface SchemaPreset {
   summary: string
   formats: Format[]
   set: Record<string, string>
+  /** The trust framework whose levels these are ("IcpBrasil"); absent for the ETSI baseline levels. */
+  framework?: string | null
 }
 
 export type Options = Record<string, unknown>

@@ -46,7 +46,7 @@ the application…"), and the applicant justifies in annex B each item it says d
 | F-9 | Revocation: every certificate of the chain is not revoked | P (`chain-revoked`) |
 | F-10 | Revocation: or OCSP (RFC 2560) for the certificate and its chain | P (`ocsp-good`, `ocsp-revoked`, `ocsp-unauthorized`) |
 | F-11 | An expired certificate cannot sign | P (`expired`, `not-yet-valid`, `chain-expired`) |
-| F-12 | The certificate's nonRepudiation bit is checked | P (`no-nonrepudiation-agent` with `IofePolicies.SigningNonRepudiation`; `no-key-usage`, `no-key-usage-extension`, `no-key-usage-cades`, `no-key-usage-xades`). `IofePolicies.Signing` also accepts digitalSignature (section 4.1): an automated agent uses `SigningNonRepudiation` |
+| F-12 | The certificate's nonRepudiation bit is checked | P (`no-nonrepudiation-agent` with playbook:iofe-agent, the iofe policy with KeyUsage = nonRepudiation declared in the playbook; `no-key-usage`, `no-key-usage-extension`, `no-key-usage-cades`, `no-key-usage-xades`). `IofePolicies.Signing` also accepts digitalSignature (section 4.1): an automated agent requires nonRepudiation (the adjustment above) |
 | F-13 | The application is protected against unauthorized access | X — the product (authentication, network exposure). The Agent listens on 127.0.0.1 only; the TestBench and Sandbox are test tools |
 | F-14 | The certificate checks cannot be switched off (except under a contingency procedure INDECOPI approved) | X — the product must not expose a way to relax the policy. In the library the checks are the `SigningPolicy` given to the signer; relaxing one is an explicit `.With(…, IGNORE)` in code or a policy file, recorded in the audit trail (`policy` of each record) |
 | F-15 | Audit log of the signatures produced, by kind of transaction | P (`audit`, `audit-refused`) + U (`JsonLinesAuditSink` hash chain, `simplesign audit verify`) |
@@ -86,7 +86,7 @@ invalid ones); differences are noted.
 | V-9 | Revocation: every certificate of the chain | P (`v-revoked`) |
 | V-10 | Revocation: or OCSP for the certificate and its chain | P (`v-revoked`: the Sandbox answers OCSP too, which the validator asks first) |
 | V-11 | The certificate and its chain have not expired | P (`v-expired`) |
-| V-12 | The certificate's nonRepudiation bit | P (`v-no-nonrepudiation` with `IofePolicies.ValidationNonRepudiation`) |
+| V-12 | The certificate's nonRepudiation bit | P (`v-no-nonrepudiation` with playbook:iofe-agent-validation, the iofe validation policy with KeyUsage = nonRepudiation) |
 | V-13 | Protected against unauthorized access | X — as F-13 |
 | V-14 | The checks cannot be switched off | X — as F-14 (`ValidationPolicy`) |
 | V-15 | Audit log | P (`audit`, `audit-refused`: signing; a verifying product logs its validation reports itself — X) |

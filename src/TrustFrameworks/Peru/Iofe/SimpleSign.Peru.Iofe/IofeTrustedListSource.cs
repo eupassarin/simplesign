@@ -182,7 +182,6 @@ public sealed class IofeTrustedListSource : ITimedTrustAnchorProvider, ITrustedL
     /// <param name="options">The list location, its signers, the cache and the HTTP client.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The source, serving the copy read.</returns>
-    /// <exception cref="ArgumentException">No <see cref="IofeExtensionOptions.TrustedListSigners"/>.</exception>
     /// <exception cref="HttpRequestException">The list could not be downloaded and there is no usable cache.</exception>
     public static Task<IofeTrustedListSource> LoadAsync(IofeExtensionOptions options, CancellationToken cancellationToken = default) =>
         LoadAsync(options, TimeProvider.System, cancellationToken);

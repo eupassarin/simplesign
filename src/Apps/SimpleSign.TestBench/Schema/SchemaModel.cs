@@ -62,7 +62,11 @@ public sealed record SchemaFormat(string Id, string Title, string Summary, IRead
 public sealed record SchemaStage(string Id, string Title, string Summary, IReadOnlyDictionary<string, IReadOnlyList<StandardRef>> Standards);
 
 /// <summary>A one-click combination: the values it sets, by option path, for each format it applies to.</summary>
-public sealed record SchemaPreset(string Id, string Title, string Summary, IReadOnlyList<string> Formats, IReadOnlyDictionary<string, string> Set);
+public sealed record SchemaPreset(string Id, string Title, string Summary, IReadOnlyList<string> Formats, IReadOnlyDictionary<string, string> Set)
+{
+    /// <summary>The trust framework whose levels these are (<c>IcpBrasil</c>); null for the ETSI baseline levels.</summary>
+    public string? Framework { get; init; }
+}
 
 /// <summary>Everything the workbench needs to draw itself: formats, sections, options, stages, presets and the default options of each format.</summary>
 public sealed record WorkbenchSchema(

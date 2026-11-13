@@ -203,6 +203,21 @@ public static partial class OptionSchema
             new("bt", "B-T", "Adds a signature timestamp.", s_all, Level("BT")),
             new("blt", "B-LT", "Adds certificates and revocation data.", s_all, Level("BLT")),
             new("blta", "B-LTA", "Adds an archive timestamp over everything.", s_all, Level("BLTA")),
+            Icp("adrb", "AD-RB", "ICP-Brasil basic reference: the policy identifier, no timestamp (B-B).", s_all, "AdRb", "BB"),
+            Icp("adrt", "AD-RT", "ICP-Brasil time reference: adds a signature timestamp from an ACT (B-T).", s_all, "AdRt", "BT"),
+            Icp("adrv", "AD-RV", "ICP-Brasil validation references: AD-RT plus references to the validation data (CAdES and XAdES only).", [C, X], "AdRv", "BT"),
+            Icp("adrc", "AD-RC", "ICP-Brasil complete references: the validation data, protected by a timestamp.", s_all, "AdRc", "BLTA"),
+            Icp("adra", "AD-RA", "ICP-Brasil archival references: AD-RC plus an archive timestamp.", s_all, "AdRa", "BLTA"),
         ];
+
+        // The level an ICP-Brasil policy sets: PAdES follows it, CAdES and XAdES take B-T and the policy's extended form.
+        static SchemaPreset Icp(string id, string title, string summary, string[] formats, string policy, string level) =>
+            new(id, title, summary, formats, new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["kind"] = "IcpBrasil",
+                ["icpPolicy"] = policy,
+                ["level"] = level,
+            })
+            { Framework = "IcpBrasil" };
     }
 }

@@ -238,6 +238,67 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Profiles_ListsEveryProfile()
+    {
+        var (exit, output) = await RunAsync("profiles");
+
+        exit.ShouldBe(0, output);
+        foreach (string name in new[] { "sandbox", "iofe", "icp-brasil", "gov-br" })
+        {
+            output.ShouldContain(name);
+        }
+    }
+
+    [Fact]
+    public async Task Sign_ProfileGovBr_IsRefusedBecauseItValidatesOnly()
+    {
+        string input = WriteMinimalPdf("govbr-input.pdf");
+
+        var (exit, output) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", Path.Combine(_tempDir, "govbr.pdf"), "--profile", "gov-br");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("Gov.br");
+    }
+
+    [Fact]
+    public async Task Sign_ProfileSandboxWithoutSandbox_IsRefused()
+    {
+        string input = WriteMinimalPdf("sandbox-input.pdf");
+
+        var (exit, output) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", Path.Combine(_tempDir, "sandbox.pdf"), "--profile", "sandbox");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("--sandbox");
+    }
+
+    [Fact]
+    public async Task Sign_ProfileIcpBrasil_RefusesACertificateOutsideIcpBrasil()
+    {
+        string input = WriteMinimalPdf("icp-input.pdf");
+
+        // The icp-brasil signing policy requires the chain to reach an ICP-Brasil root: a self-signed test certificate does not.
+        var (exit, output) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", Path.Combine(_tempDir, "icp.pdf"), "--profile", "icp-brasil");
+
+        exit.ShouldNotBe(0, output);
+        output.ShouldContain("UntrustedRoot");
+    }
+
+    [Fact]
+    public async Task Validate_ProfileIofeWithAnExplicitTsl_UsesTheIofePolicyAndThatList()
+    {
+        string signed = await SignAsync("tsl-expired-profile.pdf");
+        var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddDays(-1));
+
+        // --profile iofe gives the policy (TLNotExpired FAIL); the explicit --tsl replaces INDECOPI's list.
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--no-system-roots",
+            "--tsl", tsl, "--tsl-signer", signer, "--profile", "iofe", "--json");
+
+        exit.ShouldBe(1, output);
+        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
+        json.RootElement.GetProperty("signatures")[0].GetProperty("subIndication").GetString().ShouldBe("TRY_LATER");
+    }
+
+    [Fact]
     public async Task Validate_ExpiredTslUnderDefaultPolicy_IsValidWithTlNotExpiredWarning()
     {
         string signed = await SignAsync("tsl-expired-default.pdf");
@@ -486,8 +547,7 @@ public sealed class CliCommandTests : IDisposable
 
     [Theory]
     [InlineData("signing", "iofe")]
-    [InlineData("signing", "iofe-nonrepudiation")]
-    [InlineData("validation", "iofe-nonrepudiation")]
+    [InlineData("validation", "iofe")]
     public async Task PolicyExport_Preset_WritesTheBuiltInPolicy(string kind, string preset)
     {
         string path = Path.Combine(_tempDir, $"{kind}-{preset}.json");

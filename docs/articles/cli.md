@@ -274,6 +274,31 @@ contract-signed.pdf  1/1 valid
     └── Signed at:    2025-04-28 14:30:00 UTC
 ```
 
+## Trust Profiles
+
+A **trust profile** sets, under one name, the policy and the trust of a trust framework. Each comes from its package
+(`IofeProfile`, `IcpBrasilProfile`, `GovBrProfile`; the library takes them with `WithProfile` and
+`ValidationOptions.Profile`); `simplesign profiles` lists them:
+
+| Profile | Signing policy | Validation policy | Trust |
+|---|---|---|---|
+| `iofe` | `iofe` | `iofe` | INDECOPI's trusted list, checked against the signer bundled with `SimpleSign.Peru.Iofe` |
+| `icp-brasil` | `icp-brasil` | `icp-brasil` | The AC Raiz roots and the ICP-Brasil chain validation |
+| `gov-br` | — (Gov.br signs on its own service) | `govbr` | The Gov.br roots and their chain validation |
+| `sandbox` | `default` | `default` | A running SimpleSign Sandbox's LOTL (`--sandbox URL`) |
+
+```bash
+simplesign sign contrato.pdf --output assinado.pdf --cert cert.pfx --password "$PFX_PASSWORD" --profile iofe --tsa <ACT URL>
+simplesign validate assinado.pdf --profile iofe
+simplesign validate documento.pdf --profile icp-brasil --trust-profile gov-br
+```
+
+- An explicit option wins: `--signing-policy` / `--policy` over the profile's policy, `--tsl` / `--lotl` over its trust.
+- `--trust-profile NAME` (repeatable) adds another profile's trust; the policy stays `--profile`'s.
+- `--sandbox URL` reads a running Sandbox once: its origins, LDAP and HTTPS chain are allowed (as `--allow-origin`,
+  `--allow-ldap`, `--tls-trust` would), `--profile sandbox` trusts its LOTL, and `--profile iofe` reads the Sandbox's
+  list the IOFE way instead of INDECOPI's (to test INDECOPI's rules with the Sandbox's certificates).
+
 ## Signing Policy
 
 `sign`, `cades sign`, `xades sign`, `sign-dir` and `deferred prepare/complete` check the certificate before signing.
@@ -286,7 +311,6 @@ writes it out):
 | `strict` | `default` plus the revocation of the whole chain (CRL/OCSP); give the chain up to the root |
 | `minimal` | Only the dates of the signing certificate (tests and migrations) |
 | `iofe` | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
-| `iofe-nonrepudiation` | `iofe`, and the signing certificate must have nonRepudiation (what the guide asks of an automated agent, section 4.2) |
 
 What the policy checks against comes from these options:
 
@@ -301,7 +325,7 @@ from the file): a document time-stamp, a DSS and a new document time-stamp for a
 validation data and archive time-stamp for CAdES and XAdES. `--data` gives a detached signature's data (B-LTA needs
 it), `--signature-id` picks a ds:Signature, `--renew` renews a B-LTA, `--json` prints the levels before and after.
 
-`validate --policy` takes a file or `default`, `strict` (time-stamps out of order and an unavailable signature policy fail), `iofe` or `iofe-nonrepudiation`.
+`validate --policy` takes a file or `default`, `strict` (time-stamps out of order and an unavailable signature policy fail), `iofe`, `icp-brasil` or `govbr`.
 
 A refusal prints the reason (`KeyTooWeak`, `KeyUsageNotPermitted`, `ChainCertificateNotValid`, `CertificateRevoked`,
 `RevocationStatusUnknown`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampCertificateRevoked`…) and what to do about it. `simplesign explain <TERM>` explains the
@@ -349,7 +373,8 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 | `--trust-dir <dir>` | Folder of trust anchor certificates (`.cer`, `.crt`, `.der`, `.pem`) |
 | `--trust-dir-signer <cert>` | The folder must carry `manifest.json` (SHA-256 of every file) signed with this certificate |
 | `--tsl <url\|file>` + `--tsl-signer <cert>` | Trusted list (ETSI TS 119 612 / TS 102 231): its active CA and TSA services become trust anchors. An expired list (here or under `--lotl`) is kept: the policy's `TLNotExpired` judges it (WARN by default, FAIL in `iofe`), as EU DSS does |
-| `--tsl-profile iofe` | Read `--tsl` as INDECOPI's list (`IofeExtension.DefaultListOptions`): its `unspecified` TSAs become anchors too, code-signing certificates never |
+| `--tsl-profile iofe` | Read `--tsl` as INDECOPI's list (`IofeExtension.DefaultListOptions`): its `unspecified` TSAs become anchors too, code-signing certificates never; without `--tsl-signer`, INDECOPI's bundled signer is used |
+| `--profile NAME`, `--trust-profile NAME`, `--sandbox URL` | A trust profile (see [Trust Profiles](#trust-profiles)) |
 | `--lotl <url>` + `--lotl-signer <cert>` | List of trusted lists (e.g. the EU LOTL): the national lists it points to are checked with the certificates it gives and their CA and TSA services become trust anchors; `--lotl-territory PT` (repeatable) loads only some |
 | `--lang es` | Write the verification report in Spanish |
 | `--check-revocation` (CAdES, XAdES) | Check the revocation of the signer and TSA chains |

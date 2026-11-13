@@ -63,7 +63,8 @@ internal static class PlaybookSchema
         {
             ["type"] = "object",
             ["description"] = "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), "
-                + "sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). "
+                + "sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), "
+                + "step:ID (the file an earlier step signed). "
                 + "A validation takes { fileId, dataId?, settings? }.",
         };
 
@@ -143,6 +144,17 @@ internal static class PlaybookSchema
                         ["additionalProperties"] = false,
                     },
                 }),
+                ["policies"] = Arr(Obj("A policy the playbook adjusts, named playbook:ID by signingPolicyId or validation.policyId.", new JsonObject
+                {
+                    ["id"] = Str("Unique id."),
+                    ["kind"] = Str("Signing or validation policy.", [PolicyViewer.Signing, PolicyViewer.Validation]),
+                    ["base"] = Str("The policy it starts from: default or a built-in name (iofe, strict…)."),
+                    ["set"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["description"] = "The constraints changed, by path (SigningCertificate/KeyUsage), each as the policy file writes it: { \"Level\": \"FAIL\", \"Id\": [\"nonRepudiation\"] }.",
+                    },
+                }, "id", "kind"), "Policies the steps adjust (a built-in one with some constraints changed)."),
                 ["sections"] = Arr(Ref("section"), "The steps, grouped."),
             },
             ["$defs"] = defs,

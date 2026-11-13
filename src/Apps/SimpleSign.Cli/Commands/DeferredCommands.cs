@@ -234,7 +234,7 @@ internal sealed class DeferredPrepareCommand(ICertificateChainService certChainS
                 builder = builder.WithSignatureAlgorithm(oid);
             }
 
-            builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
+            builder = builder.WithSigningPolicy(await settings.SigningPolicyAsync(settings.SigningPolicy, cancellationToken)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellationToken));
             if (settings.AuditSink() is { } audit)
             {
                 builder = builder.WithAuditSink(audit);
@@ -382,7 +382,7 @@ internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCom
         byte[] session = await File.ReadAllBytesAsync(settings.SessionPath, cancellationToken);
         byte[] signature = await File.ReadAllBytesAsync(settings.SignaturePath, cancellationToken);
         byte[] key = DeferredSessionKey.Parse(settings.SessionKey)!;
-        var policy = SigningPolicyOption.Parse(settings.SigningPolicy);
+        var policy = await settings.SigningPolicyAsync(settings.SigningPolicy, cancellationToken);
         var anchors = await settings.SigningTrustAnchorsAsync(cancellationToken);
         var audit = settings.AuditSink();
         TimestampOptions? timestamp = settings.TsaUrl is null ? null : settings.Timestamp(settings.TsaUrl);

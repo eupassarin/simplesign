@@ -39,6 +39,21 @@ internal abstract class TimestampedSigningSettings : CommonSettings
     [Description("Password of --tsa-cert. Accepts env:NAME.")]
     public string? TsaCertificatePassword { get; init; }
 
+    /// <summary>The trust profile: its signing policy (unless --signing-policy) and its trust (unless --tsl).</summary>
+    [CommandOption("--profile <NAME>")]
+    [Description("Trust profile: sandbox, iofe or icp-brasil (gov-br validates only). Sets the signing policy (unless --signing-policy) and the trust anchors (unless --tsl); see 'simplesign profiles'")]
+    public string? Profile { get; init; }
+
+    /// <summary>Profiles whose trust is added before signing (their policies are not used).</summary>
+    [CommandOption("--trust-profile <NAME>")]
+    [Description("Also trust what this profile trusts before signing (repeatable); the policy stays --profile's")]
+    public string[] TrustProfiles { get; init; } = [];
+
+    /// <summary>A running SimpleSign Sandbox (its origins are also allowed).</summary>
+    [CommandOption("--sandbox <URL>")]
+    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and --profile iofe reads its list instead of INDECOPI's")]
+    public string? Sandbox { get; init; }
+
     /// <summary>Trust anchor certificate files for the checks made before signing.</summary>
     [CommandOption("--trust <PATH>")]
     [Description("Trust anchor certificate (.cer/.crt/.pem), repeatable: the signing certificate and each TSA must chain to an anchor when the signing policy asks (ProspectiveCertificateChain)")]
@@ -162,16 +177,47 @@ internal abstract class TimestampedSigningSettings : CommonSettings
             return $"Unknown --tsl-profile '{SigningTrustedListProfile}': use {TrustedListProfiles.Names}.";
         }
 
-        return SigningTrustedList is not null && SigningTrustedListSigner is null
-            ? "--tsl requires --tsl-signer: the certificate the trusted list must be signed with."
-            : null;
+        if (SigningTrustedList is not null && SigningTrustedListSigner is null && !TrustedListProfiles.IsIofe(SigningTrustedListProfile))
+        {
+            return "--tsl requires --tsl-signer: the certificate the trusted list must be signed with (with --tsl-profile iofe, INDECOPI's bundled one is used).";
+        }
+
+        return CliProfiles.Check(Profile, TrustProfiles, Sandbox, signing: true);
     }
+
+    private SimpleSign.Core.Extensions.TrustProfile? _profile;
+    private bool _profileLoaded;
+
+    /// <summary>The trust profile of <c>--profile</c> and <c>--trust-profile</c>, loaded once; null for none.</summary>
+    internal async Task<SimpleSign.Core.Extensions.TrustProfile?> ProfileAsync(CancellationToken cancellationToken)
+    {
+        if (!_profileLoaded)
+        {
+            _profile = await CliProfiles.ResolveAsync(Profile, TrustProfiles, Sandbox, CliNetwork.Provider, cancellationToken, signing: true);
+            _profileLoaded = true;
+        }
+
+        return _profile;
+    }
+
+    /// <summary>The signing policy: <paramref name="signingPolicy"/> (<c>--signing-policy</c>) when given, else the profile's, else the default.</summary>
+    /// <param name="signingPolicy">The value of <c>--signing-policy</c>, or null.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    internal async Task<SimpleSign.Core.Policies.SigningPolicy> SigningPolicyAsync(string? signingPolicy, CancellationToken cancellationToken) =>
+        signingPolicy is null && await ProfileAsync(cancellationToken) is { SigningPolicy: { } fromProfile }
+            ? fromProfile
+            : SigningPolicyOption.Parse(signingPolicy);
 
     /// <summary>The trust anchors of <c>--trust</c>, <c>--trust-dir</c> and <c>--tsl</c>, for the checks made before signing.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     internal async Task<SimpleSign.Core.Extensions.ITrustAnchorProvider[]> SigningTrustAnchorsAsync(CancellationToken cancellationToken)
     {
         var providers = new List<SimpleSign.Core.Extensions.ITrustAnchorProvider>();
+        if (SigningTrustedList is null && await ProfileAsync(cancellationToken) is { } profile)
+        {
+            providers.AddRange(profile.TrustAnchorProviders);
+        }
+
         if (SigningTrust.Length > 0)
         {
             providers.Add(new CertificateTrustAnchors([.. SigningTrust.Select(LoadCertificate)]));
@@ -185,7 +231,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
 
         if (SigningTrustedList is not null)
         {
-            var options = TrustedListProfiles.Options(SigningTrustedListProfile, LoadCertificate(SigningTrustedListSigner!));
+            var options = TrustedListProfiles.Options(SigningTrustedListProfile, SigningTrustedListSigner is null ? null : LoadCertificate(SigningTrustedListSigner));
             providers.Add(Uri.TryCreate(SigningTrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"
                 ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, CliNetwork.Provider, cancellationToken: cancellationToken)
                 : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(SigningTrustedList, cancellationToken), options));

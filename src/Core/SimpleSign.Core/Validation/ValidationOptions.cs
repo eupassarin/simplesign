@@ -63,6 +63,44 @@ public sealed class ValidationOptions
     /// </summary>
     public IReadOnlyList<Extensions.ITimedTrustAnchorProvider>? TimedTrustAnchors { get; init; }
 
+    /// <summary>
+    /// A trust profile (<c>IofeProfile</c>, <c>IcpBrasilProfile</c>, <c>GovBrProfile</c>): its anchors, trusted lists and
+    /// chain validation are added to the validator's, and its validation policy applies while <see cref="Policy"/> is
+    /// left at its default. Null: none.
+    /// </summary>
+    public Extensions.TrustProfile? Profile { get; init; }
+
+    /// <summary>
+    /// These options with <see cref="Profile"/> applied: its policy (when <see cref="Policy"/> is the default), its roots
+    /// in <see cref="TrustedRoots"/>, its trusted lists and its timed anchors. The same instance without a profile.
+    /// </summary>
+    internal ValidationOptions WithProfileApplied()
+    {
+        if (Profile is not { } profile)
+        {
+            return this;
+        }
+
+        var anchors = profile.Anchors();
+        var lists = profile.TrustAnchorProviders.OfType<Extensions.ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists).ToList();
+        var timed = profile.TrustAnchorProviders.OfType<Extensions.ITimedTrustAnchorProvider>().ToList();
+        return new ValidationOptions
+        {
+            CheckRevocation = CheckRevocation,
+            TrustSystemRoots = TrustSystemRoots,
+            TrustedRoots = anchors.Count == 0 ? TrustedRoots : [.. TrustedRoots ?? [], .. anchors],
+            NetworkTimeout = NetworkTimeout,
+            Policy = ReferenceEquals(Policy, Policies.ValidationPolicy.Default) ? profile.ValidationPolicy : Policy,
+            PolicyProvider = PolicyProvider,
+            SignaturePolicyDocuments = SignaturePolicyDocuments,
+            Verifier = Verifier,
+            Level = Level,
+            TrustedLists = lists.Count == 0 ? TrustedLists : [.. TrustedLists ?? [], .. lists],
+            TimedTrustAnchors = timed.Count == 0 ? TimedTrustAnchors : [.. TimedTrustAnchors ?? [], .. timed],
+            Profile = profile,
+        };
+    }
+
     /// <summary>Whether signature timestamps are validated (and give a proof of existence).</summary>
     internal bool ValidatesTimestamps => Level >= ValidationLevel.Timestamps;
 

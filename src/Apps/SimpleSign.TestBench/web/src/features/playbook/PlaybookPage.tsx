@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BookCheck, CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, Circle, Clock, Download, Eraser, ExternalLink, FileJson, FolderOpen, GitCompareArrows, ListTree, Loader2, Play, RotateCcw, Search, Square, Tag, X, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, Circle, Clock, Download, Eraser, ExternalLink, FileJson, GitCompareArrows, ListTree, Loader2, Play, RotateCcw, Search, Square, Tag, X, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -20,6 +20,7 @@ import type { Format, RunView } from "../workbench/schema"
 import { playbookApi } from "./api"
 import { OptionsReferenceDialog } from "./OptionsReference"
 import { PlaybookFileMenu } from "./PlaybookFileMenu"
+import { PlaybookPicker } from "./PlaybookPicker"
 import type { PlaybookEngineDifference, PlaybookEngineRun, PlaybookLoaded, PlaybookSample, PlaybookStateView, PlaybookStatus, PlaybookStep, PlaybookStepPreview, PlaybookStepView, PreviewItem } from "./types"
 
 const emptyState: PlaybookStateView = { running: false, version: 0, steps: [] }
@@ -222,21 +223,12 @@ export function PlaybookPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-2 border-b px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <BookCheck className="text-primary size-5 shrink-0" />
-          <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-sm font-semibold">{playbook?.title ?? t("playbook.title")}</p>
-            <p className="text-muted-foreground truncate text-xs" title={playbook?.description ?? undefined}>{playbook?.description ?? t("playbook.noPlaybook")}</p>
-          </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <PlaybookPicker current={playbook ? { id: playbook.id, title: playbook.title } : null} samples={samples} disabled={state.running}
+            onSample={(id) => playbookApi.loadSample(id).then(onLoaded).catch((e) => toast.error((e as Error).message))}
+            onOpenFile={() => fileInput.current?.click()} />
           <input ref={fileInput} type="file" accept=".json,application/json" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = "" }} />
-          <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()} disabled={state.running}><FolderOpen /> {t("playbook.load")}</Button>
-          {samples.length > 0 && (
-            <Select value="" disabled={state.running} onValueChange={(id) => playbookApi.loadSample(id).then(onLoaded).catch((e) => toast.error((e as Error).message))}>
-              <SelectTrigger size="sm" className="w-auto"><SelectValue placeholder={t("playbook.samples")} /></SelectTrigger>
-              <SelectContent align="end">{samples.map((s) => <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>)}</SelectContent>
-            </Select>
-          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={engine} onValueChange={chooseEngine}>

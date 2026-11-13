@@ -23,10 +23,17 @@ internal static class TrustedListProfiles
     /// code-signing certificate).
     /// </summary>
     /// <param name="profile">The profile name; null for the default.</param>
-    /// <param name="signer">The certificate the list must be signed with.</param>
-    internal static TrustedListOptions Options(string? profile, X509Certificate2 signer)
+    /// <param name="signer">The certificate the list must be signed with; null with <c>iofe</c> for INDECOPI's bundled one (<see cref="IofeExtension.IndecopiSigners"/>).</param>
+    internal static TrustedListOptions Options(string? profile, X509Certificate2? signer)
     {
-        var options = profile is not null && profile.Equals("iofe", StringComparison.OrdinalIgnoreCase) ? IofeExtension.DefaultListOptions : new TrustedListOptions();
-        return options with { SignerCertificates = [signer] };
+        if (IsIofe(profile))
+        {
+            return IofeExtension.DefaultListOptions with { SignerCertificates = signer is null ? IofeExtension.IndecopiSigners : [signer] };
+        }
+
+        return new TrustedListOptions { SignerCertificates = [signer ?? throw new ArgumentNullException(nameof(signer))] };
     }
+
+    /// <summary>Whether <paramref name="profile"/> is <c>iofe</c>.</summary>
+    internal static bool IsIofe(string? profile) => profile is not null && profile.Equals("iofe", StringComparison.OrdinalIgnoreCase);
 }

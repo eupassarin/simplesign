@@ -156,6 +156,11 @@ internal sealed class SigningRunner(SandboxEnvironment sandbox, DocumentStore do
         {
             var controls = await SigningControls.ResolveAsync(effective.SigningControls, sandbox, cancellationToken);
             plan = new SigningPlan(effective, credential!, sandbox, documents, controls);
+            if (engine != RunEngines.Cli)
+            {
+                await plan.PrepareIcpArtifactsAsync(pdf, cancellationToken);
+            }
+
             var steps = plan.SignSteps();
             code = CodeGenerator.Generate(effective, plan, steps, credential!.Facts);
             if (engine == RunEngines.Cli)

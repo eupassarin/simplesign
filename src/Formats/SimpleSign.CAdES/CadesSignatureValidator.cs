@@ -142,7 +142,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         ITimestampValidator? timestampValidator = null,
         IChainRevocationChecker? chainRevocationChecker = null)
     {
-        _options = options ?? new ValidationOptions();
+        _options = (options ?? new ValidationOptions()).WithProfileApplied();
         _logger = logger;
         _chainRevocationChecker = chainRevocationChecker
             ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), logger)

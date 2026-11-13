@@ -31,11 +31,39 @@
       }
     }
   },
+  "policies": [
+    {
+      "id": "iofe-agent",
+      "kind": "signing",
+      "base": "iofe",
+      "set": {
+        "SigningCertificate/KeyUsage": {
+          "Level": "FAIL",
+          "Id": [
+            "nonRepudiation"
+          ]
+        }
+      }
+    },
+    {
+      "id": "iofe-agent-validation",
+      "kind": "validation",
+      "base": "iofe",
+      "set": {
+        "SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage": {
+          "Level": "FAIL",
+          "Id": [
+            "nonRepudiation"
+          ]
+        }
+      }
+    }
+  ],
   "sections": [
     {
       "id": "tsl",
       "title": "Trusted list (TSL)",
-      "description": "The trust anchors come from the Sandbox's trusted list (/tl/tl.xml), read as IofeExtension reads INDECOPI's (IofeExtension.DefaultListOptions: the CA services and the services typed 'unspecified', as INDECOPI types its TSAs and signature software, never a code-signing certificate); its signature is checked against the operator's certificate.",
+      "description": "The iofe profile on the Sandbox: the trust anchors come from the Sandbox's trusted list (/tl/tl.xml), read as IofeExtension reads INDECOPI's (IofeExtension.DefaultListOptions: the CA services and the services typed 'unspecified', as INDECOPI types its TSAs and signature software, never a code-signing certificate); its signature is checked against the operator's certificate.",
       "steps": [
         {
           "id": "tsl-ok",
@@ -48,9 +76,9 @@
           "format": "pades",
           "options": {
             "signingControls": {
-              "trust": [
-                "SandboxIofeList"
-              ]
+              "trust": [],
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -68,9 +96,9 @@
           "format": "pades",
           "options": {
             "signingControls": {
-              "trust": [
-                "SandboxIofeList"
-              ]
+              "trust": [],
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -92,9 +120,9 @@
           "format": "pades",
           "options": {
             "signingControls": {
-              "trust": [
-                "SandboxIofeList"
-              ]
+              "trust": [],
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -115,9 +143,9 @@
           "format": "pades",
           "options": {
             "signingControls": {
-              "trust": [
-                "SandboxIofeList"
-              ]
+              "trust": [],
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -145,15 +173,14 @@
               "provider": "SandboxIofe"
             },
             "signingControls": {
-              "trust": [
-                "SandboxIofeList"
-              ]
+              "trust": [],
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             },
             "validation": {
-              "trust": [
-                "SandboxIofeList"
-              ],
-              "policyId": "preset:validation:iofe"
+              "trust": [],
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -197,10 +224,10 @@
           "options": {
             "fileId": "step:tsl-ok",
             "settings": {
-              "trust": [
-                "SandboxIofeList"
-              ],
-              "policyId": "preset:validation:iofe"
+              "trust": [],
+              "policyId": "preset:validation:iofe",
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -218,10 +245,10 @@
           "options": {
             "fileId": "step:tsl-ok",
             "settings": {
-              "trust": [
-                "SandboxIofeList"
-              ],
-              "policyId": "preset:validation:iofe"
+              "trust": [],
+              "policyId": "preset:validation:iofe",
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -243,10 +270,10 @@
           "options": {
             "fileId": "step:tsl-ok",
             "settings": {
-              "trust": [
-                "SandboxIofeList"
-              ],
-              "policyId": "preset:validation:iofe"
+              "trust": [],
+              "policyId": "preset:validation:iofe",
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -270,10 +297,10 @@
           "options": {
             "fileId": "step:tsl-tsa-unspecified",
             "settings": {
-              "trust": [
-                "SandboxIofeList"
-              ],
-              "policyId": "preset:validation:iofe"
+              "trust": [],
+              "policyId": "preset:validation:iofe",
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
@@ -713,13 +740,13 @@
           "format": "pades",
           "options": {
             "credentialId": "sandbox:no-nonrepudiation",
-            "signingPolicyId": "preset:signing:iofe-nonrepudiation"
+            "signingPolicyId": "playbook:iofe-agent"
           },
           "expect": {
             "outcome": "refused",
             "reason": "KeyUsageNotPermitted"
           },
-          "description": "Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe-nonrepudiation policy refuses a certificate that has digitalSignature only."
+          "description": "Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe policy with KeyUsage = nonRepudiation (playbook:iofe-agent) refuses a certificate that has digitalSignature only."
         },
         {
           "id": "v-no-nonrepudiation",
@@ -735,13 +762,13 @@
               "trust": [
                 "Sandbox"
               ],
-              "policyId": "preset:validation:iofe-nonrepudiation"
+              "policyId": "playbook:iofe-agent-validation"
             }
           },
           "expect": {
             "outcome": "indeterminate"
           },
-          "description": "With the iofe-nonrepudiation policy the certificate without nonRepudiation fails the chain constraint (EN 319 102-1: INDETERMINATE)."
+          "description": "With the iofe policy requiring nonRepudiation (playbook:iofe-agent-validation) the certificate without it fails the chain constraint (EN 319 102-1: INDETERMINATE)."
         },
         {
           "id": "v-revoked",

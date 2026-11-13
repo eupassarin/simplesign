@@ -101,6 +101,10 @@ internal static partial class Log
         Message = "CRL thisUpdate ({ThisUpdate}) is after signing time ({SigningTime}) — not valid for this signing event")]
     internal static partial void CrlIssuedAfterSigningTime(this ILogger logger, DateTimeOffset thisUpdate, DateTimeOffset signingTime);
 
+    [LoggerMessage(EventId = 2519, Level = LogLevel.Warning,
+        Message = "CRL download from {CrlUrl} failed: {Reason}")]
+    internal static partial void CrlDownloadFailed(this ILogger logger, string crlUrl, string reason);
+
     // ── OCSP Client (26xx) ───────────────────────────────────────────
 
     [LoggerMessage(EventId = 2610, Level = LogLevel.Debug,

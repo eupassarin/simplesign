@@ -66,7 +66,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         ArgumentNullException.ThrowIfNull(revocationChecker);
-        _options = options ?? ValidationOptions.Default;
+        _options = (options ?? ValidationOptions.Default).WithProfileApplied();
         var client = httpClientProvider.GetClient();
         _httpClient = client;
         _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
@@ -77,9 +77,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _integrityVerifier = integrityVerifier ?? new IntegrityVerifierService();
         _cmsParser = cmsParser ?? new CmsParserService();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
-        _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
-        _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
+        // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
+        _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
     }
 
     /// <param name="options">Validation options. If null, uses <see cref="ValidationOptions.Default"/>.</param>
@@ -115,7 +115,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IEnumerable<ITrustAnchorProvider>? trustAnchorProviders,
         IEnumerable<IChainValidationProvider>? chainValidationProviders = null)
     {
-        _options = options ?? ValidationOptions.Default;
+        _options = (options ?? ValidationOptions.Default).WithProfileApplied();
         _logger = logger ?? NullLogger<PdfSignatureValidator>.Instance;
         var client = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _httpClient = client;
@@ -132,9 +132,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _integrityVerifier = new IntegrityVerifierService();
         _cmsParser = new CmsParserService();
         _timestampValidator = new TimestampValidatorService();
-        _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
-        _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
+        // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
+        _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
 
     }
 
@@ -150,7 +150,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IEnumerable<IChainValidationProvider>? chainValidationProviders = null)
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
-        _options = options ?? ValidationOptions.Default;
+        _options = (options ?? ValidationOptions.Default).WithProfileApplied();
         var client = httpClientProvider.GetClient();
         _httpClient = client;
         _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
@@ -168,9 +168,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _integrityVerifier = new IntegrityVerifierService();
         _cmsParser = new CmsParserService();
         _timestampValidator = new TimestampValidatorService();
-        _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
-        _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
+        // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
+        _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
 
     }
 
@@ -1358,7 +1358,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     /// </summary>
     private IReadOnlyList<TrustedListInfo>? TrustedListInfos()
     {
-        List<TrustedListInfo> lists = [.. _options.TrustedLists ?? [], .. _trustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists)];
+        List<TrustedListInfo> lists = [.. (_options.TrustedLists ?? []).Concat(_trustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists)).Distinct()];
         return lists.Count == 0 ? null : lists;
     }
 

@@ -58,8 +58,8 @@ public sealed class IofeTrustedListSourceTests(IofeTrustedListSourceFixture fixt
     }
 
     [Fact]
-    public async Task LoadAsync_NoSigners_IsRefused() =>
-        await Should.ThrowAsync<ArgumentException>(() => IofeTrustedListSource.LoadAsync(new IofeExtensionOptions { TrustedListUrl = new Uri(Url) }));
+    public void ListOptionsOf_NoSigners_UsesTheBundledIndecopiSigner() =>
+        IofeExtension.ListOptionsOf(new IofeExtensionOptions()).SignerCertificates.ShouldBe(IofeExtension.IndecopiSigners);
 
     [Fact]
     public async Task RefreshAsync_NewSequence_SwapsAndReportsTheServicesAddedAndRemoved()

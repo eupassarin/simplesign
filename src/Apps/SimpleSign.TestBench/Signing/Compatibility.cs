@@ -76,7 +76,8 @@ public static class Compatibility
         ArgumentNullException.ThrowIfNull(options);
         var state = new Dictionary<string, OptionState>(StringComparer.Ordinal);
         var issues = new List<OptionIssue>();
-        var o = options;
+        // An ICP-Brasil policy sets the level (DOC-ICP-15.03): the baseline level follows it.
+        var o = options.Kind == SignatureKind.IcpBrasil ? options with { Level = IcpLevel(options.IcpPolicy), ReturnLowerLevel = false } : options;
 
         void Set(string key, OptionState value) => state[key] = value;
         void Error(string step, string message) => issues.Add(new(IssueSeverity.Error, step, message));
@@ -132,6 +133,20 @@ public static class Compatibility
         bool pdfA1Preserved = isPdfA1 && o.PreservePdfA && !batch;
         Set("kind.Baseline", OptionState.Shown);
         Set("kind.CustomPolicy", policyUnsupported is not null ? OptionState.Off(policyUnsupported) : OptionState.Shown);
+        Set("kind.IcpBrasil", policyUnsupported is not null ? OptionState.Off(policyUnsupported) : OptionState.Shown);
+        Set("icpPolicy", o.Kind == SignatureKind.IcpBrasil ? OptionState.Shown : OptionState.Hidden);
+        if (o.Kind == SignatureKind.IcpBrasil)
+        {
+            if (o.IcpPolicy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRv)
+            {
+                Error(StepType, L.T("PAdES has no AD-RV policy (DOC-ICP-15.03): choose AD-RB, AD-RT, AD-RC or AD-RA."));
+            }
+
+            if (o.IcpPolicy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRa && o.Mode == RunMode.Deferred)
+            {
+                Error(StepType, L.T("AD-RA embeds the policy's artifacts (PA, LPA), which a two-phase signature cannot: sign in one call."));
+            }
+        }
 
         var kind = o.Kind;
         if (state[$"kind.{kind}"].Disabled is { } kindReason)
@@ -139,11 +154,12 @@ public static class Compatibility
             Error(StepType, kindReason);
         }
 
+        bool icp = o.Kind == SignatureKind.IcpBrasil;
         string adbeOnly = L.T("PAdES B-T and above (ETSI EN 319 142-1) need the ETSI.CAdES.detached sub-filter; this document is PDF/A-1 with preservation on, which only allows adbe.pkcs7.detached.");
         foreach (var level in Enum.GetValues<BaselineLevel>())
         {
             Set($"level.{level}", level != BaselineLevel.BB && pdfA1Preserved ? OptionState.Off(adbeOnly)
-                : level != BaselineLevel.BB && o.SubFilter == SubFilterChoice.AdbePkcs7Detached ? OptionState.Off(L.T("adbe.pkcs7.detached is a legacy (pre-PAdES) format: B-T and above need ETSI.CAdES.detached. Change the sub-filter in Cryptography."))
+                : level != BaselineLevel.BB && o.SubFilter == SubFilterChoice.AdbePkcs7Detached && !icp ? OptionState.Off(L.T("adbe.pkcs7.detached is a legacy (pre-PAdES) format: B-T and above need ETSI.CAdES.detached. Change the sub-filter in Cryptography."))
                 : OptionState.Shown);
         }
 
@@ -304,6 +320,15 @@ public static class Compatibility
             _ => "B-LTA",
         };
     }
+
+    /// <summary>The baseline level an ICP-Brasil PAdES policy produces: AD-RB B-B, AD-RT B-T, AD-RC and AD-RA B-LTA.</summary>
+    internal static BaselineLevel IcpLevel(SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy policy) => policy switch
+    {
+        SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb => BaselineLevel.BB,
+        SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRt => BaselineLevel.BT,
+        SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRv => BaselineLevel.BLT,
+        _ => BaselineLevel.BLTA,
+    };
 
     internal static bool IsOid(string value) =>
         value.Split('.') is { Length: >= 2 } parts && parts.All(p => p.Length > 0 && p.All(char.IsAsciiDigit));

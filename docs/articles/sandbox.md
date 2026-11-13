@@ -210,12 +210,17 @@ var list = await TrustedList.DownloadAsync(new Uri("http://localhost:5300/tl/tl.
 var iofe = new IofeExtension(list);
 ```
 
+The iofe profile reads the same list when it is pointed at the Sandbox: `--sandbox URL` fetches the list's signer from
+the Sandbox (a test PKI); `--tsl … --tsl-signer … --tsl-profile iofe` does the same by hand.
+
 ```bash
+simplesign validate signed.pdf --profile iofe --sandbox http://localhost:5300
 simplesign validate signed.pdf --tsl http://localhost:5300/tl/tl.xml --tsl-signer tl-signer.pem --tsl-profile iofe --policy iofe
 ```
 
-In the TestBench it is the trust choice "Sandbox trusted list, IOFE profile" (`SandboxIofeList`), and the TSA
-"Sandbox TSA under its own CA (IOFE)" (`SandboxIofe`); the `indecopi-guia-v4` playbook uses both. DSS reads the list
+In the TestBench it is the Profile menu's "Peru (IOFE) · Sandbox's list (test)" (`"profile": "Iofe", "profileSource":
+"Sandbox"`), and the TSA "Sandbox TSA under its own CA (IOFE)" (`SandboxIofe`); the `indecopi-guia-v4` playbook uses
+both. DSS reads the list
 through the LOTL and trusts every granted service in it, whatever its type.
 
 ## Using it from a client

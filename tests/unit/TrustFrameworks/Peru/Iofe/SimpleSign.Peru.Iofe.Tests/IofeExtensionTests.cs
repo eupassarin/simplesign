@@ -98,10 +98,6 @@ public sealed class IofeExtensionTests : IDisposable
     }
 
     [Fact]
-    public async Task LoadAsync_WithoutSigner_Throws() =>
-        await Should.ThrowAsync<ArgumentException>(() => IofeExtension.LoadAsync(new IofeExtensionOptions()));
-
-    [Fact]
     public async Task Validator_WithIofe_TrustsAChainOfTheList()
     {
         var iofe = IofeExtension.Load(TrustedListXml((CaQc, _pki.RootCa)), [_operator]);

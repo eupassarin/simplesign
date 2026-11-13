@@ -186,6 +186,11 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
                 return Failure(o, report, unsupported, "CliUnsupported", code);
             }
 
+            if (o.Kind == CadesKind.IcpBrasil)
+            {
+                return Failure(o, report, L.T("The CLI signs under an ICP-Brasil policy for PAdES only (sign --icp-policy): run this one through the library."), "CliUnsupported", code);
+            }
+
             var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents);
             foreach (var (name, content) in controls.CliFiles())
             {
@@ -414,7 +419,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     private CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool sandboxRoot = settings.Trust.Contains(TrustChoice.Sandbox);
-        var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null ? "" : "using SimpleSign.Core.Policies;\n"));
+        var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null || ValidationService.ProfileSetsPolicy(settings) ? "" : "using SimpleSign.Core.Policies;\n"));
         sb.Append("\nvar validator = new CadesSignatureValidator(new ValidationOptions\n{\n");
         sb.Append(CultureInfo.InvariantCulture, $"    TrustSystemRoots = {(settings.Trust.Contains(TrustChoice.System) ? "true" : "false")},\n");
         if (sandboxRoot || settings.CustomRootUploadIds.Count > 0)
@@ -422,7 +427,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             sb.Append("    TrustedRoots = [root], // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")\n");
         }
 
-        foreach (string option in ValidationService.TrustedListOptionsCode(settings))
+        foreach (string option in ValidationService.TrustedListOptionsCode(settings).Concat(ValidationService.ProfileOptionsCode(settings)))
         {
             sb.Append("    ").Append(option).Append(option.StartsWith("//", StringComparison.Ordinal) ? "\n" : ",\n");
         }
@@ -510,15 +515,18 @@ internal sealed class CadesPlan
             throw new ArgumentException(L.T("The signing policy cannot be read: {0}", policyError));
         }
 
+        var controls = context.Controls;
+        bool byProfile = controls.ProfileSetsPolicy(o.SigningPolicyId);
         if (signingPolicy.Uploaded)
         {
-            _steps.Add((PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
+            _steps.Add(byProfile
+                ? (controls.ProfileStepCode(), b => b.WithSigningPolicy(signingPolicy.Policy).WithTrustAnchors([.. controls.ProfileAnchors]))
+                : (PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
         }
 
-        var controls = context.Controls;
-        if (controls.TrustCode() is { } trustCode)
+        if (controls.TrustCode(byProfile) is { } trustCode)
         {
-            _steps.Add((trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+            _steps.Add((trustCode, b => b.WithTrustAnchors([.. byProfile ? controls.OtherAnchors : controls.Anchors])));
         }
 
         if (controls.Audit is { } audit)
@@ -629,6 +637,16 @@ internal sealed class CadesPlan
 
     private void AddType()
     {
+        if (_o.Kind == CadesKind.IcpBrasil)
+        {
+            // The policy sets the level and the extended form (DOC-ICP-15.03); the TSA (an ACT) from AD-RT up.
+            var policy = _o.IcpPolicy;
+            var icpTsa = policy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb ? null : _context.BuildTimestamp(_o.Timestamp, "tsa");
+            _steps.Add(($".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}{(icpTsa is null ? "" : ", tsa")}) // DOC-ICP-15.03: the policy's OID and hash, and its level",
+                b => SimpleSign.Brazil.IcpBrasil.IcpBrasilCadesExtensions.WithIcpBrasilPolicy(b, policy, icpTsa)));
+            return;
+        }
+
         if (_o.Kind == CadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);
@@ -801,7 +819,7 @@ internal sealed class CadesPlan
             cli.Add("--signing-time", time.ToString("O", CultureInfo.InvariantCulture));
         }
 
-        if (_o.SigningPolicyId is not null)
+        if (_o.SigningPolicyId is not null && !_context.Controls.ProfileSetsPolicy(_o.SigningPolicyId))
         {
             cli.Add("--signing-policy", PolicyUploads.SigningFileName);
         }
