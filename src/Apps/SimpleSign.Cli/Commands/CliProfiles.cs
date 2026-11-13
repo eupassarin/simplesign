@@ -4,6 +4,7 @@ using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
+using SimpleSign.Europe.Eidas;
 using SimpleSign.Peru.Iofe;
 using SimpleSign.XAdES.TrustedLists;
 
@@ -20,15 +21,16 @@ internal static class CliProfiles
     internal const string Sandbox = "sandbox";
 
     /// <summary>The names, for messages and help.</summary>
-    internal const string Names = "sandbox, iofe, icp-brasil, gov-br";
+    internal const string Names = "sandbox, iofe, eidas, icp-brasil, gov-br";
 
-    private static readonly string[] s_names = [Sandbox, IofeProfile.Name, IcpBrasilProfile.Name, GovBrProfile.Name];
+    private static readonly string[] s_names = [Sandbox, IofeProfile.Name, EidasProfile.Name, IcpBrasilProfile.Name, GovBrProfile.Name];
 
     /// <summary>What each profile sets, for <c>simplesign profiles</c>.</summary>
     internal static IReadOnlyList<(string Name, string Title, string Signing, string Validation, string Trust)> Catalog { get; } =
     [
         (Sandbox, "SimpleSign Sandbox (test)", "default", "default", "the Sandbox's LOTL and trusted list (needs --sandbox URL)"),
         (IofeProfile.Name, "Peru (IOFE)", "iofe", "iofe", "INDECOPI's trusted list, checked against the bundled signer (with --sandbox: the Sandbox's list)"),
+        (EidasProfile.Name, "EU (eIDAS)", "eidas", "eidas", "the EU LOTL and its lists, checked against the bundled signers (pivots followed); qualifies each signature (with --sandbox: the Sandbox's LOTL)"),
         (IcpBrasilProfile.Name, "ICP-Brasil", "icp-brasil", "icp-brasil", "the AC Raiz roots and the ICP-Brasil chain validation"),
         (GovBrProfile.Name, "Gov.br", "— (validates only)", "govbr", "the Gov.br roots and their chain validation"),
     ];
@@ -123,6 +125,32 @@ internal static class CliProfiles
                         // INDETERMINATE (and signing is refused), as with a LOTL's lists and in the library.
                         Spectre.Console.AnsiConsole.MarkupLine($"[yellow]TSL:[/] {Spectre.Console.Markup.Escape($"{ex.Message} No anchor comes from it.")}");
                         return new TrustProfile(IofeProfile.Name, "Peru (IOFE)", IofePolicies.Signing, IofePolicies.Validation, [], []);
+                    }
+                }
+
+            case EidasProfile.Name:
+                {
+                    // An expired list is kept for validation: the policy's TLNotExpired judges it. With --sandbox, the Sandbox's LOTL.
+                    var options = new EidasExtensionOptions { HttpClientProvider = http, ListOptions = new TrustedListOptions { RejectExpired = signing } };
+                    if (sandbox is not null)
+                    {
+                        var url = new Uri(sandbox.TrimEnd('/') + "/");
+                        options = options with
+                        {
+                            LotlUrl = new Uri(url, "tl/lotl.xml"),
+                            LotlSigners = [await SignerAsync(http, new Uri(url, "tl/lotl-signer.pem"), cancellationToken)],
+                        };
+                    }
+
+                    try
+                    {
+                        return EidasProfile.Create(await EidasExtension.LoadAsync(options, cancellationToken));
+                    }
+                    catch (Exception ex) when (ex is HttpRequestException or System.Security.Cryptography.CryptographicException or InvalidDataException)
+                    {
+                        // A LOTL that cannot be read or is not signed by its operator gives no anchors, as in the library.
+                        Spectre.Console.AnsiConsole.MarkupLine($"[yellow]LOTL:[/] {Spectre.Console.Markup.Escape($"{ex.Message} No anchor comes from it.")}");
+                        return new TrustProfile(EidasProfile.Name, "EU (eIDAS)", EidasPolicies.Signing, EidasPolicies.Validation, [], []);
                     }
                 }
 

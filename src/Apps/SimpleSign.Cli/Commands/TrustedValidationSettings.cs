@@ -222,6 +222,9 @@ internal class TrustedValidationSettings : CommonSettings
     /// <summary>The trusted lists <see cref="LoadTrustAsync"/> loaded, as anchors at a time (their service history).</summary>
     internal List<ITimedTrustAnchorProvider> LoadedTimedAnchors { get; } = [];
 
+    /// <summary>The profile's qualifiers (eIDAS): each signature's qualification, QESig, AdESig-QC…</summary>
+    internal List<ISignatureQualifier> LoadedQualifiers { get; } = [];
+
     /// <summary>The policy, and the trust anchors of the trust folder and the trusted list.</summary>
     /// <param name="http">The CLI's HTTP provider (its proxy and outbound policy, <c>--allow-origin</c>): the trusted lists are downloaded through it.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -242,6 +245,7 @@ internal class TrustedValidationSettings : CommonSettings
                 policy = profile.ValidationPolicy;
             }
 
+            LoadedQualifiers.AddRange(profile.SignatureQualifiers);
             if (TrustedList is null && Lotl is null)
             {
                 anchors.AddRange(profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()));

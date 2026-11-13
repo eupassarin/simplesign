@@ -26,6 +26,7 @@ internal static class PolicyPresets
                 .With("CACertificate/NotExpired", new PolicyConstraint(ConstraintLevel.Ignore))
                 .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore)),
             ["iofe"] = () => IofePolicies.Signing,
+            ["eidas"] = () => SimpleSign.Europe.Eidas.EidasPolicies.Signing,
             ["icp-brasil"] = () => SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicies.Signing,
         };
 
@@ -38,6 +39,7 @@ internal static class PolicyPresets
                 .WithName("SimpleSign default, strict")
                 .With("Timestamp/Coherence", Fail).With("SignatureConstraints/PolicyAvailable", Fail),
             ["iofe"] = () => IofePolicies.Validation,
+            ["eidas"] = () => SimpleSign.Europe.Eidas.EidasPolicies.Validation,
             ["icp-brasil"] = () => SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicies.Validation,
             ["govbr"] = () => SimpleSign.Brazil.GovBr.GovBrPolicies.Validation,
         };

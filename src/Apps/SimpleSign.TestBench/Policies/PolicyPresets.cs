@@ -55,6 +55,8 @@ internal static class PolicyPresets
         (PolicyViewer.Signing, "icp-brasil", () => Brazil.IcpBrasil.IcpBrasilPolicies.Signing.ToJson(), Brazil.IcpBrasil.IcpBrasilPolicies.Signing.Name),
         (PolicyViewer.Validation, "icp-brasil", () => Brazil.IcpBrasil.IcpBrasilPolicies.Validation.ToJson(), Brazil.IcpBrasil.IcpBrasilPolicies.Validation.Name),
         (PolicyViewer.Validation, "govbr", () => Brazil.GovBr.GovBrPolicies.Validation.ToJson(), Brazil.GovBr.GovBrPolicies.Validation.Name),
+        (PolicyViewer.Signing, "eidas", () => Europe.Eidas.EidasPolicies.Signing.ToJson(), Europe.Eidas.EidasPolicies.Signing.Name),
+        (PolicyViewer.Validation, "eidas", () => Europe.Eidas.EidasPolicies.Validation.ToJson(), Europe.Eidas.EidasPolicies.Validation.Name),
     ];
 
     /// <summary>The presets.</summary>
@@ -67,6 +69,7 @@ internal static class PolicyPresets
         "iofe" => "Iofe",
         "icp-brasil" => "IcpBrasil",
         "govbr" => "GovBr",
+        "eidas" => "Eidas",
         _ => null,
     };
 

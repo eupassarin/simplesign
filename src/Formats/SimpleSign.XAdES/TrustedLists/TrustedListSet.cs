@@ -23,7 +23,10 @@ public sealed record TrustedListSetOptions
     /// <summary>The territories to load (<c>PT</c>, <c>DE</c>…); empty loads every list the LOTL points to.</summary>
     public IReadOnlyList<string> Territories { get; init; } = [];
 
-    /// <summary>Which services of the national lists become trust anchors.</summary>
+    /// <summary>
+    /// Which services of the national lists become trust anchors, and whether an expired national list is refused. An
+    /// expired LOTL is always refused: no constraint judges the LOTL itself.
+    /// </summary>
     public TrustedListOptions Services { get; init; } = new();
 
     /// <summary>
@@ -132,14 +135,14 @@ public sealed class TrustedListSet : ITimedTrustAnchorProvider, ITrustedListInfo
         try
         {
             lotl = await LoadOneAsync(
-                options.LotlLocation, options.Services with { SignerCertificates = lotlSigners },
+                options.LotlLocation, options.Services with { SignerCertificates = lotlSigners, RejectExpired = true },
                 CacheFile(options, "lotl"), httpClientProvider, cancellationToken).ConfigureAwait(false);
         }
         catch (CryptographicException) when (options.FollowPivots)
         {
             (lotlSigners, pivots) = await PivotSignersAsync(options, httpClientProvider, cancellationToken).ConfigureAwait(false);
             lotl = await LoadOneAsync(
-                options.LotlLocation, options.Services with { SignerCertificates = lotlSigners },
+                options.LotlLocation, options.Services with { SignerCertificates = lotlSigners, RejectExpired = true },
                 CacheFile(options, "lotl"), httpClientProvider, cancellationToken).ConfigureAwait(false);
         }
 

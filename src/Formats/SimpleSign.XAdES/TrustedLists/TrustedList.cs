@@ -461,9 +461,25 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
             throw new CryptographicException("The signature of the trusted list does not cover the whole list.");
         }
 
-        if (!signers.Any(signer => signedXml.CheckSignature(signer, verifySignatureOnly: true)))
+        if (!signers.Any(signer => Checks(signedXml, signer)))
         {
             throw new CryptographicException("The trusted list is not signed by the scheme operator's certificate.");
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="signer"/> verifies the signature. A key this platform cannot load (a curve it does not
+    /// support, such as brainpool on some systems) verifies nothing, instead of failing the whole set of lists.
+    /// </summary>
+    private static bool Checks(SignedXml signedXml, X509Certificate2 signer)
+    {
+        try
+        {
+            return signedXml.CheckSignature(signer, verifySignatureOnly: true);
+        }
+        catch (Exception ex) when (ex is ArgumentNullException or NotSupportedException or CryptographicException)
+        {
+            return false;
         }
     }
 
