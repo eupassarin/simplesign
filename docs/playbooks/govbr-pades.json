@@ -1,0 +1,109 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",
+  "schema": 2,
+  "id": "govbr-pades",
+  "title": "Gov.br PAdES (validation)",
+  "description": "Gov.br signatures (advanced electronic signatures, Lei 14.063/2020) are made on Gov.br's own portal, as PAdES; SimpleSign does not make them, it validates them (the gov-br profile has no signing policy). This playbook validates PAdES files with the gov-br trust profile (the Gov.br AC roots bundled with SimpleSign.Brazil.GovBr and its chain validation) and its validation policy (the default's constraints, and a signing certificate without digitalSignature or nonRepudiation fails), through the library and the CLI. The signed files stand in for the portal's: the Sandbox signs them and its trust is added to the profile's (trustProfiles: Sandbox), so the checks show without a real Gov.br account; the first section shows that the profile alone trusts only the Gov.br chain. The last section raises the level of such a signature (B-LT, B-LTA), as a relying party that keeps it does.",
+  "defaults": {
+    "engine": "both",
+    "format": "pades",
+    "options": {
+      "common": {
+        "level": "BB",
+        "credentialId": "sandbox:rsa-2048",
+        "attemptRefused": true,
+        "validation": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" }
+      },
+      "pades": { "documentId": "sample:contract" }
+    }
+  },
+  "sections": [
+    {
+      "id": "files",
+      "title": "Files to validate",
+      "description": "PAdES signatures like the portal hands back: one or more signers of a PDF, with or without a visible stamp. Each one is validated right after with the gov-br profile and the Sandbox's trust.",
+      "steps": [
+        { "id": "signed-etsi", "title": "PAdES B-B, ETSI.CAdES.detached", "tags": ["gov.br", "Lei 14.063", "files"],
+          "options": { "subFilter": "EtsiCadesDetached" },
+          "expect": { "outcome": "signed", "level": "B-B", "indication": "TOTAL_PASSED" } },
+        { "id": "signed-pkcs7", "title": "PAdES B-B, adbe.pkcs7.detached", "tags": ["gov.br", "files"],
+          "options": { "subFilter": "AdbePkcs7Detached" },
+          "expect": { "outcome": "signed", "indication": "TOTAL_PASSED" } },
+        { "id": "signed-visible", "title": "With a visible stamp", "tags": ["gov.br", "files", "appearance"],
+          "options": { "appearance": { "visible": true, "autoPosition": true, "showDate": true, "culture": "pt-BR",
+            "timeZoneId": "America/Sao_Paulo", "dateFormat": "dd/MM/yyyy HH:mm", "signedByLabel": "Documento assinado digitalmente por",
+            "verificationUrl": "https://validar.iti.gov.br" } },
+          "expect": { "outcome": "signed", "indication": "TOTAL_PASSED" } },
+        { "id": "signed-second", "title": "A second signer of the same PDF", "tags": ["gov.br", "files"],
+          "options": { "documentId": "step:signed-etsi", "credentialId": "sandbox:rsa-3072", "fieldName": "Assinatura2" },
+          "expect": { "outcome": "signed", "indication": "TOTAL_PASSED" } },
+        { "id": "key-usage-file", "title": "Signer with neither digitalSignature nor nonRepudiation (minimal signing policy, to validate)", "tags": ["key-usage"],
+          "options": { "credentialId": "sandbox:no-signing-key-usage", "signingPolicyId": "preset:signing:minimal", "validate": false },
+          "expect": { "outcome": "signed" } }
+      ]
+    },
+    {
+      "id": "trust",
+      "title": "The Gov.br profile",
+      "description": "Its anchors are the Gov.br AC Raiz and intermediates; a chain that does not reach them is not trusted.",
+      "steps": [
+        { "id": "v-profile-only", "kind": "validate", "title": "Profile alone: the Sandbox's chain is not Gov.br's", "tags": ["gov.br", "trust"],
+          "options": { "fileId": "step:signed-etsi", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": [], "policyId": "preset:validation:govbr" } },
+          "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE", "subIndication": "NO_CERTIFICATE_CHAIN_FOUND" } },
+        { "id": "v-with-sandbox", "kind": "validate", "title": "Profile with the Sandbox's trust added", "tags": ["gov.br", "trust"],
+          "options": { "fileId": "step:signed-etsi", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } },
+          "expect": { "outcome": "valid", "indication": "TOTAL_PASSED", "etsiReport": "valid" } },
+        { "id": "v-with-icp", "kind": "validate", "title": "ICP-Brasil's policy, trusting ICP-Brasil, Gov.br and the Sandbox", "tags": ["gov.br", "icp-brasil", "trust"],
+          "description": "A relying party that accepts both Brazilian signatures: one profile sets the policy, the others add their trust.",
+          "options": { "fileId": "step:signed-etsi", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["GovBr", "Sandbox"], "policyId": "preset:validation:icp-brasil" } },
+          "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } }
+      ]
+    },
+    {
+      "id": "validation",
+      "title": "Validation with the Gov.br policy",
+      "steps": [
+        { "id": "v-pkcs7", "kind": "validate", "title": "adbe.pkcs7.detached", "tags": ["gov.br", "validation"],
+          "options": { "fileId": "step:signed-pkcs7", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
+        { "id": "v-visible", "kind": "validate", "title": "Visible stamp", "tags": ["gov.br", "validation", "appearance"],
+          "options": { "fileId": "step:signed-visible", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
+        { "id": "v-two-signers", "kind": "validate", "title": "Two signers", "tags": ["gov.br", "validation"],
+          "options": { "fileId": "step:signed-second", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
+        { "id": "v-appended", "kind": "validate", "title": "Bytes appended after the signature", "tags": ["gov.br", "validation", "integrity"],
+          "description": "The signed revision is intact; the report says the ByteRange does not cover the whole file.",
+          "options": { "fileId": "sample:appended", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "valid" } },
+        { "id": "v-tampered", "kind": "validate", "title": "Document changed after signing", "tags": ["gov.br", "validation", "integrity"],
+          "options": { "fileId": "sample:tampered-content", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "invalid", "indication": "TOTAL_FAILED", "subIndication": "HASH_FAILURE" } },
+        { "id": "v-tampered-cms", "kind": "validate", "title": "Signature value changed", "tags": ["gov.br", "validation", "integrity"],
+          "options": { "fileId": "sample:tampered-cms", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "invalid", "indication": "TOTAL_FAILED", "subIndication": "SIG_CRYPTO_FAILURE" } },
+        { "id": "v-revoked", "kind": "validate", "title": "Signer revoked, no proof of existence before it", "tags": ["gov.br", "validation", "revocation"],
+          "options": { "fileId": "sample:revoked", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE", "subIndication": "REVOKED_NO_POE" } },
+        { "id": "v-revocation-unknown", "kind": "validate", "title": "Revocation status unknown (OCSP and CRL down)", "tags": ["gov.br", "validation", "revocation"],
+          "sandbox": { "ocsp": "Down", "crl": "Down" },
+          "options": { "fileId": "step:signed-etsi", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE" } },
+        { "id": "v-expired", "kind": "validate", "title": "Signer expired, no proof of existence", "tags": ["gov.br", "validation", "validity"],
+          "options": { "fileId": "sample:expired", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE", "subIndication": "OUT_OF_BOUNDS_NO_POE" } },
+        { "id": "v-untrusted", "kind": "validate", "title": "Self-signed signer", "tags": ["gov.br", "validation", "trust"],
+          "options": { "fileId": "sample:untrusted-root", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE", "subIndication": "NO_CERTIFICATE_CHAIN_FOUND" } },
+        { "id": "v-key-usage", "kind": "validate", "title": "Signer with neither digitalSignature nor nonRepudiation: not accepted", "tags": ["gov.br", "validation", "key-usage"],
+          "description": "The constraint the Gov.br policy adds to the default one.",
+          "options": { "fileId": "step:key-usage-file", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr" } }, "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE" } }
+      ]
+    },
+    {
+      "id": "preservation",
+      "title": "Keeping a Gov.br signature",
+      "description": "The relying party raises the level of the B-B signature it received: a time-stamp and the validation data (B-LT), then a document time-stamp (B-LTA), and validates it at the archival level.",
+      "steps": [
+        { "id": "aug-blt", "kind": "augment", "title": "Raised to B-LT", "tags": ["gov.br", "preservation", "augment"], "engine": "library",
+          "options": { "fileId": "step:signed-etsi", "level": "BLT", "timestamp": { "provider": "Sandbox" } },
+          "expect": { "outcome": "augmented", "level": "B-LT", "indication": "TOTAL_PASSED" } },
+        { "id": "aug-blta", "kind": "augment", "title": "Raised to B-LTA", "tags": ["gov.br", "preservation", "augment"], "engine": "library",
+          "options": { "fileId": "step:aug-blt", "level": "BLTA", "timestamp": { "provider": "Sandbox" } },
+          "expect": { "outcome": "augmented", "level": "B-LTA", "indication": "TOTAL_PASSED" } },
+        { "id": "v-archival", "kind": "validate", "title": "Validated at the archival level", "tags": ["gov.br", "preservation", "validation"],
+          "options": { "fileId": "step:aug-blta", "settings": { "trust": [], "profile": "GovBr", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:govbr", "level": "ArchivalData" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } }
+      ]
+    }
+  ]
+}

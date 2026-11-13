@@ -38,12 +38,15 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
 
     private static string Failures(PlaybookStateView view) => string.Join("; ", view.Steps.Where(s => s.Status != PlaybookStatuses.Passed).Select(s =>
         $"{s.StepId}: {s.Status} {s.Result?.Message} " + string.Join(", ", (s.Result?.Runs ?? []).SelectMany(r => r.Checks).Where(c => !c.Passed)
-            .Select(c => $"{c.What} {c.Expected}≠{c.Found}"))));
+            .Select(c => $"{c.What} {c.Expected}≠{c.Found}")) + " " + string.Join(" | ", (s.Result?.Runs ?? []).Where(r => r.Error is not null)
+            .Select(r => $"{r.Engine}: {r.ErrorType} {r.Error}"))));
 
     [SkippableTheory]
     [InlineData("sandbox-basics")]
     [InlineData("indecopi-guia-v4")]
     [InlineData("etsi-baseline")]
+    [InlineData("icp-brasil-pades")]
+    [InlineData("govbr-pades")]
     public async Task RunToEnd_Sample_PassesEveryStep(string sample)
     {
         fixture.RequireSandbox();

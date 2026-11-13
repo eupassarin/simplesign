@@ -17,7 +17,7 @@ them and the evidence groups by them.
 1. Start a Sandbox and the TestBench, and connect them (`tools/stack/up.sh`, or the two `dotnet run` lines of
    [testbench.md](testbench.md)). Start DSS too for steps with `crossValidate`.
 2. In the TestBench, open the **Playbook** tab (top bar, after Sign and Validate). Open a playbook file, or pick a
-   sample (`docs/playbooks/*.json` are bundled: `sandbox-basics`, `indecopi-guia-v4`).
+   sample (`docs/playbooks/*.json` are bundled: `sandbox-basics`, `indecopi-guia-v4`, `etsi-baseline`, `icp-brasil-pades`, `govbr-pades`).
 3. The playbook is checked when it loads: every Sandbox signer and certificate, failure, preset and step reference.
    Errors stop it; warnings do not.
 4. The page has three columns:
@@ -116,6 +116,13 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
   319 132-1), the extended forms, time-stamps, EN 319 102-1 validation (indication and sub-indication) and trusted
   lists, cross-validated with EU DSS. It covers the items [etsi-checklist.md](../playbooks/etsi-checklist.md) marks P;
   each step is tagged with its item id and standard. Written by `tools/playbooks/etsi.py`.
+- `icp-brasil-pades` — PAdES under the ICP-Brasil policies (AD-RB, AD-RT, AD-RC, AD-RA; DOC-ICP-15.03) with the
+  `icp-brasil` profile and its policies, through the library and the CLI: the policies, two-phase signing, revocation of
+  the whole chain, the ACT checks, keys and digests (DOC-ICP-01.01), PDF fields and certification, validation and
+  augmentation. The Sandbox's trust is added to the profile's; AD-RA downloads its artifacts from ITI's repository.
+- `govbr-pades` — Gov.br signatures, which only Gov.br's portal makes (PAdES): validation with the `gov-br` profile and
+  its policy (integrity, trust, revocation, validity, key usage), the profile combined with ICP-Brasil's, and raising
+  the level of a received signature. The files are signed by the Sandbox, whose trust is added to the profile's.
 
 Tests: `tests/unit/Apps/SimpleSign.TestBench.Tests/Playbooks` checks the format, the kept results and the preview, and
 runs every sample against the Sandbox (and checks that the ETSI one covers every P item of its checklist). The schema is `docs/schemas/playbook.schema.json` (also
