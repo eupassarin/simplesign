@@ -42,8 +42,10 @@ When the bundled roots are insufficient or the chain includes intermediate CAs n
 
 ```csharp
 var chain = new X509Chain();
-chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
-chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+// Revocation is SimpleSign's own check (IChainRevocationChecker, through IHttpClientProvider and its
+// outbound HTTP policy), never the operating system's: see "Platform revocation" below.
+chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+chain.ChainPolicy.UrlRetrievalTimeout = options.NetworkTimeout;
 chain.ChainPolicy.VerificationFlags =
     X509VerificationFlags.IgnoreEndRevocationUnknown |
     X509VerificationFlags.IgnoreCertificateAuthorityRevocationUnknown;
@@ -59,6 +61,13 @@ foreach (var cert in extraCerts)
 
 bool built = chain.Build(certificate);
 ```
+
+**Platform revocation.** The PAdES, CAdES and XAdES validators build the chain with `X509RevocationMode.NoCheck`
+(`CryptoUtility.ConfigureChainPolicy`). They used `Online` until 2026-11: the operating system then fetched every CRL
+itself, outside `IHttpClientProvider` and the SSRF guard (ADR 0020), with its own timeout (about 15 s per URL on Linux
+and Windows), although `ValidateAsync` checks the same chain again through the library. Revocation now has one path:
+`ValidateAsync` (CRL and OCSP through the library, embedded data first); the synchronous `Validate` does not check it
+and says so in a warning.
 
 ### 3. Error classification
 

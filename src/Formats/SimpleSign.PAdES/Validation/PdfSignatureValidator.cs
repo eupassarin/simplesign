@@ -1131,8 +1131,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         using var chain = new X509Chain();
-        CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
-        chain.ChainPolicy.UrlRetrievalTimeout = _options.NetworkTimeout;
+        CryptoUtility.ConfigureChainPolicy(chain, _options.NetworkTimeout);
         chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
         chain.ChainPolicy.VerificationFlags =
             X509VerificationFlags.IgnoreEndRevocationUnknown |

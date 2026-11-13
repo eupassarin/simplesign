@@ -11,15 +11,16 @@ namespace SimpleSign.Core.Crypto;
 internal static class CryptoUtility
 {
     /// <summary>
-    /// Configures the common <see cref="X509Chain.ChainPolicy"/> settings used by all validators:
-    /// revocation mode based on <paramref name="checkRevocation"/> and <c>ExcludeRoot</c> flag.
+    /// Configures the common <see cref="X509Chain.ChainPolicy"/> settings used by the signature validators.
+    /// The platform chain never checks revocation: the validators check it themselves (<c>IChainRevocationChecker</c>,
+    /// CRL and OCSP through <c>IHttpClientProvider</c> and its outbound HTTP policy), so the operating system must not
+    /// fetch CRLs on its own, outside that policy and with its own timeouts.
+    /// <paramref name="urlRetrievalTimeout"/> bounds what the platform still downloads (AIA issuer certificates).
     /// </summary>
-    internal static void ConfigureChainPolicy(X509Chain chain, bool checkRevocation)
+    internal static void ConfigureChainPolicy(X509Chain chain, TimeSpan urlRetrievalTimeout)
     {
-        chain.ChainPolicy.RevocationMode = checkRevocation
-            ? X509RevocationMode.Online
-            : X509RevocationMode.NoCheck;
-        chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.UrlRetrievalTimeout = urlRetrievalTimeout;
     }
 
     /// <summary>

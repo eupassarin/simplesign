@@ -784,7 +784,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         try
         {
             using var chain = new X509Chain { ChainPolicy = { TrustMode = X509ChainTrustMode.System } };
-            CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
+            CryptoUtility.ConfigureChainPolicy(chain, _options.NetworkTimeout);
             chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
             foreach (var certificate in embedded)
             {

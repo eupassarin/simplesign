@@ -794,7 +794,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
                 || !_options.TrustSystemRoots;
 
             using var chain = new X509Chain();
-            CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
+            CryptoUtility.ConfigureChainPolicy(chain, _options.NetworkTimeout);
             chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
             if (additionalCertificates is not null)
             {
