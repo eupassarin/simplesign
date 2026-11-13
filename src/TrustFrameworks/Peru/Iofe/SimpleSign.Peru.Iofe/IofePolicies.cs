@@ -3,9 +3,11 @@ using SimpleSign.Core.Policies;
 namespace SimpleSign.Peru.Iofe;
 
 /// <summary>
-/// The policies of INDECOPI's accreditation guide for signature software (version 4.0): signing by an automated
-/// agent (Req. 11–20), verification by automated agents (Req. 21–30) and the timestamp checks (section 4.4). They
-/// derive from SimpleSign's default policies; write them out with <c>ToJson()</c> to keep them as files.
+/// The policies of INDECOPI's accreditation guide for signature software (version 4.0, Res. 010-2016/CFE-INDECOPI):
+/// signing by an automated agent (section 4.2, Req. 11–20), verification by automated agents (section 4.3,
+/// Req. 21–30) and the timestamp checks (section 4.4). They derive from SimpleSign's default policies; write them out
+/// with <c>ToJson()</c> to keep them as files. <c>docs/playbooks/indecopi-checklist.md</c> maps each item of the
+/// guide's annex B to what shows it.
 /// </summary>
 public static class IofePolicies
 {
@@ -43,21 +45,32 @@ public static class IofePolicies
         .With("Timestamp/RevocationDataAvailable", Fail);
 
     /// <summary>
+    /// Signing as <see cref="Signing"/>, except that the signing certificate must have nonRepudiation: what section 4.2
+    /// of the guide asks of an automated agent (Req. 13, annex B item 12). <see cref="Signing"/> also accepts
+    /// digitalSignature, as section 4.1 does for end-user software (Req. 3).
+    /// </summary>
+    public static SigningPolicy SigningNonRepudiation { get; } = Signing
+        .WithName(Name + " — nonRepudiation")
+        .With("SigningCertificate/KeyUsage", Fail with { Ids = ["nonRepudiation"] });
+
+    /// <summary>
     /// Validation: the constraints of <see cref="ValidationPolicy.Default"/> (obsolete algorithms fail unless an
     /// older proof of existence covers them), a signing certificate without digitalSignature or nonRepudiation
-    /// fails (Req. 13, 26), and a trusted list that is expired or not signed by its operator gives no anchors
-    /// (optional TSL requirement).
+    /// fails (Req. 3, 23), and a trusted list that is expired or not signed by its operator gives no anchors
+    /// (optional TSL requirement). A trusted list of version 3 (ETSI TS 102 231 v3, the format INDECOPI publishes
+    /// Peru's in) is accepted besides versions 5 and 6 (TS 119 612).
     /// </summary>
     public static ValidationPolicy Validation { get; } = ValidationPolicy.Default
         .WithName(Name)
         .With("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage",
             Fail with { Ids = ["digitalSignature", "nonRepudiation"] })
         .With("TrustedLists/TLNotExpired", Fail)
-        .With("TrustedLists/TLWellSigned", Fail);
+        .With("TrustedLists/TLWellSigned", Fail)
+        .With("TrustedLists/TLVersion", Fail with { Ids = ["3", "5", "6"] });
 
     /// <summary>
     /// Validation as <see cref="Validation"/>, except that the signing certificate must have nonRepudiation: what the
-    /// guide asks of software verifying documents received by an automated agent (Req. 23).
+    /// guide asks of software verifying documents received by automated agents (section 4.3, Req. 23, annex B item 12).
     /// </summary>
     public static ValidationPolicy ValidationNonRepudiation { get; } = Validation
         .WithName(Name + " — nonRepudiation")

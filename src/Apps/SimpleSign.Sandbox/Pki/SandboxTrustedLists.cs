@@ -41,6 +41,24 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
 
     public Uri TlUrl => new(pki.BaseUrl, "tl/tl.xml");
 
+    /// <summary>The trusted list laid out as INDECOPI publishes Peru's (<c>tsl-pe.xml</c>).</summary>
+    public Uri IofeUrl => new(pki.BaseUrl, "tl/iofe.xml");
+
+    /// <summary>The territory of the INDECOPI-layout list.</summary>
+    public const string IofeTerritory = "PE";
+
+    // The TS 102 231 v3 vocabulary INDECOPI's list uses (EU Directive 1999/93/EC URIs), not TS 119 612's.
+    private const string Directive = "http://uri.etsi.org/TrstSvc/eSigDir-1999-93-EC-TrustedList/";
+
+    /// <summary>The TSLType of INDECOPI's list.</summary>
+    public const string IofeType = Directive + "TSLType/generic";
+
+    /// <summary>The status INDECOPI gives every accredited service.</summary>
+    public const string UnderSupervision = Directive + "Svcstatus/undersupervision";
+
+    /// <summary>The status of a service whose accreditation was withdrawn.</summary>
+    public const string SupervisionRevoked = Directive + "Svcstatus/supervisionrevoked";
+
     /// <summary>The signed list of trusted lists: a pointer to itself and one to the trusted list, with each operator's certificate.</summary>
     public Task<byte[]> LotlAsync(CancellationToken cancellationToken)
     {
@@ -82,6 +100,93 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
         byte[] signed = Sign(xml, fault == TlFault.WrongSigner ? pki.UntrustedSigner : pki.TlSigner);
         return Task.FromResult(fault == TlFault.Tampered ? Tamper(signed) : signed);
     }
+
+    /// <summary>
+    /// The trusted list as INDECOPI lays out Peru's: TS 102 231 v3 (version 3, TSLType <c>generic</c>, statuses
+    /// <c>undersupervision</c> / <c>supervisionrevoked</c>), territory PE, one provider per service, and no supply points
+    /// (INDECOPI publishes no TSA URLs). Its services: the root CA (CA/QC); the self-signed Timestamping CA typed
+    /// <c>Svctype/unspecified</c> — the CA of the <c>/tsa/iofe</c> TSA, not the TSA itself, as INDECOPI lists the Llama.pe
+    /// Timestamping CA —; the revoked TSA (<c>unspecified</c>, withdrawn); and a signature software listed with its
+    /// code-signing certificate (<c>unspecified</c>), which must never become an anchor. Signed by the trusted list's
+    /// operator; the <see cref="TlFault"/> switched on applies to it as to <c>/tl/tl.xml</c>. No LOTL points to it.
+    /// </summary>
+    public Task<byte[]> IofeAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var fault = pki.Faults.TrustedList;
+        var now = DateTimeOffset.UtcNow;
+        var revokedTsa = pki.Certificates.FirstOrDefault(c => c.Id == "tsa-revoked")?.Certificate;
+        var software = pki.Certificates.FirstOrDefault(c => c.Id == "code-signing")?.Certificate;
+        string providers =
+            (fault == TlFault.WithdrawnAfterUse
+                ? IofeProvider("SimpleSign Sandbox EC", "CA/QC", "Sandbox root CA", pki.Root, SupervisionRevoked, now.AddSeconds(-1), history: UnderSupervision)
+                : IofeProvider("SimpleSign Sandbox EC", "CA/QC", "Sandbox root CA", pki.Root, UnderSupervision)) +
+            IofeProvider("SimpleSign Sandbox TSA", "unspecified", "Sandbox Timestamping CA", pki.TsaCa, UnderSupervision) +
+            (revokedTsa is null ? "" : IofeProvider("SimpleSign Sandbox revoked TSA", "unspecified", "Sandbox revoked time-stamping unit", revokedTsa, SupervisionRevoked)) +
+            (software is null ? "" : IofeProvider("SimpleSign Sandbox SVA", "unspecified", "Sandbox signature software", software, UnderSupervision));
+        var nextUpdate = fault == TlFault.Expired ? now.AddDays(-1) : now.AddMonths(6);
+        var issued = fault == TlFault.Expired ? now.AddMonths(-7) : now;
+        string xml = $"""
+            <tsl:TrustServiceStatusList xmlns:tsl="{Ns}" Id="tsl-iofe" TSLTag="http://uri.etsi.org/02231/TSLTag">
+              <tsl:SchemeInformation>
+                <tsl:TSLVersionIdentifier>3</tsl:TSLVersionIdentifier>
+                <tsl:TSLSequenceNumber>1</tsl:TSLSequenceNumber>
+                <tsl:TSLType>{IofeType}</tsl:TSLType>
+                <tsl:SchemeOperatorName><tsl:Name xml:lang="es">SimpleSign Sandbox ({Escape(pki.Name)})</tsl:Name></tsl:SchemeOperatorName>
+                <tsl:SchemeOperatorAddress>{IofeAddress()}</tsl:SchemeOperatorAddress>
+                <tsl:SchemeName><tsl:Name xml:lang="es">PE: Sandbox list in the layout of INDECOPI ({Escape(pki.Name)}), for tests only</tsl:Name></tsl:SchemeName>
+                <tsl:SchemeInformationURI><tsl:URI xml:lang="es">{pki.BaseUrl}</tsl:URI></tsl:SchemeInformationURI>
+                <tsl:StatusDeterminationApproach>{Directive}StatusDetn/appropriate</tsl:StatusDeterminationApproach>
+                <tsl:SchemeTypeCommunityRules><tsl:URI xml:lang="es">{Directive}schemerules/common</tsl:URI></tsl:SchemeTypeCommunityRules>
+                <tsl:SchemeTerritory>{IofeTerritory}</tsl:SchemeTerritory>
+                <tsl:PolicyOrLegalNotice><tsl:TSLLegalNotice xml:lang="es">Test trust scheme of the SimpleSign Sandbox. Never trust it for real signatures.</tsl:TSLLegalNotice></tsl:PolicyOrLegalNotice>
+                <tsl:HistoricalInformationPeriod>65535</tsl:HistoricalInformationPeriod>
+                <tsl:ListIssueDateTime>{Time(issued)}</tsl:ListIssueDateTime>
+                <tsl:NextUpdate><tsl:dateTime>{Time(nextUpdate)}</tsl:dateTime></tsl:NextUpdate>
+                <tsl:DistributionPoints><tsl:URI>{IofeUrl}</tsl:URI></tsl:DistributionPoints>
+              </tsl:SchemeInformation>
+              <tsl:TrustServiceProviderList>{providers}</tsl:TrustServiceProviderList>
+            </tsl:TrustServiceStatusList>
+            """;
+        byte[] signed = Sign(xml, fault == TlFault.WrongSigner ? pki.UntrustedSigner : pki.TlSigner);
+        return Task.FromResult(fault == TlFault.Tampered ? Tamper(signed) : signed);
+    }
+
+    /// <summary>One provider of the INDECOPI-layout list with one service: INDECOPI lists each EC, TSA or software apart.</summary>
+    private string IofeProvider(string provider, string type, string name, X509Certificate2 certificate, string status, DateTimeOffset? since = null, string? history = null) => $"""
+        <tsl:TrustServiceProvider>
+          <tsl:TSPInformation>
+            <tsl:TSPName><tsl:Name xml:lang="es">{Escape(provider)}</tsl:Name></tsl:TSPName>
+            <tsl:TSPAddress>{IofeAddress()}</tsl:TSPAddress>
+            <tsl:TSPInformationURI><tsl:URI xml:lang="es">{pki.BaseUrl}</tsl:URI></tsl:TSPInformationURI>
+          </tsl:TSPInformation>
+          <tsl:TSPServices><tsl:TSPService><tsl:ServiceInformation>
+            <tsl:ServiceTypeIdentifier>{ServiceTypes}{type}</tsl:ServiceTypeIdentifier>
+            <tsl:ServiceName><tsl:Name xml:lang="es">{Escape(name)}</tsl:Name></tsl:ServiceName>
+            <tsl:ServiceDigitalIdentity>
+              <tsl:DigitalId><tsl:X509Certificate>{Convert.ToBase64String(certificate.RawData)}</tsl:X509Certificate></tsl:DigitalId>
+              <tsl:DigitalId><tsl:X509SubjectName>{Escape(certificate.Subject)}</tsl:X509SubjectName></tsl:DigitalId>
+            </tsl:ServiceDigitalIdentity>
+            <tsl:ServiceStatus>{status}</tsl:ServiceStatus>
+            <tsl:StatusStartingTime>{Time((since ?? certificate.NotBefore).ToUniversalTime())}</tsl:StatusStartingTime>
+          </tsl:ServiceInformation>{(history is null ? "" : $"""
+          <tsl:ServiceHistory><tsl:ServiceHistoryInstance>
+            <tsl:ServiceTypeIdentifier>{ServiceTypes}{type}</tsl:ServiceTypeIdentifier>
+            <tsl:ServiceName><tsl:Name xml:lang="es">{Escape(name)}</tsl:Name></tsl:ServiceName>
+            <tsl:ServiceDigitalIdentity><tsl:DigitalId><tsl:X509Certificate>{Convert.ToBase64String(certificate.RawData)}</tsl:X509Certificate></tsl:DigitalId></tsl:ServiceDigitalIdentity>
+            <tsl:ServiceStatus>{history}</tsl:ServiceStatus>
+            <tsl:StatusStartingTime>{Time(certificate.NotBefore.ToUniversalTime())}</tsl:StatusStartingTime>
+          </tsl:ServiceHistoryInstance></tsl:ServiceHistory>
+          """)}</tsl:TSPService></tsl:TSPServices>
+        </tsl:TrustServiceProvider>
+        """;
+
+    private string IofeAddress() => $"""
+        <tsl:PostalAddresses><tsl:PostalAddress xml:lang="es">
+          <tsl:StreetAddress>Sandbox</tsl:StreetAddress><tsl:Locality>Localhost</tsl:Locality><tsl:CountryName>{IofeTerritory}</tsl:CountryName>
+        </tsl:PostalAddress></tsl:PostalAddresses>
+        <tsl:ElectronicAddress><tsl:URI xml:lang="es">{pki.BaseUrl}</tsl:URI></tsl:ElectronicAddress>
+        """;
 
     /// <summary>
     /// A service of the trusted list, for one certificate: its status since <paramref name="since"/> (the certificate's

@@ -105,6 +105,23 @@ public sealed class TrustedListTests : IDisposable
     }
 
     [Fact]
+    public void Load_ExcludedExtendedKeyUsageOnACaCertificate_CaIsStillAnAnchor()
+    {
+        // As INDECOPI lists Certisign Application CA: a CA whose EKU names code signing among others.
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=Application CA", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+            new OidCollection { new Oid("1.3.6.1.5.5.7.3.2"), new Oid("1.3.6.1.5.5.7.3.3") }, critical: false));
+        using var ca = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        byte[] xml = Build([(CaQc, Granted, ca)]);
+
+        var list = TrustedList.Load(xml, Options() with { ExcludedExtendedKeyUsages = ["1.3.6.1.5.5.7.3.3"] });
+
+        list.GetTrustAnchors().ShouldHaveSingleItem().Thumbprint.ShouldBe(ca.Thumbprint);
+    }
+
+    [Fact]
     public void Load_ChangedAfterSigning_ThrowsCryptographicException()
     {
         string text = System.Text.Encoding.UTF8.GetString(Build([(CaQc, Withdrawn, _pki.RootCa)]));

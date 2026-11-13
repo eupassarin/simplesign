@@ -286,12 +286,13 @@ writes it out):
 | `strict` | `default` plus the revocation of the whole chain (CRL/OCSP); give the chain up to the root |
 | `minimal` | Only the dates of the signing certificate (tests and migrations) |
 | `iofe` | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
+| `iofe-nonrepudiation` | `iofe`, and the signing certificate must have nonRepudiation (what the guide asks of an automated agent, section 4.2) |
 
 What the policy checks against comes from these options:
 
 | Option | Means |
 |---|---|
-| `--trust <file>` (repeatable), `--trust-dir <dir>`, `--tsl <url\|file> --tsl-signer <file>` | The trust anchors the signer and each TSA must chain to (`ProspectiveCertificateChain`) |
+| `--trust <file>` (repeatable), `--trust-dir <dir>`, `--tsl <url\|file> --tsl-signer <file>` [`--tsl-profile iofe`] | The trust anchors the signer and each TSA must chain to (`ProspectiveCertificateChain`); `--tsl-profile iofe` reads the list as `IofeExtension` does (INDECOPI's `unspecified` TSAs too, never a code-signing certificate) |
 | `--expected-tsa <file>` | The certificate the TSA must sign with; a timestamp from another is refused (`TimestampUntrusted`) |
 | `--audit-log <file>` | Appends a hash-chained record of each signature made or refused; `simplesign audit verify <file>` checks the chain |
 
@@ -347,7 +348,8 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 | `--policy-signer <cert>` | The policy must be signed with this certificate (detached CMS in `<policy>.p7s`) |
 | `--trust-dir <dir>` | Folder of trust anchor certificates (`.cer`, `.crt`, `.der`, `.pem`) |
 | `--trust-dir-signer <cert>` | The folder must carry `manifest.json` (SHA-256 of every file) signed with this certificate |
-| `--tsl <url\|file>` + `--tsl-signer <cert>` | Trusted list (ETSI TS 119 612 / TS 102 231): its active CA and TSA services become trust anchors |
+| `--tsl <url\|file>` + `--tsl-signer <cert>` | Trusted list (ETSI TS 119 612 / TS 102 231): its active CA and TSA services become trust anchors. An expired list (here or under `--lotl`) is kept: the policy's `TLNotExpired` judges it (WARN by default, FAIL in `iofe`), as EU DSS does |
+| `--tsl-profile iofe` | Read `--tsl` as INDECOPI's list (`IofeExtension.DefaultListOptions`): its `unspecified` TSAs become anchors too, code-signing certificates never |
 | `--lotl <url>` + `--lotl-signer <cert>` | List of trusted lists (e.g. the EU LOTL): the national lists it points to are checked with the certificates it gives and their CA and TSA services become trust anchors; `--lotl-territory PT` (repeatable) loads only some |
 | `--lang es` | Write the verification report in Spanish |
 | `--check-revocation` (CAdES, XAdES) | Check the revocation of the signer and TSA chains |
@@ -365,7 +367,7 @@ the PEM) and each check of the validation. With `--json` the same data is in `su
 `constraints`.
 
 ```bash
-simplesign validate contrato.pdf --policy indecopi.json --tsl tsl-pe.xml --tsl-signer indecopi-tsl.cer --lang es
+simplesign validate contrato.pdf --policy iofe --tsl tsl-pe.xml --tsl-signer indecopi-tsl.cer --tsl-profile iofe --lang es
 ```
 
 A policy file lists constraints grouped by what they apply to, each with a level; a constraint left out is not

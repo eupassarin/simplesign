@@ -49,7 +49,8 @@ public sealed class ValidationOptions
 
     /// <summary>
     /// The trusted lists the trust anchors come from, for the <c>TrustedLists</c> constraints of the validators (the
-    /// PAdES validator also reads them from its trust anchor providers). Null when the anchors are not from trusted lists.
+    /// PAdES validator also reads those of its trust anchor providers, such as a country extension's). Null when the
+    /// anchors are not from trusted lists.
     /// </summary>
     public IReadOnlyList<Extensions.TrustedListInfo>? TrustedLists { get; init; }
 

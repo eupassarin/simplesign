@@ -64,6 +64,11 @@ internal abstract class TimestampedSigningSettings : CommonSettings
     [Description("Certificate the trusted list must be signed with (the scheme operator's)")]
     public string? SigningTrustedListSigner { get; init; }
 
+    /// <summary>Which services of <c>--tsl</c> become anchors.</summary>
+    [CommandOption("--tsl-profile <NAME>")]
+    [Description("Which services of --tsl become anchors: default (CA and TSA services) or iofe (INDECOPI's list: its 'unspecified' TSAs too, never a code-signing certificate)")]
+    public string? SigningTrustedListProfile { get; init; }
+
     /// <summary>The certificate the TSA must sign with.</summary>
     [CommandOption("--expected-tsa <PATH>")]
     [Description("Certificate the TSA must sign its timestamps with (.cer/.pem): a timestamp from any other is refused")]
@@ -152,6 +157,11 @@ internal abstract class TimestampedSigningSettings : CommonSettings
             return $"Trust folder not found: {SigningTrustDirectory}";
         }
 
+        if (!TrustedListProfiles.IsKnown(SigningTrustedListProfile))
+        {
+            return $"Unknown --tsl-profile '{SigningTrustedListProfile}': use {TrustedListProfiles.Names}.";
+        }
+
         return SigningTrustedList is not null && SigningTrustedListSigner is null
             ? "--tsl requires --tsl-signer: the certificate the trusted list must be signed with."
             : null;
@@ -175,7 +185,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
 
         if (SigningTrustedList is not null)
         {
-            var options = new SimpleSign.XAdES.TrustedLists.TrustedListOptions { SignerCertificates = [LoadCertificate(SigningTrustedListSigner!)] };
+            var options = TrustedListProfiles.Options(SigningTrustedListProfile, LoadCertificate(SigningTrustedListSigner!));
             providers.Add(Uri.TryCreate(SigningTrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"
                 ? await SimpleSign.XAdES.TrustedLists.TrustedList.DownloadAsync(url, options, CliNetwork.Provider, cancellationToken: cancellationToken)
                 : SimpleSign.XAdES.TrustedLists.TrustedList.Load(await File.ReadAllBytesAsync(SigningTrustedList, cancellationToken), options));

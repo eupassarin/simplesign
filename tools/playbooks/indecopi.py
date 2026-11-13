@@ -1,9 +1,9 @@
 """Writes docs/playbooks/indecopi-guia-v4.json: the automated steps that help with an INDECOPI (IOFE, Peru) software
-accreditation (Guía de Acreditación de Software v4.0, annex B), run in the TestBench against the Sandbox.
+accreditation (Guía de Acreditación de Aplicaciones de Software v4.0, annex B), run in the TestBench against the Sandbox.
 
-Tags name the items of the guide each step helps with (F-n: signing by an automated agent, V-n: verification by
-automated agents, S-n: time-stamp verification) and a topic. Items that need a person (manuals, code signing, the
-cryptographic module) are not here: they are handled outside the playbook.
+Tags name the annex B items each step helps with (F-n: section 4.2, signing by an automated agent; V-n: section 4.3,
+verification by automated agents; S-n: section 4.4, time-stamps) and a topic. Items that need a person (manuals, code
+signing, the cryptographic module) are not here: docs/playbooks/indecopi-checklist.md says where each one is handled.
 
     python3 tools/playbooks/indecopi.py docs/playbooks/indecopi-guia-v4.json
 """
@@ -39,12 +39,15 @@ def refused(reason=None):
     return {"outcome": "refused", **({"reason": reason} if reason else {})}
 
 
-TSL = {"trust": ["SandboxTrustedList"]}
+TSL = {"trust": ["SandboxIofeList"]}
 TSA = {"provider": "Sandbox"}
+IOFE_VALIDATION = {"trust": ["SandboxIofeList"], "policyId": "preset:validation:iofe"}
 
 sections = [
     {"id": "tsl", "title": "Trusted list (TSL)",
-     "description": "The trust anchors come from the Sandbox's trusted list, whose signature is checked against the operator's certificate.",
+     "description": "The trust anchors come from the Sandbox's list laid out as INDECOPI's (/tl/iofe.xml: TS 102 231 v3, TSLType generic, "
+                    "status undersupervision, TSAs and signature software typed unspecified), read as IofeExtension reads Peru's; its "
+                    "signature is checked against the operator's certificate.",
      "steps": [
          sign("tsl-ok", "Sign with a root listed in the TSL", ["F-1", "F-3", "tsl"], {"outcome": "signed"}, signingControls=TSL,
               desc="The Sandbox's TSL is downloaded, its signature is checked with the operator's certificate, and the signer's root is listed: the signature is made."),
@@ -53,14 +56,25 @@ sections = [
          sign("tsl-tampered", "Tampered TSL: refused", ["F-1", "tsl"], refused("UntrustedRoot"), sandbox={"trustedList": "Tampered"}, signingControls=TSL),
          sign("tsl-expired", "Expired TSL: refused", ["F-2", "tsl"], refused("UntrustedRoot"), sandbox={"trustedList": "Expired"}, signingControls=TSL,
               desc="The published TSL has its NextUpdate in the past."),
-         validate("v-tsl-ok", "Validate with anchors from the TSL", ["V-1", "V-3", "tsl"], "step:tsl-ok", {"outcome": "valid"}, trust=["SandboxTrustedList"]),
+         {**sign("tsl-tsa-unspecified", "Time-stamp from a TSA whose CA the TSL lists as 'unspecified'", ["S-1", "F-3", "tsl", "tsa"],
+                 {"outcome": "signed", "level": "B-T"}, level="BT", timestamp={"provider": "SandboxIofe"}, signingControls=TSL,
+                 validation=IOFE_VALIDATION,
+                 desc="As INDECOPI lists the Llama.pe Timestamping CA (not its TSU) with the service type 'unspecified', the TSL names the "
+                      "self-signed CA of the Sandbox's IOFE TSA: its time-stamp chains to that service and the signature is made. "
+                      "Not cross-validated: DSS reads the EU-style list, which does not name that CA."),
+            "crossValidate": False},
+         {**sign("tsl-tsa-unlisted", "Same TSA without the TSL: refused", ["S-1", "tsl", "tsa"], refused("TimestampUntrusted"), level="BT",
+                 timestamp={"provider": "SandboxIofe"},
+                 desc="With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service is what makes it trusted."),
+            "crossValidate": False},
+         validate("v-tsl-ok", "Validate with anchors from the TSL", ["V-1", "V-3", "tsl"], "step:tsl-ok", {"outcome": "valid"}, trust=["SandboxIofeList"]),
          # A list whose signature fails is not used: no anchor. An expired one is used, and IOFE's TLNotExpired (FAIL) judges it.
-         validate("v-tsl-wrong-signer", "Validate with a fake TSL", ["V-1", "tsl"], "step:tsl-ok",
-                  {"outcome": "indeterminate", "subIndication": "NO_CERTIFICATE_CHAIN_FOUND"},
-                  sandbox={"trustedList": "WrongSigner"}, trust=["SandboxTrustedList"]),
-         validate("v-tsl-expired", "Validate with an expired TSL", ["V-2", "tsl"], "step:tsl-ok",
-                  {"outcome": "indeterminate", "subIndication": "TRY_LATER"},
-                  sandbox={"trustedList": "Expired"}, trust=["SandboxTrustedList"]),
+         validate("v-tsl-wrong-signer", "Validate with a fake TSL", ["V-1", "tsl"], "step:tsl-ok", {"outcome": "indeterminate", "subIndication": "NO_CERTIFICATE_CHAIN_FOUND"},
+                  sandbox={"trustedList": "WrongSigner"}, trust=["SandboxIofeList"]),
+         validate("v-tsl-expired", "Validate with an expired TSL", ["V-2", "tsl"], "step:tsl-ok", {"outcome": "indeterminate", "subIndication": "TRY_LATER"},
+                  sandbox={"trustedList": "Expired"}, trust=["SandboxIofeList"]),
+         validate("v-tsl-tsa-unspecified", "Validate a time-stamp whose TSA's CA the TSL lists as 'unspecified'", ["V-3", "S-1", "tsl", "tsa"],
+                  "step:tsl-tsa-unspecified", {"outcome": "valid"}, trust=["SandboxIofeList"]),
      ]},
     {"id": "revocation", "title": "Revocation before signing (CRL and OCSP)", "steps": [
         sign("crl-https-good", "CRL over HTTPS, good certificate", ["F-5", "F-8", "crl"], {"outcome": "signed"}, credentialId="sandbox:good-crl-https"),
@@ -96,7 +110,12 @@ sections = [
                credentialId="sandbox:no-signing-key-usage") for f in ("cades", "xades")],
         sign("signed-no-nonrepudiation", "Sign with a certificate without nonRepudiation (to validate)", ["F-12", "key-usage"], {"outcome": "signed"},
              credentialId="sandbox:no-nonrepudiation",
-             desc="Signing accepts digitalSignature or nonRepudiation; the file is used by the validation step that requires nonRepudiation."),
+             desc="The iofe signing policy accepts digitalSignature or nonRepudiation (as section 4.1 does for end-user software); "
+                  "the file is used by the validation step that requires nonRepudiation."),
+        sign("no-nonrepudiation-agent", "Automated agent: a certificate without nonRepudiation is refused", ["F-12", "key-usage"],
+             refused("KeyUsageNotPermitted"), credentialId="sandbox:no-nonrepudiation", signingPolicyId="preset:signing:iofe-nonrepudiation",
+             desc="Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe-nonrepudiation "
+                  "policy refuses a certificate that has digitalSignature only."),
         validate("v-no-nonrepudiation", "Validation requires nonRepudiation: not accepted", ["V-12", "key-usage"], "step:signed-no-nonrepudiation",
                  {"outcome": "indeterminate"}, policyId="preset:validation:iofe-nonrepudiation",
                  desc="With the iofe-nonrepudiation policy the certificate without nonRepudiation fails the chain constraint (EN 319 102-1: INDETERMINATE)."),
@@ -167,7 +186,9 @@ playbook = {
     "description": "The automated part of an INDECOPI (IOFE, Peru) accreditation of signing and verification software (Guía de Acreditación "
                    "de Software v4.0, annex B): each step runs against the Sandbox with the IOFE policy, through the library and the CLI, "
                    "cross-validated with EU DSS when one is connected. "
-                   "Tags name the items of the guide (F-n signing, V-n verification, S-n time-stamps) and a topic.",
+                   "Tags name the items of annex B of the guide (F-n: section 4.2, signing by an automated agent; V-n: section 4.3, "
+                   "verification by automated agents; S-n: section 4.4, time-stamps) and a topic; docs/playbooks/indecopi-checklist.md "
+                   "maps every item to a step, a test or what is left to the accredited product.",
     "defaults": {
         "engine": "both",
         "format": "pades",

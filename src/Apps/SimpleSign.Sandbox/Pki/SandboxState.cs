@@ -53,6 +53,9 @@ public enum CertificateUsage
 
     /// <summary>The TLS server of the HTTPS endpoint (serverAuth).</summary>
     TlsServer,
+
+    /// <summary>Signs software (codeSigning EKU): the certificate an accredited signature software is listed with.</summary>
+    CodeSigning,
 }
 
 /// <summary>A CA of the environment.</summary>

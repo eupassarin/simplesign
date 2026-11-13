@@ -102,8 +102,9 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
 
 - `sandbox-basics` — a good chain, B-LT through the Sandbox's TSA, and the cases a signer must refuse.
 - `indecopi-guia-v4` — the automated part of INDECOPI's guide v4.0, Annex B: signing (F-n) and verification (V-n) by
-  automated agents and the time-stamp checks (S-n), with the IOFE policies, through the library and the CLI. Written
-  by `tools/playbooks/indecopi.py`.
+  automated agents and the time-stamp checks (S-n), with the IOFE policies and the Sandbox's list in INDECOPI's
+  layout, through the library and the CLI. It covers the items [indecopi-checklist.md](../playbooks/indecopi-checklist.md)
+  marks P; see [iofe.md](iofe.md). Written by `tools/playbooks/indecopi.py`.
 - `etsi-baseline` — SimpleSign against the ETSI standards: PAdES, CAdES and XAdES baseline (EN 319 142-1, 319 122-1,
   319 132-1), the extended forms, time-stamps, EN 319 102-1 validation (indication and sub-indication) and trusted
   lists, cross-validated with EU DSS. It covers the items [etsi-checklist.md](../playbooks/etsi-checklist.md) marks P;

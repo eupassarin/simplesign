@@ -7,7 +7,7 @@ import { api } from "@/lib/api"
 import type { EnvironmentInfo, OptionState, TimestampChoice, TsaProvider } from "@/lib/types"
 import { ChoiceCard, Field } from "./ui"
 
-const sandboxProviders: TsaProvider[] = ["Sandbox", "SandboxAuthenticated", "SandboxUntrusted", "SandboxRevoked", "SandboxExpired", "SandboxWrongName", "SandboxShortLived"]
+const sandboxProviders: TsaProvider[] = ["Sandbox", "SandboxAuthenticated", "SandboxUntrusted", "SandboxRevoked", "SandboxExpired", "SandboxWrongName", "SandboxShortLived", "SandboxIofe"]
 const publicProviders: TsaProvider[] = ["DigiCert", "Sectigo", "FreeTsa", "Custom"]
 
 export function TsaPicker({ value, onChange, state, env }: {

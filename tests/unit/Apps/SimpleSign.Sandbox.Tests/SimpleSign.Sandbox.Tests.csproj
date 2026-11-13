@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Apps\SimpleSign.Sandbox\SimpleSign.Sandbox.csproj" />
+    <ProjectReference Include="..\..\..\..\src\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
   </ItemGroup>
 
 </Project>
