@@ -31,6 +31,14 @@ public sealed record TrustedListSetOptions
     /// downloading it again; when a download fails, the kept list is used while it has not expired. Null: no cache.
     /// </summary>
     public string? CacheDirectory { get; init; }
+
+    /// <summary>
+    /// Whether the keys of <see cref="LotlSignerCertificates"/> may be carried forward through the pivot LOTLs the LOTL
+    /// names in its SchemeInformationURI (ETSI TS 119 612 §5.3.7, as the EU LOTL does when its signing keys change):
+    /// each pivot, from the oldest, is checked with the keys known so far and gives, in its pointer to the LOTL, the keys
+    /// accepted after it. Default: <see langword="true"/>; only used when the LOTL is not signed by the given keys.
+    /// </summary>
+    public bool FollowPivots { get; init; } = true;
 }
 
 /// <summary>A national list that could not be loaded.</summary>
@@ -48,12 +56,24 @@ public sealed class TrustedListSet : ITimedTrustAnchorProvider, ITrustedListInfo
 {
     private const string XmlMimeType = "application/vnd.etsi.tsl+xml";
 
-    private TrustedListSet(TrustedList lotl, IReadOnlyList<TrustedList> lists, IReadOnlyList<TrustedListProblem> problems)
+    private TrustedListSet(TrustedList lotl, IReadOnlyList<TrustedList> lists, IReadOnlyList<TrustedListProblem> problems,
+        IReadOnlyList<X509Certificate2> lotlSigners, IReadOnlyList<Uri> pivots)
     {
         Lotl = lotl;
         Lists = lists;
         Problems = problems;
+        LotlSigners = lotlSigners;
+        PivotsFollowed = pivots;
     }
+
+    /// <summary>
+    /// The keys the LOTL was checked with: the given ones, or those the pivot LOTLs carried them forward to (keep them to
+    /// check the next LOTL without walking the pivots again).
+    /// </summary>
+    public IReadOnlyList<X509Certificate2> LotlSigners { get; }
+
+    /// <summary>The pivot LOTLs walked to reach <see cref="LotlSigners"/>, oldest first; empty when the given keys signed the LOTL.</summary>
+    public IReadOnlyList<Uri> PivotsFollowed { get; }
 
     /// <summary>The list of trusted lists.</summary>
     public TrustedList Lotl { get; }
@@ -106,9 +126,22 @@ public sealed class TrustedListSet : ITimedTrustAnchorProvider, ITrustedListInfo
             Directory.CreateDirectory(options.CacheDirectory);
         }
 
-        var lotl = await LoadOneAsync(
-            options.LotlLocation, options.Services with { SignerCertificates = options.LotlSignerCertificates },
-            CacheFile(options, "lotl"), httpClientProvider, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<X509Certificate2> lotlSigners = options.LotlSignerCertificates;
+        IReadOnlyList<Uri> pivots = [];
+        TrustedList lotl;
+        try
+        {
+            lotl = await LoadOneAsync(
+                options.LotlLocation, options.Services with { SignerCertificates = lotlSigners },
+                CacheFile(options, "lotl"), httpClientProvider, cancellationToken).ConfigureAwait(false);
+        }
+        catch (CryptographicException) when (options.FollowPivots)
+        {
+            (lotlSigners, pivots) = await PivotSignersAsync(options, httpClientProvider, cancellationToken).ConfigureAwait(false);
+            lotl = await LoadOneAsync(
+                options.LotlLocation, options.Services with { SignerCertificates = lotlSigners },
+                CacheFile(options, "lotl"), httpClientProvider, cancellationToken).ConfigureAwait(false);
+        }
 
         var lists = new List<TrustedList>();
         var problems = new List<TrustedListProblem>();
@@ -152,7 +185,58 @@ public sealed class TrustedListSet : ITimedTrustAnchorProvider, ITrustedListInfo
             }
         }
 
-        return new TrustedListSet(lotl, lists, problems);
+        return new TrustedListSet(lotl, lists, problems, lotlSigners, pivots);
+    }
+
+    /// <summary>
+    /// The keys that may sign the LOTL, carried forward from <see cref="TrustedListSetOptions.LotlSignerCertificates"/>
+    /// through the pivot LOTLs it names (oldest first): each is checked with the keys known so far, and its pointer to
+    /// the LOTL gives the keys accepted after it.
+    /// </summary>
+    /// <exception cref="CryptographicException">A pivot is not signed by the keys known when it is read, or there is none.</exception>
+    private static async Task<(IReadOnlyList<X509Certificate2> Signers, IReadOnlyList<Uri> Pivots)> PivotSignersAsync(
+        TrustedListSetOptions options, IHttpClientProvider? httpClientProvider, CancellationToken cancellationToken)
+    {
+        var provider = httpClientProvider ?? DefaultHttpClientProvider.Instance;
+        byte[] xml = await ResilientHttp.GetBytesAsync(provider.GetClient(), options.LotlLocation, provider.OutboundPolicy, null, cancellationToken).ConfigureAwait(false)
+            ?? throw new HttpRequestException($"The list of trusted lists could not be downloaded from {options.LotlLocation}.");
+
+        // The LOTL names its pivots newest first.
+        var pivots = TrustedList.UnverifiedSchemeInformationUris(xml)
+            .Select(u => Uri.TryCreate(u, UriKind.Absolute, out var uri) ? uri : null).OfType<Uri>()
+            .Where(u => u.Scheme is "http" or "https" && u.AbsolutePath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) && u != options.LotlLocation)
+            .Reverse().ToList();
+        if (pivots.Count == 0)
+        {
+            throw new CryptographicException("The list of trusted lists is not signed by the given certificates, and it names no pivot LOTL to carry them forward.");
+        }
+
+        IReadOnlyList<X509Certificate2> signers = options.LotlSignerCertificates;
+        foreach (var location in pivots)
+        {
+            TrustedList pivot;
+            try
+            {
+                // A pivot only carries keys forward: its NextUpdate may have passed.
+                pivot = await TrustedList.DownloadAsync(location, options.Services with { SignerCertificates = signers, RejectExpired = false },
+                    httpClientProvider, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (CryptographicException ex)
+            {
+                throw new CryptographicException($"The pivot LOTL {location} is not signed by the keys known when it is read: {ex.Message}", ex);
+            }
+
+            var next = pivot.Pointers.FirstOrDefault(p => p.TslType?.EndsWith("listofthelists", StringComparison.OrdinalIgnoreCase) == true
+                || (string.Equals(p.Territory, pivot.Territory, StringComparison.OrdinalIgnoreCase) && p.Location == options.LotlLocation));
+            if (next is not { SignerCertificates.Count: > 0 })
+            {
+                throw new CryptographicException($"The pivot LOTL {location} does not say which keys sign the LOTL after it.");
+            }
+
+            signers = next.SignerCertificates;
+        }
+
+        return (signers, pivots);
     }
 
     /// <summary>
