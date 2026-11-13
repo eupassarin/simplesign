@@ -34,7 +34,7 @@ public sealed record SandboxUrls(string RootCertificate, string IntermediateCert
 public sealed record AuthorityUrls(string Id, string Certificate, string Crl, string HttpsCrl, string LdapCrl, string Ocsp);
 
 public sealed record TsaInfo(string Url, string AuthenticatedUrl, string UntrustedUrl, string RevokedUrl, string WrongNameUrl, string WrongName, string User, string Password,
-    string ExpiredUrl, string IofeUrl);
+    string ExpiredUrl, string IofeUrl, string? NonQualifiedUrl = null);
 
 public sealed record CscInfo(string BaseUrl, string ClientId, string ClientSecret, string ServiceToken, string Pin, string Otp, IReadOnlyList<CscCredentialView> Credentials);
 
@@ -152,6 +152,7 @@ internal static class AdminEndpoints
             Crl = CrlFault.None,
             Ocsp = OcspFault.None,
             TrustedList = TlFault.None,
+            Lotl = LotlFault.None,
         }));
         admin.MapGet("/log", (long? after, int? limit, string? service, RequestLog log) =>
             log.Since(after ?? 0, limit is { } n ? Math.Clamp(n, 1, RequestLog.Capacity) : null, string.IsNullOrEmpty(service) ? null : service));
@@ -185,7 +186,8 @@ internal static class AdminEndpoints
             [.. pki.Authorities.Select(a => new AuthorityUrls(a.Id, pki.CertificateUrl(a.Id).AbsoluteUri, pki.CrlUrl(a.Id).AbsoluteUri,
                 pki.HttpsCrlUrl(a.Id).AbsoluteUri, pki.LdapCrlUrl(a.Id).OriginalString, pki.OcspUrl(a.Id).AbsoluteUri))],
             new TsaInfo(Url("tsa/tsr"), Url("tsa/authenticated"), Url("tsa/untrusted"), Url("tsa/revoked"), Url("tsa/wrong-name"), ServiceEndpoints.WrongTsaName,
-                ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword, Url("tsa/expired"), Url("tsa/iofe")),
+                ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword, Url("tsa/expired"), Url("tsa/iofe"),
+                Url("tsa/non-qualified")),
             new CscInfo(csc.BaseUri.AbsoluteUri, SandboxCsc.ClientId, SandboxCsc.ClientSecret, SandboxCsc.ServiceToken, SandboxCsc.Pin, SandboxCsc.Otp,
                 [.. csc.Credentials.Select(c => new CscCredentialView(c.Id, c.Description, c.CertificateId, c.AuthMode, c.Scal, c.MultiSign))]),
             SandboxPki.PfxPassword,

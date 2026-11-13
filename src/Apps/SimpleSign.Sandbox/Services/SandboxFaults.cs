@@ -104,6 +104,22 @@ public enum TlFault
     WithdrawnAfterUse,
 }
 
+/// <summary>What the list of trusted lists (/tl/lotl.xml) looks like.</summary>
+public enum LotlFault
+{
+    /// <summary>A current LOTL, signed by its operator.</summary>
+    None,
+
+    /// <summary>A LOTL whose NextUpdate has passed.</summary>
+    Expired,
+
+    /// <summary>A LOTL signed by a certificate other than its operator's.</summary>
+    WrongSigner,
+
+    /// <summary>A LOTL changed after it was signed: its signature no longer verifies.</summary>
+    Tampered,
+}
+
 /// <summary>Failures switched on, to see how a client reacts. Kept with the environment.</summary>
 public sealed record SandboxFaults(
     TsaFault Tsa = TsaFault.None,
@@ -113,10 +129,11 @@ public sealed record SandboxFaults(
     OcspFault Ocsp = OcspFault.None,
     int OcspDelayMs = 3000,
     OcspSigner OcspSigner = OcspSigner.Issuer,
-    TlFault TrustedList = TlFault.None)
+    TlFault TrustedList = TlFault.None,
+    LotlFault Lotl = LotlFault.None)
 {
     /// <summary>Whether any failure is on.</summary>
-    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None;
+    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None || Lotl != LotlFault.None;
 
     /// <summary>The same failures with the delays kept within 0–60 s.</summary>
     public SandboxFaults Clamped() => this with
@@ -136,7 +153,8 @@ public sealed record SandboxFaultsPatch(
     OcspFault? Ocsp = null,
     int? OcspDelayMs = null,
     OcspSigner? OcspSigner = null,
-    TlFault? TrustedList = null)
+    TlFault? TrustedList = null,
+    LotlFault? Lotl = null)
 {
     /// <summary>The <paramref name="current"/> failures with this change applied.</summary>
     public SandboxFaults ApplyTo(SandboxFaults current) => current with
@@ -149,5 +167,6 @@ public sealed record SandboxFaultsPatch(
         OcspDelayMs = OcspDelayMs ?? current.OcspDelayMs,
         OcspSigner = OcspSigner ?? current.OcspSigner,
         TrustedList = TrustedList ?? current.TrustedList,
+        Lotl = Lotl ?? current.Lotl,
     };
 }

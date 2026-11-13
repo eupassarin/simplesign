@@ -84,6 +84,12 @@ internal sealed class SandboxPki : IDisposable
     public const string Sha1IntermediateId = "intermediate-sha1";
 
     /// <summary>
+    /// An intermediate CA the trusted list (<c>/tl/tl.xml</c>) names as a <c>CA/PKC</c> service: it issues non-qualified
+    /// certificates, so a signature under it is an AdESig even when its certificate claims QC statements (eIDAS).
+    /// </summary>
+    public const string PkcIntermediateId = "intermediate-pkc";
+
+    /// <summary>
     /// A self-signed CA that issues the TSA of <c>/tsa/iofe</c> only. The Sandbox's trusted list (<c>/tl/tl.xml</c>) names it as an
     /// <c>unspecified</c> service (as INDECOPI lists the Llama.pe Timestamping CA, not its TSU), so the TSA's chain closes
     /// through that service alone: only a reader that keeps <c>unspecified</c> services (<c>IofeExtension.DefaultListOptions</c>) trusts it.
@@ -166,6 +172,9 @@ internal sealed class SandboxPki : IDisposable
 
     /// <summary>The self-signed CA of the <c>/tsa/iofe</c> TSA.</summary>
     public X509Certificate2 TsaCa => Authority(TsaCaId).Certificate;
+
+    /// <summary>The certificate of the CA <paramref name="id"/>, or null when the environment has none.</summary>
+    public X509Certificate2? AuthorityCertificate(string id) => _state.Authorities.Any(a => a.Id == id) ? Authority(id).Certificate : null;
 
     /// <summary>The TSA certificate (with its key) in the Sandbox's chain.</summary>
     public X509Certificate2 Tsa => Certificate("tsa").Certificate;
@@ -649,6 +658,12 @@ internal sealed class SandboxPki : IDisposable
                 Sha1IntermediateId, "Intermediate CA signed with SHA-1", "SimpleSign Sandbox CA 4 (SHA-1)", now.AddYears(-2), now.AddYears(15),
                 "Signed with SHA-1", Sha1: true));
         }
+
+        if (!existing.Any(a => a.Id == PkcIntermediateId))
+        {
+            yield return IssueIntermediate(root, rootKey, baseUrl, name, nextSerial(), new IntermediateDefinition(
+                PkcIntermediateId, "Non-qualified intermediate CA (CA/PKC)", "SimpleSign Sandbox CA 5 (non-qualified)", now.AddYears(-2), now.AddYears(15)));
+        }
     }
 
     /// <summary>Adds to a stored environment the CAs it lacks (see <see cref="MissingAuthorities"/>).</summary>
@@ -708,11 +723,31 @@ internal sealed class SandboxPki : IDisposable
         string IssuerId = IntermediateId,
         CertificateUsage Usage = CertificateUsage.Signing,
         RevocationPointers Pointers = RevocationPointers.CrlHttp | RevocationPointers.Ocsp,
-        bool Revoked = false)
+        bool Revoked = false,
+        QcProfile Qc = QcProfile.None)
     {
         /// <summary>What decides the certificate's content: a seed whose profile changed is issued again.</summary>
         public string Profile => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"2|{KeyType}|{Problem}|{KeyUsage}|{IssuerId}|{Usage}|{Pointers}")))[..16];
+            Qc == QcProfile.None ? $"2|{KeyType}|{Problem}|{KeyUsage}|{IssuerId}|{Usage}|{Pointers}" : $"3|{KeyType}|{Problem}|{KeyUsage}|{IssuerId}|{Usage}|{Pointers}|{Qc}")))[..16];
+    }
+
+    /// <summary>The QC statements (ETSI EN 319 412-5) and certificate policy of an eIDAS signer.</summary>
+    private enum QcProfile
+    {
+        /// <summary>No QC statement.</summary>
+        None,
+
+        /// <summary>QcCompliance, QcSSCD, QcType esign: a qualified signature certificate on a QSCD.</summary>
+        ESignQscd,
+
+        /// <summary>QcCompliance, QcType esign: qualified, its key not declared on a QSCD.</summary>
+        ESign,
+
+        /// <summary>QcCompliance, QcSSCD, QcType eseal: a qualified seal certificate on a QSCD.</summary>
+        ESealQscd,
+
+        /// <summary>QcCompliance, QcType esign, policy QCP-n-qscd (0.4.0.194112.1.2): the trusted list's QCWithQSCD gives the QSCD.</summary>
+        ESignPolicyQscd,
     }
 
     /// <summary>The certificates every environment has. Each one is issued again when it no longer shows what it is for.</summary>
@@ -754,11 +789,23 @@ internal sealed class SandboxPki : IDisposable
             Problem: "No key usage extension", KeyUsage: X509KeyUsageFlags.None),
         new("under-sha1-ca", "Under a SHA-1 CA", "Valid itself, but the root signed its issuing CA's certificate with SHA-1: a policy that refuses SHA-1 rejects the chain.",
             Problem: "Issuer signed with SHA-1", IssuerId: Sha1IntermediateId),
+        new("qc-esign-qscd", "Clara Dubois (qualified, QSCD)", "eIDAS: a qualified certificate for signatures (QcCompliance, QcType esign) on a QSCD (QcSSCD), under the CA/QC root: a QESig.",
+            Qc: QcProfile.ESignQscd),
+        new("qc-esign", "Lukas Becker (qualified, no QSCD)", "eIDAS: a qualified certificate for signatures without QcSSCD: an AdESig-QC.",
+            Qc: QcProfile.ESign),
+        new("qc-eseal-qscd", "Sandbox Seal (qualified seal, QSCD)", "eIDAS: a qualified certificate for seals (QcType eseal) on a QSCD: a QESeal.",
+            Qc: QcProfile.ESealQscd),
+        new("qc-esign-policy", "Sofia Rossi (qualified, QSCD by the list)", "eIDAS: qualified, no QcSSCD, but under the QCP-n-qscd policy, which the trusted list's QCWithQSCD qualifier puts on a QSCD: a QESig.",
+            Qc: QcProfile.ESignPolicyQscd),
+        new("pkc-esign", "Pedro Almeida (under a CA/PKC)", "eIDAS: claims QcCompliance and QcSSCD, but its CA is listed as CA/PKC (non-qualified): an AdESig.",
+            IssuerId: PkcIntermediateId, Qc: QcProfile.ESignQscd),
         new("tsa", "TSA", "The time-stamping authority of /tsa/tsr and /tsa/authenticated.", Usage: CertificateUsage.Timestamping),
         new("tsa-revoked", "Revoked TSA", "The TSA of /tsa/revoked: its certificate is revoked, so its tokens must not be trusted.",
             Problem: "Revoked", Usage: CertificateUsage.Timestamping, Revoked: true),
         new("tsa-expired", "Expired TSA", "The TSA of /tsa/expired: its certificate expired yesterday, so its tokens must not be trusted.",
             Problem: "Expired", Usage: CertificateUsage.Timestamping),
+        new("tsa-non-qualified", "Non-qualified TSA", "The TSA of /tsa/non-qualified, listed in /tl/tl.xml as a TSA service (not TSA/QTST): its time-stamps are not qualified electronic time-stamps (eIDAS).",
+            Usage: CertificateUsage.Timestamping),
         new("tsa-iofe", "TSA under its own CA", "The TSA of /tsa/iofe, issued by the self-signed Timestamping CA: trusted only through /tl/tl.xml read as IofeExtension reads INDECOPI's list, which keeps that CA's 'unspecified' service.",
             Usage: CertificateUsage.Timestamping, IssuerId: TsaCaId),
         new("code-signing", "Signature software", "A code-signing certificate, as INDECOPI lists the accredited signature software: listed in /tl/tl.xml as an 'unspecified' service, it must never become a trust anchor.",
@@ -896,6 +943,14 @@ internal sealed class SandboxPki : IDisposable
 
         request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
         request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer.Certificate, true, false));
+        if (seed.Qc != QcProfile.None)
+        {
+            request.CertificateExtensions.Add(new X509Extension("1.3.6.1.5.5.7.1.3", QcStatementsValue(seed.Qc), false));
+            if (seed.Qc == QcProfile.ESignPolicyQscd)
+            {
+                request.CertificateExtensions.Add(new X509Extension("2.5.29.32", CertificatePolicyValue("0.4.0.194112.1.2"), false));
+            }
+        }
         request.CertificateExtensions.Add(seed.Usage switch
         {
             CertificateUsage.Timestamping => new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.8")], true),
@@ -957,6 +1012,53 @@ internal sealed class SandboxPki : IDisposable
         using var certificate = request.Create(issuer.Certificate.SubjectName, X509SignatureGenerator.CreateForRSA(issuer.Key, RSASignaturePadding.Pkcs1),
             from, to, SerialBytes(_state.NextSerial));
         return Pair(certificate, key);
+    }
+
+    /// <summary>The QcStatements extension value of a <see cref="QcProfile"/> (RFC 3739, ETSI EN 319 412-5).</summary>
+    private static byte[] QcStatementsValue(QcProfile profile)
+    {
+        var writer = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            using (writer.PushSequence())
+            {
+                writer.WriteObjectIdentifier("0.4.0.1862.1.1"); // QcCompliance
+            }
+
+            if (profile is QcProfile.ESignQscd or QcProfile.ESealQscd)
+            {
+                using (writer.PushSequence())
+                {
+                    writer.WriteObjectIdentifier("0.4.0.1862.1.4"); // QcSSCD
+                }
+            }
+
+            using (writer.PushSequence())
+            {
+                writer.WriteObjectIdentifier("0.4.0.1862.1.6"); // QcType
+                using (writer.PushSequence())
+                {
+                    writer.WriteObjectIdentifier(profile == QcProfile.ESealQscd ? "0.4.0.1862.1.6.2" : "0.4.0.1862.1.6.1");
+                }
+            }
+        }
+
+        return writer.Encode();
+    }
+
+    /// <summary>A certificatePolicies extension value with one policy.</summary>
+    private static byte[] CertificatePolicyValue(string oid)
+    {
+        var writer = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            using (writer.PushSequence())
+            {
+                writer.WriteObjectIdentifier(oid);
+            }
+        }
+
+        return writer.Encode();
     }
 
     private static CertificateRequest CaRequest(string subject, RSA key, int pathLength)
