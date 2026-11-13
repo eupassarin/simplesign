@@ -14,6 +14,9 @@ namespace SimpleSign.Cli;
 /// origin the requests may reach (<see cref="OutboundHttpPolicy.LoopbackOrigins"/>);</item>
 /// <item><c>--allow-ldap</c> (<c>SIMPLESIGN_ALLOW_LDAP=true</c>): CRLs over LDAP;</item>
 /// <item><c>--tls-trust PEM</c> (<c>SIMPLESIGN_TLS_TRUST</c>): a root (and its intermediates) accepted for HTTPS, next to the system's.</item>
+/// <item><c>--sandbox URL</c>: a running SimpleSign Sandbox, read once (<c>/api/info</c>): its origins are allowed, LDAP
+/// too, and its chain is accepted for HTTPS. The option stays on the command line: <c>--profile sandbox</c> and
+/// <c>--profile iofe</c> read the Sandbox's trusted lists with it.</item>
 /// </list>
 /// </summary>
 internal static class CliNetwork
@@ -21,6 +24,7 @@ internal static class CliNetwork
     internal const string AllowOrigin = "--allow-origin";
     internal const string AllowLdap = "--allow-ldap";
     internal const string TlsTrust = "--tls-trust";
+    internal const string SandboxOption = "--sandbox";
 
     /// <summary>The provider of the run: the default one, or the one the options built.</summary>
     public static IHttpClientProvider Provider { get; private set; } = DefaultHttpClientProvider.Instance;
@@ -29,9 +33,12 @@ internal static class CliNetwork
     public static bool IsConfigured { get; private set; }
 
     /// <summary>The settings read from the command line and the environment.</summary>
-    internal sealed record Settings(IReadOnlyList<Uri> Origins, bool Ldap, string? TlsTrustPath)
+    internal sealed record Settings(IReadOnlyList<Uri> Origins, bool Ldap, string? TlsTrustPath, Uri? Sandbox = null)
     {
-        public bool IsEmpty => Origins.Count == 0 && !Ldap && TlsTrustPath is null;
+        public bool IsEmpty => Origins.Count == 0 && !Ldap && TlsTrustPath is null && Sandbox is null;
+
+        /// <summary>The Sandbox's chain (PEM) accepted for HTTPS, read from it; null without <see cref="Sandbox"/>.</summary>
+        public string? SandboxChainPem { get; init; }
     }
 
     /// <summary>
@@ -42,6 +49,11 @@ internal static class CliNetwork
     public static string[] Configure(string[] args, Func<string, string?>? environment = null)
     {
         var (settings, rest) = Parse(args, environment ?? Environment.GetEnvironmentVariable);
+        if (settings.Sandbox is { } sandbox)
+        {
+            settings = WithSandbox(settings, sandbox);
+        }
+
         if (!settings.IsEmpty)
         {
             Provider = Build(settings);
@@ -64,6 +76,7 @@ internal static class CliNetwork
         }
 
         var rest = new List<string>(args.Length);
+        Uri? sandbox = null;
         for (int i = 0; i < args.Length; i++)
         {
             string arg = args[i];
@@ -85,13 +98,20 @@ internal static class CliNetwork
             {
                 tlsTrust = pem;
             }
+            else if (Value(args, ref i, SandboxOption) is { } sandboxUrl)
+            {
+                // Kept for the commands too: the profiles read the Sandbox's trusted lists with it.
+                sandbox = Origin(sandboxUrl);
+                rest.Add(SandboxOption);
+                rest.Add(sandboxUrl);
+            }
             else
             {
                 rest.Add(arg);
             }
         }
 
-        return (new Settings(origins, ldap, tlsTrust), [.. rest]);
+        return (new Settings(origins, ldap, tlsTrust, sandbox), [.. rest]);
     }
 
     /// <summary>The value of <c>--name VALUE</c> or <c>--name=VALUE</c> at <paramref name="i"/>, or null when it is another argument.</summary>
@@ -115,6 +135,26 @@ internal static class CliNetwork
         return args[++i];
     }
 
+    /// <summary><paramref name="settings"/> with the Sandbox's origins, LDAP and its chain for HTTPS, read from its <c>/api/info</c>.</summary>
+    /// <exception cref="ArgumentException">The Sandbox does not answer.</exception>
+    internal static Settings WithSandbox(Settings settings, Uri sandbox)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var info = System.Text.Json.JsonDocument.Parse(http.GetStringAsync(new Uri(sandbox, "api/info")).GetAwaiter().GetResult());
+            var origins = info.RootElement.TryGetProperty("loopbackOrigins", out var list)
+                ? list.EnumerateArray().Select(o => Origin(o.GetString()!)).ToList()
+                : [new Uri(sandbox.GetLeftPart(UriPartial.Authority))];
+            string chain = http.GetStringAsync(new Uri(sandbox, "chain.pem")).GetAwaiter().GetResult();
+            return settings with { Origins = [.. settings.Origins, .. origins], Ldap = true, SandboxChainPem = chain };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            throw new ArgumentException($"{SandboxOption}: the Sandbox at {sandbox} does not answer: {ex.Message}", ex);
+        }
+    }
+
     private static Uri Origin(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri) ? uri : throw new ArgumentException($"{AllowOrigin}: '{value}' is not an absolute URL.");
 
@@ -122,9 +162,15 @@ internal static class CliNetwork
     internal static SingleClientProvider Build(Settings settings)
     {
         X509Certificate2Collection? roots = null;
-        if (settings.TlsTrustPath is { } path)
+        if (settings.SandboxChainPem is { } sandboxChain)
         {
             roots = [];
+            roots.ImportFromPem(sandboxChain);
+        }
+
+        if (settings.TlsTrustPath is { } path)
+        {
+            roots ??= [];
             try
             {
                 roots.ImportFromPemFile(path);

@@ -88,60 +88,25 @@ public sealed class IofePoliciesTests : IDisposable
     }
 
     [Fact]
-    public void ValidationNonRepudiation_KeyUsage_IsNonRepudiationOnly()
-    {
-        var keyUsage = IofePolicies.ValidationNonRepudiation
-            .Find("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage").ShouldNotBeNull();
-
-        keyUsage.Level.ShouldBe(ConstraintLevel.Fail);
-        keyUsage.Ids.ShouldBe(["nonRepudiation"]);
-    }
-
-    [Fact]
     public void Validation_TrustedListVersion_AcceptsTheVersion3IndecopiPublishes()
     {
-        foreach (var policy in new[] { IofePolicies.Validation, IofePolicies.ValidationNonRepudiation })
-        {
-            var version = policy.Find("TrustedLists/TLVersion").ShouldNotBeNull();
-            version.Level.ShouldBe(ConstraintLevel.Fail);
-            version.Ids.ShouldBe(["3", "5", "6"]);
-        }
+        var version = IofePolicies.Validation.Find("TrustedLists/TLVersion").ShouldNotBeNull();
+        version.Level.ShouldBe(ConstraintLevel.Fail);
+        version.Ids.ShouldBe(["3", "5", "6"]);
     }
 
     [Fact]
-    public void SigningNonRepudiation_KeyUsage_RequiresNonRepudiationAndKeepsTheRestOfSigning()
+    public void Signing_AutomatedAgentAdjustment_RefusesASignerWithoutNonRepudiation()
     {
-        var keyUsage = IofePolicies.SigningNonRepudiation.Find("SigningCertificate/KeyUsage").ShouldNotBeNull();
-        keyUsage.Level.ShouldBe(ConstraintLevel.Fail);
-        keyUsage.Ids.ShouldBe(["nonRepudiation"]);
-        IofePolicies.SigningNonRepudiation.Find("SigningCertificate/ProspectiveCertificateChain").ShouldNotBeNull().Level.ShouldBe(ConstraintLevel.Fail);
-        IofePolicies.Signing.Find("SigningCertificate/KeyUsage")!.Ids.ShouldBe(["digitalSignature", "nonRepudiation"]);
-    }
+        // What an automated agent requires (section 4.2, annex B item 12): the one-line adjustment the policy's doc shows.
+        var agent = IofePolicies.Signing.With("SigningCertificate/KeyUsage", new PolicyConstraint(ConstraintLevel.Fail) { Ids = ["nonRepudiation"] });
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=Agent", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
+        using var digitalSignatureOnly = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
 
-    [Theory]
-    [InlineData("iofe-signing.json")]
-    [InlineData("iofe-signing-nonrepudiation.json")]
-    [InlineData("iofe-validation.json")]
-    [InlineData("iofe-validation-nonrepudiation.json")]
-    public void Policies_MatchTheFilesInDocs(string fileName)
-    {
-        string json = fileName switch
-        {
-            "iofe-signing.json" => IofePolicies.Signing.ToJson(),
-            "iofe-signing-nonrepudiation.json" => IofePolicies.SigningNonRepudiation.ToJson(),
-            "iofe-validation.json" => IofePolicies.Validation.ToJson(),
-            _ => IofePolicies.ValidationNonRepudiation.ToJson(),
-        };
-        string generated = json.ReplaceLineEndings("\n") + "\n";
-        string path = RepositoryPaths.Get("docs", "policies", fileName);
-        if (Environment.GetEnvironmentVariable("SIMPLESIGN_UPDATE_DOCS") == "1")
-        {
-            File.WriteAllText(path, generated);
-        }
-
-        File.Exists(path).ShouldBeTrue("Run the IOFE tests once with SIMPLESIGN_UPDATE_DOCS=1 to write docs/policies.");
-        File.ReadAllText(path).ReplaceLineEndings("\n").ShouldBe(generated,
-            "The IOFE policies changed: run the IOFE tests with SIMPLESIGN_UPDATE_DOCS=1 and commit docs/policies.");
+        agent.Evaluate(digitalSignatureOnly, DateTimeOffset.UtcNow).ShouldContain(f => f.Level == ConstraintLevel.Fail && f.Constraint.Contains("KeyUsage", StringComparison.Ordinal));
+        IofePolicies.Signing.Evaluate(digitalSignatureOnly, DateTimeOffset.UtcNow).ShouldNotContain(f => f.Level == ConstraintLevel.Fail && f.Constraint.Contains("KeyUsage", StringComparison.Ordinal));
     }
 
     private static X509Certificate2 Ca(

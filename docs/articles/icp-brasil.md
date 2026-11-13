@@ -30,6 +30,25 @@ var both = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = t
 var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 ```
 
+### Profiles
+
+`IcpBrasilProfile.Create()` and `GovBrProfile.Create()` give each framework as one `TrustProfile`: its roots, its chain
+validation and its policies (`IcpBrasilPolicies`, `GovBrPolicies`). One profile sets the policies; `WithTrustFrom` adds
+another's trust only. Gov.br's validates only: its signatures are made on Gov.br's service.
+
+```csharp
+var icp = IcpBrasilProfile.Create();
+await PadesSigner.Document(pdf).WithCertificate(cert).WithProfile(icp).SignAsync();
+
+// Brazilian documents under the ICP-Brasil policy, trusting ICP-Brasil and Gov.br
+var brazil = icp.WithTrustFrom(GovBrProfile.Create());
+var results = await new PdfSignatureValidator(new ValidationOptions { Profile = brazil }).ValidateAsync(signed);
+```
+
+```bash
+simplesign validate signed.pdf --profile icp-brasil --trust-profile gov-br
+```
+
 ### Intermediate ACs (offline chains)
 
 The package also bundles the ~176 intermediate ICP-Brasil ACs published by the ITI

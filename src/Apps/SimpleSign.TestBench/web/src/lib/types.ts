@@ -372,10 +372,17 @@ export interface MatrixRunResult {
 }
 
 // ── Validation area ─────────────────────────────────────────────────
-export type TrustChoice = "Sandbox" | "System" | "SandboxTrustedList" | "SandboxIofeList" | "PublicTsas" | "Peru" | "IcpBrasil" | "GovBr"
+export type TrustChoice = "Sandbox" | "System" | "SandboxTrustedList" | "PublicTsas"
+
+/** A trust profile (SimpleSign's TrustProfile): one sets the policies, others add their trust. */
+export type TrustProfileChoice = "None" | "Sandbox" | "Iofe" | "IcpBrasil" | "GovBr"
 
 export interface ValidationSettings {
   trust: TrustChoice[]
+  profile?: TrustProfileChoice
+  /** Which list the Iofe profile reads. */
+  profileSource?: "Indecopi" | "Sandbox"
+  trustProfiles?: TrustProfileChoice[]
   customRootUploadIds: string[]
   timeoutSeconds: number
   /** Uploaded validation policy (JSON); null: the library's default. */
@@ -751,7 +758,7 @@ export interface PolicyPreset {
   kind: PolicyKind
   name: string
   title: string
-  /** The trust framework the preset belongs to ("Peru", "IcpBrasil", "GovBr"); null for the general ones. */
+  /** The trust profile the preset belongs to ("Iofe", "IcpBrasil", "GovBr"); null for the general ones. */
   framework?: string | null
 }
 

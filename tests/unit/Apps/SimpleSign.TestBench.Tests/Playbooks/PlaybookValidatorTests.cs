@@ -71,6 +71,31 @@ public sealed class PlaybookValidatorTests
         PlaybookValidator.Check(Valid.Replace("\"kind\": \"validate\"", "\"kind\": \"manual\"", StringComparison.Ordinal), sandbox: null)
             .Issues.ShouldContain(i => i.IsError && i.Path.EndsWith(".kind", StringComparison.Ordinal));
 
+    private static string WithPolicy(string policy, string signingPolicyId) => Valid
+        .Replace("\"schema\": 2,", $"\"schema\": 2, \"policies\": [{policy}],", StringComparison.Ordinal)
+        .Replace("\"credentialId\": \"sandbox:rsa-2048\"", $"\"credentialId\": \"sandbox:rsa-2048\", \"signingPolicyId\": \"{signingPolicyId}\"", StringComparison.Ordinal);
+
+    [Fact]
+    public void Check_DeclaredPolicy_BuildsAndIsAccepted()
+    {
+        string json = WithPolicy("""{ "id": "agent", "kind": "signing", "base": "iofe", "set": { "SigningCertificate/KeyUsage": { "Level": "FAIL", "Id": ["nonRepudiation"] } } }""",
+            "playbook:agent");
+
+        var check = PlaybookValidator.Check(json, sandbox: null);
+
+        check.CanRun.ShouldBeTrue(string.Join("; ", check.Issues.Select(i => $"{i.Path}: {i.Message}")));
+        SimpleSign.Core.Policies.SigningPolicy.FromJson(PlaybookPolicies.Build(check.Playbook!.Policies[0]))
+            .Find("SigningCertificate/KeyUsage")!.Ids.ShouldBe(["nonRepudiation"]);
+    }
+
+    [Theory]
+    [InlineData("""{ "id": "agent", "kind": "signing", "base": "nope" }""", "playbook:agent")]
+    [InlineData("""{ "id": "agent", "kind": "signing", "base": "iofe", "set": { "SigningCertificate/NoSuchThing": { "Level": "FAIL" } } }""", "playbook:agent")]
+    [InlineData("""{ "id": "agent", "kind": "signing", "base": "iofe" }""", "playbook:other")]
+    public void Check_BadPolicyOrUndeclaredReference_IsAnError(string policy, string reference) =>
+        PlaybookValidator.Check(WithPolicy(policy, reference), sandbox: null).Issues
+            .ShouldContain(i => i.IsError && i.Path.StartsWith("$.policies", StringComparison.Ordinal));
+
     [Fact]
     public void Check_UnknownReasonAndFault_AreErrors()
     {

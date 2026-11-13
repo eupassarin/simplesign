@@ -107,16 +107,19 @@ internal sealed class SigningPlan
             steps.Add(new($".WithHashAlgorithm(HashAlgorithmName.{HashName(_o.Hash)})", b => b.WithHashAlgorithm(HashAlgorithm)));
         }
 
+        var controls = Context.Controls;
+        bool byProfile = controls.ProfileSetsPolicy(_o.SigningPolicyId);
         if (_signingPolicy.Uploaded)
         {
             var policy = _signingPolicy.Policy;
-            steps.Add(new(PolicyUploads.SigningCode(_signingPolicy), b => b.WithSigningPolicy(policy)));
+            steps.Add(byProfile
+                ? new(controls.ProfileStepCode(), b => b.WithSigningPolicy(policy).WithTrustAnchors([.. controls.ProfileAnchors]))
+                : new(PolicyUploads.SigningCode(_signingPolicy), b => b.WithSigningPolicy(policy)));
         }
 
-        var controls = Context.Controls;
-        if (controls.TrustCode() is { } trustCode)
+        if (controls.TrustCode(byProfile) is { } trustCode)
         {
-            steps.Add(new(trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+            steps.Add(new(trustCode, b => b.WithTrustAnchors([.. byProfile ? controls.OtherAnchors : controls.Anchors])));
         }
 
         if (controls.Audit is { } audit)
@@ -189,16 +192,19 @@ internal sealed class SigningPlan
             steps.Add((Context.HttpCode, b => b.WithHttpClientProvider(Http)));
         }
 
+        var controls = Context.Controls;
+        bool byProfile = controls.ProfileSetsPolicy(_o.SigningPolicyId);
         if (_signingPolicy.Uploaded)
         {
             var policy = _signingPolicy.Policy;
-            steps.Add((PolicyUploads.SigningCode(_signingPolicy), b => b.WithSigningPolicy(policy)));
+            steps.Add(byProfile
+                ? (controls.ProfileStepCode(), b => b.WithSigningPolicy(policy).WithTrustAnchors([.. controls.ProfileAnchors]))
+                : (PolicyUploads.SigningCode(_signingPolicy), b => b.WithSigningPolicy(policy)));
         }
 
-        var controls = Context.Controls;
-        if (controls.TrustCode() is { } trustCode)
+        if (controls.TrustCode(byProfile) is { } trustCode)
         {
-            steps.Add((trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+            steps.Add((trustCode, b => b.WithTrustAnchors([.. byProfile ? controls.OtherAnchors : controls.Anchors])));
         }
 
         if (controls.Audit is { } audit)

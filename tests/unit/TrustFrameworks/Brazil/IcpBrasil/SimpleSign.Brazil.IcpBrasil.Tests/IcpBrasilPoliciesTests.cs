@@ -54,4 +54,16 @@ public sealed class IcpBrasilPoliciesTests : IDisposable
         SigningPolicy.FromJson(IcpBrasilPolicies.Signing.ToJson()).Name.ShouldBe("ICP-Brasil");
         ValidationPolicy.FromJson(IcpBrasilPolicies.Validation.ToJson()).Name.ShouldBe("ICP-Brasil");
     }
+
+    [Fact]
+    public void Profile_Create_CarriesThePoliciesTheRootsAndTheChainValidation()
+    {
+        var profile = IcpBrasilProfile.Create();
+
+        profile.Name.ShouldBe("icp-brasil");
+        profile.SigningPolicy.ShouldBeSameAs(IcpBrasilPolicies.Signing);
+        profile.ValidationPolicy.ShouldBeSameAs(IcpBrasilPolicies.Validation);
+        profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()).ShouldNotBeEmpty();
+        profile.ChainValidationProviders.ShouldNotBeEmpty();
+    }
 }

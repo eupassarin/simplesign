@@ -162,6 +162,11 @@ internal sealed class PlaybookRunner(
             Loaded = check;
             LoadedJson = json;
             string key = Key(check.Playbook, json);
+            if (check.Playbook is { } adjusted)
+            {
+                PlaybookPolicies.AddTo(adjusted, documents);
+            }
+
             if (check.Playbook is { } playbook && _session?.Key != key)
             {
                 Release(_session?.Results.Values);
@@ -606,7 +611,29 @@ internal sealed class PlaybookRunner(
             MergeInto(merged, (JsonObject)JsonNode.Parse(s.GetRawText())!);
         }
 
+        FillProfilePolicies(merged);
         return merged;
+    }
+
+    /// <summary>
+    /// The policy of each profile the options name, where they name no policy: the profile's preset, as the Profile menu
+    /// sets it. An explicit policy (<c>playbook:ID</c>, another preset) wins.
+    /// </summary>
+    internal static void FillProfilePolicies(JsonObject options)
+    {
+        Fill(options["signingControls"] as JsonObject, options, "signingPolicyId", Policies.PolicyViewer.Signing);
+        Fill(options["validation"] as JsonObject, options["validation"] as JsonObject, "policyId", Policies.PolicyViewer.Validation);
+        Fill(options["settings"] as JsonObject, options["settings"] as JsonObject, "policyId", Policies.PolicyViewer.Validation);
+
+        static void Fill(JsonObject? holder, JsonObject? target, string key, string kind)
+        {
+            if (target is not null && target[key] is null && holder?["profile"] is JsonValue value && value.TryGetValue(out string? name)
+                && Enum.TryParse<TrustFrameworks.TrustProfileChoice>(name, ignoreCase: true, out var choice)
+                && TrustFrameworks.ProfileTrust.PolicyPresetId(choice, kind) is { } id)
+            {
+                target[key] = id;
+            }
+        }
     }
 
     private static void MergeInto(JsonObject target, JsonObject source)
@@ -874,11 +901,43 @@ internal sealed class PlaybookRunner(
         string policy = settings.PolicyId is { } id && documents.TryGet(id, out var file) ? file!.FileName : "";
         return
         [
+            new("profile", "Trust profile", ProfileText(settings.Profile, settings.ProfileSource, settings.TrustProfiles), Asked("profile") || Asked("trustProfiles"),
+                settings.Profile != TrustFrameworks.TrustProfileChoice.None || settings.TrustProfiles.Count > 0),
             new("trust", "Trusted roots", string.Join(", ", settings.Trust), Asked("trust"), true),
             new("policy", "Validation policy", policy, Asked("policyId"), settings.PolicyId is not null),
             new("level", "Validation level", settings.Level.ToString(), Asked("level"), settings.Level != SimpleSign.Core.Validation.ValidationLevel.ArchivalData),
             new("revocation", "Revocation first", settings.RevocationStrategy.ToString(), Asked("revocationStrategy"), false),
         ];
+    }
+
+    /// <summary>The profile a step runs under (its options merged with the defaults), as <see cref="ProfileText"/> writes it; null for none.</summary>
+    internal static string? StepProfile(Playbook playbook, PlaybookStep step)
+    {
+        var options = Merge(playbook.Defaults.Options, step.Format ?? playbook.Defaults.Format, step.Options);
+        var holder = (options["settings"] ?? options["validation"] ?? options["signingControls"]) as JsonObject;
+        if (options["signingControls"] is JsonObject controls && controls["profile"] is not null)
+        {
+            holder = controls;
+        }
+
+        T Read<T>(string name, T fallback) where T : struct, Enum =>
+            holder?[name] is JsonValue v && v.TryGetValue(out string? text) && Enum.TryParse<T>(text, ignoreCase: true, out var parsed) ? parsed : fallback;
+        var extras = holder?["trustProfiles"] is JsonArray list
+            ? list.OfType<JsonValue>().Select(v => v.TryGetValue(out string? t) && Enum.TryParse<TrustFrameworks.TrustProfileChoice>(t, true, out var c) ? c : TrustFrameworks.TrustProfileChoice.None).ToList()
+            : [];
+        string text = ProfileText(Read("profile", TrustFrameworks.TrustProfileChoice.None), Read("profileSource", TrustFrameworks.IofeListSource.Indecopi), extras);
+        return text == "—" ? null : text;
+    }
+
+    /// <summary>The profile as the preview and the evidence show it: <c>iofe (Sandbox's list) + gov-br</c>; "—" for none.</summary>
+    internal static string ProfileText(TrustFrameworks.TrustProfileChoice profile, TrustFrameworks.IofeListSource source,
+        IReadOnlyList<TrustFrameworks.TrustProfileChoice> extras)
+    {
+        string main = TrustFrameworks.ProfileTrust.Name(profile) is { } name
+            ? name + (profile == TrustFrameworks.TrustProfileChoice.Iofe ? source == TrustFrameworks.IofeListSource.Sandbox ? " (Sandbox's list)" : " (INDECOPI's list)" : "")
+            : "default";
+        var others = extras.Select(TrustFrameworks.ProfileTrust.Name).OfType<string>().Distinct().ToList();
+        return profile == TrustFrameworks.TrustProfileChoice.None && others.Count == 0 ? "—" : main + string.Concat(others.Select(o => " + " + o));
     }
 
     /// <summary>A value as the page shows it: a choice's title, a file's name, a signer's subject.</summary>

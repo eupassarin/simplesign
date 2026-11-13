@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useI18n, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { IssueList, Pill } from "../shared/ui"
-import { activeFramework, FrameworkMenu, FrameworkStrip } from "./framework"
+import { activeProfile, ProfileMenu, ProfileStrip } from "./profile"
 import { OptionForm } from "./OptionForm"
 import { StandardBadge } from "./parts"
 import { ResultPanel } from "./ResultPanel"
@@ -43,7 +43,7 @@ function TopBar() {
   const errors = evaluation?.issues.filter((i) => i.severity === "Error").length ?? 0
   const level = asText(options.level)
   // With ICP-Brasil on, its policies (AD-RB…AD-RA) take the place of the baseline levels.
-  const icp = activeFramework(options) === "IcpBrasil"
+  const icp = activeProfile(options)?.profile === "IcpBrasil"
   const icpPolicy = asText(options.kind) === "IcpBrasil" ? asText(options.icpPolicy) : null
   const presets = schema.presets.filter((p) => p.formats.includes(format) && (icp ? p.framework === "IcpBrasil" : !p.framework))
   const pressed = (p: SchemaPreset) => (p.framework ? p.set.icpPolicy === icpPolicy : icpPolicy === null && p.set.level === level)
@@ -69,7 +69,7 @@ function TopBar() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <FrameworkMenu page="sign" options={options} update={(change) => updateAll((o) => change(o))} />
+          <ProfileMenu page="sign" options={options} update={(change) => updateAll((o) => change(o))} />
           <VaryControl />
           <HistoryDrawer />
           <Tooltip>
@@ -88,7 +88,7 @@ function TopBar() {
         {errors > 0 && <span className="text-destructive ml-auto flex items-center gap-1"><CircleAlert className="size-3.5" />{t("wb.errors", { n: errors })}</span>}
         {evaluating && <Loader2 className="text-muted-foreground size-3 animate-spin" />}
       </div>
-      <FrameworkStrip page="sign" options={options} />
+      <ProfileStrip page="sign" options={options} />
     </div>
   )
 }

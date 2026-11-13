@@ -219,9 +219,32 @@ public static partial class OptionSchema
             [
                 V("SandboxRoot", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, its signature checked against the operator's certificate: its CA and TSA services become the anchors. A list that is expired or signed by another key refuses the signature."),
-                V("SandboxIofeList", "Sandbox (test): trusted list, IOFE profile", "To test INDECOPI's rules with the sandbox's certificates (the INDECOPI playbook); the sandbox can make it expired, fake or tampered. The sandbox's trusted list (/tl/tl.xml), read as IofeExtension reads INDECOPI's: its CA services and its 'unspecified' services (the CA of the Sandbox's IOFE TSA) become the anchors, never the code-signing certificate it lists. A list that is expired or signed by another key refuses the signature."),
-                V("Peru", "INDECOPI (real list): Peru framework", "For real Peruvian certificates. INDECOPI's real trusted list (iofe.indecopi.gob.pe/TSL/tsl-pe.xml), checked against its signer's certificate and read as IofeExtension reads it: its CA and TSA services become the anchors. The sandbox's certificates do not chain to it."),
-                V("IcpBrasil", "ICP-Brasil framework (AC Raiz)", "The ICP-Brasil roots (AC Raiz v5 and later) bundled with SimpleSign.Brazil.IcpBrasil. For real ICP-Brasil certificates: the sandbox's do not chain to them."),
+            ]),
+        O("common.signing.profile", "crypto", s_all, "choice", "signingControls.profile", "Trust profile",
+            "A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust.",
+            standards: R("ETSI TS 119 612|Trusted lists"), api: "WithProfile(TrustProfile)",
+            values:
+            [
+                V("None", "Default", "No profile: the trust choices and the policies of the form only."),
+                V("Sandbox", "Sandbox (test)", "The connected Sandbox's list of trusted lists, read with SimpleSign's default policies.", api: "--profile sandbox --sandbox URL"),
+                V("Iofe", "Peru (IOFE)", "IofeProfile: INDECOPI's trusted list (or the Sandbox's, with the source below) and the iofe policies.", api: "IofeProfile.LoadAsync()"),
+                V("IcpBrasil", "ICP-Brasil", "IcpBrasilProfile: the AC Raiz roots, the ICP-Brasil chain validation and the icp-brasil policies. For real ICP-Brasil certificates.", api: "IcpBrasilProfile.Create()"),
+            ]),
+        O("common.signing.profileSource", "crypto", s_all, "choice", "signingControls.profileSource", "IOFE list",
+            "Which list the Peru (IOFE) profile reads.", api: "IofeExtensionOptions.TrustedListUrl / TrustedListSigners",
+            values:
+            [
+                V("Indecopi", "INDECOPI (real)", "INDECOPI's real trusted list (iofe.indecopi.gob.pe/TSL/tsl-pe.xml), checked against the signer bundled with SimpleSign.Peru.Iofe. The Sandbox's certificates do not chain to it."),
+                V("Sandbox", "Sandbox (test)", "The Sandbox's trusted list (/tl/tl.xml) read the IOFE way: to test INDECOPI's rules with the Sandbox's certificates; the Sandbox can make it expired, fake or tampered."),
+            ], when: When("signingControls.profile", "Iofe")),
+        O("common.signing.trustProfiles", "crypto", s_all, "trust", "signingControls.trustProfiles", "Also trust",
+            "Other profiles whose trust is added; their policies are not used.", api: "TrustProfile.WithTrustFrom(params TrustProfile[])",
+            values:
+            [
+                V("Sandbox", "Sandbox (test)", "The Sandbox's list of trusted lists."),
+                V("Iofe", "Peru (IOFE)", "INDECOPI's trusted list (or the Sandbox's, with the source above)."),
+                V("IcpBrasil", "ICP-Brasil", "The AC Raiz roots and the ICP-Brasil chain validation."),
+                V("GovBr", "Gov.br", "The Gov.br roots and their chain validation."),
             ]),
         O("common.expectedTsa", "crypto", s_all, "choice", "signingControls.expectedTsa", "Expected TSA",
             "The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted).",
@@ -459,13 +482,36 @@ public static partial class OptionSchema
             values:
             [
                 V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, read through its list of trusted lists: its CAs with their service type and status, as DSS trusts them."),
-                V("SandboxIofeList", "Sandbox (test): trusted list, IOFE profile", "To test INDECOPI's rules with the sandbox's certificates (the INDECOPI playbook); the sandbox can make it expired, fake or tampered. The sandbox's trusted list (/tl/tl.xml), read directly with IofeExtension.DefaultListOptions: its CA and 'unspecified' services with their status, so the TrustedLists constraints are evaluated. DSS reads the same list through the LOTL and trusts every granted service in it, whatever its type."),
                 V("Sandbox", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("System", "Operating system roots", "The roots the operating system trusts."),
                 V("PublicTsas", "Public TSA roots", "The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA), so their timestamps reach a trust anchor. DSS trusts the same roots."),
-                V("Peru", "INDECOPI (real list): Peru framework", "For real Peruvian certificates. INDECOPI's real trusted list (iofe.indecopi.gob.pe/TSL/tsl-pe.xml), read as IofeExtension reads it: its CA and TSA services with their status, for the TrustedLists constraints."),
-                V("IcpBrasil", "ICP-Brasil framework", "The ICP-Brasil roots bundled with SimpleSign.Brazil.IcpBrasil, and its chain validation (certificate type A1/A3, CPF/CNPJ). For real ICP-Brasil certificates."),
-                V("GovBr", "Gov.br framework", "The Gov.br roots bundled with SimpleSign.Brazil.GovBr, and its chain validation. For signatures made on Gov.br."),
+            ], when: When("validate", "true")),
+        O("common.validation.profile", "run", s_all, "choice", "validation.profile", "Trust profile",
+            "A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust.",
+            standards: R("ETSI TS 119 612|Trusted lists"), api: "ValidationOptions.Profile",
+            values:
+            [
+                V("None", "Default", "No profile: the trust choices and the policies of the form only."),
+                V("Sandbox", "Sandbox (test)", "The connected Sandbox's list of trusted lists, read with SimpleSign's default policies.", api: "--profile sandbox --sandbox URL"),
+                V("Iofe", "Peru (IOFE)", "IofeProfile: INDECOPI's trusted list (or the Sandbox's, with the source below) and the iofe policies.", api: "IofeProfile.LoadAsync()"),
+                V("IcpBrasil", "ICP-Brasil", "IcpBrasilProfile: the AC Raiz roots, the ICP-Brasil chain validation and the icp-brasil policies. For real ICP-Brasil certificates.", api: "IcpBrasilProfile.Create()"),
+                V("GovBr", "Gov.br", "GovBrProfile: the Gov.br roots, their chain validation and the govbr policy. It validates only: signatures are made on Gov.br's service.", api: "GovBrProfile.Create()"),
+            ], when: When("validate", "true")),
+        O("common.validation.profileSource", "run", s_all, "choice", "validation.profileSource", "IOFE list",
+            "Which list the Peru (IOFE) profile reads.", api: "IofeExtensionOptions.TrustedListUrl / TrustedListSigners",
+            values:
+            [
+                V("Indecopi", "INDECOPI (real)", "INDECOPI's real trusted list (iofe.indecopi.gob.pe/TSL/tsl-pe.xml), checked against the signer bundled with SimpleSign.Peru.Iofe. The Sandbox's certificates do not chain to it."),
+                V("Sandbox", "Sandbox (test)", "The Sandbox's trusted list (/tl/tl.xml) read the IOFE way: to test INDECOPI's rules with the Sandbox's certificates; the Sandbox can make it expired, fake or tampered."),
+            ], when: [When("validate", "true"), When("validation.profile", "Iofe")]),
+        O("common.validation.trustProfiles", "run", s_all, "trust", "validation.trustProfiles", "Also trust",
+            "Other profiles whose trust is added; their policies are not used.", api: "TrustProfile.WithTrustFrom(params TrustProfile[])",
+            values:
+            [
+                V("Sandbox", "Sandbox (test)", "The Sandbox's list of trusted lists."),
+                V("Iofe", "Peru (IOFE)", "INDECOPI's trusted list (or the Sandbox's, with the source above)."),
+                V("IcpBrasil", "ICP-Brasil", "The AC Raiz roots and the ICP-Brasil chain validation."),
+                V("GovBr", "Gov.br", "The Gov.br roots and their chain validation."),
             ], when: When("validate", "true")),
         O("common.validation.policy", "run", s_all, "upload", "validation.policyId", "Validation policy (JSON)",
             "The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on.",

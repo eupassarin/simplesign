@@ -118,6 +118,16 @@ await CadesSigner.Document(data).WithCertificate(cert)
     .SignAsync();
 ```
 
+### Trust profiles
+```csharp
+// A trust framework as one value: its trust and its policies (IofeProfile, IcpBrasilProfile, GovBrProfile)
+var iofe = await IofeProfile.LoadAsync();
+await PadesSigner.Document(pdf).WithCertificate(cert).WithProfile(iofe).SignAsync();
+var results = await new PdfSignatureValidator(new ValidationOptions { Profile = iofe }).ValidateAsync(signed);
+// One profile sets the policies; others add trust only: IcpBrasilProfile.Create().WithTrustFrom(GovBrProfile.Create())
+// CLI: --profile iofe [--trust-profile gov-br] [--sandbox URL]; `simplesign profiles` lists them
+```
+
 ### Extension Points (interfaces)
 - `ITrustAnchorProvider` — custom trust roots
 - `IHttpClientProvider` — custom HTTP for TSA/OCSP/CRL

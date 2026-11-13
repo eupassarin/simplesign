@@ -11,7 +11,7 @@ import { Indication } from "../shared/results"
 import { Pill } from "../shared/ui"
 import { UploadButton } from "../shared/UploadButton"
 import { OptionField, OptionScope } from "../workbench/fields"
-import { FrameworkMenu, FrameworkStrip } from "../workbench/framework"
+import { ProfileMenu, ProfileStrip } from "../workbench/profile"
 import { ResultPanel } from "../workbench/ResultPanel"
 import type { DssSignature, RunVerdict, RunView, ValidationSampleView } from "../workbench/schema"
 import { useWorkbench } from "../workbench/state"
@@ -140,7 +140,7 @@ export function ValidatePage() {
         </span>
         {run && validateTarget?.fileId === run.outputId && <Pill>{schema.formats.find((f) => f.id === run.format)?.title}</Pill>}
         <div className="ml-auto flex items-center gap-2">
-          <FrameworkMenu page="validate" options={validateOptions} update={updateValidate} />
+          <ProfileMenu page="validate" options={validateOptions} update={updateValidate} />
           <Button variant="outline" size="sm" className="h-8" onClick={checking ? () => { stop.current = true } : checkAll} disabled={samples.length === 0}>
             {checking ? <Loader2 className="animate-spin" /> : <ListChecks />} {t(checking ? "wb.variants.stop" : "val.validateAll")}
           </Button>
@@ -150,7 +150,7 @@ export function ValidatePage() {
           </Button>
         </div>
       </div>
-      <FrameworkStrip page="validate" options={validateOptions} />
+      <ProfileStrip page="validate" options={validateOptions} />
       </div>
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(400px,5fr)_7fr]">
         <div className="min-h-0 space-y-3 overflow-y-auto border-r p-4">

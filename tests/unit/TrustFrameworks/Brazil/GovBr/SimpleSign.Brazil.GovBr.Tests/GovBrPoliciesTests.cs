@@ -18,4 +18,15 @@ public sealed class GovBrPoliciesTests
     [Fact]
     public void Validation_ToJson_RoundTrips() =>
         ValidationPolicy.FromJson(GovBrPolicies.Validation.ToJson()).Name.ShouldBe("Gov.br");
+
+    [Fact]
+    public void Profile_Create_ValidatesOnly()
+    {
+        var profile = GovBrProfile.Create();
+
+        profile.Name.ShouldBe("gov-br");
+        profile.CanSign.ShouldBeFalse();
+        profile.ValidationPolicy.ShouldBeSameAs(GovBrPolicies.Validation);
+        profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()).ShouldNotBeEmpty();
+    }
 }

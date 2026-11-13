@@ -77,6 +77,8 @@ internal static partial class Program
                 .WithDescription("Extract CMS signatures from a signed PDF");
             config.AddCommand<ExplainCommand>("explain")
                 .WithDescription("Explain PDF signature terms and fields");
+            config.AddCommand<ProfilesCommand>("profiles")
+                .WithDescription("List the trust profiles (--profile): the policies and the trust each one sets");
             config.AddCommand<HtmlToPdfCommand>("html-to-pdf")
                 .WithDescription("Convert an HTML file to PDF");
             config.AddCommand<VersionCommand>("version")

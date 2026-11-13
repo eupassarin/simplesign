@@ -19,12 +19,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `IcpBrasilPolicies.Signing` / `.Validation` (SimpleSign.Brazil.IcpBrasil) and `GovBrPolicies.Validation`
   (SimpleSign.Brazil.GovBr), on the model of `IofePolicies`; the CLI's `--policy icp-brasil` and `govbr`.
 
-### Added — TestBench: trust frameworks
+### Added — Trust profiles
 
-- Sign and Validate turn on one trust framework at a time: Peru (INDECOPI's real trusted list), ICP-Brasil (the bundled
-  AC Raiz roots and its chain validation) and, on Validate, Gov.br. A framework sets the trust choices and the policies
-  (each field shows a marker), and on Sign ICP-Brasil replaces B-B…B-LTA with its signature policies AD-RB…AD-RA
-  (`WithIcpBrasilPolicy`; the CLI's `sign --icp-policy` for PAdES). Turning it off puts the previous values back.
+- `TrustProfile` (SimpleSign.Core): a trust framework as one value — its trust anchor providers, its chain validation
+  and its signing and validation policies. `WithProfile(profile)` on every signer builder (PAdES, deferred, batch,
+  CAdES, XAdES) and `ValidationOptions.Profile`; an explicit `WithSigningPolicy` / `Policy` wins. One profile sets the
+  policies, `WithTrustFrom(...)` adds another's trust only. A profile that does not sign (Gov.br) is refused by
+  `WithProfile` (`ArgumentException`).
+- The profiles live in their packages: `IofeProfile.LoadAsync()` (SimpleSign.Peru.Iofe), `IcpBrasilProfile.Create()`
+  (SimpleSign.Brazil.IcpBrasil) and `GovBrProfile.Create()` (SimpleSign.Brazil.GovBr, validation only).
+- SimpleSign.Peru.Iofe bundles the certificate INDECOPI signs its list with (`IofeExtension.IndecopiSigners`): an
+  `IofeExtensionOptions` without `TrustedListSigners` uses it instead of throwing.
+- CLI: `--profile <sandbox|iofe|icp-brasil|gov-br>`, `--trust-profile` (repeatable) and `--sandbox URL` (a running
+  Sandbox: its origins allowed; `--profile sandbox` trusts its LOTL, `--profile iofe` reads its list) on `sign`,
+  `sign-dir`, `cades`/`xades sign`, the deferred commands and the validate commands; `simplesign profiles` lists them.
+  `--tsl-profile iofe` no longer needs `--tsl-signer`.
+- Playbooks: a `policies` section declares adjusted policies (`base` + `set`), named `playbook:ID` in the steps.
+
+### Removed
+
+- `IofePolicies.SigningNonRepudiation` / `ValidationNonRepudiation`, the CLI preset `iofe-nonrepudiation` and
+  `docs/policies/iofe-*.json`: there is one IOFE policy; what an automated agent needs (the nonRepudiation bit) is a
+  one-constraint adjustment, shown in the `IofePolicies` docs and declared in the INDECOPI playbook
+  (`playbook:iofe-agent`). `simplesign policy export signing --preset iofe` writes the policy out.
+
+### Added — TestBench: trust profiles
+
+- Sign and Validate have a Profile menu: Default, Sandbox (test), Peru (IOFE) with INDECOPI's real list or the
+  Sandbox's (test), ICP-Brasil and, on Validate, Gov.br, plus "Also trust" for the other profiles' trust. The profile
+  is an option of its own (`profile`, `profileSource`, `trustProfiles` on the signing controls and the validation); it
+  sets the policies (each field shows a marker), and on Sign ICP-Brasil replaces B-B…B-LTA with its signature policies
+  AD-RB…AD-RA (`WithIcpBrasilPolicy`; the CLI's `sign --icp-policy` for PAdES). Turning it off puts the previous
+  policies back. The CLI tab shows `--profile`, the C# tab `WithProfile` / `ValidationOptions.Profile`.
+- Playbooks use `profile` (the INDECOPI playbook's `tsl` section: `"profile": "Iofe", "profileSource": "Sandbox"`); a
+  step with a profile and no policy takes the profile's. The step preview and the evidence show each step's profile.
 - The Playbook header: a picker of the samples (and "Open a playbook file…") in place of the title; thin scrollbars in
   the theme's colours.
 
@@ -82,9 +110,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Software* v4.0 — sections 4.2 (F-1…F-32), 4.3 (V-1…V-32), 4.4 (S-1…S-4) and 4.1 (E-1…E-19) — marked as shown by
   the `indecopi-guia-v4` playbook, by tests, or left to the accredited product, with the step ids; a TestBench test
   checks that every P item has a step and every step it names exists.
-- `IofePolicies.SigningNonRepudiation` (preset `iofe-nonrepudiation` for signing in the CLI and the TestBench,
-  `docs/policies/iofe-signing-nonrepudiation.json`): section 4.2 asks an automated agent for the nonRepudiation bit;
-  playbook step `no-nonrepudiation-agent`. The requirement numbers in the `IofePolicies` XML docs follow the guide.
+- The requirement numbers in the `IofePolicies` XML docs follow the guide. What section 4.2 asks of an automated agent
+  (the nonRepudiation bit) is a one-line adjustment of `IofePolicies.Signing`, shown in its docs and declared in the
+  playbook (`policies`, step `no-nonrepudiation-agent`).
 
 ### Fixed — Trusted-list constraints in PAdES validation and the CLI
 
@@ -113,7 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — IOFE validation policy and INDECOPI's list version
 
-- `IofePolicies.Validation` / `ValidationNonRepudiation` accept a trusted list of version 3 (`TrustedLists/TLVersion`
+- `IofePolicies.Validation` accepts a trusted list of version 3 (`TrustedLists/TLVersion`
   3, 5, 6): INDECOPI publishes Peru's list in TS 102 231 v3, which the default constraint (5, 6) made INDETERMINATE.
 ### Added — Two-phase (deferred) signing for CAdES and XAdES
 
@@ -282,11 +310,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automated part of INDECOPI's guide v4.0, Annex B, in English, tagged with the guide's item ids; written by
   `tools/playbooks/indecopi.py`). `AUTHORING.md` is the kit to have an LLM write one; `options.md` is generated from
   the TestBench.
-- **Built-in policies:** `strict`, `minimal`, `iofe` (signing) and `iofe`, `iofe-nonrepudiation` (validation), in the
+- **Built-in policies:** `strict`, `minimal`, `iofe` (signing) and `strict`, `iofe` (validation), in the
   TestBench's policy fields and as names for the CLI's `--signing-policy` / `--policy` and `policy export --preset`.
 - **IOFE:** `IofePolicies.Signing` turns on the trust anchor, CRL nextUpdate, chain cryptography and TSA checks;
-  `IofePolicies.Validation` refuses an expired or badly signed trusted list; new `ValidationNonRepudiation` (Req. 23).
-  Written out in `docs/policies/iofe-*.json`.
+  `IofePolicies.Validation` refuses an expired or badly signed trusted list. `simplesign policy export --preset iofe`
+  writes them out.
 - **CLI sign commands:** `--trust`, `--trust-dir`, `--tsl/--tsl-signer` (trust anchors before signing),
   `--expected-tsa`, `--audit-log`; `--signing-policy` on `sign-dir` and `deferred`; `simplesign audit verify`.
 - **TestBench options:** trust anchors before signing, expected TSA, audit trail (shown in the log), and *Attempt

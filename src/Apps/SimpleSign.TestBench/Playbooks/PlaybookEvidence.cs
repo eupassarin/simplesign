@@ -84,6 +84,11 @@ internal static class PlaybookEvidence
                     html.Append("<p>").Append(E(stepDescription)).Append("</p>\n");
                 }
 
+                if (PlaybookRunner.StepProfile(playbook, definition) is { } profile)
+                {
+                    html.Append("<p><b>Profile:</b> ").Append(E(profile)).Append("</p>\n");
+                }
+
                 if (step.Result is not { } result)
                 {
                     html.Append("<p class=\"pending\">Not run.</p>\n");

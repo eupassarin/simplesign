@@ -12,7 +12,7 @@ namespace SimpleSign.TestBench.Policies;
 /// <param name="Title">The policy's own name.</param>
 public sealed record PolicyPreset(string Id, string Kind, string Name, string Title)
 {
-    /// <summary>The trust framework the preset belongs to (<c>Peru</c>, <c>IcpBrasil</c>, <c>GovBr</c>); null for the general ones.</summary>
+    /// <summary>The trust profile the preset belongs to (<c>Iofe</c>, <c>IcpBrasil</c>, <c>GovBr</c>); null for the general ones.</summary>
     public string? Framework { get; init; }
 }
 
@@ -50,10 +50,8 @@ internal static class PolicyPresets
         (PolicyViewer.Signing, "minimal", () => Minimal.ToJson(), Minimal.Name),
         (PolicyViewer.Signing, "anchored", () => Anchored.ToJson(), Anchored.Name),
         (PolicyViewer.Signing, "iofe", () => IofePolicies.Signing.ToJson(), IofePolicies.Signing.Name),
-        (PolicyViewer.Signing, "iofe-nonrepudiation", () => IofePolicies.SigningNonRepudiation.ToJson(), IofePolicies.SigningNonRepudiation.Name),
         (PolicyViewer.Validation, "strict", () => StrictValidation.ToJson(), StrictValidation.Name),
         (PolicyViewer.Validation, "iofe", () => IofePolicies.Validation.ToJson(), IofePolicies.Validation.Name),
-        (PolicyViewer.Validation, "iofe-nonrepudiation", () => IofePolicies.ValidationNonRepudiation.ToJson(), IofePolicies.ValidationNonRepudiation.Name),
         (PolicyViewer.Signing, "icp-brasil", () => Brazil.IcpBrasil.IcpBrasilPolicies.Signing.ToJson(), Brazil.IcpBrasil.IcpBrasilPolicies.Signing.Name),
         (PolicyViewer.Validation, "icp-brasil", () => Brazil.IcpBrasil.IcpBrasilPolicies.Validation.ToJson(), Brazil.IcpBrasil.IcpBrasilPolicies.Validation.Name),
         (PolicyViewer.Validation, "govbr", () => Brazil.GovBr.GovBrPolicies.Validation.ToJson(), Brazil.GovBr.GovBrPolicies.Validation.Name),
@@ -63,10 +61,10 @@ internal static class PolicyPresets
     public static IReadOnlyList<PolicyPreset> All { get; } =
         [.. s_all.Select(p => new PolicyPreset(Id(p.Kind, p.Name), p.Kind, p.Name, p.Title ?? p.Name) { Framework = FrameworkOf(p.Name) })];
 
-    /// <summary>The trust framework of a preset, by its name: the TestBench shows a framework's presets only while it is on.</summary>
+    /// <summary>The trust profile of a preset, by its name: the TestBench shows a profile's presets only while it is on.</summary>
     private static string? FrameworkOf(string name) => name switch
     {
-        "iofe" or "iofe-nonrepudiation" => "Peru",
+        "iofe" => "Iofe",
         "icp-brasil" => "IcpBrasil",
         "govbr" => "GovBr",
         _ => null,
@@ -74,6 +72,10 @@ internal static class PolicyPresets
 
     /// <summary>The document id of a preset.</summary>
     public static string Id(string kind, string name) => $"preset:{kind}:{name}";
+
+    /// <summary>The JSON of a preset by kind and name, or null when there is none.</summary>
+    public static string? Json(string kind, string name) =>
+        s_all.FirstOrDefault(p => p.Kind == kind && p.Name == name) is { Json: { } json } ? json() : null;
 
     /// <summary>Adds every preset to <paramref name="documents"/>, under its id.</summary>
     public static void AddTo(DocumentStore documents)

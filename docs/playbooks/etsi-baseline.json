@@ -24,6 +24,21 @@
       }
     }
   },
+  "policies": [
+    {
+      "id": "requires-non-repudiation",
+      "kind": "validation",
+      "base": "default",
+      "set": {
+        "SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage": {
+          "Level": "FAIL",
+          "Id": [
+            "nonRepudiation"
+          ]
+        }
+      }
+    }
+  ],
   "sections": [
     {
       "id": "pades",
@@ -2877,7 +2892,7 @@
               "trust": [
                 "Sandbox"
               ],
-              "policyId": "preset:validation:iofe-nonrepudiation"
+              "policyId": "playbook:requires-non-repudiation"
             }
           },
           "expect": {

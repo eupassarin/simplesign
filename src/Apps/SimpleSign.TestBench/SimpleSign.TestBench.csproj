@@ -56,8 +56,6 @@
     <EmbeddedResource Include="..\..\..\docs\playbooks\*.json" LogicalName="SimpleSign.TestBench.Playbooks.Samples.%(Filename)%(Extension)" />
     <!-- The roots of the public TSAs (PublicTsaRoots); tools/dss mounts the same folder. -->
     <EmbeddedResource Include="TsaRoots/*.crt" LogicalName="TsaRoots/%(Filename)%(Extension)" />
-    <!-- The certificate INDECOPI signs Peru's trusted list with (FrameworkTrust; see TrustFrameworks/README.md). -->
-    <EmbeddedResource Include="TrustFrameworks/*.pem" LogicalName="TrustFrameworks/%(Filename)%(Extension)" />
     <Content Remove="web/**" />
     <None Remove="web/**" />
     <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Condition="Exists('web/dist')" />

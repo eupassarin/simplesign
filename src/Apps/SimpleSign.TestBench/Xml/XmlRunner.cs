@@ -509,14 +509,14 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     private CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool customRoot = settings.Trust.Contains(TrustChoice.Sandbox) || settings.CustomRootUploadIds.Count > 0;
-        var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null ? "" : "using SimpleSign.Core.Policies;\n") + "\nvar validator = new XadesSignatureValidator(new ValidationOptions\n{\n");
+        var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null || ValidationService.ProfileSetsPolicy(settings) ? "" : "using SimpleSign.Core.Policies;\n") + "\nvar validator = new XadesSignatureValidator(new ValidationOptions\n{\n");
         sb.Append(CultureInfo.InvariantCulture, $"    TrustSystemRoots = {(settings.Trust.Contains(TrustChoice.System) ? "true" : "false")},\n");
         if (customRoot)
         {
             sb.Append("    TrustedRoots = [root], // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")\n");
         }
 
-        foreach (string option in ValidationService.TrustedListOptionsCode(settings))
+        foreach (string option in ValidationService.TrustedListOptionsCode(settings).Concat(ValidationService.ProfileOptionsCode(settings)))
         {
             sb.Append("    ").Append(option).Append(option.StartsWith("//", StringComparison.Ordinal) ? "\n" : ",\n");
         }
@@ -592,15 +592,18 @@ internal sealed class XadesPlan
             throw new ArgumentException(L.T("The signing policy cannot be read: {0}", policyError));
         }
 
+        var controls = context.Controls;
+        bool byProfile = controls.ProfileSetsPolicy(o.SigningPolicyId);
         if (signingPolicy.Uploaded)
         {
-            _steps.Add((PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
+            _steps.Add(byProfile
+                ? (controls.ProfileStepCode(), b => b.WithSigningPolicy(signingPolicy.Policy).WithTrustAnchors([.. controls.ProfileAnchors]))
+                : (PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
         }
 
-        var controls = context.Controls;
-        if (controls.TrustCode() is { } trustCode)
+        if (controls.TrustCode(byProfile) is { } trustCode)
         {
-            _steps.Add((trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+            _steps.Add((trustCode, b => b.WithTrustAnchors([.. byProfile ? controls.OtherAnchors : controls.Anchors])));
         }
 
         if (controls.Audit is { } audit)
@@ -904,7 +907,7 @@ internal sealed class XadesPlan
         }
 
         cli.AddIf("--data-mime-type", _o.MimeType?.Trim());
-        if (_o.SigningPolicyId is not null)
+        if (_o.SigningPolicyId is not null && !_context.Controls.ProfileSetsPolicy(_o.SigningPolicyId))
         {
             cli.Add("--signing-policy", PolicyUploads.SigningFileName);
         }

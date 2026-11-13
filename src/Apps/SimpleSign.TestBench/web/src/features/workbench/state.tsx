@@ -40,9 +40,9 @@ interface WorkbenchValue {
   /** The trust and revocation settings of the Validate task, shaped like the options ({ validation: … }). */
   validateOptions: Options
   setValidateOption: (path: string, value: unknown) => void
-  /** Changes the Validate task's settings at once (a trust framework sets the trust and the policy together). */
+  /** Changes the Validate task's settings at once (a trust profile sets the profile and the policy together). */
   updateValidate: (change: (current: Options) => Options) => void
-  /** Changes the options of every format at once (a trust framework applies to PAdES, CAdES and XAdES alike). */
+  /** Changes the options of every format at once (a trust profile applies to PAdES, CAdES and XAdES alike). */
   updateAll: (change: (current: Options, format: Format) => Options) => void
   validate: (target?: ValidateTarget) => Promise<RunView | null>
   /** Shows a file in the Validate task and validates it. */

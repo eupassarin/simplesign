@@ -53,7 +53,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         ILogger? logger = null,
         IChainRevocationChecker? chainRevocationChecker = null)
     {
-        _options = options ?? new ValidationOptions();
+        _options = (options ?? new ValidationOptions()).WithProfileApplied();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
         _logger = logger ?? NullLogger.Instance;
         _chainRevocationChecker = chainRevocationChecker

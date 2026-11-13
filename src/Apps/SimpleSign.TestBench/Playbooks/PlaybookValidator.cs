@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
@@ -69,6 +70,36 @@ internal static class PlaybookValidator
         if (!RunFormats.All.Contains(playbook.Defaults.Format))
         {
             Error("$.defaults.format", $"Unknown format '{playbook.Defaults.Format}': use pades, cades or xades.");
+        }
+
+        // The policies it adjusts: each one builds, and every playbook:ID a step names is declared.
+        var policyIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int p = 0; p < playbook.Policies.Count; p++)
+        {
+            var policy = playbook.Policies[p];
+            if (string.IsNullOrWhiteSpace(policy.Id) || !policyIds.Add(policy.Id))
+            {
+                Error($"$.policies[{p}].id", $"Policy id '{policy.Id}' is empty or repeated.");
+                continue;
+            }
+
+            try
+            {
+                _ = PlaybookPolicies.Build(policy);
+            }
+            catch (ArgumentException ex)
+            {
+                Error($"$.policies[{p}]", ex.Message);
+            }
+        }
+
+        foreach (string reference in PlaybookPolicies.References(playbook.Defaults.Options)
+            .Concat(playbook.AllSteps().SelectMany(s => PlaybookPolicies.References(s.Step.Options))).Distinct(StringComparer.Ordinal))
+        {
+            if (!policyIds.Contains(reference))
+            {
+                Error("$.policies", $"A step names {PlaybookPolicies.Prefix}{reference}, which the playbook does not declare in policies.");
+            }
         }
 
         var stepIds = new HashSet<string>(StringComparer.Ordinal);
@@ -176,6 +207,8 @@ internal static class PlaybookValidator
             error(at + ".engine", "An augmentation runs through the library: set engine to library.");
         }
 
+        CheckProfiles(PlaybookRunner.Merge(playbook.Defaults.Options, step.Format ?? playbook.Defaults.Format, step.Options), at + ".options", error);
+
         foreach (var (path, value) in Strings(step.Options, at + ".options").Concat(Strings(playbook.Defaults.Options, "$.defaults.options")))
         {
             if (value.StartsWith(PlaybookRunner.ShortLivedPrefix, StringComparison.Ordinal)
@@ -194,6 +227,41 @@ internal static class PlaybookValidator
                 error(path, $"'{value}' names no earlier step.");
             }
         }
+    }
+
+    /// <summary>The profiles of a step: known names, <c>profileSource</c> with iofe only, and no Gov.br signature.</summary>
+    private static void CheckProfiles(JsonObject options, string at, Action<string, string> error)
+    {
+        foreach (string part in new[] { "signingControls", "validation", "settings" })
+        {
+            if (options[part] is not JsonObject holder)
+            {
+                continue;
+            }
+
+            string? profile = Text(holder["profile"]);
+            CheckEnum<TrustFrameworks.TrustProfileChoice>(profile, $"{at}.{part}.profile", error);
+            CheckEnum<TrustFrameworks.IofeListSource>(Text(holder["profileSource"]), $"{at}.{part}.profileSource", error);
+            if (holder["trustProfiles"] is JsonArray extras)
+            {
+                foreach (var extra in extras)
+                {
+                    CheckEnum<TrustFrameworks.TrustProfileChoice>(Text(extra), $"{at}.{part}.trustProfiles", error);
+                }
+            }
+
+            if (holder["profileSource"] is not null && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Iofe), StringComparison.OrdinalIgnoreCase))
+            {
+                error($"{at}.{part}.profileSource", "profileSource chooses the list of the Iofe profile: set profile to Iofe.");
+            }
+
+            if (part == "signingControls" && string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.GovBr), StringComparison.OrdinalIgnoreCase))
+            {
+                error($"{at}.{part}.profile", "Gov.br signatures are made on Gov.br's service: its profile validates only.");
+            }
+        }
+
+        static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue(out string? text) ? text : null;
     }
 
     private static void CheckExpectation(PlaybookExpectation expect, string at, Action<string, string> error)

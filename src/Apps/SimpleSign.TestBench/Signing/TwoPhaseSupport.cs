@@ -41,13 +41,14 @@ internal static class TwoPhaseSupport
         }
 
         var signingPolicy = PolicyUploads.Signing(signingPolicyId, context.Documents);
+        var controls = context.Controls;
+        bool byProfile = controls.ProfileSetsPolicy(signingPolicyId);
         if (signingPolicy.Uploaded)
         {
-            code.Add(PolicyUploads.SigningCode(signingPolicy));
+            code.Add(byProfile ? controls.ProfileStepCode() : PolicyUploads.SigningCode(signingPolicy));
         }
 
-        var controls = context.Controls;
-        if (controls.TrustCode() is { } trustCode)
+        if (controls.TrustCode(byProfile) is { } trustCode)
         {
             code.Add(trustCode);
         }
@@ -136,7 +137,7 @@ internal static class TwoPhaseSupport
         }
 
         // The session does not carry the policy or the anchors that check the TSA: they are given again.
-        if (signingPolicyId is not null)
+        if (signingPolicyId is not null && !context.Controls.ProfileSetsPolicy(signingPolicyId))
         {
             complete.Add("--signing-policy", PolicyUploads.SigningFileName);
         }

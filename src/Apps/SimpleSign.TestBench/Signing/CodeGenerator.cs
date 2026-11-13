@@ -156,7 +156,7 @@ internal static class CodeGenerator
                     }
 
                     // The session does not carry the policy or the anchors that check the TSA: they are given again.
-                    if (o.SigningPolicyId is not null)
+                    if (o.SigningPolicyId is not null && !SigningControls.ProfileSetsPolicy(o.SigningControls, o.SigningPolicyId))
                     {
                         complete.Add("--signing-policy", PolicyUploads.SigningFileName);
                     }
@@ -276,7 +276,7 @@ internal static class CodeGenerator
     /// <summary>The signing policy file and an explicit signature policy.</summary>
     private static void Policy(CliLine line, SigningOptions o)
     {
-        if (o.SigningPolicyId is not null)
+        if (o.SigningPolicyId is not null && !SigningControls.ProfileSetsPolicy(o.SigningControls, o.SigningPolicyId))
         {
             line.Add("--signing-policy", PolicyUploads.SigningFileName);
         }

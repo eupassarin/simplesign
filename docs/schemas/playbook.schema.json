@@ -65,23 +65,58 @@
           "properties": {
             "common": {
               "type": "object",
-              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
             },
             "pades": {
               "type": "object",
-              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
             },
             "cades": {
               "type": "object",
-              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
             },
             "xades": {
               "type": "object",
-              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
             }
           },
           "additionalProperties": false
         }
+      }
+    },
+    "policies": {
+      "type": "array",
+      "description": "Policies the steps adjust (a built-in one with some constraints changed).",
+      "items": {
+        "type": "object",
+        "description": "A policy the playbook adjusts, named playbook:ID by signingPolicyId or validation.policyId.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "Signing or validation policy.",
+            "enum": [
+              "signing",
+              "validation"
+            ]
+          },
+          "base": {
+            "type": "string",
+            "description": "The policy it starts from: default or a built-in name (iofe, strict\u2026)."
+          },
+          "set": {
+            "type": "object",
+            "description": "The constraints changed, by path (SigningCertificate/KeyUsage), each as the policy file writes it: { \u0022Level\u0022: \u0022FAIL\u0022, \u0022Id\u0022: [\u0022nonRepudiation\u0022] }."
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ]
       }
     },
     "sections": {
@@ -356,7 +391,7 @@
         },
         "options": {
           "type": "object",
-          "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+          "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
         },
         "expect": {
           "$ref": "#/$defs/expect"

@@ -2,6 +2,7 @@ using Shouldly;
 using SimpleSign.TestBench.Policies;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Signing;
+using SimpleSign.TestBench.TrustFrameworks;
 
 namespace SimpleSign.TestBench.Tests;
 
@@ -78,12 +79,12 @@ public sealed class SigningControlsTests(TestBenchFixture fixture) : IDisposable
     [SkippableTheory]
     [InlineData(RunEngines.Library)]
     [InlineData(RunEngines.Cli)]
-    public async Task IofeListWithTheTsaItListsAsUnspecified_Signs(string engine)
+    public async Task IofeProfileOnTheSandboxWithTheTsaItListsAsUnspecified_Signs(string engine)
     {
         var options = Timestamped(TsaProvider.SandboxIofe) with
         {
             SigningPolicyId = IofeSigning,
-            SigningControls = new SigningControlsOptions { Trust = [SigningTrustChoice.SandboxIofeList] },
+            SigningControls = new SigningControlsOptions { Trust = [], Profile = TrustProfileChoice.Iofe, ProfileSource = IofeListSource.Sandbox },
         };
 
         var (result, _) = await RunAsync(options, engine);
@@ -96,7 +97,7 @@ public sealed class SigningControlsTests(TestBenchFixture fixture) : IDisposable
     [InlineData(RunEngines.Cli)]
     public async Task IofeTsaWithTheTrustedListReadWithTheDefaultOptions_IsRefusedAsUntrusted(string engine)
     {
-        // The same list as SandboxIofeList: without the IOFE profile its 'unspecified' service is no anchor.
+        // The same list the iofe profile reads on the Sandbox: without the profile its 'unspecified' service is no anchor.
         var options = Timestamped(TsaProvider.SandboxIofe) with
         {
             SigningPolicyId = IofeSigning,
