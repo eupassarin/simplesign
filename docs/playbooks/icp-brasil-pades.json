@@ -21,6 +21,12 @@
       "pades": { "documentId": "sample:contract" }
     }
   },
+  "inputs": [
+    { "id": "icp-signed", "title": "A PDF signed with an ICP-Brasil certificate", "accept": ".pdf",
+      "description": "Signed with a real ICP-Brasil certificate (an A1 or A3, a token, a cloud certificate, another signing product). The steps of the section 'Your files' validate it with the icp-brasil profile alone (the AC Raiz roots, no Sandbox) and raise its level; without the file they are skipped." },
+    { "id": "document", "title": "A PDF of yours to sign", "accept": ".pdf",
+      "description": "Any PDF (a contract, a form, a PDF/A): it is signed under AD-RB and AD-RT with a Sandbox certificate, to see the policies on your own documents." }
+  ],
   "sections": [
     {
       "id": "profile",
@@ -223,6 +229,23 @@
         { "id": "aug-ad-rt", "kind": "augment", "title": "AD-RT to B-LTA", "tags": ["AD-RT", "AD-RC", "augment"], "engine": "library",
           "options": { "fileId": "step:ad-rt", "level": "BLTA", "timestamp": { "provider": "Sandbox" } },
           "expect": { "outcome": "augmented", "level": "B-LTA", "indication": "TOTAL_PASSED" } }
+      ]
+    },
+    {
+      "id": "yours",
+      "title": "Your files",
+      "description": "Files uploaded on the Playbook tab: a signature made with a real ICP-Brasil certificate (input:icp-signed) and a document to sign (input:document).",
+      "steps": [
+        { "id": "v-real", "kind": "validate", "title": "Validate a real ICP-Brasil signature with the profile alone", "tags": ["icp-brasil", "real", "validation"],
+          "description": "Only the AC Raiz roots and the ICP-Brasil chain validation are used: an intact signature by a valid, unrevoked ICP-Brasil certificate is accepted.",
+          "options": { "fileId": "input:icp-signed", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": [], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
+        { "id": "real-blta", "kind": "augment", "title": "Raise the real signature to B-LTA", "tags": ["icp-brasil", "real", "AD-RC", "augment"], "engine": "library",
+          "options": { "fileId": "input:icp-signed", "level": "BLTA", "timestamp": { "provider": "Sandbox" }, "validation": { "trust": [], "profile": "IcpBrasil", "trustProfiles": [], "policyId": "preset:validation:icp-brasil" } },
+          "expect": { "outcome": "augmented", "level": "B-LTA" } },
+        { "id": "yours-ad-rb", "title": "Sign your document under AD-RB", "tags": ["AD-RB", "real", "pdf"],
+          "options": { "documentId": "input:document" }, "expect": { "outcome": "signed", "level": "B-B", "indication": "TOTAL_PASSED" } },
+        { "id": "yours-ad-rt", "title": "Sign your document under AD-RT", "tags": ["AD-RT", "real", "pdf"],
+          "options": { "documentId": "input:document", "icpPolicy": "AdRt" }, "expect": { "outcome": "signed", "level": "B-T", "indication": "TOTAL_PASSED" } }
       ]
     }
   ]

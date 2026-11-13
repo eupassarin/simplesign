@@ -65,19 +65,19 @@
           "properties": {
             "common": {
               "type": "object",
-              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed), input:ID (the file uploaded for an input declared in inputs). A validation takes { fileId, dataId?, settings? }."
             },
             "pades": {
               "type": "object",
-              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed), input:ID (the file uploaded for an input declared in inputs). A validation takes { fileId, dataId?, settings? }."
             },
             "cades": {
               "type": "object",
-              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed), input:ID (the file uploaded for an input declared in inputs). A validation takes { fileId, dataId?, settings? }."
             },
             "xades": {
               "type": "object",
-              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+              "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed), input:ID (the file uploaded for an input declared in inputs). A validation takes { fileId, dataId?, settings? }."
             }
           },
           "additionalProperties": false
@@ -116,6 +116,37 @@
         "required": [
           "id",
           "kind"
+        ]
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "description": "Files uploaded by the person running the playbook (a PDF signed elsewhere, a document to sign).",
+      "items": {
+        "type": "object",
+        "description": "A file the person running the playbook uploads on the Playbook tab, named input:ID by a step\u0027s options (a fileId to validate or augment, a documentId or dataId to sign). A step whose input has no file is skipped.",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique id."
+          },
+          "title": {
+            "type": "string",
+            "description": "What to upload, as the page asks for it."
+          },
+          "description": {
+            "type": "string",
+            "description": "Where the file comes from and what the steps do with it."
+          },
+          "accept": {
+            "type": "string",
+            "description": "The file types the page offers, as an HTML accept value (.pdf, .xml, .p7s)."
+          }
+        },
+        "required": [
+          "id",
+          "title"
         ]
       }
     },
@@ -391,7 +422,7 @@
         },
         "options": {
           "type": "object",
-          "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed). A validation takes { fileId, dataId?, settings? }."
+          "description": "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), step:ID (the file an earlier step signed), input:ID (the file uploaded for an input declared in inputs). A validation takes { fileId, dataId?, settings? }."
         },
         "expect": {
           "$ref": "#/$defs/expect"

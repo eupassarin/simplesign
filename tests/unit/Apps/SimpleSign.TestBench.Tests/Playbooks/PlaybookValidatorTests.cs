@@ -31,6 +31,36 @@ public sealed class PlaybookValidatorTests
     }
 
     [Fact]
+    public void Check_DeclaredInput_HasNoErrors()
+    {
+        var check = PlaybookValidator.Check(Valid.Replace("\"sections\":", "\"inputs\": [{ \"id\": \"theirs\", \"title\": \"A signed PDF\", \"accept\": \".pdf\" }], \"sections\":", StringComparison.Ordinal)
+            .Replace("\"fileId\": \"step:good\"", "\"fileId\": \"input:theirs\"", StringComparison.Ordinal), sandbox: null);
+
+        check.CanRun.ShouldBeTrue(string.Join("; ", check.Issues.Select(i => $"{i.Path}: {i.Message}")));
+        check.Issues.ShouldBeEmpty();
+        check.Playbook!.Inputs.Single().Accept.ShouldBe(".pdf");
+    }
+
+    [Fact]
+    public void Check_UndeclaredInput_IsAnError()
+    {
+        var check = PlaybookValidator.Check(Valid.Replace("\"fileId\": \"step:good\"", "\"fileId\": \"input:theirs\"", StringComparison.Ordinal), sandbox: null);
+
+        check.CanRun.ShouldBeFalse();
+        check.Issues.ShouldContain(i => i.IsError && i.Path == "$.sections[0].steps[1].options.fileId" && i.Message.Contains("input:theirs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Check_UnusedOrRepeatedInput_WarnsOrFails()
+    {
+        var check = PlaybookValidator.Check(Valid.Replace("\"sections\":",
+            "\"inputs\": [{ \"id\": \"a\", \"title\": \"A\" }, { \"id\": \"a\", \"title\": \"Again\" }], \"sections\":", StringComparison.Ordinal), sandbox: null);
+
+        check.Issues.ShouldContain(i => i.IsError && i.Path == "$.inputs[1].id");
+        check.Issues.ShouldContain(i => !i.IsError && i.Path == "$.inputs" && i.Message.Contains("'a'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Check_DssAgreesWithoutCrossValidate_Warns()
     {
         var check = PlaybookValidator.Check(Valid.Replace("\"expect\": { \"outcome\": \"signed\" }", "\"expect\": { \"outcome\": \"signed\", \"dssAgrees\": true }", StringComparison.Ordinal), sandbox: null);

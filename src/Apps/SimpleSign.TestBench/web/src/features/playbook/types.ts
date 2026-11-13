@@ -2,7 +2,7 @@
 import type { CodeSnippets, OptionIssue } from "@/lib/types"
 
 export type PlaybookEngine = "library" | "cli" | "both"
-export type PlaybookStatus = "pending" | "queued" | "running" | "passed" | "failed"
+export type PlaybookStatus = "pending" | "queued" | "running" | "passed" | "failed" | "skipped"
 
 export interface PlaybookExpectation {
   outcome?: string | null
@@ -119,6 +119,24 @@ export interface PlaybookStepView {
   result?: PlaybookStepResult | null
 }
 
+/** The file uploaded for an input (Playbooks/PlaybookRunner.cs). */
+export interface PlaybookInputFile {
+  fileId: string
+  fileName: string
+  size: number
+  sha256: string
+  at: string
+}
+
+/** A file the person running the playbook uploads, referenced by steps as input:ID. */
+export interface PlaybookInputView {
+  id: string
+  title: string
+  description?: string | null
+  accept?: string | null
+  file?: PlaybookInputFile | null
+}
+
 export interface PlaybookStateView {
   key?: string | null
   playbookId?: string | null
@@ -127,6 +145,7 @@ export interface PlaybookStateView {
   runningStep?: string | null
   version: number
   steps: PlaybookStepView[]
+  inputs?: PlaybookInputView[]
 }
 
 export interface PreviewItem {
@@ -164,6 +183,7 @@ export interface PlaybookStepPreview {
   code?: CodeSnippets | null
   issues: OptionIssue[]
   needsSteps: string[]
+  needsInputs?: string[]
   codeError?: string | null
 }
 
