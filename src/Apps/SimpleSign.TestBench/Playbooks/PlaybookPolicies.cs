@@ -13,8 +13,8 @@ internal static class PlaybookPolicies
     /// <summary>The prefix of a reference to one of them.</summary>
     public const string Prefix = "playbook:";
 
-    /// <summary>The policy file (JSON) of <paramref name="policy"/>: its base with the constraints of <c>set</c> replaced.</summary>
-    /// <exception cref="ArgumentException">An unknown kind or base, or a constraint the policy does not have.</exception>
+    /// <summary>The policy file (JSON) of <paramref name="policy"/>: its base with the constraints of <c>set</c> replaced or added.</summary>
+    /// <exception cref="ArgumentException">An unknown kind or base, or a constraint the policy schema does not have.</exception>
     public static string Build(PlaybookPolicy policy)
     {
         bool signing = policy.Kind == PolicyViewer.Signing;
@@ -40,11 +40,8 @@ internal static class PlaybookPolicies
                     parent = parent[part] as JsonObject ?? throw new ArgumentException($"The policy has no '{entry.Name}'.");
                 }
 
-                if (!parent.ContainsKey(path[^1]))
-                {
-                    throw new ArgumentException($"The policy has no '{entry.Name}'.");
-                }
-
+                // A constraint the base leaves out (CACertificate/Cryptographic) is added; reading the result back checks it
+                // against the policy schema.
                 parent[path[^1]] = JsonNode.Parse(entry.Value.GetRawText());
             }
         }

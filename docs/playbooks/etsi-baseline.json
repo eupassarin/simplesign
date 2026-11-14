@@ -37,6 +37,51 @@
           ]
         }
       }
+    },
+    {
+      "id": "requires-key-usage",
+      "kind": "validation",
+      "base": "default",
+      "set": {
+        "SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage": {
+          "Level": "FAIL",
+          "Id": [
+            "digitalSignature",
+            "nonRepudiation"
+          ]
+        }
+      }
+    },
+    {
+      "id": "strict-checks",
+      "kind": "signing",
+      "base": "strict",
+      "set": {
+        "SigningCertificate/ProspectiveCertificateChain": {
+          "Level": "FAIL"
+        },
+        "SigningCertificate/CRLNextUpdatePresent": {
+          "Level": "FAIL"
+        },
+        "CACertificate/CRLNextUpdatePresent": {
+          "Level": "FAIL"
+        },
+        "CACertificate/Cryptographic": {
+          "Level": "FAIL"
+        },
+        "Timestamp/ProspectiveCertificateChain": {
+          "Level": "FAIL"
+        },
+        "Timestamp/NotExpired": {
+          "Level": "FAIL"
+        },
+        "Timestamp/NotRevoked": {
+          "Level": "FAIL"
+        },
+        "Timestamp/RevocationDataAvailable": {
+          "Level": "FAIL"
+        }
+      }
     }
   ],
   "sections": [
@@ -48,6 +93,7 @@
         {
           "id": "pades-bb",
           "title": "PADES B-B",
+          "description": "Signs the sample contract in PAdES B-B (ETSI.CAdES.detached, signing-certificate-v2, no time-stamp) and validates it right after: the baseline every other level builds on.",
           "tags": [
             "PA-1",
             "EN 319 142-1",
@@ -66,6 +112,7 @@
         {
           "id": "pades-bt",
           "title": "PADES B-T",
+          "description": "PAdES B-T: B-B plus a signature time-stamp from the Sandbox's TSA, a proof the signature existed at that time.",
           "tags": [
             "PA-3",
             "EN 319 142-1",
@@ -87,6 +134,7 @@
         {
           "id": "pades-blt",
           "title": "PADES B-LT",
+          "description": "PAdES B-LT: B-T plus the certificates, CRLs and OCSP responses in the DSS (and VRI), so the signature can be validated without fetching anything.",
           "tags": [
             "PA-4",
             "EN 319 142-1",
@@ -108,6 +156,7 @@
         {
           "id": "pades-blta",
           "title": "PADES B-LTA",
+          "description": "PAdES B-LTA: B-LT plus a document time-stamp over the DSS, which keeps the validation data trustworthy after the certificates expire. Its file is validated at each validation level below.",
           "tags": [
             "PA-5",
             "EN 319 142-1",
@@ -129,6 +178,7 @@
         {
           "id": "pades-blta-archive-tsa",
           "title": "PAdES B-LTA with a separate archive TSA",
+          "description": "B-LTA with the document time-stamp taken from a TSA configured apart from the signature time-stamp's, as a preservation service with its own TSA would.",
           "tags": [
             "PA-5",
             "TS-5",
@@ -155,6 +205,7 @@
           "id": "pades-appended",
           "kind": "validate",
           "title": "Content appended after the signature",
+          "description": "An incremental update after the signature: the signed revision is intact; the report says what came after.",
           "tags": [
             "PA-7",
             "EN 319 142-1",
@@ -170,12 +221,12 @@
           },
           "expect": {
             "outcome": "valid"
-          },
-          "description": "An incremental update after the signature: the signed revision is intact; the report says what came after."
+          }
         },
         {
           "id": "pades-certified-1",
           "title": "Certification (DocMDP P=1)",
+          "description": "A certification signature with DocMDP P=1: no change at all is allowed after it.",
           "tags": [
             "PA-8",
             "EN 319 142-1",
@@ -193,6 +244,7 @@
         {
           "id": "pades-certified-2",
           "title": "Certification (DocMDP P=2)",
+          "description": "Certification with DocMDP P=2: only filling form fields and signing are allowed afterwards.",
           "tags": [
             "PA-8",
             "EN 319 142-1",
@@ -210,6 +262,7 @@
         {
           "id": "pades-certified-3",
           "title": "Certification (DocMDP P=3)",
+          "description": "Certification with DocMDP P=3: form filling, signing and annotations are allowed afterwards.",
           "tags": [
             "PA-8",
             "EN 319 142-1",
@@ -227,6 +280,7 @@
         {
           "id": "pades-attributes",
           "title": "Reason and location",
+          "description": "Writes the optional Reason and Location entries of the signature dictionary, to show they are kept and read back.",
           "tags": [
             "PA-9",
             "EN 319 142-1",
@@ -245,6 +299,7 @@
         {
           "id": "pades-policy",
           "title": "Explicit signature policy (signature-policy-identifier)",
+          "description": "Writes an explicit signature-policy-identifier (OID, hash of the policy document, SPuri), as a policy-based signature (EN 319 142-1 'PAdES with policy') does.",
           "tags": [
             "PA-9",
             "EN 319 142-1",
@@ -267,6 +322,7 @@
         {
           "id": "pades-pdfa",
           "title": "Preserve PDF/A",
+          "description": "Signs a PDF/A while preserving its conformance: the incremental update must not add anything PDF/A forbids.",
           "tags": [
             "PA-10",
             "EN 319 142-1",
@@ -283,6 +339,7 @@
         {
           "id": "pades-adbe",
           "title": "adbe.pkcs7.detached SubFilter",
+          "description": "The pre-PAdES SubFilter: still produced and read, but not a PAdES baseline signature.",
           "tags": [
             "PA-11",
             "EN 319 142-1",
@@ -294,8 +351,7 @@
           },
           "expect": {
             "outcome": "signed"
-          },
-          "description": "The pre-PAdES SubFilter: still produced and read, but not a PAdES baseline signature."
+          }
         }
       ]
     },
@@ -307,6 +363,7 @@
         {
           "id": "cades-bb",
           "title": "CADES B-B",
+          "description": "Signs the sample text in CAdES B-B (detached, signing-certificate-v2, signing-time) and validates it with the data. Its file is reused by the co-signature, the countersignature and the augmentation steps.",
           "tags": [
             "CA-1",
             "EN 319 122-1",
@@ -326,6 +383,7 @@
         {
           "id": "cades-bt",
           "title": "CADES B-T",
+          "description": "CAdES B-T: B-B plus a signature time-stamp in the unsigned attributes. Its time-stamp is also checked against the EN 319 422 profile further down.",
           "tags": [
             "CA-5",
             "EN 319 122-1",
@@ -348,6 +406,7 @@
         {
           "id": "cades-blt",
           "title": "CADES B-LT",
+          "description": "CAdES B-LT: B-T plus the certificates and revocation data needed to validate it offline, carried in the signature.",
           "tags": [
             "CA-6",
             "EN 319 122-1",
@@ -370,6 +429,7 @@
         {
           "id": "cades-blta",
           "title": "CADES B-LTA",
+          "description": "CAdES B-LTA: B-LT plus an archive-time-stamp-v3 with its ATSHashIndex.",
           "tags": [
             "CA-7",
             "EN 319 122-1",
@@ -392,6 +452,7 @@
         {
           "id": "cades-attached",
           "title": "CAdES B-B, attached content (p7m)",
+          "description": "CAdES B-B with the content inside the SignedData (a .p7m): the attached form, besides the detached one.",
           "tags": [
             "CA-1",
             "EN 319 122-1"
@@ -410,6 +471,7 @@
         {
           "id": "cades-attributes",
           "title": "Commitment type, signer location, roles, content hints, MIME type",
+          "description": "Writes the optional signed attributes: commitment type (proof of origin), signer location, signer role, content hints and the MIME type.",
           "tags": [
             "CA-2",
             "EN 319 122-1",
@@ -438,6 +500,7 @@
         {
           "id": "cades-policy",
           "title": "Explicit signature policy (signature-policy-identifier, SPuri)",
+          "description": "Writes a signature-policy-identifier with only the policy OID and its SPuri (no document carried): the file va-policy-not-available validates.",
           "tags": [
             "CA-2",
             "EN 319 122-1",
@@ -457,6 +520,7 @@
         {
           "id": "cades-policy-store",
           "title": "Signature policy with the policy document embedded (signature-policy-store)",
+          "description": "Writes the signature policy with its document embedded (signature-policy-store), so a validator can check it without fetching it: the file va-policy-available validates.",
           "tags": [
             "CA-8",
             "CA-2",
@@ -477,6 +541,7 @@
         {
           "id": "cades-certified-role",
           "title": "Certified role (attribute certificate) and a signed SAML assertion",
+          "description": "Writes a signer-attributes-v2 with a certified role (an attribute certificate) and a signed SAML assertion, the two forms of claimed authority beyond a plain role.",
           "tags": [
             "CA-2",
             "EN 319 122-1",
@@ -496,6 +561,7 @@
         {
           "id": "cades-content-ts",
           "title": "Content time-stamp before signing",
+          "description": "Time-stamps the content before signing (content-time-stamp attribute), proving the data existed before the signature, besides the signature time-stamp.",
           "tags": [
             "CA-3",
             "EN 319 122-1",
@@ -518,6 +584,7 @@
         {
           "id": "cades-cosign",
           "title": "Co-signature (a second, parallel signer)",
+          "description": "Adds a second, parallel signer (RSA 3072) to the CAdES B-B file: a SignedData with two SignerInfos over the same content.",
           "tags": [
             "CA-4",
             "EN 319 122-1"
@@ -536,6 +603,7 @@
         {
           "id": "cades-countersign",
           "title": "Countersignature of the first signer",
+          "description": "Countersigns the first signer of the CAdES B-B file with an ECDSA P-256 key: the countersignature signs the first signature value, not the content.",
           "tags": [
             "CA-4",
             "EN 319 122-1"
@@ -556,6 +624,7 @@
           "id": "cades-tree",
           "kind": "validate",
           "title": "Validate co-signers and a countersignature",
+          "description": "Validates a sample with co-signers and a countersignature: every signature in the tree must be found and verified.",
           "tags": [
             "CA-4",
             "EN 319 122-1",
@@ -583,6 +652,7 @@
         {
           "id": "xades-bb",
           "title": "XADES B-B",
+          "description": "Signs the sample XML order in XAdES B-B (enveloped, SigningCertificateV2, SigningTime) and validates it. Its file is countersigned and augmented below.",
           "tags": [
             "XA-1",
             "EN 319 132-1",
@@ -602,6 +672,7 @@
         {
           "id": "xades-bt",
           "title": "XADES B-T",
+          "description": "XAdES B-T: B-B plus a SignatureTimeStamp.",
           "tags": [
             "XA-6",
             "EN 319 132-1",
@@ -624,6 +695,7 @@
         {
           "id": "xades-blt",
           "title": "XADES B-LT",
+          "description": "XAdES B-LT: B-T plus CertificateValues and RevocationValues, so it can be validated offline.",
           "tags": [
             "XA-7",
             "EN 319 132-1",
@@ -646,6 +718,7 @@
         {
           "id": "xades-blta",
           "title": "XADES B-LTA",
+          "description": "XAdES B-LTA: B-LT plus an ArchiveTimeStamp over the signature and its validation data.",
           "tags": [
             "XA-8",
             "EN 319 132-1",
@@ -668,6 +741,7 @@
         {
           "id": "xades-enveloping",
           "title": "XAdES B-B, enveloping",
+          "description": "XAdES B-B enveloping: the XML document goes inside the signature's ds:Object.",
           "tags": [
             "XA-1",
             "EN 319 132-1"
@@ -686,6 +760,7 @@
         {
           "id": "xades-detached",
           "title": "XAdES B-B, detached",
+          "description": "XAdES B-B detached: the signature references the document from outside and is validated with it.",
           "tags": [
             "XA-1",
             "EN 319 132-1"
@@ -704,6 +779,7 @@
         {
           "id": "xades-v1",
           "title": "XAdES 1.3.2 SigningCertificate (V1)",
+          "description": "Writes the XAdES 1.3.2 SigningCertificate (V1, with IssuerSerial) instead of V2, for verifiers that only read the older property.",
           "tags": [
             "XA-1",
             "EN 319 132-1"
@@ -721,6 +797,7 @@
         {
           "id": "xades-attributes",
           "title": "Commitment type, roles, production place, data object format",
+          "description": "Writes the optional signed properties: CommitmentTypeIndication (proof of approval), SignerRoleV2, SignatureProductionPlaceV2 and DataObjectFormat (MIME type).",
           "tags": [
             "XA-2",
             "EN 319 132-1",
@@ -745,6 +822,7 @@
         {
           "id": "xades-policy",
           "title": "Explicit signature policy (SignaturePolicyIdentifier)",
+          "description": "Writes a SignaturePolicyIdentifier with the policy OID and its SPURI qualifier (no document carried).",
           "tags": [
             "XA-2",
             "EN 319 132-1",
@@ -764,6 +842,7 @@
         {
           "id": "xades-policy-store",
           "title": "SignaturePolicyStore with the policy document",
+          "description": "Writes a SignaturePolicyStore with the policy document, so a validator can check the policy without fetching it.",
           "tags": [
             "XA-2",
             "EN 319 132-1",
@@ -783,6 +862,7 @@
         {
           "id": "xades-certified-role",
           "title": "SignerRoleV2 with a certified role and a signed SAML assertion",
+          "description": "Writes SignerRoleV2 with a certified role (an attribute certificate) and a signed SAML assertion.",
           "tags": [
             "XA-2",
             "EN 319 132-1",
@@ -802,6 +882,7 @@
         {
           "id": "xades-data-ts",
           "title": "AllDataObjectsTimeStamp",
+          "description": "Adds an AllDataObjectsTimeStamp over the signed data, besides the signature time-stamp.",
           "tags": [
             "XA-3",
             "EN 319 132-1",
@@ -824,6 +905,7 @@
         {
           "id": "xades-countersign",
           "title": "CounterSignature",
+          "description": "Countersigns the XAdES B-B file with an ECDSA P-256 key (a CounterSignature unsigned property that signs the first SignatureValue).",
           "tags": [
             "XA-5",
             "EN 319 132-1"
@@ -841,6 +923,7 @@
         {
           "id": "xades-inclusive",
           "title": "Inclusive canonicalization",
+          "description": "Signs using inclusive canonicalization (C14N 1.0) instead of exclusive, to show both are produced and verify.",
           "tags": [
             "XA-9",
             "EN 319 132-1"
@@ -861,10 +944,12 @@
     {
       "id": "algorithms",
       "title": "Keys and digests (all formats)",
+      "description": "Every format signs with each key type and digest the baseline profiles name (RSA 2048/4096, RSASSA-PSS, ECDSA P-256/P-384/P-521, SHA-256/384/512) and is validated right after; a weak key, a SHA-1 CA and a level that cannot be reached are refused.",
       "steps": [
         {
           "id": "pades-rsa-4096",
           "title": "PADES with RSA-4096",
+          "description": "PAdES with an RSA 4096 key, validated right after.",
           "tags": [
             "AL-1",
             "CE-1",
@@ -884,6 +969,7 @@
         {
           "id": "pades-ecdsa-p256",
           "title": "PADES with ECDSA-P256",
+          "description": "PAdES with ECDSA on P-256 (with SHA-256).",
           "tags": [
             "AL-1",
             "CE-1",
@@ -903,6 +989,7 @@
         {
           "id": "pades-ecdsa-p384",
           "title": "PADES with ECDSA-P384",
+          "description": "PAdES with ECDSA on P-384 (with SHA-384).",
           "tags": [
             "AL-1",
             "CE-1",
@@ -922,6 +1009,7 @@
         {
           "id": "pades-ecdsa-p521",
           "title": "PADES with ECDSA-P521",
+          "description": "PAdES with ECDSA on P-521 (with SHA-512).",
           "tags": [
             "AL-1",
             "CE-1",
@@ -941,6 +1029,7 @@
         {
           "id": "cades-rsa-4096",
           "title": "CADES with RSA-4096",
+          "description": "CAdES with an RSA 4096 key.",
           "tags": [
             "AL-1",
             "CE-1",
@@ -961,6 +1050,7 @@
         {
           "id": "cades-ecdsa-p256",
           "title": "CADES with ECDSA-P256",
+          "description": "CAdES with ECDSA on P-256.",
           "tags": [
             "AL-1",
             "CE-1",
@@ -981,6 +1071,7 @@
         {
           "id": "cades-ecdsa-p384",
           "title": "CADES with ECDSA-P384",
+          "description": "CAdES with ECDSA on P-384.",
           "tags": [
             "AL-1",
             "CE-1",
@@ -1001,6 +1092,7 @@
         {
           "id": "cades-ecdsa-p521",
           "title": "CADES with ECDSA-P521",
+          "description": "CAdES with ECDSA on P-521.",
           "tags": [
             "AL-1",
             "CE-1",
@@ -1021,6 +1113,7 @@
         {
           "id": "xades-rsa-4096",
           "title": "XADES with RSA-4096",
+          "description": "XAdES with an RSA 4096 key.",
           "tags": [
             "AL-1",
             "CE-1",
@@ -1041,6 +1134,7 @@
         {
           "id": "xades-ecdsa-p256",
           "title": "XADES with ECDSA-P256",
+          "description": "XAdES with ECDSA on P-256 (with SHA-256).",
           "tags": [
             "AL-1",
             "CE-1",
@@ -1061,6 +1155,7 @@
         {
           "id": "xades-ecdsa-p384",
           "title": "XADES with ECDSA-P384",
+          "description": "XAdES with ECDSA on P-384.",
           "tags": [
             "AL-1",
             "CE-1",
@@ -1081,6 +1176,7 @@
         {
           "id": "xades-ecdsa-p521",
           "title": "XADES with ECDSA-P521",
+          "description": "XAdES with ECDSA on P-521.",
           "tags": [
             "AL-1",
             "CE-1",
@@ -1101,6 +1197,7 @@
         {
           "id": "pades-pss",
           "title": "PADES with RSASSA-PSS",
+          "description": "PAdES with RSASSA-PSS padding instead of PKCS#1 v1.5 (the RSASSA-PSS parameters written in the SignerInfo).",
           "tags": [
             "AL-1",
             "EN 319 142-1",
@@ -1119,6 +1216,7 @@
         {
           "id": "cades-pss",
           "title": "CADES with RSASSA-PSS",
+          "description": "CAdES with RSASSA-PSS padding.",
           "tags": [
             "AL-1",
             "EN 319 122-1",
@@ -1138,6 +1236,7 @@
         {
           "id": "xades-pss",
           "title": "XADES with RSASSA-PSS",
+          "description": "XAdES with RSASSA-PSS (the XML DSig 1.1 rsa-pss URI).",
           "tags": [
             "AL-1",
             "EN 319 132-1",
@@ -1157,6 +1256,7 @@
         {
           "id": "pades-sha384",
           "title": "PADES with SHA384",
+          "description": "PAdES with SHA-384 as the digest of the document and of the signed attributes.",
           "tags": [
             "AL-2",
             "EN 319 142-1",
@@ -1175,6 +1275,7 @@
         {
           "id": "pades-sha512",
           "title": "PADES with SHA512",
+          "description": "PAdES with SHA-512.",
           "tags": [
             "AL-2",
             "EN 319 142-1",
@@ -1193,6 +1294,7 @@
         {
           "id": "cades-sha384",
           "title": "CADES with SHA384",
+          "description": "CAdES with SHA-384.",
           "tags": [
             "AL-2",
             "EN 319 122-1",
@@ -1212,6 +1314,7 @@
         {
           "id": "cades-sha512",
           "title": "CADES with SHA512",
+          "description": "CAdES with SHA-512.",
           "tags": [
             "AL-2",
             "EN 319 122-1",
@@ -1231,6 +1334,7 @@
         {
           "id": "xades-sha384",
           "title": "XADES with SHA384",
+          "description": "XAdES with SHA-384 for the references and the signature.",
           "tags": [
             "AL-2",
             "EN 319 132-1",
@@ -1250,6 +1354,7 @@
         {
           "id": "xades-sha512",
           "title": "XADES with SHA512",
+          "description": "XAdES with SHA-512.",
           "tags": [
             "AL-2",
             "EN 319 132-1",
@@ -1269,6 +1374,7 @@
         {
           "id": "rsa-1024",
           "title": "RSA 1024 key: refused",
+          "description": "An RSA 1024 key, below what the default policy allows: refused before signing (KeyTooWeak).",
           "tags": [
             "AL-1",
             "CE-3",
@@ -1286,6 +1392,7 @@
         {
           "id": "chain-sha1",
           "title": "Chain with a CA signed with SHA-1: refused",
+          "description": "A certificate under a CA signed with SHA-1, with a signing policy that checks the algorithms of the CA certificates (playbook:strict-checks): SHA-1 in the chain is refused (AlgorithmNotPermitted).",
           "tags": [
             "CE-3",
             "TS 119 312"
@@ -1293,7 +1400,7 @@
           "format": "pades",
           "options": {
             "credentialId": "sandbox:under-sha1-ca",
-            "signingPolicyId": "preset:signing:iofe",
+            "signingPolicyId": "playbook:strict-checks",
             "signingControls": {
               "trust": [
                 "SandboxRoot"
@@ -1308,6 +1415,7 @@
         {
           "id": "level-not-reached",
           "title": "B-T with the TSA down: refused",
+          "description": "Asks for B-T while the TSA is down: the requested level cannot be reached, so the signer fails instead of silently returning B-B.",
           "tags": [
             "AL-4",
             "EN 319 142-1",
@@ -1330,6 +1438,7 @@
         {
           "id": "level-lower",
           "title": "B-T with the TSA down, lower level allowed: B-B",
+          "description": "Same, but the caller allows a lower level (returnLowerLevel): the signature is made at B-B and says it is not the level asked.",
           "tags": [
             "AL-4",
             "EN 319 142-1",
@@ -1356,10 +1465,12 @@
     {
       "id": "extended",
       "title": "Extended forms (EN 319 122-2, EN 319 132-2)",
+      "description": "The extended forms of EN 319 122-2 (CAdES) and EN 319 132-2 (XAdES) that predate the baseline levels: -C (references to the validation data), -X-L (the values too) and -A (archive time-stamp), for readers that still expect them.",
       "steps": [
         {
           "id": "cades-ext-c",
           "title": "CADES -C (complete references)",
+          "description": "CAdES -C: a B-T signature plus complete-certificate-references and complete-revocation-references (references only, the values are not carried).",
           "tags": [
             "EX-1",
             "EN 319 122-2",
@@ -1381,6 +1492,7 @@
         {
           "id": "cades-ext-xl",
           "title": "CADES -X-L",
+          "description": "CAdES -X-L: -C plus the certificate and revocation values themselves.",
           "tags": [
             "EX-1",
             "EN 319 122-2",
@@ -1402,6 +1514,7 @@
         {
           "id": "cades-ext-a",
           "title": "CADES -A (archive)",
+          "description": "CAdES -A: -X-L plus an archive time-stamp.",
           "tags": [
             "EX-1",
             "EN 319 122-2",
@@ -1423,6 +1536,7 @@
         {
           "id": "xades-ext-c",
           "title": "XADES -C (complete references)",
+          "description": "XAdES -C: CompleteCertificateRefs and CompleteRevocationRefs after the signature time-stamp.",
           "tags": [
             "EX-2",
             "EN 319 132-2",
@@ -1444,6 +1558,7 @@
         {
           "id": "xades-ext-xl",
           "title": "XADES -X-L",
+          "description": "XAdES -X-L: -C plus CertificateValues and RevocationValues.",
           "tags": [
             "EX-2",
             "EN 319 132-2",
@@ -1465,6 +1580,7 @@
         {
           "id": "xades-ext-a",
           "title": "XADES -A (archive)",
+          "description": "XAdES -A: -X-L plus an ArchiveTimeStamp.",
           "tags": [
             "EX-2",
             "EN 319 132-2",
@@ -1494,6 +1610,7 @@
           "id": "aug-pades-bt",
           "kind": "augment",
           "title": "PADES: augment to B-T",
+          "description": "Raises the PAdES B-B signature to B-T by adding a document time-stamp in an incremental update (EN 319 142-1 accepts it for level T), without signing again.",
           "tags": [
             "EX-3",
             "EN 319 142-1",
@@ -1516,6 +1633,7 @@
           "id": "aug-pades-blt",
           "kind": "augment",
           "title": "PADES: augment to B-LT",
+          "description": "Raises the B-T file to B-LT by adding the DSS with the validation data.",
           "tags": [
             "EX-3",
             "EN 319 142-1",
@@ -1538,6 +1656,7 @@
           "id": "aug-pades-blta",
           "kind": "augment",
           "title": "PADES: augment to B-LTA",
+          "description": "Raises the B-LT file to B-LTA with a document time-stamp over the DSS.",
           "tags": [
             "EX-3",
             "EN 319 142-1",
@@ -1560,6 +1679,7 @@
           "id": "aug-pades-renew",
           "kind": "augment",
           "title": "PAdES: renew the archive time-stamp",
+          "description": "The validation data of the last document time-stamp, then a new document time-stamp over it.",
           "tags": [
             "PA-6",
             "EN 319 142-1",
@@ -1577,13 +1697,13 @@
             "outcome": "augmented",
             "level": "B-LTA",
             "indication": "TOTAL_PASSED"
-          },
-          "description": "The validation data of the last document time-stamp, then a new document time-stamp over it."
+          }
         },
         {
           "id": "aug-cades-bt",
           "kind": "augment",
           "title": "CADES: augment to B-T",
+          "description": "Raises the CAdES B-B signature to B-T by adding a signature time-stamp to the unsigned attributes (the detached data is given to rebuild the digest).",
           "tags": [
             "EX-3",
             "EN 319 122-1",
@@ -1607,6 +1727,7 @@
           "id": "aug-cades-blt",
           "kind": "augment",
           "title": "CADES: augment to B-LT",
+          "description": "Raises the CAdES B-T file to B-LT by adding the certificate and revocation values.",
           "tags": [
             "EX-3",
             "EN 319 122-1",
@@ -1630,6 +1751,7 @@
           "id": "aug-cades-blta",
           "kind": "augment",
           "title": "CADES: augment to B-LTA",
+          "description": "Raises the CAdES B-LT file to B-LTA with an archive-time-stamp-v3.",
           "tags": [
             "EX-3",
             "EN 319 122-1",
@@ -1653,6 +1775,7 @@
           "id": "aug-xades-bt",
           "kind": "augment",
           "title": "XADES: augment to B-T",
+          "description": "Raises the XAdES B-B signature to B-T by adding a SignatureTimeStamp to the unsigned properties.",
           "tags": [
             "EX-3",
             "EN 319 132-1",
@@ -1675,6 +1798,7 @@
           "id": "aug-xades-blt",
           "kind": "augment",
           "title": "XADES: augment to B-LT",
+          "description": "Raises the XAdES B-T file to B-LT with CertificateValues and RevocationValues.",
           "tags": [
             "EX-3",
             "EN 319 132-1",
@@ -1697,6 +1821,7 @@
           "id": "aug-xades-blta",
           "kind": "augment",
           "title": "XADES: augment to B-LTA",
+          "description": "Raises the XAdES B-LT file to B-LTA with an ArchiveTimeStamp.",
           "tags": [
             "EX-3",
             "EN 319 132-1",
@@ -1720,10 +1845,12 @@
     {
       "id": "timestamps",
       "title": "Time-stamps (RFC 3161, EN 319 422)",
+      "description": "The signature time-stamp obtained while signing is checked before it is kept (token signature, trust, validity and revocation of the TSA, the TSA the signer expects), and a validation policy can require the EN 319 422 time-stamp profile.",
       "steps": [
         {
           "id": "ts-invalid-token",
           "title": "Token with an invalid signature: refused",
+          "description": "The TSA answers a token whose signature does not verify: the signer must detect it and refuse instead of embedding it.",
           "tags": [
             "TS-1",
             "RFC 3161",
@@ -1746,6 +1873,7 @@
         {
           "id": "ts-revoked",
           "title": "TSA certificate revoked: refused",
+          "description": "With a signing policy that checks the TSA (playbook:strict-checks), a TSA whose certificate is revoked: its token is refused (TimestampCertificateRevoked).",
           "tags": [
             "TS-2",
             "RFC 3161",
@@ -1757,7 +1885,7 @@
             "timestamp": {
               "provider": "SandboxRevoked"
             },
-            "signingPolicyId": "preset:signing:iofe",
+            "signingPolicyId": "playbook:strict-checks",
             "signingControls": {
               "trust": [
                 "SandboxRoot"
@@ -1772,6 +1900,7 @@
         {
           "id": "ts-expired",
           "title": "TSA certificate expired: refused",
+          "description": "A TSA whose certificate has expired: its token is refused (TimestampCertificateNotValid).",
           "tags": [
             "TS-2",
             "RFC 3161",
@@ -1783,7 +1912,7 @@
             "timestamp": {
               "provider": "SandboxExpired"
             },
-            "signingPolicyId": "preset:signing:iofe",
+            "signingPolicyId": "playbook:strict-checks",
             "signingControls": {
               "trust": [
                 "SandboxRoot"
@@ -1798,6 +1927,7 @@
         {
           "id": "ts-untrusted",
           "title": "TSA outside the anchors: refused",
+          "description": "A TSA that chains to no anchor: its token is refused (TimestampUntrusted).",
           "tags": [
             "TS-2",
             "RFC 3161",
@@ -1809,7 +1939,7 @@
             "timestamp": {
               "provider": "SandboxUntrusted"
             },
-            "signingPolicyId": "preset:signing:iofe",
+            "signingPolicyId": "playbook:strict-checks",
             "signingControls": {
               "trust": [
                 "SandboxRoot"
@@ -1824,6 +1954,7 @@
         {
           "id": "ts-expected",
           "title": "Expected TSA",
+          "description": "Names the Sandbox's TSA as the expected one (expectedTsa): the token comes from it, so the signature is made.",
           "tags": [
             "TS-3",
             "RFC 3161",
@@ -1850,6 +1981,7 @@
         {
           "id": "ts-unexpected",
           "title": "Another TSA than expected: refused",
+          "description": "Expects another TSA than the one that answers: refused (TimestampUntrusted), so a token from an authority the signer did not choose is never embedded.",
           "tags": [
             "TS-3",
             "RFC 3161",
@@ -1861,7 +1993,7 @@
             "timestamp": {
               "provider": "Sandbox"
             },
-            "signingPolicyId": "preset:signing:iofe",
+            "signingPolicyId": "playbook:strict-checks",
             "signingControls": {
               "trust": [
                 "SandboxRoot"
@@ -1878,6 +2010,7 @@
           "id": "ts-profile-ok",
           "kind": "validate",
           "title": "Time-stamp with the EN 319 422 profile",
+          "description": "The Sandbox TSA gives its accuracy, does not claim ordering and uses the policy the validation policy accepts.",
           "tags": [
             "TS-6",
             "EN 319 422",
@@ -1896,13 +2029,13 @@
           "expect": {
             "outcome": "valid",
             "indication": "TOTAL_PASSED"
-          },
-          "description": "The Sandbox TSA gives its accuracy, does not claim ordering and uses the policy the validation policy accepts."
+          }
         },
         {
           "id": "ts-profile-no-accuracy",
           "kind": "validate",
           "title": "Time-stamp without accuracy, under the EN 319 422 profile",
+          "description": "The time-stamp fails AccuracyPresent, so it is not used as a proof of existence (EN 319 102-1); the signature itself, with a valid certificate, still passes.",
           "tags": [
             "TS-6",
             "EN 319 422",
@@ -1923,12 +2056,12 @@
             "failedConstraints": [
               "AccuracyPresent"
             ]
-          },
-          "description": "The time-stamp fails AccuracyPresent, so it is not used as a proof of existence (EN 319 102-1); the signature itself, with a valid certificate, still passes."
+          }
         },
         {
           "id": "ts-authenticated",
           "title": "Authenticated TSA (HTTP Basic)",
+          "description": "Gets the time-stamp from the TSA endpoint that requires HTTP Basic authentication.",
           "tags": [
             "TS-4",
             "RFC 3161",
@@ -1957,6 +2090,7 @@
           "id": "va-valid-pades",
           "kind": "validate",
           "title": "Intact PAdES",
+          "description": "Validates the intact PAdES sample: TOTAL_PASSED, and the ETSI TS 119 102-2 report must be valid against its XML schema.",
           "tags": [
             "VA-1",
             "VA-20",
@@ -1982,6 +2116,7 @@
           "id": "va-valid-cades",
           "kind": "validate",
           "title": "Intact CAdES (detached)",
+          "description": "Validates an intact detached CAdES sample with its data: TOTAL_PASSED.",
           "tags": [
             "VA-1",
             "VA-21",
@@ -2005,6 +2140,7 @@
           "id": "va-valid-xades",
           "kind": "validate",
           "title": "Intact XAdES",
+          "description": "Validates an intact XAdES sample: TOTAL_PASSED.",
           "tags": [
             "VA-1",
             "VA-21",
@@ -2027,6 +2163,7 @@
           "id": "va-hash-pades",
           "kind": "validate",
           "title": "PDF content changed",
+          "description": "Validates the PDF whose content changed after signing: the ByteRange digest does not match, TOTAL_FAILED / HASH_FAILURE.",
           "tags": [
             "VA-2",
             "EN 319 102-1"
@@ -2049,6 +2186,7 @@
           "id": "va-hash-cades",
           "kind": "validate",
           "title": "CAdES data changed",
+          "description": "Validates a detached CAdES signature against data that changed: TOTAL_FAILED / HASH_FAILURE.",
           "tags": [
             "VA-2",
             "EN 319 102-1"
@@ -2072,6 +2210,7 @@
           "id": "va-hash-xades",
           "kind": "validate",
           "title": "XAdES document changed",
+          "description": "Validates an XAdES file whose signed document changed: a reference digest fails, TOTAL_FAILED / HASH_FAILURE.",
           "tags": [
             "VA-2",
             "EN 319 102-1"
@@ -2094,6 +2233,7 @@
           "id": "va-sig-pades",
           "kind": "validate",
           "title": "PDF signature value changed",
+          "description": "Validates the PDF whose signature value was changed: digests match but the signature does not verify, TOTAL_FAILED / SIG_CRYPTO_FAILURE.",
           "tags": [
             "VA-3",
             "EN 319 102-1"
@@ -2116,6 +2256,7 @@
           "id": "va-sig-cades",
           "kind": "validate",
           "title": "CAdES signature value changed",
+          "description": "Validates a CAdES signature whose value was changed: SIG_CRYPTO_FAILURE.",
           "tags": [
             "VA-3",
             "EN 319 102-1"
@@ -2139,6 +2280,7 @@
           "id": "va-sig-xades",
           "kind": "validate",
           "title": "XAdES signature value changed",
+          "description": "Validates an XAdES signature whose SignatureValue was changed: SIG_CRYPTO_FAILURE.",
           "tags": [
             "VA-3",
             "EN 319 102-1"
@@ -2161,6 +2303,7 @@
           "id": "va-untrusted",
           "kind": "validate",
           "title": "Root outside the anchors",
+          "description": "Validates the sample whose chain ends at a root outside the anchors: INDETERMINATE / NO_CERTIFICATE_CHAIN_FOUND.",
           "tags": [
             "VA-4",
             "EN 319 102-1"
@@ -2183,6 +2326,7 @@
           "id": "va-revoked",
           "kind": "validate",
           "title": "Signer revoked, no POE before it",
+          "description": "Validates the sample signed by a revoked certificate, without a time-stamp before the revocation: INDETERMINATE / REVOKED_NO_POE, and the ETSI report must still be schema-valid.",
           "tags": [
             "VA-5",
             "VA-20",
@@ -2207,6 +2351,7 @@
         {
           "id": "va-poe-file",
           "title": "B-T signature, then its signer is revoked",
+          "description": "Signs at B-T with the RSA 3072 certificate: the signature time-stamp is the proof of existence the next step relies on when it revokes the certificate.",
           "tags": [
             "VA-6",
             "EN 319 142-1"
@@ -2228,6 +2373,7 @@
           "id": "va-revoked-after-poe",
           "kind": "validate",
           "title": "Revoked after the signature time-stamp",
+          "description": "The signature time-stamp is a proof of existence before the revocation: the signature stays valid.",
           "tags": [
             "VA-6",
             "EN 319 102-1",
@@ -2246,7 +2392,6 @@
             "indication": "TOTAL_PASSED"
           },
           "wait": 2,
-          "description": "The signature time-stamp is a proof of existence before the revocation: the signature stays valid.",
           "sandbox": {
             "revoke": [
               "rsa-3072"
@@ -2256,6 +2401,7 @@
         {
           "id": "va-short-lived-file",
           "title": "B-LTA by a signer valid for 20 seconds",
+          "description": "Signs at B-LTA with a certificate the Sandbox issues valid for 20 seconds, so the next step can validate it after the certificate has expired.",
           "tags": [
             "VA-9",
             "EN 319 142-1"
@@ -2277,6 +2423,7 @@
           "id": "va-expired-after-lta",
           "kind": "validate",
           "title": "Signer expired after a valid B-LTA",
+          "description": "Validated after the signer's certificate expired: the signature time-stamp proves the signature existed while it was valid.",
           "tags": [
             "VA-9",
             "EN 319 102-1"
@@ -2293,12 +2440,12 @@
             "outcome": "valid",
             "indication": "TOTAL_PASSED"
           },
-          "wait": 25,
-          "description": "Validated after the signer's certificate expired: the signature time-stamp proves the signature existed while it was valid."
+          "wait": 25
         },
         {
           "id": "va-revoked-ca",
           "title": "Signer under a revoked CA: refused before signing",
+          "description": "With the strict signing policy, a signer under a revoked CA: the chain's revocation is checked before signing, so it is refused (CertificateRevoked).",
           "tags": [
             "VA-7",
             "EN 319 102-1",
@@ -2318,6 +2465,7 @@
           "id": "va-expired",
           "kind": "validate",
           "title": "Signer expired, no POE",
+          "description": "Validates the sample signed by an expired certificate with no proof of existence: INDETERMINATE / OUT_OF_BOUNDS_NO_POE.",
           "tags": [
             "VA-8",
             "EN 319 102-1"
@@ -2339,6 +2487,7 @@
         {
           "id": "va-not-yet-valid",
           "title": "Signer not yet valid: refused before signing",
+          "description": "A certificate whose notBefore is in the future: refused before signing (CertificateNotCurrentlyValid), so no such file can be produced.",
           "tags": [
             "VA-10",
             "EN 319 102-1"
@@ -2356,6 +2505,7 @@
           "id": "va-revocation-unknown",
           "kind": "validate",
           "title": "Revocation status unknown (OCSP and CRL down)",
+          "description": "Validates the PAdES B-B file while the Sandbox's OCSP and CRL are both down: the status cannot be established, so INDETERMINATE instead of valid.",
           "tags": [
             "VA-11",
             "EN 319 102-1",
@@ -2382,6 +2532,7 @@
           "id": "va-timestamp-order",
           "kind": "validate",
           "title": "Content time-stamp later than the signature time-stamp",
+          "description": "Out-of-order time-stamps are a constraint of the validation policy (Timestamp/Coherence): the default only warns, the strict preset fails.",
           "tags": [
             "VA-15",
             "EN 319 102-1"
@@ -2400,13 +2551,13 @@
             "outcome": "indeterminate",
             "indication": "INDETERMINATE",
             "subIndication": "TIMESTAMP_ORDER_FAILURE"
-          },
-          "description": "Out-of-order time-stamps are a constraint of the validation policy (Timestamp/Coherence): the default only warns, the strict preset fails."
+          }
         },
         {
           "id": "va-wrong-cert-ref",
           "kind": "validate",
           "title": "signing-certificate-v2 names another certificate",
+          "description": "Validates a CAdES sample whose signing-certificate-v2 points to a certificate other than the signer's: the signer cannot be identified, NO_SIGNING_CERTIFICATE_FOUND.",
           "tags": [
             "VA-16",
             "EN 319 102-1"
@@ -2430,6 +2581,7 @@
           "id": "va-policy-not-available",
           "kind": "validate",
           "title": "Signature policy whose document is not available",
+          "description": "The signature names a policy but does not carry its document, and the validator has no way to obtain it: under a policy that requires it (PolicyAvailable FAIL).",
           "tags": [
             "VA-14",
             "EN 319 102-1",
@@ -2449,13 +2601,13 @@
             "outcome": "indeterminate",
             "indication": "INDETERMINATE",
             "subIndication": "SIGNATURE_POLICY_NOT_AVAILABLE"
-          },
-          "description": "The signature names a policy but does not carry its document, and the validator has no way to obtain it: under a policy that requires it (PolicyAvailable FAIL)."
+          }
         },
         {
           "id": "va-policy-available",
           "kind": "validate",
           "title": "Signature policy carried in the signature-policy-store",
+          "description": "Validates the cades-policy-store file with the strict policy: the policy document travels in the signature-policy-store, so it can be checked and the signature is valid.",
           "tags": [
             "VA-14",
             "CA-8",
@@ -2481,6 +2633,7 @@
           "id": "va-signed-data-missing-cades",
           "kind": "validate",
           "title": "Detached CAdES validated without its data",
+          "description": "Validates a detached CAdES signature without giving its data: nothing to compare the digest with, SIGNED_DATA_NOT_FOUND.",
           "tags": [
             "VA-17",
             "EN 319 102-1"
@@ -2503,6 +2656,7 @@
           "id": "va-signed-data-missing-xades",
           "kind": "validate",
           "title": "Detached XAdES validated without its data",
+          "description": "Validates a detached XAdES signature without its document: SIGNED_DATA_NOT_FOUND.",
           "tags": [
             "VA-17",
             "EN 319 102-1"
@@ -2524,6 +2678,7 @@
         {
           "id": "va-weak-key-file",
           "title": "RSA 1024 signature (minimal signing policy, to validate)",
+          "description": "Signs with an RSA 1024 key under the minimal signing policy (which does not check key size), only to produce the file va-weak-key validates.",
           "tags": [
             "VA-12",
             "TS 119 312"
@@ -2541,6 +2696,7 @@
           "id": "va-weak-key",
           "kind": "validate",
           "title": "RSA 1024 against the crypto suite",
+          "description": "Validates the RSA 1024 file: the cryptographic constraints of the validation policy reject the key size, so INDETERMINATE rather than valid.",
           "tags": [
             "VA-12",
             "EN 319 102-1",
@@ -2562,6 +2718,7 @@
         {
           "id": "va-key-usage-file",
           "title": "Signer with neither digitalSignature nor nonRepudiation (minimal signing policy, to validate)",
+          "description": "Signs with a certificate that has neither digitalSignature nor nonRepudiation under the minimal signing policy, only to produce the file va-key-usage validates.",
           "tags": [
             "VA-13"
           ],
@@ -2578,6 +2735,7 @@
           "id": "va-key-usage",
           "kind": "validate",
           "title": "Signer with neither digitalSignature nor nonRepudiation",
+          "description": "The key usage a signer needs is a constraint of the validation policy (EN 319 102-1): this one (playbook:requires-key-usage) asks for digitalSignature or nonRepudiation.",
           "tags": [
             "VA-13",
             "EN 319 102-1"
@@ -2588,18 +2746,18 @@
               "trust": [
                 "Sandbox"
               ],
-              "policyId": "preset:validation:iofe"
+              "policyId": "playbook:requires-key-usage"
             }
           },
           "expect": {
             "outcome": "indeterminate",
             "indication": "INDETERMINATE"
-          },
-          "description": "The key usage a signer needs is a constraint of the validation policy (EN 319 102-1): the IOFE policy asks for digitalSignature or nonRepudiation."
+          }
         },
         {
           "id": "va-pastsig-pades",
           "title": "PAdES B-T: signer valid 40 s, TSA certificate valid 30 s",
+          "description": "PAdES B-T by a signer valid for 40 seconds, time-stamped by a TSA whose certificate is valid for 30: both will expire, to show past signature validation.",
           "tags": [
             "VA-9",
             "EN 319 142-1",
@@ -2622,6 +2780,7 @@
           "id": "va-pastsig-pades-lta",
           "kind": "augment",
           "title": "PAdES: archived at once with the long-lived TSA",
+          "description": "Raises that file to B-LTA at once with the long-lived TSA: the archive time-stamp proves the signature and its time-stamp existed while their certificates were valid.",
           "tags": [
             "VA-9",
             "EN 319 142-1",
@@ -2644,6 +2803,7 @@
           "id": "va-pastsig-pades-valid",
           "kind": "validate",
           "title": "PAdES: signer and signature TSA expired, archive time-stamp valid",
+          "description": "Past signature validation (EN 319 102-1 §5.6): the archive time-stamp proves the signature time-stamp existed while its TSA's certificate was valid, and that time-stamp proves the signature existed while the signer's was.",
           "tags": [
             "VA-9",
             "EN 319 102-1",
@@ -2661,12 +2821,12 @@
             "outcome": "valid",
             "indication": "TOTAL_PASSED"
           },
-          "wait": 45,
-          "description": "Past signature validation (EN 319 102-1 §5.6): the archive time-stamp proves the signature time-stamp existed while its TSA's certificate was valid, and that time-stamp proves the signature existed while the signer's was."
+          "wait": 45
         },
         {
           "id": "va-pastsig-cades",
           "title": "CAdES B-T: signer valid 40 s, TSA certificate valid 30 s",
+          "description": "CAdES B-T by a signer valid for 40 seconds with a TSA certificate valid for 30, for the same past-signature case in CAdES.",
           "tags": [
             "VA-9",
             "EN 319 122-1",
@@ -2690,6 +2850,7 @@
           "id": "va-pastsig-cades-lta",
           "kind": "augment",
           "title": "CAdES: archived at once with the long-lived TSA",
+          "description": "Raises the CAdES file to B-LTA at once with the long-lived TSA.",
           "tags": [
             "VA-9",
             "EN 319 122-1",
@@ -2713,6 +2874,7 @@
           "id": "va-pastsig-cades-valid",
           "kind": "validate",
           "title": "CAdES: signer and signature TSA expired, archive time-stamp valid",
+          "description": "Past signature validation (EN 319 102-1 §5.6): the archive time-stamp proves the signature time-stamp existed while its TSA's certificate was valid, and that time-stamp proves the signature existed while the signer's was.",
           "tags": [
             "VA-9",
             "EN 319 102-1",
@@ -2731,12 +2893,12 @@
             "outcome": "valid",
             "indication": "TOTAL_PASSED"
           },
-          "wait": 45,
-          "description": "Past signature validation (EN 319 102-1 §5.6): the archive time-stamp proves the signature time-stamp existed while its TSA's certificate was valid, and that time-stamp proves the signature existed while the signer's was."
+          "wait": 45
         },
         {
           "id": "va-pastsig-bt-only",
           "title": "B-T only: signer valid 40 s, TSA certificate valid 30 s",
+          "description": "The same short-lived PAdES B-T, but never archived: the control case for va-pastsig-no-archive.",
           "tags": [
             "VA-9",
             "EN 319 142-1",
@@ -2759,6 +2921,7 @@
           "id": "va-pastsig-no-archive",
           "kind": "validate",
           "title": "Signer and TSA expired, no archive time-stamp",
+          "description": "Nothing proves the signature time-stamp existed while its TSA's certificate was valid: no proof of existence.",
           "tags": [
             "VA-9",
             "EN 319 102-1",
@@ -2776,13 +2939,13 @@
             "outcome": "indeterminate",
             "indication": "INDETERMINATE"
           },
-          "wait": 45,
-          "description": "Nothing proves the signature time-stamp existed while its TSA's certificate was valid: no proof of existence."
+          "wait": 45
         },
         {
           "id": "va-level-basicsignatures",
           "kind": "validate",
           "title": "B-LTA validated at level BasicSignatures",
+          "description": "Validates the PAdES B-LTA file at the BasicSignatures level of EN 319 102-1: signature, chain and revocation only.",
           "tags": [
             "VA-18",
             "EN 319 102-1"
@@ -2804,6 +2967,7 @@
           "id": "va-level-timestamps",
           "kind": "validate",
           "title": "B-LTA validated at level Timestamps",
+          "description": "Validates it at the Timestamps level: the signature time-stamp is used as proof of existence too.",
           "tags": [
             "VA-18",
             "EN 319 102-1"
@@ -2825,6 +2989,7 @@
           "id": "va-level-longtermdata",
           "kind": "validate",
           "title": "B-LTA validated at level LongTermData",
+          "description": "Validates it at the LongTermData level: the validation data embedded in the file is used.",
           "tags": [
             "VA-18",
             "EN 319 102-1"
@@ -2846,6 +3011,7 @@
           "id": "va-level-archivaldata",
           "kind": "validate",
           "title": "B-LTA validated at level ArchivalData",
+          "description": "Validates it at the ArchivalData level: the archive (document) time-stamp and past signature validation too.",
           "tags": [
             "VA-18",
             "EN 319 102-1"
@@ -2866,6 +3032,7 @@
         {
           "id": "va-policy-file",
           "title": "Signer without nonRepudiation (to validate)",
+          "description": "Signs with a certificate that has digitalSignature but not nonRepudiation (accepted by the default signing policy), to produce the file va-policy validates.",
           "tags": [
             "VA-19"
           ],
@@ -2881,6 +3048,7 @@
           "id": "va-policy",
           "kind": "validate",
           "title": "A validation policy that requires nonRepudiation",
+          "description": "Validates that file with a validation policy that requires nonRepudiation in the signing certificate's key usage: the constraint fails, INDETERMINATE.",
           "tags": [
             "VA-19",
             "EN 319 102-1",
@@ -2905,10 +3073,12 @@
     {
       "id": "trusted-lists",
       "title": "Trusted lists (TS 119 612)",
+      "description": "Anchors taken from a TS 119 612 trusted list: a list that is expired, signed by another key or changed gives none; a service withdrawn after a time-stamp still vouches for that signature through the list's service history.",
       "steps": [
         {
           "id": "tl-ok",
           "title": "Anchors from the Sandbox's trusted list",
+          "description": "Signs with the anchors read from the Sandbox's trusted list (its signature checked against the operator's certificate) instead of a configured root.",
           "tags": [
             "TL-1",
             "TS 119 612"
@@ -2929,6 +3099,7 @@
         {
           "id": "tl-expired",
           "title": "Trusted list expired: refused",
+          "description": "The trusted list is past its NextUpdate: it gives no anchors, so signing is refused (UntrustedRoot).",
           "tags": [
             "TL-2",
             "TS 119 612"
@@ -2952,6 +3123,7 @@
         {
           "id": "tl-wrongsigner",
           "title": "Trusted list signed by another key: refused",
+          "description": "The trusted list is signed by a key other than its operator's: no anchors, signing refused.",
           "tags": [
             "TL-3",
             "TS 119 612"
@@ -2975,6 +3147,7 @@
         {
           "id": "tl-tampered",
           "title": "Trusted list tampered: refused",
+          "description": "The trusted list changed after it was signed: its XML signature breaks, no anchors, signing refused.",
           "tags": [
             "TL-4",
             "TS 119 612"
@@ -2999,6 +3172,7 @@
           "id": "va-tl-ok",
           "kind": "validate",
           "title": "Validate with anchors from the trusted list",
+          "description": "Validates the tl-ok file with the anchors from the trusted list: valid.",
           "tags": [
             "TL-1",
             "TS 119 612",
@@ -3020,6 +3194,7 @@
           "id": "va-tl-wrong-signer",
           "kind": "validate",
           "title": "Validate with a fake trusted list",
+          "description": "Validates the same file while the list has another signer: no trusted anchors, INDETERMINATE.",
           "tags": [
             "TL-3",
             "TS 119 612",
@@ -3043,6 +3218,7 @@
         {
           "id": "tl-history-pades",
           "title": "PAdES B-T while the root CA's service is granted",
+          "description": "Signs PAdES B-T while the list grants the root CA's service: the time-stamp is the proof of existence for the withdrawal step that follows.",
           "tags": [
             "TL-5",
             "TS 119 612",
@@ -3069,6 +3245,7 @@
           "id": "va-tl-history-pades",
           "kind": "validate",
           "title": "PAdES: service withdrawn after the signature time-stamp",
+          "description": "The trusted list now says withdrawn, with granted in the service history before: the anchors at the time-stamp's time vouch for the signature.",
           "tags": [
             "TL-5",
             "TS 119 612",
@@ -3088,7 +3265,6 @@
             "indication": "TOTAL_PASSED"
           },
           "wait": 2,
-          "description": "The trusted list now says withdrawn, with granted in the service history before: the anchors at the time-stamp's time vouch for the signature.",
           "sandbox": {
             "trustedList": "WithdrawnAfterUse"
           }
@@ -3096,6 +3272,7 @@
         {
           "id": "tl-history-xades",
           "title": "XAdES B-T while the root CA's service is granted",
+          "description": "Signs XAdES B-T while the root CA's service is granted, for the same withdrawal check in XAdES.",
           "tags": [
             "TL-5",
             "TS 119 612",
@@ -3123,6 +3300,7 @@
           "id": "va-tl-history-xades",
           "kind": "validate",
           "title": "XAdES: service withdrawn after the signature time-stamp",
+          "description": "The trusted list now says withdrawn, with granted in the service history before: the anchors at the time-stamp's time vouch for the signature.",
           "tags": [
             "TL-5",
             "TS 119 612",
@@ -3142,7 +3320,6 @@
             "indication": "TOTAL_PASSED"
           },
           "wait": 2,
-          "description": "The trusted list now says withdrawn, with granted in the service history before: the anchors at the time-stamp's time vouch for the signature.",
           "sandbox": {
             "trustedList": "WithdrawnAfterUse"
           }
@@ -3150,6 +3327,7 @@
         {
           "id": "tl-withdrawn",
           "title": "Signing after the service was withdrawn: refused",
+          "description": "A signing policy that asks for a chain to the anchors: the root CA's service is withdrawn now.",
           "tags": [
             "TL-5",
             "TS 119 612"
@@ -3167,7 +3345,6 @@
             "outcome": "refused",
             "reason": "UntrustedRoot"
           },
-          "description": "A signing policy that asks for a chain to the anchors: the root CA's service is withdrawn now.",
           "sandbox": {
             "trustedList": "WithdrawnAfterUse"
           }

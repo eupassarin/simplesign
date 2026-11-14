@@ -10,11 +10,16 @@ Items marked N or X in the checklist are not here.
 import json
 import sys
 
+from describe import describe
+
 PADES, CADES, XADES = "EN 319 142-1", "EN 319 122-1", "EN 319 132-1"
 VAL, TSP, TLS, CRYPTO = "EN 319 102-1", "RFC 3161", "TS 119 612", "TS 119 312"
 STD = {"pades": PADES, "cades": CADES, "xades": XADES}
 FMT = {"pades": {}, "cades": {"dataId": "cades-sample:text"}, "xades": {"dataId": "xades-sample:order"}}
 TSA = {"provider": "Sandbox"}
+# The checks before signing that the default policy leaves out (revocation of the chain, the chain to the anchors, CRLs with
+# nextUpdate, the CA certificates' algorithms, the TSA's certificate): a generic policy, the same as sandbox-basics' sandbox-strict.
+STRICT_CHECKS = "playbook:strict-checks"
 LEVEL = {"BB": "B-B", "BT": "B-T", "BLT": "B-LT", "BLTA": "B-LTA"}
 
 
@@ -156,7 +161,7 @@ sections = [
           for f in ("pades", "cades", "xades") for h in ("Sha384", "Sha512")],
         sign("rsa-1024", "RSA 1024 key: refused", ["AL-1", "CE-3", CRYPTO], refused("KeyTooWeak"), credentialId="sandbox:rsa-1024"),
         sign("chain-sha1", "Chain with a CA signed with SHA-1: refused", ["CE-3", CRYPTO], refused("AlgorithmNotPermitted"),
-             credentialId="sandbox:under-sha1-ca", signingPolicyId="preset:signing:iofe", signingControls={"trust": ["SandboxRoot"]}),
+             credentialId="sandbox:under-sha1-ca", signingPolicyId=STRICT_CHECKS, signingControls={"trust": ["SandboxRoot"]}),
         sign("level-not-reached", "B-T with the TSA down: refused", ["AL-4", PADES, "tsa"], refused(), sandbox={"tsa": "Down"}, level="BT", timestamp=TSA),
         sign("level-lower", "B-T with the TSA down, lower level allowed: B-B", ["AL-4", PADES, "tsa"], signed("BB"), sandbox={"tsa": "Down"}, level="BT",
              timestamp=TSA, returnLowerLevel=True),
@@ -181,14 +186,14 @@ sections = [
         sign("ts-invalid-token", "Token with an invalid signature: refused", ["TS-1", TSP, "tsa"], refused(), sandbox={"tsa": "InvalidToken"}, level="BT",
              timestamp=TSA),
         *[sign(f"ts-{name}", f"TSA {label}: refused", ["TS-2", TSP, "tsa"], refused(reason), level="BT", timestamp={"provider": provider},
-               signingPolicyId="preset:signing:iofe", signingControls={"trust": ["SandboxRoot"]})
+               signingPolicyId=STRICT_CHECKS, signingControls={"trust": ["SandboxRoot"]})
           for name, label, provider, reason in (("revoked", "certificate revoked", "SandboxRevoked", "TimestampCertificateRevoked"),
                                                 ("expired", "certificate expired", "SandboxExpired", "TimestampCertificateNotValid"),
                                                 ("untrusted", "outside the anchors", "SandboxUntrusted", "TimestampUntrusted"))],
         sign("ts-expected", "Expected TSA", ["TS-3", TSP, "tsa"], signed("BT"), level="BT", timestamp=TSA,
              signingControls={"trust": ["SandboxRoot"], "expectedTsa": "tsa"}),
         sign("ts-unexpected", "Another TSA than expected: refused", ["TS-3", TSP, "tsa"], refused("TimestampUntrusted"), level="BT", timestamp=TSA,
-             signingPolicyId="preset:signing:iofe", signingControls={"trust": ["SandboxRoot"], "expectedTsa": "tsa-revoked"}),
+             signingPolicyId=STRICT_CHECKS, signingControls={"trust": ["SandboxRoot"], "expectedTsa": "tsa-revoked"}),
         validate("ts-profile-ok", "Time-stamp with the EN 319 422 profile", ["TS-6", "EN 319 422", "tsa"], "step:cades-bt",
                  {"outcome": "valid", "indication": "TOTAL_PASSED"}, data_id="cades-sample:text", policyId="fixture:validation-policy-en319422",
                  desc="The Sandbox TSA gives its accuracy, does not claim ordering and uses the policy the validation policy accepts."),
@@ -266,8 +271,9 @@ sections = [
          sign("va-key-usage-file", "Signer with neither digitalSignature nor nonRepudiation (minimal signing policy, to validate)", ["VA-13"],
               {"outcome": "signed"}, credentialId="sandbox:no-signing-key-usage", signingPolicyId="preset:signing:minimal"),
          validate("va-key-usage", "Signer with neither digitalSignature nor nonRepudiation", ["VA-13", VAL], "step:va-key-usage-file", {"outcome": "indeterminate", "indication": "INDETERMINATE"},
-                  policyId="preset:validation:iofe",
-                  desc="The key usage a signer needs is a constraint of the validation policy (EN 319 102-1): the IOFE policy asks for digitalSignature or nonRepudiation."),
+                  policyId="playbook:requires-key-usage",
+                  desc="The key usage a signer needs is a constraint of the validation policy (EN 319 102-1): this one (playbook:requires-key-usage) "
+                       "asks for digitalSignature or nonRepudiation."),
          # VA-9, full case: the signature time-stamp's TSA expires too; only the later archive time-stamp keeps its POE.
          *[step for fmt, data in (("pades", None), ("cades", "cades-sample:text")) for step in (
              sign(f"va-pastsig-{fmt}", f"{fmt[0].upper()}AdES B-T: signer valid 40 s, TSA certificate valid 30 s", ["VA-9", STD[fmt], "past signature"],
@@ -311,6 +317,345 @@ sections = [
     ]},
 ]
 
+
+# What each step runs and why, for the steps above that give no desc (describe.py puts them in place).
+DESCRIPTIONS = {
+    "pades-bb":
+        "Signs the sample contract in PAdES B-B (ETSI.CAdES.detached, signing-certificate-v2, no time-stamp) and "
+        "validates it right after: the baseline every other level builds on.",
+    "pades-bt":
+        "PAdES B-T: B-B plus a signature time-stamp from the Sandbox's TSA, a proof the signature existed at that time.",
+    "pades-blt":
+        "PAdES B-LT: B-T plus the certificates, CRLs and OCSP responses in the DSS (and VRI), so the signature can be "
+        "validated without fetching anything.",
+    "pades-blta":
+        "PAdES B-LTA: B-LT plus a document time-stamp over the DSS, which keeps the validation data trustworthy after "
+        "the certificates expire. Its file is validated at each validation level below.",
+    "pades-blta-archive-tsa":
+        "B-LTA with the document time-stamp taken from a TSA configured apart from the signature time-stamp's, as a "
+        "preservation service with its own TSA would.",
+    "pades-certified-1":
+        "A certification signature with DocMDP P=1: no change at all is allowed after it.",
+    "pades-certified-2":
+        "Certification with DocMDP P=2: only filling form fields and signing are allowed afterwards.",
+    "pades-certified-3":
+        "Certification with DocMDP P=3: form filling, signing and annotations are allowed afterwards.",
+    "pades-attributes":
+        "Writes the optional Reason and Location entries of the signature dictionary, to show they are kept and read "
+        "back.",
+    "pades-policy":
+        "Writes an explicit signature-policy-identifier (OID, hash of the policy document, SPuri), as a policy-based "
+        "signature (EN 319 142-1 'PAdES with policy') does.",
+    "pades-pdfa":
+        "Signs a PDF/A while preserving its conformance: the incremental update must not add anything PDF/A forbids.",
+    "cades-bb":
+        "Signs the sample text in CAdES B-B (detached, signing-certificate-v2, signing-time) and validates it with the "
+        "data. Its file is reused by the co-signature, the countersignature and the augmentation steps.",
+    "cades-bt":
+        "CAdES B-T: B-B plus a signature time-stamp in the unsigned attributes. Its time-stamp is also checked against "
+        "the EN 319 422 profile further down.",
+    "cades-blt":
+        "CAdES B-LT: B-T plus the certificates and revocation data needed to validate it offline, carried in the "
+        "signature.",
+    "cades-blta":
+        "CAdES B-LTA: B-LT plus an archive-time-stamp-v3 with its ATSHashIndex.",
+    "cades-attached":
+        "CAdES B-B with the content inside the SignedData (a .p7m): the attached form, besides the detached one.",
+    "cades-attributes":
+        "Writes the optional signed attributes: commitment type (proof of origin), signer location, signer role, "
+        "content hints and the MIME type.",
+    "cades-policy":
+        "Writes a signature-policy-identifier with only the policy OID and its SPuri (no document carried): the file "
+        "va-policy-not-available validates.",
+    "cades-policy-store":
+        "Writes the signature policy with its document embedded (signature-policy-store), so a validator can check it "
+        "without fetching it: the file va-policy-available validates.",
+    "cades-certified-role":
+        "Writes a signer-attributes-v2 with a certified role (an attribute certificate) and a signed SAML assertion, "
+        "the two forms of claimed authority beyond a plain role.",
+    "cades-content-ts":
+        "Time-stamps the content before signing (content-time-stamp attribute), proving the data existed before the "
+        "signature, besides the signature time-stamp.",
+    "cades-cosign":
+        "Adds a second, parallel signer (RSA 3072) to the CAdES B-B file: a SignedData with two SignerInfos over the "
+        "same content.",
+    "cades-countersign":
+        "Countersigns the first signer of the CAdES B-B file with an ECDSA P-256 key: the countersignature signs the "
+        "first signature value, not the content.",
+    "cades-tree":
+        "Validates a sample with co-signers and a countersignature: every signature in the tree must be found and "
+        "verified.",
+    "xades-bb":
+        "Signs the sample XML order in XAdES B-B (enveloped, SigningCertificateV2, SigningTime) and validates it. Its "
+        "file is countersigned and augmented below.",
+    "xades-bt":
+        "XAdES B-T: B-B plus a SignatureTimeStamp.",
+    "xades-blt":
+        "XAdES B-LT: B-T plus CertificateValues and RevocationValues, so it can be validated offline.",
+    "xades-blta":
+        "XAdES B-LTA: B-LT plus an ArchiveTimeStamp over the signature and its validation data.",
+    "xades-enveloping":
+        "XAdES B-B enveloping: the XML document goes inside the signature's ds:Object.",
+    "xades-detached":
+        "XAdES B-B detached: the signature references the document from outside and is validated with it.",
+    "xades-v1":
+        "Writes the XAdES 1.3.2 SigningCertificate (V1, with IssuerSerial) instead of V2, for verifiers that only read "
+        "the older property.",
+    "xades-attributes":
+        "Writes the optional signed properties: CommitmentTypeIndication (proof of approval), SignerRoleV2, "
+        "SignatureProductionPlaceV2 and DataObjectFormat (MIME type).",
+    "xades-policy":
+        "Writes a SignaturePolicyIdentifier with the policy OID and its SPURI qualifier (no document carried).",
+    "xades-policy-store":
+        "Writes a SignaturePolicyStore with the policy document, so a validator can check the policy without fetching "
+        "it.",
+    "xades-certified-role":
+        "Writes SignerRoleV2 with a certified role (an attribute certificate) and a signed SAML assertion.",
+    "xades-data-ts":
+        "Adds an AllDataObjectsTimeStamp over the signed data, besides the signature time-stamp.",
+    "xades-countersign":
+        "Countersigns the XAdES B-B file with an ECDSA P-256 key (a CounterSignature unsigned property that signs the "
+        "first SignatureValue).",
+    "xades-inclusive":
+        "Signs using inclusive canonicalization (C14N 1.0) instead of exclusive, to show both are produced and verify.",
+    "pades-rsa-4096":
+        "PAdES with an RSA 4096 key, validated right after.",
+    "pades-ecdsa-p256":
+        "PAdES with ECDSA on P-256 (with SHA-256).",
+    "pades-ecdsa-p384":
+        "PAdES with ECDSA on P-384 (with SHA-384).",
+    "pades-ecdsa-p521":
+        "PAdES with ECDSA on P-521 (with SHA-512).",
+    "cades-rsa-4096":
+        "CAdES with an RSA 4096 key.",
+    "cades-ecdsa-p256":
+        "CAdES with ECDSA on P-256.",
+    "cades-ecdsa-p384":
+        "CAdES with ECDSA on P-384.",
+    "cades-ecdsa-p521":
+        "CAdES with ECDSA on P-521.",
+    "xades-rsa-4096":
+        "XAdES with an RSA 4096 key.",
+    "xades-ecdsa-p256":
+        "XAdES with ECDSA on P-256 (with SHA-256).",
+    "xades-ecdsa-p384":
+        "XAdES with ECDSA on P-384.",
+    "xades-ecdsa-p521":
+        "XAdES with ECDSA on P-521.",
+    "pades-pss":
+        "PAdES with RSASSA-PSS padding instead of PKCS#1 v1.5 (the RSASSA-PSS parameters written in the SignerInfo).",
+    "cades-pss":
+        "CAdES with RSASSA-PSS padding.",
+    "xades-pss":
+        "XAdES with RSASSA-PSS (the XML DSig 1.1 rsa-pss URI).",
+    "pades-sha384":
+        "PAdES with SHA-384 as the digest of the document and of the signed attributes.",
+    "pades-sha512":
+        "PAdES with SHA-512.",
+    "cades-sha384":
+        "CAdES with SHA-384.",
+    "cades-sha512":
+        "CAdES with SHA-512.",
+    "xades-sha384":
+        "XAdES with SHA-384 for the references and the signature.",
+    "xades-sha512":
+        "XAdES with SHA-512.",
+    "rsa-1024":
+        "An RSA 1024 key, below what the default policy allows: refused before signing (KeyTooWeak).",
+    "chain-sha1":
+        "A certificate under a CA signed with SHA-1, with a signing policy that checks the algorithms of the CA "
+        "certificates (playbook:strict-checks): SHA-1 in the chain is refused (AlgorithmNotPermitted).",
+    "level-not-reached":
+        "Asks for B-T while the TSA is down: the requested level cannot be reached, so the signer fails instead of "
+        "silently returning B-B.",
+    "level-lower":
+        "Same, but the caller allows a lower level (returnLowerLevel): the signature is made at B-B and says it is not "
+        "the level asked.",
+    "cades-ext-c":
+        "CAdES -C: a B-T signature plus complete-certificate-references and complete-revocation-references (references "
+        "only, the values are not carried).",
+    "cades-ext-xl":
+        "CAdES -X-L: -C plus the certificate and revocation values themselves.",
+    "cades-ext-a":
+        "CAdES -A: -X-L plus an archive time-stamp.",
+    "xades-ext-c":
+        "XAdES -C: CompleteCertificateRefs and CompleteRevocationRefs after the signature time-stamp.",
+    "xades-ext-xl":
+        "XAdES -X-L: -C plus CertificateValues and RevocationValues.",
+    "xades-ext-a":
+        "XAdES -A: -X-L plus an ArchiveTimeStamp.",
+    "aug-pades-bt":
+        "Raises the PAdES B-B signature to B-T by adding a document time-stamp in an incremental update (EN 319 142-1 "
+        "accepts it for level T), without signing again.",
+    "aug-pades-blt":
+        "Raises the B-T file to B-LT by adding the DSS with the validation data.",
+    "aug-pades-blta":
+        "Raises the B-LT file to B-LTA with a document time-stamp over the DSS.",
+    "aug-cades-bt":
+        "Raises the CAdES B-B signature to B-T by adding a signature time-stamp to the unsigned attributes (the "
+        "detached data is given to rebuild the digest).",
+    "aug-cades-blt":
+        "Raises the CAdES B-T file to B-LT by adding the certificate and revocation values.",
+    "aug-cades-blta":
+        "Raises the CAdES B-LT file to B-LTA with an archive-time-stamp-v3.",
+    "aug-xades-bt":
+        "Raises the XAdES B-B signature to B-T by adding a SignatureTimeStamp to the unsigned properties.",
+    "aug-xades-blt":
+        "Raises the XAdES B-T file to B-LT with CertificateValues and RevocationValues.",
+    "aug-xades-blta":
+        "Raises the XAdES B-LT file to B-LTA with an ArchiveTimeStamp.",
+    "ts-invalid-token":
+        "The TSA answers a token whose signature does not verify: the signer must detect it and refuse instead of "
+        "embedding it.",
+    "ts-revoked":
+        "With a signing policy that checks the TSA (playbook:strict-checks), a TSA whose certificate is revoked: its "
+        "token is refused (TimestampCertificateRevoked).",
+    "ts-expired":
+        "A TSA whose certificate has expired: its token is refused (TimestampCertificateNotValid).",
+    "ts-untrusted":
+        "A TSA that chains to no anchor: its token is refused (TimestampUntrusted).",
+    "ts-expected":
+        "Names the Sandbox's TSA as the expected one (expectedTsa): the token comes from it, so the signature is made.",
+    "ts-unexpected":
+        "Expects another TSA than the one that answers: refused (TimestampUntrusted), so a token from an authority the "
+        "signer did not choose is never embedded.",
+    "ts-authenticated":
+        "Gets the time-stamp from the TSA endpoint that requires HTTP Basic authentication.",
+    "va-valid-pades":
+        "Validates the intact PAdES sample: TOTAL_PASSED, and the ETSI TS 119 102-2 report must be valid against its "
+        "XML schema.",
+    "va-valid-cades":
+        "Validates an intact detached CAdES sample with its data: TOTAL_PASSED.",
+    "va-valid-xades":
+        "Validates an intact XAdES sample: TOTAL_PASSED.",
+    "va-hash-pades":
+        "Validates the PDF whose content changed after signing: the ByteRange digest does not match, TOTAL_FAILED / "
+        "HASH_FAILURE.",
+    "va-hash-cades":
+        "Validates a detached CAdES signature against data that changed: TOTAL_FAILED / HASH_FAILURE.",
+    "va-hash-xades":
+        "Validates an XAdES file whose signed document changed: a reference digest fails, TOTAL_FAILED / HASH_FAILURE.",
+    "va-sig-pades":
+        "Validates the PDF whose signature value was changed: digests match but the signature does not verify, "
+        "TOTAL_FAILED / SIG_CRYPTO_FAILURE.",
+    "va-sig-cades":
+        "Validates a CAdES signature whose value was changed: SIG_CRYPTO_FAILURE.",
+    "va-sig-xades":
+        "Validates an XAdES signature whose SignatureValue was changed: SIG_CRYPTO_FAILURE.",
+    "va-untrusted":
+        "Validates the sample whose chain ends at a root outside the anchors: INDETERMINATE / "
+        "NO_CERTIFICATE_CHAIN_FOUND.",
+    "va-revoked":
+        "Validates the sample signed by a revoked certificate, without a time-stamp before the revocation: "
+        "INDETERMINATE / REVOKED_NO_POE, and the ETSI report must still be schema-valid.",
+    "va-poe-file":
+        "Signs at B-T with the RSA 3072 certificate: the signature time-stamp is the proof of existence the next step "
+        "relies on when it revokes the certificate.",
+    "va-short-lived-file":
+        "Signs at B-LTA with a certificate the Sandbox issues valid for 20 seconds, so the next step can validate it "
+        "after the certificate has expired.",
+    "va-revoked-ca":
+        "With the strict signing policy, a signer under a revoked CA: the chain's revocation is checked before signing, "
+        "so it is refused (CertificateRevoked).",
+    "va-expired":
+        "Validates the sample signed by an expired certificate with no proof of existence: INDETERMINATE / "
+        "OUT_OF_BOUNDS_NO_POE.",
+    "va-not-yet-valid":
+        "A certificate whose notBefore is in the future: refused before signing (CertificateNotCurrentlyValid), so no "
+        "such file can be produced.",
+    "va-revocation-unknown":
+        "Validates the PAdES B-B file while the Sandbox's OCSP and CRL are both down: the status cannot be established, "
+        "so INDETERMINATE instead of valid.",
+    "va-wrong-cert-ref":
+        "Validates a CAdES sample whose signing-certificate-v2 points to a certificate other than the signer's: the "
+        "signer cannot be identified, NO_SIGNING_CERTIFICATE_FOUND.",
+    "va-policy-available":
+        "Validates the cades-policy-store file with the strict policy: the policy document travels in the "
+        "signature-policy-store, so it can be checked and the signature is valid.",
+    "va-signed-data-missing-cades":
+        "Validates a detached CAdES signature without giving its data: nothing to compare the digest with, "
+        "SIGNED_DATA_NOT_FOUND.",
+    "va-signed-data-missing-xades":
+        "Validates a detached XAdES signature without its document: SIGNED_DATA_NOT_FOUND.",
+    "va-weak-key-file":
+        "Signs with an RSA 1024 key under the minimal signing policy (which does not check key size), only to produce "
+        "the file va-weak-key validates.",
+    "va-weak-key":
+        "Validates the RSA 1024 file: the cryptographic constraints of the validation policy reject the key size, so "
+        "INDETERMINATE rather than valid.",
+    "va-key-usage-file":
+        "Signs with a certificate that has neither digitalSignature nor nonRepudiation under the minimal signing "
+        "policy, only to produce the file va-key-usage validates.",
+    "va-pastsig-pades":
+        "PAdES B-T by a signer valid for 40 seconds, time-stamped by a TSA whose certificate is valid for 30: both will "
+        "expire, to show past signature validation.",
+    "va-pastsig-pades-lta":
+        "Raises that file to B-LTA at once with the long-lived TSA: the archive time-stamp proves the signature and its "
+        "time-stamp existed while their certificates were valid.",
+    "va-pastsig-cades":
+        "CAdES B-T by a signer valid for 40 seconds with a TSA certificate valid for 30, for the same past-signature "
+        "case in CAdES.",
+    "va-pastsig-cades-lta":
+        "Raises the CAdES file to B-LTA at once with the long-lived TSA.",
+    "va-pastsig-bt-only":
+        "The same short-lived PAdES B-T, but never archived: the control case for va-pastsig-no-archive.",
+    "va-level-basicsignatures":
+        "Validates the PAdES B-LTA file at the BasicSignatures level of EN 319 102-1: signature, chain and revocation "
+        "only.",
+    "va-level-timestamps":
+        "Validates it at the Timestamps level: the signature time-stamp is used as proof of existence too.",
+    "va-level-longtermdata":
+        "Validates it at the LongTermData level: the validation data embedded in the file is used.",
+    "va-level-archivaldata":
+        "Validates it at the ArchivalData level: the archive (document) time-stamp and past signature validation too.",
+    "va-policy-file":
+        "Signs with a certificate that has digitalSignature but not nonRepudiation (accepted by the default signing "
+        "policy), to produce the file va-policy validates.",
+    "va-policy":
+        "Validates that file with a validation policy that requires nonRepudiation in the signing certificate's key "
+        "usage: the constraint fails, INDETERMINATE.",
+    "tl-ok":
+        "Signs with the anchors read from the Sandbox's trusted list (its signature checked against the operator's "
+        "certificate) instead of a configured root.",
+    "tl-expired":
+        "The trusted list is past its NextUpdate: it gives no anchors, so signing is refused (UntrustedRoot).",
+    "tl-wrongsigner":
+        "The trusted list is signed by a key other than its operator's: no anchors, signing refused.",
+    "tl-tampered":
+        "The trusted list changed after it was signed: its XML signature breaks, no anchors, signing refused.",
+    "va-tl-ok":
+        "Validates the tl-ok file with the anchors from the trusted list: valid.",
+    "va-tl-wrong-signer":
+        "Validates the same file while the list has another signer: no trusted anchors, INDETERMINATE.",
+    "tl-history-pades":
+        "Signs PAdES B-T while the list grants the root CA's service: the time-stamp is the proof of existence for the "
+        "withdrawal step that follows.",
+    "tl-history-xades":
+        "Signs XAdES B-T while the root CA's service is granted, for the same withdrawal check in XAdES.",
+}
+
+# What each section above that gives no description shows.
+SECTION_DESCRIPTIONS = {
+    "algorithms":
+        "Every format signs with each key type and digest the baseline profiles name (RSA 2048/4096, RSASSA-PSS, ECDSA "
+        "P-256/P-384/P-521, SHA-256/384/512) and is validated right after; a weak key, a SHA-1 CA and a level that "
+        "cannot be reached are refused.",
+    "extended":
+        "The extended forms of EN 319 122-2 (CAdES) and EN 319 132-2 (XAdES) that predate the baseline levels: -C "
+        "(references to the validation data), -X-L (the values too) and -A (archive time-stamp), for readers that still "
+        "expect them.",
+    "timestamps":
+        "The signature time-stamp obtained while signing is checked before it is kept (token signature, trust, validity "
+        "and revocation of the TSA, the TSA the signer expects), and a validation policy can require the EN 319 422 "
+        "time-stamp profile.",
+    "trusted-lists":
+        "Anchors taken from a TS 119 612 trusted list: a list that is expired, signed by another key or changed gives "
+        "none; a service withdrawn after a time-stamp still vouches for that signature through the list's service "
+        "history.",
+}
+
+sections = describe(sections, DESCRIPTIONS, SECTION_DESCRIPTIONS)
+
 playbook = {
     "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",
     "schema": 2,
@@ -329,9 +674,15 @@ playbook = {
             "pades": {"documentId": "sample:contract"},
         },
     },
-    # A validation policy that requires the nonRepudiation bit (VA-19): the default one with that constraint changed.
-    "policies": [{"id": "requires-non-repudiation", "kind": "validation", "base": "default",
-                  "set": {"SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage": {"Level": "FAIL", "Id": ["nonRepudiation"]}}}],
+    "policies": [
+        # A validation policy that requires the nonRepudiation bit (VA-19): the default one with that constraint changed.
+        {"id": "requires-non-repudiation", "kind": "validation", "base": "default",
+         "set": {"SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage": {"Level": "FAIL", "Id": ["nonRepudiation"]}}},
+        # A validation policy that requires a key usage for signing (VA-13): digitalSignature or nonRepudiation.
+        {"id": "requires-key-usage", "kind": "validation", "base": "default",
+         "set": {"SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage": {"Level": "FAIL", "Id": ["digitalSignature", "nonRepudiation"]}}},
+        {"id": "strict-checks", "kind": "signing", "base": "strict", "set": {"SigningCertificate/ProspectiveCertificateChain": {"Level": "FAIL"}, "SigningCertificate/CRLNextUpdatePresent": {"Level": "FAIL"}, "CACertificate/CRLNextUpdatePresent": {"Level": "FAIL"}, "CACertificate/Cryptographic": {"Level": "FAIL"}, "Timestamp/ProspectiveCertificateChain": {"Level": "FAIL"}, "Timestamp/NotExpired": {"Level": "FAIL"}, "Timestamp/NotRevoked": {"Level": "FAIL"}, "Timestamp/RevocationDataAvailable": {"Level": "FAIL"}}},
+    ],
     "sections": sections,
 }
 

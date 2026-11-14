@@ -188,6 +188,31 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
     }
 
     [Fact]
+    public void SetInput_FileTheInputDoesNotAccept_IsRefusedAndTheInputStaysEmpty()
+    {
+        const string json = """
+            {
+              "schema": 2, "id": "inputs", "title": "Inputs",
+              "inputs": [{ "id": "theirs", "title": "A signed PDF", "accept": ".pdf" }],
+              "sections": [
+                { "id": "s1", "title": "Theirs", "steps": [
+                  { "id": "check", "title": "Validate", "kind": "validate", "tags": ["input"],
+                    "options": { "fileId": "input:theirs", "settings": { "trust": ["Sandbox"] } }, "expect": { "outcome": "valid" } }
+                ] }
+              ]
+            }
+            """;
+        using var runner = Runner();
+        runner.Load(json).CanRun.ShouldBeTrue();
+        var xml = fixture.Documents.Add("order.xml", "<order/>"u8.ToArray());
+        var renamed = fixture.Documents.Add("renamed.pdf", "<order/>"u8.ToArray());
+
+        Should.Throw<ArgumentException>(() => runner.SetInput("theirs", xml.Id)).Message.ShouldContain(".pdf");
+        Should.Throw<ArgumentException>(() => runner.SetInput("theirs", renamed.Id)).Message.ShouldContain("not a PDF");
+        runner.State().Inputs.Single().File.ShouldBeNull();
+    }
+
+    [Fact]
     public void Clear_UnknownStepOrNoPlaybook_Throws()
     {
         using var runner = Runner();
