@@ -119,7 +119,7 @@ internal sealed class OverviewPage : AgentPage
     internal static Border CertificateRow(CertificateEntry entry, IReadOnlyList<string>? frameworks = null)
     {
         string details = string.Join(" · ", new[] { entry.MaskedDocument, entry.Source, entry.Issuer }.Where(s => !string.IsNullOrEmpty(s)));
-        int days = (int)Math.Floor((entry.Certificate.NotAfter - DateTime.Now).TotalDays);
+        int days = entry.DaysLeft;
         var validity = entry.IsExpired ? Ui.Badge(L.T("cert.expired"), "err")
             : days <= 30 ? Ui.Badge(L.T("cert.expiresIn", days), "warn")
             : Ui.Badge(entry.Validity);
