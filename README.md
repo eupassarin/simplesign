@@ -31,6 +31,7 @@ dotnet add package SimpleSign                  # PAdES + CAdES + XAdES
 dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil, Lei 14.063
 dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
 dotnet add package SimpleSign.Peru.Iofe        # IOFE (Peru), INDECOPI policies
+dotnet add package SimpleSign.Europe.Eidas     # eIDAS (EU), qualification from the EU LOTL
 dotnet add package SimpleSign.Signers.Pkcs11   # A3 tokens, smartcards, HSMs
 dotnet add package SimpleSign.Signers.Cloud    # cloud certificates (PSC, CSC v2)
 dotnet tool install -g SimpleSign.Cli          # command line
@@ -47,6 +48,8 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.Brazil.GovBr` | Gov.br chain and assurance level, Lei 14.063 |
 | `SimpleSign.Brazil` | Shared: CPF/CNPJ, Lei 14.063 levels, AEA manifest (pulled in by both) |
 | `SimpleSign.Peru.Iofe` | IOFE (Ley 27269): anchors from INDECOPI's signed trusted list, INDECOPI signing and validation policies |
+| `SimpleSign.Europe.Eidas` | eIDAS (Regulation 910/2014): anchors from the EU list of trusted lists, and the qualification of a signature (QESig, AdESig-QC…) |
+| `SimpleSign.Brazil.IcpBrasil.Xades` | ICP-Brasil XAdES signature policies |
 | `SimpleSign.Brazil.Fiscal` | XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf |
 | `SimpleSign.Signers.Pkcs11` | Sign through a token's PKCS#11 driver |
 | `SimpleSign.Signers.Cloud` | Sign with cloud certificates (ICP-Brasil PSCs, CSC API v2) |
@@ -120,8 +123,8 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | Guide | |
 |---|---|
 | [Getting started](docs/articles/getting-started.md) | First signature, validation, appearance |
-| [PAdES signing](docs/articles/pades.md) | Levels, appearance, batch, TSA pool, logging |
-| [CAdES and XAdES](docs/articles/cades-xades.md) | Detached/enveloped CMS, XML forms, validation |
+| [PAdES signing](docs/articles/pades.md) | Levels, appearance, batch, augmentation, TSA pool, logging |
+| [CAdES and XAdES](docs/articles/cades-xades.md) | Detached/enveloped CMS, XML forms, validation, augmentation |
 | [Inspection and validation](docs/articles/inspection-validation.md) | Validation results and fast inspection |
 | [Deferred signing](docs/articles/deferred-signing.md) | Two-phase signing (PAdES, CAdES, XAdES) for keys on another machine |
 | [Remote signing](docs/articles/remote-signing.md) | The generic interface for keys outside the engine |
@@ -129,8 +132,10 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Observability](docs/articles/observability.md) | Traces and metrics (`ActivitySource`/`Meter` named `SimpleSign`) |
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
 | [ICP-Brasil](docs/articles/icp-brasil.md) / [Fiscal XML](docs/articles/fiscal-xml.md) | Brazilian PKI and NF-e/eSocial signing |
+| [eIDAS (EU)](docs/articles/eidas.md) | The EU list of trusted lists, and the qualification of a signature (QESig, QESeal, AdESig-QC…) |
 | [IOFE (Peru)](docs/articles/iofe.md) | INDECOPI's trusted list kept current, the policies of INDECOPI's accreditation guide, its checklist and playbook |
-| [CLI](docs/articles/cli.md) | `simplesign sign`, `validate`, `cades`, `xades`… |
+| [The apps](docs/articles/apps.md) | The CLI, the signing Agent, the TestBench and the Sandbox: what each is for |
+| [CLI](docs/articles/cli.md) | `simplesign sign`, `validate`, `augment`, `cades`, `xades`… |
 | [Signing agent](docs/articles/agent.md) / [TestBench](docs/articles/testbench.md) | Tray app with a local signing API; local web app to try every option |
 | [Standard coverage](docs/articles/coverage.md) | Every option with the clause that defines it, and what is not implemented |
 | [Conformance](docs/conformance.md) / [ADRs](docs/adr/) | Standards coverage and design decisions |
@@ -140,9 +145,16 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 ## Extension points
 
 `ITrustAnchorProvider` (trust roots; `DirectoryTrustAnchorProvider` and `TrustedList` are ready-made),
+`ITimedTrustAnchorProvider` (the anchors at a given time, from a trusted list's service history),
+`ITrustedListInfoProvider` (the list the anchors came from, for the `TrustedLists` constraints),
 `IChainValidationProvider` (chain rules), `IExternalSigner` (remote keys), `IHttpClientProvider` (TSA/OCSP/CRL HTTP),
-`IChainRevocationChecker` and `IRevocationCache` (revocation of a chain), `ICertificateCache`, `ICertificateStore`
-and `ICountryExtension` (country packages such as `SimpleSign.Brazil.IcpBrasil` and `SimpleSign.Peru.Iofe`).
+`IChainRevocationChecker` and `IRevocationCache` (revocation of a chain), `ISignatureAuditSink` (a record of every
+signature made or refused; `AuditChain` gives its hash chain), `IPolicyProvider` and
+`ISignaturePolicyDocumentProvider` (the validation policy and the policy documents),
+`ITimestampClientFactory`, `ICertificateCache`, `ICertificateStore`
+`ICountryExtension` (country packages such as `SimpleSign.Brazil.IcpBrasil`, `SimpleSign.Peru.Iofe` and
+`SimpleSign.Europe.Eidas`) and `ISignatureQualifier` (the qualification of a validated signature, as
+`EidasQualifier` does for eIDAS). A whole framework travels as one `TrustProfile`.
 
 ## Contributing
 

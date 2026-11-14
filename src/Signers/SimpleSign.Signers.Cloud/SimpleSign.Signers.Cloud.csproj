@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Signers.Cloud</PackageId>
     <Description>Sign PAdES, CAdES and XAdES documents with cloud certificates: ICP-Brasil PSCs (BirdID, VIDaaS, NeoID, SafeID, RemoteID — ITI API v0, DOC-ICP-17.01) and Cloud Signature Consortium API v2 providers. OAuth 2.0 with PKCE. No third-party dependencies. Native AOT compatible.</Description>
     <PackageTags>cloud-signature;remote-signing;psc;icp-brasil;birdid;vidaas;csc;cloud-signature-consortium;oauth2;pkce;digital-signature;external-signer;native-aot</PackageTags>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

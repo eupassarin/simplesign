@@ -210,10 +210,23 @@ services.AddSimpleSign(options =>
 // For ICP-Brasil and Gov.br support
 services.AddSimpleSignIcpBrasil();
 services.AddSimpleSignGovBr();
+
+// For IOFE (Peru): also registers a hosted service that reads INDECOPI's
+// trusted list when the host starts, and every 6 hours after that.
+services.AddSimpleSignIofe(new IofeExtensionOptions
+{
+    TrustedListSigners = [indecopiTslSigner],
+    CacheFile = "/var/lib/simplesign/tsl-pe.xml",
+}, refreshInterval: TimeSpan.FromHours(6));
 ```
 
 ## Next Steps
 
-- [Deferred Signing](deferred-signing.md) — for web apps where the key is on a client device
+- [The apps](apps.md) — the CLI, the signing Agent, the TestBench and the Sandbox
+- [Deferred Signing](deferred-signing.md) — two-phase signing, for a key on another machine
 - [Inspection & Validation](inspection-validation.md) — detailed metadata extraction
+- [CAdES and XAdES](cades-xades.md) — CMS and XML signatures, and augmenting an existing signature
+- [Observability](observability.md) — traces and metrics
+- [CLI](cli.md) — `simplesign sign`, `validate`, `augment`…
 - [ICP-Brasil](icp-brasil.md) — Brazilian PKI integration
+- [IOFE (Peru)](iofe.md) — INDECOPI's trusted list and the accreditation guide's policies

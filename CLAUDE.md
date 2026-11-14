@@ -117,6 +117,13 @@ await foreach (var r in batch.SignAllAsync(inputs)) { }
 await CadesSigner.Document(data).WithCertificate(cert)
     .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(url))))
     .SignAsync();
+
+// Augmentation: raise an existing signature without touching what is signed (ADR 0025)
+var augmented = await PadesAugmenter.Document(signedPdf)
+    .ToLevel(AdesBaselineLevel.Archive)          // or .RenewArchive() on a B-LTA
+    .WithTimestamp(TimestampOptions.DigiCert)
+    .AugmentAsync();                              // .Document, .InitialLevel, .Level
+// Same shape: CadesAugmenter.Signature(cms, detachedContent?) / XadesAugmenter.Document(xml, detachedData?)
 ```
 
 ### Trust profiles
@@ -132,12 +139,15 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 
 ### Extension Points (interfaces)
 - `ITrustAnchorProvider` — custom trust roots
+- `ITimedTrustAnchorProvider` — the anchors at a given time (trusted-list service history, ADR 0026)
 - `IHttpClientProvider` — custom HTTP for TSA/OCSP/CRL
 - `ICertificateCache` — cert caching
 - `IChainValidationProvider` — custom chain logic
 - `IChainRevocationChecker` / `IRevocationCache` — revocation of a whole chain, CRL cache
 - `ICountryExtension` — country packages (ICP-Brasil, Gov.br, IOFE, eIDAS)
 - `ISignatureQualifier` — the qualification of a validated signature under a framework (eIDAS's `EidasQualifier`)
+- `ISignatureAuditSink` — a record of every signature made or refused (`AuditChain`, `JsonLinesAuditSink`)
+- `IPolicyProvider` / `ISignaturePolicyDocumentProvider` — the validation policy, and policy documents
 - `DirectoryTrustAnchorProvider`, `TrustedList` — ready-made `ITrustAnchorProvider`s
 
 ### Error Handling

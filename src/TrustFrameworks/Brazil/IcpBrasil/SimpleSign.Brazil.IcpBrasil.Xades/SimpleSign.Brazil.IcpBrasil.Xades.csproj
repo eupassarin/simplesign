@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Brazil.IcpBrasil.Xades</PackageId>
     <Description>XAdES under the ICP-Brasil signature policies: AD-RB, AD-RT, AD-RV, AD-RC and AD-RA signing, policy validation and the verified LPA_XAdES refresh.</Description>
     <PackageTags>xades;icp-brasil;brazil;signature-policy;ad-rb;ad-rt;ad-rc;ad-ra;xmldsig</PackageTags>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 

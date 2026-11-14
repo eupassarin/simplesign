@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Brazil.Fiscal</PackageId>
     <Description>XMLDSig signing and validation of Brazilian fiscal XML: NF-e, NFC-e, CT-e, MDF-e (and their events), NFS-e Nacional, eSocial and EFD-Reinf, with ICP-Brasil certificates.</Description>
     <PackageTags>nfe;nfce;cte;mdfe;nfse;esocial;reinf;xmldsig;icp-brasil;brazil;fiscal</PackageTags>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 

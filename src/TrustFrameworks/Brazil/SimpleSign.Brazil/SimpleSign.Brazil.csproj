@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Brazil</PackageId>
     <Description>Shared building blocks of the SimpleSign Brazilian trust frameworks: CPF/CNPJ, Lei 14.063/2020 levels, the advanced-signature (AEA) manifest and the ITI VALIDAR helpers. Used by SimpleSign.Brazil.IcpBrasil and SimpleSign.Brazil.GovBr.</Description>
     <PackageTags>brazil;cpf;cnpj;lei-14063;aea;digital-signature;native-aot</PackageTags>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

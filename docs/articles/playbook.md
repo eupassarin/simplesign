@@ -1,5 +1,7 @@
 # Playbooks
 
+> Part of [the apps that ship with SimpleSign](apps.md): the CLI, the Agent, the TestBench and the Sandbox.
+
 A **playbook** is a list of TestBench steps, grouped in sections: a signature that must be made or refused for a
 given reason, or a file that must validate or not, each with what its run must show. The TestBench runs it against a
 [Sandbox](sandbox.md), through the library, the CLI or both, keeps the latest result of every step, and exports the
@@ -17,7 +19,8 @@ them and the evidence groups by them.
 1. Start a Sandbox and the TestBench, and connect them (`tools/stack/up.sh`, or the two `dotnet run` lines of
    [testbench.md](testbench.md)). Start DSS too for steps with `crossValidate`.
 2. In the TestBench, open the **Playbook** tab (top bar, after Sign and Validate). Open a playbook file, or pick a
-   sample (`docs/playbooks/*.json` are bundled: `sandbox-basics`, `indecopi-guia-v4`, `etsi-baseline`, `icp-brasil-pades`, `govbr-pades`).
+   sample (`docs/playbooks/*.json` are bundled: `sandbox-basics`, `indecopi-guia-v4`, `etsi-baseline`,
+   `eidas-baseline`, `icp-brasil-pades`, `govbr-pades`).
 3. The playbook is checked when it loads: every Sandbox signer and certificate, failure, preset and step reference.
    Errors stop it; warnings do not.
 4. The page has three columns:

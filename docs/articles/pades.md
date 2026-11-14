@@ -206,6 +206,48 @@ Each result includes:
 - `Constraints` — every check, the validation policy's (`ValidationOptions.Policy`) included
 - `SignerName`, `SigningTime`, `DigestAlgorithmOid`, `SubFilter`, `Warnings`
 
+## Augmenting an existing signature
+
+`PadesAugmenter` raises a PDF that is already signed to a higher baseline level, without touching
+what is signed: the signature, its byte range and the original revisions stay exactly as they are,
+and the evidence is appended in a new incremental update (ADR 0025).
+
+```csharp
+using SimpleSign.PAdES;
+
+var result = await PadesAugmenter
+    .Document(await File.ReadAllBytesAsync("signed-b-b.pdf"))
+    .ToLevel(AdesBaselineLevel.Archive)
+    .WithTimestamp(TimestampOptions.DigiCert)
+    .AugmentAsync();
+
+Console.WriteLine($"{result.InitialLevel} -> {result.Level}");
+await File.WriteAllBytesAsync("signed-b-lta.pdf", result.Document);
+```
+
+`RenewArchive()` adds a new document timestamp to a B-LTA before the current archive timestamp's TSA
+certificate expires, which is how a long-term signature stays verifiable:
+
+```csharp
+var renewed = await PadesAugmenter.Document(bytes)
+    .RenewArchive()
+    .WithTimestamp(TimestampOptions.DigiCert)
+    .AugmentAsync();
+```
+
+A level that cannot be reached — no TSA for B-T, no revocation data available for B-LT — throws
+`SigningException` with `SigningErrorReason.LevelNotAchievable` rather than quietly returning a
+lower level. Augmenting never downgrades: asking for a level the document already has is a no-op.
+
+From the CLI:
+
+```bash
+simplesign augment signed.pdf --level BLTA --tsa http://timestamp.digicert.com
+```
+
+CAdES and XAdES have the same shape — see
+[Augmenting an existing signature](cades-xades.md#augmenting-an-existing-signature).
+
 ## Inspection
 
 Extract metadata without full validation (fast, non-cryptographic):
@@ -301,7 +343,7 @@ byte[] tsaResponse = await pool.GetTimestampAsync(
 
 ## Structured Logging
 
-105 source-generated `[LoggerMessage]` definitions with semantic fields:
+Source-generated `[LoggerMessage]` definitions with semantic fields:
 
 ```csharp
 services.AddLogging(b => b.AddConsole());

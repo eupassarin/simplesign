@@ -15,8 +15,8 @@ a project implementing `ICountryExtension`, built on the public API of Core and 
 - `EidasPolicies.Signing` / `Validation` and `EidasProfile` (`eidas`): `WithProfile(eidas)` for signers,
   `ValidationOptions.Profile = eidas` for validators; `simplesign … --profile eidas` in the CLI.
 
-Documentation: [docs/articles/eidas.md](../../../docs/articles/eidas.md); what each item shows in
-[docs/playbooks/eidas-checklist.md](../../../docs/playbooks/eidas-checklist.md).
+Documentation: [docs/articles/eidas.md](../../../../docs/articles/eidas.md); what each item shows in
+[docs/playbooks/eidas-checklist.md](../../../../docs/playbooks/eidas-checklist.md).
 
 ## The bundled LOTL signers
 

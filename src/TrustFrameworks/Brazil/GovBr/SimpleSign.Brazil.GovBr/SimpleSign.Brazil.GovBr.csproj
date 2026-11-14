@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Brazil.GovBr</PackageId>
     <Description>Gov.br for SimpleSign: bundled Gov.br AC Raiz and intermediates, Gov.br chain validation and assurance level, and the Lei 14.063 advanced level of Gov.br signatures.</Description>
     <PackageTags>govbr;gov.br;brazil;digital-signature;lei-14063;aea;native-aot</PackageTags>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

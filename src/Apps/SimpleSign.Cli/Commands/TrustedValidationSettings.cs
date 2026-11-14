@@ -12,7 +12,7 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, iofe, icp-brasil, govbr). Write one with 'simplesign policy export validation [--preset NAME]'")]
+    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, iofe, eidas, icp-brasil, govbr). Write one with 'simplesign policy export validation [[--preset NAME]]'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>The trust profile: its validation policy (unless --policy) and its trust (unless --tsl/--lotl).</summary>

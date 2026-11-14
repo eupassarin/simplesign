@@ -107,6 +107,7 @@ src/
     SimpleSign.Cli/                # dotnet tool
     SimpleSign.Agent/              # tray app with a local signing API
     SimpleSign.TestBench/          # local web app to try every option
+    SimpleSign.Sandbox/            # test PKI (CRL, OCSP, TSA, CSC) for the TestBench and the playbooks
 tests/
   unit/        # unit tests, one project per library and app, mirroring src/ (CLI tests in unit/Apps)
   integration/ # network-dependent tests
