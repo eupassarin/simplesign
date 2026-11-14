@@ -45,6 +45,7 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
     [InlineData("sandbox-basics")]
     [InlineData("indecopi-guia-v4")]
     [InlineData("etsi-baseline")]
+    [InlineData("eidas-baseline")]
     [InlineData("icp-brasil-pades")]
     [InlineData("govbr-pades")]
     public async Task RunToEnd_Sample_PassesEveryStep(string sample)

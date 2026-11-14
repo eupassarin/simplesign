@@ -100,7 +100,8 @@ internal static class PolicySchema
             "Timestamp:SigningTimestampConstraints Cryptographic:C",
             [("Name", PolicyAttributeKind.String)]);
         Add("SigningCertificateConstraints",
-            "NotExpired:L RevocationDataAvailable:L KeyUsage:M ExtendedKeyUsage:M NotRevoked:L CRLNextUpdatePresent:L ProspectiveCertificateChain:L Cryptographic:C");
+            "NotExpired:L RevocationDataAvailable:L KeyUsage:M ExtendedKeyUsage:M NotRevoked:L CRLNextUpdatePresent:L ProspectiveCertificateChain:L " +
+            "QcCompliance:L QcSSCD:L Cryptographic:C");
         // The checks of the TSA certificate of each timestamp obtained while signing (B-T, B-LT, B-LTA).
         Add("SigningTimestampConstraints", "ProspectiveCertificateChain:L NotExpired:L NotRevoked:L RevocationDataAvailable:L");
         Add("SigningCaCertificateConstraints", "NotExpired:L RevocationDataAvailable:L NotRevoked:L CRLNextUpdatePresent:L Cryptographic:C");

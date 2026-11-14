@@ -83,7 +83,7 @@ public sealed class ValidationServiceTests(TestBenchFixture fixture)
         {
             Trust = [],
             Profile = TrustProfileChoice.Iofe,
-            ProfileSource = IofeListSource.Sandbox,
+            ProfileSource = ProfileListSource.Sandbox,
             // The profile's policy, as the Profile menu sets it.
             PolicyId = SimpleSign.TestBench.Policies.PolicyPresets.Id("validation", "iofe"),
         }, default);

@@ -42,6 +42,18 @@ internal static class PlaybookExpectations
             checks.Add(new("subIndication", expectedSub, subIndication ?? "—", Same(expectedSub, subIndication)));
         }
 
+        string? qualification = verdict?.Qualification;
+        string? timestampQualification = verdict?.TimestampQualifications is [var first, ..] ? first : null;
+        if (expect.Qualification is { } expectedQualification)
+        {
+            checks.Add(new("qualification", expectedQualification, qualification ?? "—", Same(expectedQualification, qualification)));
+        }
+
+        if (expect.TimestampQualification is { } expectedTimestamp)
+        {
+            checks.Add(new("timestampQualification", expectedTimestamp, timestampQualification ?? "—", Same(expectedTimestamp, timestampQualification)));
+        }
+
         if (expect.Level is { } expectedLevel)
         {
             checks.Add(new("level", expectedLevel, level ?? "—", Same(expectedLevel, level)));
@@ -92,6 +104,8 @@ internal static class PlaybookExpectations
         {
             CrossValidated = crossValidated,
             DssError = dssAgrees is null && crossValidated ? dssError ?? "DSS gave no verdict." : null,
+            Qualification = qualification,
+            TimestampQualification = timestampQualification,
         };
     }
 
@@ -115,6 +129,8 @@ internal static class PlaybookExpectations
             ("indication", library.Indication, cli.Indication),
             ("subIndication", library.SubIndication, cli.SubIndication),
             ("level", library.AchievedLevel, cli.AchievedLevel),
+            ("qualification", library.Qualification, cli.Qualification),
+            ("timestampQualification", library.TimestampQualification, cli.TimestampQualification),
         ];
         return [.. fields.Where(f => !string.Equals(f.Library, f.Cli, StringComparison.OrdinalIgnoreCase))
             .Select(f => new PlaybookEngineDifference(f.What, f.Library, f.Cli))];

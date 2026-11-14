@@ -2,7 +2,7 @@
 
 export type SignatureKind = "Baseline" | "CustomPolicy"
 export type BaselineLevel = "BB" | "BT" | "BLT" | "BLTA"
-export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "SandboxUntrusted" | "SandboxRevoked" | "SandboxExpired" | "SandboxWrongName" | "SandboxShortLived" | "SandboxIofe" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
+export type TsaProvider = "Sandbox" | "SandboxAuthenticated" | "SandboxUntrusted" | "SandboxRevoked" | "SandboxExpired" | "SandboxWrongName" | "SandboxShortLived" | "SandboxIofe" | "SandboxNonQualified" | "DigiCert" | "Sectigo" | "FreeTsa" | "Custom"
 export type TsaAuth = "None" | "Basic" | "Bearer"
 export type HashChoice = "Sha256" | "Sha384" | "Sha512" | "Sha3_256" | "Sha3_384" | "Sha3_512"
 export type RsaPadding = "Pkcs1" | "Pss"
@@ -375,13 +375,13 @@ export interface MatrixRunResult {
 export type TrustChoice = "Sandbox" | "System" | "SandboxTrustedList" | "PublicTsas"
 
 /** A trust profile (SimpleSign's TrustProfile): one sets the policies, others add their trust. */
-export type TrustProfileChoice = "None" | "Sandbox" | "Iofe" | "IcpBrasil" | "GovBr"
+export type TrustProfileChoice = "None" | "Sandbox" | "Iofe" | "Eidas" | "IcpBrasil" | "GovBr"
 
 export interface ValidationSettings {
   trust: TrustChoice[]
   profile?: TrustProfileChoice
   /** Which list the Iofe profile reads. */
-  profileSource?: "Indecopi" | "Sandbox"
+  profileSource?: "Official" | "Sandbox"
   trustProfiles?: TrustProfileChoice[]
   customRootUploadIds: string[]
   timeoutSeconds: number

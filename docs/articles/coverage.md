@@ -12,9 +12,9 @@ from the published standards; check them against the version you follow before q
 
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
-| PAdES | 134 | 133 | 1 |
-| CAdES | 84 | 83 | 1 |
-| XAdES | 92 | 88 | 4 |
+| PAdES | 136 | 135 | 1 |
+| CAdES | 86 | 85 | 1 |
+| XAdES | 94 | 90 | 4 |
 
 ## PAdES
 
@@ -60,8 +60,9 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Cryptography | Trust profile | ETSI TS 119 612 · Trusted lists | `WithProfile(TrustProfile)` | yes |
 | Cryptography | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
 | Cryptography | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Cryptography | Trust profile: EU (eIDAS) |  | `EidasProfile.LoadAsync()` | yes |
 | Cryptography | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
-| Cryptography | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Cryptography | Trusted list source |  | `IofeExtensionOptions.TrustedListUrl / EidasExtensionOptions.LotlUrl` | yes |
 | Cryptography | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
 | Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
@@ -149,9 +150,10 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Trust profile | ETSI TS 119 612 · Trusted lists | `ValidationOptions.Profile` | yes |
 | Run and validation | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
 | Run and validation | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Run and validation | Trust profile: EU (eIDAS) |  | `EidasProfile.LoadAsync()` | yes |
 | Run and validation | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
 | Run and validation | Trust profile: Gov.br |  | `GovBrProfile.Create()` | yes |
-| Run and validation | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Run and validation | Trusted list source |  | `IofeExtensionOptions.TrustedListUrl / EidasExtensionOptions.LotlUrl` | yes |
 | Run and validation | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |
@@ -205,8 +207,9 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Cryptography | Trust profile | ETSI TS 119 612 · Trusted lists | `WithProfile(TrustProfile)` | yes |
 | Cryptography | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
 | Cryptography | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Cryptography | Trust profile: EU (eIDAS) |  | `EidasProfile.LoadAsync()` | yes |
 | Cryptography | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
-| Cryptography | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Cryptography | Trusted list source |  | `IofeExtensionOptions.TrustedListUrl / EidasExtensionOptions.LotlUrl` | yes |
 | Cryptography | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
 | Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
@@ -240,9 +243,10 @@ ETSI EN 319 122-1 (CAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Trust profile | ETSI TS 119 612 · Trusted lists | `ValidationOptions.Profile` | yes |
 | Run and validation | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
 | Run and validation | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Run and validation | Trust profile: EU (eIDAS) |  | `EidasProfile.LoadAsync()` | yes |
 | Run and validation | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
 | Run and validation | Trust profile: Gov.br |  | `GovBrProfile.Create()` | yes |
-| Run and validation | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Run and validation | Trusted list source |  | `IofeExtensionOptions.TrustedListUrl / EidasExtensionOptions.LotlUrl` | yes |
 | Run and validation | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |
@@ -298,8 +302,9 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Cryptography | Trust profile | ETSI TS 119 612 · Trusted lists | `WithProfile(TrustProfile)` | yes |
 | Cryptography | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
 | Cryptography | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Cryptography | Trust profile: EU (eIDAS) |  | `EidasProfile.LoadAsync()` | yes |
 | Cryptography | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
-| Cryptography | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Cryptography | Trusted list source |  | `IofeExtensionOptions.TrustedListUrl / EidasExtensionOptions.LotlUrl` | yes |
 | Cryptography | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Cryptography | Expected TSA | RFC 3161 · §2.4.2 Response format | `TimestampOptions.ExpectedTsaCertificate` | yes |
 | Cryptography | Audit trail |  | `WithAuditSink(ISignatureAuditSink)` | yes |
@@ -339,9 +344,10 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Run and validation | Trust profile | ETSI TS 119 612 · Trusted lists | `ValidationOptions.Profile` | yes |
 | Run and validation | Trust profile: Sandbox (test) |  | `--profile sandbox --sandbox URL` | yes |
 | Run and validation | Trust profile: Peru (IOFE) |  | `IofeProfile.LoadAsync()` | yes |
+| Run and validation | Trust profile: EU (eIDAS) |  | `EidasProfile.LoadAsync()` | yes |
 | Run and validation | Trust profile: ICP-Brasil |  | `IcpBrasilProfile.Create()` | yes |
 | Run and validation | Trust profile: Gov.br |  | `GovBrProfile.Create()` | yes |
-| Run and validation | IOFE list |  | `IofeExtensionOptions.TrustedListUrl / TrustedListSigners` | yes |
+| Run and validation | Trusted list source |  | `IofeExtensionOptions.TrustedListUrl / EidasExtensionOptions.LotlUrl` | yes |
 | Run and validation | Also trust |  | `TrustProfile.WithTrustFrom(params TrustProfile[])` | yes |
 | Run and validation | Validation policy (JSON) | ETSI EN 319 102-1 · §5 Validation process<br>ETSI TS 119 172-1 · Signature policies | `ValidationOptions.Policy = ValidationPolicy.Load(path)` | yes |
 | Run and validation | Validation level | ETSI EN 319 102-1 · §5.3 Validation process for Basic Signatures<br>ETSI EN 319 102-1 · §5.5 Validation process for Signatures providing Long Term Availability | `ValidationOptions.Level` | yes |

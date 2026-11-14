@@ -12,8 +12,8 @@ import { asText, getPath, setPath, type Options } from "./schema"
 // its own, `profile` (with `profileSource` for IOFE and `trustProfiles` for the others' trust), on the signing controls and
 // on the validation. Only one profile sets the policies: the menu writes its presets in the policy fields, where they show.
 
-export type Profile = "Sandbox" | "Iofe" | "IcpBrasil" | "GovBr"
-export type ProfileSource = "Indecopi" | "Sandbox"
+export type Profile = "Sandbox" | "Iofe" | "Eidas" | "IcpBrasil" | "GovBr"
+export type ProfileSource = "Official" | "Sandbox"
 
 /** The profile on: which one, and for IOFE which list it reads. */
 export interface ProfileChoice {
@@ -37,13 +37,17 @@ interface ProfileDefinition {
 export const profiles: Record<Profile, ProfileDefinition> = {
   Sandbox: { signs: true, flag: "🧪", title: "wb.profile.sandbox" },
   Iofe: { signing: "preset:signing:iofe", validation: "preset:validation:iofe", signs: true, flag: "🇵🇪", title: "wb.profile.peru" },
+  Eidas: { signing: "preset:signing:eidas", validation: "preset:validation:eidas", signs: true, flag: "🇪🇺", title: "wb.profile.eidas" },
   IcpBrasil: { signing: "preset:signing:icp-brasil", validation: "preset:validation:icp-brasil", signs: true, flag: "🇧🇷", title: "wb.profile.icpBrasil" },
   GovBr: { validation: "preset:validation:govbr", signs: false, flag: "🇧🇷", title: "wb.profile.govBr" },
 }
 
 const all = Object.keys(profiles) as Profile[]
 
-/** The menu's profiles: one entry each (Peru's list is chosen inside its entry), Gov.br on Validate only. */
+/** The profiles that read a trusted list, real or the Sandbox's: the list is chosen inside their entry. */
+const withSource: Profile[] = ["Iofe", "Eidas"]
+
+/** The menu's profiles: one entry each (Peru's and the EU's list is chosen inside the entry), Gov.br on Validate only. */
 function entries(page: ProfilePage): Profile[] {
   return all.filter((p) => page === "validate" || profiles[p].signs)
 }
@@ -58,7 +62,7 @@ export function activeProfile(options: Options): ProfileChoice | null {
   for (const holder of ["validation", "signingControls"]) {
     const profile = asText(getPath(options, `${holder}.profile`))
     if (profile && profile !== "None" && profile in profiles) {
-      return { profile: profile as Profile, source: asText(getPath(options, `${holder}.profileSource`)) === "Sandbox" ? "Sandbox" : "Indecopi" }
+      return { profile: profile as Profile, source: asText(getPath(options, `${holder}.profileSource`)) === "Sandbox" ? "Sandbox" : "Official" }
     }
   }
   return null
@@ -72,8 +76,9 @@ export function extraProfiles(options: Options): Profile[] {
 
 /** The name of a profile on: "Peru (IOFE) · Sandbox's list". */
 export function profileTitle(choice: ProfileChoice, t: ReturnType<typeof useT>): string {
-  if (choice.profile !== "Iofe") return t(profiles[choice.profile].title)
-  return `${t("wb.profile.peru")} · ${t(choice.source === "Sandbox" ? "wb.profile.listSandbox" : "wb.profile.listIndecopi")}`
+  if (choice.profile === "Iofe") return `${t("wb.profile.peru")} · ${t(choice.source === "Sandbox" ? "wb.profile.listSandbox" : "wb.profile.listIndecopi")}`
+  if (choice.profile === "Eidas") return `${t("wb.profile.eidas")} · ${t(choice.source === "Sandbox" ? "wb.profile.lotlSandbox" : "wb.profile.lotlEu")}`
+  return t(profiles[choice.profile].title)
 }
 
 /** The policy preset the profile puts at <paramref name="path"/>, or null (SimpleSign's default). */
@@ -111,7 +116,7 @@ export function applyProfile(options: Options, next: ProfileChoice | null, page:
   let o = options
   for (const holder of holders(o, page)) {
     o = setPath(o, `${holder}.profile`, next?.profile ?? "None")
-    o = setPath(o, `${holder}.profileSource`, next?.source ?? "Indecopi")
+    o = setPath(o, `${holder}.profileSource`, next?.source ?? "Official")
     const extras = getPath(o, `${holder}.trustProfiles`)
     if (next && Array.isArray(extras)) o = setPath(o, `${holder}.trustProfiles`, (extras as string[]).filter((p) => p !== next.profile))
   }
@@ -152,18 +157,20 @@ function effects(choice: ProfileChoice, page: ProfilePage, t: ReturnType<typeof 
   const trust: Record<Profile, MessageKey> = {
     Sandbox: "wb.profile.effect.trustSandbox",
     Iofe: choice.source === "Sandbox" ? "wb.profile.effect.trustPeruSandbox" : "wb.profile.effect.trustPeru",
+    Eidas: choice.source === "Sandbox" ? "wb.profile.effect.trustEidasSandbox" : "wb.profile.effect.trustEidas",
     IcpBrasil: "wb.profile.effect.trustIcp",
     GovBr: "wb.profile.effect.trustGovBr",
   }
   lines.push(t(trust[choice.profile]))
   if (page === "sign" && choice.profile === "IcpBrasil") lines.push(t("wb.profile.effect.levels"))
-  const test = choice.profile === "Sandbox" || choice.source === "Sandbox" && choice.profile === "Iofe"
+  if (choice.profile === "Eidas") lines.push(t("wb.profile.effect.qualification"))
+  const test = choice.profile === "Sandbox" || choice.source === "Sandbox" && withSource.includes(choice.profile)
   lines.push(t(test ? "wb.profile.effect.sandboxCertificates" : "wb.profile.effect.realCertificates"))
   return lines
 }
 
 const same = (a: ProfileChoice | null, b: ProfileChoice | null) =>
-  a?.profile === b?.profile && (a?.profile !== "Iofe" || a?.source === b?.source)
+  a?.profile === b?.profile && (!a || !withSource.includes(a.profile) || a.source === b?.source)
 
 /**
  * The trust profiles of a page as one menu button (as the Playbook menu): Default or one profile, each saying what it
@@ -180,12 +187,13 @@ export function ProfileMenu({ page, options, update }: {
   const memory = useRef<ProfileMemory>({})
   const active = activeProfile(options)
   const extras = extraProfiles(options)
-  // Peru's list: the one on while IOFE is on, else the last chosen (the Sandbox's at first: the TestBench's certificates).
-  const [pickedSource, setPickedSource] = useState<ProfileSource>("Sandbox")
-  const iofeSource: ProfileSource = active?.profile === "Iofe" ? active.source : pickedSource
+  // The list of Peru and of the EU: the one on while the profile is on, else the last chosen (the Sandbox's at first:
+  // the TestBench's certificates).
+  const [pickedSources, setPickedSources] = useState<Partial<Record<Profile, ProfileSource>>>({})
+  const sourceOf = (profile: Profile): ProfileSource => active?.profile === profile ? active.source : pickedSources[profile] ?? "Sandbox"
   const choose = (next: ProfileChoice | null) => {
     setOpen(false)
-    if (next?.profile === "Iofe") setPickedSource(next.source)
+    if (next && withSource.includes(next.profile)) setPickedSources((picked) => ({ ...picked, [next.profile]: next.source }))
     if (same(next, active)) return
     if (!active) memory.current = rememberPolicies(options)
     update((current) => applyProfile(current, next, page, memory.current))
@@ -217,7 +225,7 @@ export function ProfileMenu({ page, options, update }: {
         </button>
         <div className="bg-border -mx-1 my-1 h-px" />
         {entries(page).map((profile) => {
-          const choice: ProfileChoice = { profile, source: profile === "Iofe" ? iofeSource : "Indecopi" }
+          const choice: ProfileChoice = { profile, source: withSource.includes(profile) ? sourceOf(profile) : "Official" }
           const on = active?.profile === profile
           return (
             <div key={profile} className={cn("rounded-sm", on && "bg-accent/50")}>
@@ -230,15 +238,15 @@ export function ProfileMenu({ page, options, update }: {
                   </span>
                 </span>
               </button>
-              {profile === "Iofe" && (
+              {withSource.includes(profile) && (
                 <div className="flex items-center gap-1.5 pr-2 pb-1.5 pl-8 text-xs" role="radiogroup" aria-label={t("wb.profile.listLabel")}>
                   <span className="text-muted-foreground">{t("wb.profile.listLabel")}</span>
-                  {(["Indecopi", "Sandbox"] as const).map((source) => (
-                    <button key={source} type="button" role="radio" aria-checked={iofeSource === source}
+                  {(["Official", "Sandbox"] as const).map((source) => (
+                    <button key={source} type="button" role="radio" aria-checked={sourceOf(profile) === source}
                       className={cn("rounded border px-1.5 py-0.5",
-                        iofeSource === source ? "border-primary/40 bg-primary/10 text-primary" : "hover:bg-accent text-muted-foreground")}
+                        sourceOf(profile) === source ? "border-primary/40 bg-primary/10 text-primary" : "hover:bg-accent text-muted-foreground")}
                       onClick={() => choose({ profile, source })}>
-                      {t(source === "Sandbox" ? "wb.profile.listSandboxShort" : "wb.profile.listIndecopiShort")}
+                      {t(source === "Sandbox" ? "wb.profile.listSandboxShort" : profile === "Eidas" ? "wb.profile.lotlEuShort" : "wb.profile.listIndecopiShort")}
                     </button>
                   ))}
                 </div>

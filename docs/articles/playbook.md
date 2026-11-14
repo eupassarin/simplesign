@@ -143,6 +143,11 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
   319 132-1), the extended forms, time-stamps, EN 319 102-1 validation (indication and sub-indication) and trusted
   lists, cross-validated with EU DSS. It covers the items [etsi-checklist.md](../playbooks/etsi-checklist.md) marks P;
   each step is tagged with its item id and standard. Written by `tools/playbooks/etsi.py`.
+- `eidas-baseline` — the eIDAS profile on the Sandbox's list of trusted lists: the faults of the LOTL and the TL
+  (`sandbox.lotl`, `sandbox.trustedList`), the qualification of each signature (`expect.qualification`: QESig, QESeal,
+  AdESig-QC, AdESig) and of its time-stamps (`expect.timestampQualification`: QTSA, TSA), through the library and the
+  CLI. It covers the items [eidas-checklist.md](../playbooks/eidas-checklist.md) marks P; see [eidas.md](eidas.md).
+  Written by `tools/playbooks/eidas.py`.
 - `icp-brasil-pades` — PAdES under the ICP-Brasil policies (AD-RB, AD-RT, AD-RC, AD-RA; DOC-ICP-15.03) with the
   `icp-brasil` profile and its policies, through the library and the CLI: the policies, two-phase signing, revocation of
   the whole chain, the ACT checks, keys and digests (DOC-ICP-01.01), PDF fields and certification, validation and

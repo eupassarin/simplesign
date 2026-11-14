@@ -3,6 +3,7 @@ using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
+using SimpleSign.Europe.Eidas;
 using SimpleSign.Peru.Iofe;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
@@ -19,7 +20,7 @@ public enum TrustProfileChoice
     /// <summary>The connected Sandbox (test): its LOTL and SimpleSign's default policies.</summary>
     Sandbox,
 
-    /// <summary>Peru (IOFE): <c>IofeProfile</c>, with INDECOPI's list or the Sandbox's (<see cref="IofeListSource"/>).</summary>
+    /// <summary>Peru (IOFE): <c>IofeProfile</c>, with INDECOPI's list or the Sandbox's (<see cref="ProfileListSource"/>).</summary>
     Iofe,
 
     /// <summary>ICP-Brasil: <c>IcpBrasilProfile</c> (AC Raiz roots and chain validation).</summary>
@@ -27,22 +28,28 @@ public enum TrustProfileChoice
 
     /// <summary>Gov.br: <c>GovBrProfile</c> (validation only).</summary>
     GovBr,
+
+    /// <summary>EU (eIDAS): <c>EidasProfile</c>, with the EU LOTL or the Sandbox's (<see cref="ProfileListSource"/>), and the qualification of each signature.</summary>
+    Eidas,
 }
 
-/// <summary>Which list the IOFE profile reads.</summary>
-public enum IofeListSource
+/// <summary>Which list a profile of a trusted list (IOFE, eIDAS) reads.</summary>
+public enum ProfileListSource
 {
-    /// <summary>INDECOPI's real list (iofe.indecopi.gob.pe), checked against the signer bundled with SimpleSign.Peru.Iofe.</summary>
-    Indecopi,
+    /// <summary>
+    /// The real one, checked against the signers bundled with the package: INDECOPI's list (iofe.indecopi.gob.pe) for IOFE,
+    /// the EU LOTL (ec.europa.eu) and its national lists for eIDAS.
+    /// </summary>
+    Official,
 
-    /// <summary>The connected Sandbox's list read the IOFE way (test): its certificates chain to it, and its faults show.</summary>
+    /// <summary>The connected Sandbox's (test): its certificates chain to it, and its faults show. IOFE reads /tl/tl.xml, eIDAS /tl/lotl.xml.</summary>
     Sandbox,
 }
 
 /// <summary>
 /// The trust profiles as library objects (<see cref="TrustProfile"/>): each comes from its trust framework package
-/// (<see cref="IofeProfile"/>, <see cref="IcpBrasilProfile"/>, <see cref="GovBrProfile"/>), plus the Sandbox's. INDECOPI's
-/// real list is downloaded once, kept in a cache file and refreshed every 6 hours; the Sandbox's lists are read again for
+/// (<see cref="IofeProfile"/>, <see cref="IcpBrasilProfile"/>, <see cref="GovBrProfile"/>, <see cref="EidasProfile"/>), plus the
+/// Sandbox's. INDECOPI's real list and the EU LOTL are downloaded once, kept in a cache and refreshed every 6 hours; the Sandbox's lists are read again for
 /// each run, so their faults show at once.
 /// </summary>
 internal sealed class ProfileTrust : IDisposable
@@ -54,6 +61,8 @@ internal sealed class ProfileTrust : IDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IofeTrustedListSource? _indecopi;
     private DateTimeOffset _indecopiFailedAt = DateTimeOffset.MinValue;
+    private EidasTrustedListSource? _eu;
+    private DateTimeOffset _euFailedAt = DateTimeOffset.MinValue;
 
     /// <summary>Creates the profiles' trust.</summary>
     /// <param name="loadIndecopi">Reads INDECOPI's list; null downloads it (tests pass a fixture).</param>
@@ -75,6 +84,7 @@ internal sealed class ProfileTrust : IDisposable
         TrustProfileChoice.Iofe => IofeProfile.Name,
         TrustProfileChoice.IcpBrasil => IcpBrasilProfile.Name,
         TrustProfileChoice.GovBr => GovBrProfile.Name,
+        TrustProfileChoice.Eidas => EidasProfile.Name,
         _ => null,
     };
 
@@ -84,6 +94,7 @@ internal sealed class ProfileTrust : IDisposable
         (TrustProfileChoice.Iofe, _) => Policies.PolicyPresets.Id(kind, "iofe"),
         (TrustProfileChoice.IcpBrasil, _) => Policies.PolicyPresets.Id(kind, "icp-brasil"),
         (TrustProfileChoice.GovBr, Policies.PolicyViewer.Validation) => Policies.PolicyPresets.Id(kind, "govbr"),
+        (TrustProfileChoice.Eidas, _) => Policies.PolicyPresets.Id(kind, "eidas"),
         _ => null,
     };
 
@@ -92,7 +103,7 @@ internal sealed class ProfileTrust : IDisposable
     /// added; null when none is chosen, or when its list cannot be read (logged). For <paramref name="signing"/> an expired
     /// Sandbox list gives no anchors; for validation it is kept, and the policy's <c>TLNotExpired</c> judges it.
     /// </summary>
-    public async Task<TrustProfile?> ResolveAsync(TrustProfileChoice main, IofeListSource source, IReadOnlyList<TrustProfileChoice> extras,
+    public async Task<TrustProfile?> ResolveAsync(TrustProfileChoice main, ProfileListSource source, IReadOnlyList<TrustProfileChoice> extras,
         SandboxEnvironment sandbox, CancellationToken cancellationToken, bool signing = false)
     {
         if (main == TrustProfileChoice.None && extras.Count == 0)
@@ -118,7 +129,7 @@ internal sealed class ProfileTrust : IDisposable
         return profile.WithTrustFrom([.. added]);
     }
 
-    private async Task<TrustProfile?> LoadAsync(TrustProfileChoice choice, IofeListSource source, SandboxEnvironment sandbox, bool signing, CancellationToken cancellationToken)
+    private async Task<TrustProfile?> LoadAsync(TrustProfileChoice choice, ProfileListSource source, SandboxEnvironment sandbox, bool signing, CancellationToken cancellationToken)
     {
         switch (choice)
         {
@@ -127,7 +138,7 @@ internal sealed class ProfileTrust : IDisposable
                     ? new TrustProfile("sandbox", "SimpleSign Sandbox", SigningPolicy.Default, ValidationPolicy.Default, [set], [])
                     : null;
             case TrustProfileChoice.Iofe:
-                var extension = source == IofeListSource.Sandbox
+                var extension = source == ProfileListSource.Sandbox
                     ? await SandboxIofeListAsync(sandbox, signing, cancellationToken) is { } list ? new IofeExtension(list) : null
                     : await IndecopiAsync(sandbox, cancellationToken) is { } indecopi ? new IofeExtension(indecopi) : null;
                 return extension is null ? null : IofeProfile.Create(extension);
@@ -135,6 +146,11 @@ internal sealed class ProfileTrust : IDisposable
                 return IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { HttpClient = sandbox.GetClient(), Logger = RunLog.Logger });
             case TrustProfileChoice.GovBr:
                 return GovBrProfile.Create(new GovBrExtensionOptions { HttpClient = sandbox.GetClient(), Logger = RunLog.Logger });
+            case TrustProfileChoice.Eidas:
+                var eidas = source == ProfileListSource.Sandbox
+                    ? await SandboxListsAsync(sandbox, signing, cancellationToken) is { } lotl ? new EidasExtension(lotl) : null
+                    : await EuAsync(sandbox, cancellationToken) is { } eu ? new EidasExtension(eu) : null;
+                return eidas is null ? null : EidasProfile.Create(eidas);
             default:
                 return null;
         }
@@ -218,6 +234,49 @@ internal sealed class ProfileTrust : IDisposable
                 _indecopiFailedAt = DateTimeOffset.UtcNow;
                 RunLog.Logger.LogWarning("INDECOPI's trusted list {Url} could not be read: {Reason}. No anchor comes from it.",
                     IofeExtensionOptions.DefaultTrustedListUrl, ex.Message);
+                return null;
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>The EU LOTL and its lists, read once (kept in a cache folder) and refreshed every 6 hours.</summary>
+    private async Task<EidasTrustedListSource?> EuAsync(IHttpClientProvider http, CancellationToken cancellationToken)
+    {
+        if (Volatile.Read(ref _eu) is { } loaded)
+        {
+            return loaded;
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_eu is not null || DateTimeOffset.UtcNow - _euFailedAt < s_retry)
+            {
+                return _eu;
+            }
+
+            try
+            {
+                string cache = Path.Combine(Path.GetDirectoryName(SandboxEnvironment.DefaultStatePath)!, "eu-lotl");
+                var source = await EidasTrustedListSource.LoadAsync(new EidasExtensionOptions
+                {
+                    CacheDirectory = cache,
+                    HttpClientProvider = http,
+                    ListOptions = new TrustedListOptions { RejectExpired = false },
+                }, cancellationToken).ConfigureAwait(false);
+                source.StartAutoRefresh(s_refresh);
+                Volatile.Write(ref _eu, source);
+                return source;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidDataException
+                or System.Security.Cryptography.CryptographicException or System.Xml.XmlException)
+            {
+                _euFailedAt = DateTimeOffset.UtcNow;
+                RunLog.Logger.LogWarning("The EU list of trusted lists could not be read: {Reason}. No anchor comes from it.", ex.Message);
                 return null;
             }
         }

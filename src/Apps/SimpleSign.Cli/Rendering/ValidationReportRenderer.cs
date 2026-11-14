@@ -15,24 +15,40 @@ internal static class ValidationReportRenderer
     /// <summary>Adds the report under <paramref name="parent"/>.</summary>
     internal static void AddNodes(
         TreeNode parent, SignatureIndication indication, SignatureSubIndication? subIndication,
-        IReadOnlyList<ValidationConstraintResult> constraints, X509Certificate2? signer, bool spanish)
+        IReadOnlyList<ValidationConstraintResult> constraints, X509Certificate2? signer, bool spanish, SignatureQualification? qualification = null)
     {
         var report = parent.AddNode($"[blue]{(spanish ? "Informe de verificación" : "Verification report")}[/]");
         foreach (string line in Lines(indication, subIndication, constraints, signer, spanish))
         {
             report.AddNode(line);
         }
+
+        if (qualification is not null)
+        {
+            report.AddNode(QualificationLine(qualification, spanish));
+        }
     }
+
+    /// <summary>The qualification line (eIDAS): the level and its framework.</summary>
+    private static string QualificationLine(SignatureQualification qualification, bool spanish) =>
+        $"{(spanish ? "Cualificación" : "Qualification")}: [bold]{Markup.Escape(qualification.Level)}[/]"
+        + (qualification.Framework is { } framework ? $" ({Markup.Escape(framework)})" : "")
+        + string.Concat(qualification.Timestamps.Select(t => $" · {(spanish ? "sello" : "timestamp")} {t.Time.UtcDateTime:yyyy-MM-dd HH:mm}: {Markup.Escape(t.Level)}"));
 
     /// <summary>Writes the report to the console.</summary>
     internal static void Write(
         SignatureIndication indication, SignatureSubIndication? subIndication,
-        IReadOnlyList<ValidationConstraintResult> constraints, X509Certificate2? signer, bool spanish)
+        IReadOnlyList<ValidationConstraintResult> constraints, X509Certificate2? signer, bool spanish, SignatureQualification? qualification = null)
     {
         AnsiConsole.MarkupLine($"\n[blue]{(spanish ? "Informe de verificación" : "Verification report")}[/]");
         foreach (string line in Lines(indication, subIndication, constraints, signer, spanish))
         {
             AnsiConsole.MarkupLine("  " + line);
+        }
+
+        if (qualification is not null)
+        {
+            AnsiConsole.MarkupLine("  " + QualificationLine(qualification, spanish));
         }
     }
 

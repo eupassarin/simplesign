@@ -18,7 +18,7 @@ internal static class HtmlValidationReport
             "Integrity of the signed data", "intact", "altered", "not established", "Claimed signing time",
             "Time proved by a timestamp", "Signer certificate", "Subject", "Issuer", "Serial number", "Valid from", "Valid to",
             "Key usage", "SHA-256 fingerprint", "Public key", "Timestamps", "Revocation data", "Validation policy",
-            "Errors", "Warnings", "none", "PASSED", "FAILED", "INDETERMINATE", "Format",
+            "Errors", "Warnings", "none", "PASSED", "FAILED", "INDETERMINATE", "Format", "Qualification",
         ],
         ["pt"] =
         [
@@ -26,7 +26,7 @@ internal static class HtmlValidationReport
             "Integridade dos dados assinados", "íntegros", "alterados", "não determinada", "Data de assinatura declarada",
             "Data provada por carimbo do tempo", "Certificado do signatário", "Titular", "Emissor", "Número de série", "Válido de",
             "Válido até", "Uso da chave", "Impressão digital SHA-256", "Chave pública", "Carimbos do tempo", "Dados de revogação",
-            "Política de validação", "Erros", "Avisos", "nenhum", "APROVADA", "REPROVADA", "INDETERMINADA", "Formato",
+            "Política de validação", "Erros", "Avisos", "nenhum", "APROVADA", "REPROVADA", "INDETERMINADA", "Formato", "Qualificação",
         ],
         ["es"] =
         [
@@ -34,7 +34,7 @@ internal static class HtmlValidationReport
             "Integridad de los datos firmados", "íntegros", "alterados", "no determinada", "Fecha de firma declarada",
             "Fecha probada por sello de tiempo", "Certificado del firmante", "Titular", "Emisor", "Número de serie", "Válido desde",
             "Válido hasta", "Uso de la clave", "Huella digital SHA-256", "Clave pública", "Sellos de tiempo", "Datos de revocación",
-            "Política de validación", "Errores", "Advertencias", "ninguno", "APROBADA", "RECHAZADA", "INDETERMINADA", "Formato",
+            "Política de validación", "Errores", "Advertencias", "ninguno", "APROBADA", "RECHAZADA", "INDETERMINADA", "Formato", "Cualificación",
         ],
     };
 
@@ -42,7 +42,7 @@ internal static class HtmlValidationReport
     {
         Title, ValidatedAt, Signatures, Valid, Signature, Result, Reason, Integrity, Intact, Altered, NotEstablished,
         ClaimedTime, ProvedTime, Certificate, Subject, Issuer, Serial, ValidFrom, ValidTo, KeyUsage, Fingerprint, PublicKey,
-        Timestamps, Revocation, Policy, Errors, Warnings, None, Passed, Failed, Indeterminate, Format,
+        Timestamps, Revocation, Policy, Errors, Warnings, None, Passed, Failed, Indeterminate, Format, Qualification,
     }
 
     internal static string Write(IReadOnlyList<SignatureReportEntry> signatures, string? requestedLanguage, DateTimeOffset validationTime)
@@ -98,6 +98,11 @@ internal static class HtmlValidationReport
             if (signature.Policy is { } policy)
             {
                 Row(html, L(Label.Policy), $"{policy.Name} ({policy.Digest})");
+            }
+
+            if (signature.Qualification is { } qualification)
+            {
+                Row(html, L(Label.Qualification), qualification.Framework is { } framework ? $"{qualification.Level} ({framework})" : qualification.Level);
             }
 
             html.Append("</table>\n");

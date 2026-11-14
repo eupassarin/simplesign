@@ -31,7 +31,7 @@ public sealed class ProfileTrustTests : IDisposable
     {
         using var profiles = new ProfileTrust();
 
-        (await profiles.ResolveAsync(TrustProfileChoice.None, IofeListSource.Indecopi, [], _sandbox, default)).ShouldBeNull();
+        (await profiles.ResolveAsync(TrustProfileChoice.None, ProfileListSource.Official, [], _sandbox, default)).ShouldBeNull();
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class ProfileTrustTests : IDisposable
     {
         using var profiles = new ProfileTrust();
 
-        var profile = (await profiles.ResolveAsync(TrustProfileChoice.IcpBrasil, IofeListSource.Indecopi, [], _sandbox, default)).ShouldNotBeNull();
+        var profile = (await profiles.ResolveAsync(TrustProfileChoice.IcpBrasil, ProfileListSource.Official, [], _sandbox, default)).ShouldNotBeNull();
 
         profile.Name.ShouldBe("icp-brasil");
         profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()).ShouldNotBeEmpty();
@@ -52,7 +52,7 @@ public sealed class ProfileTrustTests : IDisposable
     {
         using var profiles = new ProfileTrust();
 
-        var profile = (await profiles.ResolveAsync(TrustProfileChoice.GovBr, IofeListSource.Indecopi, [], _sandbox, default)).ShouldNotBeNull();
+        var profile = (await profiles.ResolveAsync(TrustProfileChoice.GovBr, ProfileListSource.Official, [], _sandbox, default)).ShouldNotBeNull();
 
         profile.Name.ShouldBe("gov-br");
         profile.CanSign.ShouldBeFalse();
@@ -63,9 +63,9 @@ public sealed class ProfileTrustTests : IDisposable
     public async Task ResolveAsync_IcpBrasilAlsoTrustingGovBr_KeepsTheIcpPoliciesAndAddsTheGovBrTrust()
     {
         using var profiles = new ProfileTrust();
-        var icp = (await profiles.ResolveAsync(TrustProfileChoice.IcpBrasil, IofeListSource.Indecopi, [], _sandbox, default)).ShouldNotBeNull();
+        var icp = (await profiles.ResolveAsync(TrustProfileChoice.IcpBrasil, ProfileListSource.Official, [], _sandbox, default)).ShouldNotBeNull();
 
-        var both = (await profiles.ResolveAsync(TrustProfileChoice.IcpBrasil, IofeListSource.Indecopi, [TrustProfileChoice.GovBr], _sandbox, default)).ShouldNotBeNull();
+        var both = (await profiles.ResolveAsync(TrustProfileChoice.IcpBrasil, ProfileListSource.Official, [TrustProfileChoice.GovBr], _sandbox, default)).ShouldNotBeNull();
 
         both.Name.ShouldBe("icp-brasil");
         both.ValidationPolicy.ShouldBeSameAs(icp.ValidationPolicy);
@@ -85,7 +85,7 @@ public sealed class ProfileTrustTests : IDisposable
             HttpClientProvider = http,
         }, ct));
 
-        var profile = (await profiles.ResolveAsync(TrustProfileChoice.Iofe, IofeListSource.Indecopi, [], _sandbox, default)).ShouldNotBeNull();
+        var profile = (await profiles.ResolveAsync(TrustProfileChoice.Iofe, ProfileListSource.Official, [], _sandbox, default)).ShouldNotBeNull();
 
         profile.Name.ShouldBe(IofeProfile.Name);
         profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()).ShouldNotBeEmpty();
@@ -98,7 +98,7 @@ public sealed class ProfileTrustTests : IDisposable
     {
         using var profiles = new ProfileTrust((_, _) => throw new HttpRequestException("offline"));
 
-        (await profiles.ResolveAsync(TrustProfileChoice.Iofe, IofeListSource.Indecopi, [], _sandbox, default)).ShouldBeNull();
+        (await profiles.ResolveAsync(TrustProfileChoice.Iofe, ProfileListSource.Official, [], _sandbox, default)).ShouldBeNull();
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public sealed class ProfileTrustTests : IDisposable
     {
         using var profiles = new ProfileTrust();
 
-        (await profiles.ResolveAsync(TrustProfileChoice.Sandbox, IofeListSource.Indecopi, [], _sandbox, default)).ShouldBeNull();
+        (await profiles.ResolveAsync(TrustProfileChoice.Sandbox, ProfileListSource.Official, [], _sandbox, default)).ShouldBeNull();
     }
 
     [Theory]
@@ -126,7 +126,7 @@ public sealed class ProfileTrustTests : IDisposable
         ValidationService.ProfileCli(line, new ValidationSettings
         {
             Profile = TrustProfileChoice.Iofe,
-            ProfileSource = IofeListSource.Sandbox,
+            ProfileSource = ProfileListSource.Sandbox,
             TrustProfiles = [TrustProfileChoice.IcpBrasil],
         }, _sandbox);
 
@@ -149,7 +149,7 @@ public sealed class ProfileTrustTests : IDisposable
 
     [Fact]
     public void ProfileText_IofeOnTheSandboxPlusGovBr_NamesBoth() =>
-        PlaybookRunner.ProfileText(TrustProfileChoice.Iofe, IofeListSource.Sandbox, [TrustProfileChoice.GovBr]).ShouldBe("iofe (Sandbox's list) + gov-br");
+        PlaybookRunner.ProfileText(TrustProfileChoice.Iofe, ProfileListSource.Sandbox, [TrustProfileChoice.GovBr]).ShouldBe("iofe (Sandbox's list) + gov-br");
 
     private static string RepositoryRoot()
     {

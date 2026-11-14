@@ -46,6 +46,9 @@ public sealed record SignatureReportEntry
 
     /// <summary>The timestamps and revocation data the validation used, with their own outcome.</summary>
     public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];
+
+    /// <summary>The qualification of the signature under a legal framework, or null.</summary>
+    public SignatureQualification? Qualification { get; init; }
 }
 
 /// <summary>
@@ -245,6 +248,13 @@ public static class ValidationReports
             writer.WriteEndElement();
         }
 
+        if (signature.Qualification is { EtsiUri: { } quality })
+        {
+            writer.WriteStartElement("SignatureQuality", EtsiNamespace);
+            writer.WriteElementString("SignatureQualityInformation", EtsiNamespace, quality);
+            writer.WriteEndElement();
+        }
+
         writer.WriteStartElement("SignatureValidationProcess", EtsiNamespace);
         writer.WriteElementString("SignatureValidationProcessID", EtsiNamespace, Etsi + "validationprocess:" + level switch
         {
@@ -360,6 +370,11 @@ public static class ValidationReports
                     writer.WriteEndObject();
                 }
 
+                if (signature.Qualification is { } qualification)
+                {
+                    WriteQualification(writer, qualification);
+                }
+
                 WriteStrings(writer, "errors", signature.Errors);
                 WriteStrings(writer, "warnings", signature.Warnings);
                 WriteStrings(writer, "infos", [.. signature.Constraints.Where(c => c.Status == ConstraintStatus.Information).Select(c => c.Message)]);
@@ -372,6 +387,38 @@ public static class ValidationReports
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static void WriteQualification(Utf8JsonWriter writer, SignatureQualification qualification)
+    {
+        writer.WriteStartObject("qualification");
+        writer.WriteString("level", qualification.Level);
+        if (qualification.Framework is { } framework)
+        {
+            writer.WriteString("framework", framework);
+        }
+
+        WriteStrings(writer, "notes", qualification.Notes);
+        if (qualification.Timestamps.Count > 0)
+        {
+            writer.WriteStartArray("timestamps");
+            foreach (var timestamp in qualification.Timestamps)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("time", timestamp.Time.ToUniversalTime());
+                writer.WriteString("level", timestamp.Level);
+                if (timestamp.Tsa is { } tsa)
+                {
+                    writer.WriteString("tsa", tsa);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
+        writer.WriteEndObject();
     }
 
     /// <summary>The timestamps and the revocation data of a signature, each with its own indication.</summary>

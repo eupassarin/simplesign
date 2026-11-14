@@ -57,6 +57,12 @@ public enum TsaProvider
     /// </summary>
     SandboxIofe,
 
+    /// <summary>
+    /// The connected Sandbox's TSA that its trusted list names as a <c>TSA</c> service, not <c>TSA/QTST</c>: trusted, but its
+    /// time-stamps are not qualified electronic time-stamps (eIDAS).
+    /// </summary>
+    SandboxNonQualified,
+
     DigiCert,
     Sectigo,
     FreeTsa,

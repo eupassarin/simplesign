@@ -44,13 +44,17 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
     /// <summary>The signed list of trusted lists: a pointer to itself and one to the trusted list, with each operator's certificate.</summary>
     public Task<byte[]> LotlAsync(CancellationToken cancellationToken)
     {
+        var fault = pki.Faults.Lotl;
         var now = DateTimeOffset.UtcNow;
         string pointers =
             Pointer(LotlUrl, pki.LotlSigner, LotlType) +
             Pointer(TlUrl, pki.TlSigner, TlType);
-        string xml = Document(LotlType, "Sandbox list of trusted lists", pointers, services: "", now, now.AddMonths(6));
+        var nextUpdate = fault == LotlFault.Expired ? now.AddDays(-1) : now.AddMonths(6);
+        var issued = fault == LotlFault.Expired ? now.AddMonths(-7) : now;
+        string xml = Document(LotlType, "Sandbox list of trusted lists", pointers, services: "", issued, nextUpdate);
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(Sign(xml, pki.LotlSigner));
+        byte[] signed = Sign(xml, fault == LotlFault.WrongSigner ? pki.UntrustedSigner : pki.LotlSigner);
+        return Task.FromResult(fault == LotlFault.Tampered ? Tamper(signed) : signed);
     }
 
     /// <summary>
@@ -67,6 +71,8 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
         var now = DateTimeOffset.UtcNow;
         var revokedTsa = pki.Certificates.FirstOrDefault(c => c.Id == "tsa-revoked")?.Certificate;
         var software = pki.Certificates.FirstOrDefault(c => c.Id == "code-signing")?.Certificate;
+        var nonQualifiedTsa = pki.Certificates.FirstOrDefault(c => c.Id == "tsa-non-qualified")?.Certificate;
+        var pkcCa = pki.AuthorityCertificate(SandboxPki.PkcIntermediateId);
         string services = $"""
             <TrustServiceProviderList><TrustServiceProvider>
               <TSPInformation>
@@ -76,9 +82,11 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
               </TSPInformation>
               <TSPServices>
                 {(fault == TlFault.WithdrawnAfterUse
-                    ? Service("CA/QC", "Sandbox root CA", pki.Root, "withdrawn", now.AddSeconds(-1), history: "granted")
-                    : Service("CA/QC", "Sandbox root CA", pki.Root, "granted"))}
+                    ? Service("CA/QC", "Sandbox root CA", pki.Root, "withdrawn", now.AddSeconds(-1), history: "granted", extensions: QualifiedCaExtensions)
+                    : Service("CA/QC", "Sandbox root CA", pki.Root, "granted", extensions: QualifiedCaExtensions))}
+                {(pkcCa is null ? "" : Service("CA/PKC", "Sandbox non-qualified CA", pkcCa, "granted"))}
                 {Service("TSA/QTST", "Sandbox time-stamping unit", pki.Tsa, "granted")}
+                {(nonQualifiedTsa is null ? "" : Service("TSA", "Sandbox non-qualified time-stamping unit", nonQualifiedTsa, "granted"))}
                 {(revokedTsa is null ? "" : Service("TSA/QTST", "Sandbox revoked time-stamping unit", revokedTsa, "withdrawn"))}
                 {Service("unspecified", "Sandbox Timestamping CA", pki.TsaCa, "granted")}
                 {(software is null ? "" : Service("unspecified", "Sandbox signature software", software, "granted"))}
@@ -96,13 +104,15 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
     /// A service of the trusted list, for one certificate: its status since <paramref name="since"/> (the certificate's
     /// NotBefore by default), and, with <paramref name="history"/>, the earlier status from NotBefore until then.
     /// </summary>
-    private static string Service(string type, string name, X509Certificate2 certificate, string status, DateTimeOffset? since = null, string? history = null) => $"""
+    private static string Service(string type, string name, X509Certificate2 certificate, string status, DateTimeOffset? since = null, string? history = null,
+        string extensions = "") => $"""
         <TSPService><ServiceInformation>
           <ServiceTypeIdentifier>{ServiceTypes}{type}</ServiceTypeIdentifier>
           <ServiceName><Name xml:lang="en">{Escape(name)}</Name></ServiceName>
           <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(certificate.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
           <ServiceStatus>{Statuses}{status}</ServiceStatus>
           <StatusStartingTime>{Time((since ?? certificate.NotBefore).ToUniversalTime())}</StatusStartingTime>
+          {extensions}
         </ServiceInformation>{(history is null ? "" : $"""
         <ServiceHistory><ServiceHistoryInstance>
           <ServiceTypeIdentifier>{ServiceTypes}{type}</ServiceTypeIdentifier>
@@ -110,8 +120,31 @@ internal sealed class SandboxTrustedLists(SandboxPki pki)
           <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(certificate.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
           <ServiceStatus>{Statuses}{history}</ServiceStatus>
           <StatusStartingTime>{Time(certificate.NotBefore.ToUniversalTime())}</StatusStartingTime>
+          {extensions}
         </ServiceHistoryInstance></ServiceHistory>
         """)}</TSPService>
+        """;
+
+    /// <summary>
+    /// The service information extensions of the root's CA/QC service (ETSI TS 119 612 §5.5.9): it issues qualified
+    /// certificates for signatures and seals, and the certificates under the QCP-n-qscd policy (0.4.0.194112.1.2) have
+    /// their key on a QSCD even when they do not say so (QCWithQSCD), as the <c>qc-esign-policy</c> signer shows.
+    /// </summary>
+    private const string QualifiedCaExtensions = """
+        <ServiceInformationExtensions>
+          <Extension Critical="true"><AdditionalServiceInformation><URI xml:lang="en">http://uri.etsi.org/TrstSvc/TrustedList/SvcInfoExt/ForeSignatures</URI></AdditionalServiceInformation></Extension>
+          <Extension Critical="true"><AdditionalServiceInformation><URI xml:lang="en">http://uri.etsi.org/TrstSvc/TrustedList/SvcInfoExt/ForeSeals</URI></AdditionalServiceInformation></Extension>
+          <Extension Critical="true">
+            <ecc:Qualifications xmlns:ecc="http://uri.etsi.org/TrstSvc/SvcInfoExt/eSigDir-1999-93-EC-TrustedList/#" xmlns:xades="http://uri.etsi.org/01903/v1.3.2#">
+              <ecc:QualificationElement>
+                <ecc:Qualifiers><ecc:Qualifier uri="http://uri.etsi.org/TrstSvc/TrustedList/SvcInfoExt/QCWithQSCD"/></ecc:Qualifiers>
+                <ecc:CriteriaList assert="atLeastOne">
+                  <ecc:PolicySet><ecc:PolicyIdentifier><xades:Identifier Qualifier="OIDAsURN">urn:oid:0.4.0.194112.1.2</xades:Identifier></ecc:PolicyIdentifier></ecc:PolicySet>
+                </ecc:CriteriaList>
+              </ecc:QualificationElement>
+            </ecc:Qualifications>
+          </Extension>
+        </ServiceInformationExtensions>
         """;
 
     /// <summary>A pointer of the LOTL: where the list is, who signs it, its type, territory and media type.</summary>

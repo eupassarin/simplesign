@@ -223,6 +223,7 @@ internal static class PlaybookValidator
             CheckEnum<OcspFault>(box.Ocsp, at + ".sandbox.ocsp", error);
             CheckEnum<TsaFault>(box.Tsa, at + ".sandbox.tsa", error);
             CheckEnum<TlFault>(box.TrustedList, at + ".sandbox.trustedList", error);
+            CheckEnum<LotlFault>(box.Lotl, at + ".sandbox.lotl", error);
             if (sandbox is not null)
             {
                 foreach (string id in box.Revoke.Where(id => sandbox.Certificates.All(c => c.Id != id)))
@@ -277,7 +278,7 @@ internal static class PlaybookValidator
 
             string? profile = Text(holder["profile"]);
             CheckEnum<TrustFrameworks.TrustProfileChoice>(profile, $"{at}.{part}.profile", error);
-            CheckEnum<TrustFrameworks.IofeListSource>(Text(holder["profileSource"]), $"{at}.{part}.profileSource", error);
+            CheckEnum<TrustFrameworks.ProfileListSource>(Text(holder["profileSource"]), $"{at}.{part}.profileSource", error);
             if (holder["trustProfiles"] is JsonArray extras)
             {
                 foreach (var extra in extras)
@@ -286,9 +287,10 @@ internal static class PlaybookValidator
                 }
             }
 
-            if (holder["profileSource"] is not null && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Iofe), StringComparison.OrdinalIgnoreCase))
+            if (holder["profileSource"] is not null && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Iofe), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Eidas), StringComparison.OrdinalIgnoreCase))
             {
-                error($"{at}.{part}.profileSource", "profileSource chooses the list of the Iofe profile: set profile to Iofe.");
+                error($"{at}.{part}.profileSource", "profileSource chooses the list of the Iofe or Eidas profile: set profile to one of them.");
             }
 
             if (part == "signingControls" && string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.GovBr), StringComparison.OrdinalIgnoreCase))

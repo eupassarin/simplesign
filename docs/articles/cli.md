@@ -277,12 +277,13 @@ contract-signed.pdf  1/1 valid
 ## Trust Profiles
 
 A **trust profile** sets, under one name, the policy and the trust of a trust framework. Each comes from its package
-(`IofeProfile`, `IcpBrasilProfile`, `GovBrProfile`; the library takes them with `WithProfile` and
+(`IofeProfile`, `EidasProfile`, `IcpBrasilProfile`, `GovBrProfile`; the library takes them with `WithProfile` and
 `ValidationOptions.Profile`); `simplesign profiles` lists them:
 
 | Profile | Signing policy | Validation policy | Trust |
 |---|---|---|---|
 | `iofe` | `iofe` | `iofe` | INDECOPI's trusted list, checked against the signer bundled with `SimpleSign.Peru.Iofe` |
+| `eidas` | `eidas` | `eidas` | The EU LOTL and its national lists, checked against the signers bundled with `SimpleSign.Europe.Eidas` (pivot LOTLs followed); `validate` shows each signature's qualification (QESig, AdESig-QC…) — see [eidas.md](eidas.md) |
 | `icp-brasil` | `icp-brasil` | `icp-brasil` | The AC Raiz roots and the ICP-Brasil chain validation |
 | `gov-br` | — (Gov.br signs on its own service) | `govbr` | The Gov.br roots and their chain validation |
 | `sandbox` | `default` | `default` | A running SimpleSign Sandbox's LOTL (`--sandbox URL`) |
@@ -311,6 +312,7 @@ writes it out):
 | `strict` | `default` plus the revocation of the whole chain (CRL/OCSP); give the chain up to the root |
 | `minimal` | Only the dates of the signing certificate (tests and migrations) |
 | `iofe` | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
+| `eidas` | `strict`, the signer and every TSA chained to a trust anchor (the EU lists), TSA valid and not revoked, a warning on a non-qualified certificate (QcCompliance) |
 
 What the policy checks against comes from these options:
 

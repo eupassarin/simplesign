@@ -56,7 +56,8 @@ src/
 │   │   │   └── SimpleSign.Brazil.Fiscal/           XML-DSig for NF-e, CT-e, eSocial…
 │   │   └── GovBr/
 │   │       └── SimpleSign.Brazil.GovBr/            Gov.br: chain validation, assurance level
-│   ├── Europe/Eidas/                   planned (README only)
+│   ├── Europe/Eidas/
+│   │   └── SimpleSign.Europe.Eidas/     eIDAS (EU): anchors from the EU LOTL (pivots followed), qualification (QESig, AdESig-QC…), policies
 │   └── Peru/Iofe/
 │       └── SimpleSign.Peru.Iofe/        IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
 ├── Signers/
@@ -120,12 +121,13 @@ await CadesSigner.Document(data).WithCertificate(cert)
 
 ### Trust profiles
 ```csharp
-// A trust framework as one value: its trust and its policies (IofeProfile, IcpBrasilProfile, GovBrProfile)
+// A trust framework as one value: its trust and its policies (IofeProfile, EidasProfile, IcpBrasilProfile, GovBrProfile)
 var iofe = await IofeProfile.LoadAsync();
 await PadesSigner.Document(pdf).WithCertificate(cert).WithProfile(iofe).SignAsync();
 var results = await new PdfSignatureValidator(new ValidationOptions { Profile = iofe }).ValidateAsync(signed);
 // One profile sets the policies; others add trust only: IcpBrasilProfile.Create().WithTrustFrom(GovBrProfile.Create())
 // CLI: --profile iofe [--trust-profile gov-br] [--sandbox URL]; `simplesign profiles` lists them
+// eidas also qualifies each signature: results[0].Qualification?.Level is QESig, AdESig-QC… (ISignatureQualifier)
 ```
 
 ### Extension Points (interfaces)
@@ -134,7 +136,8 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 - `ICertificateCache` — cert caching
 - `IChainValidationProvider` — custom chain logic
 - `IChainRevocationChecker` / `IRevocationCache` — revocation of a whole chain, CRL cache
-- `ICountryExtension` — country packages (ICP-Brasil, Gov.br, IOFE)
+- `ICountryExtension` — country packages (ICP-Brasil, Gov.br, IOFE, eIDAS)
+- `ISignatureQualifier` — the qualification of a validated signature under a framework (eIDAS's `EidasQualifier`)
 - `DirectoryTrustAnchorProvider`, `TrustedList` — ready-made `ITrustAnchorProvider`s
 
 ### Error Handling
@@ -177,8 +180,8 @@ SimpleSign.Brazil (shared Brazilian building blocks)
 SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension each)
   └── depend on SimpleSign.Brazil only, never on each other (Fiscal and IcpBrasil.Xades build on IcpBrasil)
 
-SimpleSign.Peru.Iofe (one ICountryExtension)
-  └── depends on SimpleSign.Core + SimpleSign.XAdES — public API only
+SimpleSign.Peru.Iofe / SimpleSign.Europe.Eidas (one ICountryExtension each)
+  └── depend on SimpleSign.Core + SimpleSign.XAdES — public API only
 
 SimpleSign.CAdES / SimpleSign.XAdES
   └── each depends on SimpleSign.Core only

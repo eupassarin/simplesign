@@ -32,6 +32,12 @@ public sealed record TrustProfile(
     /// <summary>The profile without a framework: SimpleSign's default policies, no anchors of its own (the system's roots).</summary>
     public static TrustProfile Default { get; } = new("default", "SimpleSign default", Policies.SigningPolicy.Default, Policies.ValidationPolicy.Default, [], []);
 
+    /// <summary>
+    /// The qualifiers that say the qualification of a validated signature under the framework (the eIDAS profile's);
+    /// empty for none. <see cref="WithTrustFrom"/> does not add the others': they add trust only.
+    /// </summary>
+    public IReadOnlyList<ISignatureQualifier> SignatureQualifiers { get; init; } = [];
+
     /// <summary>Whether signatures are made under this profile (it has a signing policy).</summary>
     public bool CanSign => SigningPolicy is not null;
 
@@ -51,7 +57,10 @@ public sealed record TrustProfile(
     public static TrustProfile FromExtension(string name, string title, SigningPolicy? signing, ValidationPolicy validation, ICountryExtension extension)
     {
         ArgumentNullException.ThrowIfNull(extension);
-        return new(name, title, signing, validation, extension.TrustAnchorProviders, extension.ChainValidationProviders);
+        return new(name, title, signing, validation, extension.TrustAnchorProviders, extension.ChainValidationProviders)
+        {
+            SignatureQualifiers = extension.SignatureQualifiers,
+        };
     }
 
     /// <summary>

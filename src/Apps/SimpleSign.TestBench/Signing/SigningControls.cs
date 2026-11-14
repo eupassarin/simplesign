@@ -41,7 +41,7 @@ public sealed record SigningControlsOptions
     public TrustProfileChoice Profile { get; init; }
 
     /// <summary>Which list the IOFE profile reads: INDECOPI's or the Sandbox's (test).</summary>
-    public IofeListSource ProfileSource { get; init; }
+    public ProfileListSource ProfileSource { get; init; }
 
     /// <summary>Other profiles whose trust is added (their policies are not used).</summary>
     public IReadOnlyList<TrustProfileChoice> TrustProfiles { get; init; } = [];
@@ -208,8 +208,10 @@ internal sealed class SigningControls
     {
         string create = p.Profile switch
         {
-            TrustProfileChoice.Iofe when p.ProfileSource == IofeListSource.Sandbox => "await IofeProfile.LoadAsync(new IofeExtensionOptions { TrustedListUrl = sandboxTl, TrustedListSigners = [tlSigner] })",
+            TrustProfileChoice.Iofe when p.ProfileSource == ProfileListSource.Sandbox => "await IofeProfile.LoadAsync(new IofeExtensionOptions { TrustedListUrl = sandboxTl, TrustedListSigners = [tlSigner] })",
             TrustProfileChoice.Iofe => "await IofeProfile.LoadAsync()",
+            TrustProfileChoice.Eidas when p.ProfileSource == ProfileListSource.Sandbox => "await EidasProfile.LoadAsync(new EidasExtensionOptions { LotlUrl = sandboxLotl, LotlSigners = [lotlSigner] })",
+            TrustProfileChoice.Eidas => "await EidasProfile.LoadAsync()",
             TrustProfileChoice.IcpBrasil => "IcpBrasilProfile.Create()",
             TrustProfileChoice.Sandbox => "the Sandbox's LOTL as a TrustProfile",
             _ => "TrustProfile.Default",
@@ -251,7 +253,7 @@ internal sealed class SigningControls
             }
 
             if (p.Profile == TrustProfileChoice.Sandbox || p.TrustProfiles.Contains(TrustProfileChoice.Sandbox)
-                || (p.Profile == TrustProfileChoice.Iofe && p.ProfileSource == IofeListSource.Sandbox))
+                || (p.Profile is TrustProfileChoice.Iofe or TrustProfileChoice.Eidas && p.ProfileSource == ProfileListSource.Sandbox))
             {
                 line.Add("--sandbox", _sandboxUrl ?? "http://localhost:5300/");
             }

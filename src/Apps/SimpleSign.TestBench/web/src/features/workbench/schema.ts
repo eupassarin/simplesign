@@ -125,6 +125,10 @@ export interface RunVerdict {
   subIndication?: string | null
   /** The policy constraints that failed, warned or informed, one per constraint with all its messages. */
   findings?: Finding[] | null
+  /** The qualification under the profile's framework (eIDAS: QESig, AdESig-QC…); absent when none was made. */
+  qualification?: string | null
+  /** The qualification of each timestamp: QTSA, TSA or N/A. */
+  timestampQualifications?: string[]
 }
 
 export interface Finding {

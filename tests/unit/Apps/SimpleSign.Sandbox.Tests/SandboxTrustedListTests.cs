@@ -139,6 +139,65 @@ public sealed class SandboxTrustedListTests(SandboxFixture fixture)
         list.GetTrustAnchors(DateTimeOffset.UtcNow.AddHours(-1)).ShouldContain(c => c.Thumbprint == fixture.Root.Thumbprint);
     }
 
+    [Theory]
+    [InlineData(LotlFault.Expired)]
+    [InlineData(LotlFault.WrongSigner)]
+    [InlineData(LotlFault.Tampered)]
+    public async Task Lotl_Fault_IsRefused(LotlFault fault)
+    {
+        await WithFaultsAsync(new SandboxFaults(Lotl: fault), async () =>
+        {
+            var ex = await Should.ThrowAsync<Exception>(LoadAsync);
+            ex.ShouldBeAssignableTo(fault == LotlFault.Expired ? typeof(InvalidDataException) : typeof(System.Security.Cryptography.CryptographicException));
+            return 0;
+        });
+    }
+
+    [Fact]
+    public async Task TrustedList_Eidas_QualifiedCaNonQualifiedCaAndTsas()
+    {
+        var list = (await LoadAsync()).Lists.ShouldHaveSingleItem();
+        var policySigner = await CertificateAsync("qc-esign-policy");
+        var pkcSigner = await CertificateAsync("pkc-esign");
+
+        var qualified = list.Services.Single(s => s.ServiceType.EndsWith("/CA/QC", StringComparison.Ordinal));
+        qualified.Extensions.HasAdditionalInformation("/ForeSignatures").ShouldBeTrue();
+        qualified.Extensions.HasAdditionalInformation("/ForeSeals").ShouldBeTrue();
+        qualified.Extensions.QualifiersFor(policySigner).ShouldBe(["http://uri.etsi.org/TrstSvc/TrustedList/SvcInfoExt/QCWithQSCD"]);
+        list.Services.ShouldContain(s => s.ServiceType.EndsWith("/CA/PKC", StringComparison.Ordinal)
+            && s.Certificates.Any(c => c.Subject == pkcSigner.Issuer));
+        list.Services.ShouldContain(s => s.ServiceType.EndsWith("/Svctype/TSA", StringComparison.Ordinal) && s.Status.EndsWith("/granted", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("qc-esign-qscd", true)]
+    [InlineData("qc-esign", true)]
+    [InlineData("qc-eseal-qscd", true)]
+    [InlineData("rsa-2048", false)]
+    public async Task Certificate_EidasSigner_CarriesQcStatements(string id, bool expected)
+    {
+        var certificate = await CertificateAsync(id);
+
+        (certificate.Extensions["1.3.6.1.5.5.7.1.3"] is not null).ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task Tsa_NonQualified_SignsWithItsOwnCertificate()
+    {
+        var tsa = await CertificateAsync("tsa-non-qualified");
+        fixture.Info.Tsa.NonQualifiedUrl.ShouldBe(new Uri(fixture.BaseUrl, "tsa/non-qualified").AbsoluteUri);
+        var request = System.Security.Cryptography.Pkcs.Rfc3161TimestampRequest.CreateFromHash(
+            new byte[32], System.Security.Cryptography.HashAlgorithmName.SHA256, requestSignerCertificates: true);
+        using var content = new ByteArrayContent(request.Encode());
+        content.Headers.ContentType = new("application/timestamp-query");
+
+        var response = await Http.PostAsync(fixture.Info.Tsa.NonQualifiedUrl, content);
+
+        response.EnsureSuccessStatusCode();
+        var token = request.ProcessResponse(await response.Content.ReadAsByteArrayAsync(), out _);
+        token.AsSignedCms().SignerInfos[0].Certificate!.Thumbprint.ShouldBe(tsa.Thumbprint);
+    }
+
     /// <summary>/tl/tl.xml read directly, as <see cref="IofeExtension"/> reads INDECOPI's list.</summary>
     private async Task<TrustedList> LoadIofeAsync()
     {

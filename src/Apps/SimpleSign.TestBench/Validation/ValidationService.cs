@@ -50,7 +50,7 @@ public sealed record ValidationSettings
     public TrustFrameworks.TrustProfileChoice Profile { get; init; }
 
     /// <summary>Which list the IOFE profile reads: INDECOPI's or the Sandbox's (test).</summary>
-    public TrustFrameworks.IofeListSource ProfileSource { get; init; }
+    public TrustFrameworks.ProfileListSource ProfileSource { get; init; }
 
     /// <summary>Other profiles whose trust is added (their policies are not used).</summary>
     public IReadOnlyList<TrustFrameworks.TrustProfileChoice> TrustProfiles { get; init; } = [];
@@ -134,7 +134,14 @@ internal sealed record PadesVerdict(
     IReadOnlyList<ValidationConstraintResult> Constraints,
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings,
-    IReadOnlyDictionary<string, string>? ChainMetadata);
+    IReadOnlyDictionary<string, string>? ChainMetadata)
+{
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+}
 
 /// <summary>Validates PDFs with PdfSignatureValidator and enriches the result with the inspector's facts.</summary>
 internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStore documents, TrustFrameworks.ProfileTrust? profiles = null)
@@ -330,6 +337,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
 
         // The trust profile (and the trust of others): its anchors, its trusted lists and its chain validation.
         IReadOnlyList<IChainValidationProvider> chainValidation = [];
+        IReadOnlyList<Core.Extensions.ISignatureQualifier> qualifiers = [];
         if (await (profiles ?? TrustFrameworks.ProfileTrust.Shared).ResolveAsync(settings.Profile, settings.ProfileSource, settings.TrustProfiles, sandbox, cancellationToken)
             is { } profile)
         {
@@ -348,6 +356,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             }
 
             chainValidation = profile.ChainValidationProviders;
+            qualifiers = profile.SignatureQualifiers;
         }
 
         var options = new ValidationOptions
@@ -360,6 +369,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             Policy = PolicyUploads.Validation(settings.PolicyId, documents),
             Level = settings.Level,
             Verifier = VerifierOptions.Default with { RevocationStrategy = settings.RevocationStrategy },
+            SignatureQualifiers = qualifiers.Count > 0 ? qualifiers : null,
         };
         return new ValidationTrust(options) { Providers = providers, ChainValidation = chainValidation };
     }
@@ -400,11 +410,19 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             r.SignerName ?? r.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, false), r.SubFilter, r.DigestAlgorithmName, r.SigningTime,
             r.IsIntegrityValid, r.IsSignatureValid, r.IsCertificateChainValid, r.IsChainTrustWarning, r.ChainValidationRegion,
             r.IsNotRevoked, r.RevocationSource.ToString(), r.HasValidTimestamp, r.IsTsaTrusted,
-            r.Constraints, r.Errors, r.Warnings, r.ChainValidationMetadata))
+            r.Constraints, r.Errors, r.Warnings, r.ChainValidationMetadata)
+        {
+            Qualification = r.Qualification?.Level,
+            TimestampQualifications = TimestampLevels(r.Qualification),
+        })
         with
         {
             Source = new Reports.ReportSource(r.ToReportEntry(), r.EmbeddedCertificates),
         };
+
+    /// <summary>The qualification level of each timestamp of a qualified signature.</summary>
+    internal static IReadOnlyList<string> TimestampLevels(SignatureQualification? qualification) =>
+        qualification is null ? [] : [.. qualification.Timestamps.Select(t => t.Level)];
 
     /// <summary>The report of one PDF signature from its verdict, whichever validated it (the library or the CLI).</summary>
     internal static SignatureReport ToReport(PadesVerdict v)
@@ -424,7 +442,11 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         return new SignatureReport(
             v.FieldName, v.Indication, v.IsDocumentTimestamp, v.Signer, v.SubFilter, v.Digest,
             v.SigningTime?.ToString("yyyy-MM-dd HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture),
-            checks, v.Errors, v.Warnings, v.ChainMetadata, v.SubIndication, Findings(v.Constraints));
+            checks, v.Errors, v.Warnings, v.ChainMetadata, v.SubIndication, Findings(v.Constraints))
+        {
+            Qualification = v.Qualification,
+            TimestampQualifications = v.TimestampQualifications,
+        };
     }
 
     private static DetailedSignature Detail(SignatureReport report, SignatureFieldInfo? info, string? level, long fileSize, int revisions)
@@ -629,7 +651,8 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         if (s.Profile == TrustFrameworks.TrustProfileChoice.Sandbox || s.TrustProfiles.Contains(TrustFrameworks.TrustProfileChoice.Sandbox)
-            || (s.Profile == TrustFrameworks.TrustProfileChoice.Iofe && s.ProfileSource == TrustFrameworks.IofeListSource.Sandbox))
+            || (s.Profile is TrustFrameworks.TrustProfileChoice.Iofe or TrustFrameworks.TrustProfileChoice.Eidas
+                && s.ProfileSource == TrustFrameworks.ProfileListSource.Sandbox))
         {
             line.Add("--sandbox", sandbox.Current?.Url.AbsoluteUri ?? "http://localhost:5300/");
         }
@@ -656,9 +679,12 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
     {
         string? create = s.Profile switch
         {
-            TrustFrameworks.TrustProfileChoice.Iofe => s.ProfileSource == TrustFrameworks.IofeListSource.Sandbox
+            TrustFrameworks.TrustProfileChoice.Iofe => s.ProfileSource == TrustFrameworks.ProfileListSource.Sandbox
                 ? "await IofeProfile.LoadAsync(new IofeExtensionOptions { TrustedListUrl = new Uri(\"http://localhost:5300/tl/tl.xml\"), TrustedListSigners = [tlSigner] })"
                 : "await IofeProfile.LoadAsync() /* INDECOPI's list, checked against the bundled signer */",
+            TrustFrameworks.TrustProfileChoice.Eidas => s.ProfileSource == TrustFrameworks.ProfileListSource.Sandbox
+                ? "await EidasProfile.LoadAsync(new EidasExtensionOptions { LotlUrl = new Uri(\"http://localhost:5300/tl/lotl.xml\"), LotlSigners = [lotlSigner] })"
+                : "await EidasProfile.LoadAsync() /* the EU LOTL, checked against the bundled signers; qualifies each signature */",
             TrustFrameworks.TrustProfileChoice.IcpBrasil => "IcpBrasilProfile.Create()",
             TrustFrameworks.TrustProfileChoice.GovBr => "GovBrProfile.Create()",
             TrustFrameworks.TrustProfileChoice.Sandbox => "new TrustProfile(\"sandbox\", \"Sandbox\", SigningPolicy.Default, ValidationPolicy.Default, [lists], [])",

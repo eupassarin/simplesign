@@ -59,6 +59,28 @@ public sealed class SigningPolicyTests
     }
 
     [Fact]
+    public void Evaluate_QcComplianceAndQcSscdAtFailWithoutQcStatements_ReportsCertificateNotQualified()
+    {
+        using var certificate = Certificate(2048, X509KeyUsageFlags.NonRepudiation);
+        var policy = SigningPolicy.Default
+            .With("SigningCertificate/QcCompliance", new PolicyConstraint(ConstraintLevel.Fail))
+            .With("SigningCertificate/QcSSCD", new PolicyConstraint(ConstraintLevel.Fail));
+
+        var findings = policy.Evaluate(certificate, DateTimeOffset.UtcNow);
+
+        findings.Select(f => f.Constraint).ShouldBe(["SigningCertificate/QcCompliance", "SigningCertificate/QcSSCD"]);
+        findings.ShouldAllBe(f => f.Reason == SigningErrorReason.CertificateNotQualified);
+    }
+
+    [Fact]
+    public void Evaluate_DefaultPolicy_DoesNotAskForQcStatements()
+    {
+        using var certificate = Certificate(2048, X509KeyUsageFlags.NonRepudiation);
+
+        SigningPolicy.Default.Evaluate(certificate, DateTimeOffset.UtcNow).ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Evaluate_ConstraintAtIgnore_IsNotReported()
     {
         using var certificate = Certificate(2048, X509KeyUsageFlags.KeyEncipherment);

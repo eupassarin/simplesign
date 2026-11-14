@@ -243,7 +243,7 @@ public sealed class CliCommandTests : IDisposable
         var (exit, output) = await RunAsync("profiles");
 
         exit.ShouldBe(0, output);
-        foreach (string name in new[] { "sandbox", "iofe", "icp-brasil", "gov-br" })
+        foreach (string name in new[] { "sandbox", "iofe", "eidas", "icp-brasil", "gov-br" })
         {
             output.ShouldContain(name);
         }
@@ -546,16 +546,18 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Theory]
-    [InlineData("signing", "iofe")]
-    [InlineData("validation", "iofe")]
-    public async Task PolicyExport_Preset_WritesTheBuiltInPolicy(string kind, string preset)
+    [InlineData("signing", "iofe", "INDECOPI")]
+    [InlineData("validation", "iofe", "INDECOPI")]
+    [InlineData("signing", "eidas", "eIDAS")]
+    [InlineData("validation", "eidas", "eIDAS")]
+    public async Task PolicyExport_Preset_WritesTheBuiltInPolicy(string kind, string preset, string name)
     {
         string path = Path.Combine(_tempDir, $"{kind}-{preset}.json");
 
         var (exit, output) = await RunAsync("policy", "export", kind, "--preset", preset, "--output", path);
 
         exit.ShouldBe(0, output);
-        File.ReadAllText(path).ShouldContain("INDECOPI");
+        File.ReadAllText(path).ShouldContain(name);
     }
 
     [Fact]

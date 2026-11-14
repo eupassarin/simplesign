@@ -167,11 +167,14 @@ public sealed record PlaybookSandbox
     /// <summary>Trusted list failure: None, Expired, WrongSigner, Tampered, WithdrawnAfterUse.</summary>
     public string? TrustedList { get; init; }
 
+    /// <summary>List of trusted lists failure (/tl/lotl.xml): None, Expired, WrongSigner, Tampered.</summary>
+    public string? Lotl { get; init; }
+
     /// <summary>Sandbox certificates to revoke for the step.</summary>
     public IReadOnlyList<string> Revoke { get; init; } = [];
 
     /// <summary>Whether anything is asked.</summary>
-    public bool Any => Crl is not null || Ocsp is not null || Tsa is not null || TrustedList is not null || Revoke.Count > 0;
+    public bool Any => Crl is not null || Ocsp is not null || Tsa is not null || TrustedList is not null || Lotl is not null || Revoke.Count > 0;
 
     /// <summary>The changes, one line each, as the page and the evidence show them.</summary>
     public IEnumerable<string> Describe()
@@ -194,6 +197,11 @@ public sealed record PlaybookSandbox
         if (TrustedList is not null)
         {
             yield return $"Trusted list: {TrustedList}";
+        }
+
+        if (Lotl is not null)
+        {
+            yield return $"List of trusted lists: {Lotl}";
         }
 
         foreach (string id in Revoke)
@@ -227,6 +235,12 @@ public sealed record PlaybookExpectation
     /// <summary><c>valid</c>: the run's ETSI TS 119 102-2 report must be valid against its schema.</summary>
     public string? EtsiReport { get; init; }
 
+    /// <summary>The qualification of the (first) signature under the profile's framework (eIDAS: QESig, QESeal, AdESig-QC, AdESig, N/A…).</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of its first timestamp: QTSA (qualified electronic time-stamp), TSA or N/A.</summary>
+    public string? TimestampQualification { get; init; }
+
     /// <summary>
     /// Constraints of the validation policy that must fail (their names, as the report shows them: <c>AccuracyPresent</c>),
     /// in the signature or in what it carries (a time-stamp, revocation data).
@@ -247,6 +261,16 @@ public sealed record PlaybookExpectation
         if (Reason is not null)
         {
             yield return ("reason", Reason);
+        }
+
+        if (Qualification is not null)
+        {
+            yield return ("qualification", Qualification);
+        }
+
+        if (TimestampQualification is not null)
+        {
+            yield return ("timestampQualification", TimestampQualification);
         }
 
         if (Indication is not null)

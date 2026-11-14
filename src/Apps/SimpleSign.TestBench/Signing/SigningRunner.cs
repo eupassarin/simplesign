@@ -33,6 +33,12 @@ public sealed record SignatureReport(
     string? SubIndication = null,
     IReadOnlyList<FindingView>? Findings = null)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry of this signature and the certificates next to it, for the SimpleSign report (not sent to the UI).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public Reports.ReportSource? Source { get; init; }

@@ -185,7 +185,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         HttpClient? httpClient,
         ILogger<PdfSignatureValidator>? logger,
         IEnumerable<ICountryExtension>? countryExtensions)
-        : this(options, httpClient, logger,
+        : this((options ?? ValidationOptions.Default).WithQualifiersFrom(countryExtensions), httpClient, logger,
             trustAnchorProviders: countryExtensions?.SelectMany(e => e.TrustAnchorProviders),
             chainValidationProviders: countryExtensions?.SelectMany(e => e.ChainValidationProviders))
     {
@@ -200,7 +200,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         ValidationOptions? options,
         ILogger<PdfSignatureValidator>? logger,
         IEnumerable<ICountryExtension>? countryExtensions)
-        : this(httpClientProvider, options, logger,
+        : this(httpClientProvider, (options ?? ValidationOptions.Default).WithQualifiersFrom(countryExtensions), logger,
             trustAnchorProviders: countryExtensions?.SelectMany(e => e.TrustAnchorProviders),
             chainValidationProviders: countryExtensions?.SelectMany(e => e.ChainValidationProviders))
     {
@@ -250,6 +250,18 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             var facts = BuildPdfFacts(fields, i, dssData);
             var result = await ValidateFieldAsync(pdfStream, fields[i], embeddedCrls, embeddedOcsps, cancellationToken, isLast, facts,
                 LaterDocumentTimestamps(fields, fields[i])).ConfigureAwait(false);
+            if (!result.IsDocumentTimestamp && result.SignerCertificate is { } signer && _options.SignatureQualifiers is { Count: > 0 })
+            {
+                result.Qualification = _options.Qualify(new SignatureQualificationContext(signer, result.Indication)
+                {
+                    Certificates = result.EmbeddedCertificates,
+                    ClaimedSigningTime = result.SigningTime,
+                    BestSignatureTime = result.BestSignatureTime,
+                    ValidationObjects = result.ValidationObjects,
+                    Format = "PAdES",
+                });
+            }
+
             results.Add(result);
         }
 

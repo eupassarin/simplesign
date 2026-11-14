@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — eIDAS: SimpleSign.Europe.Eidas, the EU trust framework
+
+- `EidasExtension` / `EidasProfile` (`eidas`): trust anchors from the EU list of trusted lists and its national lists,
+  checked against the LOTL signers bundled with the package (`EidasExtension.LotlSigners`, fingerprints in its README),
+  kept current by `EidasTrustedListSource` (`AddSimpleSignEidas`); `EidasPolicies.Signing` / `Validation`.
+- The qualification of a validated signature: `EidasQualifier` (ETSI TS 119 615 and TS 119 172-4) gives QESig, QESeal,
+  AdESig-QC, AdESeal-QC, AdESig, AdESeal (`Indeterminate …`, `Not AdES`, `N/A`) and the qualification of each
+  time-stamp (QTSA). `QcStatements` decodes QcCompliance, QcSSCD, QcType, QcCClegislation and QcPDS.
+- Core: `ISignatureQualifier`, `SignatureQualification`; `ValidationOptions.SignatureQualifiers` (a profile's or a
+  country extension's are added); `Qualification` on the PAdES, CAdES and XAdES results; `SignatureQuality` in the ETSI
+  TS 119 102-2 report, `qualification` in the simple JSON and HTML reports. The indication does not change.
+- Signing policy: `SigningCertificate/QcCompliance` and `QcSSCD` (`SigningErrorReason.CertificateNotQualified`).
+- Trusted lists: `TrustedListService.Extensions` (Qualifications with their criteria, AdditionalServiceInformation,
+  ExpiredCertsRevocationInfo; also per history entry, `InformationAt`), `TrustedListPointer.TslType`,
+  `TrustedList.SchemeInformationUris`; `TrustedListSet` follows pivot LOTLs (`FollowPivots`, `LotlSigners`,
+  `PivotsFollowed`).
+- CLI: `--profile eidas` (with `--sandbox URL`: the Sandbox's LOTL), presets `eidas`; `validate` (text and `--json`)
+  shows each signature's qualification.
+- Sandbox: signers with QC statements (`qc-esign-qscd`, `qc-esign`, `qc-eseal-qscd`, `qc-esign-policy`), a CA/PKC service
+  (`intermediate-pkc`, `pkc-esign`), a non-qualified TSA (`/tsa/non-qualified`), Qualifications and
+  AdditionalServiceInformation on the CA/QC service, and LOTL faults (`lotl`: Expired, WrongSigner, Tampered).
+- TestBench: the Profile menu's EU (eIDAS) with the EU LOTL or the Sandbox's (`profileSource`: `Official` replaces
+  `Indecopi`), the qualification on each result, the `eidas-baseline` playbook (`qualification`,
+  `timestampQualification` and `sandbox.lotl` in playbooks) and [eidas-checklist.md](docs/playbooks/eidas-checklist.md).
+
+### Changed — Trusted lists
+
+- An expired LOTL is always refused (no constraint judges the LOTL itself), whatever `Services.RejectExpired` says.
+- A list signer whose key the platform cannot load (a curve it does not support) checks nothing, instead of failing
+  the whole `TrustedListSet` (found reading the real EU LOTL).
+
 ### Fixed — The operating system no longer checks revocation during validation
 
 - `PdfSignatureValidator`, `CadesSignatureValidator` and `XadesSignatureValidator` built the platform `X509Chain` with
