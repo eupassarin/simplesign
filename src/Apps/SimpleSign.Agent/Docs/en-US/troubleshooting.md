@@ -19,6 +19,16 @@ Another program, or another copy of the agent, is using port `{port}`. Close it 
 3. **About** lists the *PKCS#11 drivers* that were found. If yours is not there, the agent does not know where it is.
 4. For a driver in an unusual place, set the environment variable `SIMPLESIGN_PKCS11_LIBRARY` to the full path of the driver's library and start the agent again.
 
+## The site gets "the trust framework is not enabled"
+
+The `country` and `trust` filters, and the former `filterIcpBrasil`, only answer for the frameworks enabled in Settings, under **Trust frameworks**. The error lists which ones are enabled. A listing with no filter is not affected.
+
+On a Peruvian DNIe, the middleware RENIEC publishes (AuthentIC WebPack) is the one the agent looks for; for another Peruvian token whose module the agent does not know, point `SIMPLESIGN_PKCS11_LIBRARY` at its library.
+
+## The site gets "not available offline"
+
+IOFE and eIDAS read a trusted list over the internet, keep it in a cache and refresh it every six hours. While it cannot be read, those filters answer 503 instead of returning a shorter list, and Settings shows *not available offline*. It is retried a minute later. The frameworks of Brazil carry their roots inside the agent and never need the network for this.
+
 ## My certificate from the system store does not show up
 
 - It must have its private key on this computer. A certificate copied without the key cannot sign.

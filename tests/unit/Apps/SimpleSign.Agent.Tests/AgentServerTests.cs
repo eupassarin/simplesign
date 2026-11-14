@@ -113,11 +113,8 @@ public sealed class AgentServerTests : IAsyncLifetime
     {
         using var pki = new SyntheticPki();
         using var expired = Fixtures.RsaCertificate("CN=Expired", validDays: -1);
-        var services = new AgentServices(_services.Settings, _dialogs)
-        {
-            TrustFrameworks = new TrustFrameworks(
-                [new TrustFramework("lab", new Lazy<SimpleSign.Core.Extensions.ICountryExtension>(() => new TrustFrameworksTests.TestExtension("XX", pki)))]),
-        };
+        _services.Settings.Current.EnabledTrustFrameworks = ["lab"];
+        var services = new AgentServices(_services.Settings, _dialogs, Lab(_services.Settings, pki));
         CertificateEntry[] entries =
         [
             new(CertificateSourceKind.File, _certificate, FilePath: "a.pfx"),
@@ -153,8 +150,139 @@ public sealed class AgentServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Certificates_FrameworkThatIsNotEnabled_BadRequestListingWhatIs()
+    {
+        using var pki = new SyntheticPki();
+        _services.Settings.Current.EnabledTrustFrameworks = ["other"];
+        string answer = await ListWith(Lab(_services.Settings, pki), "?trust=lab", pki);
+
+        answer.ShouldStartWith("400");
+        answer.ShouldContain("lab");
+        answer.ShouldContain("other (XX)");
+    }
+
+    [Fact]
+    public async Task Certificates_NoFrameworkEnabled_FiltersAreBadRequestsButAPlainListingWorks()
+    {
+        using var pki = new SyntheticPki();
+        _services.Settings.Current.EnabledTrustFrameworks = [];
+        var frameworks = Lab(_services.Settings, pki);
+
+        (await ListWith(frameworks, "?trust=lab", pki)).ShouldStartWith("400");
+        (await ListWith(frameworks, "?country=XX", pki)).ShouldStartWith("400");
+        (await ListWith(frameworks, "?filterIcpBrasil=true", pki)).ShouldStartWith("400");
+        (await ListWith(frameworks, "", pki)).ShouldStartWith("200");
+    }
+
+    [Fact]
+    public async Task Certificates_TrustedListUnavailable_ServiceUnavailable()
+    {
+        using var pki = new SyntheticPki();
+        _services.Settings.Current.EnabledTrustFrameworks = ["lab"];
+        var offline = new TrustFrameworks(
+            _services.Settings,
+            [new TrustFramework("lab", "XX", "Lab", NeedsTrustedList: true)],
+            (_, _) => throw new HttpRequestException("The trusted list could not be downloaded."));
+
+        string answer = await ListWith(offline, "?trust=lab", pki);
+
+        answer.ShouldStartWith("503");
+    }
+
+    [Fact]
+    public async Task Sign_SignedRequestsRequiredAndNoToken_BadRequest()
+    {
+        _services.Settings.Current.SignedRequestsRequired = true;
+        _services.Settings.Current.SignedRequestKeys = [TestKeyPem];
+
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", SignBody());
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("signedRequest");
+        _dialogs.Asked.Where(a => a.CertificateHolder != null).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Sign_UnknownOriginUnderALockedPolicy_ForbiddenWithoutAsking()
+    {
+        var policy = PolicyFile("""
+            { "lockedSettings": ["allowedOrigins"], "allowedOrigins": ["https://portal.example.com"] }
+            """);
+        var services = new AgentServices(new SettingsStore(Directory.CreateTempSubdirectory("simplesign-agent-").FullName, policy), _dialogs);
+        int port = FreePort();
+        await using var agent = new AgentServer(services, new TokenSessionCache(), _ => Task.FromResult<IReadOnlyList<CertificateEntry>>([]));
+        await agent.StartAsync(port);
+
+        using var refused = await SendTo(port, "/api/certificates", "https://evil.example.net");
+        using var allowed = await SendTo(port, "/api/certificates", "https://portal.example.com");
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        _dialogs.Asked.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task AnyRequest_InvalidPolicyFile_ForbiddenEverywhere()
+    {
+        var policy = PolicyFile("{ not json");
+        var services = new AgentServices(new SettingsStore(Directory.CreateTempSubdirectory("simplesign-agent-").FullName, policy), _dialogs);
+        int port = FreePort();
+        await using var agent = new AgentServer(services, new TokenSessionCache(), _ => Task.FromResult<IReadOnlyList<CertificateEntry>>([]));
+        await agent.StartAsync(port);
+
+        using var health = await SendTo(port, "/api/health", "https://portal.example.com");
+
+        health.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await health.Content.ReadAsStringAsync()).ShouldContain("policy");
+    }
+
+    private static ManagedPolicy PolicyFile(string json)
+    {
+        string path = Path.Combine(Directory.CreateTempSubdirectory("simplesign-policy-").FullName, "policy.json");
+        File.WriteAllText(path, json);
+        return ManagedPolicy.Load(path);
+    }
+
+    private static TrustFrameworks Lab(SettingsStore settings, SyntheticPki pki) => new(
+        settings,
+        [new TrustFramework("lab", "XX", "Lab", NeedsTrustedList: false), new TrustFramework("other", "XX", "Other", NeedsTrustedList: false)],
+        (_, _) => Task.FromResult<SimpleSign.Core.Extensions.ICountryExtension>(new TrustFrameworksTests.TestExtension("XX", pki)));
+
+    private async Task<string> ListWith(TrustFrameworks frameworks, string query, SyntheticPki pki)
+    {
+        var services = new AgentServices(_services.Settings, _dialogs, frameworks);
+        CertificateEntry[] entries = [new(CertificateSourceKind.File, pki.Leaf, FilePath: "b.pfx")];
+        _dialogs.Site = ConsentDecision.AllowAlways;
+        int port = FreePort();
+        await using var agent = new AgentServer(services, new TokenSessionCache(), _ => Task.FromResult<IReadOnlyList<CertificateEntry>>(entries));
+        await agent.StartAsync(port);
+        using var response = await SendTo(port, "/api/certificates" + query, "https://portal.example.com");
+        return $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}";
+    }
+
+    private async Task<HttpResponseMessage> SendTo(int port, string path, string origin)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"http://127.0.0.1:{port}{path}"));
+        request.Headers.Add("Origin", origin);
+        return await _http.SendAsync(request);
+    }
+
+    private string SignBody() =>
+        $$"""{"thumbprint":"{{_certificate.Thumbprint}}","hashAlgorithm":"SHA256","signRequests":[{"id":"1","authenticatedAttributeBase64":"MQA="}]}""";
+
+    private static string TestKeyPem
+    {
+        get
+        {
+            using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            return key.ExportSubjectPublicKeyInfoPem();
+        }
+    }
+
+    [Fact]
     public async Task Certificates_FilterIcpBrasil_StillLeavesOutOtherCertificates()
     {
+        _services.Settings.Current.EnabledTrustFrameworks = [TrustFrameworkCatalog.IcpBrasil];
         using var response = await Send(HttpMethod.Get, "/api/certificates?filterIcpBrasil=true", "https://portal.example.com");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);

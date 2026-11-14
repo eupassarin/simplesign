@@ -96,9 +96,9 @@ Drivers that do not count attempts (SoftHSM among them) never set `IsPinCountLow
 ## Finding the driver
 
 The driver ships with the token's middleware. SimpleSign knows where the middlewares used in
-Brazil install it (SafeNet/Thales, SafeSign/G+D, Watchdata, Gemalto IDPrime/GemSafe,
-Oberthur/Certisign, Pronova, Feitian ePass2003, Safeweb, NeoID, Dexon, birdID, desktopID, OpenSC and
-SoftHSM), so the path is usually not needed:
+Brazil and Peru install it (SafeNet/Thales, SafeSign/G+D, Watchdata, Gemalto IDPrime/GemSafe,
+Oberthur AWP/AuthentIC WebPack, Pronova, Feitian ePass2003, Safeweb, NeoID, Dexon, birdID,
+desktopID, OpenSC and SoftHSM), so the path is usually not needed:
 
 ```csharp
 // The library of the connected token (or of the one labelled "ICP-Brasil" when several are)
@@ -126,6 +126,27 @@ driver and skips, with the reason, those that fail. Other drivers can be added w
 
 Paths vary with the middleware version; check its installation folder. The process must have the
 same architecture as the driver (64-bit drivers for 64-bit processes).
+
+### Peru
+
+Two Peruvian cases are covered by catalog entries that already existed, because they are the same
+middleware sold elsewhere:
+
+- **The RENIEC DNIe.** RENIEC publishes *AuthentIC WebPack* as the DNIe's middleware (Windows), which
+  is the Oberthur/IDEMIA **AWP** library the catalog looks for (`OcsCryptoki.dll`,
+  `OcsCryptolib_P11.dll`). RENIEC publishes no module for Linux or macOS.
+- **The tokens of Peruvian certification authorities.** They are commonly Feitian **ePass2003**
+  (the model Llama.pe distributes a driver for, on Windows and macOS), which the catalog also knows.
+
+No other Peruvian path is in the catalog: the published documentation of the remaining middlewares
+does not state a library file name, and SimpleSign does not guess one. For any of them — and for a
+module in a place its vendor does not use — give the full path in `SIMPLESIGN_PKCS11_LIBRARY`:
+
+```bash
+# macOS/Linux; use ; between paths on Windows
+export SIMPLESIGN_PKCS11_LIBRARY=/usr/local/lib/libmymodule.so
+simplesign pkcs11 list
+```
 
 > Drivers read their own configuration through the native environment. On Linux and macOS,
 > `Environment.SetEnvironmentVariable` does not reach native code, so variables such as

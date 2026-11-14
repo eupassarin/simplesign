@@ -13,7 +13,7 @@ using SimpleSign.Agent.Views;
 namespace SimpleSign.Agent.Tests;
 
 /// <summary>
-/// Opens the window on the headless platform in both languages and both themes, visits every
+/// Opens the window on the headless platform in every language and both themes, visits every
 /// section and panel, and saves each frame as a PNG (bin/…/screenshots) for visual review.
 /// </summary>
 [Trait("Category", "Unit")]
@@ -24,6 +24,7 @@ public sealed class MainWindowTests
     [AvaloniaTheory]
     [InlineData("en-US", "light")]
     [InlineData("pt-BR", "dark")]
+    [InlineData("es-ES", "light")]
     public async Task EverySectionAndPanel_Renders(string language, string theme)
     {
         MainWindow.Animate = false;
@@ -37,7 +38,7 @@ public sealed class MainWindowTests
             new(CertificateSourceKind.File, second, FilePath: "beltrana.pfx"),
             new(CertificateSourceKind.Store, expiring),
         ];
-        var services = Fixtures.Services();
+        var services = Fixtures.ServicesWithTrust(null, TrustFrameworkCatalog.IcpBrasil);
         services.Settings.Current.AgentPort = Fixtures.FreePort();
         services.Settings.Current.AllowedOrigins.Add("https://portal.example.com");
         services.Settings.Current.BlockedOrigins.Add("https://ads.example.net");
@@ -78,6 +79,46 @@ public sealed class MainWindowTests
         window.GetVisualDescendants().OfType<TextBlock>().ShouldContain(t => t.Text == L.T("overview.running.title"));
         window.Close();
         L.Use(L.English);
+        // Drain the jobs the language change posted while the certificates above are still alive.
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// A language change after the window closed must not rebuild its pages: unsubscribing does not cancel a job
+    /// already posted, and a page rebuilt then reads certificates whose owner may have released them — which is how
+    /// the Overview came to call Thumbprint on a disposed certificate.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LanguageChangeAfterTheWindowClosed_DoesNotRebuildIt()
+    {
+        MainWindow.Animate = false;
+        L.Use(L.English);
+        using var certificate = Fixtures.RsaCertificate();
+        IReadOnlyList<CertificateEntry> entries = [new(CertificateSourceKind.Store, certificate)];
+        var services = Fixtures.ServicesWithTrust(null, TrustFrameworkCatalog.IcpBrasil);
+        services.Settings.Current.AgentPort = Fixtures.FreePort();
+        await using var controller = new AgentController(services, _ => Task.FromResult(entries));
+        var window = new MainWindow(controller);
+        window.Show();
+        Settle(() => window.Inventory is not null);
+        string english = L.T("overview.certificates.title");
+        Has(window, english).ShouldBeTrue();
+
+        window.Close();
+        L.Use(L.Portuguese);
+        Dispatcher.UIThread.RunJobs();
+
+        try
+        {
+            // Still the English text: the posted rebuild returned without touching the page or the certificates.
+            Has(window, english).ShouldBeTrue();
+            Has(window, L.T("overview.certificates.title")).ShouldBeFalse();
+        }
+        finally
+        {
+            L.Use(L.English);
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
     [AvaloniaFact]
@@ -110,6 +151,7 @@ public sealed class MainWindowTests
         services.Signatures.ShouldBe(1);
         window.Close();
         L.Use(L.English);
+        Dispatcher.UIThread.RunJobs();
     }
 
     [AvaloniaFact]

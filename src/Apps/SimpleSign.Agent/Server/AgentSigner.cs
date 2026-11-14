@@ -71,11 +71,16 @@ internal sealed record CertificateQuery(
     string Source = "all", bool IcpBrasilOnly = false, IReadOnlyList<TrustFramework>? Frameworks = null, bool SigningOnly = false);
 
 /// <summary>Signs the agent's /api/sign requests with a store or token key, after the user consents.</summary>
-internal sealed class AgentSigner(AgentServices services, TokenSessionCache sessions, Func<CancellationToken, Task<IReadOnlyList<CertificateEntry>>>? certificates = null)
+internal sealed class AgentSigner(
+    AgentServices services,
+    TokenSessionCache sessions,
+    Func<CancellationToken, Task<IReadOnlyList<CertificateEntry>>>? certificates = null,
+    SignedRequestVerifier? verifier = null)
 {
     public const int MaxItems = 100;
 
     private readonly Func<CancellationToken, Task<IReadOnlyList<CertificateEntry>>> _certificates = certificates ?? AllCertificatesAsync;
+    private readonly SignedRequestVerifier _verifier = verifier ?? new SignedRequestVerifier(services.Settings);
 
     /// <summary>The OS store certificates and those of the connected tokens.</summary>
     public static async Task<IReadOnlyList<CertificateEntry>> AllCertificatesAsync(CancellationToken cancellationToken) =>
@@ -96,7 +101,8 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
             if (fromSource
                 && (!query.IcpBrasilOnly || e.IsIcpBrasil)
                 && (!query.SigningOnly || TrustFrameworks.CanSignNow(e.Certificate))
-                && (query.Frameworks is null || await services.TrustFrameworks.AnyTrustsAsync(query.Frameworks, e.Certificate, cancellationToken)))
+                && (query.Frameworks is null or { Count: 0 }
+                    || await services.TrustFrameworks.AnyTrustsAsync(query.Frameworks, e.Certificate, cancellationToken)))
             {
                 entries.Add(e);
             }
@@ -120,16 +126,33 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
     }
 
     /// <summary>Asks the user, then signs every item. Null when the user refused.</summary>
-    public async Task<List<AgentSignResult>?> SignAsync(string originLabel, AgentSignRequest request, CancellationToken cancellationToken)
+    /// <param name="origin">The normalized origin of the request, as the signed-request token must name it.</param>
+    /// <param name="originLabel">What the dialog and the log call the caller.</param>
+    /// <param name="request">The request body.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<List<AgentSignResult>?> SignAsync(
+        string origin, string originLabel, AgentSignRequest request, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
         var items = request.SignRequests ?? [];
         var entry = (await _certificates(cancellationToken)).FirstOrDefault(e => Same(e, request.Thumbprint))
             ?? throw new KeyNotFoundException(L.T("api.certificateNotFound", request.Thumbprint));
-        var payloads = Inspect(items, entry.Certificate);
-        string what = request.DocumentName is { Length: > 0 } name ? $"“{Trim(name, 80)}”" : L.T("consent.sign.documents", items.Count);
+        // The token is checked before the bytes are parsed and before the user is asked, and what the dialog shows
+        // comes from it, not from the page.
+        var decoded = Decode(items);
+        var grant = _verifier.Verify(request.SignedRequest, origin, request, decoded);
+        var payloads = Inspect(decoded, entry.Certificate);
+        string? documentName = grant is not null ? grant.DocumentName : request.DocumentName;
+        string what = documentName is { Length: > 0 } name ? $"“{Trim(name, 80)}”" : L.T("consent.sign.documents", items.Count);
         string digest = payloads[0].Inspection.Digests[0].ToShortString();
         string message = L.T("consent.sign.message", originLabel, what, entry.Holder) + " "
             + (payloads.Count == 1 ? L.T("consent.sign.digest", digest) : L.T("consent.sign.digests", digest, payloads.Count - 1));
+        if (grant is not null)
+        {
+            message += " " + L.T("consent.sign.verified");
+            services.Log.Add("Agent", L.T("log.signedRequest", originLabel, grant.KeyId));
+        }
+
         var decision = await services.Dialogs.AskConsentAsync(new ConsentRequest(originLabel, L.T("consent.sign.title"),
             message, entry.Holder, OfferRemember: false));
         if (decision == ConsentDecision.Deny)
@@ -152,38 +175,56 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
         return [.. payloads.Select(p => SignWithStore(entry.Certificate, p, hash))];
     }
 
-    /// <summary>
-    /// Decodes and inspects every item before the user is asked: only CMS signed attributes (naming the chosen
-    /// certificate when they name one) or an XML-DSig SignedInfo are signed, never raw bytes.
-    /// </summary>
-    /// <exception cref="AgentRequestException">An item is not base64 or not data the agent signs.</exception>
-    internal static List<Payload> Inspect(IReadOnlyList<AgentSignRequestItem> items, X509Certificate2 certificate)
+    /// <summary>The bytes of every item, base64-decoded, with the item's id.</summary>
+    /// <param name="items">The request's items.</param>
+    /// <exception cref="AgentRequestException">An item is not base64.</exception>
+    internal static List<SignRequestBytes> Decode(IReadOnlyList<AgentSignRequestItem> items)
     {
-        var payloads = new List<Payload>(items.Count);
+        var decoded = new List<SignRequestBytes>(items.Count);
         for (int i = 0; i < items.Count; i++)
         {
             string id = items[i].Id ?? i.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            byte[] data;
             try
             {
-                data = Convert.FromBase64String(items[i].AuthenticatedAttributeBase64 ?? "");
+                decoded.Add(new SignRequestBytes(id, Convert.FromBase64String(items[i].AuthenticatedAttributeBase64 ?? "")));
             }
             catch (FormatException)
             {
                 throw new AgentRequestException(L.T("api.itemNotBase64", id));
             }
+        }
 
-            var inspection = DataToSignInspector.Inspect(data, certificate);
+        return decoded;
+    }
+
+    /// <summary>
+    /// Inspects every item before the user is asked: only CMS signed attributes (naming the chosen certificate when
+    /// they name one) or an XML-DSig SignedInfo are signed, never raw bytes.
+    /// </summary>
+    /// <param name="decoded">The items' bytes, from <see cref="Decode"/>.</param>
+    /// <param name="certificate">The certificate the signature will be made with.</param>
+    /// <exception cref="AgentRequestException">An item is not data the agent signs.</exception>
+    internal static List<Payload> Inspect(IReadOnlyList<SignRequestBytes> decoded, X509Certificate2 certificate)
+    {
+        var payloads = new List<Payload>(decoded.Count);
+        foreach (var item in decoded)
+        {
+            var inspection = DataToSignInspector.Inspect(item.Data, certificate);
             if (!inspection.IsAccepted)
             {
-                throw new AgentRequestException(L.T("api.itemRefused", id, inspection.Message ?? ""));
+                throw new AgentRequestException(L.T("api.itemRefused", item.Id, inspection.Message ?? ""));
             }
 
-            payloads.Add(new Payload(id, data, inspection));
+            payloads.Add(new Payload(item.Id, item.Data, inspection));
         }
 
         return payloads;
     }
+
+    /// <summary>One item of a request, base64-decoded.</summary>
+    /// <param name="Id">The item's id.</param>
+    /// <param name="Data">The bytes to sign.</param>
+    internal sealed record SignRequestBytes(string Id, byte[] Data);
 
     /// <summary>An item of a request, decoded and inspected.</summary>
     internal sealed record Payload(string Id, byte[] Data, DataToSignInspection Inspection);
@@ -200,7 +241,8 @@ internal sealed class AgentSigner(AgentServices services, TokenSessionCache sess
         if (!entry.Token.HasPinPad)
         {
             pin = await services.Dialogs.AskSecretAsync(L.T("pin.title"),
-                L.T("pin.message", entry.Token.TokenLabel.Trim(), entry.Holder), L.T("pin.confirm"));
+                L.T("pin.message", entry.Token.TokenLabel.Trim(), entry.Holder), L.T("pin.confirm"),
+                entry.Token.PinWarning, entry.Token.IsPinWarningSevere);
             if (pin is null)
             {
                 return null;

@@ -4,7 +4,12 @@ namespace SimpleSign.Agent.Services;
 internal interface IDialogService
 {
     /// <summary>Asks for a secret (token PIN); null when cancelled.</summary>
-    Task<string?> AskSecretAsync(string title, string message, string confirmText);
+    /// <param name="title">The dialog's title.</param>
+    /// <param name="message">What is being asked and why.</param>
+    /// <param name="confirmText">The confirm button's text.</param>
+    /// <param name="warning">A warning shown above the box (the token is on its last try…); null for none.</param>
+    /// <param name="severe">Whether the warning is shown as an error rather than a caution.</param>
+    Task<string?> AskSecretAsync(string title, string message, string confirmText, string? warning = null, bool severe = false);
 
     /// <summary>Asks the user to approve an agent request.</summary>
     Task<ConsentDecision> AskConsentAsync(ConsentRequest request);
@@ -21,14 +26,25 @@ internal enum ConsentDecision
 }
 
 /// <summary>The agent-wide services (a tiny composition root).</summary>
-internal sealed class AgentServices(SettingsStore settings, IDialogService dialogs)
+internal sealed class AgentServices
 {
-    public SettingsStore Settings { get; } = settings;
+    /// <summary>Creates the agent's services.</summary>
+    /// <param name="settings">The settings store.</param>
+    /// <param name="dialogs">What asks the user.</param>
+    /// <param name="trustFrameworks">The trust frameworks; null builds the ones this agent ships with.</param>
+    public AgentServices(SettingsStore settings, IDialogService dialogs, TrustFrameworks? trustFrameworks = null)
+    {
+        Settings = settings;
+        Dialogs = dialogs;
+        TrustFrameworks = trustFrameworks ?? new TrustFrameworks(settings, log: Log);
+    }
 
-    public IDialogService Dialogs { get; } = dialogs;
+    public SettingsStore Settings { get; }
 
-    /// <summary>The trust frameworks of <c>?country=</c> and <c>?trust=</c>.</summary>
-    public TrustFrameworks TrustFrameworks { get; init; } = TrustFrameworks.Default;
+    public IDialogService Dialogs { get; }
+
+    /// <summary>The trust frameworks of <c>?country=</c> and <c>?trust=</c>, those the user enabled.</summary>
+    public TrustFrameworks TrustFrameworks { get; }
 
     public ActivityLog Log { get; } = new();
 

@@ -8,25 +8,53 @@ namespace SimpleSign.Agent.Tests;
 [Trait("Category", "Unit")]
 public sealed partial class StringsTests
 {
-    [Fact]
-    public void Portuguese_HasTheSameKeysAsEnglish() =>
-        Strings.Portuguese.Keys.Order(StringComparer.Ordinal).ShouldBe(Strings.English.Keys.Order(StringComparer.Ordinal));
+    public static TheoryData<string> Translations() => new(L.Portuguese, L.Spanish);
 
-    [Fact]
-    public void Portuguese_HasTheSamePlaceholdersAsEnglish()
+    [Theory]
+    [MemberData(nameof(Translations))]
+    public void EveryTranslation_HasTheSameKeysAsEnglish(string language) =>
+        Strings.For(language).Keys.Order(StringComparer.Ordinal).ShouldBe(Strings.English.Keys.Order(StringComparer.Ordinal));
+
+    [Theory]
+    [MemberData(nameof(Translations))]
+    public void EveryTranslation_HasTheSamePlaceholdersAsEnglish(string language)
     {
+        var texts = Strings.For(language);
         foreach (var (key, english) in Strings.English)
         {
-            Placeholders(Strings.Portuguese[key]).ShouldBe(Placeholders(english), key);
+            Placeholders(texts[key]).ShouldBe(Placeholders(english), $"{language} {key}");
         }
     }
 
     [Fact]
     public void EveryText_IsFilledIn()
     {
-        foreach (var texts in new[] { Strings.English, Strings.Portuguese })
+        foreach (var texts in new[] { Strings.English, Strings.Portuguese, Strings.Spanish })
         {
             texts.Where(t => string.IsNullOrWhiteSpace(t.Value)).Select(t => t.Key).ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public void Languages_AreTheThreeWithADictionaryEach()
+    {
+        L.Languages.Select(l => l.Id).ShouldBe([L.English, L.Portuguese, L.Spanish]);
+        L.Languages.Select(l => Strings.For(l.Id)).ShouldBeUnique();
+    }
+
+    [Fact]
+    public void Use_Spanish_SwitchesTheTexts()
+    {
+        try
+        {
+            L.Use(L.Spanish);
+
+            L.Language.ShouldBe(L.Spanish);
+            L.T("common.cancel").ShouldBe(Strings.Spanish["common.cancel"]);
+        }
+        finally
+        {
+            L.Use(L.English);
         }
     }
 
@@ -50,8 +78,11 @@ public sealed partial class StringsTests
     [InlineData("pt-BR", "pt-BR")]
     [InlineData("pt-PT", "pt-BR")]
     [InlineData("en-GB", "en-US")]
-    [InlineData("es-ES", "en-US")]
-    public void Detect_PortugueseOrEnglish(string culture, string expected) =>
+    [InlineData("es-ES", "es-ES")]
+    [InlineData("es-PE", "es-ES")]
+    [InlineData("es-MX", "es-ES")]
+    [InlineData("fr-FR", "en-US")]
+    public void Detect_PortugueseSpanishOrEnglish(string culture, string expected) =>
         L.Detect(CultureInfo.GetCultureInfo(culture)).ShouldBe(expected);
 
     private static string[] Placeholders(string text) =>

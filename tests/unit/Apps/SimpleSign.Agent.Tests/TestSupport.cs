@@ -13,7 +13,14 @@ internal sealed class FakeDialogs : IDialogService
 
     public List<ConsentRequest> Asked { get; } = [];
 
-    public Task<string?> AskSecretAsync(string title, string message, string confirmText) => Task.FromResult<string?>("1234");
+    /// <summary>The warning shown with the last PIN prompt, and whether it was shown as an error.</summary>
+    public (string? Text, bool Severe) LastPinWarning { get; private set; }
+
+    public Task<string?> AskSecretAsync(string title, string message, string confirmText, string? warning = null, bool severe = false)
+    {
+        LastPinWarning = (warning, severe);
+        return Task.FromResult<string?>("1234");
+    }
 
     public Task<ConsentDecision> AskConsentAsync(ConsentRequest request)
     {
@@ -24,8 +31,16 @@ internal sealed class FakeDialogs : IDialogService
 
 internal static class Fixtures
 {
-    public static AgentServices Services(FakeDialogs? dialogs = null) =>
-        new(new SettingsStore(Directory.CreateTempSubdirectory("simplesign-agent-").FullName), dialogs ?? new FakeDialogs());
+    public static AgentServices Services(FakeDialogs? dialogs = null, ManagedPolicy? policy = null) =>
+        new(new SettingsStore(Directory.CreateTempSubdirectory("simplesign-agent-").FullName, policy ?? ManagedPolicy.None), dialogs ?? new FakeDialogs());
+
+    /// <summary>The agent's services with those trust frameworks enabled.</summary>
+    public static AgentServices ServicesWithTrust(FakeDialogs? dialogs, params string[] enabled)
+    {
+        var services = Services(dialogs);
+        services.Settings.Current.EnabledTrustFrameworks = [.. enabled];
+        return services;
+    }
 
     public static X509Certificate2 RsaCertificate(string name = "CN=Fulano de Tal", int validDays = 365)
     {
