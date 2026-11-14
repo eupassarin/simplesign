@@ -81,7 +81,11 @@ internal static class CliValidation
     public static PadesVerdict Verdict(CliPadesSignature s) => new(
         s.FieldName, s.Indication, s.SubIndication, s.IsDocumentTimestamp, s.Signer, s.SubFilter, s.Algorithm, s.SigningTime,
         s.Integrity, s.Signature, s.Chain, s.ChainTrustWarning, s.ChainRegion, s.NotRevoked, s.RevocationSource ?? "", s.HasValidTimestamp, s.IsTsaTrusted,
-        Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [], s.ChainMetadata);
+        Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [], s.ChainMetadata)
+    {
+        Qualification = s.Qualification,
+        TimestampQualifications = s.TimestampQualifications ?? [],
+    };
 }
 
 /// <summary>The reports a validate command wrote, kept in the document store: the simple report (JSON) and the ETSI report (XML).</summary>
@@ -115,7 +119,14 @@ internal sealed record CliPadesSignature(
     bool? IsTsaTrusted,
     bool ChainTrustWarning,
     string? ChainRegion,
-    IReadOnlyDictionary<string, string>? ChainMetadata);
+    IReadOnlyDictionary<string, string>? ChainMetadata)
+{
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+}
 
 /// <summary>The JSON of <c>simplesign cades validate --json</c>.</summary>
 internal sealed record CliCadesOutput(IReadOnlyList<CliCadesSigner> Signatures, IReadOnlyList<string>? ReportErrors);
@@ -143,7 +154,14 @@ internal sealed record CliCadesSigner(
     DateTimeOffset? SigningTime,
     IReadOnlyList<string>? Errors,
     IReadOnlyList<string>? Warnings,
-    IReadOnlyList<CliCadesSigner>? CounterSignatures);
+    IReadOnlyList<CliCadesSigner>? CounterSignatures)
+{
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+}
 
 /// <summary>The JSON of <c>simplesign xades validate --json</c>.</summary>
 internal sealed record CliXadesOutput(IReadOnlyList<CliXadesSignature> Signatures);
@@ -172,4 +190,11 @@ internal sealed record CliXadesSignature(
     DateTimeOffset? SigningTime,
     IReadOnlyList<string>? Errors,
     IReadOnlyList<string>? Warnings,
-    IReadOnlyList<CliXadesSignature>? CounterSignatures);
+    IReadOnlyList<CliXadesSignature>? CounterSignatures)
+{
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+}

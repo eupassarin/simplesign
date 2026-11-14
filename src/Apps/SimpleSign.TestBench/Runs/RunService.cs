@@ -68,6 +68,12 @@ public sealed record RunVerdict(
     string? SubIndication = null,
     IReadOnlyList<FindingView>? Findings = null)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The ETSI indication (EN 319 102-1 §5.1.3): TOTAL_PASSED, TOTAL_FAILED or INDETERMINATE.</summary>
     public string EtsiIndication => Indication switch
     {
@@ -480,6 +486,7 @@ internal sealed class RunService(
             TsaProvider.SandboxWrongName when connection is not null => connection.WrongNameTsaUri,
             TsaProvider.SandboxShortLived when connection is not null => connection.ShortLivedTsaUri,
             TsaProvider.SandboxIofe when connection is not null => connection.IofeTsaUri,
+            TsaProvider.SandboxNonQualified when connection is not null => connection.NonQualifiedTsaUri,
             TsaProvider.DigiCert => TimestampOptions.DigiCert.Endpoint,
             TsaProvider.Sectigo => TimestampOptions.Sectigo.Endpoint,
             TsaProvider.FreeTsa => TimestampOptions.FreeTsa.Endpoint,
@@ -583,6 +590,8 @@ internal sealed class RunService(
         new(v.FieldName, v.Signer, v.Indication, null, v.SigningTime, v.Checks, v.Errors, v.Warnings, [], v.IsDocumentTimestamp, v.SubIndication, v.Findings)
         {
             Source = v.Source,
+            Qualification = v.Qualification,
+            TimestampQualifications = v.TimestampQualifications,
         };
 
     private static RunVerdict Verdict(XmlSignatureReport s) => new(
@@ -590,6 +599,8 @@ internal sealed class RunService(
         SubIndication: s.SubIndication, Findings: s.Findings)
     {
         Source = s.Source,
+        Qualification = s.Qualification,
+        TimestampQualifications = s.TimestampQualifications,
     };
 
     private static RunView Empty(Run run) => new(
@@ -651,6 +662,8 @@ internal sealed class RunService(
         [.. s.CounterSignatures.Select(Verdict)], SubIndication: s.SubIndication, Findings: s.Findings)
     {
         Source = s.Source,
+        Qualification = s.Qualification,
+        TimestampQualifications = s.TimestampQualifications,
     };
 
     private static RunView FromXml(Run run, XmlSignResult r) => Empty(run) with

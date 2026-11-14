@@ -53,7 +53,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         ILogger? logger = null,
         IChainRevocationChecker? chainRevocationChecker = null)
     {
-        _options = options ?? new ValidationOptions();
+        _options = (options ?? new ValidationOptions()).WithProfileApplied();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
         _logger = logger ?? NullLogger.Instance;
         _chainRevocationChecker = chainRevocationChecker
@@ -169,7 +169,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         var (facts, evaluation, revocationWarnings) = await RevocationStep.RunAsync(
             result.Facts, result.ChainCandidates, result.SignatureTimestampToken, _chainRevocationChecker,
             result.EmbeddedCrls, result.EmbeddedOcsps, _options.PolicyFor(result.Facts.SignaturePolicyOid), cancellationToken).ConfigureAwait(false);
-        return result with
+        return Qualified(result with
         {
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
@@ -182,11 +182,28 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             RevocationSource = facts.RevocationSource,
             IsTsaTrusted = facts.IsTsaTrusted,
             Warnings = [.. result.Warnings.Where(w => w != RevocationStep.NotCheckedWarning), .. revocationWarnings],
-        };
+        });
     }
+
+    /// <summary>The result with its qualification under a legal framework, when the options have qualifiers.</summary>
+    private XadesValidationResult Qualified(XadesValidationResult result) =>
+        result.SignerCertificate is { } signer && _options.SignatureQualifiers is { Count: > 0 }
+            ? result with
+            {
+                Qualification = _options.Qualify(new SimpleSign.Core.Extensions.SignatureQualificationContext(signer, result.Indication)
+                {
+                    Certificates = [.. result.ChainCandidates],
+                    ClaimedSigningTime = result.SigningTime,
+                    BestSignatureTime = result.BestSignatureTime,
+                    ValidationObjects = result.ValidationObjects,
+                    Format = "XAdES",
+                }),
+            }
+            : result;
 
     private XadesValidationResult Logged(XadesValidationResult result)
     {
+        result = Qualified(result);
         if (result.Facts is { } facts && _options.ChecksRevocationFor(facts.IsChainAnchored))
         {
             result = result with { Warnings = [.. result.Warnings, RevocationStep.NotCheckedWarning] };
@@ -784,7 +801,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         try
         {
             using var chain = new X509Chain { ChainPolicy = { TrustMode = X509ChainTrustMode.System } };
-            CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
+            CryptoUtility.ConfigureChainPolicy(chain, _options.NetworkTimeout);
             chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
             foreach (var certificate in embedded)
             {

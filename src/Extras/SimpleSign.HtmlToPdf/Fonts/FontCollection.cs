@@ -108,7 +108,6 @@ internal sealed class FontCollection
         return false;
     }
 
-    internal bool HasFamily(string family) => _families.ContainsKey(NormalizeFamily(family));
 
     /// <summary>Resolves the face for a CSS family list and requested style.</summary>
     internal static ResolvedFont Resolve(FontCollection? fonts, IReadOnlyList<string> families, bool bold, bool italic)

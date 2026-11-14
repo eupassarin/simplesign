@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
@@ -69,6 +70,72 @@ internal static class PlaybookValidator
         if (!RunFormats.All.Contains(playbook.Defaults.Format))
         {
             Error("$.defaults.format", $"Unknown format '{playbook.Defaults.Format}': use pades, cades or xades.");
+        }
+
+        // The policies it adjusts: each one builds, and every playbook:ID a step names is declared.
+        var policyIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int p = 0; p < playbook.Policies.Count; p++)
+        {
+            var policy = playbook.Policies[p];
+            if (string.IsNullOrWhiteSpace(policy.Id) || !policyIds.Add(policy.Id))
+            {
+                Error($"$.policies[{p}].id", $"Policy id '{policy.Id}' is empty or repeated.");
+                continue;
+            }
+
+            try
+            {
+                _ = PlaybookPolicies.Build(policy);
+            }
+            catch (ArgumentException ex)
+            {
+                Error($"$.policies[{p}]", ex.Message);
+            }
+        }
+
+        foreach (string reference in PlaybookPolicies.References(playbook.Defaults.Options)
+            .Concat(playbook.AllSteps().SelectMany(s => PlaybookPolicies.References(s.Step.Options))).Distinct(StringComparer.Ordinal))
+        {
+            if (!policyIds.Contains(reference))
+            {
+                Error("$.policies", $"A step names {PlaybookPolicies.Prefix}{reference}, which the playbook does not declare in policies.");
+            }
+        }
+
+        // The files the person running it uploads: each declared once, each input:ID a step names declared.
+        var inputIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < playbook.Inputs.Count; i++)
+        {
+            var input = playbook.Inputs[i];
+            if (string.IsNullOrWhiteSpace(input.Id) || !inputIds.Add(input.Id))
+            {
+                Error($"$.inputs[{i}].id", $"Input id '{input.Id}' is empty or repeated.");
+            }
+
+            if (string.IsNullOrWhiteSpace(input.Title))
+            {
+                Error($"$.inputs[{i}].title", "Say what to upload (title).");
+            }
+        }
+
+        var usedInputs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (path, value) in Strings(playbook.Defaults.Options, "$.defaults.options")
+            .Concat(playbook.Sections.SelectMany((section, s) => section.Steps.SelectMany((step, n) => Strings(step.Options, $"$.sections[{s}].steps[{n}].options")))))
+        {
+            if (value.StartsWith(PlaybookRunner.InputPrefix, StringComparison.Ordinal))
+            {
+                string id = value[PlaybookRunner.InputPrefix.Length..];
+                usedInputs.Add(id);
+                if (!inputIds.Contains(id))
+                {
+                    Error(path, $"'{value}' names no input: declare it in inputs.");
+                }
+            }
+        }
+
+        foreach (string unused in inputIds.Where(id => !usedInputs.Contains(id)))
+        {
+            issues.Add(new("$.inputs", $"No step uses the input '{unused}'.", IsError: false));
         }
 
         var stepIds = new HashSet<string>(StringComparer.Ordinal);
@@ -156,6 +223,7 @@ internal static class PlaybookValidator
             CheckEnum<OcspFault>(box.Ocsp, at + ".sandbox.ocsp", error);
             CheckEnum<TsaFault>(box.Tsa, at + ".sandbox.tsa", error);
             CheckEnum<TlFault>(box.TrustedList, at + ".sandbox.trustedList", error);
+            CheckEnum<LotlFault>(box.Lotl, at + ".sandbox.lotl", error);
             if (sandbox is not null)
             {
                 foreach (string id in box.Revoke.Where(id => sandbox.Certificates.All(c => c.Id != id)))
@@ -168,13 +236,15 @@ internal static class PlaybookValidator
         if (step.Kind is PlaybookStepKinds.Validate or PlaybookStepKinds.Augment
             && (step.Options is not { ValueKind: JsonValueKind.Object } options || !options.TryGetProperty("fileId", out _)))
         {
-            error(at + ".options.fileId", $"A{(step.Kind == PlaybookStepKinds.Augment ? "n augmentation" : " validation")} needs options.fileId (step:ID or a sample).");
+            error(at + ".options.fileId", $"A{(step.Kind == PlaybookStepKinds.Augment ? "n augmentation" : " validation")} needs options.fileId (step:ID, input:ID or a sample).");
         }
 
         if (step.Kind == PlaybookStepKinds.Augment && (step.Engine ?? playbook.Defaults.Engine) != PlaybookEngines.Library)
         {
             error(at + ".engine", "An augmentation runs through the library: set engine to library.");
         }
+
+        CheckProfiles(PlaybookRunner.Merge(playbook.Defaults.Options, step.Format ?? playbook.Defaults.Format, step.Options), at + ".options", error);
 
         foreach (var (path, value) in Strings(step.Options, at + ".options").Concat(Strings(playbook.Defaults.Options, "$.defaults.options")))
         {
@@ -194,6 +264,42 @@ internal static class PlaybookValidator
                 error(path, $"'{value}' names no earlier step.");
             }
         }
+    }
+
+    /// <summary>The profiles of a step: known names, <c>profileSource</c> with iofe only, and no Gov.br signature.</summary>
+    private static void CheckProfiles(JsonObject options, string at, Action<string, string> error)
+    {
+        foreach (string part in new[] { "signingControls", "validation", "settings" })
+        {
+            if (options[part] is not JsonObject holder)
+            {
+                continue;
+            }
+
+            string? profile = Text(holder["profile"]);
+            CheckEnum<TrustFrameworks.TrustProfileChoice>(profile, $"{at}.{part}.profile", error);
+            CheckEnum<TrustFrameworks.ProfileListSource>(Text(holder["profileSource"]), $"{at}.{part}.profileSource", error);
+            if (holder["trustProfiles"] is JsonArray extras)
+            {
+                foreach (var extra in extras)
+                {
+                    CheckEnum<TrustFrameworks.TrustProfileChoice>(Text(extra), $"{at}.{part}.trustProfiles", error);
+                }
+            }
+
+            if (holder["profileSource"] is not null && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Iofe), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Eidas), StringComparison.OrdinalIgnoreCase))
+            {
+                error($"{at}.{part}.profileSource", "profileSource chooses the list of the Iofe or Eidas profile: set profile to one of them.");
+            }
+
+            if (part == "signingControls" && string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.GovBr), StringComparison.OrdinalIgnoreCase))
+            {
+                error($"{at}.{part}.profile", "Gov.br signatures are made on Gov.br's service: its profile validates only.");
+            }
+        }
+
+        static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue(out string? text) ? text : null;
     }
 
     private static void CheckExpectation(PlaybookExpectation expect, string at, Action<string, string> error)

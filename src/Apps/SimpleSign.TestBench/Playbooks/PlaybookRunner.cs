@@ -24,6 +24,9 @@ public static class PlaybookStatuses
     public const string Running = "running";
     public const string Passed = "passed";
     public const string Failed = "failed";
+
+    /// <summary>Not run: an input it needs has no file yet.</summary>
+    public const string Skipped = "skipped";
 }
 
 /// <summary>One check of an expectation: what was expected and what the run showed.</summary>
@@ -53,6 +56,12 @@ public sealed record PlaybookEngineRun(
     /// <summary>Why DSS gave no verdict (unreachable, an error); null when it answered or was not asked.</summary>
     public string? DssError { get; init; }
 
+    /// <summary>The qualification of the (first) signature (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of its first timestamp (QTSA, TSA, N/A); null when none.</summary>
+    public string? TimestampQualification { get; init; }
+
     /// <summary>Whether every check passed.</summary>
     public bool Passed => Checks.All(c => c.Passed);
 }
@@ -67,6 +76,12 @@ public sealed record PlaybookStepResult(string Status, string? Message, IReadOnl
     public IReadOnlyList<PlaybookEngineDifference> EngineDifferences { get; init; } = [];
 }
 
+/// <summary>An input of the loaded playbook, with the file uploaded for it (null until one is).</summary>
+public sealed record PlaybookInputView(string Id, string Title, string? Description, string? Accept, PlaybookInputFile? File);
+
+/// <summary>The file uploaded for an input: its TestBench file, name, size and SHA-256 (kept with the evidence).</summary>
+public sealed record PlaybookInputFile(string FileId, string FileName, long Size, string Sha256, DateTimeOffset At);
+
 /// <summary>A step as the page shows it: its definition's summary, its status and its latest result.</summary>
 public sealed record PlaybookStepView(string SectionId, string StepId, string Title, string Kind, IReadOnlyList<string> Tags, string Status, PlaybookStepResult? Result);
 
@@ -78,7 +93,11 @@ public sealed record PlaybookStateView(
     bool Running,
     string? RunningStep,
     int Version,
-    IReadOnlyList<PlaybookStepView> Steps);
+    IReadOnlyList<PlaybookStepView> Steps)
+{
+    /// <summary>The playbook's inputs and the file uploaded for each.</summary>
+    public IReadOnlyList<PlaybookInputView> Inputs { get; init; } = [];
+}
 
 /// <summary>What to run: the whole playbook, a section or a step, through the playbook's engines or another.</summary>
 public sealed record PlaybookRunRequest(string? Engine = null, string? SectionId = null, string? StepId = null);
@@ -108,7 +127,11 @@ public sealed record PlaybookStepPreview(
     CodeSnippets? Code,
     IReadOnlyList<OptionIssue> Issues,
     IReadOnlyList<string> NeedsSteps,
-    string? CodeError);
+    string? CodeError)
+{
+    /// <summary>The inputs the step uses that have no file yet: it is skipped until they do.</summary>
+    public IReadOnlyList<string> NeedsInputs { get; init; } = [];
+}
 
 /// <summary>
 /// Runs playbooks: each step through <see cref="RunService"/> (so it has the log, reports, file and DSS verdict of
@@ -162,15 +185,22 @@ internal sealed class PlaybookRunner(
             Loaded = check;
             LoadedJson = json;
             string key = Key(check.Playbook, json);
+            if (check.Playbook is { } adjusted)
+            {
+                PlaybookPolicies.AddTo(adjusted, documents);
+            }
+
             if (check.Playbook is { } playbook && _session?.Key != key)
             {
                 Release(_session?.Results.Values);
+                ReleaseInputs(_session);
                 _session?.Dispose();
                 _session = new PlaybookSession(key, playbook, json);
             }
             else if (check.Playbook is null)
             {
                 Release(_session?.Results.Values);
+                ReleaseInputs(_session);
                 _session?.Dispose();
                 _session = null;
             }
@@ -183,6 +213,7 @@ internal sealed class PlaybookRunner(
     {
         lock (_gate)
         {
+            ReleaseInputs(_session);
             _session?.Dispose();
             _session = null;
         }
@@ -241,6 +272,88 @@ internal sealed class PlaybookRunner(
         session.Clear(stepId);
         Release(stepId is null ? before.Values : before.TryGetValue(stepId, out var cleared) ? [cleared] : null);
         return session.View();
+    }
+
+    /// <summary>
+    /// Takes <paramref name="fileId"/> (an upload) as the file of the input <paramref name="inputId"/>, or drops the input's
+    /// file when it is null. The results of the steps that use the input, and of the steps that use their files, are dropped.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No playbook is loaded, it has no such input, or there is no such file.</exception>
+    /// <exception cref="InvalidOperationException">A run is going.</exception>
+    public PlaybookStateView SetInput(string inputId, string? fileId)
+    {
+        var session = Session ?? throw new KeyNotFoundException("No playbook is loaded.");
+        if (session.Playbook.Inputs.All(i => i.Id != inputId))
+        {
+            throw new KeyNotFoundException($"The playbook has no input '{inputId}'.");
+        }
+
+        StoredFile? file = null;
+        if (fileId is not null && !documents.TryGet(fileId, out file))
+        {
+            throw new KeyNotFoundException($"No file '{fileId}': upload it again.");
+        }
+
+        if (session.IsRunning)
+        {
+            throw new InvalidOperationException("Wait for the run to end (or stop it) before changing an input.");
+        }
+
+        foreach (string stepId in UsersOf(session.Playbook, inputId))
+        {
+            Clear(stepId);
+        }
+
+        // The file stays while it is the input's: pinned like the files of the results.
+        bool pinned = file is not null && documents.Pin(file.Id);
+        var previous = session.SetInput(inputId, file is null ? null
+            : new PlaybookInputFile(file.Id, file.FileName, file.Content.Length, Convert.ToHexStringLower(SHA256.HashData(file.Content)), DateTimeOffset.Now), pinned);
+        if (previous is { Pinned: true, File: var old })
+        {
+            documents.Unpin(old.FileId);
+        }
+
+        return session.View();
+    }
+
+    /// <summary>The steps that use an input, directly or through the file of a step that does, in order.</summary>
+    internal static IReadOnlyList<string> UsersOf(Playbook playbook, string inputId)
+    {
+        var users = new List<string>();
+        var affected = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (_, step) in playbook.AllSteps())
+        {
+            var values = PlaybookValidator.Strings(JsonSerializer.SerializeToElement(Merge(playbook.Defaults.Options, step.Format ?? playbook.Defaults.Format, step.Options)), "$")
+                .Select(s => s.Value).ToList();
+            if (values.Contains(InputPrefix + inputId)
+                || values.Any(v => v.StartsWith("step:", StringComparison.Ordinal) && affected.Contains(v["step:".Length..])))
+            {
+                affected.Add(step.Id);
+                users.Add(step.Id);
+            }
+        }
+
+        return users;
+    }
+
+    /// <summary>The inputs a step uses that have no file yet.</summary>
+    private static List<string> MissingInputs(PlaybookSession session, PlaybookStep step) =>
+        [.. PlaybookValidator.Strings(JsonSerializer.SerializeToElement(Merge(session.Playbook.Defaults.Options, step.Format ?? session.Playbook.Defaults.Format, step.Options)), "$")
+            .Select(s => s.Value)
+            .Where(v => v.StartsWith(InputPrefix, StringComparison.Ordinal))
+            .Select(v => v[InputPrefix.Length..])
+            .Where(id => session.Input(id) is null)
+            .Distinct(StringComparer.Ordinal)];
+
+    private void ReleaseInputs(PlaybookSession? session)
+    {
+        foreach (var binding in session?.InputBindings() ?? [])
+        {
+            if (binding.Pinned)
+            {
+                documents.Unpin(binding.File.FileId);
+            }
+        }
     }
 
     /// <summary>The files a kept result shows (its output and reports): pinned, so a long playbook does not lose them.</summary>
@@ -313,12 +426,13 @@ internal sealed class PlaybookRunner(
         var sandboxLines = SandboxRows(step.Sandbox);
         var expect = (step.Expect?.Fields() ?? []).Select(f => new PreviewItem(f.Name, f.Name, f.Value)).ToList();
         var missing = new List<string>();
+        var needsInputs = MissingInputs(session, step);
         var issued = await ShortLivedAsync(merged, session, fresh: false, cancellationToken).ConfigureAwait(false);
         var options = Resolve(merged, session, missing, issued);
 
         if (step.Kind == PlaybookStepKinds.Augment)
         {
-            return AugmentPreview(step, options, sandboxLines, expect, missing);
+            return AugmentPreview(step, options, sandboxLines, expect, missing, needsInputs) with { NeedsInputs = needsInputs };
         }
 
         if (step.Kind == PlaybookStepKinds.Validate)
@@ -331,7 +445,7 @@ internal sealed class PlaybookRunner(
             }
             else
             {
-                target.Add(new("file", "File", missing.Count > 0 ? $"step:{missing[0]}" : "—"));
+                target.Add(new("file", "File", Pending(missing, needsInputs)));
             }
 
             if (validate?.DataId is { } dataId && documents.TryGet(dataId, out var data))
@@ -342,7 +456,8 @@ internal sealed class PlaybookRunner(
             var settings = validate?.Settings ?? new ValidationSettings();
             var group = new PreviewGroup("validation", "Validation", ValidationSettingsRows(settings, asked));
             return new PlaybookStepPreview(step.Id, step.Kind, format, PlaybookEngines.Library, crossValidate, crossValidateFrom, target, [], [group], sandboxLines, expect,
-                validation.ValidationCode(settings), [], missing, null);
+                validation.ValidationCode(settings), [], missing, null)
+            { NeedsInputs = needsInputs };
         }
 
         RunDescription description = format switch
@@ -356,12 +471,17 @@ internal sealed class PlaybookRunner(
             await TargetAsync(format, effective, cancellationToken).ConfigureAwait(false),
             SignerRows(description.Signer, asked),
             Groups(format, effective, asked, description.States),
-            sandboxLines, expect, description.Code, description.Issues, missing, description.Error);
+            sandboxLines, expect, description.Code, description.Issues, missing, description.Error)
+        { NeedsInputs = needsInputs };
     }
+
+    /// <summary>What a file option waits for: the earlier step that signs it, or the input to upload.</summary>
+    private static string Pending(IReadOnlyList<string> missing, IReadOnlyList<string> needsInputs) =>
+        needsInputs.Count > 0 ? $"{InputPrefix}{needsInputs[0]}" : missing.Count > 0 ? $"step:{missing[0]}" : "—";
 
     /// <summary>The preview of an augmentation: the file, the level, the TSA, and the library call and CLI command that do it.</summary>
     private PlaybookStepPreview AugmentPreview(PlaybookStep step, JsonElement options, IReadOnlyList<PreviewItem> sandboxLines,
-        IReadOnlyList<PreviewItem> expect, IReadOnlyList<string> missing)
+        IReadOnlyList<PreviewItem> expect, IReadOnlyList<string> missing, IReadOnlyList<string> needsInputs)
     {
         var augment = options.Deserialize<AugmentOptions>(WorkbenchJson.Options);
         var target = new List<PreviewItem>();
@@ -375,7 +495,7 @@ internal sealed class PlaybookRunner(
         }
         else
         {
-            target.Add(new("file", "File", missing.Count > 0 ? $"step:{missing[0]}" : "—"));
+            target.Add(new("file", "File", Pending(missing, needsInputs)));
         }
 
         string level = augment?.Level ?? "BLTA";
@@ -443,6 +563,16 @@ internal sealed class PlaybookRunner(
     {
         var watch = Stopwatch.StartNew();
         session.Running(step.Id);
+        if (MissingInputs(session, step) is { Count: > 0 } absent)
+        {
+            // Nothing to run without the file: the Sandbox is not touched and no wait is spent.
+            session.Results.TryGetValue(step.Id, out var stale);
+            Release(stale is null ? null : [stale]);
+            session.Done(step.Id, new PlaybookStepResult(PlaybookStatuses.Skipped,
+                $"Upload the file of {string.Join(", ", absent.Select(id => InputPrefix + id))} to run this step.", [], 0, DateTimeOffset.Now));
+            return;
+        }
+
         var results = new List<PlaybookEngineRun>();
         string? message = null;
         bool changedSandbox = false;
@@ -463,7 +593,7 @@ internal sealed class PlaybookRunner(
             // DSS downloads the trusted lists every few seconds (every hour with the EU lists): it validates against the
             // list the step changed only once it has downloaded it again. Until then its verdict is not compared.
             string? dssStale = null;
-            if (changedSandbox && Parse(step.Sandbox!.TrustedList, TlFault.None) != TlFault.None
+            if (changedSandbox && (Parse(step.Sandbox!.TrustedList, TlFault.None) != TlFault.None || Parse(step.Sandbox!.Lotl, LotlFault.None) != LotlFault.None)
                 && (step.CrossValidate ?? session.Playbook.Defaults.CrossValidate))
             {
                 dssStale = await WaitForDssTrustedListsAsync(step, session.Token).ConfigureAwait(false);
@@ -568,7 +698,8 @@ internal sealed class PlaybookRunner(
             Tsa: Parse(box.Tsa, TsaFault.None),
             Crl: Parse(box.Crl, CrlFault.None),
             Ocsp: Parse(box.Ocsp, OcspFault.None),
-            TrustedList: Parse(box.TrustedList, TlFault.None));
+            TrustedList: Parse(box.TrustedList, TlFault.None),
+            Lotl: Parse(box.Lotl, LotlFault.None));
         if (faults.Any)
         {
             await sandbox.SetFaultsAsync(faults, cancellationToken).ConfigureAwait(false);
@@ -606,7 +737,29 @@ internal sealed class PlaybookRunner(
             MergeInto(merged, (JsonObject)JsonNode.Parse(s.GetRawText())!);
         }
 
+        FillProfilePolicies(merged);
         return merged;
+    }
+
+    /// <summary>
+    /// The policy of each profile the options name, where they name no policy: the profile's preset, as the Profile menu
+    /// sets it. An explicit policy (<c>playbook:ID</c>, another preset) wins.
+    /// </summary>
+    internal static void FillProfilePolicies(JsonObject options)
+    {
+        Fill(options["signingControls"] as JsonObject, options, "signingPolicyId", Policies.PolicyViewer.Signing);
+        Fill(options["validation"] as JsonObject, options["validation"] as JsonObject, "policyId", Policies.PolicyViewer.Validation);
+        Fill(options["settings"] as JsonObject, options["settings"] as JsonObject, "policyId", Policies.PolicyViewer.Validation);
+
+        static void Fill(JsonObject? holder, JsonObject? target, string key, string kind)
+        {
+            if (target is not null && target[key] is null && holder?["profile"] is JsonValue value && value.TryGetValue(out string? name)
+                && Enum.TryParse<TrustFrameworks.TrustProfileChoice>(name, ignoreCase: true, out var choice)
+                && TrustFrameworks.ProfileTrust.PolicyPresetId(choice, kind) is { } id)
+            {
+                target[key] = id;
+            }
+        }
     }
 
     private static void MergeInto(JsonObject target, JsonObject source)
@@ -704,6 +857,12 @@ internal sealed class PlaybookRunner(
                 return data ? sample.DataId ?? throw new KeyNotFoundException($"XAdES sample '{id}' has no data.") : sample.FileId;
             }
 
+            // input:ID: the file uploaded for the input; a step without it is skipped before it resolves.
+            if (text.StartsWith(InputPrefix, StringComparison.Ordinal))
+            {
+                return session.Input(text[InputPrefix.Length..])?.FileId;
+            }
+
             if (text.StartsWith("step:", StringComparison.Ordinal))
             {
                 string stepId = text["step:".Length..];
@@ -719,6 +878,9 @@ internal sealed class PlaybookRunner(
             return null;
         }
     }
+
+    /// <summary>A file the person running the playbook uploads: <c>input:ID</c>, an id of the playbook's inputs.</summary>
+    internal const string InputPrefix = "input:";
 
     /// <summary>A Sandbox signer issued for the run and valid for N seconds only: <c>sandbox-short-lived:N</c>.</summary>
     internal const string ShortLivedPrefix = "sandbox-short-lived:";
@@ -798,6 +960,7 @@ internal sealed class PlaybookRunner(
         Add("ocsp", "OCSP", box.Ocsp);
         Add("tsa", "TSA", box.Tsa);
         Add("trustedList", "Trusted list", box.TrustedList);
+        Add("lotl", "List of trusted lists", box.Lotl);
         foreach (string id in box.Revoke)
         {
             rows.Add(new("revoke", "Revoke", id));
@@ -874,11 +1037,48 @@ internal sealed class PlaybookRunner(
         string policy = settings.PolicyId is { } id && documents.TryGet(id, out var file) ? file!.FileName : "";
         return
         [
+            new("profile", "Trust profile", ProfileText(settings.Profile, settings.ProfileSource, settings.TrustProfiles), Asked("profile") || Asked("trustProfiles"),
+                settings.Profile != TrustFrameworks.TrustProfileChoice.None || settings.TrustProfiles.Count > 0),
             new("trust", "Trusted roots", string.Join(", ", settings.Trust), Asked("trust"), true),
             new("policy", "Validation policy", policy, Asked("policyId"), settings.PolicyId is not null),
             new("level", "Validation level", settings.Level.ToString(), Asked("level"), settings.Level != SimpleSign.Core.Validation.ValidationLevel.ArchivalData),
             new("revocation", "Revocation first", settings.RevocationStrategy.ToString(), Asked("revocationStrategy"), false),
         ];
+    }
+
+    /// <summary>The profile a step runs under (its options merged with the defaults), as <see cref="ProfileText"/> writes it; null for none.</summary>
+    internal static string? StepProfile(Playbook playbook, PlaybookStep step)
+    {
+        var options = Merge(playbook.Defaults.Options, step.Format ?? playbook.Defaults.Format, step.Options);
+        var holder = (options["settings"] ?? options["validation"] ?? options["signingControls"]) as JsonObject;
+        if (options["signingControls"] is JsonObject controls && controls["profile"] is not null)
+        {
+            holder = controls;
+        }
+
+        T Read<T>(string name, T fallback) where T : struct, Enum =>
+            holder?[name] is JsonValue v && v.TryGetValue(out string? text) && Enum.TryParse<T>(text, ignoreCase: true, out var parsed) ? parsed : fallback;
+        var extras = holder?["trustProfiles"] is JsonArray list
+            ? list.OfType<JsonValue>().Select(v => v.TryGetValue(out string? t) && Enum.TryParse<TrustFrameworks.TrustProfileChoice>(t, true, out var c) ? c : TrustFrameworks.TrustProfileChoice.None).ToList()
+            : [];
+        string text = ProfileText(Read("profile", TrustFrameworks.TrustProfileChoice.None), Read("profileSource", TrustFrameworks.ProfileListSource.Official), extras);
+        return text == "—" ? null : text;
+    }
+
+    /// <summary>The profile as the preview and the evidence show it: <c>iofe (Sandbox's list) + gov-br</c>; "—" for none.</summary>
+    internal static string ProfileText(TrustFrameworks.TrustProfileChoice profile, TrustFrameworks.ProfileListSource source,
+        IReadOnlyList<TrustFrameworks.TrustProfileChoice> extras)
+    {
+        string main = TrustFrameworks.ProfileTrust.Name(profile) is { } name
+            ? name + profile switch
+            {
+                TrustFrameworks.TrustProfileChoice.Iofe => source == TrustFrameworks.ProfileListSource.Sandbox ? " (Sandbox's list)" : " (INDECOPI's list)",
+                TrustFrameworks.TrustProfileChoice.Eidas => source == TrustFrameworks.ProfileListSource.Sandbox ? " (Sandbox's LOTL)" : " (EU LOTL)",
+                _ => "",
+            }
+            : "default";
+        var others = extras.Select(TrustFrameworks.ProfileTrust.Name).OfType<string>().Distinct().ToList();
+        return profile == TrustFrameworks.TrustProfileChoice.None && others.Count == 0 ? "—" : main + string.Concat(others.Select(o => " + " + o));
     }
 
     /// <summary>A value as the page shows it: a choice's title, a file's name, a signer's subject.</summary>
@@ -937,6 +1137,7 @@ internal sealed class PlaybookSession(string key, Playbook playbook, string json
     private readonly Dictionary<string, PlaybookStepResult> _results = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _signers = new(StringComparer.Ordinal);
     private readonly HashSet<string> _queued = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, InputBinding> _inputs = new(StringComparer.Ordinal);
     private CancellationTokenSource _cancel = new();
     private string? _running;
     private bool _active;
@@ -1004,6 +1205,43 @@ internal sealed class PlaybookSession(string key, Playbook playbook, string json
             }
 
             return id;
+        }
+    }
+
+    /// <summary>The file uploaded for an input, and whether the runner pinned it.</summary>
+    internal sealed record InputBinding(PlaybookInputFile File, bool Pinned);
+
+    /// <summary>The file uploaded for an input, or null.</summary>
+    public PlaybookInputFile? Input(string inputId)
+    {
+        lock (_gate)
+        {
+            return _inputs.TryGetValue(inputId, out var binding) ? binding.File : null;
+        }
+    }
+
+    /// <summary>The inputs that have a file.</summary>
+    public IReadOnlyList<InputBinding> InputBindings()
+    {
+        lock (_gate)
+        {
+            return [.. _inputs.Values];
+        }
+    }
+
+    /// <summary>Sets (or drops, with null) the file of an input; returns the binding it replaced.</summary>
+    public InputBinding? SetInput(string inputId, PlaybookInputFile? file, bool pinned)
+    {
+        lock (_gate)
+        {
+            _inputs.Remove(inputId, out var previous);
+            if (file is not null)
+            {
+                _inputs[inputId] = new InputBinding(file, pinned);
+            }
+
+            _version++;
+            return previous;
         }
     }
 
@@ -1117,7 +1355,9 @@ internal sealed class PlaybookSession(string key, Playbook playbook, string json
                     : result?.Status ?? PlaybookStatuses.Pending;
                 return new PlaybookStepView(s.Section.Id, s.Step.Id, s.Step.Title, s.Step.Kind, s.Step.Tags, status, result);
             }).ToList();
-            return new PlaybookStateView(Key, Playbook.Id, Playbook.Title, _active, _running, _version, steps);
+            var inputs = Playbook.Inputs.Select(i => new PlaybookInputView(i.Id, i.Title, i.Description, i.Accept,
+                _inputs.TryGetValue(i.Id, out var binding) ? binding.File : null)).ToList();
+            return new PlaybookStateView(Key, Playbook.Id, Playbook.Title, _active, _running, _version, steps) { Inputs = inputs };
         }
     }
 }

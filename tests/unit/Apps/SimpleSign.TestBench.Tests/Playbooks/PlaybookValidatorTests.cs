@@ -31,6 +31,36 @@ public sealed class PlaybookValidatorTests
     }
 
     [Fact]
+    public void Check_DeclaredInput_HasNoErrors()
+    {
+        var check = PlaybookValidator.Check(Valid.Replace("\"sections\":", "\"inputs\": [{ \"id\": \"theirs\", \"title\": \"A signed PDF\", \"accept\": \".pdf\" }], \"sections\":", StringComparison.Ordinal)
+            .Replace("\"fileId\": \"step:good\"", "\"fileId\": \"input:theirs\"", StringComparison.Ordinal), sandbox: null);
+
+        check.CanRun.ShouldBeTrue(string.Join("; ", check.Issues.Select(i => $"{i.Path}: {i.Message}")));
+        check.Issues.ShouldBeEmpty();
+        check.Playbook!.Inputs.Single().Accept.ShouldBe(".pdf");
+    }
+
+    [Fact]
+    public void Check_UndeclaredInput_IsAnError()
+    {
+        var check = PlaybookValidator.Check(Valid.Replace("\"fileId\": \"step:good\"", "\"fileId\": \"input:theirs\"", StringComparison.Ordinal), sandbox: null);
+
+        check.CanRun.ShouldBeFalse();
+        check.Issues.ShouldContain(i => i.IsError && i.Path == "$.sections[0].steps[1].options.fileId" && i.Message.Contains("input:theirs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Check_UnusedOrRepeatedInput_WarnsOrFails()
+    {
+        var check = PlaybookValidator.Check(Valid.Replace("\"sections\":",
+            "\"inputs\": [{ \"id\": \"a\", \"title\": \"A\" }, { \"id\": \"a\", \"title\": \"Again\" }], \"sections\":", StringComparison.Ordinal), sandbox: null);
+
+        check.Issues.ShouldContain(i => i.IsError && i.Path == "$.inputs[1].id");
+        check.Issues.ShouldContain(i => !i.IsError && i.Path == "$.inputs" && i.Message.Contains("'a'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Check_DssAgreesWithoutCrossValidate_Warns()
     {
         var check = PlaybookValidator.Check(Valid.Replace("\"expect\": { \"outcome\": \"signed\" }", "\"expect\": { \"outcome\": \"signed\", \"dssAgrees\": true }", StringComparison.Ordinal), sandbox: null);
@@ -70,6 +100,31 @@ public sealed class PlaybookValidatorTests
     public void Check_ManualStep_IsAnError() =>
         PlaybookValidator.Check(Valid.Replace("\"kind\": \"validate\"", "\"kind\": \"manual\"", StringComparison.Ordinal), sandbox: null)
             .Issues.ShouldContain(i => i.IsError && i.Path.EndsWith(".kind", StringComparison.Ordinal));
+
+    private static string WithPolicy(string policy, string signingPolicyId) => Valid
+        .Replace("\"schema\": 2,", $"\"schema\": 2, \"policies\": [{policy}],", StringComparison.Ordinal)
+        .Replace("\"credentialId\": \"sandbox:rsa-2048\"", $"\"credentialId\": \"sandbox:rsa-2048\", \"signingPolicyId\": \"{signingPolicyId}\"", StringComparison.Ordinal);
+
+    [Fact]
+    public void Check_DeclaredPolicy_BuildsAndIsAccepted()
+    {
+        string json = WithPolicy("""{ "id": "agent", "kind": "signing", "base": "iofe", "set": { "SigningCertificate/KeyUsage": { "Level": "FAIL", "Id": ["nonRepudiation"] } } }""",
+            "playbook:agent");
+
+        var check = PlaybookValidator.Check(json, sandbox: null);
+
+        check.CanRun.ShouldBeTrue(string.Join("; ", check.Issues.Select(i => $"{i.Path}: {i.Message}")));
+        SimpleSign.Core.Policies.SigningPolicy.FromJson(PlaybookPolicies.Build(check.Playbook!.Policies[0]))
+            .Find("SigningCertificate/KeyUsage")!.Ids.ShouldBe(["nonRepudiation"]);
+    }
+
+    [Theory]
+    [InlineData("""{ "id": "agent", "kind": "signing", "base": "nope" }""", "playbook:agent")]
+    [InlineData("""{ "id": "agent", "kind": "signing", "base": "iofe", "set": { "SigningCertificate/NoSuchThing": { "Level": "FAIL" } } }""", "playbook:agent")]
+    [InlineData("""{ "id": "agent", "kind": "signing", "base": "iofe" }""", "playbook:other")]
+    public void Check_BadPolicyOrUndeclaredReference_IsAnError(string policy, string reference) =>
+        PlaybookValidator.Check(WithPolicy(policy, reference), sandbox: null).Issues
+            .ShouldContain(i => i.IsError && i.Path.StartsWith("$.policies", StringComparison.Ordinal));
 
     [Fact]
     public void Check_UnknownReasonAndFault_AreErrors()
@@ -157,7 +212,7 @@ public sealed class PlaybookValidatorTests
     [Fact]
     public void Samples_AreValidPlaybooks()
     {
-        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["etsi-baseline", "indecopi-guia-v4", "sandbox-basics"]);
+        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["eidas-baseline", "etsi-baseline", "govbr-pades", "icp-brasil-pades", "indecopi-guia-v4", "sandbox-basics"]);
         foreach (var sample in PlaybookSamples.All)
         {
             var check = PlaybookValidator.Check(PlaybookSamples.Json(sample.Id)!, sandbox: null);
@@ -203,6 +258,28 @@ public sealed class PlaybookValidatorTests
         shown.SelectMany(c => System.Text.RegularExpressions.Regex.Matches(c[^2], "`([a-z0-9-]+)`").Select(m => m.Groups[1].Value))
             .Where(id => !ids.Contains(id)).ShouldBeEmpty("step ids the checklist names but the playbook does not have");
         tags.Where(t => System.Text.RegularExpressions.Regex.IsMatch(t, "^[FVS]-[0-9]+$") && !shown.Any(c => c[1] == t))
+            .ShouldBeEmpty("playbook tags whose checklist item is not marked P");
+    }
+
+    [Fact]
+    public void EidasSample_CoversEveryChecklistItemARunCanShow()
+    {
+        // Rows of docs/playbooks/eidas-checklist.md whose "How" is P: each needs a step of eidas-baseline tagged with its
+        // id, and every step id the row names must exist.
+        var rows = File.ReadAllLines(RepositoryPaths.Get("docs", "playbooks", "eidas-checklist.md"))
+            .Select(l => l.Split('|', StringSplitOptions.TrimEntries))
+            .Where(c => c.Length > 4 && System.Text.RegularExpressions.Regex.IsMatch(c[1], "^[LQT]-[0-9]+$"))
+            .ToList();
+        var steps = PlaybookValidator.Check(PlaybookSamples.Json("eidas-baseline")!, sandbox: null).Playbook!.AllSteps().ToList();
+        var tags = steps.SelectMany(s => s.Step.Tags).ToHashSet(StringComparer.Ordinal);
+        var ids = steps.Select(s => s.Step.Id).ToHashSet(StringComparer.Ordinal);
+        var shown = rows.Where(c => c[3] == "P").ToList();
+
+        shown.ShouldNotBeEmpty();
+        shown.Where(c => !tags.Contains(c[1])).Select(c => c[1]).ShouldBeEmpty("checklist items with P and no step tagged with them");
+        shown.SelectMany(c => System.Text.RegularExpressions.Regex.Matches(c[4], "`([a-z0-9-]+)`").Select(m => m.Groups[1].Value))
+            .Where(id => !ids.Contains(id)).ShouldBeEmpty("step ids the checklist names but the playbook does not have");
+        tags.Where(t => System.Text.RegularExpressions.Regex.IsMatch(t, "^[LQT]-[0-9]+$") && !shown.Any(c => c[1] == t))
             .ShouldBeEmpty("playbook tags whose checklist item is not marked P");
     }
 }

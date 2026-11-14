@@ -49,14 +49,17 @@ internal sealed class SandboxConnection : IDisposable
 
     public Uri WrongNameTsaUri => new(Info.Tsa.WrongNameUrl);
 
-    /// <summary>The TSA under its own CA, which the Sandbox's INDECOPI-layout list names as an <c>unspecified</c> service.</summary>
+    /// <summary>The TSA under its own CA, which the Sandbox's trusted list names as an <c>unspecified</c> service.</summary>
     /// <exception cref="InvalidOperationException">The Sandbox is older than that TSA.</exception>
-    public Uri IofeTsaUri => new(Info.Tsa.IofeUrl ?? throw new InvalidOperationException("This Sandbox has no INDECOPI-layout TSA: update it."));
+    public Uri IofeTsaUri => new(Info.Tsa.IofeUrl ?? throw new InvalidOperationException("This Sandbox has no IOFE TSA: update it."));
 
-    /// <summary>The Sandbox's trusted list laid out as INDECOPI's; null for a Sandbox without one.</summary>
-    public Uri? IofeListUri => Info.TrustedLists?.IofeUrl is { } url ? new Uri(url) : null;
+    /// <summary>The Sandbox's non-qualified TSA (a TSA service of its trusted list, not TSA/QTST).</summary>
+    public Uri NonQualifiedTsaUri => new(Info.Tsa.NonQualifiedUrl ?? throw new InvalidOperationException("This Sandbox has no non-qualified TSA: update it."));
 
-    /// <summary>The certificate the trusted list and the INDECOPI-layout list are signed with; null for a Sandbox without trusted lists.</summary>
+    /// <summary>The Sandbox's trusted list, read directly (not through the LOTL); null for a Sandbox without one.</summary>
+    public Uri? TlUri => Info.TrustedLists is { } lists ? new Uri(lists.TlUrl) : null;
+
+    /// <summary>The certificate the trusted list is signed with; null for a Sandbox without trusted lists.</summary>
     public X509Certificate2? TlSigner { get; init; }
 
     /// <summary>How long the certificate of <see cref="ShortLivedTsaUri"/> stays valid.</summary>

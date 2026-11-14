@@ -782,7 +782,6 @@ public sealed partial class LayoutEngine
 
     internal void NewPage() => StartNewPage();
 
-    internal void ResetMarginCollapse() => _lastMarginBottom = 0;
 
     /// <summary>Collapses a top margin against the previous sibling's bottom margin and advances the cursor.</summary>
     internal void ApplyTopMargin(float marginTop)

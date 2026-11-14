@@ -30,6 +30,12 @@ public sealed record XmlSignatureReport(
     string? SubIndication = null,
     IReadOnlyList<FindingView>? Findings = null)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry of this signature and the certificates next to it, for the SimpleSign report (not sent to the UI).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public Reports.ReportSource? Source { get; init; }
@@ -61,6 +67,12 @@ internal sealed record XmlVerdict(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<XmlVerdict> CounterSignatures)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry, for the SimpleSign report; null from the CLI.</summary>
     public Reports.ReportSource? Source { get; init; }
 }
@@ -178,6 +190,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                 if (CliJobs.Unsupported(credential) is { } unsupported)
                 {
                     return Failure(report, unsupported, "CliUnsupported", code);
+                }
+
+                if (o.Kind == XadesKind.IcpBrasil)
+                {
+                    return Failure(report, L.T("The CLI signs under an ICP-Brasil policy for PAdES only (sign --icp-policy): run this one through the library."), "CliUnsupported", code);
                 }
 
                 var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents)
@@ -386,6 +403,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         [.. r.CounterSignatures.Select(Verdict)])
     {
         Source = new Reports.ReportSource(r.ToReportEntry(), []),
+        Qualification = r.Qualification?.Level,
+        TimestampQualifications = ValidationService.TimestampLevels(r.Qualification),
     };
 
     /// <summary>The verdict on a signature the CLI validated, with its countersignatures.</summary>
@@ -393,7 +412,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         s.Id, s.Signer, s.Indication, s.SubIndication, s.DetectedLevel, s.SigningTime, s.IsSignatureValid, s.IsIntegrityValid, s.IsCertificateChainValid,
         s.HasValidSignatureTimeStamp, s.IsTsaTrusted, s.HasValidDataObjectsTimeStamp, s.DataObjectsTimeStampTime, s.HasValidCompleteReferences,
         s.HasValidSigAndRefsTimeStamp, s.IsLtvDataValid, s.HasValidArchiveTimeStamp, s.NotRevoked, s.RevocationSource ?? "",
-        CliValidation.Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [], [.. (s.CounterSignatures ?? []).Select(Verdict)]);
+        CliValidation.Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [], [.. (s.CounterSignatures ?? []).Select(Verdict)])
+    {
+        Qualification = s.Qualification,
+        TimestampQualifications = s.TimestampQualifications ?? [],
+    };
 
     /// <summary>The reports of the signatures, whichever validated them: a countersignature right after the signature it signs, saying so.</summary>
     private static List<XmlSignatureReport> Reports(IEnumerable<XmlVerdict> verdicts)
@@ -441,6 +464,8 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
                 v.SubIndication, ValidationService.Findings(v.Constraints))
             {
                 Source = v.Source,
+                Qualification = v.Qualification,
+                TimestampQualifications = v.TimestampQualifications,
             });
             foreach (var counter in v.CounterSignatures)
             {
@@ -504,14 +529,14 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
     private CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool customRoot = settings.Trust.Contains(TrustChoice.Sandbox) || settings.CustomRootUploadIds.Count > 0;
-        var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null ? "" : "using SimpleSign.Core.Policies;\n") + "\nvar validator = new XadesSignatureValidator(new ValidationOptions\n{\n");
+        var sb = new StringBuilder("using SimpleSign.XAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null || ValidationService.ProfileSetsPolicy(settings) ? "" : "using SimpleSign.Core.Policies;\n") + "\nvar validator = new XadesSignatureValidator(new ValidationOptions\n{\n");
         sb.Append(CultureInfo.InvariantCulture, $"    TrustSystemRoots = {(settings.Trust.Contains(TrustChoice.System) ? "true" : "false")},\n");
         if (customRoot)
         {
             sb.Append("    TrustedRoots = [root], // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")\n");
         }
 
-        foreach (string option in ValidationService.TrustedListOptionsCode(settings))
+        foreach (string option in ValidationService.TrustedListOptionsCode(settings).Concat(ValidationService.ProfileOptionsCode(settings)))
         {
             sb.Append("    ").Append(option).Append(option.StartsWith("//", StringComparison.Ordinal) ? "\n" : ",\n");
         }
@@ -587,15 +612,18 @@ internal sealed class XadesPlan
             throw new ArgumentException(L.T("The signing policy cannot be read: {0}", policyError));
         }
 
+        var controls = context.Controls;
+        bool byProfile = controls.ProfileSetsPolicy(o.SigningPolicyId);
         if (signingPolicy.Uploaded)
         {
-            _steps.Add((PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
+            _steps.Add(byProfile
+                ? (controls.ProfileStepCode(), b => b.WithSigningPolicy(signingPolicy.Policy).WithTrustAnchors([.. controls.ProfileAnchors]))
+                : (PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
         }
 
-        var controls = context.Controls;
-        if (controls.TrustCode() is { } trustCode)
+        if (controls.TrustCode(byProfile) is { } trustCode)
         {
-            _steps.Add((trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+            _steps.Add((trustCode, b => b.WithTrustAnchors([.. byProfile ? controls.OtherAnchors : controls.Anchors])));
         }
 
         if (controls.Audit is { } audit)
@@ -723,6 +751,16 @@ internal sealed class XadesPlan
 
     private void AddType()
     {
+        if (_o.Kind == XadesKind.IcpBrasil)
+        {
+            // The policy sets the level and the extended form (DOC-ICP-15.03); the TSA (an ACT) from AD-RT up.
+            var policy = _o.IcpPolicy;
+            var icpTsa = policy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb ? null : _context.BuildTimestamp(_o.Timestamp, "tsa");
+            _steps.Add(($".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}{(icpTsa is null ? "" : ", tsa")}) // DOC-ICP-15.03: the policy's OID and hash, and its level",
+                b => SimpleSign.Brazil.IcpBrasil.Xades.IcpBrasilXadesExtensions.WithIcpBrasilPolicy(b, policy, icpTsa)));
+            return;
+        }
+
         if (_o.Kind == XadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);
@@ -889,7 +927,7 @@ internal sealed class XadesPlan
         }
 
         cli.AddIf("--data-mime-type", _o.MimeType?.Trim());
-        if (_o.SigningPolicyId is not null)
+        if (_o.SigningPolicyId is not null && !_context.Controls.ProfileSetsPolicy(_o.SigningPolicyId))
         {
             cli.Add("--signing-policy", PolicyUploads.SigningFileName);
         }

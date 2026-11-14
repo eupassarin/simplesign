@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Europe.Eidas</AssemblyName>
+    <RootNamespace>SimpleSign.Europe.Eidas</RootNamespace>
+    <PackageId>SimpleSign.Europe.Eidas</PackageId>
+    <Description>eIDAS (EU Regulation 910/2014) for SimpleSign: trust anchors from the EU list of trusted lists (LOTL, pivots followed), the qualification of signatures (QESig, QESeal, AdESig-QC… per ETSI TS 119 615 and TS 119 172-4), and eIDAS signing and validation policies.</Description>
+    <PackageTags>eidas;eu;lotl;trusted-list;qualified-signature;qes;digital-signature</PackageTags>
+    <Version>0.11.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Europe.Eidas.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The certificates the EU LOTL is signed with (EidasExtension.LotlSigners; see README.md). -->
+    <EmbeddedResource Include="Certs/*.pem" LogicalName="SimpleSign.Europe.Eidas.Certs.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

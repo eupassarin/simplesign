@@ -114,4 +114,36 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv11", "ss01";
   }
+
+  /* Thin scrollbars in the theme's colours, for every scrolling area (the ScrollArea component draws its own). */
+  :root {
+    --scrollbar-thumb: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+    --scrollbar-thumb-hover: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  }
+  @supports (scrollbar-color: auto) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
+  }
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border: 2px solid transparent;
+      border-radius: 9999px;
+      background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
+      background-clip: padding-box;
+    }
+  }
 }

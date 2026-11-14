@@ -329,6 +329,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
 
         try
         {
+            _logger.CrlDownloading(url);
             byte[]? bytes = LdapCrlClient.IsLdapUrl(url)
                 ? await LdapCrlClient.GetCrlAsync(url, _outboundPolicy, LdapTimeout, cancellationToken).ConfigureAwait(false)
                 : CrlEncoding.ToDer(await ResilientHttp.GetBytesAsync(_httpClient, new Uri(url), _outboundPolicy, _logger, cancellationToken).ConfigureAwait(false));
@@ -351,6 +352,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             or System.Net.Sockets.SocketException or IOException or InvalidDataException
             or System.Formats.Asn1.AsnContentException or System.Security.Authentication.AuthenticationException)
         {
+            _logger.CrlDownloadFailed(url, ex.Message);
             return (null, false);
         }
     }

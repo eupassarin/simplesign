@@ -135,6 +135,7 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
             TrustedRoots = roots.Count == 0 ? null : roots,
             TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
             TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
+            SignatureQualifiers = settings.LoadedQualifiers.Count > 0 ? settings.LoadedQualifiers : null,
             Policy = policy,
             Level = settings.ValidationLevel,
             Verifier = settings.Verifier,

@@ -14,8 +14,9 @@ public sealed record IofeExtensionOptions
     public Uri TrustedListUrl { get; init; } = DefaultTrustedListUrl;
 
     /// <summary>
-    /// The certificates INDECOPI signs the trusted list with. Required: obtain them from INDECOPI and check
-    /// their fingerprint out of band; the list is refused when it is signed by any other key.
+    /// The certificates INDECOPI signs the trusted list with; the list is refused when it is signed by any other key.
+    /// Empty: <see cref="IofeExtension.IndecopiSigners"/>, the one bundled with this package (its fingerprint is in the
+    /// package's README: confirm it with INDECOPI before trusting it, and pass the new one here when INDECOPI renews it).
     /// </summary>
     public IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> TrustedListSigners { get; init; } = [];
 
@@ -77,6 +78,25 @@ public sealed class IofeExtension : ICountryExtension
 
     private const string CodeSigningOid = "1.3.6.1.5.5.7.3.3";
 
+    private static readonly Lazy<IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2>> s_indecopiSigners = new(LoadIndecopiSigners);
+
+    /// <summary>
+    /// The certificate INDECOPI signs its trusted list with, bundled with this package (<c>CN=TSL Suscriptor, O=INDECOPI</c>,
+    /// valid until 2027-08-23, SHA-256 <c>bc32323c…0bf612ed</c>). Used when <see cref="IofeExtensionOptions.TrustedListSigners"/>
+    /// is empty. It was taken from the list itself: confirm its fingerprint with INDECOPI before trusting it.
+    /// </summary>
+    public static IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> IndecopiSigners => s_indecopiSigners.Value;
+
+    private static IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> LoadIndecopiSigners()
+    {
+        using var stream = typeof(IofeExtension).Assembly.GetManifestResourceStream("SimpleSign.Peru.Iofe.Certs.indecopi-tsl-signer.pem")
+            ?? throw new InvalidOperationException("The INDECOPI signer certificate is not embedded in SimpleSign.Peru.Iofe.");
+        using var reader = new StreamReader(stream);
+        var signers = new List<System.Security.Cryptography.X509Certificates.X509Certificate2>();
+        signers.Add(System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(reader.ReadToEnd()));
+        return signers.AsReadOnly();
+    }
+
     /// <summary>The trusted list the anchors come from: with a <see cref="Source"/>, the copy it serves now.</summary>
     public TrustedList TrustedList => Source?.Current.List ?? _list!;
 
@@ -117,16 +137,12 @@ public sealed class IofeExtension : ICountryExtension
     public static async Task<IofeExtension> LoadRefreshableAsync(IofeExtensionOptions options, CancellationToken cancellationToken = default) =>
         new(await IofeTrustedListSource.LoadAsync(options, cancellationToken).ConfigureAwait(false));
 
-    /// <summary>The list options of <paramref name="options"/>, with its signers; refuses options without signers.</summary>
-    internal static TrustedListOptions ListOptionsOf(IofeExtensionOptions options)
-    {
-        if (options.TrustedListSigners.Count == 0)
+    /// <summary>The list options of <paramref name="options"/>, with its signers (the bundled ones when it gives none).</summary>
+    internal static TrustedListOptions ListOptionsOf(IofeExtensionOptions options) =>
+        (options.ListOptions ?? DefaultListOptions) with
         {
-            throw new ArgumentException("The certificate INDECOPI signs the trusted list with is required (TrustedListSigners).", nameof(options));
-        }
-
-        return (options.ListOptions ?? DefaultListOptions) with { SignerCertificates = options.TrustedListSigners };
-    }
+            SignerCertificates = options.TrustedListSigners.Count > 0 ? options.TrustedListSigners : IndecopiSigners,
+        };
 
     /// <summary>Reads INDECOPI's trusted list from bytes (a copy kept by the deployment) and creates the extension.</summary>
     /// <param name="trustedListXml">The trusted list XML.</param>

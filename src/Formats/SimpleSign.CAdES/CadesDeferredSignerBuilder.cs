@@ -262,6 +262,20 @@ public sealed class CadesDeferredSignerBuilder
         With(_inner.WithHttpClientProvider(provider));
 
     /// <summary>
+    /// Signs under a trust profile (<c>IofeProfile</c>, <c>IcpBrasilProfile</c>…): its signing policy and its trust anchors,
+    /// as <c>WithSigningPolicy</c> and <c>WithTrustAnchors</c> would set them. A later <c>WithSigningPolicy</c> replaces the
+    /// profile's policy; later anchors are added to its own.
+    /// </summary>
+    /// <param name="profile">The trust profile.</param>
+    /// <returns>A new builder with the profile's policy and anchors.</returns>
+    /// <exception cref="ArgumentException">The profile does not sign (Gov.br).</exception>
+    public CadesDeferredSignerBuilder WithProfile(SimpleSign.Core.Extensions.TrustProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return WithSigningPolicy(profile.RequireSigningPolicy()).WithTrustAnchors([.. profile.TrustAnchorProviders]);
+    }
+
+    /// <summary>
     /// Sets the signing policy (<see cref="SigningPolicy.Load"/>). Phase one runs its checks on the certificate,
     /// the chain and the algorithms before the bytes to sign are produced; phase two applies its <c>Timestamp</c>
     /// constraints to the timestamps it obtains. Default: <see cref="SigningPolicy.Default"/>.

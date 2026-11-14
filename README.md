@@ -31,6 +31,7 @@ dotnet add package SimpleSign                  # PAdES + CAdES + XAdES
 dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil, Lei 14.063
 dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
 dotnet add package SimpleSign.Peru.Iofe        # IOFE (Peru), INDECOPI policies
+dotnet add package SimpleSign.Europe.Eidas     # eIDAS (EU), qualification from the EU LOTL
 dotnet add package SimpleSign.Signers.Pkcs11   # A3 tokens, smartcards, HSMs
 dotnet add package SimpleSign.Signers.Cloud    # cloud certificates (PSC, CSC v2)
 dotnet tool install -g SimpleSign.Cli          # command line
@@ -47,6 +48,7 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.Brazil.GovBr` | Gov.br chain and assurance level, Lei 14.063 |
 | `SimpleSign.Brazil` | Shared: CPF/CNPJ, Lei 14.063 levels, AEA manifest (pulled in by both) |
 | `SimpleSign.Peru.Iofe` | IOFE (Ley 27269): anchors from INDECOPI's signed trusted list, INDECOPI signing and validation policies |
+| `SimpleSign.Europe.Eidas` | eIDAS (Regulation 910/2014): anchors from the EU list of trusted lists, and the qualification of a signature (QESig, AdESig-QC…) |
 | `SimpleSign.Brazil.IcpBrasil.Xades` | ICP-Brasil XAdES signature policies |
 | `SimpleSign.Brazil.Fiscal` | XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf |
 | `SimpleSign.Signers.Pkcs11` | Sign through a token's PKCS#11 driver |
@@ -130,6 +132,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Observability](docs/articles/observability.md) | Traces and metrics (`ActivitySource`/`Meter` named `SimpleSign`) |
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
 | [ICP-Brasil](docs/articles/icp-brasil.md) / [Fiscal XML](docs/articles/fiscal-xml.md) | Brazilian PKI and NF-e/eSocial signing |
+| [eIDAS (EU)](docs/articles/eidas.md) | The EU list of trusted lists, and the qualification of a signature (QESig, QESeal, AdESig-QC…) |
 | [IOFE (Peru)](docs/articles/iofe.md) | INDECOPI's trusted list kept current, the policies of INDECOPI's accreditation guide, its checklist and playbook |
 | [The apps](docs/articles/apps.md) | The CLI, the signing Agent, the TestBench and the Sandbox: what each is for |
 | [CLI](docs/articles/cli.md) | `simplesign sign`, `validate`, `augment`, `cades`, `xades`… |
@@ -149,7 +152,9 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 signature made or refused; `AuditChain` gives its hash chain), `IPolicyProvider` and
 `ISignaturePolicyDocumentProvider` (the validation policy and the policy documents),
 `ITimestampClientFactory`, `ICertificateCache`, `ICertificateStore`
-and `ICountryExtension` (country packages such as `SimpleSign.Brazil.IcpBrasil` and `SimpleSign.Peru.Iofe`).
+`ICountryExtension` (country packages such as `SimpleSign.Brazil.IcpBrasil`, `SimpleSign.Peru.Iofe` and
+`SimpleSign.Europe.Eidas`) and `ISignatureQualifier` (the qualification of a validated signature, as
+`EidasQualifier` does for eIDAS). A whole framework travels as one `TrustProfile`.
 
 ## Contributing
 

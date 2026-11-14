@@ -53,14 +53,15 @@ internal static class LdapCrlClient
             ? [literal]
             : await (resolve ?? Dns.GetHostAddressesAsync)(target.Host, token).ConfigureAwait(false);
         var origin = new Uri($"{(target.Secure ? "ldaps" : "ldap")}://{(target.Host.Contains(':', StringComparison.Ordinal) ? $"[{target.Host}]" : target.Host)}:{target.Port}/");
-        var address = addresses.FirstOrDefault(a => !UrlValidator.IsBlockedAddress(target.Host, a, policy, origin));
-        if (address is null)
+        var allowed = addresses.Where(a => !UrlValidator.IsBlockedAddress(target.Host, a, policy, origin)).ToList();
+        if (allowed.Count == 0)
         {
             return null;
         }
 
-        using var client = new TcpClient(address.AddressFamily);
-        await client.ConnectAsync(address, target.Port, token).ConfigureAwait(false);
+        // Each address in turn, as an HTTP client does: "localhost" gives ::1 first, and a server (a container's
+        // published port, for one) may listen on 127.0.0.1 only.
+        using var client = await ConnectAsync(allowed, target.Port, token).ConfigureAwait(false);
         Stream stream = client.GetStream();
         if (target.Secure)
         {
@@ -73,6 +74,29 @@ internal static class LdapCrlClient
         await using (stream.ConfigureAwait(false))
         {
             return await ReadAttributeAsync(stream, target.BaseDn, target.Attribute, token).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>A connection to the first of <paramref name="addresses"/> that accepts one; the last error when none does.</summary>
+    private static async Task<TcpClient> ConnectAsync(IReadOnlyList<IPAddress> addresses, int port, CancellationToken cancellationToken)
+    {
+        for (int i = 0; ; i++)
+        {
+            var client = new TcpClient(addresses[i].AddressFamily);
+            try
+            {
+                await client.ConnectAsync(addresses[i], port, cancellationToken).ConfigureAwait(false);
+                return client;
+            }
+            catch (SocketException) when (i < addresses.Count - 1)
+            {
+                client.Dispose();
+            }
+            catch
+            {
+                client.Dispose();
+                throw;
+            }
         }
     }
 

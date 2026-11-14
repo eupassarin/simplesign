@@ -16,6 +16,7 @@ import { PoliciesPage } from "../policies/PoliciesPage"
 import { TsaPicker } from "../shared/TsaPicker"
 import { Pill } from "../shared/ui"
 import { UploadButton } from "../shared/UploadButton"
+import { activeProfile, ProfileMarker, profiles, profileTitle } from "./profile"
 import { OptionRow, StandardBadge, type Explanation } from "./parts"
 import { asText, getPath, type Options, type SchemaOption, type SchemaValue } from "./schema"
 import { useWorkbench } from "./state"
@@ -53,6 +54,22 @@ export function OptionField({ option }: { option: SchemaOption }) {
     case "toggle":
       return <OptionRow {...row} inline><Switch checked={value === true && !locked} disabled={locked} onCheckedChange={(v) => set(path, v)} aria-label={option.title} /></OptionRow>
     case "choice":
+      // The profile is chosen in the Profile menu, which sets its policies too: here it is shown, not edited.
+      if (path.endsWith(".profile") || path.endsWith(".profileSource")) {
+        const active = activeProfile(options)
+        return (
+          <OptionRow {...row}>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <Pill tone={active ? "info" : "default"}>
+                {path.endsWith(".profile")
+                  ? active ? `${profiles[active.profile].flag} ${profileTitle(active, t)}` : t("wb.profile.default")
+                  : option.values.find((v) => v.value === asText(value))?.title ?? asText(value)}
+              </Pill>
+              <span className="text-muted-foreground">{t("wb.profile.fieldHint")}</span>
+            </div>
+          </OptionRow>
+        )
+      }
       return <OptionRow {...row}><Choice option={option} value={asText(value)} locked={locked} onChange={(v) => set(path, v === "" && value === null ? null : v || null)} /></OptionRow>
     case "text":
       return <OptionRow {...row}><Input value={asText(value)} disabled={locked} onChange={(e) => text(e.target.value)} className={/oid|uri|hash|url/i.test(path) ? "font-mono text-xs" : undefined} /></OptionRow>
@@ -79,7 +96,12 @@ export function OptionField({ option }: { option: SchemaOption }) {
       // The JSON policies: the one in use (the library's default until a file is uploaded), to view or change.
       const policy = path === "signingPolicyId" ? "signing" : path === "validation.policyId" ? "validation" : null
       if (policy) {
-        return <OptionRow {...row}><PolicyField kind={policy} uploadId={typeof value === "string" ? value : null} onChange={(id) => set(path, id)} /></OptionRow>
+        return (
+          <OptionRow {...row}>
+            <PolicyField kind={policy} uploadId={typeof value === "string" ? value : null} onChange={(id) => set(path, id)} profile={activeProfile(options)?.profile ?? null}
+              marker={<ProfileMarker options={options} path={path} />} />
+          </OptionRow>
+        )
       }
       return (
         <OptionRow {...row}>
@@ -93,7 +115,8 @@ export function OptionField({ option }: { option: SchemaOption }) {
     case "tsa":
       return <OptionRow {...row}><Tsa value={value as TimestampChoice} onChange={(v) => set(path, v)} /></OptionRow>
     case "trust":
-      return <OptionRow {...row}><Trust option={option} value={Array.isArray(value) ? (value as string[]) : []} onChange={(v) => set(path, v)} /></OptionRow>
+      return <OptionRow {...row}><Trust option={option} value={Array.isArray(value) ? (value as string[]) : []} onChange={(v) => set(path, v)}
+        hidden={path.endsWith(".trustProfiles") ? activeProfile(options)?.profile : undefined} /></OptionRow>
     case "keyValues":
       return <OptionRow {...row}><KeyValues value={Array.isArray(value) ? (value as { key: string; value: string }[]) : []} onChange={(v) => set(path, v)} /></OptionRow>
     case "document":
@@ -161,14 +184,14 @@ function Tsa({ value, onChange }: { value: TimestampChoice; onChange: (value: Ti
   return <TsaPicker value={value} onChange={onChange} state={state} env={env} />
 }
 
-function Trust({ option, value, onChange }: { option: SchemaOption; value: string[]; onChange: (value: string[]) => void }) {
+function Trust({ option, value, onChange, hidden }: { option: SchemaOption; value: string[]; onChange: (value: string[]) => void; hidden?: string }) {
   const { visibleValues } = useWorkbench()
+  const check = (choice: string, on: boolean) => onChange(on ? [...value.filter((x) => x !== choice), choice] : value.filter((x) => x !== choice))
   return (
     <div className="space-y-2">
-      {visibleValues(option).map((v) => (
+      {visibleValues(option).filter((v) => v.value !== hidden).map((v) => (
         <label key={v.value} className="flex items-start gap-2 text-sm">
-          <Checkbox className="mt-0.5" checked={value.includes(v.value)}
-            onCheckedChange={(on) => onChange(on === true ? [...value, v.value] : value.filter((x) => x !== v.value))} />
+          <Checkbox className="mt-0.5" checked={value.includes(v.value)} onCheckedChange={(on) => check(v.value, on === true)} />
           <span>
             <span className="flex items-center gap-1.5">{v.title}</span>
             {v.summary && <span className="text-muted-foreground block text-xs">{v.summary}</span>}
@@ -321,7 +344,13 @@ function Credential() {
 }
 
 /** A policy option: the policy in use (the default until a file is uploaded), with a link to view it explained. */
-function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId: string | null; onChange: (id: string | null) => void }) {
+function PolicyField({ kind, uploadId, onChange, marker, profile }: {
+  kind: PolicyKind
+  uploadId: string | null
+  onChange: (id: string | null) => void
+  marker?: React.ReactNode
+  profile: string | null
+}) {
   const t = useT()
   const [name, setName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -332,6 +361,9 @@ function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId:
     return () => { current = false }
   }, [kind])
   const preset = presets.find((p) => p.id === uploadId)
+  // The profile's presets while one is on (the general ones for the Sandbox), the general ones otherwise; the current one stays so the select keeps it.
+  const own = presets.some((p) => p.framework === profile) ? profile : null
+  const shown = presets.filter((p) => (p.framework ?? null) === own || p.id === uploadId)
   useEffect(() => {
     let current = true
     api.policies.view({ kind, uploadId }).then((v) => {
@@ -347,6 +379,7 @@ function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId:
         <Pill tone={error ? "danger" : uploadId ? "info" : "default"}>
           {t("policies.current", { name: name ?? "…" })}{!uploadId && ` (${t("policies.defaultName")})`}
         </Pill>
+        {marker}
         {error && <span className="text-destructive">{error}</span>}
       </div>
       {presets.length > 0 && (
@@ -354,7 +387,7 @@ function PolicyField({ kind, uploadId, onChange }: { kind: PolicyKind; uploadId:
           <SelectTrigger className="w-full max-w-sm" aria-label={t("policies.preset")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__none">{t("policies.presetNone")}</SelectItem>
-            {presets.map((p) => <SelectItem key={p.id} value={p.id}>{p.title} ({p.name})</SelectItem>)}
+            {shown.map((p) => <SelectItem key={p.id} value={p.id}>{p.title} ({p.name})</SelectItem>)}
           </SelectContent>
         </Select>
       )}

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.11.0] - 2026-11-13
+## [0.11.0] - 2026-11-14
 
 The first release since 0.10.1 (2026-11-04), and a large one. **It contains breaking changes**: the
 Brazilian packages were split and renamed, `SimpleSign.Pdf` was merged into `SimpleSign.PAdES`, and
@@ -28,9 +28,15 @@ Brazilian packages were split and renamed, `SimpleSign.Pdf` was merged into `Sim
   time-stamp when its own TSA is no longer trusted (ADR 0027).
 - **Configurable signing and validation policies** in SimpleSign's own JSON format, with a level per
   constraint, the ETSI TS 119 102-2 validation report and a readable HTML report (ADR 0023, 0024).
+- **eIDAS (EU), a new package.** `SimpleSign.Europe.Eidas` takes its anchors from the EU list of
+  trusted lists, and reports the **qualification** of a validated signature — QESig, QESeal,
+  AdESig-QC… (ETSI TS 119 615) — beside the indication, which does not change.
 - **IOFE (Peru) is complete.** `SimpleSign.Peru.Iofe` takes its anchors from INDECOPI's signed
   trusted list and keeps it current (`IofeTrustedListSource`), with the policies of INDECOPI's
   accreditation guide v4.0, its checklist, a playbook and an article.
+- **Trust profiles.** `TrustProfile` is a whole trust framework as one value — anchors, chain rules
+  and policies. `WithProfile(IcpBrasilProfile.Create())` on any builder, `--profile icp-brasil` on
+  the CLI, a Profile menu in the TestBench.
 - **Before you sign, and what you sign.** `SigningCertificateCheck` answers "will this certificate
   be accepted?" before asking for a PIN; `DataToSignInspector` says what a payload actually is;
   `AuditChain` exposes the audit hash chain for any store.
@@ -225,8 +231,8 @@ properties, but reference equality, `Equals` and `ToString` behave differently.
   the RFC 5280 certificate checks, the PDF revision checks (`DocMDP`, `FieldMDP`, `SigFieldLock`,
   `FormFillChanges`, `AnnotationChanges`, `UndefinedChanges`), `StructuralValidation` and
   `TLStructure`.
-- Built-in presets: `default`, `strict`, `minimal`, `anchored`, `iofe` (signing) and `default`,
-  `strict`, `iofe`, `iofe-nonrepudiation` (validation).
+- Built-in presets: `default`, `strict`, `minimal`, `anchored`, `iofe`, `eidas`, `icp-brasil`
+  (signing) and `default`, `strict`, `iofe`, `eidas`, `icp-brasil`, `govbr` (validation).
 - `ValidationOptions` gained `Policy`, `Level` (`ValidationLevel`), `Verifier` (`VerifierOptions`:
   revocation strategy, now OCSP first everywhere, fallback, AIA, revocation of untrusted chains),
   `TrustedLists`, `PolicyProvider` (`IPolicyProvider`, the policy chosen by the signature policy OID)
@@ -300,11 +306,64 @@ turns it on.
 - `DirectoryTrustAnchorProvider` (Core): trust anchors from a folder of certificates, optionally
   protected by a signed manifest.
 
+#### eIDAS (EU) — `SimpleSign.Europe.Eidas` (ADR 0029)
+
+- `EidasExtension` / `EidasProfile` (`eidas`): trust anchors from the EU list of trusted lists and
+  its national lists, checked against the LOTL signers bundled with the package
+  (`EidasExtension.LotlSigners`, fingerprints in its README), kept current by
+  `EidasTrustedListSource` (`AddSimpleSignEidas`); `EidasPolicies.Signing` / `Validation`.
+- **The qualification of a validated signature.** `EidasQualifier` (ETSI TS 119 615 and
+  TS 119 172-4) gives QESig, QESeal, AdESig-QC, AdESeal-QC, AdESig, AdESeal (and `Indeterminate …`,
+  `Not AdES`, `N/A`), and the qualification of each time-stamp (QTSA). `QcStatements` decodes
+  QcCompliance, QcSSCD, QcType, QcCClegislation and QcPDS.
+- Core: `ISignatureQualifier`, `SignatureQualification`, `ValidationOptions.SignatureQualifiers`
+  (a profile's or a country extension's are added), `Qualification` on the PAdES, CAdES and XAdES
+  results, `SignatureQuality` in the ETSI TS 119 102-2 report and `qualification` in the simple JSON
+  and HTML reports. **The indication does not change** — qualification is reported beside it.
+- Signing policy: `SigningCertificate/QcCompliance` and `QcSSCD`
+  (`SigningErrorReason.CertificateNotQualified`).
+- Trusted lists: `TrustedListService.Extensions` (Qualifications with their criteria,
+  AdditionalServiceInformation, ExpiredCertsRevocationInfo; also per history entry,
+  `InformationAt`), `TrustedListPointer.TslType`, `TrustedList.SchemeInformationUris`;
+  `TrustedListSet` follows pivot LOTLs (`FollowPivots`, `LotlSigners`, `PivotsFollowed`).
+- CLI: `--profile eidas` (with `--sandbox URL`, the Sandbox's LOTL) and the `eidas` presets;
+  `validate` shows each signature's qualification, in text and `--json`.
+- Sandbox: signers with QC statements (`qc-esign-qscd`, `qc-esign`, `qc-eseal-qscd`,
+  `qc-esign-policy`), a CA/PKC service (`intermediate-pkc`, `pkc-esign`), a non-qualified TSA
+  (`/tsa/non-qualified`), Qualifications and AdditionalServiceInformation on the CA/QC service, and
+  LOTL faults (`lotl`: Expired, WrongSigner, Tampered).
+- TestBench: EU (eIDAS) in the Profile menu, with the EU LOTL or the Sandbox's; the qualification on
+  each result; the `eidas-baseline` playbook and
+  [eidas-checklist.md](docs/playbooks/eidas-checklist.md).
+
+#### Trust profiles (ADR 0029)
+
+- `TrustProfile` (`SimpleSign.Core`): a trust framework as one value — its trust anchor providers,
+  its chain validation and its signing and validation policies. `WithProfile(profile)` on every
+  signer builder (PAdES, deferred, batch, CAdES, XAdES) and `ValidationOptions.Profile`; an explicit
+  `WithSigningPolicy` / `Policy` wins. One profile sets the policies, `WithTrustFrom(...)` adds
+  another's trust only. A profile that does not sign (Gov.br) is refused by `WithProfile`.
+- The profiles live in their packages: `EidasProfile`, `IofeProfile.LoadAsync()`,
+  `IcpBrasilProfile.Create()` and `GovBrProfile.Create()` (validation only).
+- `IcpBrasilPolicies.Signing` / `.Validation` and `GovBrPolicies.Validation`, on the model of
+  `IofePolicies`.
+- CLI: `--profile <sandbox|iofe|icp-brasil|gov-br|eidas>`, `--trust-profile` (repeatable) and
+  `--sandbox URL` on the signing, deferred and validate commands; `simplesign profiles` lists them.
+  `--tsl-profile iofe` no longer needs `--tsl-signer`.
+- Playbooks: a `policies` section declares adjusted policies (`base` + `set`), named `playbook:ID`
+  in the steps.
+- TestBench: Sign and Validate have a Profile menu (Default, Sandbox, Peru/IOFE with INDECOPI's real
+  list or the Sandbox's, ICP-Brasil and, on Validate, Gov.br), plus "Also trust" for the other
+  profiles' trust. It sets the policies, and on Sign ICP-Brasil replaces B-B…B-LTA with its
+  signature policies AD-RB…AD-RA.
+
 #### IOFE (Peru) — `SimpleSign.Peru.Iofe`
 
 - `IofeExtension` takes its anchors from INDECOPI's signed trusted list, and `IofePolicies`
-  (`Signing`, `SigningNonRepudiation`, `Validation`, `ValidationNonRepudiation`) implement the
-  *Guía de Acreditación de Aplicaciones de Software* v4.0.
+  (`Signing`, `Validation`) implement the *Guía de Acreditación de Aplicaciones de Software* v4.0.
+  The package bundles the certificate INDECOPI signs its list with
+  (`IofeExtension.IndecopiSigners`), so `IofeExtensionOptions` without `TrustedListSigners` works.
+  `IofeProfile.LoadAsync()` gives the whole framework as one value.
 - **`IofeTrustedListSource`** (`IofeExtension.LoadRefreshableAsync`, `new IofeExtension(source)`)
   reads the list again on demand (`RefreshAsync`) or on a schedule (`StartAutoRefresh`). Each copy is
   verified like the first and swapped in one step, so concurrent signers and validators see the old
@@ -440,6 +499,10 @@ when to use which; each has its own article.
   code is 0 only when all are valid. With `--trust`, the operating system's roots stay trusted
   (`--no-system-roots` turns them off); before, `--trust` replaced them. `cades validate` no longer
   requires `--data` for an attached signature.
+- **Trusted lists:** an expired LOTL is always refused, whatever `Services.RejectExpired` says — no
+  constraint judges the LOTL itself. A list signer whose key the platform cannot load (a curve it
+  does not support) now checks nothing instead of failing the whole `TrustedListSet` (found reading
+  the real EU LOTL).
 - ICP-Brasil PAdES signatures use `/Filter /PBAD_PAdES /SubFilter /PBAD.PAdES`, as the PAs mandate.
 - DocMDP: only P=1 blocks further signatures; P=2 and P=3 documents can be signed again
   (ISO 32000-1 §12.8.2.2.2). Certifying a document that is already signed is refused.
@@ -457,6 +520,18 @@ when to use which; each has its own article.
 
 ### Fixed
 
+- **The operating system checked revocation during validation.** The three validators built the
+  platform `X509Chain` with `X509RevocationMode.Online` when revocation was on, so the OS fetched
+  each CRL itself — outside `IHttpClientProvider` and its outbound HTTP policy (the SSRF guard,
+  ADR 0020), with its own timeout (about 15 s per URL on Linux and Windows). The chain is now built
+  with `NoCheck`; revocation is checked once, by `ValidateAsync`, through the library. The
+  synchronous `Validate` no longer reports chain errors from that check either — as documented, it
+  does not check revocation and says so in a warning.
+- **CRL over LDAP when a host name has several addresses.** `LdapCrlClient` tried only the first
+  address a name resolves to: `localhost` gives `::1` first, so a server listening on `127.0.0.1`
+  only was never reached and the CRL was reported missing (`RevocationStatusUnknown`). It now tries
+  each allowed address in turn, as an HTTP client does. `ChainRevocationChecker` also logs a failed
+  CRL download (event 2519, with the reason) instead of failing silently.
 - **PAdES accepted a signature under a revoked CA.** The validator checked online revocation for the
   signing certificate only, and the failed chain status was waived because the chain reaches its
   anchor. It now checks the CA certificates of the chain too, as CAdES and XAdES do.
@@ -535,7 +610,10 @@ when to use which; each has its own article.
 - Augmentation and past signature validation are documented in
   [pades.md](docs/articles/pades.md), [cades-xades.md](docs/articles/cades-xades.md) and
   [inspection-validation.md](docs/articles/inspection-validation.md).
-- ADRs 0021–0028; `docs/playbooks/etsi-checklist.md` and `indecopi-checklist.md`;
+- Each app now has a README of its own next to its code (`src/Apps/*/README.md`): what it is, how
+  to run it, its options and endpoints, pointing at the full article. The packable libraries keep
+  `PACKAGE.md` as their NuGet readme.
+- ADRs 0021–0029 (0029: trust profiles and signature qualification); `docs/playbooks/etsi-checklist.md`, `eidas-checklist.md` and `indecopi-checklist.md`;
   `docs/policies/compatibility.md`; `docs/schemas/`.
 - `RELEASING.md` now states that while SimpleSign is on 0.x, breaking changes ship in a MINOR bump
   and `x.0.0` is reserved for 1.0.

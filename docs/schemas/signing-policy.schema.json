@@ -199,6 +199,12 @@
         "ProspectiveCertificateChain": {
           "$ref": "#/$defs/LevelConstraint"
         },
+        "QcCompliance": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
+        "QcSSCD": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
         "Cryptographic": {
           "$ref": "#/$defs/CryptographicConstraint"
         }

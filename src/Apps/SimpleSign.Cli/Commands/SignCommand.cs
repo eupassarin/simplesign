@@ -1038,7 +1038,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             builder = builder.WithOperationId(settings.OperationId);
         }
 
-        builder = builder.WithSigningPolicy(SigningPolicyOption.Parse(settings.SigningPolicy)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellation));
+        builder = builder.WithSigningPolicy(await settings.SigningPolicyAsync(settings.SigningPolicy, cancellation)).WithTrustAnchors(await settings.SigningTrustAnchorsAsync(cancellation));
         if (settings.AuditSink() is { } audit)
         {
             builder = builder.WithAuditSink(audit);

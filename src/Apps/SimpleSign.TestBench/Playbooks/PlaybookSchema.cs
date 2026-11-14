@@ -63,7 +63,8 @@ internal static class PlaybookSchema
         {
             ["type"] = "object",
             ["description"] = "TestBench run options (see docs/playbooks/options.md). Symbolic values: sandbox:SIGNER (a Sandbox signer), "
-                + "sample:ID (a sample document), preset:KIND:NAME (a built-in policy), step:ID (the file an earlier step signed). "
+                + "sample:ID (a sample document), preset:KIND:NAME (a built-in policy), playbook:ID (a policy declared in policies), "
+                + "step:ID (the file an earlier step signed), input:ID (the file uploaded for an input declared in inputs). "
                 + "A validation takes { fileId, dataId?, settings? }.",
         };
 
@@ -82,6 +83,7 @@ internal static class PlaybookSchema
                 ["ocsp"] = Str("OCSP failure.", Enum.GetNames<OcspFault>()),
                 ["tsa"] = Str("TSA failure.", Enum.GetNames<TsaFault>()),
                 ["trustedList"] = Str("Trusted list failure.", Enum.GetNames<TlFault>()),
+                ["lotl"] = Str("List of trusted lists failure.", Enum.GetNames<LotlFault>()),
                 ["revoke"] = Arr(Str("A Sandbox certificate id."), "Certificates to revoke for the step."),
             }),
             ["expect"] = Obj("What the run must show; every field given is checked, for each engine.", new JsonObject
@@ -93,6 +95,8 @@ internal static class PlaybookSchema
                 ["level"] = Str("Level achieved (signature) or detected (validation).", ["B-B", "B-T", "B-LT", "B-LTA"]),
                 ["failedConstraints"] = Arr(Str("A constraint name (AccuracyPresent)."),
                     "Constraints of the validation policy that must fail, by name, in the signature or what it carries (a time-stamp, revocation data)."),
+                ["qualification"] = Str("The qualification of the first signature under the profile's framework (eIDAS: QESig, QESeal, AdESig-QC, AdESeal-QC, AdESig, AdESeal, Indeterminate …, Not AdES, N/A)."),
+                ["timestampQualification"] = Str("The qualification of its first timestamp: QTSA (qualified electronic time-stamp), TSA or N/A."),
                 ["etsiReport"] = Str("valid: the run's ETSI TS 119 102-2 validation report must be valid against its schema (embedded in SimpleSign).", ["valid"]),
                 ["dssAgrees"] = Bool("Whether EU DSS must agree with SimpleSign. Needs crossValidate on the step or in the defaults, and a run that produces a file (a refusal is never sent to DSS); when DSS is unavailable this check fails."),
                 ["logContains"] = Arr(Str("Text."), "Texts the run's log must contain."),
@@ -143,6 +147,24 @@ internal static class PlaybookSchema
                         ["additionalProperties"] = false,
                     },
                 }),
+                ["policies"] = Arr(Obj("A policy the playbook adjusts, named playbook:ID by signingPolicyId or validation.policyId.", new JsonObject
+                {
+                    ["id"] = Str("Unique id."),
+                    ["kind"] = Str("Signing or validation policy.", [PolicyViewer.Signing, PolicyViewer.Validation]),
+                    ["base"] = Str("The policy it starts from: default or a built-in name (iofe, strict…)."),
+                    ["set"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["description"] = "The constraints changed, by path (SigningCertificate/KeyUsage), each as the policy file writes it: { \"Level\": \"FAIL\", \"Id\": [\"nonRepudiation\"] }.",
+                    },
+                }, "id", "kind"), "Policies the steps adjust (a built-in one with some constraints changed)."),
+                ["inputs"] = Arr(Obj("A file the person running the playbook uploads on the Playbook tab, named input:ID by a step's options (a fileId to validate or augment, a documentId or dataId to sign). A step whose input has no file is skipped.", new JsonObject
+                {
+                    ["id"] = Str("Unique id."),
+                    ["title"] = Str("What to upload, as the page asks for it."),
+                    ["description"] = Str("Where the file comes from and what the steps do with it."),
+                    ["accept"] = Str("The file types the page offers, as an HTML accept value (.pdf, .xml, .p7s)."),
+                }, "id", "title"), "Files uploaded by the person running the playbook (a PDF signed elsewhere, a document to sign)."),
                 ["sections"] = Arr(Ref("section"), "The steps, grouped."),
             },
             ["$defs"] = defs,
@@ -166,6 +188,7 @@ internal static class PlaybookSchema
             .Append("| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: ")
             .Append(string.Join(", ", PolicyPresets.All.Select(p => $"`{p.Id}`"))).Append(". |\n")
             .Append("| `step:ID` | The file an earlier step signed, as `fileId` of a validation or as the input of a later signature. |\n")
+            .Append("| `input:ID` | The file uploaded on the Playbook tab for an input the playbook declares in `inputs` (a PDF signed elsewhere, a document to sign), wherever a file goes (`fileId`, `documentId`, `dataId`). A step whose input has no file is skipped. |\n")
             .Append("| `sandbox-short-lived:N` | A Sandbox signer issued when the step runs and valid for N seconds (1 to 3600), as `credentialId`: with a later step's `wait`, its certificate has expired by validation time. |\n")
             .Append("| `fixture:NAME` | A bundled file, as an upload option: ")
             .Append(string.Join(", ", Documents.Fixtures.All.Select(f => $"`{f.Id}` ({f.Title})"))).Append(". |\n\n")
@@ -188,7 +211,8 @@ internal static class PlaybookSchema
             .Append("the TestBench checks them when it loads a playbook. Failures: crl ").Append(string.Join("/", Enum.GetNames<CrlFault>()))
             .Append(", ocsp ").Append(string.Join("/", Enum.GetNames<OcspFault>()))
             .Append(", tsa ").Append(string.Join("/", Enum.GetNames<TsaFault>()))
-            .Append(", trustedList ").Append(string.Join("/", Enum.GetNames<TlFault>())).Append(".\n");
+            .Append(", trustedList ").Append(string.Join("/", Enum.GetNames<TlFault>()))
+            .Append(", lotl ").Append(string.Join("/", Enum.GetNames<LotlFault>())).Append(".\n");
         return md.ToString();
     }
 
@@ -210,6 +234,7 @@ internal static class PlaybookSchema
                 ["ocsp"] = Enum.GetNames<OcspFault>(),
                 ["tsa"] = Enum.GetNames<TsaFault>(),
                 ["trustedList"] = Enum.GetNames<TlFault>(),
+                ["lotl"] = Enum.GetNames<LotlFault>(),
             });
 
     private static string Cell(string text) => text.Replace("|", "\\|", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);

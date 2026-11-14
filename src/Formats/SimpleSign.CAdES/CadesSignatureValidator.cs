@@ -90,6 +90,9 @@ public sealed record CadesValidationResult
     /// <summary>The earliest time the signature is proven to exist (a trusted signature timestamp), or null.</summary>
     public DateTimeOffset? BestSignatureTime { get; init; }
 
+    /// <summary>The qualification of the signature under a legal framework (QESig, AdESig-QC…), from <see cref="ValidationOptions.SignatureQualifiers"/>; null when no qualifier applies.</summary>
+    public SignatureQualification? Qualification { get; init; }
+
     /// <summary>The timestamps and revocation data the validation used, each with the outcome of its own evaluation.</summary>
     public IReadOnlyList<ValidationObjectEntry> ValidationObjects { get; init; } = [];
 
@@ -142,7 +145,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         ITimestampValidator? timestampValidator = null,
         IChainRevocationChecker? chainRevocationChecker = null)
     {
-        _options = options ?? new ValidationOptions();
+        _options = (options ?? new ValidationOptions()).WithProfileApplied();
         _logger = logger;
         _chainRevocationChecker = chainRevocationChecker
             ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), logger)
@@ -271,7 +274,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         var (facts, evaluation, revocationWarnings) = await RevocationStep.RunAsync(
             result.Facts, result.ChainCandidates, result.SignatureTimestampToken, _chainRevocationChecker,
             result.EmbeddedCrls, result.EmbeddedOcsps, _options.PolicyFor(result.Facts.SignaturePolicyOid), cancellationToken).ConfigureAwait(false);
-        return result with
+        return Qualified(result with
         {
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
@@ -284,7 +287,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             RevocationSource = facts.RevocationSource,
             IsTsaTrusted = facts.IsTsaTrusted,
             Warnings = [.. result.Warnings.Where(w => w != RevocationStep.NotCheckedWarning), .. revocationWarnings],
-        };
+        });
     }
 
     /// <summary>
@@ -665,7 +668,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             warnings.Add(RevocationStep.NotCheckedWarning);
         }
 
-        return new CadesValidationResult
+        return Qualified(new CadesValidationResult
         {
             Indication = evaluation.Indication,
             SubIndication = evaluation.SubIndication,
@@ -692,8 +695,25 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             SigningTime = cmsData.SigningTime,
             Errors = errors.AsReadOnly(),
             Warnings = warnings.Count > 0 ? warnings.AsReadOnly() : []
-        };
+        });
     }
+
+    /// <summary>The result with its qualification under a legal framework, when the options have qualifiers.</summary>
+    private CadesValidationResult Qualified(CadesValidationResult result) =>
+        result.SignerCertificate is { } signer && _options.SignatureQualifiers is { Count: > 0 }
+            ? result with
+            {
+                Qualification = _options.Qualify(new SimpleSign.Core.Extensions.SignatureQualificationContext(signer, result.Indication)
+                {
+                    Certificates = [.. result.ChainCandidates],
+                    ClaimedSigningTime = result.SigningTime,
+                    BestSignatureTime = result.BestSignatureTime,
+                    ValidationObjects = result.ValidationObjects,
+                    Format = "CAdES",
+                }),
+            }
+            : result;
+
 
     /// <summary>The first value of a signed attribute, DER-encoded; null when the attribute is absent or the set is malformed.</summary>
     private static byte[]? ReadSignedAttribute(byte[]? signedAttrs, string oid)
@@ -794,7 +814,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
                 || !_options.TrustSystemRoots;
 
             using var chain = new X509Chain();
-            CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
+            CryptoUtility.ConfigureChainPolicy(chain, _options.NetworkTimeout);
             chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
             if (additionalCertificates is not null)
             {

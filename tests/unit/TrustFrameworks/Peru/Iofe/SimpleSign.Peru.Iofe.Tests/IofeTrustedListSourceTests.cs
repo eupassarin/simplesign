@@ -58,8 +58,8 @@ public sealed class IofeTrustedListSourceTests(IofeTrustedListSourceFixture fixt
     }
 
     [Fact]
-    public async Task LoadAsync_NoSigners_IsRefused() =>
-        await Should.ThrowAsync<ArgumentException>(() => IofeTrustedListSource.LoadAsync(new IofeExtensionOptions { TrustedListUrl = new Uri(Url) }));
+    public void ListOptionsOf_NoSigners_UsesTheBundledIndecopiSigner() =>
+        IofeExtension.ListOptionsOf(new IofeExtensionOptions()).SignerCertificates.ShouldBe(IofeExtension.IndecopiSigners);
 
     [Fact]
     public async Task RefreshAsync_NewSequence_SwapsAndReportsTheServicesAddedAndRemoved()
@@ -237,7 +237,10 @@ public sealed class IofeTrustedListSourceTests(IofeTrustedListSourceFixture fixt
         string[] newList = [fixture.EcB.RootCa.Thumbprint];
         byte[][] lists = [List(26, EcB), List(27, EcA, Tsa), List(28, EcB)];
         using var stop = new CancellationTokenSource();
-        var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
+        var firstReads = Enumerable.Range(0, 4).Select(_ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).ToList();
+        // Each reader on its own thread: on a busy machine (a CI runner running the other test projects alongside),
+        // thread-pool work may not start before the refreshes are over.
+        var readers = firstReads.Select(firstRead => Task.Factory.StartNew(() =>
         {
             int reads = 0;
             while (!stop.IsCancellationRequested)
@@ -245,11 +248,14 @@ public sealed class IofeTrustedListSourceTests(IofeTrustedListSourceFixture fixt
                 var anchors = source.GetTrustAnchors().Select(c => c.Thumbprint).Order().ToArray();
                 (anchors.SequenceEqual(oldList.Order()) || anchors.SequenceEqual(newList)).ShouldBeTrue(string.Join(",", anchors));
                 reads++;
+                firstRead.TrySetResult();
             }
 
             return reads;
-        })).ToList();
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToList();
 
+        // The refreshes start once every reader is reading.
+        await Task.WhenAll(firstReads.Select(r => r.Task)).WaitAsync(TimeSpan.FromSeconds(30));
         foreach (byte[] list in lists)
         {
             _served = list;

@@ -27,6 +27,20 @@ public sealed record TrustedListService(
     /// <summary>The earlier statuses of the service (ServiceHistory), each with when it started.</summary>
     public IReadOnlyList<TrustedListServiceStatus> History { get; init; } = [];
 
+    /// <summary>The service information extensions in force now (Qualifications, AdditionalServiceInformation…).</summary>
+    public TrustedListServiceExtensions Extensions { get; init; } = TrustedListServiceExtensions.None;
+
+    /// <summary>
+    /// The status and extensions the service had at <paramref name="at"/> (TS 119 612 §5.6): the current ones from their
+    /// starting time, else the history entry then in force; null before any.
+    /// </summary>
+    /// <param name="at">The time.</param>
+    /// <returns>The status entry, or null.</returns>
+    public TrustedListServiceStatus? InformationAt(DateTimeOffset at) =>
+        StatusStartingTime is not { } started || started <= at
+            ? new TrustedListServiceStatus(Status, StatusStartingTime ?? DateTimeOffset.MinValue) { ServiceType = ServiceType, Extensions = Extensions }
+            : History.Where(h => h.StartingTime <= at).OrderByDescending(h => h.StartingTime).FirstOrDefault();
+
     /// <summary>The status the service had at <paramref name="at"/>: the current one from its starting time, else the history's; null before any.</summary>
     /// <param name="at">The time.</param>
     /// <returns>The ServiceStatus URI, or null.</returns>
@@ -39,7 +53,14 @@ public sealed record TrustedListService(
 /// <summary>A status of a trust service and when it started (a ServiceHistoryInstance).</summary>
 /// <param name="Status">The ServiceStatus URI.</param>
 /// <param name="StartingTime">The StatusStartingTime.</param>
-public sealed record TrustedListServiceStatus(string Status, DateTimeOffset StartingTime);
+public sealed record TrustedListServiceStatus(string Status, DateTimeOffset StartingTime)
+{
+    /// <summary>The ServiceTypeIdentifier then in force; null when the history entry does not give it.</summary>
+    public string? ServiceType { get; init; }
+
+    /// <summary>The service information extensions then in force.</summary>
+    public TrustedListServiceExtensions Extensions { get; init; } = TrustedListServiceExtensions.None;
+}
 
 /// <summary>A pointer of a list of trusted lists (LOTL) to another trusted list (<c>OtherTSLPointer</c>).</summary>
 /// <param name="Territory">The territory of the pointed list.</param>
@@ -50,7 +71,11 @@ public sealed record TrustedListPointer(
     string Territory,
     Uri Location,
     string? MimeType,
-    IReadOnlyList<X509Certificate2> SignerCertificates);
+    IReadOnlyList<X509Certificate2> SignerCertificates)
+{
+    /// <summary>The TSLType of the pointed list (<c>…/TSLType/EUlistofthelists</c> for a LOTL's pointer to itself); null when absent.</summary>
+    public string? TslType { get; init; }
+}
 
 /// <summary>Which services of a trusted list become trust anchors.</summary>
 public sealed record TrustedListOptions
@@ -188,6 +213,7 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
         Version = other.Version;
         Pointers = other.Pointers;
         StructureErrors = other.StructureErrors;
+        SchemeInformationUris = other.SchemeInformationUris;
         _anchors = other._anchors;
         _intermediates = other._intermediates;
         _options = other._options;
@@ -298,7 +324,11 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
                     if (instance.SelectSingleNode("tsl:ServiceStatus", ns)?.InnerText.Trim() is { Length: > 0 } past
                         && ReadDate(instance.SelectSingleNode("tsl:StatusStartingTime", ns)) is { } since)
                     {
-                        history.Add(new TrustedListServiceStatus(past, since));
+                        history.Add(new TrustedListServiceStatus(past, since)
+                        {
+                            ServiceType = instance.SelectSingleNode("tsl:ServiceTypeIdentifier", ns)?.InnerText.Trim(),
+                            Extensions = TrustedListExtensionReader.Read(instance),
+                        });
                     }
                 }
 
@@ -311,6 +341,7 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
                 {
                     StatusStartingTime = ReadDate(service.SelectSingleNode("tsl:StatusStartingTime", ns)),
                     History = history,
+                    Extensions = TrustedListExtensionReader.Read(service),
                 });
             }
         }
@@ -327,8 +358,37 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
             ReadPointers(scheme, ns))
         {
             StructureErrors = Internal.XmlSchemas.Validate(root),
+            SchemeInformationUris = SchemeUris(scheme, ns),
         };
     }
+
+    private static List<string> SchemeUris(XmlNode scheme, XmlNamespaceManager ns) =>
+        [.. scheme.SelectNodes("tsl:SchemeInformationURI/tsl:URI", ns)!.Cast<XmlNode>().Select(u => u.InnerText.Trim()).Where(u => u.Length > 0)];
+
+    /// <summary>
+    /// The SchemeInformationURI values of a list read <b>without</b> checking its signature: only to find the pivot
+    /// LOTLs that say which keys may sign it (ETSI TS 119 612 §5.3.7, the EU LOTL).
+    /// </summary>
+    internal static IReadOnlyList<string> UnverifiedSchemeInformationUris(byte[] xml)
+    {
+        var doc = new XmlDocument { PreserveWhitespace = true, XmlResolver = null };
+        try
+        {
+            using var reader = XmlReader.Create(new MemoryStream(xml), new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+            doc.Load(reader);
+        }
+        catch (XmlException ex)
+        {
+            throw new InvalidDataException($"The trusted list is not well-formed XML: {ex.Message}", ex);
+        }
+
+        var ns = new XmlNamespaceManager(doc.NameTable);
+        ns.AddNamespace("tsl", Namespace);
+        return doc.DocumentElement?.SelectSingleNode("tsl:SchemeInformation", ns) is { } scheme ? SchemeUris(scheme, ns) : [];
+    }
+
+    /// <summary>The SchemeInformationURI values (for the EU LOTL: the Official Journal notice and the pivot LOTLs).</summary>
+    public IReadOnlyList<string> SchemeInformationUris { get; private init; } = [];
 
     /// <summary>
     /// Downloads and reads a trusted list. With <paramref name="cacheFile"/>, a list that was read successfully is
@@ -401,9 +461,25 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
             throw new CryptographicException("The signature of the trusted list does not cover the whole list.");
         }
 
-        if (!signers.Any(signer => signedXml.CheckSignature(signer, verifySignatureOnly: true)))
+        if (!signers.Any(signer => Checks(signedXml, signer)))
         {
             throw new CryptographicException("The trusted list is not signed by the scheme operator's certificate.");
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="signer"/> verifies the signature. A key this platform cannot load (a curve it does not
+    /// support, such as brainpool on some systems) verifies nothing, instead of failing the whole set of lists.
+    /// </summary>
+    private static bool Checks(SignedXml signedXml, X509Certificate2 signer)
+    {
+        try
+        {
+            return signedXml.CheckSignature(signer, verifySignatureOnly: true);
+        }
+        catch (Exception ex) when (ex is ArgumentNullException or NotSupportedException or CryptographicException)
+        {
+            return false;
         }
     }
 
@@ -446,6 +522,7 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
 
             string territory = string.Empty;
             string? mimeType = null;
+            string? tslType = null;
             foreach (XmlNode info in pointer.SelectNodes("tsl:AdditionalInformation/tsl:OtherInformation/*", ns)!)
             {
                 switch (info.LocalName)
@@ -455,6 +532,9 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
                         break;
                     case "MimeType":
                         mimeType = info.InnerText.Trim();
+                        break;
+                    case "TSLType":
+                        tslType = info.InnerText.Trim();
                         break;
                     default:
                         break;
@@ -474,7 +554,7 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
                 }
             }
 
-            pointers.Add(new TrustedListPointer(territory, uri, mimeType, signers));
+            pointers.Add(new TrustedListPointer(territory, uri, mimeType, signers) { TslType = tslType });
         }
 
         return pointers;

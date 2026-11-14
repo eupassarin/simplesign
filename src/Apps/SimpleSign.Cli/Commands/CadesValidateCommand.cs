@@ -94,6 +94,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
                 Verifier = settings.Verifier,
                 TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
                 TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
+                SignatureQualifiers = settings.LoadedQualifiers.Count > 0 ? settings.LoadedQualifiers : null,
             },
             chainRevocationChecker: settings.RevocationCheckerFor(_httpClientProvider));
 
@@ -222,7 +223,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             }
         }
 
-        ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, spanish);
+        ValidationReportRenderer.Write(result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, spanish, result.Qualification);
         AnsiConsole.MarkupLine(result.Indication switch
         {
             SignatureIndication.Valid => "\n[green]✓ Signature is VALID[/]",

@@ -23,7 +23,7 @@ export interface SandboxInfo {
   }
   pfxPassword: string
   loopbackOrigins: string[]
-  trustedLists?: { lotlUrl: string; tlUrl: string; lotlSignerUrl: string; tlSignerUrl: string; territory: string; iofeUrl?: string | null } | null
+  trustedLists?: { lotlUrl: string; tlUrl: string; lotlSignerUrl: string; tlSignerUrl: string; territory: string } | null
 }
 
 export interface CertificateView {

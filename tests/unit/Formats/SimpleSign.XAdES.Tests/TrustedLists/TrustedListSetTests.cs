@@ -96,6 +96,87 @@ public sealed class TrustedListSetTests : IDisposable
             TrustedListSet.LoadAsync(Options() with { LotlSignerCertificates = [_ptSigner] }, new SingleClientProvider(http)));
     }
 
+    [Fact]
+    public async Task LoadAsync_LotlSignedByANewKey_CarriesTheGivenKeyForwardThroughThePivots()
+    {
+        // The given (Official Journal) key signs the pivot; the pivot says the LOTL is signed by the new key from then on.
+        using var newKey = RSA.Create(2048);
+        using var newSigner = Operator("CN=EU LOTL 2", newKey);
+        var lists = Lists();
+        lists[LotlUrl] = Lotl(newKey, newSigner, PivotUrl);
+        lists[PivotUrl] = Sign(Document("EU", LotlPointer(newSigner), ""), _lotlKey, _lotlSigner);
+        using var http = Server(lists);
+
+        var set = await TrustedListSet.LoadAsync(Options(), new SingleClientProvider(http));
+
+        set.Lists.Count.ShouldBe(2);
+        set.PivotsFollowed.ShouldBe([new Uri(PivotUrl)]);
+        set.LotlSigners.ShouldHaveSingleItem().Thumbprint.ShouldBe(newSigner.Thumbprint);
+    }
+
+    [Fact]
+    public async Task LoadAsync_PivotOlderThanTheGivenKeys_IsSkipped()
+    {
+        // The LOTL names two pivots, newest first: the older one is signed by a key before the given ones and is skipped.
+        using var oldKey = RSA.Create(2048);
+        using var oldSigner = Operator("CN=EU LOTL 0", oldKey);
+        using var newKey = RSA.Create(2048);
+        using var newSigner = Operator("CN=EU LOTL 2", newKey);
+        const string OlderPivot = "https://198.51.100.7/eu-lotl-pivot-100.xml";
+        var lists = Lists();
+        lists[LotlUrl] = Lotl(newKey, newSigner, PivotUrl + "</URI><URI xml:lang=\"en\">" + OlderPivot);
+        lists[OlderPivot] = Sign(Document("EU", LotlPointer(_lotlSigner), ""), oldKey, oldSigner);
+        lists[PivotUrl] = Sign(Document("EU", LotlPointer(newSigner), ""), _lotlKey, _lotlSigner);
+        using var http = Server(lists);
+
+        var set = await TrustedListSet.LoadAsync(Options(), new SingleClientProvider(http));
+
+        set.PivotsFollowed.ShouldBe([new Uri(PivotUrl)]);
+        set.Lists.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task LoadAsync_PivotSignedByAnUnknownKey_Throws()
+    {
+        using var newKey = RSA.Create(2048);
+        using var newSigner = Operator("CN=EU LOTL 2", newKey);
+        var lists = Lists();
+        lists[LotlUrl] = Lotl(newKey, newSigner, PivotUrl);
+        lists[PivotUrl] = Sign(Document("EU", LotlPointer(newSigner), ""), newKey, newSigner);
+        using var http = Server(lists);
+
+        var ex = await Should.ThrowAsync<CryptographicException>(() => TrustedListSet.LoadAsync(Options(), new SingleClientProvider(http)));
+
+        ex.Message.ShouldContain("pivot", Case.Insensitive);
+    }
+
+    [Fact]
+    public async Task LoadAsync_FollowPivotsOff_DoesNotWalkThem()
+    {
+        using var newKey = RSA.Create(2048);
+        using var newSigner = Operator("CN=EU LOTL 2", newKey);
+        var lists = Lists();
+        lists[LotlUrl] = Lotl(newKey, newSigner, PivotUrl);
+        lists[PivotUrl] = Sign(Document("EU", LotlPointer(newSigner), ""), _lotlKey, _lotlSigner);
+        using var http = Server(lists);
+
+        await Should.ThrowAsync<CryptographicException>(() =>
+            TrustedListSet.LoadAsync(Options() with { FollowPivots = false }, new SingleClientProvider(http)));
+    }
+
+    private const string PivotUrl = "https://198.51.100.7/eu-lotl-pivot-300.xml";
+
+    private static string LotlPointer(X509Certificate2 signer) => $"""
+        <OtherTSLPointer>
+          <ServiceDigitalIdentities><ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(signer.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity></ServiceDigitalIdentities>
+          <TSLLocation>{LotlUrl}</TSLLocation>
+          <AdditionalInformation>
+            <OtherInformation><TSLType>http://uri.etsi.org/TrstSvc/TrustedList/TSLType/EUlistofthelists</TSLType></OtherInformation>
+            <OtherInformation><SchemeTerritory>EU</SchemeTerritory></OtherInformation>
+          </AdditionalInformation>
+        </OtherTSLPointer>
+        """;
+
     public void Dispose()
     {
         Directory.Delete(_cache, recursive: true);
@@ -124,7 +205,9 @@ public sealed class TrustedListSetTests : IDisposable
                 ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) }
                 : new HttpResponseMessage(HttpStatusCode.NotFound))));
 
-    private byte[] Lotl()
+    private byte[] Lotl() => Lotl(_lotlKey, _lotlSigner, null);
+
+    private byte[] Lotl(RSA key, X509Certificate2 signer, string? pivot)
     {
         string Pointer(string territory, string url, X509Certificate2 signer) => $"""
             <OtherTSLPointer>
@@ -138,7 +221,14 @@ public sealed class TrustedListSetTests : IDisposable
             """;
         string pointers = Pointer("PT", PtUrl, _ptSigner) + Pointer("DE", DeUrl, _deSigner)
             + Pointer("PT", "https://198.51.100.7/pt.pdf", _ptSigner).Replace("application/vnd.etsi.tsl+xml", "application/pdf", StringComparison.Ordinal);
-        return Sign(Document("EU", pointers, ""), _lotlKey, _lotlSigner);
+        string document = Document("EU", pointers, "");
+        if (pivot is not null)
+        {
+            document = document.Replace("<SchemeTerritory>EU</SchemeTerritory>",
+                $"<SchemeTerritory>EU</SchemeTerritory><SchemeInformationURI><URI xml:lang=\"en\">{pivot}</URI><URI xml:lang=\"en\">https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ</URI></SchemeInformationURI>", StringComparison.Ordinal);
+        }
+
+        return Sign(document, key, signer);
     }
 
     private static byte[] Tl(string territory, X509Certificate2 anchor, RSA key, X509Certificate2 signer)

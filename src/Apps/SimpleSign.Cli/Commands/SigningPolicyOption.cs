@@ -7,7 +7,7 @@ internal static class SigningPolicyOption
 {
     /// <summary>The option's description.</summary>
     internal const string Description =
-        "Signing policy: a JSON file (root SigningConstraints) or a built-in name (default, strict, minimal, iofe): the checks made before " +
+        "Signing policy: a JSON file (root SigningConstraints) or a built-in name (default, strict, minimal, iofe, eidas, icp-brasil): the checks made before " +
         "signing. Default: chain validity, key usage, RSA >= 2048, SHA-2/SHA-3. Write one with 'simplesign policy export signing [[--preset NAME]]'";
 
     /// <summary>The policy in the file or of the built-in name, or the default policy when none is given.</summary>

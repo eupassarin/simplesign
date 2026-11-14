@@ -71,6 +71,16 @@ public static partial class OptionSchema
 
     // ── Signature level ─────────────────────────────────────────────────
 
+    /// <summary>The ICP-Brasil signature policies (PAdES has no AD-RV).</summary>
+    private static SchemaValue[] IcpPolicies(bool pades) =>
+    [
+        V("AdRb", "AD-RB", "Basic reference: the signature and the policy identifier (B-B).", standards: R("DOC-ICP-15.03|AD-RB"), api: "IcpBrasilPolicy.AdRb"),
+        V("AdRt", "AD-RT", "Time reference: adds a signature timestamp from an ACT (B-T).", standards: R("DOC-ICP-15.03|AD-RT"), api: "IcpBrasilPolicy.AdRt"),
+        .. pades ? Array.Empty<SchemaValue>() : [V("AdRv", "AD-RV", "Validation references: AD-RT plus the references to the certificates and revocation data (C).", standards: R("DOC-ICP-15.03|AD-RV"), api: "IcpBrasilPolicy.AdRv")],
+        V("AdRc", "AD-RC", "Complete references: the validation data themselves, protected by a timestamp (B-LTA in PAdES, X-L in CAdES and XAdES).", standards: R("DOC-ICP-15.03|AD-RC"), api: "IcpBrasilPolicy.AdRc"),
+        V("AdRa", "AD-RA", "Archival references: AD-RC plus an archive timestamp; in PAdES, the policy (PA, LPA) embedded too.", standards: R("DOC-ICP-15.03|AD-RA"), api: "IcpBrasilPolicy.AdRa"),
+    ];
+
     private static List<SchemaOption> LevelOptions()
     {
         SchemaValue[] kinds(string custom) =>
@@ -78,6 +88,8 @@ public static partial class OptionSchema
             V("Baseline", "Baseline", "The ETSI baseline levels: B-B, B-T, B-LT, B-LTA.", standards: R("ETSI EN 319 102-1|Annex B Signature classes"), api: "WithLevel(AdesBaselineProfile.…)"),
             V("CustomPolicy", "Explicit signature policy", "A baseline signature that also names a signature policy (OID and hash of the policy document).",
                 standards: R(custom), api: "WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))"),
+            V("IcpBrasil", "ICP-Brasil signature policy", "A signature under an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RV, AD-RC, AD-RA): its identifier and hash, and the level it sets. For real ICP-Brasil certificates.",
+                standards: R("DOC-ICP-15.03|Signature policies of ICP-Brasil"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy)"),
         ];
 
         SchemaValue[] levels(string b, string t, string lt, string lta) =>
@@ -107,13 +119,13 @@ public static partial class OptionSchema
 
             O("pades.level", "level", s_pades, "choice", "level", "Baseline level", "Each level adds what a validator needs later.",
                 standards: R("ETSI EN 319 142-1|§6.2 Signature levels", "ETSI EN 319 142-1|§6.3 Requirements"), api: "WithLevel(AdesBaselineProfile)", valueStateKey: "level",
-                values: levels("ETSI EN 319 142-1|§6.3 PAdES-B-B", "ETSI EN 319 142-1|§6.3 PAdES-B-T", "ETSI EN 319 142-1|§5.4 Document Security Store (PAdES-B-LT)", "ETSI EN 319 142-1|§5.4.3 Document time-stamp (PAdES-B-LTA)")),
+                values: levels("ETSI EN 319 142-1|§6.3 PAdES-B-B", "ETSI EN 319 142-1|§6.3 PAdES-B-T", "ETSI EN 319 142-1|§5.4 Document Security Store (PAdES-B-LT)", "ETSI EN 319 142-1|§5.4.3 Document time-stamp (PAdES-B-LTA)"), when: When("kind", "Baseline", "CustomPolicy")),
             O("cades.level", "level", s_cades, "choice", "level", "Baseline level", "Each level adds what a validator needs later.",
                 standards: R("ETSI EN 319 122-1|§6.2 Signature levels", "ETSI EN 319 122-1|§6.3 Requirements"), api: "WithLevel(AdesBaselineProfile)", stateKey: "level", valueStateKey: "level",
-                values: levels("ETSI EN 319 122-1|§6.3 CAdES-B-B", "ETSI EN 319 122-1|§5.3 signature-time-stamp (CAdES-B-T)", "ETSI EN 319 122-1|§5.4 Validation data (CAdES-B-LT)", "ETSI EN 319 122-1|§5.5 archive-time-stamp-v3 (CAdES-B-LTA)")),
+                values: levels("ETSI EN 319 122-1|§6.3 CAdES-B-B", "ETSI EN 319 122-1|§5.3 signature-time-stamp (CAdES-B-T)", "ETSI EN 319 122-1|§5.4 Validation data (CAdES-B-LT)", "ETSI EN 319 122-1|§5.5 archive-time-stamp-v3 (CAdES-B-LTA)"), when: When("kind", "Baseline", "CustomPolicy")),
             O("xades.level", "level", s_xades, "choice", "level", "Baseline level", "Each level adds what a validator needs later.",
                 standards: R("ETSI EN 319 132-1|§6.2 Signature levels", "ETSI EN 319 132-1|§6.3 Requirements"), api: "WithLevel(AdesBaselineProfile)", stateKey: "level", valueStateKey: "level",
-                values: levels("ETSI EN 319 132-1|§6.3 XAdES-B-B", "ETSI EN 319 132-1|§5.3 SignatureTimeStamp (XAdES-B-T)", "ETSI EN 319 132-1|§5.4 CertificateValues and RevocationValues (XAdES-B-LT)", "ETSI EN 319 132-1|§5.5.2 ArchiveTimeStamp (XAdES-B-LTA)")),
+                values: levels("ETSI EN 319 132-1|§6.3 XAdES-B-B", "ETSI EN 319 132-1|§5.3 SignatureTimeStamp (XAdES-B-T)", "ETSI EN 319 132-1|§5.4 CertificateValues and RevocationValues (XAdES-B-LT)", "ETSI EN 319 132-1|§5.5.2 ArchiveTimeStamp (XAdES-B-LTA)"), when: When("kind", "Baseline", "CustomPolicy")),
 
             O("pades.customPolicy.oid", "level", s_pades, "text", "customPolicy.oid", "Policy OID", "The object identifier of the signature policy.",
                 standards: R("ETSI EN 319 122-1|§5.2.9 signature-policy-identifier"), api: "SignaturePolicyReference.Oid", stateKey: "customPolicy"),
@@ -136,12 +148,20 @@ public static partial class OptionSchema
 
             O("cades.extendedForm", "level", s_cades, "choice", "extendedForm", "Extended form", "The older CAdES forms with references to the validation data, still required by some policies.",
                 standards: R("ETSI EN 319 122-2|Extended CAdES signatures", "RFC 5126|§5.7.3–§6.4"), api: "WithExtendedValidationData(CadesExtendedForm)", stateKey: "extendedForm", valueStateKey: "extendedForm",
-                values: extended("RFC 5126|§6.2 complete-certificate-references and complete-revocation-references", "RFC 5126|§6.3 certificate-values and revocation-values", "RFC 5126|§6.4.1 archive-time-stamp", "CadesExtendedForm")),
+                values: extended("RFC 5126|§6.2 complete-certificate-references and complete-revocation-references", "RFC 5126|§6.3 certificate-values and revocation-values", "RFC 5126|§6.4.1 archive-time-stamp", "CadesExtendedForm"), when: When("kind", "Baseline", "CustomPolicy")),
             O("xades.extendedForm", "level", s_xades, "choice", "extendedForm", "Extended form", "The older XAdES forms with references to the validation data, still required by some policies.",
                 standards: R("ETSI EN 319 132-2|Extended XAdES signatures", "ETSI TS 101 903|§7.4–§7.6"), api: "WithExtendedValidationData(XadesExtendedForm)", stateKey: "extendedForm", valueStateKey: "extendedForm",
-                values: extended("ETSI TS 101 903|§7.4 CompleteCertificateRefs and CompleteRevocationRefs", "ETSI TS 101 903|§7.6 CertificateValues and RevocationValues", "ETSI TS 101 903|§7.7 ArchiveTimeStamp", "XadesExtendedForm")),
+                values: extended("ETSI TS 101 903|§7.4 CompleteCertificateRefs and CompleteRevocationRefs", "ETSI TS 101 903|§7.6 CertificateValues and RevocationValues", "ETSI TS 101 903|§7.7 ArchiveTimeStamp", "XadesExtendedForm"), when: When("kind", "Baseline", "CustomPolicy")),
 
-            OC("pades.returnLowerLevel", "level", s_pades, "toggle", "returnLowerLevel", "returnLowerLevel", R("ETSI EN 319 142-1|§6.2 Signature levels"), stateKey: "returnLowerLevel"),
+            OC("pades.returnLowerLevel", "level", s_pades, "toggle", "returnLowerLevel", "returnLowerLevel", R("ETSI EN 319 142-1|§6.2 Signature levels"), stateKey: "returnLowerLevel",
+                when: When("kind", "Baseline", "CustomPolicy")),
+
+            O("pades.icpPolicy", "level", s_pades, "choice", "icpPolicy", "ICP-Brasil policy", "The ICP-Brasil signature policy: it writes the policy's identifier and hash, the PBAD.PAdES sub-filter the policies mandate, and the level it needs. The newest version that accepts the signer's root is chosen.",
+                standards: R("DOC-ICP-15.03|Signature policies of ICP-Brasil"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy, IcpBrasilPadesOptions)", stateKey: "icpPolicy",
+                values: IcpPolicies(pades: true), when: When("kind", "IcpBrasil")),
+            O("cx.icpPolicy", "level", s_cadesXades, "choice", "icpPolicy", "ICP-Brasil policy", "The ICP-Brasil signature policy: it writes the policy's identifier and hash, and the level and extended form it needs. The newest version that accepts the signer's root is chosen.",
+                standards: R("DOC-ICP-15.03|Signature policies of ICP-Brasil"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy, TimestampOptions)", stateKey: "icpPolicy",
+                values: IcpPolicies(pades: false), when: When("kind", "IcpBrasil")),
 
             O("common.revocationPreference", "level", s_all, "choice", "revocationPreference", "Prefer OCSP or CRL", "Which revocation source is tried first when collecting the validation data; the other one is the fallback.",
                 standards: R("RFC 6960|OCSP", "RFC 5280|§5 CRL", "ETSI EN 319 102-1|§5.2.5 Revocation freshness"), api: "new LongTermValidationOptions { RevocationPreference }", stateKey: "revocationPreference",
@@ -199,7 +219,34 @@ public static partial class OptionSchema
             [
                 V("SandboxRoot", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, its signature checked against the operator's certificate: its CA and TSA services become the anchors. A list that is expired or signed by another key refuses the signature."),
-                V("SandboxIofeList", "Sandbox list in INDECOPI's layout", "The sandbox's list laid out as INDECOPI's (/tl/iofe.xml), read as IofeExtension reads Peru's: its CA services and its 'unspecified' services (the CA of the Sandbox's IOFE TSA) become the anchors, never the code-signing certificate it lists. A list that is expired or signed by another key refuses the signature."),
+            ]),
+        O("common.signing.profile", "crypto", s_all, "choice", "signingControls.profile", "Trust profile",
+            "A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust.",
+            standards: R("ETSI TS 119 612|Trusted lists"), api: "WithProfile(TrustProfile)",
+            values:
+            [
+                V("None", "Default", "No profile: the trust choices and the policies of the form only."),
+                V("Sandbox", "Sandbox (test)", "The connected Sandbox's list of trusted lists, read with SimpleSign's default policies.", api: "--profile sandbox --sandbox URL"),
+                V("Iofe", "Peru (IOFE)", "IofeProfile: INDECOPI's trusted list (or the Sandbox's, with the source below) and the iofe policies.", api: "IofeProfile.LoadAsync()"),
+                V("Eidas", "EU (eIDAS)", "EidasProfile: the EU list of trusted lists (or the Sandbox's, with the source below), the eidas policies and the qualification of each signature (QESig, AdESig-QC…).", api: "EidasProfile.LoadAsync()"),
+                V("IcpBrasil", "ICP-Brasil", "IcpBrasilProfile: the AC Raiz roots, the ICP-Brasil chain validation and the icp-brasil policies. For real ICP-Brasil certificates.", api: "IcpBrasilProfile.Create()"),
+            ]),
+        O("common.signing.profileSource", "crypto", s_all, "choice", "signingControls.profileSource", "Trusted list source",
+            "Which list the Peru (IOFE) or EU (eIDAS) profile reads.", api: "IofeExtensionOptions.TrustedListUrl / EidasExtensionOptions.LotlUrl",
+            values:
+            [
+                V("Official", "Official (real)", "The real list, checked against the signers bundled with the package: INDECOPI's trusted list (iofe.indecopi.gob.pe/TSL/tsl-pe.xml) for IOFE, the EU LOTL and its national lists for eIDAS. The Sandbox's certificates do not chain to them."),
+                V("Sandbox", "Sandbox (test)", "The Sandbox's lists, to test the framework's rules with the Sandbox's certificates (the Sandbox can make them expired, fake or tampered): /tl/tl.xml read the IOFE way, or /tl/lotl.xml for eIDAS."),
+            ], when: When("signingControls.profile", "Iofe", "Eidas")),
+        O("common.signing.trustProfiles", "crypto", s_all, "trust", "signingControls.trustProfiles", "Also trust",
+            "Other profiles whose trust is added; their policies are not used.", api: "TrustProfile.WithTrustFrom(params TrustProfile[])",
+            values:
+            [
+                V("Sandbox", "Sandbox (test)", "The Sandbox's list of trusted lists."),
+                V("Iofe", "Peru (IOFE)", "INDECOPI's trusted list (or the Sandbox's, with the source above)."),
+                V("Eidas", "EU (eIDAS)", "The EU list of trusted lists (or the Sandbox's, with the source above)."),
+                V("IcpBrasil", "ICP-Brasil", "The AC Raiz roots and the ICP-Brasil chain validation."),
+                V("GovBr", "Gov.br", "The Gov.br roots and their chain validation."),
             ]),
         O("common.expectedTsa", "crypto", s_all, "choice", "signingControls.expectedTsa", "Expected TSA",
             "The certificate the TSA must sign its timestamps with: a timestamp signed by any other is refused (TimestampUntrusted).",
@@ -437,10 +484,38 @@ public static partial class OptionSchema
             values:
             [
                 V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, read through its list of trusted lists: its CAs with their service type and status, as DSS trusts them."),
-                V("SandboxIofeList", "Sandbox list in INDECOPI's layout", "The sandbox's list laid out as INDECOPI's (/tl/iofe.xml), read with IofeExtension.DefaultListOptions: its CA and 'unspecified' services with their status, so the TrustedLists constraints are evaluated. DSS does not read it."),
                 V("Sandbox", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("System", "Operating system roots", "The roots the operating system trusts."),
                 V("PublicTsas", "Public TSA roots", "The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA), so their timestamps reach a trust anchor. DSS trusts the same roots."),
+            ], when: When("validate", "true")),
+        O("common.validation.profile", "run", s_all, "choice", "validation.profile", "Trust profile",
+            "A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust.",
+            standards: R("ETSI TS 119 612|Trusted lists"), api: "ValidationOptions.Profile",
+            values:
+            [
+                V("None", "Default", "No profile: the trust choices and the policies of the form only."),
+                V("Sandbox", "Sandbox (test)", "The connected Sandbox's list of trusted lists, read with SimpleSign's default policies.", api: "--profile sandbox --sandbox URL"),
+                V("Iofe", "Peru (IOFE)", "IofeProfile: INDECOPI's trusted list (or the Sandbox's, with the source below) and the iofe policies.", api: "IofeProfile.LoadAsync()"),
+                V("Eidas", "EU (eIDAS)", "EidasProfile: the EU list of trusted lists (or the Sandbox's, with the source below), the eidas policies and the qualification of each signature (QESig, AdESig-QC…).", api: "EidasProfile.LoadAsync()"),
+                V("IcpBrasil", "ICP-Brasil", "IcpBrasilProfile: the AC Raiz roots, the ICP-Brasil chain validation and the icp-brasil policies. For real ICP-Brasil certificates.", api: "IcpBrasilProfile.Create()"),
+                V("GovBr", "Gov.br", "GovBrProfile: the Gov.br roots, their chain validation and the govbr policy. It validates only: signatures are made on Gov.br's service.", api: "GovBrProfile.Create()"),
+            ], when: When("validate", "true")),
+        O("common.validation.profileSource", "run", s_all, "choice", "validation.profileSource", "Trusted list source",
+            "Which list the Peru (IOFE) or EU (eIDAS) profile reads.", api: "IofeExtensionOptions.TrustedListUrl / EidasExtensionOptions.LotlUrl",
+            values:
+            [
+                V("Official", "Official (real)", "The real list, checked against the signers bundled with the package: INDECOPI's trusted list (iofe.indecopi.gob.pe/TSL/tsl-pe.xml) for IOFE, the EU LOTL and its national lists for eIDAS. The Sandbox's certificates do not chain to them."),
+                V("Sandbox", "Sandbox (test)", "The Sandbox's lists, to test the framework's rules with the Sandbox's certificates (the Sandbox can make them expired, fake or tampered): /tl/tl.xml read the IOFE way, or /tl/lotl.xml for eIDAS."),
+            ], when: [When("validate", "true"), When("validation.profile", "Iofe", "Eidas")]),
+        O("common.validation.trustProfiles", "run", s_all, "trust", "validation.trustProfiles", "Also trust",
+            "Other profiles whose trust is added; their policies are not used.", api: "TrustProfile.WithTrustFrom(params TrustProfile[])",
+            values:
+            [
+                V("Sandbox", "Sandbox (test)", "The Sandbox's list of trusted lists."),
+                V("Iofe", "Peru (IOFE)", "INDECOPI's trusted list (or the Sandbox's, with the source above)."),
+                V("Eidas", "EU (eIDAS)", "The EU list of trusted lists (or the Sandbox's, with the source above)."),
+                V("IcpBrasil", "ICP-Brasil", "The AC Raiz roots and the ICP-Brasil chain validation."),
+                V("GovBr", "Gov.br", "The Gov.br roots and their chain validation."),
             ], when: When("validate", "true")),
         O("common.validation.policy", "run", s_all, "upload", "validation.policyId", "Validation policy (JSON)",
             "The constraints the validator checks and their levels: a JSON file with root ValidationConstraints. Without a file, the library's default. The same policy goes to DSS when the cross-validation is on.",

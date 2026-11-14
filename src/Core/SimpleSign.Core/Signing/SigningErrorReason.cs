@@ -88,4 +88,10 @@ public enum SigningErrorReason
 
     /// <summary>The revocation status of the TSA chain could not be established (<c>Timestamp/RevocationDataAvailable</c>).</summary>
     TimestampRevocationStatusUnknown = 25,
+
+    /// <summary>
+    /// The signing certificate is not a qualified certificate (no QcCompliance statement, <c>SigningCertificate/QcCompliance</c>)
+    /// or its key is not declared to be on a qualified signature creation device (no QcSSCD, <c>SigningCertificate/QcSSCD</c>).
+    /// </summary>
+    CertificateNotQualified = 26,
 }

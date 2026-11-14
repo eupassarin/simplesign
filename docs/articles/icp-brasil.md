@@ -30,6 +30,34 @@ var both = new PdfSignatureValidator(new ValidationOptions { CheckRevocation = t
 var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 ```
 
+### Profiles
+
+`IcpBrasilProfile.Create()` and `GovBrProfile.Create()` give each framework as one `TrustProfile`: its roots, its chain
+validation and its policies (`IcpBrasilPolicies`, `GovBrPolicies`). One profile sets the policies; `WithTrustFrom` adds
+another's trust only. Gov.br's validates only: its signatures are made on Gov.br's service.
+
+```csharp
+var icp = IcpBrasilProfile.Create();
+await PadesSigner.Document(pdf).WithCertificate(cert).WithProfile(icp).SignAsync();
+
+// Brazilian documents under the ICP-Brasil policy, trusting ICP-Brasil and Gov.br
+var brazil = icp.WithTrustFrom(GovBrProfile.Create());
+var results = await new PdfSignatureValidator(new ValidationOptions { Profile = brazil }).ValidateAsync(signed);
+```
+
+```bash
+simplesign validate signed.pdf --profile icp-brasil --trust-profile gov-br
+```
+
+Gov.br's portal signs in `adbe.pkcs7.detached` without a signing-certificate attribute (ESS signing-certificate-v2).
+The ICP-Brasil policy requires that attribute, as the ICP-Brasil signature policies do, so under it a signature from
+the portal is INDETERMINATE (NO_SIGNING_CERTIFICATE_FOUND). The Gov.br policy only warns about it: to accept the
+portal's signatures next to ICP-Brasil's, let Gov.br's profile set the policy and add ICP-Brasil's trust.
+
+```bash
+simplesign validate signed.pdf --profile gov-br --trust-profile icp-brasil
+```
+
 ### Intermediate ACs (offline chains)
 
 The package also bundles the ~176 intermediate ICP-Brasil ACs published by the ITI

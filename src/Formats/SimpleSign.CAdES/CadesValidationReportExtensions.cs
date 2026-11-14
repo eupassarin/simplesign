@@ -26,6 +26,7 @@ public static class CadesValidationReportExtensions
             Policy = result.AppliedPolicy,
             Errors = result.Errors,
             Warnings = result.Warnings,
+            Qualification = result.Qualification,
         };
     }
 

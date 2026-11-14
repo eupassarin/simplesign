@@ -100,21 +100,27 @@ builder.Services.AddSimpleSignIofe(new IofeExtensionOptions
 
 ## Policies
 
-`IofePolicies` holds the policies of the guide (also as files in `docs/policies/iofe-*.json`, and as the CLI/TestBench
-presets `iofe` and `iofe-nonrepudiation`):
+`IofePolicies` holds the policies of the guide, also the CLI/TestBench preset `iofe` (`simplesign policy export signing
+--preset iofe` writes one out as JSON):
 
 | Policy | For | What it adds to SimpleSign's defaults |
 |---|---|---|
 | `IofePolicies.Signing` | End-user signing software (guide §4.1) | The signer chains to a trust anchor (the extension); revocation of the whole chain, CRL or OCSP, refused when revoked or unknown, CRLs without nextUpdate refused (Req. 1, 11); no SHA-1/MD5 in the chain (Req. 6, 16); each TSA trusted, valid and not revoked (§4.4); key usage digitalSignature or nonRepudiation (Req. 3) |
-| `IofePolicies.SigningNonRepudiation` | Signing by an automated agent (§4.2) | As `Signing`, with nonRepudiation required (Req. 13) |
 | `IofePolicies.Validation` | Verification (§4.3) | Signing certificate with digitalSignature or nonRepudiation; an expired or badly signed trusted list gives no anchors; trusted lists of version 3 accepted (INDECOPI's) besides 5 and 6 |
-| `IofePolicies.ValidationNonRepudiation` | Verification by automated agents (§4.3, Req. 23) | As `Validation`, with nonRepudiation required |
+
+An automated agent (§4.2, Req. 13) and the software verifying what agents receive (§4.3, Req. 23) also require the
+nonRepudiation bit: one constraint changed on the same policy.
+
+```csharp
+static readonly SigningPolicy AutomatedAgent = IofePolicies.Signing
+    .With("SigningCertificate/KeyUsage", new PolicyConstraint(ConstraintLevel.Fail) { Ids = ["nonRepudiation"] });
+```
 
 ```csharp
 byte[] signed = await PadesSigner.Document(pdf)
     .WithCertificate(certificate, chain)
     .WithCountryExtension(iofe)                        // the signer and each TSA must chain to INDECOPI's list
-    .WithSigningPolicy(IofePolicies.SigningNonRepudiation)
+    .WithSigningPolicy(AutomatedAgent)
     .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(tsaUrl))))
     .SignAsync();
 
@@ -126,10 +132,32 @@ var validator = new PdfSignatureValidator(
 Use `IofePolicies.Validation` (not `ValidationPolicy.Default`) with INDECOPI's list: the default `TLVersion`
 constraint accepts versions 5 and 6 only, which makes every signature under a version 3 list INDETERMINATE.
 
+## Profile
+
+`IofeProfile` is the list and the policies as one value (a `TrustProfile`), the way the CLI's `--profile iofe` and the
+TestBench's Profile menu use them. Without signers it checks INDECOPI's list against the signer bundled with the
+package (`IofeExtension.IndecopiSigners`).
+
+```csharp
+var iofe = await IofeProfile.LoadAsync();                  // INDECOPI's list + IofePolicies.Signing / .Validation
+
+byte[] signed = await PadesSigner.Document(pdf).WithCertificate(certificate, chain).WithProfile(iofe).SignAsync();
+var results = await new PdfSignatureValidator(new ValidationOptions { Profile = iofe }).ValidateAsync(signed);
+
+// An automated agent: the same profile, with the adjusted policy (an explicit policy wins over the profile's)
+await PadesSigner.Document(pdf).WithCertificate(certificate, chain).WithProfile(iofe).WithSigningPolicy(AutomatedAgent).SignAsync();
+```
+
+```bash
+simplesign sign contrato.pdf --cert signer.pfx --profile iofe --tsa <ACT URL>
+simplesign validate contrato-signed.pdf --profile iofe
+simplesign validate contrato-signed.pdf --profile iofe --sandbox http://localhost:5300   # the Sandbox's list, to test
+```
+
 ## Time-stamping authorities
 
 The list says which TSAs are accredited, not where they are: configure each TSA's URL (and credentials) as its provider
-gives them. With `IofePolicies.Signing*`, a time-stamp from a TSA that does not chain to the list is refused before the
+gives them. With `IofePolicies.Signing`, a time-stamp from a TSA that does not chain to the list is refused before the
 signature is returned (`TimestampUntrusted`); give `TimestampOptions.ExpectedTsaCertificate` to also pin the TSA.
 
 ## The INDECOPI playbook
@@ -139,10 +167,11 @@ the automated part of annex B, about 70 steps through the library and the CLI ag
 
 1. Start a Sandbox and the TestBench and connect them ([testbench.md](testbench.md)); start DSS for cross-validation.
 2. Open the **Playbook** tab and pick the `indecopi-guia-v4` sample; run everything.
-3. The `tsl` section reads the Sandbox's list **laid out as INDECOPI's** (`/tl/iofe.xml`: version 3, `generic`,
-   `undersupervision`, a self-signed Timestamping CA as `unspecified` and a code-signing certificate as signature
-   software — see [sandbox.md](sandbox.md#the-list-in-indecopis-layout)), with the trust choice `SandboxIofeList` and
-   the TSA `SandboxIofe`, and switches on its failures (signed by another key, tampered, expired).
+3. The `tsl` section reads the Sandbox's trusted list **as `IofeExtension` reads INDECOPI's** (`/tl/tl.xml` with
+   `IofeExtension.DefaultListOptions`: a self-signed Timestamping CA and a code-signing certificate are listed as
+   `unspecified` — see [sandbox.md](sandbox.md#reading-it-as-indecopis-list)), with the iofe profile on the Sandbox
+   (`"profile": "Iofe", "profileSource": "Sandbox"`; in the CLI `--profile iofe --sandbox URL`) and the TSA
+   `SandboxIofe`, and switches on its failures (signed by another key, tampered, expired).
 4. **Evidence**: export the page and the zip (per step the signed file, the SimpleSign and ETSI reports, the CLI
    commands and the logs, a summary by item id): see [playbook.md](playbook.md).
 

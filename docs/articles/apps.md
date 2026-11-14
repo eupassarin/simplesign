@@ -21,8 +21,8 @@ Sandbox gives you a PKI whose every edge case you can produce on demand (a revok
 expired TSA, a CRL without `nextUpdate`, a trusted list signed by the wrong key). The TestBench's
 Playbook tab runs a list of steps written beforehand against it, through the library *and* through
 the CLI, and exports the evidence as an HTML page and a zip. That is how
-[INDECOPI's guide v4.0](iofe.md) and the [ETSI checklist](../playbooks/etsi-checklist.md) are
-demonstrated. See [playbook.md](playbook.md).
+[INDECOPI's guide v4.0](iofe.md), the [ETSI checklist](../playbooks/etsi-checklist.md) and the
+[eIDAS checklist](../playbooks/eidas-checklist.md) are demonstrated. See [playbook.md](playbook.md).
 
 **For signing in a browser** — the Agent. A web page cannot reach a smartcard or the OS certificate
 store, so the Agent runs on the user's machine and the page calls it over loopback. The server keeps
@@ -48,7 +48,11 @@ dotnet tool install -g SimpleSign.Cli
 
 The CLI targets **net8.0** and covers what the library does: `sign`, `sign-dir`, `validate`,
 `validate-dir`, `inspect`, `extract`, `augment`, `deferred prepare|complete`, `cades`, `xades`,
-`timestamp`, `policy`, `audit`, `pkcs11`, `psc`, `csc`, `fiscal`, `explain` and `html-to-pdf`.
+`timestamp`, `policy`, `audit`, `pkcs11`, `psc`, `csc`, `fiscal`, `profiles`, `explain` and
+`html-to-pdf`.
+
+A whole trust framework comes from one flag: `--profile icp-brasil`, `iofe`, `gov-br`, `eidas` or
+`sandbox` sets the trust anchors *and* the policies together (`simplesign profiles` lists them).
 
 ```console
 $ simplesign --help
@@ -143,7 +147,8 @@ The TestBench is where you find out what an option *is*. Every control names the
 it (EN 319 142-1, 122-1, 132-1, 102-1, RFC 5652/3161/6960/5280, ISO 32000-1, XMLDSig) and the library
 call it becomes, and the options the standards define but SimpleSign does not implement are shown
 too, disabled. The **Library / CLI** switch at the top runs the same run through either engine, so
-you can see where they differ.
+you can see where they differ, and the **Profile** menu applies a whole trust framework at once —
+Sandbox, Peru (IOFE), ICP-Brasil, Gov.br or EU (eIDAS) — setting the policies with it.
 
 ![The TestBench's Sign task: the PAdES options on the left, each with the ETSI clause that defines it, and the result of a B-B signature on the right with its validation warnings.](../assets/testbench-sign.png)
 
@@ -246,4 +251,6 @@ is asked by the app, never by the page. See [agent.md](agent.md).
   [two-phase signing](deferred-signing.md).
 - **Deciding which options to use, or reading what a standard requires** → the TestBench.
 - **Testing revocation, timestamps or trusted lists without a production PKI** → the Sandbox.
+- **Signing or validating under one country's rules** → any of them with a profile:
+  `WithProfile(...)` in the library, `--profile` on the CLI, the Profile menu in the TestBench.
 - **Showing an auditor that it all works** → the TestBench's Playbook tab against the Sandbox.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BookCheck, CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, Circle, Clock, Download, Eraser, ExternalLink, FileJson, FolderOpen, GitCompareArrows, ListTree, Loader2, Play, RotateCcw, Search, Square, Tag, X, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, Circle, Clock, Download, Eraser, ExternalLink, FileJson, GitCompareArrows, ListTree, Loader2, Paperclip, Play, RotateCcw, Search, SkipForward, Square, Tag, Upload, X, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -20,7 +20,8 @@ import type { Format, RunView } from "../workbench/schema"
 import { playbookApi } from "./api"
 import { OptionsReferenceDialog } from "./OptionsReference"
 import { PlaybookFileMenu } from "./PlaybookFileMenu"
-import type { PlaybookEngineDifference, PlaybookEngineRun, PlaybookLoaded, PlaybookSample, PlaybookStateView, PlaybookStatus, PlaybookStep, PlaybookStepPreview, PlaybookStepView, PreviewItem } from "./types"
+import { PlaybookPicker } from "./PlaybookPicker"
+import type { PlaybookEngineDifference, PlaybookEngineRun, PlaybookInputView, PlaybookLoaded, PlaybookSample, PlaybookStateView, PlaybookStatus, PlaybookStep, PlaybookStepPreview, PlaybookStepView, PreviewItem } from "./types"
 
 const emptyState: PlaybookStateView = { running: false, version: 0, steps: [] }
 
@@ -222,21 +223,12 @@ export function PlaybookPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-2 border-b px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <BookCheck className="text-primary size-5 shrink-0" />
-          <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-sm font-semibold">{playbook?.title ?? t("playbook.title")}</p>
-            <p className="text-muted-foreground truncate text-xs" title={playbook?.description ?? undefined}>{playbook?.description ?? t("playbook.noPlaybook")}</p>
-          </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <PlaybookPicker current={playbook ? { id: playbook.id, title: playbook.title } : null} samples={samples} disabled={state.running}
+            onSample={(id) => playbookApi.loadSample(id).then(onLoaded).catch((e) => toast.error((e as Error).message))}
+            onOpenFile={() => fileInput.current?.click()} />
           <input ref={fileInput} type="file" accept=".json,application/json" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = "" }} />
-          <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()} disabled={state.running}><FolderOpen /> {t("playbook.load")}</Button>
-          {samples.length > 0 && (
-            <Select value="" disabled={state.running} onValueChange={(id) => playbookApi.loadSample(id).then(onLoaded).catch((e) => toast.error((e as Error).message))}>
-              <SelectTrigger size="sm" className="w-auto"><SelectValue placeholder={t("playbook.samples")} /></SelectTrigger>
-              <SelectContent align="end">{samples.map((s) => <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>)}</SelectContent>
-            </Select>
-          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={engine} onValueChange={chooseEngine}>
@@ -309,6 +301,10 @@ export function PlaybookPage() {
         </div>
       )}
 
+      {playbook && (state.inputs?.length ?? 0) > 0 && (
+        <InputsBar inputs={state.inputs!} disabled={state.running} onChange={setState} />
+      )}
+
       {!playbook ? (
         <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">{t("playbook.noPlaybook")}</div>
       ) : (
@@ -374,6 +370,73 @@ export function PlaybookPage() {
           </section>
         </div>
       )}
+    </div>
+  )
+}
+
+/** The playbook's inputs: what to upload for each, the file uploaded (name, size, SHA-256), and a button to upload or replace it. */
+function InputsBar({ inputs, disabled, onChange }: { inputs: PlaybookInputView[]; disabled: boolean; onChange: (state: PlaybookStateView) => void }) {
+  const t = useT()
+  const [busy, setBusy] = useState<string | null>(null)
+  const pick = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const upload = async (input: PlaybookInputView, file: File) => {
+    setBusy(input.id)
+    try {
+      const uploaded = await api.uploadFile(file)
+      onChange(await playbookApi.setInput(input.id, uploaded.id))
+      toast.success(t("playbook.inputUploaded", { name: uploaded.fileName }))
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const remove = async (input: PlaybookInputView) => {
+    setBusy(input.id)
+    try {
+      onChange(await playbookApi.removeInput(input.id))
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="border-b px-4 py-2">
+      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium" title={t("playbook.inputsHint")}>
+        <Paperclip className="size-3.5" />{t("playbook.inputs")}
+        <span className="text-muted-foreground font-normal">· {t("playbook.inputsHint")}</span>
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {inputs.map((input) => (
+          <div key={input.id} className={cn("flex min-w-0 max-w-full items-center gap-2 rounded-md border px-2 py-1.5 text-xs",
+            input.file ? "border-success/40" : "border-warning/50 bg-warning/5")}>
+            <div className="min-w-0">
+              <p className="truncate font-medium" title={input.description ?? undefined}>{input.title}</p>
+              <p className="text-muted-foreground truncate font-mono text-[10px]"
+                title={input.file ? `SHA-256 ${input.file.sha256}` : undefined}>
+                input:{input.id} · {input.file
+                  ? <a className="hover:text-foreground underline underline-offset-2" href={api.fileUrl(input.file.fileId)} target="_blank" rel="noreferrer">
+                      {input.file.fileName} ({input.file.size.toLocaleString()} B)</a>
+                  : t("playbook.inputMissing")}
+              </p>
+            </div>
+            <input ref={(el) => { pick.current[input.id] = el }} type="file" accept={input.accept ?? undefined} className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(input, f); e.target.value = "" }} />
+            <Button size="sm" variant={input.file ? "outline" : "default"} className="h-7 shrink-0" disabled={disabled || busy === input.id}
+              onClick={() => pick.current[input.id]?.click()}>
+              {busy === input.id ? <Loader2 className="animate-spin" /> : <Upload />} {input.file ? t("playbook.inputReplace") : t("playbook.inputUpload")}
+            </Button>
+            {input.file && (
+              <Button size="icon" variant="ghost" className="size-7 shrink-0" disabled={disabled || busy === input.id}
+                aria-label={t("playbook.inputRemove")} title={t("playbook.inputRemove")} onClick={() => void remove(input)}><X /></Button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -599,7 +662,8 @@ function StepPlan({ step, engine, view, canRun, onRun, onTag }: {
       case "on": return t("playbook.on")
       case "off": return t("playbook.off")
       case "": return t("playbook.libraryDefault")
-      default: return raw.startsWith("step:") ? t("playbook.fileOfStep", { step: raw.slice(5) }) : raw
+      default: return raw.startsWith("step:") ? t("playbook.fileOfStep", { step: raw.slice(5) })
+        : raw.startsWith("input:") ? t("playbook.fileOfInput", { input: raw.slice(6) }) : raw
     }
   }, [t])
   const label = useCallback((i: PreviewItem) => itemKeys.has(i.key) ? t(`playbook.item.${i.key}` as MessageKey) : i.label, [t])
@@ -648,6 +712,7 @@ function StepPlan({ step, engine, view, canRun, onRun, onTag }: {
   const allOpen = cards.length > 0 && cards.every(isOpen)
   const status = view?.status ?? "pending"
   const notes = preview ? [
+    ...(preview.needsInputs ?? []).map((i) => ({ tone: "warning" as const, text: t("playbook.needsInput", { input: i }) })),
     ...preview.needsSteps.map((s) => ({ tone: "warning" as const, text: t("playbook.needsStep", { step: s }) })),
     ...(preview.codeError ? [{ tone: "warning" as const, text: t("playbook.codeError", { error: preview.codeError }) }] : []),
     ...preview.issues.map((i) => ({ tone: i.severity === "Error" ? "error" as const : "muted" as const, text: i.message })),
@@ -806,7 +871,7 @@ function StepResultPanel({ step, view, defaultFormat, json, defaultsJson, canCle
         <span className="text-muted-foreground ml-auto text-xs">{t("playbook.ranAt", { at: new Date(result.at).toLocaleString(locale), ms: result.ms })}</span>
         <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={!canClear} onClick={onClear} title={t("playbook.clearResultHint")}><Eraser /> {t("playbook.clearResult")}</Button>
       </div>
-      {result.message && <p className="text-destructive text-sm">{result.message}</p>}
+      {result.message && <p className={cn("text-sm", result.status === "skipped" ? "text-warning" : "text-destructive")}>{result.message}</p>}
       {result.engineDifferences && result.engineDifferences.length > 0 && <EngineDifferences differences={result.engineDifferences} />}
       {result.runs.map((r) => <EngineRunCard key={r.engine + r.runId} result={r} format={(step.format as Format) ?? defaultFormat} />)}
     </div>
@@ -913,6 +978,8 @@ function StatusIcon({ status }: { status: PlaybookStatus }) {
       return <Loader2 className="text-info mt-0.5 size-4 shrink-0 animate-spin" />
     case "queued":
       return <Clock className="text-info mt-0.5 size-4 shrink-0" />
+    case "skipped":
+      return <SkipForward className="text-warning mt-0.5 size-4 shrink-0" />
     default:
       return <Circle className="text-muted-foreground mt-0.5 size-4 shrink-0" />
   }

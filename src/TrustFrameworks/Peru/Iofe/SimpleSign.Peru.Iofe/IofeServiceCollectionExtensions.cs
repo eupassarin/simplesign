@@ -44,7 +44,6 @@ public static class IofeServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
-        _ = IofeExtension.ListOptionsOf(options); // refuses options without the list's signers now, not at start-up
         var interval = refreshInterval ?? DefaultRefreshInterval;
         services.AddSingleton(_ => new IofeTrustedListRefresher(options, interval));
         services.AddHostedService(sp => sp.GetRequiredService<IofeTrustedListRefresher>());

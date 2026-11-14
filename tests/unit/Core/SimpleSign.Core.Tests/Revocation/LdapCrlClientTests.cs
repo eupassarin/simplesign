@@ -119,6 +119,26 @@ public sealed class LdapCrlClientTests
         (await server).ShouldBe("cn=CA,c=PE");
     }
 
+    [Fact]
+    public async Task GetCrlAsync_FirstAddressRefuses_TriesTheNext()
+    {
+        using var pki = new SyntheticPki();
+        byte[] crl = pki.BuildLeafCrl();
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var server = ServeOnceAsync(listener, "certificateRevocationList;binary", crl, resultCode: 0);
+        var policy = new OutboundHttpPolicy { AllowLdap = true, LoopbackOrigins = [new Uri($"ldap://localhost:{port}")] };
+
+        // As "localhost" resolves on most machines: ::1 first, where nothing listens (a container's port published on IPv4 only).
+        // Windows does not refuse at once: it retries the SYN for a few seconds, more on a busy CI runner, hence the long timeout.
+        byte[]? value = await LdapCrlClient.GetCrlAsync($"ldap://localhost:{port}/cn=CA,c=PE", policy, TimeSpan.FromSeconds(30), CancellationToken.None,
+            (_, _) => Task.FromResult(new[] { IPAddress.IPv6Loopback, IPAddress.Loopback }));
+
+        value.ShouldBe(crl);
+        (await server).ShouldBe("cn=CA,c=PE");
+    }
+
     /// <summary>A one-connection LDAP server: answers the bind, then the search with one entry.</summary>
     private static async Task<string?> ServeOnceAsync(TcpListener listener, string attribute, byte[] value, int resultCode)
     {

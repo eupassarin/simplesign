@@ -31,6 +31,9 @@ public enum CadesKind
 {
     Baseline,
     CustomPolicy,
+
+    /// <summary>An ICP-Brasil signature policy (DOC-ICP-15.03: AD-RB, AD-RT, AD-RV, AD-RC, AD-RA), which sets the level itself.</summary>
+    IcpBrasil,
 }
 
 /// <summary>RFC 5126 extended forms (<c>CadesExtendedForm</c>).</summary>
@@ -61,6 +64,9 @@ public sealed record CadesOptions
     public string? CredentialId { get; init; }
 
     public CadesKind Kind { get; init; } = CadesKind.Baseline;
+
+    /// <summary>The ICP-Brasil signature policy when <see cref="Kind"/> is <see cref="CadesKind.IcpBrasil"/>.</summary>
+    public SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy IcpPolicy { get; init; } = SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb;
 
     public BaselineLevel Level { get; init; } = BaselineLevel.BB;
 

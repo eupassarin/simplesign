@@ -156,6 +156,7 @@ foreach (var r in results)
 | `SignerName` | `string?` | Signer common name |
 | `SigningTime` | `DateTimeOffset?` | Claimed signing time from CMS/PDF; not necessarily trusted |
 | `RevocationSource` | `enum` | Embedded/online CRL or OCSP, `CertificateChain` (whole chain, CAdES/XAdES `ValidateAsync`), `None` (unchecked), or `Indeterminate` (unknown) |
+| `Qualification` | `SignatureQualification?` | The signature's qualification under a trust framework, when one was configured (see below); `null` otherwise |
 | `Errors` | `IReadOnlyList<string>` | Validation errors |
 | `Warnings` | `IReadOnlyList<string>` | Diagnostic warnings; unknown revocation prevents a `Valid` indication |
 
@@ -256,7 +257,38 @@ validators do it whenever the document carries the later time-stamp.
 | `TimedTrustAnchors` | The providers above. |
 | `PolicyProvider` | An `IPolicyProvider` that chooses the validation policy from the signature's policy OID. |
 | `SignaturePolicyDocuments` | An `ISignaturePolicyDocumentProvider` supplying policy documents the signature names but does not carry, so `PolicyAvailable` can be satisfied. CLI `--policy-signer`. |
+| `Profile` | A `TrustProfile` — a whole trust framework as one value (its anchors, chain rules, policy and qualifiers). `IcpBrasilProfile.Create()`, `await IofeProfile.LoadAsync()`, `EidasProfile`, `GovBrProfile.Create()`. An explicit `Policy` wins over the profile's. CLI `--profile`. |
+| `SignatureQualifiers` | `ISignatureQualifier`s that qualify a validated signature; a profile's and a country extension's are added to these. |
 | `CheckRevocation`, `TrustSystemRoots`, `TrustedRoots` | As above. |
+
+### Qualification
+
+The indication says whether a signature *verifies*. **Qualification** says what it *is* under a
+legal framework — in the EU, whether it is a qualified electronic signature. The two are separate,
+and **qualification never changes the indication**: a signature can be `Valid` and still not be
+qualified.
+
+It is reported when the validation is given a framework that qualifies — today eIDAS:
+
+```csharp
+var eidas = await EidasProfile.LoadAsync();        // reads the EU list of trusted lists
+var results = await new PdfSignatureValidator(new ValidationOptions { Profile = eidas })
+    .ValidateAsync(stream);
+
+Console.WriteLine(results[0].Indication);              // Valid
+Console.WriteLine(results[0].Qualification?.Level);    // QESig, QESeal, AdESig-QC, AdESig…
+```
+
+`Qualification` is on the PAdES, CAdES and XAdES results alike, and travels into the reports:
+`SignatureQuality` in the ETSI TS 119 102-2 XML, and `qualification` in the simple JSON and the
+HTML report. The CLI shows it in `validate`, in text and `--json`. Each time-stamp is qualified
+too (QTSA).
+
+Any framework can qualify by implementing `ISignatureQualifier` and passing it in
+`SignatureQualifiers`, or by carrying it on a `TrustProfile`. With no qualifier configured,
+`Qualification` is `null` and nothing else changes.
+
+See [eIDAS](eidas.md) for what each level means and how the EU list of trusted lists is read.
 
 ## XAdES Validation
 

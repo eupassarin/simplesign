@@ -161,6 +161,42 @@ public sealed class ValidationReportsTests : IDisposable
         signature.GetProperty("signerCertificateSha256").GetString()!.Length.ShouldBe(64);
     }
 
+    [Fact]
+    public void ToEtsiXml_Qualification_IsTheSignatureQualityAndTheReportStaysValid()
+    {
+        var entry = Entry("Signature1") with
+        {
+            Qualification = new SignatureQualification(SignatureQualificationLevels.QESig) { EtsiUri = "urn:cef:dss:signatureQualification:QESig" },
+        };
+
+        string xml = ValidationReports.ToEtsiXml([entry]);
+
+        XDocument.Parse(xml).Root!.Element(Vr + "SignatureValidationReport")!.Element(Vr + "SignatureQuality")!
+            .Element(Vr + "SignatureQualityInformation")!.Value.ShouldBe("urn:cef:dss:signatureQualification:QESig");
+        ValidationReports.ValidateEtsiXml(xml).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ToSimpleJson_Qualification_HasTheLevelAndTheTimestamps()
+    {
+        var time = new DateTimeOffset(2026, 11, 13, 12, 0, 0, TimeSpan.Zero);
+        var entry = Entry("Signature1") with
+        {
+            Qualification = new SignatureQualification(SignatureQualificationLevels.AdESigQC)
+            {
+                Framework = "eIDAS",
+                Timestamps = [new TimestampQualification(time, "QTSA") { Tsa = "TSU" }],
+            },
+        };
+
+        using var json = JsonDocument.Parse(ValidationReports.ToSimpleJson([entry]));
+
+        var qualification = json.RootElement.GetProperty("signatures")[0].GetProperty("qualification");
+        qualification.GetProperty("level").GetString().ShouldBe("AdESig-QC");
+        qualification.GetProperty("framework").GetString().ShouldBe("eIDAS");
+        qualification.GetProperty("timestamps")[0].GetProperty("level").GetString().ShouldBe("QTSA");
+    }
+
     private SignatureReportEntry Entry(string id, bool invalid = false) => new()
     {
         Id = id,

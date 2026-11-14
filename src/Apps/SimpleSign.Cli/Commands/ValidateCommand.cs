@@ -118,6 +118,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             TrustedRoots = roots.Count == 0 ? null : roots,
             TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
             TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
+            SignatureQualifiers = settings.LoadedQualifiers.Count > 0 ? settings.LoadedQualifiers : null,
             Policy = policy,
             Level = settings.ValidationLevel,
             Verifier = settings.Verifier,
@@ -434,7 +435,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             }
 
             // Validation status
-            ValidationReportRenderer.AddNodes(sigNode, result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, spanish);
+            ValidationReportRenderer.AddNodes(sigNode, result.Indication, result.SubIndication, result.Constraints, result.SignerCertificate, spanish, result.Qualification);
             var valNode = sigNode.AddNode("[blue]Validation[/]");
             valNode.AddNode($"Integrity:  {Check(result.IsIntegrityValid)}");
             valNode.AddNode($"Signature:  {Check(result.IsSignatureValid)}");

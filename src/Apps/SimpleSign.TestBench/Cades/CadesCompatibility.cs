@@ -41,7 +41,10 @@ public static class CadesCompatibility
         ArgumentNullException.ThrowIfNull(inputs);
         var state = new Dictionary<string, OptionState>(StringComparer.Ordinal);
         var issues = new List<OptionIssue>();
-        var o = options;
+        // An ICP-Brasil policy sets the level and the extended form (DOC-ICP-15.03): a timestamp from AD-RT up.
+        var o = options.Kind == CadesKind.IcpBrasil
+            ? options with { Level = options.IcpPolicy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb ? BaselineLevel.BB : BaselineLevel.BT, ExtendedForm = CadesExtendedChoice.None }
+            : options;
 
         void Set(string key, OptionState value) => state[key] = value;
         void Error(string step, string message) => issues.Add(new(IssueSeverity.Error, step, message));
@@ -120,6 +123,7 @@ public static class CadesCompatibility
         }
 
         Set("level", OptionState.Shown);
+        Set("icpPolicy", o.Kind == CadesKind.IcpBrasil ? OptionState.Shown : OptionState.Hidden);
         Set("customPolicy", o.Kind == CadesKind.CustomPolicy ? OptionState.Shown : OptionState.Hidden);
         if (o.Kind == CadesKind.CustomPolicy && !Compatibility.IsOid(o.PolicyOid))
         {

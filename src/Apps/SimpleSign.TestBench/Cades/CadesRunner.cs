@@ -27,6 +27,12 @@ public sealed record CadesSignerReport(
     string? SubIndication = null,
     IReadOnlyList<FindingView>? Findings = null)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry of this signature and the certificates next to it, for the SimpleSign report (not sent to the UI).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public Reports.ReportSource? Source { get; init; }
@@ -56,6 +62,12 @@ internal sealed record CadesVerdict(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<CadesVerdict> CounterSignatures)
 {
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…); null when none was made.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (<c>QTSA</c>, <c>TSA</c>, <c>N/A</c>).</summary>
+    public IReadOnlyList<string> TimestampQualifications { get; init; } = [];
+
     /// <summary>The library's report entry, for the SimpleSign report; null from the CLI.</summary>
     public Reports.ReportSource? Source { get; init; }
 }
@@ -184,6 +196,11 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             if (CliJobs.Unsupported(credential) is { } unsupported)
             {
                 return Failure(o, report, unsupported, "CliUnsupported", code);
+            }
+
+            if (o.Kind == CadesKind.IcpBrasil)
+            {
+                return Failure(o, report, L.T("The CLI signs under an ICP-Brasil policy for PAdES only (sign --icp-policy): run this one through the library."), "CliUnsupported", code);
             }
 
             var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents);
@@ -361,6 +378,8 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             [.. s.CounterSignatures.Select((c, i) => Verdict(c, $"{id}.{i + 1}"))])
         {
             Source = new Reports.ReportSource(r.ToReportEntry(id), []),
+            Qualification = r.Qualification?.Level,
+            TimestampQualifications = ValidationService.TimestampLevels(r.Qualification),
         };
     }
 
@@ -369,7 +388,11 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
         s.Index, s.Signer, s.Indication, s.SubIndication, s.SigningTime, s.IsIntegrityValid, s.IsSignatureValid, s.IsCertificateChainValid,
         s.HasValidTimestamp, s.IsTsaTrusted, s.HasValidContentTimestamp, s.ContentTimestampTime, s.IsLtvDataValid, s.HasValidEscTimestamp,
         s.HasValidArchiveTimestamp, s.NotRevoked, s.RevocationSource ?? "", CliValidation.Constraints(s.Constraints), s.Errors ?? [], s.Warnings ?? [],
-        [.. (s.CounterSignatures ?? []).Select(Verdict)]);
+        [.. (s.CounterSignatures ?? []).Select(Verdict)])
+    {
+        Qualification = s.Qualification,
+        TimestampQualifications = s.TimestampQualifications ?? [],
+    };
 
     private static IEnumerable<CadesSignerReport> Flatten(IEnumerable<CadesSignerReport> signers) =>
         signers.SelectMany(s => new[] { s }.Concat(Flatten(s.CounterSignatures)));
@@ -403,6 +426,8 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             [.. v.CounterSignatures.Select(Signer)], v.SubIndication, ValidationService.Findings(v.Constraints))
         {
             Source = v.Source,
+            Qualification = v.Qualification,
+            TimestampQualifications = v.TimestampQualifications,
         };
     }
 
@@ -414,7 +439,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
     private CodeSnippets ValidationCode(ValidationSettings settings, bool detached)
     {
         bool sandboxRoot = settings.Trust.Contains(TrustChoice.Sandbox);
-        var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null ? "" : "using SimpleSign.Core.Policies;\n"));
+        var sb = new StringBuilder("using SimpleSign.CAdES;\nusing SimpleSign.Core.Validation;\n" + (settings.PolicyId is null || ValidationService.ProfileSetsPolicy(settings) ? "" : "using SimpleSign.Core.Policies;\n"));
         sb.Append("\nvar validator = new CadesSignatureValidator(new ValidationOptions\n{\n");
         sb.Append(CultureInfo.InvariantCulture, $"    TrustSystemRoots = {(settings.Trust.Contains(TrustChoice.System) ? "true" : "false")},\n");
         if (sandboxRoot || settings.CustomRootUploadIds.Count > 0)
@@ -422,7 +447,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
             sb.Append("    TrustedRoots = [root], // X509CertificateLoader.LoadCertificateFromFile(\"root.cer\")\n");
         }
 
-        foreach (string option in ValidationService.TrustedListOptionsCode(settings))
+        foreach (string option in ValidationService.TrustedListOptionsCode(settings).Concat(ValidationService.ProfileOptionsCode(settings)))
         {
             sb.Append("    ").Append(option).Append(option.StartsWith("//", StringComparison.Ordinal) ? "\n" : ",\n");
         }
@@ -510,15 +535,18 @@ internal sealed class CadesPlan
             throw new ArgumentException(L.T("The signing policy cannot be read: {0}", policyError));
         }
 
+        var controls = context.Controls;
+        bool byProfile = controls.ProfileSetsPolicy(o.SigningPolicyId);
         if (signingPolicy.Uploaded)
         {
-            _steps.Add((PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
+            _steps.Add(byProfile
+                ? (controls.ProfileStepCode(), b => b.WithSigningPolicy(signingPolicy.Policy).WithTrustAnchors([.. controls.ProfileAnchors]))
+                : (PolicyUploads.SigningCode(signingPolicy), b => b.WithSigningPolicy(signingPolicy.Policy)));
         }
 
-        var controls = context.Controls;
-        if (controls.TrustCode() is { } trustCode)
+        if (controls.TrustCode(byProfile) is { } trustCode)
         {
-            _steps.Add((trustCode, b => b.WithTrustAnchors([.. controls.Anchors])));
+            _steps.Add((trustCode, b => b.WithTrustAnchors([.. byProfile ? controls.OtherAnchors : controls.Anchors])));
         }
 
         if (controls.Audit is { } audit)
@@ -629,6 +657,16 @@ internal sealed class CadesPlan
 
     private void AddType()
     {
+        if (_o.Kind == CadesKind.IcpBrasil)
+        {
+            // The policy sets the level and the extended form (DOC-ICP-15.03); the TSA (an ACT) from AD-RT up.
+            var policy = _o.IcpPolicy;
+            var icpTsa = policy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb ? null : _context.BuildTimestamp(_o.Timestamp, "tsa");
+            _steps.Add(($".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}{(icpTsa is null ? "" : ", tsa")}) // DOC-ICP-15.03: the policy's OID and hash, and its level",
+                b => SimpleSign.Brazil.IcpBrasil.IcpBrasilCadesExtensions.WithIcpBrasilPolicy(b, policy, icpTsa)));
+            return;
+        }
+
         if (_o.Kind == CadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);
@@ -801,7 +839,7 @@ internal sealed class CadesPlan
             cli.Add("--signing-time", time.ToString("O", CultureInfo.InvariantCulture));
         }
 
-        if (_o.SigningPolicyId is not null)
+        if (_o.SigningPolicyId is not null && !_context.Controls.ProfileSetsPolicy(_o.SigningPolicyId))
         {
             cli.Add("--signing-policy", PolicyUploads.SigningFileName);
         }

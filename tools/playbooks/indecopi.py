@@ -39,15 +39,17 @@ def refused(reason=None):
     return {"outcome": "refused", **({"reason": reason} if reason else {})}
 
 
-TSL = {"trust": ["SandboxIofeList"]}
+# The iofe profile reading the Sandbox's list (/tl/tl.xml) instead of INDECOPI's: the CLI says --profile iofe --sandbox URL.
+IOFE_ON_SANDBOX = {"profile": "Iofe", "profileSource": "Sandbox"}
+TSL = {"trust": [], **IOFE_ON_SANDBOX}
 TSA = {"provider": "Sandbox"}
-IOFE_VALIDATION = {"trust": ["SandboxIofeList"], "policyId": "preset:validation:iofe"}
+IOFE_VALIDATION = {"trust": [], **IOFE_ON_SANDBOX}
 
 sections = [
     {"id": "tsl", "title": "Trusted list (TSL)",
-     "description": "The trust anchors come from the Sandbox's list laid out as INDECOPI's (/tl/iofe.xml: TS 102 231 v3, TSLType generic, "
-                    "status undersupervision, TSAs and signature software typed unspecified), read as IofeExtension reads Peru's; its "
-                    "signature is checked against the operator's certificate.",
+     "description": "The iofe profile on the Sandbox: the trust anchors come from the Sandbox's trusted list (/tl/tl.xml), read as IofeExtension reads INDECOPI's "
+                    "(IofeExtension.DefaultListOptions: the CA services and the services typed 'unspecified', as INDECOPI types its TSAs "
+                    "and signature software, never a code-signing certificate); its signature is checked against the operator's certificate.",
      "steps": [
          sign("tsl-ok", "Sign with a root listed in the TSL", ["F-1", "F-3", "tsl"], {"outcome": "signed"}, signingControls=TSL,
               desc="The Sandbox's TSL is downloaded, its signature is checked with the operator's certificate, and the signer's root is listed: the signature is made."),
@@ -61,20 +63,21 @@ sections = [
                  validation=IOFE_VALIDATION,
                  desc="As INDECOPI lists the Llama.pe Timestamping CA (not its TSU) with the service type 'unspecified', the TSL names the "
                       "self-signed CA of the Sandbox's IOFE TSA: its time-stamp chains to that service and the signature is made. "
-                      "Not cross-validated: DSS reads the EU-style list, which does not name that CA."),
+                      "Not cross-validated: DSS trusts every granted service of the list whatever its type, so it does not show the "
+                      "'unspecified' rule this step is about."),
             "crossValidate": False},
          {**sign("tsl-tsa-unlisted", "Same TSA without the TSL: refused", ["S-1", "tsl", "tsa"], refused("TimestampUntrusted"), level="BT",
                  timestamp={"provider": "SandboxIofe"},
                  desc="With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service is what makes it trusted."),
             "crossValidate": False},
-         validate("v-tsl-ok", "Validate with anchors from the TSL", ["V-1", "V-3", "tsl"], "step:tsl-ok", {"outcome": "valid"}, trust=["SandboxIofeList"]),
+         validate("v-tsl-ok", "Validate with anchors from the TSL", ["V-1", "V-3", "tsl"], "step:tsl-ok", {"outcome": "valid"}, trust=[], **IOFE_ON_SANDBOX),
          # A list whose signature fails is not used: no anchor. An expired one is used, and IOFE's TLNotExpired (FAIL) judges it.
          validate("v-tsl-wrong-signer", "Validate with a fake TSL", ["V-1", "tsl"], "step:tsl-ok", {"outcome": "indeterminate", "subIndication": "NO_CERTIFICATE_CHAIN_FOUND"},
-                  sandbox={"trustedList": "WrongSigner"}, trust=["SandboxIofeList"]),
+                  sandbox={"trustedList": "WrongSigner"}, trust=[], **IOFE_ON_SANDBOX),
          validate("v-tsl-expired", "Validate with an expired TSL", ["V-2", "tsl"], "step:tsl-ok", {"outcome": "indeterminate", "subIndication": "TRY_LATER"},
-                  sandbox={"trustedList": "Expired"}, trust=["SandboxIofeList"]),
+                  sandbox={"trustedList": "Expired"}, trust=[], **IOFE_ON_SANDBOX),
          validate("v-tsl-tsa-unspecified", "Validate a time-stamp whose TSA's CA the TSL lists as 'unspecified'", ["V-3", "S-1", "tsl", "tsa"],
-                  "step:tsl-tsa-unspecified", {"outcome": "valid"}, trust=["SandboxIofeList"]),
+                  "step:tsl-tsa-unspecified", {"outcome": "valid"}, trust=[], **IOFE_ON_SANDBOX),
      ]},
     {"id": "revocation", "title": "Revocation before signing (CRL and OCSP)", "steps": [
         sign("crl-https-good", "CRL over HTTPS, good certificate", ["F-5", "F-8", "crl"], {"outcome": "signed"}, credentialId="sandbox:good-crl-https"),
@@ -113,12 +116,13 @@ sections = [
              desc="The iofe signing policy accepts digitalSignature or nonRepudiation (as section 4.1 does for end-user software); "
                   "the file is used by the validation step that requires nonRepudiation."),
         sign("no-nonrepudiation-agent", "Automated agent: a certificate without nonRepudiation is refused", ["F-12", "key-usage"],
-             refused("KeyUsageNotPermitted"), credentialId="sandbox:no-nonrepudiation", signingPolicyId="preset:signing:iofe-nonrepudiation",
-             desc="Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe-nonrepudiation "
-                  "policy refuses a certificate that has digitalSignature only."),
+             refused("KeyUsageNotPermitted"), credentialId="sandbox:no-nonrepudiation", signingPolicyId="playbook:iofe-agent",
+             desc="Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe policy with "
+                  "KeyUsage = nonRepudiation (playbook:iofe-agent) refuses a certificate that has digitalSignature only."),
         validate("v-no-nonrepudiation", "Validation requires nonRepudiation: not accepted", ["V-12", "key-usage"], "step:signed-no-nonrepudiation",
-                 {"outcome": "indeterminate"}, policyId="preset:validation:iofe-nonrepudiation",
-                 desc="With the iofe-nonrepudiation policy the certificate without nonRepudiation fails the chain constraint (EN 319 102-1: INDETERMINATE)."),
+                 {"outcome": "indeterminate"}, policyId="playbook:iofe-agent-validation",
+                 desc="With the iofe policy requiring nonRepudiation (playbook:iofe-agent-validation) the certificate without it fails "
+                      "the chain constraint (EN 319 102-1: INDETERMINATE)."),
         validate("v-revoked", "Validate a revoked signer", ["V-5", "V-8", "V-9", "V-10", "revocation"], "sample:revoked", {"outcome": "indeterminate"},
                  desc="A sample signed by a certificate revoked afterwards: the validator checks the chain's CRL/OCSP and does not accept it."),
         validate("v-expired", "Validate an expired signer", ["V-11", "validity"], "sample:expired", {"outcome": "indeterminate"}),
@@ -178,6 +182,15 @@ sections = [
     ]},
 ]
 
+# What section 4.2 (annex B item 12) asks of an automated agent, and section 4.3 (Req. 23) of the software verifying what
+# agents receive: the iofe policy with the nonRepudiation bit required.
+NON_REPUDIATION = {"Level": "FAIL", "Id": ["nonRepudiation"]}
+AGENT_POLICIES = [
+    {"id": "iofe-agent", "kind": "signing", "base": "iofe", "set": {"SigningCertificate/KeyUsage": NON_REPUDIATION}},
+    {"id": "iofe-agent-validation", "kind": "validation", "base": "iofe",
+     "set": {"SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage": NON_REPUDIATION}},
+]
+
 playbook = {
     "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",
     "schema": 2,
@@ -201,6 +214,7 @@ playbook = {
             "pades": {"documentId": "sample:contract"},
         },
     },
+    "policies": AGENT_POLICIES,
     "sections": sections,
 }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
@@ -66,7 +67,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         ArgumentNullException.ThrowIfNull(revocationChecker);
-        _options = options ?? ValidationOptions.Default;
+        _options = (options ?? ValidationOptions.Default).WithProfileApplied();
         var client = httpClientProvider.GetClient();
         _httpClient = client;
         _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
@@ -77,9 +78,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _integrityVerifier = integrityVerifier ?? new IntegrityVerifierService();
         _cmsParser = cmsParser ?? new CmsParserService();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
-        _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
-        _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
+        // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
+        _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
     }
 
     /// <param name="options">Validation options. If null, uses <see cref="ValidationOptions.Default"/>.</param>
@@ -115,7 +116,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IEnumerable<ITrustAnchorProvider>? trustAnchorProviders,
         IEnumerable<IChainValidationProvider>? chainValidationProviders = null)
     {
-        _options = options ?? ValidationOptions.Default;
+        _options = (options ?? ValidationOptions.Default).WithProfileApplied();
         _logger = logger ?? NullLogger<PdfSignatureValidator>.Instance;
         var client = httpClient ?? DefaultHttpClientProvider.Instance.GetClient();
         _httpClient = client;
@@ -132,9 +133,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _integrityVerifier = new IntegrityVerifierService();
         _cmsParser = new CmsParserService();
         _timestampValidator = new TimestampValidatorService();
-        _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
-        _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
+        // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
+        _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
 
     }
 
@@ -150,7 +151,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         IEnumerable<IChainValidationProvider>? chainValidationProviders = null)
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
-        _options = options ?? ValidationOptions.Default;
+        _options = (options ?? ValidationOptions.Default).WithProfileApplied();
         var client = httpClientProvider.GetClient();
         _httpClient = client;
         _outboundPolicy = httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default;
@@ -168,9 +169,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _integrityVerifier = new IntegrityVerifierService();
         _cmsParser = new CmsParserService();
         _timestampValidator = new TimestampValidatorService();
-        _trustAnchorProviders = trustAnchorProviders?.ToList().AsReadOnly()
-            ?? (IReadOnlyList<ITrustAnchorProvider>)[];
-        _chainValidationProviders = (chainValidationProviders ?? []).ToList().AsReadOnly();
+        // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
+        _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
 
     }
 
@@ -184,7 +185,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         HttpClient? httpClient,
         ILogger<PdfSignatureValidator>? logger,
         IEnumerable<ICountryExtension>? countryExtensions)
-        : this(options, httpClient, logger,
+        : this((options ?? ValidationOptions.Default).WithQualifiersFrom(countryExtensions), httpClient, logger,
             trustAnchorProviders: countryExtensions?.SelectMany(e => e.TrustAnchorProviders),
             chainValidationProviders: countryExtensions?.SelectMany(e => e.ChainValidationProviders))
     {
@@ -199,7 +200,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         ValidationOptions? options,
         ILogger<PdfSignatureValidator>? logger,
         IEnumerable<ICountryExtension>? countryExtensions)
-        : this(httpClientProvider, options, logger,
+        : this(httpClientProvider, (options ?? ValidationOptions.Default).WithQualifiersFrom(countryExtensions), logger,
             trustAnchorProviders: countryExtensions?.SelectMany(e => e.TrustAnchorProviders),
             chainValidationProviders: countryExtensions?.SelectMany(e => e.ChainValidationProviders))
     {
@@ -249,6 +250,18 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             var facts = BuildPdfFacts(fields, i, dssData);
             var result = await ValidateFieldAsync(pdfStream, fields[i], embeddedCrls, embeddedOcsps, cancellationToken, isLast, facts,
                 LaterDocumentTimestamps(fields, fields[i])).ConfigureAwait(false);
+            if (!result.IsDocumentTimestamp && result.SignerCertificate is { } signer && _options.SignatureQualifiers is { Count: > 0 })
+            {
+                result.Qualification = _options.Qualify(new SignatureQualificationContext(signer, result.Indication)
+                {
+                    Certificates = result.EmbeddedCertificates,
+                    ClaimedSigningTime = result.SigningTime,
+                    BestSignatureTime = result.BestSignatureTime,
+                    ValidationObjects = result.ValidationObjects,
+                    Format = "PAdES",
+                });
+            }
+
             results.Add(result);
         }
 
@@ -460,6 +473,15 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
         DateTimeOffset? provenTime = timestamp is { IsIntegrityValid: true, IsTsaTrusted: true } ? timestamp.GenTime : null;
 
+        // 4a''. No signature time-stamp proves the signature: the first later document time-stamp that is intact and
+        // trusted does (EN 319 142-1 gives level T with either; an augmented B-B gets only that).
+        byte[]? documentTimestamp = null;
+        if (provenTime is null && _options.ValidatesTimestamps && laterDocumentTimestamps is { Count: > 0 }
+            && await DocumentTimestampProofAsync(pdfStream, laterDocumentTimestamps, embeddedCrls, embeddedOcsps, warnings, cancellationToken).ConfigureAwait(false) is { } proof)
+        {
+            (documentTimestamp, provenTime) = proof;
+        }
+
         // 4a'. Not anchored today: the anchors of the proof of existence (a trusted-list service withdrawn since).
         if (!chainAnchored && provenTime is { } proven && TimedTrust.IsConfigured(_options) && cmsData.SignerCertificate is { } signerAtTime)
         {
@@ -573,9 +595,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             },
             EmbeddedCrls = [.. embeddedCrls, .. chainCrls],
             EmbeddedOcsps = [.. embeddedOcsps, .. fetchedOcsps, .. chainOcsps],
-            Timestamps = cmsData.SignatureTimestampToken is { } signatureToken && _options.ValidatesTimestamps
-                ? [new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, timestamp.IsIntegrityValid, timestamp.IsTsaTrusted)]
-                : null,
+            Timestamps = TimestampFacts(cmsData.SignatureTimestampToken, timestamp, documentTimestamp),
             PolicyDocumentAvailable = _options.PolicyDocumentFound(cmsData.SignaturePolicyOid),
         }.WithCms(cmsData, _options.TrustedRoots, field.PdfSigningTime), _options.PolicyFor(cmsData.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -1131,8 +1151,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         using var chain = new X509Chain();
-        CryptoUtility.ConfigureChainPolicy(chain, _options.ChecksRevocation);
-        chain.ChainPolicy.UrlRetrievalTimeout = _options.NetworkTimeout;
+        CryptoUtility.ConfigureChainPolicy(chain, _options.NetworkTimeout);
         chain.ChainPolicy.DisableCertificateDownloads = !_options.Verifier.UseAia;
         chain.ChainPolicy.VerificationFlags =
             X509VerificationFlags.IgnoreEndRevocationUnknown |
@@ -1321,13 +1340,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
                 continue;
             }
 
-            var ignoredErrors = new List<string>();
-            var ignoredWarnings = new List<string>();
-            bool intact = token.TstMessageImprintHash is not null && token.TstMessageImprintHashAlgOid is not null
-                && await _integrityVerifier.ValidateTimestampByteRangeAsync(
-                    pdfStream, later, token.TstMessageImprintHashAlgOid, token.TstMessageImprintHash,
-                    ignoredErrors, ignoredWarnings, false, cancellationToken, _logger).ConfigureAwait(false)
-                && ValidateSignatureStep(token, ignoredErrors, out _);
+            bool intact = await DocumentTimestampIntactAsync(pdfStream, later, token, cancellationToken).ConfigureAwait(false);
             if (intact && TimedTrust.TrustTsaAtLaterProof(
                 timestamp.GenTime, signatureTimestampToken, TokenBytes(later.ContentsBytes), anchors, _options, warnings))
             {
@@ -1336,6 +1349,101 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         return timestamp;
+    }
+
+    /// <summary>Whether a document time-stamp covers its revision and its TSA's signature verifies.</summary>
+    private async Task<bool> DocumentTimestampIntactAsync(Stream pdfStream, PdfSignatureField field, CmsSignedData token, CancellationToken cancellationToken)
+    {
+        var ignoredErrors = new List<string>();
+        var ignoredWarnings = new List<string>();
+        return token.TstMessageImprintHash is not null && token.TstMessageImprintHashAlgOid is not null
+            && await _integrityVerifier.ValidateTimestampByteRangeAsync(
+                pdfStream, field, token.TstMessageImprintHashAlgOid, token.TstMessageImprintHash,
+                ignoredErrors, ignoredWarnings, false, cancellationToken, _logger).ConfigureAwait(false)
+            && ValidateSignatureStep(token, ignoredErrors, out _);
+    }
+
+    /// <summary>
+    /// The proof of existence of a signature without a trusted signature time-stamp: the first document time-stamp after
+    /// it, in document order, that is intact and whose TSA is trusted as a signature time-stamp's is (timeStamping EKU,
+    /// a chain to the anchors, today's or those of its time, or a later document time-stamp proving it; not revoked).
+    /// Null when none is.
+    /// </summary>
+    private async Task<(byte[] Token, DateTimeOffset Time)?> DocumentTimestampProofAsync(
+        Stream pdfStream, IReadOnlyList<PdfSignatureField> laterDocumentTimestamps, IReadOnlyList<byte[]> embeddedCrls,
+        IReadOnlyList<byte[]> embeddedOcsps, List<string> warnings, CancellationToken cancellationToken)
+    {
+        for (int i = 0; i < laterDocumentTimestamps.Count; i++)
+        {
+            var field = laterDocumentTimestamps[i];
+            CmsSignedData cms;
+            try
+            {
+                cms = _cmsParser.Parse(field.ContentsBytes, _logger);
+            }
+            catch (CryptographicException)
+            {
+                continue;
+            }
+
+            byte[] token = TokenBytes(field.ContentsBytes);
+            if (!await DocumentTimestampIntactAsync(pdfStream, field, cms, cancellationToken).ConfigureAwait(false)
+                || TstInfoReader.FromToken(token).GenTime is not { } genTime)
+            {
+                continue;
+            }
+
+            var proofWarnings = new List<string>();
+            var ignored = new List<string>();
+            bool trusted = TimestampValidator.HasTimestampingEku(cms.SignerCertificate, ignored)
+                && ValidateCertificateChain(cms.SignerCertificate, cms.Certificates, ignored, [], out _);
+            var result = TimedTrust.TrustTsaAtGenTime(
+                new TimestampTokenValidationResult { IsIntegrityValid = true, IsTsaTrusted = trusted, GenTime = genTime }, token, _options, proofWarnings);
+            if (result.IsTsaTrusted != true && _options.ValidatesArchivalData)
+            {
+                result = await TrustTsaAtLaterDocumentTimestampAsync(
+                    pdfStream, result, token, [.. laterDocumentTimestamps.Skip(i + 1)], proofWarnings, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (_options.ChecksRevocation)
+            {
+                result = await TimestampTsaChecks.CheckTsaRevocationAsync(
+                    result, token, [.. cms.Certificates, .. TrustAnchorCertificates()], TsaRevocationChecker,
+                    embeddedCrls, embeddedOcsps, allowOnline: true, proofWarnings, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (result.IsTsaTrusted == true)
+            {
+                warnings.AddRange(proofWarnings);
+                warnings.Add(string.Create(CultureInfo.InvariantCulture,
+                    $"No signature time-stamp: the document time-stamp '{field.FieldName}' ({genTime:u}) is the signature's proof of existence (EN 319 142-1, level T)."));
+                return (token, genTime);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The time-stamp tokens of a signature for the policy: its signature time-stamp, and the document time-stamp standing for it.</summary>
+    private List<TimestampTokenFacts>? TimestampFacts(byte[]? signatureToken, TimestampTokenValidationResult timestamp, byte[]? documentTimestamp)
+    {
+        if (!_options.ValidatesTimestamps)
+        {
+            return null;
+        }
+
+        List<TimestampTokenFacts> tokens = [];
+        if (signatureToken is not null)
+        {
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Signature, signatureToken, timestamp.IsIntegrityValid, timestamp.IsTsaTrusted));
+        }
+
+        if (documentTimestamp is not null)
+        {
+            tokens.Add(new TimestampTokenFacts(TimestampTokenKind.Document, documentTimestamp, ImprintValid: true, Trusted: true));
+        }
+
+        return tokens.Count == 0 ? null : tokens;
     }
 
     /// <summary>The DER token in a /Contents value, without its zero padding.</summary>
@@ -1358,7 +1466,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     /// </summary>
     private IReadOnlyList<TrustedListInfo>? TrustedListInfos()
     {
-        List<TrustedListInfo> lists = [.. _options.TrustedLists ?? [], .. _trustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists)];
+        List<TrustedListInfo> lists = [.. (_options.TrustedLists ?? []).Concat(_trustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists)).Distinct()];
         return lists.Count == 0 ? null : lists;
     }
 

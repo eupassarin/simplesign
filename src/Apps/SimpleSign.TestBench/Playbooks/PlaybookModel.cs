@@ -24,6 +24,18 @@ public sealed record Playbook
     /// <summary>What every step starts from.</summary>
     public PlaybookDefaults Defaults { get; init; } = new();
 
+    /// <summary>
+    /// Policies the playbook adjusts: a built-in one (or the default) with some constraints changed, referenced by its steps
+    /// as <c>playbook:ID</c> (for example IOFE's signing policy that also requires nonRepudiation).
+    /// </summary>
+    public IReadOnlyList<PlaybookPolicy> Policies { get; init; } = [];
+
+    /// <summary>
+    /// Files the person running the playbook uploads (a PDF signed elsewhere, a document to sign), referenced by the steps
+    /// as <c>input:ID</c>. A step whose input has no file yet is skipped.
+    /// </summary>
+    public IReadOnlyList<PlaybookInput> Inputs { get; init; } = [];
+
     /// <summary>The steps, grouped in sections.</summary>
     public IReadOnlyList<PlaybookSection> Sections { get; init; } = [];
 
@@ -33,6 +45,38 @@ public sealed record Playbook
 
     /// <summary>A step by id, or null.</summary>
     public PlaybookStep? Step(string id) => AllSteps().Select(s => s.Step).FirstOrDefault(s => s.Id == id);
+}
+
+/// <summary>A policy the playbook adjusts, referenced as <c>playbook:ID</c> by <c>signingPolicyId</c> or <c>validation.policyId</c>.</summary>
+public sealed record PlaybookPolicy
+{
+    /// <summary>The id, unique in the playbook.</summary>
+    public string Id { get; init; } = "";
+
+    /// <summary><c>signing</c> or <c>validation</c>.</summary>
+    public string Kind { get; init; } = "";
+
+    /// <summary>The policy it starts from: a built-in name (<c>iofe</c>, <c>strict</c>…) or <c>default</c>.</summary>
+    public string Base { get; init; } = "default";
+
+    /// <summary>The constraints changed, by path (<c>SigningCertificate/KeyUsage</c>), each as the policy file writes it.</summary>
+    public JsonElement? Set { get; init; }
+}
+
+/// <summary>A file the person running the playbook uploads, referenced as <c>input:ID</c> (a file to validate, augment or sign).</summary>
+public sealed record PlaybookInput
+{
+    /// <summary>The id, unique in the playbook.</summary>
+    public string Id { get; init; } = "";
+
+    /// <summary>What to upload, as the page asks for it.</summary>
+    public string Title { get; init; } = "";
+
+    /// <summary>Where the file comes from and what the steps do with it.</summary>
+    public string? Description { get; init; }
+
+    /// <summary>The file types the page offers, as an HTML <c>accept</c> value (<c>.pdf</c>); null for any.</summary>
+    public string? Accept { get; init; }
 }
 
 /// <summary>The values every step starts from.</summary>
@@ -100,7 +144,7 @@ public sealed record PlaybookStep
     /// <summary>
     /// The TestBench options of the run (the Sign page's for a signature, <c>fileId</c>/<c>dataId</c>/<c>settings</c> for a
     /// validation), with symbolic values: <c>sandbox:SIGNER</c>, <c>sample:ID</c>, <c>cades-sample:ID</c>,
-    /// <c>xades-sample:ID</c>, <c>preset:KIND:NAME</c>, <c>step:ID</c>.
+    /// <c>xades-sample:ID</c>, <c>preset:KIND:NAME</c>, <c>step:ID</c>, <c>input:ID</c>.
     /// </summary>
     public JsonElement? Options { get; init; }
 
@@ -123,11 +167,14 @@ public sealed record PlaybookSandbox
     /// <summary>Trusted list failure: None, Expired, WrongSigner, Tampered, WithdrawnAfterUse.</summary>
     public string? TrustedList { get; init; }
 
+    /// <summary>List of trusted lists failure (/tl/lotl.xml): None, Expired, WrongSigner, Tampered.</summary>
+    public string? Lotl { get; init; }
+
     /// <summary>Sandbox certificates to revoke for the step.</summary>
     public IReadOnlyList<string> Revoke { get; init; } = [];
 
     /// <summary>Whether anything is asked.</summary>
-    public bool Any => Crl is not null || Ocsp is not null || Tsa is not null || TrustedList is not null || Revoke.Count > 0;
+    public bool Any => Crl is not null || Ocsp is not null || Tsa is not null || TrustedList is not null || Lotl is not null || Revoke.Count > 0;
 
     /// <summary>The changes, one line each, as the page and the evidence show them.</summary>
     public IEnumerable<string> Describe()
@@ -150,6 +197,11 @@ public sealed record PlaybookSandbox
         if (TrustedList is not null)
         {
             yield return $"Trusted list: {TrustedList}";
+        }
+
+        if (Lotl is not null)
+        {
+            yield return $"List of trusted lists: {Lotl}";
         }
 
         foreach (string id in Revoke)
@@ -183,6 +235,12 @@ public sealed record PlaybookExpectation
     /// <summary><c>valid</c>: the run's ETSI TS 119 102-2 report must be valid against its schema.</summary>
     public string? EtsiReport { get; init; }
 
+    /// <summary>The qualification of the (first) signature under the profile's framework (eIDAS: QESig, QESeal, AdESig-QC, AdESig, N/A…).</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of its first timestamp: QTSA (qualified electronic time-stamp), TSA or N/A.</summary>
+    public string? TimestampQualification { get; init; }
+
     /// <summary>
     /// Constraints of the validation policy that must fail (their names, as the report shows them: <c>AccuracyPresent</c>),
     /// in the signature or in what it carries (a time-stamp, revocation data).
@@ -203,6 +261,16 @@ public sealed record PlaybookExpectation
         if (Reason is not null)
         {
             yield return ("reason", Reason);
+        }
+
+        if (Qualification is not null)
+        {
+            yield return ("qualification", Qualification);
+        }
+
+        if (TimestampQualification is not null)
+        {
+            yield return ("timestampQualification", TimestampQualification);
         }
 
         if (Indication is not null)

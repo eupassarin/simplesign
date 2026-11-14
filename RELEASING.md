@@ -28,6 +28,7 @@ Update `<Version>` in all `.csproj` files:
 | `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj` | Fiscal XML |
 | `src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj` | Gov.br |
 | `src/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj` | IOFE (Peru) |
+| `src/TrustFrameworks/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj` | eIDAS (EU) |
 | `src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj` | PKCS#11 tokens and HSMs |
 | `src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj` | Cloud certificates (PSC, CSC) |
 | `src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
@@ -51,6 +52,7 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj \
   src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj \
   src/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
+  src/TrustFrameworks/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj \
   src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj \
   src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj \
   src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \

@@ -76,15 +76,6 @@ internal static class ServiceEndpoints
 
             return Results.Bytes(await lists.TlAsync(ct), SandboxTrustedLists.MediaType);
         });
-        app.MapGet("/tl/iofe.xml", async (SandboxTrustedLists lists, SandboxPki pki, HttpContext context, CancellationToken ct) =>
-        {
-            if (pki.Faults.TrustedList != TlFault.None)
-            {
-                context.Items[FaultItem] = pki.Faults.TrustedList.ToString();
-            }
-
-            return Results.Bytes(await lists.IofeAsync(ct), SandboxTrustedLists.MediaType);
-        });
         app.MapGet("/tl/lotl-signer.pem", (SandboxPki pki) => Results.Text(pki.LotlSigner.ExportCertificatePem() + "\n", "application/x-pem-file"));
         app.MapGet("/tl/tl-signer.pem", (SandboxPki pki) => Results.Text(pki.TlSigner.ExportCertificatePem() + "\n", "application/x-pem-file"));
 
@@ -143,7 +134,8 @@ internal static class ServiceEndpoints
         // /tsa/wrong-name (the token names another TSA), /tsa/shifted?seconds=N (its clock is N seconds off, -86400 to 86400)
         // /tsa/no-accuracy (the TSTInfo gives no accuracy, which EN 319 422 asks for) and /tsa/short-lived?seconds=N (a TSA
         // certificate issued for the request, valid N more seconds, 1 to 3600: its tokens outlive it), /tsa/iofe (a TSA under
-        // its own self-signed CA, trusted only through the INDECOPI-layout list /tl/iofe.xml).
+        // its own self-signed CA, trusted only through /tl/tl.xml read with the IOFE options: the CA is an 'unspecified' service)
+        // and /tsa/non-qualified (listed as a TSA service, not TSA/QTST: its tokens are not qualified electronic time-stamps).
         app.MapPost("/tsa/{kind}", TimestampAsync);
 
         // CSC v2 (the simulated provider is an HttpMessageHandler: requests are passed through).
@@ -223,7 +215,7 @@ internal static class ServiceEndpoints
 
     private static async Task<IResult> TimestampAsync(string kind, HttpContext context, SandboxPki pki, CancellationToken ct)
     {
-        if (kind is not ("tsr" or "archive" or "authenticated" or "untrusted" or "revoked" or "expired" or "wrong-name" or "shifted" or "no-accuracy" or "short-lived" or "iofe"))
+        if (kind is not ("tsr" or "archive" or "authenticated" or "untrusted" or "revoked" or "expired" or "wrong-name" or "shifted" or "no-accuracy" or "short-lived" or "iofe" or "non-qualified"))
         {
             return Results.NotFound();
         }
@@ -318,6 +310,7 @@ internal static class ServiceEndpoints
             "revoked" => "tsa-revoked",
             "expired" => "tsa-expired",
             "iofe" => "tsa-iofe",
+            "non-qualified" => "tsa-non-qualified",
             _ => "tsa",
         });
         using var key = certificate.Certificate.GetRSAPrivateKey()!;

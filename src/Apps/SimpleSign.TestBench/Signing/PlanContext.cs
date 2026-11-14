@@ -249,6 +249,7 @@ internal sealed class PlanContext
         TsaProvider.SandboxWrongName => _sandbox.Connection.WrongNameTsaUri,
         TsaProvider.SandboxShortLived => _sandbox.Connection.ShortLivedTsaUri,
         TsaProvider.SandboxIofe => _sandbox.Connection.IofeTsaUri,
+        TsaProvider.SandboxNonQualified => _sandbox.Connection.NonQualifiedTsaUri,
         TsaProvider.DigiCert => TimestampOptions.DigiCert.Endpoint,
         TsaProvider.Sectigo => TimestampOptions.Sectigo.Endpoint,
         TsaProvider.FreeTsa => TimestampOptions.FreeTsa.Endpoint,

@@ -32,6 +32,7 @@
     <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
     <ProjectReference Include="..\..\TrustFrameworks\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
     <ProjectReference Include="..\..\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
+    <ProjectReference Include="..\..\TrustFrameworks\Europe\Eidas\SimpleSign.Europe.Eidas\SimpleSign.Europe.Eidas.csproj" />
     <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.Fiscal\SimpleSign.Brazil.Fiscal.csproj" />
     <ProjectReference Include="..\..\Extras\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />

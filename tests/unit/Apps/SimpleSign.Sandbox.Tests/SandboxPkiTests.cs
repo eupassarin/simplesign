@@ -50,6 +50,38 @@ public sealed class SandboxPkiTests : IDisposable
     }
 
     [Fact]
+    public void Reset_AfterRevocation_KeepsTheLoadedCertificatesAndTheirKeys()
+    {
+        using var pki = SandboxPki.Open(null, Options);
+        var before = pki.Certificate("rsa-2048").Certificate;
+
+        pki.Revoke("rsa-2048");
+        var revoked = pki.Certificate("rsa-2048");
+        pki.Reset();
+        var after = pki.Certificate("rsa-2048");
+
+        revoked.RevokedAt.ShouldNotBeNull();
+        after.RevokedAt.ShouldBeNull();
+        revoked.Certificate.ShouldBeSameAs(before);
+        after.Certificate.ShouldBeSameAs(before);
+        using var key = after.Certificate.GetRSAPrivateKey().ShouldNotBeNull();
+        key.SignData([1, 2, 3], HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1).Length.ShouldBe(256);
+    }
+
+    [Fact]
+    public void Reset_CustomCertificate_IsNoLongerListedAndTheOthersStay()
+    {
+        using var pki = SandboxPki.Open(null, Options);
+        var good = pki.Certificate("ecdsa-p256").Certificate;
+        var issued = pki.IssueCustom(SandboxSubject.Parse("CN=Ana"), null, SandboxKeyType.Rsa2048, null, TimeSpan.FromDays(1));
+
+        pki.Reset();
+
+        pki.Certificates.ShouldNotContain(c => c.Id == issued.Id);
+        pki.Certificate("ecdsa-p256").Certificate.ShouldBeSameAs(good);
+    }
+
+    [Fact]
     public void IssueCustom_KeyUsageGiven_HasOnlyIt()
     {
         using var pki = SandboxPki.Open(null, Options);

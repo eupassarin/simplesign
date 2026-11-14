@@ -12,6 +12,9 @@ public enum SignatureKind
 
     /// <summary>Baseline plus an explicit signature-policy-identifier (any OID and hash).</summary>
     CustomPolicy,
+
+    /// <summary>An ICP-Brasil signature policy (DOC-ICP-15.03: AD-RB, AD-RT, AD-RC, AD-RA), which sets the level itself.</summary>
+    IcpBrasil,
 }
 
 public enum BaselineLevel
@@ -49,10 +52,16 @@ public enum TsaProvider
     SandboxShortLived,
 
     /// <summary>
-    /// The connected Sandbox's TSA under its own self-signed CA, which only the INDECOPI-layout list names (as an
-    /// <c>unspecified</c> service).
+    /// The connected Sandbox's TSA under its own self-signed CA, which the Sandbox's trusted list names as an
+    /// <c>unspecified</c> service: trusted only when the list is read with the IOFE profile.
     /// </summary>
     SandboxIofe,
+
+    /// <summary>
+    /// The connected Sandbox's TSA that its trusted list names as a <c>TSA</c> service, not <c>TSA/QTST</c>: trusted, but its
+    /// time-stamps are not qualified electronic time-stamps (eIDAS).
+    /// </summary>
+    SandboxNonQualified,
 
     DigiCert,
     Sectigo,
@@ -257,6 +266,9 @@ public sealed record SigningOptions
     public BaselineLevel Level { get; init; } = BaselineLevel.BB;
 
     public CustomPolicyChoice CustomPolicy { get; init; } = new();
+
+    /// <summary>The ICP-Brasil signature policy when <see cref="Kind"/> is <see cref="SignatureKind.IcpBrasil"/>.</summary>
+    public SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy IcpPolicy { get; init; } = SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb;
 
     public TimestampChoice Timestamp { get; init; } = new();
 

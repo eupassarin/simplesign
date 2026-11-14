@@ -2026,13 +2026,6 @@ public static class StyleResolver
         _ => VerticalAlign.Top,
     };
 
-    /// <summary>
-    /// Tests whether an HTML node matches a CSS selector.
-    /// Supports type, universal, class, id and attribute selectors, all four combinators,
-    /// structural pseudo-classes and <c>:not()</c>.
-    /// </summary>
-    internal static bool MatchesSelector(HtmlNode node, string selector) =>
-        CssSelector.TryParse(selector) is { PseudoElement: PseudoElement.None } parsed && parsed.Matches(node);
 
     private sealed record CompiledRule(CssRule Rule, CssSelector Selector, int SourceIndex);
 

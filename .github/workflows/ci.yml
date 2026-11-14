@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, develop]
 
+# A new push to a pull request cancels its run still going; pushes to main and develop each run to the end.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   # The TestBench UI (src/Apps/SimpleSign.TestBench/web) is built by the testbench job, not by every build.
@@ -13,12 +18,24 @@ env:
 
 jobs:
   build-and-test:
-    name: ${{ matrix.os }}
+    name: ${{ matrix.os }}${{ matrix.framework && format(' ({0})', matrix.framework) || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # Ubuntu tests both frameworks in one job, with coverage. Windows and macOS (CPU-bound, ~19 minutes of tests
+      # on macOS for both) test each framework in its own job, side by side.
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            framework: ''
+          - os: windows-latest
+            framework: net8.0
+          - os: windows-latest
+            framework: net10.0
+          - os: macos-latest
+            framework: net8.0
+          - os: macos-latest
+            framework: net10.0
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,12 +61,14 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
+      # The same packages on every OS: checked once.
       - name: Check for vulnerable packages
+        if: matrix.os == 'ubuntu-latest'
         continue-on-error: true
         run: dotnet list package --vulnerable --include-transitive 2>&1 | tee vulnerability-report.txt
 
       - name: Upload vulnerability report
-        if: always()
+        if: always() && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vulnerability-report-${{ matrix.os }}
@@ -69,6 +88,9 @@ jobs:
           done
           echo "The Sandbox did not answer on http://localhost:5300"; cat sandbox.log; exit 1
 
+      # The TestBench tests run on Linux only (here with coverage, and in the testbench job): on Windows they took
+      # ~38 of the job's 45 minutes, starting the CLI in a new process for each playbook step.
+      # --framework net8.0 leaves out the projects that target net10.0 only (Agent, Sandbox).
       - name: Test
         if: matrix.os != 'ubuntu-latest'
         shell: bash
@@ -76,8 +98,8 @@ jobs:
           SIMPLESIGN_SANDBOX_URL: http://localhost:5300/
           SIMPLESIGN_REQUIRE_SANDBOX: "true"
         run: |
-          dotnet test --no-build --configuration Release \
-            --filter "Category!=Stress" \
+          dotnet test --no-build --configuration Release --framework ${{ matrix.framework }} \
+            --filter "Category!=Stress&FullyQualifiedName!~SimpleSign.TestBench.Tests" \
             --logger "trx" \
             --logger "console;verbosity=normal" \
             --results-directory TestResults
@@ -101,7 +123,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-results-${{ matrix.os }}
+          name: test-results-${{ matrix.os }}${{ matrix.framework && format('-{0}', matrix.framework) || '' }}
           path: |
             TestResults/
             sandbox.log
@@ -229,10 +251,11 @@ jobs:
           name: stress-test-results
           path: TestResults-Stress/
 
+  # AOT, PKCS#11, TestBench and Agent build what they need themselves: they start with the matrix instead of
+  # waiting for its slowest OS (which added ~9 minutes at the end of every run).
   aot-smoke-test:
     name: AOT Smoke Test
     runs-on: ubuntu-latest
-    needs: build-and-test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -250,7 +273,6 @@ jobs:
   pkcs11-tests:
     name: PKCS#11 (SoftHSM2)
     runs-on: ubuntu-latest
-    needs: build-and-test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -352,7 +374,6 @@ jobs:
   testbench:
     name: TestBench
     runs-on: ubuntu-latest
-    needs: build-and-test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -402,7 +423,6 @@ jobs:
   agent:
     name: Agent (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: build-and-test
     strategy:
       fail-fast: false
       matrix:

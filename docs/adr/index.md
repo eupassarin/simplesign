@@ -31,3 +31,4 @@ SimpleSign, including their rationale, consequences, and alternatives.
 - [ADR 0026: Trust Anchors at a Time (Trusted-List Service History)](0026-trust-anchors-at-a-time.md)
 - [ADR 0027: Past Signature Validation with Archive Time-Stamps](0027-past-signature-validation.md)
 - [ADR 0028: Two-Phase Signing Across Formats](0028-two-phase-signing-across-formats.md)
+- [ADR 0029: Trust Profiles and Signature Qualification](0029-trust-profiles-and-signature-qualification.md)

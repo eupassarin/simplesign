@@ -52,6 +52,13 @@ internal sealed class ValidateSignatureDto
 {
     public string FieldName { get; init; } = string.Empty;
     public string Indication { get; init; } = "Indeterminate";
+
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…), with --profile eidas; null otherwise.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (QTSA, TSA, N/A), with --profile eidas.</summary>
+    public List<string>? TimestampQualifications { get; init; }
+
     public bool IsDocumentTimestamp { get; init; }
     public string? Signer { get; init; }
     public string? Level { get; init; }
@@ -281,6 +288,13 @@ internal sealed class CadesSignerDto
     public int Index { get; init; }
     public bool IsValid { get; init; }
     public string Indication { get; init; } = "Indeterminate";
+
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…), with --profile eidas; null otherwise.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (QTSA, TSA, N/A), with --profile eidas.</summary>
+    public List<string>? TimestampQualifications { get; init; }
+
     public string? SubIndication { get; init; }
     public List<ConstraintDto> Constraints { get; init; } = [];
     public bool IsSignatureValid { get; init; }
@@ -342,6 +356,13 @@ internal sealed class XadesSignatureDto
     public string? Id { get; init; }
     public bool IsValid { get; init; }
     public string Indication { get; init; } = "Indeterminate";
+
+    /// <summary>The qualification under a legal framework (eIDAS: QESig, AdESig-QC…), with --profile eidas; null otherwise.</summary>
+    public string? Qualification { get; init; }
+
+    /// <summary>The qualification of each timestamp (QTSA, TSA, N/A), with --profile eidas.</summary>
+    public List<string>? TimestampQualifications { get; init; }
+
     public string? SubIndication { get; init; }
     public List<ConstraintDto> Constraints { get; init; } = [];
     public bool IsSignatureValid { get; init; }
