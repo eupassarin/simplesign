@@ -5,7 +5,22 @@ using SimpleSign.Agent.Server;
 namespace SimpleSign.Agent.Services;
 
 /// <summary>What the window lists: the signing certificates and the installed token drivers.</summary>
-internal sealed record CertificateInventory(IReadOnlyList<CertificateEntry> Certificates, IReadOnlyList<string> Drivers);
+/// <param name="Certificates">The certificates the agent can sign with.</param>
+/// <param name="Drivers">The PKCS#11 drivers found, with how many tokens each sees.</param>
+/// <param name="RecognizedBy">
+/// Per certificate thumbprint, the names of the enabled trust frameworks that recognize it. A framework whose trusted
+/// list is still being read contributes nothing until the next refresh.
+/// </param>
+internal sealed record CertificateInventory(
+    IReadOnlyList<CertificateEntry> Certificates,
+    IReadOnlyList<string> Drivers,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? RecognizedBy = null)
+{
+    /// <summary>The frameworks that recognize the certificate of <paramref name="thumbprint"/>.</summary>
+    /// <param name="thumbprint">The certificate's thumbprint.</param>
+    public IReadOnlyList<string> FrameworksOf(string? thumbprint) =>
+        thumbprint is not null && RecognizedBy?.TryGetValue(thumbprint, out var names) == true ? names : [];
+}
 
 internal enum AgentState
 {
@@ -124,15 +139,35 @@ internal sealed class AgentController : IAsyncDisposable
     {
         if (_certificates is not null)
         {
-            return new CertificateInventory(await _certificates(cancellationToken), []);
+            var injected = await _certificates(cancellationToken);
+            return new CertificateInventory(injected, [], await RecognizeAsync(injected, cancellationToken));
         }
 
         var store = CertificateService.ListStore();
         var (tokens, drivers) = await CertificateService.ListTokensAsync(cancellationToken);
+        IReadOnlyList<CertificateEntry> all = [.. store, .. tokens];
         return new CertificateInventory(
-            [.. store, .. tokens],
-            [.. drivers.Select(d => $"{d.Driver.Driver.Product} ({d.Tokens.Count})")]);
+            all,
+            [.. drivers.Select(d => $"{d.Driver.Driver.Product} ({d.Tokens.Count})")],
+            await RecognizeAsync(all, cancellationToken));
     }, cancellationToken);
+
+    /// <summary>Which enabled frameworks recognize each certificate; the frameworks' lists load in the background.</summary>
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> RecognizeAsync(
+        IReadOnlyList<CertificateEntry> entries, CancellationToken cancellationToken)
+    {
+        Services.TrustFrameworks.StartLoading();
+        var byThumbprint = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
+        {
+            if (entry.Certificate.Thumbprint is { Length: > 0 } thumbprint && !byThumbprint.ContainsKey(thumbprint))
+            {
+                byThumbprint[thumbprint] = await Services.TrustFrameworks.RecognizedByAsync(entry.Certificate, cancellationToken);
+            }
+        }
+
+        return byThumbprint;
+    }
 
     public async ValueTask DisposeAsync()
     {

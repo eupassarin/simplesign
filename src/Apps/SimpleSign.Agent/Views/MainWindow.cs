@@ -197,7 +197,7 @@ internal sealed class MainWindow : Window
         pill.Margin = new Thickness(0, 0, 6, 0);
 
         var language = L.Languages.First(l => l.Id == L.Language);
-        var next = L.Languages.First(l => l.Id != L.Language);
+        var next = L.Languages[(L.Languages.ToList().FindIndex(l => l.Id == L.Language) + 1) % L.Languages.Count];
         var languageButton = new Button { Content = Ui.Row(5, Ui.Icon(Icons.Globe), Ui.Text(language.Short, "small strong")) }
             .Class("sm").Tip(L.T("topbar.language", language.Label, next.Label));
         languageButton.Click += (_, _) => Appearance.SetLanguage(Controller, next.Id);

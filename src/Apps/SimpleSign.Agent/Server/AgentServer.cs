@@ -24,11 +24,15 @@ internal sealed class AgentServer : IAsyncDisposable
     private WebApplication? _app;
 #pragma warning restore CA2213
 
-    public AgentServer(AgentServices services, TokenSessionCache sessions, Func<CancellationToken, Task<IReadOnlyList<CertificateEntry>>>? certificates = null)
+    public AgentServer(
+        AgentServices services,
+        TokenSessionCache sessions,
+        Func<CancellationToken, Task<IReadOnlyList<CertificateEntry>>>? certificates = null,
+        SignedRequestVerifier? verifier = null)
     {
         _services = services;
         Origins = new OriginPolicy(services.Settings);
-        _signer = new AgentSigner(services, sessions, certificates);
+        _signer = new AgentSigner(services, sessions, certificates, verifier);
     }
 
     public OriginPolicy Origins { get; }
@@ -96,6 +100,13 @@ internal sealed class AgentServer : IAsyncDisposable
         string? header = request.Headers.Origin;
         string? origin = header is null ? OriginPolicy.LocalApplication : OriginPolicy.Normalize(header);
         string path = request.Path.Value ?? "/";
+        if (_services.Settings.Policy.Error is { } policyError)
+        {
+            // Fail closed: an administrator's policy that cannot be read would otherwise silently stop locking.
+            await WriteErrorAsync(response, 403, L.T("api.policyInvalid", _services.Settings.Policy.Path ?? "", policyError));
+            return;
+        }
+
         if (origin is null)
         {
             await WriteErrorAsync(response, 403, L.T("api.originNotAllowed"));
@@ -151,6 +162,13 @@ internal sealed class AgentServer : IAsyncDisposable
         }
 
         string label = origin == OriginPolicy.LocalApplication ? L.T("agent.localApplication") : origin;
+        if (state == OriginState.Unknown && Origins.IsLocked)
+        {
+            _services.Log.Add("Agent", L.T("log.originNotInPolicy", label), isError: true);
+            await WriteErrorAsync(response, 403, L.T("api.originNotInPolicy"));
+            return;
+        }
+
         if (state == OriginState.Unknown && !await AskSiteAsync(origin, label))
         {
             _services.Log.Add("Agent", L.T("log.accessRefused", label), isError: true);
@@ -165,16 +183,38 @@ internal sealed class AgentServer : IAsyncDisposable
                 string source = request.Query["source"].ToString() is { Length: > 0 } s ? s.ToLowerInvariant() : "all";
                 bool icp = bool.TryParse(request.Query["filterIcpBrasil"], out bool f) && f;
                 bool signingOnly = bool.TryParse(request.Query["signingOnly"], out bool s2) && s2;
+                var trust = _services.TrustFrameworks;
+                if (icp && !trust.IsEnabled(TrustFrameworkCatalog.IcpBrasil))
+                {
+                    await WriteErrorAsync(response, 400, L.T("api.trustDisabled", TrustFrameworkCatalog.IcpBrasil, trust.EnabledSummary));
+                    return;
+                }
+
                 IReadOnlyList<TrustFramework>? frameworks;
                 try
                 {
-                    frameworks = _services.TrustFrameworks.Select(request.Query["country"].ToString(), request.Query["trust"].ToString());
+                    frameworks = trust.Select(request.Query["country"].ToString(), request.Query["trust"].ToString());
+                }
+                catch (TrustFrameworkDisabledException ex)
+                {
+                    await WriteErrorAsync(response, 400, L.T("api.trustDisabled", ex.Message, trust.EnabledSummary));
+                    return;
                 }
                 catch (ArgumentException ex)
                 {
                     await WriteErrorAsync(response, 400, L.T("api.unknownTrust", ex.Message,
-                        string.Join(", ", _services.TrustFrameworks.All.Select(t => $"{t.Id} ({t.Extension.Value.RegionCode})"))));
+                        string.Join(", ", trust.All.Select(t => $"{t.Id} ({t.RegionCode})"))));
                     return;
+                }
+
+                if (frameworks is not null)
+                {
+                    frameworks = await trust.AvailableAsync(frameworks, context.RequestAborted);
+                    if (frameworks.Count == 0)
+                    {
+                        await WriteErrorAsync(response, 503, L.T("api.trustUnavailable"));
+                        return;
+                    }
                 }
 
                 var list = await _signer.ListAsync(new CertificateQuery(source, icp, frameworks, signingOnly), context.RequestAborted);
@@ -202,7 +242,7 @@ internal sealed class AgentServer : IAsyncDisposable
                 return;
             }
 
-            var results = await _signer.SignAsync(label, body, context.RequestAborted);
+            var results = await _signer.SignAsync(origin, label, body, context.RequestAborted);
             if (results is null)
             {
                 _services.Log.Add("Agent", L.T("log.signRefused", label), isError: true);

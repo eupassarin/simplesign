@@ -19,6 +19,16 @@ Outro programa, ou outra cópia do agente, está usando a porta `{port}`. Feche-
 3. O **Sobre** lista os *Drivers PKCS#11* encontrados. Se o seu não está lá, o agente não sabe onde ele fica.
 4. Para um driver em lugar incomum, defina a variável de ambiente `SIMPLESIGN_PKCS11_LIBRARY` com o caminho completo da biblioteca do driver e abra o agente de novo.
 
+## O site recebe "a estrutura de confiança não está habilitada"
+
+Os filtros `country` e `trust`, e o antigo `filterIcpBrasil`, só respondem pelas estruturas habilitadas nas Configurações, em **Estruturas de confiança**. O erro lista quais estão habilitadas. Uma listagem sem filtro não é afetada.
+
+Em um DNIe peruano, o middleware que a RENIEC publica (AuthentIC WebPack) é o que o agente procura; para outro token peruano cujo módulo o agente não conhece, aponte `SIMPLESIGN_PKCS11_LIBRARY` para a biblioteca dele.
+
+## O site recebe "indisponível offline"
+
+IOFE e eIDAS leem uma lista de confiança pela internet, guardam em cache e atualizam a cada seis horas. Enquanto ela não pode ser lida, esses filtros respondem 503 em vez de devolver uma lista menor, e as Configurações mostram *indisponível offline*. Uma nova tentativa acontece um minuto depois. As estruturas do Brasil trazem as raízes dentro do agente e nunca precisam da rede para isso.
+
 ## Meu certificado do repositório do sistema não aparece
 
 - Ele precisa ter a chave privada neste computador. Um certificado copiado sem a chave não assina.

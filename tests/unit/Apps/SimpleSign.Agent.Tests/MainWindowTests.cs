@@ -13,7 +13,7 @@ using SimpleSign.Agent.Views;
 namespace SimpleSign.Agent.Tests;
 
 /// <summary>
-/// Opens the window on the headless platform in both languages and both themes, visits every
+/// Opens the window on the headless platform in every language and both themes, visits every
 /// section and panel, and saves each frame as a PNG (bin/…/screenshots) for visual review.
 /// </summary>
 [Trait("Category", "Unit")]
@@ -24,6 +24,7 @@ public sealed class MainWindowTests
     [AvaloniaTheory]
     [InlineData("en-US", "light")]
     [InlineData("pt-BR", "dark")]
+    [InlineData("es-ES", "light")]
     public async Task EverySectionAndPanel_Renders(string language, string theme)
     {
         MainWindow.Animate = false;
@@ -37,7 +38,7 @@ public sealed class MainWindowTests
             new(CertificateSourceKind.File, second, FilePath: "beltrana.pfx"),
             new(CertificateSourceKind.Store, expiring),
         ];
-        var services = Fixtures.Services();
+        var services = Fixtures.ServicesWithTrust(null, TrustFrameworkCatalog.IcpBrasil);
         services.Settings.Current.AgentPort = Fixtures.FreePort();
         services.Settings.Current.AllowedOrigins.Add("https://portal.example.com");
         services.Settings.Current.BlockedOrigins.Add("https://ads.example.net");

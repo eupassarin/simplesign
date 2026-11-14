@@ -149,18 +149,26 @@ internal static class Ui
 
     public static Border Dot(string kind) => new Border().Class("dot " + kind);
 
+    /// <summary>A highlighted remark, the same look the documentation gives a blockquote.</summary>
+    /// <param name="text">The remark.</param>
+    public static Border Note(string text) => new Border { Child = Text(text, "wrap relaxed") }.Class("note");
+
     public static Border Line() => new Border().Class("line");
 
     public static Border IconBox(string icon, string kind = "", string? brush = null) =>
         new Border { Child = Icon(icon, 18, brush).With(i => i.HorizontalAlignment = HorizontalAlignment.Center) }.Class("iconbox " + kind);
 
     /// <summary>The TestBench's segmented switch: one of a few choices.</summary>
-    public static Border Segmented<T>(IReadOnlyList<(T Value, string Label)> items, T selected, Action<T> select)
+    /// <param name="items">The choices and their labels.</param>
+    /// <param name="selected">The chosen value.</param>
+    /// <param name="select">Called with the new value.</param>
+    /// <param name="enabled">False to show the choice without letting it change.</param>
+    public static Border Segmented<T>(IReadOnlyList<(T Value, string Label)> items, T selected, Action<T> select, bool enabled = true)
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         foreach (var (value, label) in items)
         {
-            var button = new Button { Content = Text(label) }.Class("seg");
+            var button = new Button { Content = Text(label), IsEnabled = enabled }.Class("seg");
             button.Classes.Set("on", EqualityComparer<T>.Default.Equals(value, selected));
             button.Click += (_, _) =>
             {

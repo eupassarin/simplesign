@@ -21,7 +21,34 @@ internal enum CertificateSourceKind
 }
 
 /// <summary>A token key: the driver, the token and the key's certificate.</summary>
-internal sealed record TokenKey(string LibraryPath, string DriverName, string TokenLabel, string TokenSerial, string? KeyLabel, bool HasPinPad);
+/// <param name="LibraryPath">The PKCS#11 library that sees the token.</param>
+/// <param name="DriverName">The driver's product name.</param>
+/// <param name="TokenLabel">The token's label.</param>
+/// <param name="TokenSerial">The token's serial number.</param>
+/// <param name="KeyLabel">The key's label on the token.</param>
+/// <param name="HasPinPad">Whether the PIN is typed on the reader instead of in the agent.</param>
+internal sealed record TokenKey(
+    string LibraryPath, string DriverName, string TokenLabel, string TokenSerial, string? KeyLabel, bool HasPinPad)
+{
+    /// <summary>Whether a wrong PIN was typed since the last good one (<c>CKF_USER_PIN_COUNT_LOW</c>).</summary>
+    public bool IsPinCountLow { get; init; }
+
+    /// <summary>Whether one more wrong PIN locks the token (<c>CKF_USER_PIN_FINAL_TRY</c>).</summary>
+    public bool IsPinFinalTry { get; init; }
+
+    /// <summary>Whether the PIN is still the issuer's and must be changed (<c>CKF_USER_PIN_TO_BE_CHANGED</c>).</summary>
+    public bool IsPinToBeChanged { get; init; }
+
+    /// <summary>The warning to show before the PIN is asked for; null when there is nothing to warn about.</summary>
+    public string? PinWarning =>
+        IsPinFinalTry ? L.T("pin.warn.finalTry")
+        : IsPinToBeChanged ? L.T("pin.warn.mustChange")
+        : IsPinCountLow ? L.T("pin.warn.countLow")
+        : null;
+
+    /// <summary>Whether <see cref="PinWarning"/> is about losing the card, so it is shown as an error.</summary>
+    public bool IsPinWarningSevere => IsPinFinalTry;
+}
 
 /// <summary>A certificate the user can sign with.</summary>
 internal sealed record CertificateEntry(CertificateSourceKind Kind, X509Certificate2 Certificate, TokenKey? Token = null, string? FilePath = null)
@@ -151,7 +178,12 @@ internal static class CertificateService
                 {
                     entries.Add(new CertificateEntry(CertificateSourceKind.Token, certificate.Certificate,
                         new TokenKey(driver.Driver.LibraryPath, driver.Driver.Driver.Product, token.Label, token.SerialNumber,
-                            certificate.Label, token.HasProtectedAuthenticationPath)));
+                            certificate.Label, token.HasProtectedAuthenticationPath)
+                        {
+                            IsPinCountLow = token.IsPinCountLow,
+                            IsPinFinalTry = token.IsPinFinalTry,
+                            IsPinToBeChanged = token.IsPinToBeChanged,
+                        }));
                 }
             }
         }

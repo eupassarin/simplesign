@@ -109,14 +109,14 @@ internal sealed class OverviewPage : AgentPage
             foreach (var entry in inventory.Certificates)
             {
                 list.Children.Add(Ui.Line());
-                list.Children.Add(CertificateRow(entry));
+                list.Children.Add(CertificateRow(entry, inventory.FrameworksOf(entry.Certificate.Thumbprint)));
             }
         }
 
         return Ui.Card(list, "flush");
     }
 
-    internal static Border CertificateRow(CertificateEntry entry)
+    internal static Border CertificateRow(CertificateEntry entry, IReadOnlyList<string>? frameworks = null)
     {
         string details = string.Join(" · ", new[] { entry.MaskedDocument, entry.Source, entry.Issuer }.Where(s => !string.IsNullOrEmpty(s)));
         int days = (int)Math.Floor((entry.Certificate.NotAfter - DateTime.Now).TotalDays);
@@ -134,8 +134,8 @@ internal sealed class OverviewPage : AgentPage
             "weakKey" => Ui.Badge(L.T("cert.policy.weakKey"), "warn"),
             _ => null,
         };
-        var badges = Ui.Row(6, entry.IsIcpBrasil ? Ui.Badge("ICP-Brasil", "solid", Icons.ShieldCheck) : null, policy, validity);
-        return new Border { Padding = new Thickness(20, 12), Child = Ui.Split(left, badges) };
+        List<Control?> badges = [.. (frameworks ?? []).Select(f => (Control?)Ui.Badge(f, "solid", Icons.ShieldCheck)), policy, validity];
+        return new Border { Padding = new Thickness(20, 12), Child = Ui.Split(left, Ui.Row(6, [.. badges])) };
     }
 
     private static void Center(TextBlock text)

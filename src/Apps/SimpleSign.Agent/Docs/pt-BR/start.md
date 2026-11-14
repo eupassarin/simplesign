@@ -13,11 +13,15 @@ O seu certificado deve estar na lista da **Visão geral**:
 
 Certificados sem chave privada, ou que não servem para assinar, não aparecem.
 
-## 3. Faça o teste
+## 3. Habilite a sua estrutura de confiança
+
+Nas Configurações, **Estruturas de confiança** lista as que vêm com o agente: ICP-Brasil, Gov.br, IOFE (Peru) e eIDAS (União Europeia). Habilite as que interessam: só elas respondem aos filtros `country` e `trust` da API, e só elas marcam um certificado com um selo na **Visão geral**. IOFE e eIDAS leem uma lista de confiança, que é baixada em segundo plano.
+
+## 4. Faça o teste
 
 Abra **Testar** e inicie. Ele faz as mesmas chamadas que um site faz e termina conferindo a assinatura. Se o teste passa, o agente, o certificado e a chave funcionam.
 
-## 4. Assine em um site
+## 5. Assine em um site
 
 Na primeira vez que um site chama o agente, você responde se ele pode usar os seus certificados:
 
