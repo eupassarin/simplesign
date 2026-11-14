@@ -106,10 +106,10 @@ internal sealed class OverviewPage : AgentPage
         }
         else
         {
-            foreach (var entry in inventory.Certificates)
+            for (int i = 0; i < inventory.Certificates.Count; i++)
             {
                 list.Children.Add(Ui.Line());
-                list.Children.Add(CertificateRow(entry, inventory.FrameworksOf(entry.Certificate.Thumbprint)));
+                list.Children.Add(CertificateRow(inventory.Certificates[i], inventory.FrameworksOf(i)));
             }
         }
 

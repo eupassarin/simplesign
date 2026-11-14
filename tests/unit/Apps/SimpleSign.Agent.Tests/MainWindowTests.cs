@@ -79,6 +79,46 @@ public sealed class MainWindowTests
         window.GetVisualDescendants().OfType<TextBlock>().ShouldContain(t => t.Text == L.T("overview.running.title"));
         window.Close();
         L.Use(L.English);
+        // Drain the jobs the language change posted while the certificates above are still alive.
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// A language change after the window closed must not rebuild its pages: unsubscribing does not cancel a job
+    /// already posted, and a page rebuilt then reads certificates whose owner may have released them — which is how
+    /// the Overview came to call Thumbprint on a disposed certificate.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LanguageChangeAfterTheWindowClosed_DoesNotRebuildIt()
+    {
+        MainWindow.Animate = false;
+        L.Use(L.English);
+        using var certificate = Fixtures.RsaCertificate();
+        IReadOnlyList<CertificateEntry> entries = [new(CertificateSourceKind.Store, certificate)];
+        var services = Fixtures.ServicesWithTrust(null, TrustFrameworkCatalog.IcpBrasil);
+        services.Settings.Current.AgentPort = Fixtures.FreePort();
+        await using var controller = new AgentController(services, _ => Task.FromResult(entries));
+        var window = new MainWindow(controller);
+        window.Show();
+        Settle(() => window.Inventory is not null);
+        string english = L.T("overview.certificates.title");
+        Has(window, english).ShouldBeTrue();
+
+        window.Close();
+        L.Use(L.Portuguese);
+        Dispatcher.UIThread.RunJobs();
+
+        try
+        {
+            // Still the English text: the posted rebuild returned without touching the page or the certificates.
+            Has(window, english).ShouldBeTrue();
+            Has(window, L.T("overview.certificates.title")).ShouldBeFalse();
+        }
+        finally
+        {
+            L.Use(L.English);
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
     [AvaloniaFact]
@@ -111,6 +151,7 @@ public sealed class MainWindowTests
         services.Signatures.ShouldBe(1);
         window.Close();
         L.Use(L.English);
+        Dispatcher.UIThread.RunJobs();
     }
 
     [AvaloniaFact]

@@ -8,18 +8,21 @@ namespace SimpleSign.Agent.Services;
 /// <param name="Certificates">The certificates the agent can sign with.</param>
 /// <param name="Drivers">The PKCS#11 drivers found, with how many tokens each sees.</param>
 /// <param name="RecognizedBy">
-/// Per certificate thumbprint, the names of the enabled trust frameworks that recognize it. A framework whose trusted
-/// list is still being read contributes nothing until the next refresh.
+/// For each entry of <paramref name="Certificates"/>, in the same order, the names of the enabled trust frameworks
+/// that recognize it. A framework whose trusted list is still being read contributes nothing until the next refresh.
+/// It is worked out while the inventory is built, off the UI thread, so drawing a row never reads the certificate
+/// again: <see cref="System.Security.Cryptography.X509Certificates.X509Certificate2.Thumbprint"/> checks the handle
+/// on every call and throws once the certificate is disposed.
 /// </param>
 internal sealed record CertificateInventory(
     IReadOnlyList<CertificateEntry> Certificates,
     IReadOnlyList<string> Drivers,
-    IReadOnlyDictionary<string, IReadOnlyList<string>>? RecognizedBy = null)
+    IReadOnlyList<IReadOnlyList<string>>? RecognizedBy = null)
 {
-    /// <summary>The frameworks that recognize the certificate of <paramref name="thumbprint"/>.</summary>
-    /// <param name="thumbprint">The certificate's thumbprint.</param>
-    public IReadOnlyList<string> FrameworksOf(string? thumbprint) =>
-        thumbprint is not null && RecognizedBy?.TryGetValue(thumbprint, out var names) == true ? names : [];
+    /// <summary>The frameworks that recognize the certificate at <paramref name="index"/>.</summary>
+    /// <param name="index">The position in <see cref="Certificates"/>.</param>
+    public IReadOnlyList<string> FrameworksOf(int index) =>
+        RecognizedBy is { } names && index >= 0 && index < names.Count ? names[index] : [];
 }
 
 internal enum AgentState
@@ -153,20 +156,17 @@ internal sealed class AgentController : IAsyncDisposable
     }, cancellationToken);
 
     /// <summary>Which enabled frameworks recognize each certificate; the frameworks' lists load in the background.</summary>
-    private async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> RecognizeAsync(
+    private async Task<IReadOnlyList<IReadOnlyList<string>>> RecognizeAsync(
         IReadOnlyList<CertificateEntry> entries, CancellationToken cancellationToken)
     {
         Services.TrustFrameworks.StartLoading();
-        var byThumbprint = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        var recognized = new List<IReadOnlyList<string>>(entries.Count);
         foreach (var entry in entries)
         {
-            if (entry.Certificate.Thumbprint is { Length: > 0 } thumbprint && !byThumbprint.ContainsKey(thumbprint))
-            {
-                byThumbprint[thumbprint] = await Services.TrustFrameworks.RecognizedByAsync(entry.Certificate, cancellationToken);
-            }
+            recognized.Add(await Services.TrustFrameworks.RecognizedByAsync(entry.Certificate, cancellationToken));
         }
 
-        return byThumbprint;
+        return recognized;
     }
 
     public async ValueTask DisposeAsync()
