@@ -601,6 +601,18 @@ when to use which; each has its own article.
   `Brasil: Lei 14.063` node for them. The level is now reported only for a signature validated under
   the Brazilian framework or carrying an AEA manifest.
 
+### Dependencies
+
+- Every package reference is now on **one version across the repository**. Notably
+  `System.Security.Cryptography.Xml` moves 10.0.13 → **10.0.14** in the three packages that ship it
+  (`SimpleSign.XAdES`, `SimpleSign.Brazil.Fiscal`, `SimpleSign.Brazil.IcpBrasil.Xades`), matching
+  every other Microsoft package. Test-only: `Microsoft.NET.Test.Sdk` 18.5.1 → 18.11.0,
+  `coverlet.collector` 10.0.1 → 10.1.0 and `xunit.runner.visualstudio` 3.1.5 → 4.0.1 (the current
+  stable, already in use by two projects on the same xunit 2.9.3).
+- No advisory affects any version in use: the full transitive closure (86 packages) was checked
+  against NuGet's vulnerability database. Ten of them have advisories on record; none applies to
+  the versions referenced here.
+
 ### Documentation
 
 - New [apps.md](docs/articles/apps.md) (the CLI, Agent, TestBench and Sandbox, with screenshots),
