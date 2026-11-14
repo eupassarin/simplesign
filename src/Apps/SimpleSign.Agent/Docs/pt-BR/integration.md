@@ -7,7 +7,7 @@ O agente ouve só em `http://127.0.0.1:{port}`. A página chama com `fetch`; as 
 | Chamada | O que faz |
 | --- | --- |
 | `GET /api/health` | Diz que o agente está lá: `status`, `version`, `app`. Não pede permissão. |
-| `GET /api/certificates` | Lista os certificados de assinatura. Opcionais: `source=store` ou `source=pkcs11`; `country=BR` (os que encadeiam numa estrutura de confiança desse país) ou `trust=icp-brasil` / `trust=govbr` (uma estrutura); `signingOnly=true` (válidos agora e aptos a assinar); e `filterIcpBrasil=true`, o filtro ICP-Brasil anterior. |
+| `GET /api/certificates` | Lista os certificados de assinatura. Opcionais: `source=store` ou `source=pkcs11`; `country=BR\|PE\|EU` (os que encadeiam numa estrutura de confiança desse país) ou `trust=icp-brasil` / `govbr` / `iofe` / `eidas` (uma estrutura); `signingOnly=true` (válidos agora e aptos a assinar); e `filterIcpBrasil=true`, o filtro ICP-Brasil anterior. Só as estruturas habilitadas nas Configurações respondem a isso. |
 | `POST /api/sign` | Assina até 100 itens com um certificado, depois que o usuário confirma. |
 
 Um certificado tem `name`, `thumbprint`, `issuerName`, `notBefore`, `expireDate`, `signatureAlgorithm` (RSA ou ECDSA), `userCertificateBase64`, `source` (store ou pkcs11) e `tokenLabel`.
@@ -37,6 +37,10 @@ const [result] = await (await fetch(`${agent}/api/sign`, {
 
 // result.signedHashBase64 volta para o servidor; result.error diz por que um item falhou.
 ```
+
+## Pedidos assinados pelo servidor
+
+Um agente configurado com `signedRequestsRequired` só assina quando o corpo também traz `signedRequest`: um JWS em serialização compacta (RFC 7515) que o servidor emite com uma chave que o agente está configurado para confiar. O cabeçalho traz `alg` (ES256/384/512, RS256/384/512 ou PS256/384/512), `typ` `simplesign-sign-request+jws` e, opcionalmente, `kid`; as claims são `aud` `simplesign-agent`, `origin` (o site exato), `thumbprint` (o certificado), `items` (um `{ id, digest }` por item, sendo o digest o SHA-256 em base64url dos bytes a assinar), `iat`, `exp` (no máximo cinco minutos depois de `iat`) e `jti` (aceito uma vez). Um token ausente, expirado, repetido, assinado por outra chave ou que descreve outros bytes é recusado com 400 antes de perguntar ao usuário, e a confirmação passa a mostrar o `documentName` do token, não o do corpo. Num agente que não exige token, `signedRequest` é ignorado.
 
 `authenticatedAttributeBase64` são os bytes a assinar: atributos assinados CMS em DER (PAdES, CAdES) ou um `SignedInfo` XML-DSig canônico (XAdES). Qualquer outra coisa — um hash solto, um documento — é recusada com 400 antes de perguntar ao usuário, assim como atributos assinados cujo `signingCertificateV2` aponta outro certificado. A confirmação mostra o resumo que será assinado (algoritmo e os primeiros e últimos bytes). O agente calcula o hash com `hashAlgorithm` (SHA256, SHA384 ou SHA512) e assina: RSA com PKCS#1 v1.5, ECDSA no formato IEEE P1363 (r seguido de s). `documentName` aparece para o usuário na confirmação.
 
@@ -71,10 +75,11 @@ precisa ser passada com `.WithCertificate(certificate, chain)`. O `/api/certific
 | Status | Significado |
 | --- | --- |
 | 200 | Feito. Em `/api/sign`, confira `error` em cada item. |
-| 400 | Pedido inválido: JSON inválido, sem `thumbprint`, fora de 1 a 100 itens, ou um item que não é atributos assinados nem um `SignedInfo`; `country` ou `trust` desconhecido. |
+| 400 | Pedido inválido: JSON inválido, sem `thumbprint`, fora de 1 a 100 itens, ou um item que não é atributos assinados nem um `SignedInfo`; `country` ou `trust` desconhecido, ou não habilitado; `signedRequest` ausente ou inválido. |
 | 403 | O usuário recusou, ou o site está bloqueado. |
 | 404 | Certificado ou endereço desconhecido. |
 | 429 | Mais de 20 chamadas por minuto do mesmo site. |
+| 503 | A lista de confiança da estrutura pedida não está disponível offline; tente de novo em instantes. |
 | Sem resposta | O agente não está instalado, não está ativo, ou está em outra porta. |
 
 > O site é identificado pela origem exata (esquema, host e porta). Páginas abertas de um arquivo, e origens que não são http ou https, são recusadas.

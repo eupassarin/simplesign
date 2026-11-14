@@ -13,7 +13,13 @@ internal static class DocLibrary
     /// <summary>The Markdown of a topic in a language, with {port} replaced.</summary>
     public static string Load(string topic, string language, int port)
     {
-        string name = $"Docs/{(language == L.Portuguese ? L.Portuguese : L.English)}/{topic}.md";
+        string folder = language switch
+        {
+            L.Portuguese => L.Portuguese,
+            L.Spanish => L.Spanish,
+            _ => L.English,
+        };
+        string name = $"Docs/{folder}/{topic}.md";
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
             ?? throw new FileNotFoundException(name);
         using var reader = new StreamReader(stream);

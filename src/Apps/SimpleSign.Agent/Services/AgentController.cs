@@ -5,7 +5,25 @@ using SimpleSign.Agent.Server;
 namespace SimpleSign.Agent.Services;
 
 /// <summary>What the window lists: the signing certificates and the installed token drivers.</summary>
-internal sealed record CertificateInventory(IReadOnlyList<CertificateEntry> Certificates, IReadOnlyList<string> Drivers);
+/// <param name="Certificates">The certificates the agent can sign with.</param>
+/// <param name="Drivers">The PKCS#11 drivers found, with how many tokens each sees.</param>
+/// <param name="RecognizedBy">
+/// For each entry of <paramref name="Certificates"/>, in the same order, the names of the enabled trust frameworks
+/// that recognize it. A framework whose trusted list is still being read contributes nothing until the next refresh.
+/// It is worked out while the inventory is built, off the UI thread, so drawing a row never reads the certificate
+/// again: <see cref="System.Security.Cryptography.X509Certificates.X509Certificate2.Thumbprint"/> checks the handle
+/// on every call and throws once the certificate is disposed.
+/// </param>
+internal sealed record CertificateInventory(
+    IReadOnlyList<CertificateEntry> Certificates,
+    IReadOnlyList<string> Drivers,
+    IReadOnlyList<IReadOnlyList<string>>? RecognizedBy = null)
+{
+    /// <summary>The frameworks that recognize the certificate at <paramref name="index"/>.</summary>
+    /// <param name="index">The position in <see cref="Certificates"/>.</param>
+    public IReadOnlyList<string> FrameworksOf(int index) =>
+        RecognizedBy is { } names && index >= 0 && index < names.Count ? names[index] : [];
+}
 
 internal enum AgentState
 {
@@ -124,15 +142,32 @@ internal sealed class AgentController : IAsyncDisposable
     {
         if (_certificates is not null)
         {
-            return new CertificateInventory(await _certificates(cancellationToken), []);
+            var injected = await _certificates(cancellationToken);
+            return new CertificateInventory(injected, [], await RecognizeAsync(injected, cancellationToken));
         }
 
         var store = CertificateService.ListStore();
         var (tokens, drivers) = await CertificateService.ListTokensAsync(cancellationToken);
+        IReadOnlyList<CertificateEntry> all = [.. store, .. tokens];
         return new CertificateInventory(
-            [.. store, .. tokens],
-            [.. drivers.Select(d => $"{d.Driver.Driver.Product} ({d.Tokens.Count})")]);
+            all,
+            [.. drivers.Select(d => $"{d.Driver.Driver.Product} ({d.Tokens.Count})")],
+            await RecognizeAsync(all, cancellationToken));
     }, cancellationToken);
+
+    /// <summary>Which enabled frameworks recognize each certificate; the frameworks' lists load in the background.</summary>
+    private async Task<IReadOnlyList<IReadOnlyList<string>>> RecognizeAsync(
+        IReadOnlyList<CertificateEntry> entries, CancellationToken cancellationToken)
+    {
+        Services.TrustFrameworks.StartLoading();
+        var recognized = new List<IReadOnlyList<string>>(entries.Count);
+        foreach (var entry in entries)
+        {
+            recognized.Add(await Services.TrustFrameworks.RecognizedByAsync(entry.Certificate, cancellationToken));
+        }
+
+        return recognized;
+    }
 
     public async ValueTask DisposeAsync()
     {

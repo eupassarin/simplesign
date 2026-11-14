@@ -36,8 +36,9 @@ public sealed record Pkcs11InstalledDriver(Pkcs11Driver Driver, string LibraryPa
 public sealed record Pkcs11DriverTokens(Pkcs11InstalledDriver Driver, IReadOnlyList<Pkcs11TokenInfo> Tokens, string? Error);
 
 /// <summary>
-/// Finds the PKCS#11 drivers of the A3 tokens and smartcards used in Brazil (and generic OpenSC
-/// readers) where their vendors install them, so users do not need to know the library path.
+/// Finds the PKCS#11 drivers of the tokens and smartcards used in Brazil (A3) and Peru, and generic
+/// OpenSC readers, where their vendors install them, so users do not need to know the library path.
+/// A driver that is not in this catalog is reached through <see cref="LibraryEnvironmentVariable"/>.
 /// </summary>
 /// <example>
 /// <code>
@@ -84,7 +85,8 @@ public static class Pkcs11Drivers
             [Sys + "gclib.dll", Sys + "pk2priv.dll", "%ProgramFiles%\\Gemplus\\GemSafe Libraries\\BIN\\gclib.dll"],
             ["/usr/lib/libgclib.so"],
             []),
-        new("Oberthur / IDEMIA", "AWP (Certisign, Cosmo)",
+        // RENIEC distributes AuthentIC WebPack as the middleware of Peru's DNIe, which is this same AWP library.
+        new("Oberthur / IDEMIA", "AWP / AuthentIC WebPack (Certisign, Cosmo, RENIEC DNIe)",
             [Sys + "OcsCryptoki.dll", "%ProgramFiles(x86)%\\Oberthur Technologies\\AWP\\DLLs\\OcsCryptolib_P11.dll"],
             ["/usr/local/AWP/lib/libOcsCryptoki.so"],
             ["/usr/local/AWP/lib/libOcsCryptoki.dylib"]),
@@ -92,7 +94,8 @@ public static class Pkcs11Drivers
             [Sys + "ngp11v211.dll", Sys + "asepkcs.dll", Sys + "acospkcs11.dll"],
             ["/usr/lib/libepsng_p11.so", "/usr/local/ngsrv/libepsng_p11.so.1", "/usr/lib/libasepkcs.so"],
             ["/usr/local/lib/libepsng_p11.dylib"]),
-        new("Feitian", "ePass2003",
+        // Peruvian certification authorities (e.g. Llama.pe) issue on this token as well.
+        new("Feitian", "ePass2003 (also Peru)",
             [Sys + "eps2003csp11v2.dll", Sys + "eps2003csp11.dll"],
             ["/usr/lib/ePass2003-Linux-x64/x86_64/redist/libcastle.so.1.0.0", "/usr/local/lib/libcastle.so.1.0.0"],
             ["/usr/local/lib/libcastle.1.0.0.dylib"]),

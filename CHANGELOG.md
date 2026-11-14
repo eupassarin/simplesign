@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Agent: trust frameworks the user enables, and generic hardening
+
+- **Every trust framework is built into `SimpleSign.Agent`** — ICP-Brasil, Gov.br, IOFE (Peru) and eIDAS (EU) — and
+  the user enables the ones they want in *Settings → Trust frameworks* (`enabledTrustFrameworks` in `settings.json`).
+  Only an enabled framework answers `?country=` (`BR`, `PE`, `EU`), `?trust=` (`icp-brasil`, `govbr`, `iofe`, `eidas`)
+  and `filterIcpBrasil`, and only an enabled framework puts a badge on a certificate in the Overview, which is no
+  longer ICP-Brasil only. A disabled framework answers 400 listing what is enabled.
+  A new installation enables none; an existing `settings.json` without the key keeps `icp-brasil` and `govbr`, so
+  current integrations are unaffected. IOFE's and eIDAS's trusted lists load in the background, are cached beside
+  `settings.json` and refresh every six hours; while one cannot be read its filters answer 503 ("not available
+  offline") instead of silently returning fewer certificates.
+- **Server-signed sign requests (opt-in).** With `signedRequestsRequired` and `signedRequestKeys`, `POST /api/sign` is
+  answered only for a request carrying `signedRequest`: a JWS (RFC 7515; ES/RS/PS 256/384/512) binding the origin, the
+  certificate thumbprint, the digest of every item, a five-minute expiry and a one-use `jti`. It is verified before the
+  bytes are parsed and before the user is asked, and the consent dialog then shows the token's document name instead of
+  the page's. Off by default, and ignored when not required.
+- **PIN warnings.** The PIN dialog now shows the token's own flags before a wrong PIN can cost the card: last attempt
+  (`CKF_USER_PIN_FINAL_TRY`, as an error), a wrong PIN since the last good one, and a PIN that must still be changed.
+- **Locked-down installations.** A machine-level `policy.json` (`$SIMPLESIGN_AGENT_POLICY`, `%ProgramData%\SimpleSign`,
+  `/Library/Application Support/SimpleSign`, `/etc/simplesign`) can fix and lock the allowed origins, the
+  signed-request mode and its keys, the enabled frameworks, the port and the PIN cache. A locked setting is read-only
+  in the window and cannot be saved away; with the origins locked, an unknown site is refused without asking. A
+  `policy.json` that cannot be parsed makes the agent refuse every request, rather than quietly dropping the lock.
+- **Spanish (`es-ES`)** alongside `en-US` and `pt-BR`, in the window, the dialogs, the API messages and the five
+  built-in documentation pages. One neutral Spanish: any `es*` system language gets it.
+- `Pkcs11Drivers`: the catalog now names the two middlewares used in Peru that it already found — Oberthur/IDEMIA
+  **AWP / AuthentIC WebPack**, which is what RENIEC publishes for the DNIe, and Feitian **ePass2003**, which Peruvian
+  certification authorities issue on. No path was added for a module whose vendor documentation does not state one;
+  `SIMPLESIGN_PKCS11_LIBRARY` is documented as the way in for those.
+
 ### Added — eIDAS: SimpleSign.Europe.Eidas, the EU trust framework
 
 - `EidasExtension` / `EidasProfile` (`eidas`): trust anchors from the EU list of trusted lists and its national lists,

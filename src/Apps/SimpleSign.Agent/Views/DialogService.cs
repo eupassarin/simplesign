@@ -7,9 +7,9 @@ namespace SimpleSign.Agent.Views;
 /// <summary>Agent prompts on the UI thread, shown on top of the browser.</summary>
 internal sealed class DialogService : IDialogService
 {
-    public Task<string?> AskSecretAsync(string title, string message, string confirmText) => OnUi(async () =>
+    public Task<string?> AskSecretAsync(string title, string message, string confirmText, string? warning = null, bool severe = false) => OnUi(async () =>
     {
-        var dialog = new PromptWindow(title, message, confirmText);
+        var dialog = new PromptWindow(title, message, confirmText, warning, severe);
         return await Show(dialog, () => dialog.Result);
     });
 

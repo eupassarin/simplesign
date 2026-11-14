@@ -37,6 +37,7 @@ internal sealed class MainWindow : Window
     private readonly CancellationTokenSource _closing = new();
     private string? _sheet;
     private bool _loadingInventory;
+    private bool _closed;
 
     public MainWindow(AgentController controller)
     {
@@ -74,6 +75,9 @@ internal sealed class MainWindow : Window
             Controller.Services.Log.Added -= OnLogAdded;
             Controller.Services.Log.Cleared -= OnLogCleared;
             L.Changed -= OnLanguageChanged;
+            // Unsubscribing does not cancel a job already posted, and a page rebuilt after the window closed would
+            // read certificates its owner may have released.
+            _closed = true;
             _closing.Cancel();
             _closing.Dispose();
         };
@@ -197,7 +201,7 @@ internal sealed class MainWindow : Window
         pill.Margin = new Thickness(0, 0, 6, 0);
 
         var language = L.Languages.First(l => l.Id == L.Language);
-        var next = L.Languages.First(l => l.Id != L.Language);
+        var next = L.Languages[(L.Languages.ToList().FindIndex(l => l.Id == L.Language) + 1) % L.Languages.Count];
         var languageButton = new Button { Content = Ui.Row(5, Ui.Icon(Icons.Globe), Ui.Text(language.Short, "small strong")) }
             .Class("sm").Tip(L.T("topbar.language", language.Label, next.Label));
         languageButton.Click += (_, _) => Appearance.SetLanguage(Controller, next.Id);
@@ -293,12 +297,22 @@ internal sealed class MainWindow : Window
 
     private void OnControllerChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
     {
+        if (_closed)
+        {
+            return;
+        }
+
         RenderTopbar();
         NotifyPages();
     });
 
     private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
     {
+        if (_closed)
+        {
+            return;
+        }
+
         RenderTopbar();
         foreach (var page in _pages.Values)
         {
@@ -313,6 +327,11 @@ internal sealed class MainWindow : Window
 
     private void OnLogAdded(object? sender, LogEntry entry) => Dispatcher.UIThread.Post(() =>
     {
+        if (_closed)
+        {
+            return;
+        }
+
         foreach (var page in _pages.Values)
         {
             page.OnActivity(entry);
@@ -321,6 +340,11 @@ internal sealed class MainWindow : Window
 
     private void OnLogCleared(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
     {
+        if (_closed)
+        {
+            return;
+        }
+
         foreach (var page in _pages.Values)
         {
             page.OnActivity(null);

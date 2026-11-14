@@ -14,6 +14,7 @@ public sealed class DocLibraryTests
         {
             data.Add(topic, L.English);
             data.Add(topic, L.Portuguese);
+            data.Add(topic, L.Spanish);
         }
 
         return data;
@@ -21,7 +22,7 @@ public sealed class DocLibraryTests
 
     [Theory]
     [MemberData(nameof(TopicsAndLanguages))]
-    public void Load_EveryTopicInBothLanguages_ParsesAndStartsWithItsTitle(string topic, string language)
+    public void Load_EveryTopicInEveryLanguage_ParsesAndStartsWithItsTitle(string topic, string language)
     {
         string text = DocLibrary.Load(topic, language, 21590);
 
@@ -53,14 +54,17 @@ public sealed class DocLibraryTests
     }
 
     [Fact]
-    public void Load_BothLanguages_HaveTheSameStructure()
+    public void Load_EveryLanguage_HasTheSameStructure()
     {
         foreach (string topic in DocLibrary.Topics)
         {
             var english = Markdown.Parse(DocLibrary.Load(topic, L.English, 1));
-            var portuguese = Markdown.Parse(DocLibrary.Load(topic, L.Portuguese, 1));
-
-            portuguese.Select(b => b.GetType().Name).ShouldBe(english.Select(b => b.GetType().Name), topic);
+            foreach (string language in new[] { L.Portuguese, L.Spanish })
+            {
+                Markdown.Parse(DocLibrary.Load(topic, language, 1))
+                    .Select(b => b.GetType().Name)
+                    .ShouldBe(english.Select(b => b.GetType().Name), $"{topic} {language}");
+            }
         }
     }
 
