@@ -470,14 +470,45 @@ when to use which; each has its own article.
   steps — checks it against the connected Sandbox, and runs one step, a section or all of them,
   through the library, the CLI or both. It shows everything a step will do before it runs, keeps each
   step's latest result, and exports the evidence as an HTML page and a zip. It reports where the
-  library and the CLI disagree ("Lib ≠ CLI") and where EU DSS disagrees. Bundled samples:
-  `sandbox-basics`, `indecopi-guia-v4` (70 steps) and `etsi-baseline` (115 steps).
+  library and the CLI disagree ("Lib ≠ CLI") and where EU DSS disagrees. Every section and step
+  says what it runs and why, and loading a playbook warns about a step without an objective. An
+  input's `accept` is enforced on upload: the extension (or MIME type) must be listed, the content
+  must match it (PDF, XML, CMS), and an empty file is refused. Bundled samples:
+  `sandbox-basics`, `etsi-baseline`, `indecopi-guia-v4`, `icp-brasil-pades`, `govbr-pades` and
+  `eidas-baseline`. They **complement** each other: a check every signer or validator makes
+  whatever the policy is appears once, in `sandbox-basics` or `etsi-baseline` under the generic
+  policies, and a framework playbook keeps only what its profile and policies decide differently
+  (tests check each framework preset against the generic policies constraint by constraint).
 - **SimpleSign Agent** — a cross-platform tray / menu-bar app (Avalonia) that web pages call to sign
   with the OS store or an A3 token, on `127.0.0.1:21590`, with per-site authorization, a consent
-  dialog for every signature and the PIN asked by the app.
-  `GET /api/certificates?country=XX` (or `?trust=icp-brasil|govbr`, `?signingOnly=true`) lists the
-  certificates that chain to that country's registered `ICountryExtension`s, checked with
+  dialog for every signature and the PIN asked by the app. It speaks `en-US`, `pt-BR` and `es-ES`.
+  **Every trust framework is built in** — ICP-Brasil, Gov.br, IOFE (Peru) and eIDAS (EU) — and the
+  user enables the ones they want in *Settings → Trust frameworks* (`enabledTrustFrameworks`). Only
+  an enabled framework answers `GET /api/certificates?country=BR|PE|EU` (or
+  `?trust=icp-brasil|govbr|iofe|eidas`, `?signingOnly=true`, `filterIcpBrasil`) and badges a
+  certificate in the Overview; a disabled one answers 400 listing what is enabled. A new
+  installation enables none, and an existing `settings.json` without the key keeps `icp-brasil` and
+  `govbr`. IOFE's and eIDAS's trusted lists load in the background, are cached beside
+  `settings.json` and refresh every six hours; while one cannot be read its filters answer 503
+  rather than quietly returning fewer certificates. Certificates are listed with
   `SigningCertificateCheck`.
+  - **Server-signed sign requests (opt-in).** With `signedRequestsRequired` and `signedRequestKeys`,
+    `POST /api/sign` is answered only for a request carrying `signedRequest`: a JWS (RFC 7515;
+    ES/RS/PS 256/384/512) binding the origin, the certificate thumbprint, the digest of every item,
+    a five-minute expiry and a one-use `jti`. It is verified before the bytes are parsed and before
+    the user is asked, and the consent dialog then shows the token's document name instead of the
+    page's.
+  - **Locked-down installations.** A machine-level `policy.json`
+    (`$SIMPLESIGN_AGENT_POLICY`, `%ProgramData%\SimpleSign`,
+    `/Library/Application Support/SimpleSign`, `/etc/simplesign`) fixes and locks the allowed
+    origins, the signed-request mode and its keys, the enabled frameworks, the port and the PIN
+    cache. A locked setting is read-only in the window; one that cannot be parsed makes the agent
+    refuse every request instead of quietly dropping the lock.
+  - **PIN warnings.** The PIN dialog shows the token's own flags before a wrong PIN can cost the
+    card: last attempt (`CKF_USER_PIN_FINAL_TRY`), a wrong PIN since the last good one, and a PIN
+    that must still be changed.
+  - `Pkcs11Drivers` names the two middlewares used in Peru that it already found: Oberthur/IDEMIA
+    AWP (AuthentIC WebPack), what RENIEC publishes for the DNIe, and Feitian ePass2003.
 - **CLI** — `augment`, `sign-dir`, `deferred prepare|complete`, `cades sign|validate`,
   `xades sign|validate`, `timestamp create|verify`, `policy export|schema`, `audit verify`,
   `pkcs11 list|drivers`, `psc certificates`, `csc list`, `fiscal sign|validate` and `explain`, plus

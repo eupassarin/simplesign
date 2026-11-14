@@ -116,6 +116,18 @@ internal static class PlaybookValidator
             {
                 Error($"$.inputs[{i}].title", "Say what to upload (title).");
             }
+
+            // accept is the upload's rule: the server refuses a file whose extension or content it does not allow.
+            var tokens = PlaybookUploads.Tokens(input.Accept);
+            if (tokens.Count == 0)
+            {
+                issues.Add(new($"$.inputs[{i}].accept", $"Say which files '{input.Id}' takes (accept: .pdf, .xml, .p7s…): without it any file is taken.", IsError: false));
+            }
+
+            foreach (string token in tokens.Where(t => !PlaybookUploads.IsValidToken(t)))
+            {
+                Error($"$.inputs[{i}].accept", $"'{token}' is neither an extension (.pdf) nor a MIME type (application/pdf).");
+            }
         }
 
         var usedInputs = new HashSet<string>(StringComparer.Ordinal);
@@ -153,6 +165,11 @@ internal static class PlaybookValidator
                 var step = section.Steps[n];
                 string at = $"$.sections[{s}].steps[{n}]";
                 CheckStep(step, at, playbook, stepIds, sandbox, Error);
+                if (string.IsNullOrWhiteSpace(step.Description))
+                {
+                    issues.Add(new(at + ".description", "Say what the step runs and why (description): the page and the evidence show it.", IsError: false));
+                }
+
                 if (step.Expect?.DssAgrees is not null)
                 {
                     if (!(step.CrossValidate ?? playbook.Defaults.CrossValidate))

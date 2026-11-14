@@ -22,6 +22,12 @@ internal sealed class OriginPolicy(SettingsStore settings)
     private readonly Lock _gate = new();
 
     /// <summary>
+    /// Whether an administrator fixed the list of sites: the user is not asked about an unknown site, and allowing,
+    /// blocking or forgetting one does nothing.
+    /// </summary>
+    public bool IsLocked => settings.IsLocked(Services.ManagedPolicy.Origins);
+
+    /// <summary>
     /// Normalizes an Origin header to scheme://host[:port] (lower case, default ports dropped);
     /// null for "null", file:// and anything that is not an http(s) origin.
     /// </summary>
@@ -50,6 +56,11 @@ internal sealed class OriginPolicy(SettingsStore settings)
 
     public void Allow(string origin, bool permanently)
     {
+        if (IsLocked)
+        {
+            return;
+        }
+
         lock (_gate)
         {
             _session.Add(origin);
@@ -81,6 +92,11 @@ internal sealed class OriginPolicy(SettingsStore settings)
     /// <summary>Blocks an origin permanently: its requests are refused without asking.</summary>
     public void Block(string origin)
     {
+        if (IsLocked)
+        {
+            return;
+        }
+
         lock (_gate)
         {
             _session.Remove(origin);
@@ -96,6 +112,11 @@ internal sealed class OriginPolicy(SettingsStore settings)
 
     public void Forget(string origin)
     {
+        if (IsLocked)
+        {
+            return;
+        }
+
         lock (_gate)
         {
             _session.Remove(origin);

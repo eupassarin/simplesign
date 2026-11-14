@@ -37,6 +37,12 @@ internal sealed class AgentSignRequest
     /// <summary>Optional name shown in the consent dialog (new).</summary>
     public string? DocumentName { get; set; }
 
+    /// <summary>
+    /// A JWS the server signed over this request (new, optional). Required only when the agent is configured with
+    /// <c>signedRequestsRequired</c>; see <see cref="SignedRequestVerifier"/> for its exact shape.
+    /// </summary>
+    public string? SignedRequest { get; set; }
+
     public List<AgentSignRequestItem>? SignRequests { get; set; }
 }
 

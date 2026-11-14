@@ -10,6 +10,8 @@ time-stamps) and a topic. The checklist maps each item to the steps that show it
 import json
 import sys
 
+from describe import describe
+
 # The eidas profile on the Sandbox: its LOTL (/tl/lotl.xml) and the list it points to. The CLI says --profile eidas --sandbox URL.
 EIDAS_ON_SANDBOX = {"profile": "Eidas", "profileSource": "Sandbox"}
 
@@ -111,6 +113,65 @@ QUALIFIED = [
 ]
 
 EIDAS = {"trust": [], **EIDAS_ON_SANDBOX}
+
+
+# What each step runs and why, for the steps above that give no desc (describe.py puts them in place).
+DESCRIPTIONS = {
+    "tl-wrong-signer":
+        "The national TL is signed by a key other than the one the LOTL names for its operator: it must not be used, so "
+        "there are no anchors and the eidas policy refuses to sign (UntrustedRoot).",
+    "tl-tampered":
+        "The TL's content changed after it was signed, so its XML signature breaks: no anchors, signing refused.",
+    "tl-expired":
+        "The TL is past its NextUpdate: for signing an outdated list gives no anchors, so the signature is refused.",
+    "lotl-wrong-signer":
+        "The LOTL is signed by a key other than its operator's: nothing it points to can be trusted, so signing is "
+        "refused.",
+    "lotl-tampered":
+        "The LOTL changed after it was signed: its signature breaks, nothing is trusted, signing refused.",
+    "lotl-expired":
+        "The LOTL is past its NextUpdate: an expired LOTL is always refused, so there are no anchors and signing is "
+        "refused.",
+    "v-tl-ok":
+        "Validates the tl-ok file under the eidas profile and policy with good lists: TOTAL_PASSED and qualified as "
+        "QESig (qualified certificate, key on a QSCD).",
+    "v-tl-wrong-signer":
+        "Validates the same file while the TL has another signer: no anchors, so NO_CERTIFICATE_CHAIN_FOUND, and the "
+        "qualification is N/A because the signature is not under eIDAS at all.",
+    "v-tl-expired":
+        "Validates it while the TL has expired: for validation the list is kept but the policy's TLNotExpired fails, so "
+        "the result is INDETERMINATE / TRY_LATER and the qualification 'Indeterminate QESig' (it would be QESig with a "
+        "current list).",
+    "v-lotl-wrong-signer":
+        "Validates it while the LOTL has another signer: nothing is trusted, NO_CERTIFICATE_CHAIN_FOUND.",
+    "q-adesig-qc":
+        "Signs with a qualified certificate (QcCompliance) whose key is not on a QSCD: an advanced signature supported "
+        "by a qualified certificate, AdESig-QC, not QESig.",
+    "q-qeseal":
+        "Signs with a qualified certificate for electronic seals (QcType eseal) on a QSCD: QESeal, the seal counterpart "
+        "of QESig.",
+    "q-not-qualified":
+        "Signs with a certificate that has no QC statements: an advanced electronic signature only (AdESig).",
+    "q-policy-refuses":
+        "Signs with the non-qualified certificate under a policy that sets QcCompliance and QcSSCD to FAIL: a service "
+        "that must make qualified signatures refuses it (CertificateNotQualified).",
+    "q-policy-accepts":
+        "The same policy with the default qualified certificate on a QSCD: the signature is made and qualified as "
+        "QESig.",
+    "ts-qualified":
+        "Signs at B-T with the Sandbox's main TSA, listed as a TSA/QTST service: the signature is QESig and its "
+        "time-stamp a qualified electronic time-stamp (QTSA).",
+    "ts-non-qualified":
+        "Signs at B-T with a TSA listed only as a TSA service: the signature is still QESig, but its time-stamp is not "
+        "qualified (TSA).",
+    "ts-revoked":
+        "Signs at B-T with the withdrawn TSA, whose certificate is revoked: the eidas signing policy refuses its token "
+        "(TimestampCertificateRevoked).",
+    "ts-untrusted":
+        "Signs at B-T with a TSA that is in none of the lists: its token is not trusted, refused (TimestampUntrusted).",
+}
+
+sections = describe(sections, DESCRIPTIONS)
 
 playbook = {
     "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",

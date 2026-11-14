@@ -216,7 +216,7 @@ Its window has an **Overview** (the agent's state, the certificates it can see a
 them), **Sites** (which origins are authorized, and a way to revoke one), **Activity** (what has
 been signed), **Test** (a real health → certificates → sign round trip through the consent dialog)
 and **Documentation**, plus Settings and About panels. The tray menu shows the listening address and
-lets you pause the agent, open the window, or quit.
+lets you pause the agent, open the window, or quit. It speaks English, Portuguese and Spanish.
 
 Three endpoints:
 
@@ -226,11 +226,13 @@ GET  /api/certificates    → the usable certificates, filtered by country or tr
 POST /api/sign            → signs one payload, after the user confirms
 ```
 
-`GET /api/certificates?country=PE`, `?trust=icp-brasil`, `?trust=govbr` and `?signingOnly=true`
-narrow the list to the certificates that chain to a registered country extension's anchors and are
-usable for signing now; the chain is checked with `SigningCertificateCheck`, the same code path the
-signers use, so a certificate the library would refuse is reported as such before the user is asked
-for a PIN.
+All four trust frameworks are built in — ICP-Brasil, Gov.br, IOFE (Peru) and eIDAS (EU) — and the
+user enables the ones they want in *Settings → Trust frameworks*. `?country=BR|PE|EU`,
+`?trust=icp-brasil|govbr|iofe|eidas` and `?signingOnly=true` narrow the list to the certificates
+that chain to an **enabled** framework's anchors and are usable for signing now; the chain is
+checked with `SigningCertificateCheck`, the same code path the signers use, so a certificate the
+library would refuse is reported as such before the user is asked for a PIN. A framework the user
+has not enabled answers 400 listing the ones that are.
 
 `POST /api/sign` only accepts what a signature is actually made of — DER CMS signed attributes, or a
 canonical XML-DSig `SignedInfo`. Anything else (a raw hash, a whole document, bytes of some other
@@ -238,7 +240,10 @@ protocol) is refused with 400 **before** the user is asked to confirm, and the c
 the digest being signed. That check is `DataToSignInspector`, which you can also call yourself.
 
 Every signature needs the user's confirmation, every origin has to be authorized once, and the PIN
-is asked by the app, never by the page. See [agent.md](agent.md).
+is asked by the app, never by the page. Two options go further, both off by default: a server can be
+required to sign each request (a JWS binding the origin, the certificate and the digests), and an
+administrator can ship a machine-level `policy.json` that fixes and locks the allowed origins, the
+enabled frameworks, the port and the PIN cache. See [agent.md](agent.md).
 
 > The screenshots above are of the TestBench. The Agent's window is not pictured here yet — see
 > [agent.md](agent.md) for what each page holds.

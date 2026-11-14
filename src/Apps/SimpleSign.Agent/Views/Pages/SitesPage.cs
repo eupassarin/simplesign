@@ -19,12 +19,15 @@ internal sealed class SitesPage : AgentPage
     {
         var origins = Controller.Server.Origins;
         var settings = Controller.Settings;
+        bool locked = origins.IsLocked;
         var allowed = Section(L.T("sites.allowed.title"), L.T("sites.allowed.subtitle"), L.T("sites.allowed.empty"));
         foreach (string origin in settings.AllowedOrigins.Order(StringComparer.Ordinal))
         {
-            Add(allowed, Row(origin, Ui.Badge(L.T("sites.always"), "ok"),
-                Ui.Button(L.T("sites.block"), Icons.Ban, "sm destructive", () => origins.Block(origin)),
-                Ui.Button(L.T("sites.remove"), Icons.Trash, "sm", () => origins.Forget(origin))));
+            Add(allowed, locked
+                ? Row(origin, Ui.Badge(L.T("sites.always"), "ok"))
+                : Row(origin, Ui.Badge(L.T("sites.always"), "ok"),
+                    Ui.Button(L.T("sites.block"), Icons.Ban, "sm destructive", () => origins.Block(origin)),
+                    Ui.Button(L.T("sites.remove"), Icons.Trash, "sm", () => origins.Forget(origin))));
         }
 
         foreach (string origin in origins.SessionOnly)
@@ -41,12 +44,15 @@ internal sealed class SitesPage : AgentPage
         var blocked = Section(L.T("sites.blocked.title"), L.T("sites.blocked.subtitle"), L.T("sites.blocked.empty"));
         foreach (string origin in settings.BlockedOrigins.Order(StringComparer.Ordinal))
         {
-            Add(blocked, Row(origin, Ui.Badge(L.T("sites.blockedBadge"), "err"),
-                Ui.Button(L.T("sites.unblock"), Icons.Check, "sm", () => origins.Forget(origin))));
+            Add(blocked, locked
+                ? Row(origin, Ui.Badge(L.T("sites.blockedBadge"), "err"))
+                : Row(origin, Ui.Badge(L.T("sites.blockedBadge"), "err"),
+                    Ui.Button(L.T("sites.unblock"), Icons.Check, "sm", () => origins.Forget(origin))));
         }
 
         return Ui.Page(Ui.Col(16,
             Ui.Col(4, Ui.Text(L.T("sites.title"), "h1"), Ui.Text(L.T("sites.intro"), "muted wrap")),
+            locked ? Ui.Note(L.T("sites.locked")) : null,
             Ui.Card(allowed, "flush"),
             Ui.Card(blocked, "flush")));
     }

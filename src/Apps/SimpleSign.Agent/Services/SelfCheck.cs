@@ -75,7 +75,8 @@ internal static class SelfCheck
     /// <summary>The check has no user: the site is allowed, and nothing is signed.</summary>
     private sealed class NoDialogs : IDialogService
     {
-        public Task<string?> AskSecretAsync(string title, string message, string confirmText) => Task.FromResult<string?>(null);
+        public Task<string?> AskSecretAsync(string title, string message, string confirmText, string? warning = null, bool severe = false) =>
+            Task.FromResult<string?>(null);
 
         public Task<ConsentDecision> AskConsentAsync(ConsentRequest request) =>
             Task.FromResult(request.CertificateHolder is null ? ConsentDecision.AllowOnce : ConsentDecision.Deny);

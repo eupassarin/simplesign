@@ -21,15 +21,54 @@ internal enum CertificateSourceKind
 }
 
 /// <summary>A token key: the driver, the token and the key's certificate.</summary>
-internal sealed record TokenKey(string LibraryPath, string DriverName, string TokenLabel, string TokenSerial, string? KeyLabel, bool HasPinPad);
+/// <param name="LibraryPath">The PKCS#11 library that sees the token.</param>
+/// <param name="DriverName">The driver's product name.</param>
+/// <param name="TokenLabel">The token's label.</param>
+/// <param name="TokenSerial">The token's serial number.</param>
+/// <param name="KeyLabel">The key's label on the token.</param>
+/// <param name="HasPinPad">Whether the PIN is typed on the reader instead of in the agent.</param>
+internal sealed record TokenKey(
+    string LibraryPath, string DriverName, string TokenLabel, string TokenSerial, string? KeyLabel, bool HasPinPad)
+{
+    /// <summary>Whether a wrong PIN was typed since the last good one (<c>CKF_USER_PIN_COUNT_LOW</c>).</summary>
+    public bool IsPinCountLow { get; init; }
+
+    /// <summary>Whether one more wrong PIN locks the token (<c>CKF_USER_PIN_FINAL_TRY</c>).</summary>
+    public bool IsPinFinalTry { get; init; }
+
+    /// <summary>Whether the PIN is still the issuer's and must be changed (<c>CKF_USER_PIN_TO_BE_CHANGED</c>).</summary>
+    public bool IsPinToBeChanged { get; init; }
+
+    /// <summary>The warning to show before the PIN is asked for; null when there is nothing to warn about.</summary>
+    public string? PinWarning =>
+        IsPinFinalTry ? L.T("pin.warn.finalTry")
+        : IsPinToBeChanged ? L.T("pin.warn.mustChange")
+        : IsPinCountLow ? L.T("pin.warn.countLow")
+        : null;
+
+    /// <summary>Whether <see cref="PinWarning"/> is about losing the card, so it is shown as an error.</summary>
+    public bool IsPinWarningSevere => IsPinFinalTry;
+}
 
 /// <summary>A certificate the user can sign with.</summary>
+/// <remarks>
+/// Everything this record shows is read from the certificate once, here, while the handle is certainly alive. The
+/// window redraws a certificate row whenever the agent logs something or the language changes, and such a redraw can
+/// run after whoever listed the certificates released them; every member of <see cref="X509Certificate2"/> revalidates
+/// the handle and throws <c>m_safeCertContext is an invalid handle</c> once it is disposed.
+/// </remarks>
 internal sealed record CertificateEntry(CertificateSourceKind Kind, X509Certificate2 Certificate, TokenKey? Token = null, string? FilePath = null)
 {
-    public string Holder => Certificate.GetNameInfo(X509NameType.SimpleName, false);
+    private readonly DateTime _notAfter = Certificate.NotAfter;
+    private readonly (string? Plain, string? Masked) _document = ReadDocument(Certificate);
 
-    public string Issuer => Certificate.GetNameInfo(X509NameType.SimpleName, true);
+    /// <summary>The holder's common name.</summary>
+    public string Holder { get; } = Certificate.GetNameInfo(X509NameType.SimpleName, false);
 
+    /// <summary>The issuer's common name.</summary>
+    public string Issuer { get; } = Certificate.GetNameInfo(X509NameType.SimpleName, true);
+
+    /// <summary>Where the certificate came from, in the user's language.</summary>
     public string Source => Kind switch
     {
         CertificateSourceKind.Token => $"Token {Token!.TokenLabel.Trim()} · {Token.DriverName}",
@@ -37,52 +76,53 @@ internal sealed record CertificateEntry(CertificateSourceKind Kind, X509Certific
         _ => L.T(OperatingSystem.IsMacOS() ? "cert.source.keychain" : "cert.source.store"),
     };
 
-    public string Validity => L.T("cert.validUntil", Certificate.NotAfter.ToString("d", L.Culture));
+    /// <summary>How long the certificate is valid, in the user's language.</summary>
+    public string Validity => L.T("cert.validUntil", _notAfter.ToString("d", L.Culture));
 
-    public bool IsExpired => Certificate.NotAfter < DateTime.Now;
+    /// <summary>Whether the certificate has expired.</summary>
+    public bool IsExpired => _notAfter < DateTime.Now;
+
+    /// <summary>Whole days until the certificate expires; negative once it has.</summary>
+    public int DaysLeft => (int)Math.Floor((_notAfter - DateTime.Now).TotalDays);
 
     /// <summary>
     /// Why a server with SimpleSign's default signing policy refuses this certificate: "keyUsage" when the key usage
     /// allows neither digitalSignature nor nonRepudiation (or is missing), "weakKey" for a key the policy finds too
     /// small; else null. The checks are those of <see cref="SigningPolicy.Default"/>.
     /// </summary>
-    public string? PolicyIssue
-    {
-        get
-        {
-            var findings = SigningPolicy.Default.Evaluate(Certificate, DateTimeOffset.UtcNow)
-                .Where(f => f.Level == ConstraintLevel.Fail)
-                .ToList();
-            return findings.Exists(f => f.Reason == SigningErrorReason.KeyUsageNotPermitted) ? "keyUsage"
-                : findings.Exists(f => f.Reason == SigningErrorReason.KeyTooWeak) ? "weakKey"
-                : null;
-        }
-    }
+    public string? PolicyIssue { get; } = ReadPolicyIssue(Certificate);
 
-    public string? Document
-    {
-        get
-        {
-            var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(Certificate);
-            return cpf is not null ? $"CPF {FormatCpf(cpf)}" : cnpj is not null ? $"CNPJ {FormatCnpj(cnpj)}" : null;
-        }
-    }
+    /// <summary>The holder's CPF or CNPJ, formatted; null when the certificate carries neither.</summary>
+    public string? Document => _document.Plain;
 
     /// <summary>The holder's CPF or CNPJ with most digits hidden, for display.</summary>
-    public string? MaskedDocument
+    public string? MaskedDocument => _document.Masked;
+
+    /// <summary>Whether the certificate was issued under ICP-Brasil.</summary>
+    public bool IsIcpBrasil { get; } = IcpBrasilChainValidator.IsIcpBrasilCertificate(Certificate);
+
+    /// <summary>The holder and the source on one line, for a list.</summary>
+    public string Display => $"{Holder} — {Source}";
+
+    private static string? ReadPolicyIssue(X509Certificate2 certificate)
     {
-        get
-        {
-            var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(Certificate);
-            return cpf is { Length: 11 } ? $"CPF ***.{cpf[3..6]}.{cpf[6..9]}-**"
-                : cnpj is { Length: 14 } ? $"CNPJ {cnpj[..2]}.***.***/{cnpj[8..12]}-**"
-                : null;
-        }
+        var findings = SigningPolicy.Default.Evaluate(certificate, DateTimeOffset.UtcNow)
+            .Where(f => f.Level == ConstraintLevel.Fail)
+            .ToList();
+        return findings.Exists(f => f.Reason == SigningErrorReason.KeyUsageNotPermitted) ? "keyUsage"
+            : findings.Exists(f => f.Reason == SigningErrorReason.KeyTooWeak) ? "weakKey"
+            : null;
     }
 
-    public bool IsIcpBrasil => IcpBrasilChainValidator.IsIcpBrasilCertificate(Certificate);
-
-    public string Display => $"{Holder} — {Source}";
+    private static (string? Plain, string? Masked) ReadDocument(X509Certificate2 certificate)
+    {
+        var (cpf, cnpj) = IcpBrasilChainValidator.ExtractCpfCnpj(certificate);
+        string? plain = cpf is not null ? $"CPF {FormatCpf(cpf)}" : cnpj is not null ? $"CNPJ {FormatCnpj(cnpj)}" : null;
+        string? masked = cpf is { Length: 11 } ? $"CPF ***.{cpf[3..6]}.{cpf[6..9]}-**"
+            : cnpj is { Length: 14 } ? $"CNPJ {cnpj[..2]}.***.***/{cnpj[8..12]}-**"
+            : null;
+        return (plain, masked);
+    }
 
     private static string FormatCpf(string d) => d.Length == 11 ? $"{d[..3]}.{d[3..6]}.{d[6..9]}-{d[9..]}" : d;
 
@@ -151,7 +191,12 @@ internal static class CertificateService
                 {
                     entries.Add(new CertificateEntry(CertificateSourceKind.Token, certificate.Certificate,
                         new TokenKey(driver.Driver.LibraryPath, driver.Driver.Driver.Product, token.Label, token.SerialNumber,
-                            certificate.Label, token.HasProtectedAuthenticationPath)));
+                            certificate.Label, token.HasProtectedAuthenticationPath)
+                        {
+                            IsPinCountLow = token.IsPinCountLow,
+                            IsPinFinalTry = token.IsPinFinalTry,
+                            IsPinToBeChanged = token.IsPinToBeChanged,
+                        }));
                 }
             }
         }

@@ -440,6 +440,21 @@ public sealed class TrustedList : ITimedTrustAnchorProvider, ITrustedListInfoPro
         return list;
     }
 
+    // Signing and validating XAdES is not AOT-compatible and says so with RequiresUnreferencedCode and
+    // RequiresDynamicCode. Reading a trusted list is the one path a trimmed or Native AOT application does use: the
+    // eIDAS and IOFE trust frameworks are built on it, and SimpleSign.Agent ships them, so it cannot carry those
+    // attributes without making the whole trust-anchor chain unusable there.
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026:Members annotated with RequiresUnreferencedCodeAttribute require dynamic access",
+        Justification = "A trusted list is signed with an enveloped signature, canonical XML and RSA or ECDSA over "
+            + "SHA-2, implementations that trimming keeps. A list signed any other way fails to verify, which the "
+            + "callers treat as a list that cannot be read: no trust anchor comes from it, so it fails closed.")]
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050:Calling members annotated with RequiresDynamicCodeAttribute may break functionality",
+        Justification = "The dynamic code is XmlDsigXsltTransform, and ETSI TS 119 612 does not use XSLT transforms "
+            + "in a trusted list's signature; one that did would fail to verify and contribute no trust anchor.")]
     private static void VerifySignature(XmlDocument doc, XmlElement root, IReadOnlyList<X509Certificate2> signers)
     {
         var signatures = root.GetElementsByTagName("Signature", SignedXml.XmlDsigNamespaceUrl);

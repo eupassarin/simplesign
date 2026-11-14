@@ -10,6 +10,8 @@ signing, the cryptographic module) are not here: docs/playbooks/indecopi-checkli
 import json
 import sys
 
+from describe import describe
+
 FMT = {"pades": {}, "cades": {"dataId": "cades-sample:text"}, "xades": {"dataId": "xades-sample:order"}}
 
 
@@ -42,7 +44,6 @@ def refused(reason=None):
 # The iofe profile reading the Sandbox's list (/tl/tl.xml) instead of INDECOPI's: the CLI says --profile iofe --sandbox URL.
 IOFE_ON_SANDBOX = {"profile": "Iofe", "profileSource": "Sandbox"}
 TSL = {"trust": [], **IOFE_ON_SANDBOX}
-TSA = {"provider": "Sandbox"}
 IOFE_VALIDATION = {"trust": [], **IOFE_ON_SANDBOX}
 
 sections = [
@@ -68,7 +69,8 @@ sections = [
             "crossValidate": False},
          {**sign("tsl-tsa-unlisted", "Same TSA without the TSL: refused", ["S-1", "tsl", "tsa"], refused("TimestampUntrusted"), level="BT",
                  timestamp={"provider": "SandboxIofe"},
-                 desc="With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service is what makes it trusted."),
+                 desc="With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service of the "
+                      "TSL is what makes it trusted in tsl-tsa-unspecified."),
             "crossValidate": False},
          validate("v-tsl-ok", "Validate with anchors from the TSL", ["V-1", "V-3", "tsl"], "step:tsl-ok", {"outcome": "valid"}, trust=[], **IOFE_ON_SANDBOX),
          # A list whose signature fails is not used: no anchor. An expired one is used, and IOFE's TLNotExpired (FAIL) judges it.
@@ -79,38 +81,11 @@ sections = [
          validate("v-tsl-tsa-unspecified", "Validate a time-stamp whose TSA's CA the TSL lists as 'unspecified'", ["V-3", "S-1", "tsl", "tsa"],
                   "step:tsl-tsa-unspecified", {"outcome": "valid"}, trust=[], **IOFE_ON_SANDBOX),
      ]},
-    {"id": "revocation", "title": "Revocation before signing (CRL and OCSP)", "steps": [
-        sign("crl-https-good", "CRL over HTTPS, good certificate", ["F-5", "F-8", "crl"], {"outcome": "signed"}, credentialId="sandbox:good-crl-https"),
-        sign("crl-https-revoked", "CRL over HTTPS, revoked certificate: refused", ["F-5", "F-8", "crl"], refused("CertificateRevoked"), credentialId="sandbox:revoked-crl-https"),
-        sign("crl-ldap-good", "CRL over LDAP, good certificate", ["F-5", "crl", "ldap"], {"outcome": "signed"}, credentialId="sandbox:good-crl-ldap"),
-        sign("crl-ldap-revoked", "CRL over LDAP, revoked certificate: refused", ["F-5", "crl", "ldap"], refused("CertificateRevoked"), credentialId="sandbox:revoked-crl-ldap"),
-        sign("crl-wrong-key", "CRL signed by another key: refused", ["F-6", "crl"], refused("RevocationStatusUnknown"), sandbox={"crl": "WrongKey"},
-             credentialId="sandbox:good-crl-https",
-             desc="The Sandbox signs the CRL with a key that is not the issuing CA's: the CRL is not accepted and, without OCSP, the status is unknown."),
-        sign("crl-expired", "Expired CRL: refused", ["F-7", "crl"], refused("RevocationStatusUnknown"), sandbox={"crl": "Expired"}, credentialId="sandbox:good-crl-https"),
-        sign("crl-no-next-update", "CRL without nextUpdate: refused", ["F-7", "crl"], refused("RevocationStatusUnknown"), sandbox={"crl": "NoNextUpdate"},
-             credentialId="sandbox:good-crl-https",
-             desc="A CRL without nextUpdate does not say until when it is current: the IOFE policy (CRLNextUpdatePresent) refuses it."),
-        sign("crl-stale", "Revoked after the cached CRL: refused", ["F-8", "crl"], refused("CertificateRevoked"), sandbox={"crl": "Stale", "revoke": ["rsa-3072"]},
-             credentialId="sandbox:rsa-3072",
-             desc="The certificate is revoked now; before signing the status is fetched again (OCSP, then the CRL downloaded without cache), not the earlier copy."),
-        sign("crl-down", "CRL server down, no OCSP: refused", ["F-8", "crl"], refused("RevocationStatusUnknown"), sandbox={"crl": "Down"}, credentialId="sandbox:good-crl-https"),
-        validate("v-crl-wrong-key", "Validate with a CRL signed by another key", ["V-6", "crl"], "step:crl-https-good", {"outcome": "indeterminate"}, sandbox={"crl": "WrongKey"}),
-        validate("v-crl-expired", "Validate with an expired CRL", ["V-7", "crl"], "step:crl-https-good", {"outcome": "indeterminate"}, sandbox={"crl": "Expired"}),
-        sign("chain-revoked", "Certificate under a revoked CA: refused", ["F-9", "revocation"], refused("CertificateRevoked"), credentialId="sandbox:under-revoked-ca"),
-        sign("ocsp-good", "OCSP, good certificate", ["F-10", "ocsp"], {"outcome": "signed"}, credentialId="sandbox:good-ocsp"),
-        sign("ocsp-revoked", "OCSP, revoked certificate: refused", ["F-10", "ocsp"], refused("CertificateRevoked"), credentialId="sandbox:revoked-ocsp"),
-        sign("ocsp-unauthorized", "OCSP response from an unauthorized signer, no CRL: refused", ["F-10", "ocsp"], refused("RevocationStatusUnknown"),
-             sandbox={"ocsp": "Unauthorized"}, credentialId="sandbox:good-ocsp"),
-    ]},
-    {"id": "validity", "title": "Certificate validity and purpose", "steps": [
-        sign("expired", "Expired certificate: refused", ["F-11", "validity"], refused("CertificateExpired"), credentialId="sandbox:expired"),
-        sign("not-yet-valid", "Not yet valid certificate: refused", ["F-11", "validity"], refused("CertificateNotCurrentlyValid"), credentialId="sandbox:not-yet-valid"),
-        sign("chain-expired", "Certificate under an expired CA: refused", ["F-11", "validity"], refused("ChainCertificateNotValid"), credentialId="sandbox:under-expired-ca"),
-        sign("no-key-usage", "Neither digitalSignature nor nonRepudiation: refused", ["F-12", "key-usage"], refused("KeyUsageNotPermitted"), credentialId="sandbox:no-signing-key-usage"),
-        sign("no-key-usage-extension", "No KeyUsage extension: refused", ["F-12", "key-usage"], refused("KeyUsageNotPermitted"), credentialId="sandbox:no-key-usage-extension"),
-        *[sign(f"no-key-usage-{f}", f"{f.upper()}: neither digitalSignature nor nonRepudiation", ["F-12", "key-usage"], refused("KeyUsageNotPermitted"), fmt=f,
-               credentialId="sandbox:no-signing-key-usage") for f in ("cades", "xades")],
+    {"id": "agent", "title": "Key usage of an automated agent",
+     "description": "Section 4.2 asks an automated agent to check the nonRepudiation bit, and section 4.3 the software verifying what agents "
+                    "receive: the iofe policies with KeyUsage = nonRepudiation (declared in policies). The other certificate checks (validity, "
+                    "a key usage not meant for signing, revocation) are the same under any policy: sandbox-basics shows them.",
+     "steps": [
         sign("signed-no-nonrepudiation", "Sign with a certificate without nonRepudiation (to validate)", ["F-12", "key-usage"], {"outcome": "signed"},
              credentialId="sandbox:no-nonrepudiation",
              desc="The iofe signing policy accepts digitalSignature or nonRepudiation (as section 4.1 does for end-user software); "
@@ -119,60 +94,31 @@ sections = [
              refused("KeyUsageNotPermitted"), credentialId="sandbox:no-nonrepudiation", signingPolicyId="playbook:iofe-agent",
              desc="Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe policy with "
                   "KeyUsage = nonRepudiation (playbook:iofe-agent) refuses a certificate that has digitalSignature only."),
+        sign("key-usage-file", "Signer with neither digitalSignature nor nonRepudiation (minimal signing policy, to validate)", ["V-12", "key-usage"],
+             {"outcome": "signed"}, credentialId="sandbox:no-signing-key-usage", signingPolicyId="preset:signing:minimal", validate=False,
+             desc="Signs with a certificate whose key usage allows neither digitalSignature nor nonRepudiation, under the minimal signing "
+                  "policy and without validating, only to produce the file v-key-usage validates."),
+        validate("v-key-usage", "IOFE validation: a signer with neither digitalSignature nor nonRepudiation is not accepted", ["V-12", "key-usage"],
+                 "step:key-usage-file", {"outcome": "indeterminate"},
+                 desc="The IOFE validation policy requires digitalSignature or nonRepudiation in the signing certificate (Req. 23), where the "
+                      "library's default only warns: the certificate without either fails the constraint (INDETERMINATE)."),
         validate("v-no-nonrepudiation", "Validation requires nonRepudiation: not accepted", ["V-12", "key-usage"], "step:signed-no-nonrepudiation",
                  {"outcome": "indeterminate"}, policyId="playbook:iofe-agent-validation",
                  desc="With the iofe policy requiring nonRepudiation (playbook:iofe-agent-validation) the certificate without it fails "
                       "the chain constraint (EN 319 102-1: INDETERMINATE)."),
-        validate("v-revoked", "Validate a revoked signer", ["V-5", "V-8", "V-9", "V-10", "revocation"], "sample:revoked", {"outcome": "indeterminate"},
-                 desc="A sample signed by a certificate revoked afterwards: the validator checks the chain's CRL/OCSP and does not accept it."),
-        validate("v-expired", "Validate an expired signer", ["V-11", "validity"], "sample:expired", {"outcome": "indeterminate"}),
-        validate("v-untrusted", "Validate with a root outside the anchors", ["V-3", "trust"], "sample:untrusted-root", {"outcome": "indeterminate"}),
     ]},
-    {"id": "timestamp", "title": "Time-stamps (RFC 3161)",
-     "description": "Each time-stamp obtained while signing is checked: expected TSA, token signature, trust, validity and revocation of the TSA certificate.",
+    {"id": "report", "title": "Validation report",
+     "description": "What the guide asks a viewer to show the signer and the relying parties (F-30, V-30), in Spanish.",
      "steps": [
-         sign("tsa-ok", "Time-stamp from the Sandbox's TSA", ["S-1", "S-2", "S-3", "S-4", "F-31", "tsa"], {"outcome": "signed", "level": "B-T"}, level="BT", timestamp=TSA,
-              signingControls={"trust": ["SandboxRoot"], "expectedTsa": "tsa"}),
-         sign("tsa-unexpected", "Time-stamp from another TSA than expected: refused", ["S-1", "tsa"], refused("TimestampUntrusted"), level="BT", timestamp=TSA,
-              signingControls={"trust": ["SandboxRoot"], "expectedTsa": "tsa-revoked"}),
-         sign("tsa-invalid-token", "Token with an invalid signature: refused", ["S-2", "tsa"], refused(), sandbox={"tsa": "InvalidToken"}, level="BT", timestamp=TSA),
-         sign("tsa-revoked", "Revoked TSA: refused", ["S-3", "tsa"], refused("TimestampCertificateRevoked"), level="BT", timestamp={"provider": "SandboxRevoked"}),
-         sign("tsa-untrusted", "TSA outside the anchors: refused", ["S-1", "tsa"], refused("TimestampUntrusted"), level="BT", timestamp={"provider": "SandboxUntrusted"}),
-         sign("tsa-expired", "TSA with an expired certificate: refused", ["S-4", "tsa"], refused("TimestampCertificateNotValid"), level="BT",
-              timestamp={"provider": "SandboxExpired"},
-              desc="The TSA certificate has expired: the time-stamp it issues now is not valid at its own time."),
-         *[sign(f"tsa-revoked-{f}", f"{f.upper()}: revoked TSA", ["S-3", "tsa"], refused("TimestampCertificateRevoked"), fmt=f, level="BT",
-                timestamp={"provider": "SandboxRevoked"}) for f in ("cades", "xades")],
-         *[sign(f"tsa-expired-{f}", f"{f.upper()}: expired TSA", ["S-4", "tsa"], refused("TimestampCertificateNotValid"), fmt=f, level="BT",
-                timestamp={"provider": "SandboxExpired"}) for f in ("cades", "xades")],
-     ]},
-    {"id": "levels", "title": "Validation data and levels (B-T, B-LT, B-LTA)", "steps": [
-        *[sign(f"{f}-{lv.lower()}", f"{f.upper()} {lv[0]}-{lv[1:]}", ["F-31", "V-31", "levels"],
-               {"outcome": "signed", "level": f"{lv[0]}-{lv[1:]}", "indication": "TOTAL_PASSED"}, fmt=f, level=lv, timestamp=TSA)
-          for f in ("pades", "cades", "xades") for lv in ("BLT", "BLTA")],
-        sign("cades-attached-blta", "CAdES attached (p7m) B-LTA", ["F-31", "V-31", "levels"], {"outcome": "signed", "level": "B-LTA"}, fmt="cades", level="BLTA",
-             timestamp=TSA, contentType="Enveloped"),
-        sign("xades-detached-blta", "XAdES detached B-LTA", ["F-31", "V-31", "levels"], {"outcome": "signed", "level": "B-LTA"}, fmt="xades", level="BLTA",
-             timestamp=TSA, form="Detached"),
-        sign("xades-enveloping-blta", "XAdES enveloping B-LTA", ["F-31", "V-31", "levels"], {"outcome": "signed", "level": "B-LTA"}, fmt="xades", level="BLTA",
-             timestamp=TSA, form="Enveloping"),
-        validate("v-altered", "Document changed after signing", ["V-30", "integrity"], "sample:tampered-content", {"outcome": "invalid", "indication": "TOTAL_FAILED"}),
-        validate("v-cades-altered", "CAdES: data changed", ["V-30", "integrity"], "cades-sample:v-changed-data", {"outcome": "invalid"},
-                 data_id="cades-sample:v-changed-data#data"),
-        validate("v-xades-altered", "XAdES: document changed", ["V-30", "integrity"], "xades-sample:v-changed", {"outcome": "invalid"}),
-        validate("viewer", "Validation report of a B-LTA signature", ["F-30", "V-30", "report"], "step:pades-blta", {"outcome": "valid"},
-                 desc="The validation report shows integrity, signing time, public key and certificate data; the CLI writes it as HTML with "
+        validate("viewer", "Validation report of a signature trusted through the TSL", ["F-30", "V-30", "report"], "step:tsl-ok", {"outcome": "valid"},
+                 trust=[], **IOFE_ON_SANDBOX,
+                 desc="Validates the tsl-ok file as INDECOPI's relying parties would (anchors from the TSL, IOFE policy): the report shows "
+                      "integrity, signing time, public key and certificate data; the CLI writes it as HTML with "
                       "simplesign validate --html-report report.html --report-language es."),
     ]},
-    {"id": "crypto", "title": "Algorithms", "steps": [
-        sign("rsa-1024", "RSA 1024 key: refused", ["F-28", "V-28", "algorithms"], refused("KeyTooWeak"), credentialId="sandbox:rsa-1024"),
-        *[sign(f"alg-{c}", f"Sign with {c.upper()}", ["F-28", "algorithms"], {"outcome": "signed"}, credentialId=f"sandbox:{c}")
-          for c in ("rsa-4096", "ecdsa-p256", "ecdsa-p384")],
-        sign("chain-sha1", "Chain with a CA signed with SHA-1: refused", ["F-28", "V-28", "algorithms"], refused("AlgorithmNotPermitted"), credentialId="sandbox:under-sha1-ca"),
-        *[sign(f"rsa-1024-{f}", f"{f.upper()}: RSA 1024 key", ["F-28", "algorithms"], refused("KeyTooWeak"), fmt=f, credentialId="sandbox:rsa-1024")
-          for f in ("cades", "xades")],
-    ]},
-    {"id": "audit", "title": "Audit log", "steps": [
+    {"id": "audit", "title": "Audit log",
+     "description": "The audit trail the guide asks of signing software (F-15, V-15): every attempt, made or refused, leaves a record.",
+     "steps": [
         sign("audit", "Audit record of each signature", ["F-15", "V-15", "audit"], {"outcome": "signed", "logContains": ["Audit:"]},
              signingControls={"trust": ["SandboxRoot"], "auditLog": True},
              desc="Each signature made or refused is recorded (certificate, policy, input and output hashes, reason) in a hash-chained log; "
@@ -181,6 +127,30 @@ sections = [
              credentialId="sandbox:revoked", signingControls={"trust": ["SandboxRoot"], "auditLog": True}),
     ]},
 ]
+
+
+# What each step runs and why, for the steps above that give no desc (describe.py puts them in place).
+DESCRIPTIONS = {
+    "tsl-tampered":
+        "The Sandbox publishes a TSL whose content changed after it was signed, so its XML signature breaks: it must not "
+        "be used, there are no anchors, and signing is refused (UntrustedRoot).",
+    "v-tsl-ok":
+        "Validates the tsl-ok file with the anchors read from the TSL and the IOFE validation policy: valid.",
+    "v-tsl-wrong-signer":
+        "Validates the same file while the TSL is signed by another key: the fake list gives no anchors, so "
+        "NO_CERTIFICATE_CHAIN_FOUND.",
+    "v-tsl-expired":
+        "Validates it while the TSL is past its NextUpdate: the IOFE policy's TLNotExpired fails, so the validator asks "
+        "to try later (INDETERMINATE / TRY_LATER) instead of accepting.",
+    "v-tsl-tsa-unspecified":
+        "Validates the B-T file whose TSA chains to a CA the TSL lists as 'unspecified': the time-stamp is trusted "
+        "through the list, so the signature is valid.",
+    "audit-refused":
+        "A refused signature (a revoked certificate) with the audit log on: the attempt must be recorded too, with its "
+        "refusal, not only the signatures made.",
+}
+
+sections = describe(sections, DESCRIPTIONS)
 
 # What section 4.2 (annex B item 12) asks of an automated agent, and section 4.3 (Req. 23) of the software verifying what
 # agents receive: the iofe policy with the nonRepudiation bit required.
@@ -201,7 +171,11 @@ playbook = {
                    "cross-validated with EU DSS when one is connected. "
                    "Tags name the items of annex B of the guide (F-n: section 4.2, signing by an automated agent; V-n: section 4.3, "
                    "verification by automated agents; S-n: section 4.4, time-stamps) and a topic; docs/playbooks/indecopi-checklist.md "
-                   "maps every item to a step, a test or what is left to the accredited product.",
+                   "maps every item to a step, a test or what is left to the accredited product. "
+                   "It complements sandbox-basics and etsi-baseline: the checks any signer or validator makes whatever the policy "
+                   "(revocation, validity, time-stamps, levels, algorithms, changed files) are shown there, and the checklist names "
+                   "those steps; here are only the ones the IOFE profile and policies decide (the TSL, nonRepudiation for an "
+                   "automated agent), the report and the audit trail.",
     "defaults": {
         "engine": "both",
         "format": "pades",

@@ -3,7 +3,7 @@
   "schema": 2,
   "id": "indecopi-guia-v4",
   "title": "INDECOPI software accreditation (Guide v4.0)",
-  "description": "The automated part of an INDECOPI (IOFE, Peru) accreditation of signing and verification software (Guía de Acreditación de Software v4.0, annex B): each step runs against the Sandbox with the IOFE policy, through the library and the CLI, cross-validated with EU DSS when one is connected. Tags name the items of annex B of the guide (F-n: section 4.2, signing by an automated agent; V-n: section 4.3, verification by automated agents; S-n: section 4.4, time-stamps) and a topic; docs/playbooks/indecopi-checklist.md maps every item to a step, a test or what is left to the accredited product.",
+  "description": "The automated part of an INDECOPI (IOFE, Peru) accreditation of signing and verification software (Guía de Acreditación de Software v4.0, annex B): each step runs against the Sandbox with the IOFE policy, through the library and the CLI, cross-validated with EU DSS when one is connected. Tags name the items of annex B of the guide (F-n: section 4.2, signing by an automated agent; V-n: section 4.3, verification by automated agents; S-n: section 4.4, time-stamps) and a topic; docs/playbooks/indecopi-checklist.md maps every item to a step, a test or what is left to the accredited product. It complements sandbox-basics and etsi-baseline: the checks any signer or validator makes whatever the policy (revocation, validity, time-stamps, levels, algorithms, changed files) are shown there, and the checklist names those steps; here are only the ones the IOFE profile and policies decide (the TSL, nonRepudiation for an automated agent), the report and the audit trail.",
   "defaults": {
     "engine": "both",
     "format": "pades",
@@ -68,6 +68,7 @@
         {
           "id": "tsl-ok",
           "title": "Sign with a root listed in the TSL",
+          "description": "The Sandbox's TSL is downloaded, its signature is checked with the operator's certificate, and the signer's root is listed: the signature is made.",
           "tags": [
             "F-1",
             "F-3",
@@ -83,12 +84,12 @@
           },
           "expect": {
             "outcome": "signed"
-          },
-          "description": "The Sandbox's TSL is downloaded, its signature is checked with the operator's certificate, and the signer's root is listed: the signature is made."
+          }
         },
         {
           "id": "tsl-wrong-signer",
           "title": "TSL signed by another key: refused",
+          "description": "The Sandbox publishes a TSL signed by a key that is not the operator's (a fake TSL): there are no anchors and the signature is refused.",
           "tags": [
             "F-1",
             "tsl"
@@ -105,7 +106,6 @@
             "outcome": "refused",
             "reason": "UntrustedRoot"
           },
-          "description": "The Sandbox publishes a TSL signed by a key that is not the operator's (a fake TSL): there are no anchors and the signature is refused.",
           "sandbox": {
             "trustedList": "WrongSigner"
           }
@@ -113,6 +113,7 @@
         {
           "id": "tsl-tampered",
           "title": "Tampered TSL: refused",
+          "description": "The Sandbox publishes a TSL whose content changed after it was signed, so its XML signature breaks: it must not be used, there are no anchors, and signing is refused (UntrustedRoot).",
           "tags": [
             "F-1",
             "tsl"
@@ -136,6 +137,7 @@
         {
           "id": "tsl-expired",
           "title": "Expired TSL: refused",
+          "description": "The published TSL has its NextUpdate in the past.",
           "tags": [
             "F-2",
             "tsl"
@@ -152,7 +154,6 @@
             "outcome": "refused",
             "reason": "UntrustedRoot"
           },
-          "description": "The published TSL has its NextUpdate in the past.",
           "sandbox": {
             "trustedList": "Expired"
           }
@@ -160,6 +161,7 @@
         {
           "id": "tsl-tsa-unspecified",
           "title": "Time-stamp from a TSA whose CA the TSL lists as 'unspecified'",
+          "description": "As INDECOPI lists the Llama.pe Timestamping CA (not its TSU) with the service type 'unspecified', the TSL names the self-signed CA of the Sandbox's IOFE TSA: its time-stamp chains to that service and the signature is made. Not cross-validated: DSS trusts every granted service of the list whatever its type, so it does not show the 'unspecified' rule this step is about.",
           "tags": [
             "S-1",
             "F-3",
@@ -187,12 +189,12 @@
             "outcome": "signed",
             "level": "B-T"
           },
-          "description": "As INDECOPI lists the Llama.pe Timestamping CA (not its TSU) with the service type 'unspecified', the TSL names the self-signed CA of the Sandbox's IOFE TSA: its time-stamp chains to that service and the signature is made. Not cross-validated: DSS trusts every granted service of the list whatever its type, so it does not show the 'unspecified' rule this step is about.",
           "crossValidate": false
         },
         {
           "id": "tsl-tsa-unlisted",
           "title": "Same TSA without the TSL: refused",
+          "description": "With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service of the TSL is what makes it trusted in tsl-tsa-unspecified.",
           "tags": [
             "S-1",
             "tsl",
@@ -209,13 +211,13 @@
             "outcome": "refused",
             "reason": "TimestampUntrusted"
           },
-          "description": "With the Sandbox root as the only anchor, the IOFE TSA chains to nothing trusted: the 'unspecified' service is what makes it trusted.",
           "crossValidate": false
         },
         {
           "id": "v-tsl-ok",
           "kind": "validate",
           "title": "Validate with anchors from the TSL",
+          "description": "Validates the tsl-ok file with the anchors read from the TSL and the IOFE validation policy: valid.",
           "tags": [
             "V-1",
             "V-3",
@@ -238,6 +240,7 @@
           "id": "v-tsl-wrong-signer",
           "kind": "validate",
           "title": "Validate with a fake TSL",
+          "description": "Validates the same file while the TSL is signed by another key: the fake list gives no anchors, so NO_CERTIFICATE_CHAIN_FOUND.",
           "tags": [
             "V-1",
             "tsl"
@@ -263,6 +266,7 @@
           "id": "v-tsl-expired",
           "kind": "validate",
           "title": "Validate with an expired TSL",
+          "description": "Validates it while the TSL is past its NextUpdate: the IOFE policy's TLNotExpired fails, so the validator asks to try later (INDETERMINATE / TRY_LATER) instead of accepting.",
           "tags": [
             "V-2",
             "tsl"
@@ -288,6 +292,7 @@
           "id": "v-tsl-tsa-unspecified",
           "kind": "validate",
           "title": "Validate a time-stamp whose TSA's CA the TSL lists as 'unspecified'",
+          "description": "Validates the B-T file whose TSA chains to a CA the TSL lists as 'unspecified': the time-stamp is trusted through the list, so the signature is valid.",
           "tags": [
             "V-3",
             "S-1",
@@ -310,413 +315,14 @@
       ]
     },
     {
-      "id": "revocation",
-      "title": "Revocation before signing (CRL and OCSP)",
+      "id": "agent",
+      "title": "Key usage of an automated agent",
+      "description": "Section 4.2 asks an automated agent to check the nonRepudiation bit, and section 4.3 the software verifying what agents receive: the iofe policies with KeyUsage = nonRepudiation (declared in policies). The other certificate checks (validity, a key usage not meant for signing, revocation) are the same under any policy: sandbox-basics shows them.",
       "steps": [
-        {
-          "id": "crl-https-good",
-          "title": "CRL over HTTPS, good certificate",
-          "tags": [
-            "F-5",
-            "F-8",
-            "crl"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:good-crl-https"
-          },
-          "expect": {
-            "outcome": "signed"
-          }
-        },
-        {
-          "id": "crl-https-revoked",
-          "title": "CRL over HTTPS, revoked certificate: refused",
-          "tags": [
-            "F-5",
-            "F-8",
-            "crl"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:revoked-crl-https"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "CertificateRevoked"
-          }
-        },
-        {
-          "id": "crl-ldap-good",
-          "title": "CRL over LDAP, good certificate",
-          "tags": [
-            "F-5",
-            "crl",
-            "ldap"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:good-crl-ldap"
-          },
-          "expect": {
-            "outcome": "signed"
-          }
-        },
-        {
-          "id": "crl-ldap-revoked",
-          "title": "CRL over LDAP, revoked certificate: refused",
-          "tags": [
-            "F-5",
-            "crl",
-            "ldap"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:revoked-crl-ldap"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "CertificateRevoked"
-          }
-        },
-        {
-          "id": "crl-wrong-key",
-          "title": "CRL signed by another key: refused",
-          "tags": [
-            "F-6",
-            "crl"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:good-crl-https"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "RevocationStatusUnknown"
-          },
-          "description": "The Sandbox signs the CRL with a key that is not the issuing CA's: the CRL is not accepted and, without OCSP, the status is unknown.",
-          "sandbox": {
-            "crl": "WrongKey"
-          }
-        },
-        {
-          "id": "crl-expired",
-          "title": "Expired CRL: refused",
-          "tags": [
-            "F-7",
-            "crl"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:good-crl-https"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "RevocationStatusUnknown"
-          },
-          "sandbox": {
-            "crl": "Expired"
-          }
-        },
-        {
-          "id": "crl-no-next-update",
-          "title": "CRL without nextUpdate: refused",
-          "tags": [
-            "F-7",
-            "crl"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:good-crl-https"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "RevocationStatusUnknown"
-          },
-          "description": "A CRL without nextUpdate does not say until when it is current: the IOFE policy (CRLNextUpdatePresent) refuses it.",
-          "sandbox": {
-            "crl": "NoNextUpdate"
-          }
-        },
-        {
-          "id": "crl-stale",
-          "title": "Revoked after the cached CRL: refused",
-          "tags": [
-            "F-8",
-            "crl"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:rsa-3072"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "CertificateRevoked"
-          },
-          "description": "The certificate is revoked now; before signing the status is fetched again (OCSP, then the CRL downloaded without cache), not the earlier copy.",
-          "sandbox": {
-            "crl": "Stale",
-            "revoke": [
-              "rsa-3072"
-            ]
-          }
-        },
-        {
-          "id": "crl-down",
-          "title": "CRL server down, no OCSP: refused",
-          "tags": [
-            "F-8",
-            "crl"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:good-crl-https"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "RevocationStatusUnknown"
-          },
-          "sandbox": {
-            "crl": "Down"
-          }
-        },
-        {
-          "id": "v-crl-wrong-key",
-          "kind": "validate",
-          "title": "Validate with a CRL signed by another key",
-          "tags": [
-            "V-6",
-            "crl"
-          ],
-          "options": {
-            "fileId": "step:crl-https-good",
-            "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
-            }
-          },
-          "expect": {
-            "outcome": "indeterminate"
-          },
-          "sandbox": {
-            "crl": "WrongKey"
-          }
-        },
-        {
-          "id": "v-crl-expired",
-          "kind": "validate",
-          "title": "Validate with an expired CRL",
-          "tags": [
-            "V-7",
-            "crl"
-          ],
-          "options": {
-            "fileId": "step:crl-https-good",
-            "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
-            }
-          },
-          "expect": {
-            "outcome": "indeterminate"
-          },
-          "sandbox": {
-            "crl": "Expired"
-          }
-        },
-        {
-          "id": "chain-revoked",
-          "title": "Certificate under a revoked CA: refused",
-          "tags": [
-            "F-9",
-            "revocation"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:under-revoked-ca"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "CertificateRevoked"
-          }
-        },
-        {
-          "id": "ocsp-good",
-          "title": "OCSP, good certificate",
-          "tags": [
-            "F-10",
-            "ocsp"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:good-ocsp"
-          },
-          "expect": {
-            "outcome": "signed"
-          }
-        },
-        {
-          "id": "ocsp-revoked",
-          "title": "OCSP, revoked certificate: refused",
-          "tags": [
-            "F-10",
-            "ocsp"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:revoked-ocsp"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "CertificateRevoked"
-          }
-        },
-        {
-          "id": "ocsp-unauthorized",
-          "title": "OCSP response from an unauthorized signer, no CRL: refused",
-          "tags": [
-            "F-10",
-            "ocsp"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:good-ocsp"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "RevocationStatusUnknown"
-          },
-          "sandbox": {
-            "ocsp": "Unauthorized"
-          }
-        }
-      ]
-    },
-    {
-      "id": "validity",
-      "title": "Certificate validity and purpose",
-      "steps": [
-        {
-          "id": "expired",
-          "title": "Expired certificate: refused",
-          "tags": [
-            "F-11",
-            "validity"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:expired"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "CertificateExpired"
-          }
-        },
-        {
-          "id": "not-yet-valid",
-          "title": "Not yet valid certificate: refused",
-          "tags": [
-            "F-11",
-            "validity"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:not-yet-valid"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "CertificateNotCurrentlyValid"
-          }
-        },
-        {
-          "id": "chain-expired",
-          "title": "Certificate under an expired CA: refused",
-          "tags": [
-            "F-11",
-            "validity"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:under-expired-ca"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "ChainCertificateNotValid"
-          }
-        },
-        {
-          "id": "no-key-usage",
-          "title": "Neither digitalSignature nor nonRepudiation: refused",
-          "tags": [
-            "F-12",
-            "key-usage"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:no-signing-key-usage"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "KeyUsageNotPermitted"
-          }
-        },
-        {
-          "id": "no-key-usage-extension",
-          "title": "No KeyUsage extension: refused",
-          "tags": [
-            "F-12",
-            "key-usage"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:no-key-usage-extension"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "KeyUsageNotPermitted"
-          }
-        },
-        {
-          "id": "no-key-usage-cades",
-          "title": "CADES: neither digitalSignature nor nonRepudiation",
-          "tags": [
-            "F-12",
-            "key-usage"
-          ],
-          "format": "cades",
-          "options": {
-            "dataId": "cades-sample:text",
-            "credentialId": "sandbox:no-signing-key-usage"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "KeyUsageNotPermitted"
-          }
-        },
-        {
-          "id": "no-key-usage-xades",
-          "title": "XADES: neither digitalSignature nor nonRepudiation",
-          "tags": [
-            "F-12",
-            "key-usage"
-          ],
-          "format": "xades",
-          "options": {
-            "dataId": "xades-sample:order",
-            "credentialId": "sandbox:no-signing-key-usage"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "KeyUsageNotPermitted"
-          }
-        },
         {
           "id": "signed-no-nonrepudiation",
           "title": "Sign with a certificate without nonRepudiation (to validate)",
+          "description": "The iofe signing policy accepts digitalSignature or nonRepudiation (as section 4.1 does for end-user software); the file is used by the validation step that requires nonRepudiation.",
           "tags": [
             "F-12",
             "key-usage"
@@ -727,12 +333,12 @@
           },
           "expect": {
             "outcome": "signed"
-          },
-          "description": "The iofe signing policy accepts digitalSignature or nonRepudiation (as section 4.1 does for end-user software); the file is used by the validation step that requires nonRepudiation."
+          }
         },
         {
           "id": "no-nonrepudiation-agent",
           "title": "Automated agent: a certificate without nonRepudiation is refused",
+          "description": "Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe policy with KeyUsage = nonRepudiation (playbook:iofe-agent) refuses a certificate that has digitalSignature only.",
           "tags": [
             "F-12",
             "key-usage"
@@ -745,13 +351,53 @@
           "expect": {
             "outcome": "refused",
             "reason": "KeyUsageNotPermitted"
+          }
+        },
+        {
+          "id": "key-usage-file",
+          "title": "Signer with neither digitalSignature nor nonRepudiation (minimal signing policy, to validate)",
+          "description": "Signs with a certificate whose key usage allows neither digitalSignature nor nonRepudiation, under the minimal signing policy and without validating, only to produce the file v-key-usage validates.",
+          "tags": [
+            "V-12",
+            "key-usage"
+          ],
+          "format": "pades",
+          "options": {
+            "credentialId": "sandbox:no-signing-key-usage",
+            "signingPolicyId": "preset:signing:minimal",
+            "validate": false
           },
-          "description": "Section 4.2 (annex B item 12) asks an automated agent to check the nonRepudiation bit: the iofe policy with KeyUsage = nonRepudiation (playbook:iofe-agent) refuses a certificate that has digitalSignature only."
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "v-key-usage",
+          "kind": "validate",
+          "title": "IOFE validation: a signer with neither digitalSignature nor nonRepudiation is not accepted",
+          "description": "The IOFE validation policy requires digitalSignature or nonRepudiation in the signing certificate (Req. 23), where the library's default only warns: the certificate without either fails the constraint (INDETERMINATE).",
+          "tags": [
+            "V-12",
+            "key-usage"
+          ],
+          "options": {
+            "fileId": "step:key-usage-file",
+            "settings": {
+              "trust": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:iofe"
+            }
+          },
+          "expect": {
+            "outcome": "indeterminate"
+          }
         },
         {
           "id": "v-no-nonrepudiation",
           "kind": "validate",
           "title": "Validation requires nonRepudiation: not accepted",
+          "description": "With the iofe policy requiring nonRepudiation (playbook:iofe-agent-validation) the certificate without it fails the chain constraint (EN 319 102-1: INDETERMINATE).",
           "tags": [
             "V-12",
             "key-usage"
@@ -767,703 +413,36 @@
           },
           "expect": {
             "outcome": "indeterminate"
-          },
-          "description": "With the iofe policy requiring nonRepudiation (playbook:iofe-agent-validation) the certificate without it fails the chain constraint (EN 319 102-1: INDETERMINATE)."
-        },
-        {
-          "id": "v-revoked",
-          "kind": "validate",
-          "title": "Validate a revoked signer",
-          "tags": [
-            "V-5",
-            "V-8",
-            "V-9",
-            "V-10",
-            "revocation"
-          ],
-          "options": {
-            "fileId": "sample:revoked",
-            "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
-            }
-          },
-          "expect": {
-            "outcome": "indeterminate"
-          },
-          "description": "A sample signed by a certificate revoked afterwards: the validator checks the chain's CRL/OCSP and does not accept it."
-        },
-        {
-          "id": "v-expired",
-          "kind": "validate",
-          "title": "Validate an expired signer",
-          "tags": [
-            "V-11",
-            "validity"
-          ],
-          "options": {
-            "fileId": "sample:expired",
-            "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
-            }
-          },
-          "expect": {
-            "outcome": "indeterminate"
-          }
-        },
-        {
-          "id": "v-untrusted",
-          "kind": "validate",
-          "title": "Validate with a root outside the anchors",
-          "tags": [
-            "V-3",
-            "trust"
-          ],
-          "options": {
-            "fileId": "sample:untrusted-root",
-            "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
-            }
-          },
-          "expect": {
-            "outcome": "indeterminate"
           }
         }
       ]
     },
     {
-      "id": "timestamp",
-      "title": "Time-stamps (RFC 3161)",
-      "description": "Each time-stamp obtained while signing is checked: expected TSA, token signature, trust, validity and revocation of the TSA certificate.",
+      "id": "report",
+      "title": "Validation report",
+      "description": "What the guide asks a viewer to show the signer and the relying parties (F-30, V-30), in Spanish.",
       "steps": [
-        {
-          "id": "tsa-ok",
-          "title": "Time-stamp from the Sandbox's TSA",
-          "tags": [
-            "S-1",
-            "S-2",
-            "S-3",
-            "S-4",
-            "F-31",
-            "tsa"
-          ],
-          "format": "pades",
-          "options": {
-            "level": "BT",
-            "timestamp": {
-              "provider": "Sandbox"
-            },
-            "signingControls": {
-              "trust": [
-                "SandboxRoot"
-              ],
-              "expectedTsa": "tsa"
-            }
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-T"
-          }
-        },
-        {
-          "id": "tsa-unexpected",
-          "title": "Time-stamp from another TSA than expected: refused",
-          "tags": [
-            "S-1",
-            "tsa"
-          ],
-          "format": "pades",
-          "options": {
-            "level": "BT",
-            "timestamp": {
-              "provider": "Sandbox"
-            },
-            "signingControls": {
-              "trust": [
-                "SandboxRoot"
-              ],
-              "expectedTsa": "tsa-revoked"
-            }
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "TimestampUntrusted"
-          }
-        },
-        {
-          "id": "tsa-invalid-token",
-          "title": "Token with an invalid signature: refused",
-          "tags": [
-            "S-2",
-            "tsa"
-          ],
-          "format": "pades",
-          "options": {
-            "level": "BT",
-            "timestamp": {
-              "provider": "Sandbox"
-            }
-          },
-          "expect": {
-            "outcome": "refused"
-          },
-          "sandbox": {
-            "tsa": "InvalidToken"
-          }
-        },
-        {
-          "id": "tsa-revoked",
-          "title": "Revoked TSA: refused",
-          "tags": [
-            "S-3",
-            "tsa"
-          ],
-          "format": "pades",
-          "options": {
-            "level": "BT",
-            "timestamp": {
-              "provider": "SandboxRevoked"
-            }
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "TimestampCertificateRevoked"
-          }
-        },
-        {
-          "id": "tsa-untrusted",
-          "title": "TSA outside the anchors: refused",
-          "tags": [
-            "S-1",
-            "tsa"
-          ],
-          "format": "pades",
-          "options": {
-            "level": "BT",
-            "timestamp": {
-              "provider": "SandboxUntrusted"
-            }
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "TimestampUntrusted"
-          }
-        },
-        {
-          "id": "tsa-expired",
-          "title": "TSA with an expired certificate: refused",
-          "tags": [
-            "S-4",
-            "tsa"
-          ],
-          "format": "pades",
-          "options": {
-            "level": "BT",
-            "timestamp": {
-              "provider": "SandboxExpired"
-            }
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "TimestampCertificateNotValid"
-          },
-          "description": "The TSA certificate has expired: the time-stamp it issues now is not valid at its own time."
-        },
-        {
-          "id": "tsa-revoked-cades",
-          "title": "CADES: revoked TSA",
-          "tags": [
-            "S-3",
-            "tsa"
-          ],
-          "format": "cades",
-          "options": {
-            "dataId": "cades-sample:text",
-            "level": "BT",
-            "timestamp": {
-              "provider": "SandboxRevoked"
-            }
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "TimestampCertificateRevoked"
-          }
-        },
-        {
-          "id": "tsa-revoked-xades",
-          "title": "XADES: revoked TSA",
-          "tags": [
-            "S-3",
-            "tsa"
-          ],
-          "format": "xades",
-          "options": {
-            "dataId": "xades-sample:order",
-            "level": "BT",
-            "timestamp": {
-              "provider": "SandboxRevoked"
-            }
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "TimestampCertificateRevoked"
-          }
-        },
-        {
-          "id": "tsa-expired-cades",
-          "title": "CADES: expired TSA",
-          "tags": [
-            "S-4",
-            "tsa"
-          ],
-          "format": "cades",
-          "options": {
-            "dataId": "cades-sample:text",
-            "level": "BT",
-            "timestamp": {
-              "provider": "SandboxExpired"
-            }
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "TimestampCertificateNotValid"
-          }
-        },
-        {
-          "id": "tsa-expired-xades",
-          "title": "XADES: expired TSA",
-          "tags": [
-            "S-4",
-            "tsa"
-          ],
-          "format": "xades",
-          "options": {
-            "dataId": "xades-sample:order",
-            "level": "BT",
-            "timestamp": {
-              "provider": "SandboxExpired"
-            }
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "TimestampCertificateNotValid"
-          }
-        }
-      ]
-    },
-    {
-      "id": "levels",
-      "title": "Validation data and levels (B-T, B-LT, B-LTA)",
-      "steps": [
-        {
-          "id": "pades-blt",
-          "title": "PADES B-LT",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "pades",
-          "options": {
-            "level": "BLT",
-            "timestamp": {
-              "provider": "Sandbox"
-            }
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LT",
-            "indication": "TOTAL_PASSED"
-          }
-        },
-        {
-          "id": "pades-blta",
-          "title": "PADES B-LTA",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "pades",
-          "options": {
-            "level": "BLTA",
-            "timestamp": {
-              "provider": "Sandbox"
-            }
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LTA",
-            "indication": "TOTAL_PASSED"
-          }
-        },
-        {
-          "id": "cades-blt",
-          "title": "CADES B-LT",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "cades",
-          "options": {
-            "dataId": "cades-sample:text",
-            "level": "BLT",
-            "timestamp": {
-              "provider": "Sandbox"
-            }
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LT",
-            "indication": "TOTAL_PASSED"
-          }
-        },
-        {
-          "id": "cades-blta",
-          "title": "CADES B-LTA",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "cades",
-          "options": {
-            "dataId": "cades-sample:text",
-            "level": "BLTA",
-            "timestamp": {
-              "provider": "Sandbox"
-            }
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LTA",
-            "indication": "TOTAL_PASSED"
-          }
-        },
-        {
-          "id": "xades-blt",
-          "title": "XADES B-LT",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "xades",
-          "options": {
-            "dataId": "xades-sample:order",
-            "level": "BLT",
-            "timestamp": {
-              "provider": "Sandbox"
-            }
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LT",
-            "indication": "TOTAL_PASSED"
-          }
-        },
-        {
-          "id": "xades-blta",
-          "title": "XADES B-LTA",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "xades",
-          "options": {
-            "dataId": "xades-sample:order",
-            "level": "BLTA",
-            "timestamp": {
-              "provider": "Sandbox"
-            }
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LTA",
-            "indication": "TOTAL_PASSED"
-          }
-        },
-        {
-          "id": "cades-attached-blta",
-          "title": "CAdES attached (p7m) B-LTA",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "cades",
-          "options": {
-            "dataId": "cades-sample:text",
-            "level": "BLTA",
-            "timestamp": {
-              "provider": "Sandbox"
-            },
-            "contentType": "Enveloped"
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LTA"
-          }
-        },
-        {
-          "id": "xades-detached-blta",
-          "title": "XAdES detached B-LTA",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "xades",
-          "options": {
-            "dataId": "xades-sample:order",
-            "level": "BLTA",
-            "timestamp": {
-              "provider": "Sandbox"
-            },
-            "form": "Detached"
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LTA"
-          }
-        },
-        {
-          "id": "xades-enveloping-blta",
-          "title": "XAdES enveloping B-LTA",
-          "tags": [
-            "F-31",
-            "V-31",
-            "levels"
-          ],
-          "format": "xades",
-          "options": {
-            "dataId": "xades-sample:order",
-            "level": "BLTA",
-            "timestamp": {
-              "provider": "Sandbox"
-            },
-            "form": "Enveloping"
-          },
-          "expect": {
-            "outcome": "signed",
-            "level": "B-LTA"
-          }
-        },
-        {
-          "id": "v-altered",
-          "kind": "validate",
-          "title": "Document changed after signing",
-          "tags": [
-            "V-30",
-            "integrity"
-          ],
-          "options": {
-            "fileId": "sample:tampered-content",
-            "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
-            }
-          },
-          "expect": {
-            "outcome": "invalid",
-            "indication": "TOTAL_FAILED"
-          }
-        },
-        {
-          "id": "v-cades-altered",
-          "kind": "validate",
-          "title": "CAdES: data changed",
-          "tags": [
-            "V-30",
-            "integrity"
-          ],
-          "options": {
-            "fileId": "cades-sample:v-changed-data",
-            "dataId": "cades-sample:v-changed-data#data",
-            "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
-            }
-          },
-          "expect": {
-            "outcome": "invalid"
-          }
-        },
-        {
-          "id": "v-xades-altered",
-          "kind": "validate",
-          "title": "XAdES: document changed",
-          "tags": [
-            "V-30",
-            "integrity"
-          ],
-          "options": {
-            "fileId": "xades-sample:v-changed",
-            "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
-            }
-          },
-          "expect": {
-            "outcome": "invalid"
-          }
-        },
         {
           "id": "viewer",
           "kind": "validate",
-          "title": "Validation report of a B-LTA signature",
+          "title": "Validation report of a signature trusted through the TSL",
+          "description": "Validates the tsl-ok file as INDECOPI's relying parties would (anchors from the TSL, IOFE policy): the report shows integrity, signing time, public key and certificate data; the CLI writes it as HTML with simplesign validate --html-report report.html --report-language es.",
           "tags": [
             "F-30",
             "V-30",
             "report"
           ],
           "options": {
-            "fileId": "step:pades-blta",
+            "fileId": "step:tsl-ok",
             "settings": {
-              "trust": [
-                "Sandbox"
-              ],
-              "policyId": "preset:validation:iofe"
+              "trust": [],
+              "policyId": "preset:validation:iofe",
+              "profile": "Iofe",
+              "profileSource": "Sandbox"
             }
           },
           "expect": {
             "outcome": "valid"
-          },
-          "description": "The validation report shows integrity, signing time, public key and certificate data; the CLI writes it as HTML with simplesign validate --html-report report.html --report-language es."
-        }
-      ]
-    },
-    {
-      "id": "crypto",
-      "title": "Algorithms",
-      "steps": [
-        {
-          "id": "rsa-1024",
-          "title": "RSA 1024 key: refused",
-          "tags": [
-            "F-28",
-            "V-28",
-            "algorithms"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:rsa-1024"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "KeyTooWeak"
-          }
-        },
-        {
-          "id": "alg-rsa-4096",
-          "title": "Sign with RSA-4096",
-          "tags": [
-            "F-28",
-            "algorithms"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:rsa-4096"
-          },
-          "expect": {
-            "outcome": "signed"
-          }
-        },
-        {
-          "id": "alg-ecdsa-p256",
-          "title": "Sign with ECDSA-P256",
-          "tags": [
-            "F-28",
-            "algorithms"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:ecdsa-p256"
-          },
-          "expect": {
-            "outcome": "signed"
-          }
-        },
-        {
-          "id": "alg-ecdsa-p384",
-          "title": "Sign with ECDSA-P384",
-          "tags": [
-            "F-28",
-            "algorithms"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:ecdsa-p384"
-          },
-          "expect": {
-            "outcome": "signed"
-          }
-        },
-        {
-          "id": "chain-sha1",
-          "title": "Chain with a CA signed with SHA-1: refused",
-          "tags": [
-            "F-28",
-            "V-28",
-            "algorithms"
-          ],
-          "format": "pades",
-          "options": {
-            "credentialId": "sandbox:under-sha1-ca"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "AlgorithmNotPermitted"
-          }
-        },
-        {
-          "id": "rsa-1024-cades",
-          "title": "CADES: RSA 1024 key",
-          "tags": [
-            "F-28",
-            "algorithms"
-          ],
-          "format": "cades",
-          "options": {
-            "dataId": "cades-sample:text",
-            "credentialId": "sandbox:rsa-1024"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "KeyTooWeak"
-          }
-        },
-        {
-          "id": "rsa-1024-xades",
-          "title": "XADES: RSA 1024 key",
-          "tags": [
-            "F-28",
-            "algorithms"
-          ],
-          "format": "xades",
-          "options": {
-            "dataId": "xades-sample:order",
-            "credentialId": "sandbox:rsa-1024"
-          },
-          "expect": {
-            "outcome": "refused",
-            "reason": "KeyTooWeak"
           }
         }
       ]
@@ -1471,10 +450,12 @@
     {
       "id": "audit",
       "title": "Audit log",
+      "description": "The audit trail the guide asks of signing software (F-15, V-15): every attempt, made or refused, leaves a record.",
       "steps": [
         {
           "id": "audit",
           "title": "Audit record of each signature",
+          "description": "Each signature made or refused is recorded (certificate, policy, input and output hashes, reason) in a hash-chained log; the CLI checks it with simplesign audit verify.",
           "tags": [
             "F-15",
             "V-15",
@@ -1494,12 +475,12 @@
             "logContains": [
               "Audit:"
             ]
-          },
-          "description": "Each signature made or refused is recorded (certificate, policy, input and output hashes, reason) in a hash-chained log; the CLI checks it with simplesign audit verify."
+          }
         },
         {
           "id": "audit-refused",
           "title": "A refused signature is recorded too",
+          "description": "A refused signature (a revoked certificate) with the audit log on: the attempt must be recorded too, with its refusal, not only the signatures made.",
           "tags": [
             "F-15",
             "V-15",

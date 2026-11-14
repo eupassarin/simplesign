@@ -7,7 +7,7 @@ The agent listens on `http://127.0.0.1:{port}` only. A page calls it with `fetch
 | Call | What it does |
 | --- | --- |
 | `GET /api/health` | Says the agent is there: `status`, `version`, `app`. Needs no permission. |
-| `GET /api/certificates` | Lists the signing certificates. Optional: `source=store` or `source=pkcs11`; `country=BR` (those that chain to a trust framework of that country) or `trust=icp-brasil` / `trust=govbr` (one framework); `signingOnly=true` (valid now, able to sign); and `filterIcpBrasil=true`, the former ICP-Brasil filter. |
+| `GET /api/certificates` | Lists the signing certificates. Optional: `source=store` or `source=pkcs11`; `country=BR\|PE\|EU` (those that chain to a trust framework of that country) or `trust=icp-brasil` / `govbr` / `iofe` / `eidas` (one framework); `signingOnly=true` (valid now, able to sign); and `filterIcpBrasil=true`, the former ICP-Brasil filter. Only the frameworks enabled in Settings answer these. |
 | `POST /api/sign` | Signs up to 100 items with one certificate, after the user confirms. |
 
 A certificate has `name`, `thumbprint`, `issuerName`, `notBefore`, `expireDate`, `signatureAlgorithm` (RSA or ECDSA), `userCertificateBase64`, `source` (store or pkcs11) and `tokenLabel`.
@@ -37,6 +37,10 @@ const [result] = await (await fetch(`${agent}/api/sign`, {
 
 // result.signedHashBase64 goes back to the server; result.error says why an item failed.
 ```
+
+## Server-signed requests
+
+An agent configured with `signedRequestsRequired` signs only when the body also carries `signedRequest`: a JWS in compact serialization (RFC 7515) that the server makes with a key the agent is configured to trust. Its header carries `alg` (ES256/384/512, RS256/384/512 or PS256/384/512), `typ` `simplesign-sign-request+jws` and optionally `kid`; its claims are `aud` `simplesign-agent`, `origin` (the exact site), `thumbprint` (the certificate), `items` (one `{ id, digest }` per item, the digest being the base64url SHA-256 of the bytes to sign), `iat`, `exp` (at most five minutes after `iat`) and `jti` (accepted once). A token that is missing, expired, replayed, signed by another key or describing other bytes is refused with 400 before the user is asked, and the confirmation then shows the token's `documentName`, not the body's. On an agent that does not require one, `signedRequest` is ignored.
 
 `authenticatedAttributeBase64` is the bytes to sign: DER CMS signed attributes (PAdES, CAdES) or a canonical XML-DSig `SignedInfo` (XAdES). Anything else — a raw hash, a document — is refused with 400 before the user is asked, and so are signed attributes whose `signingCertificateV2` names another certificate. The confirmation shows the digest being signed (algorithm and the first and last bytes). The agent hashes them with `hashAlgorithm` (SHA256, SHA384 or SHA512) and signs: RSA with PKCS#1 v1.5, ECDSA in the IEEE P1363 format (r followed by s). `documentName` is shown to the user in the confirmation.
 
@@ -70,10 +74,11 @@ also `CertificateRevoked` and `RevocationStatusUnknown`, and then the chain must
 | Status | Meaning |
 | --- | --- |
 | 200 | Done. For `/api/sign`, check `error` on each item. |
-| 400 | Bad request: invalid JSON, no `thumbprint`, not 1 to 100 items, or an item that is not signed attributes or a `SignedInfo`; an unknown `country` or `trust`. |
+| 400 | Bad request: invalid JSON, no `thumbprint`, not 1 to 100 items, or an item that is not signed attributes or a `SignedInfo`; an unknown `country` or `trust`, or one that is not enabled; a missing or invalid `signedRequest`. |
 | 403 | The user refused, or the site is blocked. |
 | 404 | Unknown certificate or address. |
 | 429 | More than 20 calls a minute from the same site. |
+| 503 | The trusted list of the framework asked for is not available offline; try again in a moment. |
 | No answer | The agent is not installed, not running, or on another port. |
 
 > The site is identified by its exact origin (scheme, host and port). Pages opened from a file, and origins that are not http or https, are refused.

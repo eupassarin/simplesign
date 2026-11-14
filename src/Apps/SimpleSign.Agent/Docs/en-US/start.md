@@ -13,11 +13,15 @@ Your certificate should be in the list on the **Overview**:
 
 Certificates without a private key, or that cannot be used to sign, are not listed.
 
-## 3. Run the test
+## 3. Enable your trust framework
+
+In Settings, **Trust frameworks** lists the ones the agent ships with: ICP-Brasil, Gov.br, IOFE (Peru) and eIDAS (European Union). Enable the ones you care about: only those answer the `country` and `trust` filters of the API, and only those put a badge on a certificate in the **Overview**. IOFE and eIDAS read a trusted list, which is downloaded in the background.
+
+## 4. Run the test
 
 Open **Test** and run it. It makes the same calls a site makes and ends by checking the signature. If the test passes, the agent, the certificate and the key work.
 
-## 4. Sign on a site
+## 5. Sign on a site
 
 The first time a site calls the agent, you are asked whether it may use your certificates:
 

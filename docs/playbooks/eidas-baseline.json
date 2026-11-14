@@ -55,6 +55,7 @@
         {
           "id": "tl-ok",
           "title": "Sign with a qualified certificate the Sandbox's lists vouch for",
+          "description": "The LOTL is checked with its operator's certificate, the TL with the one the LOTL names; the signer chains to the CA/QC service.",
           "tags": [
             "L-1",
             "L-2",
@@ -65,12 +66,12 @@
           "expect": {
             "outcome": "signed",
             "qualification": "QESig"
-          },
-          "description": "The LOTL is checked with its operator's certificate, the TL with the one the LOTL names; the signer chains to the CA/QC service."
+          }
         },
         {
           "id": "tl-wrong-signer",
           "title": "TL signed by another key: refused",
+          "description": "The national TL is signed by a key other than the one the LOTL names for its operator: it must not be used, so there are no anchors and the eidas policy refuses to sign (UntrustedRoot).",
           "tags": [
             "L-2",
             "lists"
@@ -87,6 +88,7 @@
         {
           "id": "tl-tampered",
           "title": "TL changed after signing: refused",
+          "description": "The TL's content changed after it was signed, so its XML signature breaks: no anchors, signing refused.",
           "tags": [
             "L-2",
             "lists"
@@ -103,6 +105,7 @@
         {
           "id": "tl-expired",
           "title": "Expired TL: refused for signing",
+          "description": "The TL is past its NextUpdate: for signing an outdated list gives no anchors, so the signature is refused.",
           "tags": [
             "L-3",
             "lists"
@@ -119,6 +122,7 @@
         {
           "id": "lotl-wrong-signer",
           "title": "LOTL signed by another key: refused",
+          "description": "The LOTL is signed by a key other than its operator's: nothing it points to can be trusted, so signing is refused.",
           "tags": [
             "L-1",
             "lists"
@@ -135,6 +139,7 @@
         {
           "id": "lotl-tampered",
           "title": "LOTL changed after signing: refused",
+          "description": "The LOTL changed after it was signed: its signature breaks, nothing is trusted, signing refused.",
           "tags": [
             "L-1",
             "lists"
@@ -151,6 +156,7 @@
         {
           "id": "lotl-expired",
           "title": "Expired LOTL: refused",
+          "description": "The LOTL is past its NextUpdate: an expired LOTL is always refused, so there are no anchors and signing is refused.",
           "tags": [
             "L-3",
             "lists"
@@ -168,6 +174,7 @@
           "id": "v-tl-ok",
           "kind": "validate",
           "title": "Validate under the eidas profile",
+          "description": "Validates the tl-ok file under the eidas profile and policy with good lists: TOTAL_PASSED and qualified as QESig (qualified certificate, key on a QSCD).",
           "tags": [
             "L-1",
             "L-2",
@@ -193,6 +200,7 @@
           "id": "v-tl-wrong-signer",
           "kind": "validate",
           "title": "Validate with a fake TL: no chain, not under eIDAS",
+          "description": "Validates the same file while the TL has another signer: no anchors, so NO_CERTIFICATE_CHAIN_FOUND, and the qualification is N/A because the signature is not under eIDAS at all.",
           "tags": [
             "L-2",
             "lists"
@@ -219,6 +227,7 @@
           "id": "v-tl-expired",
           "kind": "validate",
           "title": "Validate with an expired TL: TLNotExpired fails",
+          "description": "Validates it while the TL has expired: for validation the list is kept but the policy's TLNotExpired fails, so the result is INDETERMINATE / TRY_LATER and the qualification 'Indeterminate QESig' (it would be QESig with a current list).",
           "tags": [
             "L-3",
             "lists"
@@ -245,6 +254,7 @@
           "id": "v-lotl-wrong-signer",
           "kind": "validate",
           "title": "Validate with a fake LOTL: no chain",
+          "description": "Validates it while the LOTL has another signer: nothing is trusted, NO_CERTIFICATE_CHAIN_FOUND.",
           "tags": [
             "L-1",
             "lists"
@@ -276,6 +286,7 @@
         {
           "id": "q-adesig-qc",
           "title": "Qualified certificate without a QSCD",
+          "description": "Signs with a qualified certificate (QcCompliance) whose key is not on a QSCD: an advanced signature supported by a qualified certificate, AdESig-QC, not QESig.",
           "tags": [
             "Q-1",
             "Q-3",
@@ -292,6 +303,7 @@
         {
           "id": "q-qeseal",
           "title": "Qualified seal certificate on a QSCD",
+          "description": "Signs with a qualified certificate for electronic seals (QcType eseal) on a QSCD: QESeal, the seal counterpart of QESig.",
           "tags": [
             "Q-1",
             "Q-4",
@@ -308,6 +320,7 @@
         {
           "id": "q-qscd-by-list",
           "title": "QSCD declared by the trusted list (QCWithQSCD)",
+          "description": "The certificate has no QcSSCD, but its policy is QCP-n-qscd and the TL's Qualifications extension says QCWithQSCD for it.",
           "tags": [
             "Q-2",
             "Q-3",
@@ -319,12 +332,12 @@
           "expect": {
             "outcome": "signed",
             "qualification": "QESig"
-          },
-          "description": "The certificate has no QcSSCD, but its policy is QCP-n-qscd and the TL's Qualifications extension says QCWithQSCD for it."
+          }
         },
         {
           "id": "q-not-qualified",
           "title": "Certificate without QC statements",
+          "description": "Signs with a certificate that has no QC statements: an advanced electronic signature only (AdESig).",
           "tags": [
             "Q-1",
             "qualification"
@@ -340,6 +353,7 @@
         {
           "id": "q-under-pkc",
           "title": "QC statements under a CA/PKC service",
+          "description": "The certificate claims QcCompliance and QcSSCD, but its CA is listed as CA/PKC: the list does not vouch for it as qualified.",
           "tags": [
             "Q-5",
             "qualification"
@@ -350,12 +364,12 @@
           "expect": {
             "outcome": "signed",
             "qualification": "AdESig"
-          },
-          "description": "The certificate claims QcCompliance and QcSSCD, but its CA is listed as CA/PKC: the list does not vouch for it as qualified."
+          }
         },
         {
           "id": "q-policy-refuses",
           "title": "A policy that asks for a qualified certificate on a QSCD refuses a non-qualified one",
+          "description": "Signs with the non-qualified certificate under a policy that sets QcCompliance and QcSSCD to FAIL: a service that must make qualified signatures refuses it (CertificateNotQualified).",
           "tags": [
             "Q-6",
             "qualification"
@@ -372,6 +386,7 @@
         {
           "id": "q-policy-accepts",
           "title": "The same policy signs with a qualified certificate on a QSCD",
+          "description": "The same policy with the default qualified certificate on a QSCD: the signature is made and qualified as QESig.",
           "tags": [
             "Q-6",
             "qualification"
@@ -394,6 +409,7 @@
         {
           "id": "ts-qualified",
           "title": "B-T with the qualified TSA",
+          "description": "Signs at B-T with the Sandbox's main TSA, listed as a TSA/QTST service: the signature is QESig and its time-stamp a qualified electronic time-stamp (QTSA).",
           "tags": [
             "T-1",
             "Q-1",
@@ -415,6 +431,7 @@
         {
           "id": "ts-non-qualified",
           "title": "B-T with a non-qualified TSA (a TSA service)",
+          "description": "Signs at B-T with a TSA listed only as a TSA service: the signature is still QESig, but its time-stamp is not qualified (TSA).",
           "tags": [
             "T-2",
             "timestamps"
@@ -435,6 +452,7 @@
         {
           "id": "ts-revoked",
           "title": "B-T with the withdrawn TSA, whose certificate is revoked: refused",
+          "description": "Signs at B-T with the withdrawn TSA, whose certificate is revoked: the eidas signing policy refuses its token (TimestampCertificateRevoked).",
           "tags": [
             "T-3",
             "timestamps"
@@ -453,6 +471,7 @@
         {
           "id": "ts-untrusted",
           "title": "B-T with a TSA outside the lists: refused",
+          "description": "Signs at B-T with a TSA that is in none of the lists: its token is not trusted, refused (TimestampUntrusted).",
           "tags": [
             "T-3",
             "timestamps"
@@ -472,6 +491,7 @@
           "id": "v-withdrawn-after-use",
           "kind": "validate",
           "title": "CA/QC withdrawn after the signature: still qualified by its history",
+          "description": "The time-stamp proves the signature existed while the root's CA/QC service was granted (its ServiceHistory).",
           "tags": [
             "L-4",
             "Q-1",
@@ -492,7 +512,6 @@
             "qualification": "QESig",
             "timestampQualification": "QTSA"
           },
-          "description": "The time-stamp proves the signature existed while the root's CA/QC service was granted (its ServiceHistory).",
           "sandbox": {
             "trustedList": "WithdrawnAfterUse"
           }
