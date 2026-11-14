@@ -49,6 +49,7 @@ them and the evidence groups by them.
   "sections": [
     { "id": "revocation", "title": "Revocation", "steps": [
       { "id": "revoked", "title": "Revoked by OCSP: refused", "tags": ["F-10", "ocsp"],
+        "description": "The OCSP responder reports the certificate revoked: the signer must refuse instead of signing.",
         "options": { "documentId": "sample:contract", "credentialId": "sandbox:revoked-ocsp" },
         "expect": { "outcome": "refused", "reason": "CertificateRevoked" } }
     ] }
@@ -63,6 +64,10 @@ them and the evidence groups by them.
 | `augment` | Raises `options.fileId` to `options.level` (`BT`, `BLT`, `BLTA`) with the library's augmenter, through `options.timestamp` (`renew: true` renews a B-LTA), then validates the result; library engine only | `outcome` augmented / refused / error, `level`, `indication`, `subIndication` |
 
 `etsiReport: "valid"` checks the run's ETSI TS 119 102-2 report against the schema embedded in SimpleSign.
+
+Give every step a `description`: what it runs and why (the case it stands for, what the expected result proves). The
+page shows it next to the step and the evidence writes it under the step's title, so a reader of the evidence knows
+what each result means without the playbook at hand. A step without one still runs; loading it gives a warning.
 
 The TestBench's **Options reference** (Playbook tab) lists, in the UI's language, every option path, symbolic value and
 Sandbox id and failure a step can use; [options.md](../playbooks/options.md) is the same catalogue in Markdown.
@@ -89,6 +94,11 @@ them as `input:ID` wherever a file goes (`fileId`, `documentId`, `dataId`):
   "options": { "fileId": "input:govbr-signed", "settings": { "profile": "GovBr" } },
   "expect": { "outcome": "valid" } }
 ```
+
+`accept` is the upload's rule, not only a hint to the file picker: the TestBench refuses, when the file is uploaded, a
+file whose extension (or MIME type: `application/pdf`, `text/xml`, `application/pkcs7-signature`…) is not listed, and a
+`.pdf`, `.xml` or `.p7s`/`.p7m` whose content is not a PDF, an XML document or a CMS structure. An empty file is always
+refused. An input without `accept` takes any file (loading the playbook warns).
 
 The Playbook tab shows a **Files to upload** bar with each input: upload, replace or remove its file. A step whose
 input has no file yet is **skipped** (not failed), with a note saying which file it needs; uploading another file
@@ -129,16 +139,33 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
 
 ## The samples
 
+The samples complement each other. `sandbox-basics` and `etsi-baseline` are the generic ones: the checks every signer or
+validator makes whatever the policy (revocation, validity and key usage, the TSA's certificate, levels, algorithms,
+changed files) are shown there, once. A trust-framework playbook (`indecopi-guia-v4`, `eidas-baseline`,
+`icp-brasil-pades`, `govbr-pades`) has only what its profile and policies decide; its checklist names the generic steps
+it relies on (`sandbox-basics:crl-down`), and `PlaybookValidatorTests.SpecificSamples_DoNotRepeatAGenericStep` fails
+when a framework playbook repeats a generic run. For an accreditation, run the framework playbook and the generic ones
+and keep the evidence of each.
+
+The generic playbooks use generic policies only (`sandbox-strict` and `strict-checks`: the strict preset with the checks
+of the chain, CRLs and TSA set to FAIL; the default validation policy, or one with a single constraint changed), never a
+framework's preset or profile. The framework presets set those checks the same way, which
+`PlaybookPoliciesTests` checks constraint by constraint; where a preset differs (the icp-brasil signing policy accepts a
+CRL without nextUpdate; the framework validation policies require a key usage for signing, IOFE's judges the trusted
+list, Gov.br's accepts a signature without the signing-certificate attribute), the framework's playbook has the step
+that shows it, and the test names it.
+
 - `sandbox-basics` — a full tour of the Sandbox: every signer of its good chain in PAdES, CAdES and XAdES up to B-LTA;
   each of its TSAs; CRLs over HTTP, HTTPS and LDAP and its OCSP responder with every failure they can be switched to
   (and the fallback from one to the other); revocations made for a step; short-lived certificates; its trusted list
   and the IOFE profile read from it; the cases a signer must refuse and the samples a validator must not accept.
   Through the library only, with a signing policy it declares (`sandbox-strict`: the strict preset plus the chain to
   the Sandbox root, the TSA checks and CRLs with nextUpdate).
-- `indecopi-guia-v4` — the automated part of INDECOPI's guide v4.0, Annex B: signing (F-n) and verification (V-n) by
-  automated agents and the time-stamp checks (S-n), with the IOFE policies and the Sandbox's list in INDECOPI's
-  layout, through the library and the CLI. It covers the items [indecopi-checklist.md](../playbooks/indecopi-checklist.md)
-  marks P; see [iofe.md](iofe.md). Written by `tools/playbooks/indecopi.py`.
+- `indecopi-guia-v4` — what INDECOPI's guide v4.0 (Annex B) asks that the IOFE profile and policies decide: the
+  trusted list in INDECOPI's layout (signature, expiry, listed roots and the 'unspecified' TSA), nonRepudiation for an
+  automated agent, the validation report and the audit trail, through the library and the CLI. The other items marked
+  P in [indecopi-checklist.md](../playbooks/indecopi-checklist.md) name steps of `sandbox-basics` and `etsi-baseline`;
+  see [iofe.md](iofe.md). Written by `tools/playbooks/indecopi.py`.
 - `etsi-baseline` — SimpleSign against the ETSI standards: PAdES, CAdES and XAdES baseline (EN 319 142-1, 319 122-1,
   319 132-1), the extended forms, time-stamps, EN 319 102-1 validation (indication and sub-indication) and trusted
   lists, cross-validated with EU DSS. It covers the items [etsi-checklist.md](../playbooks/etsi-checklist.md) marks P;
@@ -149,17 +176,17 @@ with `"expect": { "dssAgrees": true }`, which makes the agreement a check. The T
   CLI. It covers the items [eidas-checklist.md](../playbooks/eidas-checklist.md) marks P; see [eidas.md](eidas.md).
   Written by `tools/playbooks/eidas.py`.
 - `icp-brasil-pades` — PAdES under the ICP-Brasil policies (AD-RB, AD-RT, AD-RC, AD-RA; DOC-ICP-15.03) with the
-  `icp-brasil` profile and its policies, through the library and the CLI: the policies, two-phase signing, revocation of
-  the whole chain, the ACT checks, keys and digests (DOC-ICP-01.01), PDF fields and certification, validation and
-  augmentation. The Sandbox's trust is added to the profile's; AD-RA downloads its artifacts from ITI's repository.
+  `icp-brasil` profile and its policies, through the library and the CLI: the profile's trust, the policies, two-phase
+  signing, PDF fields and a pt-BR stamp, validation under the ICP-Brasil policy and augmentation. The Sandbox's trust is added to the profile's; AD-RA downloads its artifacts from ITI's repository.
   Its inputs take a PDF signed with a real ICP-Brasil certificate (`icp-signed`, validated with the profile alone) and
   a PDF of yours to sign under AD-RB and AD-RT (`document`).
 - `govbr-pades` — Gov.br signatures, which only Gov.br's portal makes (PAdES): validation with the `gov-br` profile and
-  its policy (integrity, trust, revocation, validity, key usage), the profile combined with ICP-Brasil's, and raising
-  the level of a received signature. The files are signed by the Sandbox, whose trust is added to the profile's.
+  its policy (trust, the portal's forms, key usage) and the profile combined with ICP-Brasil's. The files are signed by the Sandbox, whose trust is added to the profile's.
   Its input `govbr-signed` takes a PDF signed on the portal: validated with the `gov-br` profile alone, raised to
   B-LTA, given a second signer.
 
 Tests: `tests/unit/Apps/SimpleSign.TestBench.Tests/Playbooks` checks the format, the kept results and the preview, and
-runs every sample against the Sandbox (and checks that the ETSI one covers every P item of its checklist). The schema is `docs/schemas/playbook.schema.json` (also
+runs every sample against the Sandbox; it checks that the ETSI, INDECOPI and eIDAS samples cover every P item of their
+checklists, that every step and section of a sample has a description, and that no framework sample repeats a generic
+step. The schema is `docs/schemas/playbook.schema.json` (also
 `GET /api/playbook/schema`).

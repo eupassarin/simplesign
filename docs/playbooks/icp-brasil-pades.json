@@ -3,7 +3,7 @@
   "schema": 2,
   "id": "icp-brasil-pades",
   "title": "ICP-Brasil PAdES (AD-RB, AD-RT, AD-RC, AD-RA)",
-  "description": "PAdES signatures under the ICP-Brasil signature policies (DOC-ICP-15.03: AD-RB, AD-RT, AD-RC and AD-RA; AD-RV has no PAdES form) with the icp-brasil trust profile and its signing and validation policies, through the library and the CLI. The Sandbox stands in for ICP-Brasil: its trust is added to the profile's (trustProfiles: Sandbox), so its certificates and its TSA play the part of an AC and an ACT; the first section shows that the profile alone trusts only the AC Raiz roots. AD-RA downloads its policy artifacts (LPA_PAdES and the PA) from ITI's repository, so that step needs the network. Tags name the policy (AD-RB…), the ICP-Brasil document (DOC-ICP-15.03 policies, DOC-ICP-01.01 algorithms) and a topic.",
+  "description": "PAdES signatures under the ICP-Brasil signature policies (DOC-ICP-15.03: AD-RB, AD-RT, AD-RC and AD-RA; AD-RV has no PAdES form) with the icp-brasil trust profile and its signing and validation policies, through the library and the CLI. The Sandbox stands in for ICP-Brasil: its trust is added to the profile's (trustProfiles: Sandbox), so its certificates and its TSA play the part of an AC and an ACT; the first section shows that the profile alone trusts only the AC Raiz roots. AD-RA downloads its policy artifacts (LPA_PAdES and the PA) from ITI's repository, so that step needs the network. Tags name the policy (AD-RB…), the ICP-Brasil document (DOC-ICP-15.03) and a topic. It complements sandbox-basics and etsi-baseline: the checks they already show (revocation before signing, validity and key usage, the TSA's certificate, keys and digests, changed files, revocation after a time-stamp, certification) are not repeated here; only what the icp-brasil profile and its policies decide is.",
   "defaults": {
     "engine": "both",
     "format": "pades",
@@ -48,11 +48,14 @@
       "description": "Each policy writes its identifier and the hash of the policy document (signature-policy-identifier), the /Filter /PBAD_PAdES /SubFilter /PBAD.PAdES signature dictionary, and the level it needs. The newest version of the policy in force is chosen. Each signature is validated right after with the ICP-Brasil validation policy.",
       "steps": [
         { "id": "ad-rb", "title": "AD-RB (basic reference)", "tags": ["AD-RB", "DOC-ICP-15.03", "policy"],
+          "description": "Signs under AD-RB: the signature-policy-identifier of the newest AD-RB in force and the PBAD.PAdES dictionary, no time-stamp (B-B). Validated right after with the ICP-Brasil validation policy; its file is reused by later steps.",
           "expect": { "outcome": "signed", "level": "B-B", "indication": "TOTAL_PASSED" } },
         { "id": "ad-rt", "title": "AD-RT (time reference): signature time-stamp from the ACT", "tags": ["AD-RT", "DOC-ICP-15.03", "policy", "tsa"],
+          "description": "Signs under AD-RT: AD-RB plus a signature time-stamp from the ACT (here the Sandbox's TSA), giving B-T.",
           "options": { "icpPolicy": "AdRt" },
           "expect": { "outcome": "signed", "level": "B-T", "indication": "TOTAL_PASSED" } },
         { "id": "ad-rc", "title": "AD-RC (complete references): validation data and a document time-stamp", "tags": ["AD-RC", "DOC-ICP-15.03", "policy", "ltv"],
+          "description": "Signs under AD-RC: AD-RT plus the chain's certificates, CRLs and OCSP responses in the DSS and a document time-stamp over them (B-LTA).",
           "options": { "icpPolicy": "AdRc" },
           "expect": { "outcome": "signed", "level": "B-LTA", "indication": "TOTAL_PASSED" } },
         { "id": "ad-ra", "title": "AD-RA (archival): AD-RC plus the PA, the LPA and its signature in the DSS", "tags": ["AD-RA", "DOC-ICP-15.03", "policy", "ltv", "network"],
@@ -71,154 +74,77 @@
       "description": "The same policies through the two-phase signer: the key signs elsewhere, as a token or a cloud certificate does (AD-RA embeds its artifacts and is made in one call only).",
       "steps": [
         { "id": "ad-rt-deferred", "title": "AD-RT in two phases", "tags": ["AD-RT", "deferred"], "engine": "library",
+          "description": "AD-RT through the two-phase signer: the library prepares the hash, the key signs it elsewhere (as a token or a cloud certificate would), and the library completes it. The result must equal a one-call AD-RT.",
           "options": { "icpPolicy": "AdRt", "mode": "Deferred" },
           "expect": { "outcome": "signed", "level": "B-T", "indication": "TOTAL_PASSED" } },
         { "id": "ad-rc-deferred", "title": "AD-RC in two phases", "tags": ["AD-RC", "deferred"], "engine": "library",
+          "description": "AD-RC through the two-phase signer: the validation data and the document time-stamp are added when the signature is completed.",
           "options": { "icpPolicy": "AdRc", "mode": "Deferred" },
           "expect": { "outcome": "signed", "level": "B-LTA", "indication": "TOTAL_PASSED" } }
       ]
     },
     {
-      "id": "revocation",
-      "title": "Revocation before signing",
-      "description": "The ICP-Brasil signing policy checks the revocation of the whole chain (CRL or OCSP) and refuses a certificate whose status is revoked or unknown.",
-      "steps": [
-        { "id": "crl-https-good", "title": "CRL over HTTPS, good certificate", "tags": ["revocation", "crl"],
-          "options": { "credentialId": "sandbox:good-crl-https" }, "expect": { "outcome": "signed" } },
-        { "id": "ocsp-good", "title": "OCSP, good certificate", "tags": ["revocation", "ocsp"],
-          "options": { "credentialId": "sandbox:good-ocsp" }, "expect": { "outcome": "signed" } },
-        { "id": "revoked-crl-https", "title": "Revoked, CRL over HTTPS: refused", "tags": ["revocation", "crl"],
-          "options": { "credentialId": "sandbox:revoked-crl-https" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
-        { "id": "revoked-crl-ldap", "title": "Revoked, CRL over LDAP: refused", "tags": ["revocation", "crl", "ldap"],
-          "options": { "credentialId": "sandbox:revoked-crl-ldap" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
-        { "id": "revoked-ocsp", "title": "Revoked, OCSP: refused", "tags": ["revocation", "ocsp"],
-          "options": { "credentialId": "sandbox:revoked-ocsp" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
-        { "id": "revoked-ca", "title": "Under a revoked AC: refused", "tags": ["revocation"],
-          "options": { "credentialId": "sandbox:under-revoked-ca" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
-        { "id": "crl-stale", "title": "Revoked after the CRL a client may have cached: refused", "tags": ["revocation", "crl"],
-          "sandbox": { "revoke": ["rsa-4096"], "crl": "Stale" },
-          "options": { "credentialId": "sandbox:rsa-4096" }, "expect": { "outcome": "refused", "reason": "CertificateRevoked" } },
-        { "id": "crl-down", "title": "CRL server down, no OCSP: refused", "tags": ["revocation", "crl"],
-          "sandbox": { "crl": "Down" },
-          "options": { "credentialId": "sandbox:good-crl-https" }, "expect": { "outcome": "refused", "reason": "RevocationStatusUnknown" } },
-        { "id": "crl-expired", "title": "Expired CRL: refused", "tags": ["revocation", "crl"],
-          "sandbox": { "crl": "Expired" },
-          "options": { "credentialId": "sandbox:good-crl-https" }, "expect": { "outcome": "refused", "reason": "RevocationStatusUnknown" } },
-        { "id": "crl-wrong-key", "title": "CRL signed by another key: refused", "tags": ["revocation", "crl"],
-          "sandbox": { "crl": "WrongKey" },
-          "options": { "credentialId": "sandbox:good-crl-https" }, "expect": { "outcome": "refused", "reason": "RevocationStatusUnknown" } },
-        { "id": "ocsp-unauthorized", "title": "OCSP response from an unauthorized signer, no CRL: refused", "tags": ["revocation", "ocsp"],
-          "sandbox": { "ocsp": "Unauthorized" },
-          "options": { "credentialId": "sandbox:good-ocsp" }, "expect": { "outcome": "refused", "reason": "RevocationStatusUnknown" } }
-      ]
-    },
-    {
-      "id": "validity",
-      "title": "Certificate validity and purpose",
-      "steps": [
-        { "id": "expired", "title": "Expired certificate: refused", "tags": ["validity"],
-          "options": { "credentialId": "sandbox:expired" }, "expect": { "outcome": "refused", "reason": "CertificateExpired" } },
-        { "id": "not-yet-valid", "title": "Not yet valid certificate: refused", "tags": ["validity"],
-          "options": { "credentialId": "sandbox:not-yet-valid" }, "expect": { "outcome": "refused", "reason": "CertificateNotCurrentlyValid" } },
-        { "id": "expired-ca", "title": "Under an expired AC: refused", "tags": ["validity"],
-          "options": { "credentialId": "sandbox:under-expired-ca" }, "expect": { "outcome": "refused", "reason": "ChainCertificateNotValid" } },
-        { "id": "no-key-usage", "title": "Neither digitalSignature nor nonRepudiation: refused", "tags": ["key-usage"],
-          "options": { "credentialId": "sandbox:no-signing-key-usage" }, "expect": { "outcome": "refused", "reason": "KeyUsageNotPermitted" } },
-        { "id": "no-key-usage-extension", "title": "No KeyUsage extension: refused", "tags": ["key-usage"],
-          "options": { "credentialId": "sandbox:no-key-usage-extension" }, "expect": { "outcome": "refused", "reason": "KeyUsageNotPermitted" } }
-      ]
-    },
-    {
-      "id": "act",
-      "title": "Time-stamps (ACT)",
-      "description": "AD-RT and above need a signature time-stamp. The ICP-Brasil signing policy checks the TSA before the signature is kept: it chains to an anchor, its certificate was valid at the time-stamp's time and is not revoked.",
-      "steps": [
-        { "id": "act-revoked", "title": "Revoked TSA: refused", "tags": ["AD-RT", "tsa"],
-          "options": { "icpPolicy": "AdRt", "timestamp": { "provider": "SandboxRevoked" } },
-          "expect": { "outcome": "refused", "reason": "TimestampCertificateRevoked" } },
-        { "id": "act-expired", "title": "TSA with an expired certificate: refused", "tags": ["AD-RT", "tsa"],
-          "options": { "icpPolicy": "AdRt", "timestamp": { "provider": "SandboxExpired" } },
-          "expect": { "outcome": "refused", "reason": "TimestampCertificateNotValid" } },
-        { "id": "act-untrusted", "title": "TSA outside the anchors: refused", "tags": ["AD-RT", "tsa"],
-          "options": { "icpPolicy": "AdRt", "timestamp": { "provider": "SandboxUntrusted" } },
-          "expect": { "outcome": "refused", "reason": "TimestampUntrusted" } },
-        { "id": "act-down", "title": "TSA down: refused", "tags": ["AD-RT", "tsa"],
-          "sandbox": { "tsa": "Down" },
-          "options": { "icpPolicy": "AdRt" }, "expect": { "outcome": "refused", "reason": "NetworkFailure" } }
-      ]
-    },
-    {
-      "id": "algorithms",
-      "title": "Keys and digests (DOC-ICP-01.01)",
-      "steps": [
-        { "id": "alg-rsa-4096-sha512", "title": "RSA 4096 with SHA-512", "tags": ["DOC-ICP-01.01", "algorithms"],
-          "options": { "credentialId": "sandbox:rsa-4096", "hash": "Sha512" }, "expect": { "outcome": "signed", "indication": "TOTAL_PASSED" } },
-        { "id": "alg-ecdsa-p256", "title": "ECDSA P-256 with SHA-256", "tags": ["DOC-ICP-01.01", "algorithms"],
-          "options": { "credentialId": "sandbox:ecdsa-p256" }, "expect": { "outcome": "signed", "indication": "TOTAL_PASSED" } },
-        { "id": "alg-ecdsa-p521", "title": "ECDSA P-521 with SHA-512", "tags": ["DOC-ICP-01.01", "algorithms"],
-          "options": { "credentialId": "sandbox:ecdsa-p521", "hash": "Sha512" }, "expect": { "outcome": "signed", "indication": "TOTAL_PASSED" } },
-        { "id": "alg-rsa-1024", "title": "RSA 1024 key: refused", "tags": ["DOC-ICP-01.01", "algorithms"],
-          "options": { "credentialId": "sandbox:rsa-1024" }, "expect": { "outcome": "refused", "reason": "KeyTooWeak" } },
-        { "id": "alg-sha1-ca", "title": "AC certificate signed with SHA-1: refused", "tags": ["DOC-ICP-01.01", "algorithms"],
-          "options": { "credentialId": "sandbox:under-sha1-ca" }, "expect": { "outcome": "refused", "reason": "AlgorithmNotPermitted" } }
-      ]
-    },
-    {
       "id": "pdf",
       "title": "PDF documents",
-      "description": "What a PDF brings to an ICP-Brasil signature: a field to sign, a signature already there, a visible stamp, certification.",
+      "description": "What a PDF brings to an ICP-Brasil signature: a field to sign, a signature already there, a visible stamp in pt-BR (certification is in etsi-baseline).",
       "steps": [
         { "id": "pdf-existing-field", "title": "Sign the document's empty signature field", "tags": ["AD-RB", "pdf"],
+          "description": "Signs the empty signature field the document already has (Assinatura) instead of creating one, as forms prepared for signing expect.",
           "options": { "documentId": "sample:empty-field", "fieldMode": "Existing", "existingFieldName": "Assinatura" },
           "expect": { "outcome": "signed", "indication": "TOTAL_PASSED" } },
         { "id": "pdf-visible", "title": "AD-RT with a visible stamp", "tags": ["AD-RT", "pdf", "appearance"],
+          "description": "AD-RT with a visible stamp in pt-BR (signer, date in Brasília time, reason and location): the appearance must not affect the policy or the validation.",
           "options": { "icpPolicy": "AdRt", "reason": "Concordo com o conteúdo", "location": "Brasília, DF",
             "appearance": { "visible": true, "autoPosition": true, "showDate": true, "showReason": true, "culture": "pt-BR",
               "timeZoneId": "America/Sao_Paulo", "dateFormat": "dd/MM/yyyy HH:mm", "signedByLabel": "Assinado digitalmente por" } },
           "expect": { "outcome": "signed", "level": "B-T", "indication": "TOTAL_PASSED" } },
         { "id": "pdf-second-signer", "title": "A second signer (AD-RT) over the AD-RB document", "tags": ["AD-RT", "pdf"],
+          "description": "A second signer (RSA 3072, AD-RT) signs the AD-RB file in a new field: an incremental update that keeps the first signature intact. Its file is validated with both signatures.",
           "options": { "documentId": "step:ad-rb", "icpPolicy": "AdRt", "credentialId": "sandbox:rsa-3072", "fieldName": "Assinatura2" },
-          "expect": { "outcome": "signed", "level": "B-T", "indication": "TOTAL_PASSED" } },
-        { "id": "pdf-certified", "title": "Certification signature (DocMDP, form filling allowed)", "tags": ["AD-RB", "pdf", "certification"],
-          "options": { "certification": "FormFilling" },
-          "expect": { "outcome": "signed", "indication": "TOTAL_PASSED" } }
+          "expect": { "outcome": "signed", "level": "B-T", "indication": "TOTAL_PASSED" } }
       ]
     },
     {
       "id": "validation",
       "title": "Validation with the ICP-Brasil profile",
-      "description": "The signatures above and the validation samples, validated with the ICP-Brasil validation policy (the default's constraints, and a signing certificate without digitalSignature or nonRepudiation fails).",
+      "description": "The signatures above, validated with the ICP-Brasil validation policy (the default's constraints, and a signing certificate without digitalSignature or nonRepudiation fails); the files any validator must reject are in etsi-baseline and sandbox-basics.",
       "steps": [
         { "id": "v-ad-rb", "kind": "validate", "title": "AD-RB", "tags": ["AD-RB", "validation"],
+          "description": "Validates the AD-RB file with the ICP-Brasil profile and policy: valid, and its ETSI TS 119 102-2 report must be valid against the schema.",
           "options": { "fileId": "step:ad-rb", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED", "etsiReport": "valid" } },
         { "id": "v-ad-rt", "kind": "validate", "title": "AD-RT", "tags": ["AD-RT", "validation"],
+          "description": "Validates the AD-RT file, its signature time-stamp included.",
           "options": { "fileId": "step:ad-rt", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
         { "id": "v-ad-rc", "kind": "validate", "title": "AD-RC at the archival level", "tags": ["AD-RC", "validation"],
+          "description": "Validates the AD-RC file at the archival-data level, which checks the document time-stamp and the validation data it protects.",
           "options": { "fileId": "step:ad-rc", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil", "level": "ArchivalData" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
         { "id": "v-ad-ra", "kind": "validate", "title": "AD-RA at the archival level", "tags": ["AD-RA", "validation", "network"],
+          "description": "Validates the AD-RA file at the archival-data level, with the policy artifacts carried in its DSS.",
           "options": { "fileId": "step:ad-ra", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil", "level": "ArchivalData" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
         { "id": "v-two-signers", "kind": "validate", "title": "Two signers", "tags": ["AD-RT", "validation", "pdf"],
+          "description": "Validates the PDF signed by two signers: both signatures must be valid.",
           "options": { "fileId": "step:pdf-second-signer", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "valid" } },
         { "id": "v-profile-only", "kind": "validate", "title": "Profile alone: the Sandbox's chain is not ICP-Brasil", "tags": ["validation", "trust"],
+          "description": "Validates the AD-RB file with the ICP-Brasil profile alone: the Sandbox's chain is not under the AC Raiz, so NO_CERTIFICATE_CHAIN_FOUND. Shows the profile trusts only ICP-Brasil.",
           "options": { "fileId": "step:ad-rb", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": [], "policyId": "preset:validation:icp-brasil" } },
           "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE", "subIndication": "NO_CERTIFICATE_CHAIN_FOUND" } },
-        { "id": "v-revoked-after-adrt", "kind": "validate", "title": "AD-RT: signer revoked after the time-stamp stays valid", "tags": ["AD-RT", "validation", "revocation"],
-          "description": "The signature time-stamp proves the signature existed before the revocation.",
-          "wait": 2, "sandbox": { "revoke": ["rsa-3072"] },
-          "options": { "fileId": "step:pdf-second-signer", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "valid" } },
-        { "id": "v-tampered", "kind": "validate", "title": "Document changed after signing", "tags": ["validation", "integrity"],
-          "options": { "fileId": "sample:tampered-content", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "invalid", "indication": "TOTAL_FAILED", "subIndication": "HASH_FAILURE" } },
-        { "id": "v-tampered-cms", "kind": "validate", "title": "Signature value changed", "tags": ["validation", "integrity"],
-          "options": { "fileId": "sample:tampered-cms", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "invalid", "indication": "TOTAL_FAILED", "subIndication": "SIG_CRYPTO_FAILURE" } },
-        { "id": "v-revoked", "kind": "validate", "title": "Signer revoked, no proof of existence before it", "tags": ["validation", "revocation"],
-          "options": { "fileId": "sample:revoked", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE", "subIndication": "REVOKED_NO_POE" } },
-        { "id": "v-expired", "kind": "validate", "title": "Signer expired, no proof of existence", "tags": ["validation", "validity"],
-          "options": { "fileId": "sample:expired", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE", "subIndication": "OUT_OF_BOUNDS_NO_POE" } },
         { "id": "key-usage-file", "title": "Signer with neither digitalSignature nor nonRepudiation (minimal signing policy, to validate)", "tags": ["key-usage"],
+          "description": "Signs with a certificate that has neither digitalSignature nor nonRepudiation, under the minimal signing policy and without validating, only to produce the file v-key-usage must reject.",
           "options": { "credentialId": "sandbox:no-signing-key-usage", "signingPolicyId": "preset:signing:minimal", "validate": false },
           "expect": { "outcome": "signed" } },
         { "id": "v-key-usage", "kind": "validate", "title": "Signer with neither digitalSignature nor nonRepudiation: not accepted", "tags": ["validation", "key-usage"],
+          "description": "Validates that file with the ICP-Brasil policy: the signing certificate's key usage does not allow signatures, so it is not accepted (INDETERMINATE).",
           "options": { "fileId": "step:key-usage-file", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": ["Sandbox"], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "indeterminate", "indication": "INDETERMINATE" } }
+      ]
+    },
+    {
+      "id": "differences",
+      "title": "Where the ICP-Brasil policy differs",
+      "description": "The icp-brasil signing policy makes the checks of the generic policy that sandbox-basics runs (sandbox-strict: revocation of the whole chain, the chain to the anchors, the CA certificates' algorithms, the TSA's certificate), so those cases are shown there once; PlaybookPoliciesTests keeps the two in step. Where it decides otherwise, the step is here.",
+      "steps": [
+        { "id": "crl-no-next-update", "title": "CRL without nextUpdate: accepted", "tags": ["revocation", "crl"],
+          "description": "The CRL served has no nextUpdate. The IOFE policy and the generic one refuse it (CRLNextUpdatePresent at FAIL: the CRL does not say until when it is current); the icp-brasil signing policy leaves that constraint at the default's IGNORE, so the CRL is used and, the certificate being good, the signature is made.",
+          "sandbox": { "crl": "NoNextUpdate" }, "options": { "credentialId": "sandbox:good-crl-https" }, "expect": { "outcome": "signed", "level": "B-B" } }
       ]
     },
     {
@@ -227,6 +153,7 @@
       "description": "An AD-RT signature brought to B-LTA later (validation data and a document time-stamp), as AD-RC needs.",
       "steps": [
         { "id": "aug-ad-rt", "kind": "augment", "title": "AD-RT to B-LTA", "tags": ["AD-RT", "AD-RC", "augment"], "engine": "library",
+          "description": "Raises the AD-RT signature to B-LTA afterwards (validation data and a document time-stamp), without signing again: what AD-RC needs, done later.",
           "options": { "fileId": "step:ad-rt", "level": "BLTA", "timestamp": { "provider": "Sandbox" } },
           "expect": { "outcome": "augmented", "level": "B-LTA", "indication": "TOTAL_PASSED" } }
       ]
@@ -240,11 +167,14 @@
           "description": "Only the AC Raiz roots and the ICP-Brasil chain validation are used: an intact signature by a valid, unrevoked ICP-Brasil certificate is accepted.",
           "options": { "fileId": "input:icp-signed", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": [], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
         { "id": "real-blta", "kind": "augment", "title": "Raise the real signature to B-LTA", "tags": ["icp-brasil", "real", "AD-RC", "augment"], "engine": "library",
+          "description": "Raises the uploaded ICP-Brasil signature to B-LTA with the Sandbox's TSA, validating it with the ICP-Brasil profile alone: a real signature can be preserved the same way.",
           "options": { "fileId": "input:icp-signed", "level": "BLTA", "timestamp": { "provider": "Sandbox" }, "validation": { "trust": [], "profile": "IcpBrasil", "trustProfiles": [], "policyId": "preset:validation:icp-brasil" } },
           "expect": { "outcome": "augmented", "level": "B-LTA" } },
         { "id": "yours-ad-rb", "title": "Sign your document under AD-RB", "tags": ["AD-RB", "real", "pdf"],
+          "description": "Signs the uploaded document under AD-RB with a Sandbox certificate, to see the policy applied to your own PDF (its structure, existing signatures, PDF/A).",
           "options": { "documentId": "input:document" }, "expect": { "outcome": "signed", "level": "B-B", "indication": "TOTAL_PASSED" } },
         { "id": "yours-ad-rt", "title": "Sign your document under AD-RT", "tags": ["AD-RT", "real", "pdf"],
+          "description": "Signs the uploaded document under AD-RT (with the Sandbox's time-stamp).",
           "options": { "documentId": "input:document", "icpPolicy": "AdRt" }, "expect": { "outcome": "signed", "level": "B-T", "indication": "TOTAL_PASSED" } }
       ]
     }

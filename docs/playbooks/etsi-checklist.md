@@ -111,7 +111,7 @@ otherwise a sign step produces the file.
 | VA-10 | Not yet valid at signing | NOT_YET_VALID (INDETERMINATE) | P (`not-yet-valid`) |
 | VA-11 | Revocation status unknown (OCSP unknown, CRL down) | INDETERMINATE / TRY_LATER or CHAIN_GENERAL_FAILURE | P (faults) |
 | VA-12 | Weak algorithm (RSA-1024, SHA-1 CA) per the crypto suite (TS 119 312 / TS 119 322) | INDETERMINATE / CRYPTO_CONSTRAINTS_FAILURE(_NO_POE) | P (`rsa-1024`, `under-sha1-ca`) |
-| VA-13 | KeyUsage without digitalSignature or nonRepudiation (a certificate with no KeyUsage extension is unrestricted, RFC 5280) | INDETERMINATE / CHAIN_CONSTRAINTS_FAILURE under a policy that FAILs on it (the default policy only WARNs, as DSS's) | P (`no-signing-key-usage`, IOFE validation policy) |
+| VA-13 | KeyUsage without digitalSignature or nonRepudiation (a certificate with no KeyUsage extension is unrestricted, RFC 5280) | INDETERMINATE / CHAIN_CONSTRAINTS_FAILURE under a policy that FAILs on it (the default policy only WARNs, as DSS's) | P (`va-key-usage`, under `playbook:requires-key-usage`; the IOFE, ICP-Brasil and Gov.br validation policies set the same constraint) |
 | VA-14 | Signature policy required but not available | INDETERMINATE / SIGNATURE_POLICY_NOT_AVAILABLE | P (a policy OID without its document, `preset:validation:strict`; available from the signature-policy-store or an `ISignaturePolicyDocumentProvider`) |
 | VA-15 | Time-stamps out of order (content time-stamp later than the signature time-stamp) | INDETERMINATE / TIMESTAMP_ORDER_FAILURE | P (`cades-sample:v-ts-order`, from a TSA whose clock is ahead) |
 | VA-16 | Signing certificate reference does not match | INDETERMINATE / NO_SIGNING_CERTIFICATE_FOUND | P (`cades-sample:v-wrong-cert-ref`) |

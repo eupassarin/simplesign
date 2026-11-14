@@ -283,15 +283,18 @@ internal sealed class PlaybookRunner(
     public PlaybookStateView SetInput(string inputId, string? fileId)
     {
         var session = Session ?? throw new KeyNotFoundException("No playbook is loaded.");
-        if (session.Playbook.Inputs.All(i => i.Id != inputId))
-        {
-            throw new KeyNotFoundException($"The playbook has no input '{inputId}'.");
-        }
+        var input = session.Playbook.Inputs.FirstOrDefault(i => i.Id == inputId)
+            ?? throw new KeyNotFoundException($"The playbook has no input '{inputId}'.");
 
         StoredFile? file = null;
         if (fileId is not null && !documents.TryGet(fileId, out file))
         {
             throw new KeyNotFoundException($"No file '{fileId}': upload it again.");
+        }
+
+        if (file is not null && PlaybookUploads.Refusal(input, file.FileName, file.Content) is { } refusal)
+        {
+            throw new ArgumentException(refusal, nameof(fileId));
         }
 
         if (session.IsRunning)
