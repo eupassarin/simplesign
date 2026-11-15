@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.11.0] - 2026-11-14
+## [0.11.0] - 2026-11-15
 
 The first release since 0.10.1 (2026-11-04), and a large one. **It contains breaking changes**: the
 Brazilian packages were split and renamed, `SimpleSign.Pdf` was merged into `SimpleSign.PAdES`, and
