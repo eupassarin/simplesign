@@ -17,7 +17,7 @@ internal class TrustedValidationSettings : CommonSettings
 
     /// <summary>The trust profile: its validation policy (unless --policy) and its trust (unless --tsl/--lotl).</summary>
     [CommandOption("--profile <NAME>")]
-    [Description("Trust profile: sandbox, iofe, icp-brasil or gov-br. Sets the validation policy (unless --policy) and the trust (unless --tsl or --lotl); see 'simplesign profiles'")]
+    [Description("Trust profile: sandbox, iofe, eidas, icp-brasil or gov-br. Sets the validation policy (unless --policy) and the trust (unless --tsl or --lotl); see 'simplesign profiles'")]
     public string? Profile { get; init; }
 
     /// <summary>Profiles whose trust is added (their policies are not used).</summary>
