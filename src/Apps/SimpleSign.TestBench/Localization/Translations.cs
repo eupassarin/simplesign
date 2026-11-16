@@ -325,6 +325,7 @@ internal static class Translations
         ["Choose a file to augment."] = "Escolha um arquivo para subir de nível.",
         ["Augmentation runs through the library."] = "O upgrade de nível roda pela biblioteca.",
         ["Choose a TSA for the augmentation."] = "Escolha uma TSA para o upgrade de nível.",
+        ["Connect a Sandbox to use its TSA, or choose a public TSA."] = "Conecte um Sandbox para usar a TSA dele, ou escolha uma TSA pública.",
         ["Content time-stamp after the signature time-stamp"] = "Carimbo do conteúdo depois do carimbo da assinatura",
         ["The content time-stamp comes from a TSA whose clock is an hour ahead, so it is later than the signature time-stamp. The default policy only warns; the strict one fails (TIMESTAMP_ORDER_FAILURE)."] = "O carimbo do conteúdo vem de uma TSA com o relógio uma hora adiantado, então é posterior ao carimbo da assinatura. A política padrão só avisa; a estrita reprova (TIMESTAMP_ORDER_FAILURE).",
         ["Time-stamp without accuracy"] = "Carimbo sem precisão",

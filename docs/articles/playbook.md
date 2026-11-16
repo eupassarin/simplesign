@@ -18,9 +18,9 @@ them and the evidence groups by them.
 
 1. Start a Sandbox and the TestBench, and connect them (`tools/stack/up.sh`, or the two `dotnet run` lines of
    [testbench.md](testbench.md)). Start DSS too for steps with `crossValidate`.
-2. In the TestBench, open the **Playbook** tab (top bar, after Sign and Validate). Open a playbook file, or pick a
+2. In the TestBench, open the **Playbook** tab (top bar, after Sign, Validate and Augment). Open a playbook file, or pick a
    sample (`docs/playbooks/*.json` are bundled: `sandbox-basics`, `indecopi-guia-v4`, `etsi-baseline`,
-   `eidas-baseline`, `icp-brasil-pades`, `govbr-pades`).
+   `eidas-baseline`, `icp-brasil-pades`, `govbr-pades`, `augment-external`).
 3. The playbook is checked when it loads: every Sandbox signer and certificate, failure, preset and step reference.
    Errors stop it; warnings do not.
 4. The page has three columns:
@@ -166,7 +166,8 @@ that shows it, and the test names it.
   the Sandbox root, the TSA checks and CRLs with nextUpdate).
 - `indecopi-guia-v4` — what INDECOPI's guide v4.0 (Annex B) asks that the IOFE profile and policies decide: the
   trusted list in INDECOPI's layout (signature, expiry, listed roots and the 'unspecified' TSA), nonRepudiation for an
-  automated agent, the validation report and the audit trail, through the library and the CLI. The other items marked
+  automated agent, a TSA of the TSL when a signature is raised to B-LTA later, the validation report and the audit
+  trail, through the library and the CLI. The other items marked
   P in [indecopi-checklist.md](../playbooks/indecopi-checklist.md) name steps of `sandbox-basics` and `etsi-baseline`;
   see [iofe.md](iofe.md). Written by `tools/playbooks/indecopi.py`.
 - `etsi-baseline` — SimpleSign against the ETSI standards: PAdES, CAdES and XAdES baseline (EN 319 142-1, 319 122-1,
@@ -175,8 +176,8 @@ that shows it, and the test names it.
   each step is tagged with its item id and standard. Written by `tools/playbooks/etsi.py`.
 - `eidas-baseline` — the eIDAS profile on the Sandbox's list of trusted lists: the faults of the LOTL and the TL
   (`sandbox.lotl`, `sandbox.trustedList`), the qualification of each signature (`expect.qualification`: QESig, QESeal,
-  AdESig-QC, AdESig) and of its time-stamps (`expect.timestampQualification`: QTSA, TSA), through the library and the
-  CLI. It covers the items [eidas-checklist.md](../playbooks/eidas-checklist.md) marks P; see [eidas.md](eidas.md).
+  AdESig-QC, AdESig) and of its time-stamps (`expect.timestampQualification`: QTSA, TSA), including those an
+  augmentation adds later (a QESig raised to B-LTA and renewed), through the library and the CLI. It covers the items [eidas-checklist.md](../playbooks/eidas-checklist.md) marks P; see [eidas.md](eidas.md).
   Written by `tools/playbooks/eidas.py`.
 - `icp-brasil-pades` — PAdES under the ICP-Brasil policies (AD-RB, AD-RT, AD-RC, AD-RA; DOC-ICP-15.03) with the
   `icp-brasil` profile and its policies, through the library and the CLI: the profile's trust, the policies, two-phase
@@ -187,6 +188,11 @@ that shows it, and the test names it.
   its policy (trust, the portal's forms, key usage) and the profile combined with ICP-Brasil's. The files are signed by the Sandbox, whose trust is added to the profile's.
   Its input `govbr-signed` takes a PDF signed on the portal: validated with the `gov-br` profile alone, raised to
   B-LTA, given a second signer.
+- `augment-external` — signatures made by another product (a portal, a desktop signer, another library), uploaded on
+  the Playbook tab and raised with SimpleSign's augmenters: B-LT, then B-LTA, then the archive time-stamp renewed. One
+  section per input: a PDF, a CMS with its content (.p7m), a detached CMS with its content, an XML (XAdES enveloped or
+  enveloping); a section whose file is missing is skipped. Through the library, with the Sandbox's TSA (change
+  `timestamp.provider` to keep the result).
 
 Tests: `tests/unit/Apps/SimpleSign.TestBench.Tests/Playbooks` checks the format, the kept results and the preview, and
 runs every sample against the Sandbox; it checks that the ETSI, INDECOPI and eIDAS samples cover every P item of their

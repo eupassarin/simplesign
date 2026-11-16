@@ -32,6 +32,7 @@ The **Library / CLI** switch runs the same operation through either engine, whic
 |---|---|
 | **Sign** | The three formats, every option, baseline presets B-B…B-LTA, *Vary* and *Combinations* to sweep an option, the Stamp drawer with a live preview |
 | **Validate** | One screen for the three formats, with samples each broken in one specific way and the verdict each should get |
+| **Augment** | Raises a signed file (made here, a sample, or from any other product) to B-T, B-LT or B-LTA without signing again, or renews a B-LTA; the result can be augmented again |
 | **Playbook** | Runs a playbook of scripted steps against the Sandbox and exports the evidence |
 | Panels | Policies, the standards Reference, Environment, Sandbox, EU DSS |
 
@@ -46,7 +47,7 @@ everything a step will do *before* it runs, and exports the evidence as an HTML 
 That is how an accreditation is demonstrated.
 
 Bundled in [`docs/playbooks/`](../../../docs/playbooks/): `sandbox-basics`, `etsi-baseline`,
-`eidas-baseline`, `indecopi-guia-v4`, `icp-brasil-pades` and `govbr-pades`.
+`eidas-baseline`, `indecopi-guia-v4`, `icp-brasil-pades`, `govbr-pades` and `augment-external`.
 
 ## Options
 

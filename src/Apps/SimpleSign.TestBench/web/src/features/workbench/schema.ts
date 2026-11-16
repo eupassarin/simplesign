@@ -215,7 +215,8 @@ export interface DssPolicyView {
   notInDss: string[]
 }
 
-export type RunKind = "sign" | "validate"
+/** What a run does: sign, validate a file, or raise the level of a signed file (augment). */
+export type RunKind = "sign" | "validate" | "augment"
 
 /** How a run makes the signature: through the library, or by running the generated command through the simplesign CLI. */
 export type RunEngine = "library" | "cli"
@@ -249,6 +250,8 @@ export interface RunView {
   bytes: number
   requestedLevel?: string | null
   achievedLevel?: string | null
+  /** The level the signature had before an augmentation. */
+  initialLevel?: string | null
   warnings: string[]
   signMs: number
   validateMs: number

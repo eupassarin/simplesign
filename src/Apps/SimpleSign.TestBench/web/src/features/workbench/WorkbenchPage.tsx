@@ -187,7 +187,7 @@ export function HistoryDrawer() {
               <button className="hover:bg-accent/50 flex w-full items-center gap-2 px-4 py-2.5 text-left" onClick={() => { void openRun(h.id); setOpen(false) }}>
                 <span className={cn("size-2 shrink-0 rounded-full", h.status === "running" ? "bg-info" : h.success ? (h.overall === "Valid" || !h.overall ? "bg-success" : "bg-warning") : "bg-destructive")} />
                 <span className="w-14 shrink-0 text-xs font-semibold">{schema.formats.find((f) => f.id === h.format)?.title}</span>
-                {h.kind === "validate" && <Pill>{t("app.mode.validate")}</Pill>}
+                {h.kind !== "sign" && <Pill>{t(h.kind === "augment" ? "app.mode.augment" : "app.mode.validate")}</Pill>}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{h.success ? [h.achievedLevel ?? h.requestedLevel, h.fileName].filter(Boolean).join(" · ") : h.error ?? t("wb.history.running")}</span>
                   <span className="text-muted-foreground block text-xs">{time(h.startedAt)} · {h.totalMs} ms{h.overall ? ` · ${h.overall}` : ""}</span>
