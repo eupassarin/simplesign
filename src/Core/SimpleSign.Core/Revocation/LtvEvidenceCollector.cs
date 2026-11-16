@@ -66,6 +66,8 @@ internal static class LtvEvidenceCollector
     /// <param name="revocationPreference">The revocation source tried first for each certificate.</param>
     /// <param name="outboundPolicy">Outbound URL policy for AIA, OCSP and CRL downloads.</param>
     /// <param name="clockSkewTolerance">Clock skew allowed for fetched OCSP responses (default 5 minutes).</param>
+    /// <param name="revocationCache">A shared CRL cache (see <see cref="CachedCrl"/>), or null.</param>
+    /// <param name="reuseCrlsIssuedAfter">The time a cached CRL must have been issued after to be reused; null to never reuse.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Collected certificate raw data, OCSP responses, and CRLs.</returns>
     internal static async Task<LtvEvidence> CollectAsync(
@@ -77,6 +79,8 @@ internal static class LtvEvidenceCollector
         RevocationPreference revocationPreference = RevocationPreference.OcspFirst,
         OutboundHttpPolicy? outboundPolicy = null,
         TimeSpan? clockSkewTolerance = null,
+        IRevocationCache? revocationCache = null,
+        DateTimeOffset? reuseCrlsIssuedAfter = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -188,8 +192,9 @@ internal static class LtvEvidenceCollector
 
             try
             {
-                byte[]? crlBytes = CrlEncoding.ToDer(await ResilientHttp.GetBytesAsync(
-                    httpClient, crlUrl, logger: logger, policy: outboundPolicy, ct: cancellationToken).ConfigureAwait(false));
+                byte[]? crlBytes = await CachedCrl.GetAsync(revocationCache, crlUrl, reuseCrlsIssuedAfter, async () => CrlEncoding.ToDer(
+                    await ResilientHttp.GetBytesAsync(httpClient, crlUrl, logger: logger, policy: outboundPolicy, ct: cancellationToken).ConfigureAwait(false)))
+                    .ConfigureAwait(false);
                 // Collection establishes that the embedded CRL is structurally relevant to this
                 // certificate. Trust-policy validation of the CRL signature is deliberately left
                 // to validation time, where the full issuer path and validation time are available.

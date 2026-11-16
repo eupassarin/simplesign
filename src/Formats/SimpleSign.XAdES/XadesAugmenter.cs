@@ -36,6 +36,7 @@ public sealed class XadesAugmenter
     private string? _signatureId;
     private TimestampOptions? _timestamp;
     private IHttpClientProvider _httpClientProvider = DefaultHttpClientProvider.Instance;
+    private IRevocationCache? _revocationCache;
     private AdesBaselineLevel _target = AdesBaselineLevel.Archive;
     private bool _renew;
     private ILogger _logger = NullLogger.Instance;
@@ -91,6 +92,19 @@ public sealed class XadesAugmenter
     public XadesAugmenter WithHttpClientProvider(IHttpClientProvider httpClientProvider)
     {
         _httpClientProvider = httpClientProvider ?? throw new ArgumentNullException(nameof(httpClientProvider));
+        return this;
+    }
+
+    /// <summary>
+    /// A CRL cache shared with other operations: CRLs downloaded for B-LT are remembered, and a cached one is embedded
+    /// when it was issued after the signature time-stamp's genTime and is still current — so extending a batch of
+    /// older signatures downloads each CRL once (see <see cref="LongTermValidationOptions.RevocationCache"/>).
+    /// </summary>
+    /// <param name="cache">The cache, e.g. the <see cref="InMemoryRevocationCache"/> a <see cref="ChainRevocationChecker"/> uses.</param>
+    /// <returns>This augmenter.</returns>
+    public XadesAugmenter WithRevocationCache(IRevocationCache cache)
+    {
+        _revocationCache = cache ?? throw new ArgumentNullException(nameof(cache));
         return this;
     }
 
@@ -217,6 +231,8 @@ public sealed class XadesAugmenter
             var evidence = await LtvEvidenceCollector.CollectAsync(
                 _httpClientProvider.GetClient(), signer, certificates, _logger,
                 outboundPolicy: _httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default,
+                revocationCache: _revocationCache,
+                reuseCrlsIssuedAfter: CachedCrl.GenTime(XadesSignatureBuilder.ExtractSignatureTimeStamp(xml, signatureId)),
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             if (evidence.CertificateRawData.Count == 0 || !evidence.HasCompleteCoverage)
             {

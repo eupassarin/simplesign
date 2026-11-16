@@ -161,7 +161,8 @@ public static class SimpleSignServiceCollectionExtensions
             sp.GetRequiredService<IRevocationChecker>(),
             sp.GetService<ValidationOptions>(),
             sp.GetService<ILogger<PdfSignatureValidator>>(),
-            sp.GetServices<ITrustAnchorProvider>()));
+            sp.GetServices<ITrustAnchorProvider>(),
+            chainRevocationChecker: sp.GetService<IChainRevocationChecker>()));
         services.TryAddTransient(sp => (PdfSignatureValidator)sp.GetRequiredService<IPdfSignatureValidator>());
 
         // LTV embedder

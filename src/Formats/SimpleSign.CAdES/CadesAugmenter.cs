@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 
 namespace SimpleSign.CAdES;
@@ -31,6 +32,7 @@ public sealed class CadesAugmenter
     private readonly byte[]? _detachedContent;
     private TimestampOptions? _timestamp;
     private IHttpClientProvider _httpClientProvider = DefaultHttpClientProvider.Instance;
+    private IRevocationCache? _revocationCache;
     private AdesBaselineLevel _target = AdesBaselineLevel.Archive;
     private bool _renew;
     private ILogger _logger = NullLogger.Instance;
@@ -66,6 +68,19 @@ public sealed class CadesAugmenter
     public CadesAugmenter WithHttpClientProvider(IHttpClientProvider httpClientProvider)
     {
         _httpClientProvider = httpClientProvider ?? throw new ArgumentNullException(nameof(httpClientProvider));
+        return this;
+    }
+
+    /// <summary>
+    /// A CRL cache shared with other operations: CRLs downloaded for B-LT are remembered, and a cached one is embedded
+    /// when it was issued after the signature time-stamp's genTime and is still current — so extending a batch of
+    /// older signatures downloads each CRL once (see <see cref="LongTermValidationOptions.RevocationCache"/>).
+    /// </summary>
+    /// <param name="cache">The cache, e.g. the <see cref="InMemoryRevocationCache"/> a <see cref="ChainRevocationChecker"/> uses.</param>
+    /// <returns>This augmenter.</returns>
+    public CadesAugmenter WithRevocationCache(IRevocationCache cache)
+    {
+        _revocationCache = cache ?? throw new ArgumentNullException(nameof(cache));
         return this;
     }
 
@@ -175,8 +190,10 @@ public sealed class CadesAugmenter
         }
 
         // Through the provider, so its outbound policy (allowed origins, LDAP) applies to the CRL and OCSP requests.
-        var evidence = await LtvDataCollector.CollectAsync(_httpClientProvider, signer, known, _logger, new LongTermValidationOptions(),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+        var evidence = await LtvDataCollector.CollectAsync(
+            _httpClientProvider, signer, known, _logger, new LongTermValidationOptions { RevocationCache = _revocationCache },
+            CachedCrl.GenTime(archive ? parsed.ArchiveTimestampToken : parsed.SignatureTimestampToken), ocspClient: null, cancellationToken)
+            .ConfigureAwait(false);
         if (evidence.CertificateRawData.Count == 0 || !evidence.HasCompleteCoverage)
         {
             throw new SigningException(

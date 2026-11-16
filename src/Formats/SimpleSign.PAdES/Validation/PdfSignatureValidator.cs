@@ -52,6 +52,19 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     /// Creates a validator with injected revocation checker and trust anchor providers.
     /// This is the recommended constructor when using DI.
     /// </summary>
+    /// <param name="httpClientProvider">The HTTP clients for OCSP, CRL and AIA.</param>
+    /// <param name="revocationChecker">Checks the revocation of the signer's chain.</param>
+    /// <param name="options">Validation options; null for <see cref="ValidationOptions.Default"/>.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="trustAnchorProviders">Trust anchors besides the options'.</param>
+    /// <param name="chainValidationProviders">Chain validation besides the options'.</param>
+    /// <param name="certChainService">Builds chains; null for the default.</param>
+    /// <param name="cryptoVerifier">Verifies signatures; null for the default.</param>
+    /// <param name="integrityVerifier">Checks the byte ranges; null for the default.</param>
+    /// <param name="cmsParser">Parses the CMS; null for the default.</param>
+    /// <param name="timestampValidator">Validates time-stamp tokens; null for the default.</param>
+    /// <param name="chainRevocationChecker">Checks the revocation of time-stamping authorities' chains, e.g. the
+    /// application's shared one; null for one of the validator's own.</param>
     public PdfSignatureValidator(
         IHttpClientProvider httpClientProvider,
         IRevocationChecker revocationChecker,
@@ -63,10 +76,12 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         ICryptoVerifier? cryptoVerifier = null,
         IIntegrityVerifier? integrityVerifier = null,
         ICmsParser? cmsParser = null,
-        ITimestampValidator? timestampValidator = null)
+        ITimestampValidator? timestampValidator = null,
+        IChainRevocationChecker? chainRevocationChecker = null)
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         ArgumentNullException.ThrowIfNull(revocationChecker);
+        _tsaRevocationChecker = chainRevocationChecker;
         _options = (options ?? ValidationOptions.Default).WithProfileApplied();
         var client = httpClientProvider.GetClient();
         _httpClient = client;
@@ -149,8 +164,36 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         ILogger<PdfSignatureValidator>? logger,
         IEnumerable<ITrustAnchorProvider>? trustAnchorProviders,
         IEnumerable<IChainValidationProvider>? chainValidationProviders = null)
+        : this(httpClientProvider, options, logger, trustAnchorProviders, chainValidationProviders, chainRevocationChecker: null, revocationCache: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a validator that shares revocation data with the rest of the application: the CRLs downloaded for the
+    /// signer's chain go in <paramref name="revocationCache"/> (and are taken from it until their nextUpdate), and the
+    /// chains of time-stamping authorities are checked by <paramref name="chainRevocationChecker"/> — e.g. the
+    /// <see cref="ChainRevocationChecker"/> a signer uses, with the same cache. A service validating many documents then
+    /// downloads each CRL once.
+    /// </summary>
+    /// <param name="httpClientProvider">The HTTP clients for OCSP, CRL and AIA.</param>
+    /// <param name="options">Validation options; null for <see cref="ValidationOptions.Default"/>.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="trustAnchorProviders">Trust anchors besides the options'.</param>
+    /// <param name="chainValidationProviders">Chain validation besides the options'.</param>
+    /// <param name="chainRevocationChecker">Checks TSA chains; null for one of the validator's own (with <paramref name="revocationCache"/>).</param>
+    /// <param name="revocationCache">The CRL cache of the signer's chain checks; null for none.</param>
+    public PdfSignatureValidator(
+        IHttpClientProvider httpClientProvider,
+        ValidationOptions? options,
+        ILogger<PdfSignatureValidator>? logger,
+        IEnumerable<ITrustAnchorProvider>? trustAnchorProviders,
+        IEnumerable<IChainValidationProvider>? chainValidationProviders,
+        IChainRevocationChecker? chainRevocationChecker,
+        IRevocationCache? revocationCache)
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
+        _tsaRevocationChecker = chainRevocationChecker;
+        _revocationCache = revocationCache;
         _options = (options ?? ValidationOptions.Default).WithProfileApplied();
         var client = httpClientProvider.GetClient();
         _httpClient = client;
@@ -158,7 +201,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _logger = logger ?? NullLogger<PdfSignatureValidator>.Instance;
         _revocationChecker = new RevocationChecker(
             new OcspClient(client, _logger) { OutboundPolicy = _outboundPolicy },
-            new CrlClient(client, _logger) { OutboundPolicy = _outboundPolicy },
+            new CrlClient(client, _logger) { OutboundPolicy = _outboundPolicy, Cache = revocationCache },
             _logger)
         {
             Strategy = _options.Verifier.RevocationStrategy,
@@ -1480,14 +1523,16 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         return lists.Count == 0 ? null : lists;
     }
 
-    private ChainRevocationChecker? _tsaRevocationChecker;
+    private readonly IRevocationCache? _revocationCache;
+    private IChainRevocationChecker? _tsaRevocationChecker;
 
-    /// <summary>The checker for the revocation of TSA chains, created on first use.</summary>
-    private ChainRevocationChecker TsaRevocationChecker =>
+    /// <summary>The checker for the revocation of TSA chains: the one given, or one created on first use.</summary>
+    private IChainRevocationChecker TsaRevocationChecker =>
         _tsaRevocationChecker ??= new ChainRevocationChecker(_httpClient, _logger, _outboundPolicy)
         {
             Strategy = _options.Verifier.RevocationStrategy,
             Fallback = _options.Verifier.RevocationFallback,
+            Cache = _revocationCache ?? new InMemoryRevocationCache(TimeSpan.FromMinutes(15)),
         };
 
     /// <summary>The trust anchors and intermediates of the providers and the options, to complete TSA chains.</summary>

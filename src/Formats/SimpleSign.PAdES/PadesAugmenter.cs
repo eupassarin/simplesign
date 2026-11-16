@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Signing;
@@ -39,6 +40,7 @@ public sealed class PadesAugmenter
     private readonly byte[] _pdf;
     private TimestampOptions? _timestamp;
     private IHttpClientProvider _httpClientProvider = DefaultHttpClientProvider.Instance;
+    private IRevocationCache? _revocationCache;
     private AdesBaselineLevel _target = AdesBaselineLevel.Archive;
     private bool _renew;
     private ILogger _logger = NullLogger.Instance;
@@ -72,6 +74,19 @@ public sealed class PadesAugmenter
     public PadesAugmenter WithHttpClientProvider(IHttpClientProvider httpClientProvider)
     {
         _httpClientProvider = httpClientProvider ?? throw new ArgumentNullException(nameof(httpClientProvider));
+        return this;
+    }
+
+    /// <summary>
+    /// A CRL cache shared with other operations: CRLs downloaded for B-LT are remembered, and a cached one is embedded
+    /// when it was issued after the signature time-stamp's genTime and is still current — so extending a batch of
+    /// older signatures downloads each CRL once (see <see cref="LongTermValidationOptions.RevocationCache"/>).
+    /// </summary>
+    /// <param name="cache">The cache, e.g. the <see cref="InMemoryRevocationCache"/> a <see cref="ChainRevocationChecker"/> uses.</param>
+    /// <returns>This augmenter.</returns>
+    public PadesAugmenter WithRevocationCache(IRevocationCache cache)
+    {
+        _revocationCache = cache ?? throw new ArgumentNullException(nameof(cache));
         return this;
     }
 
@@ -176,7 +191,7 @@ public sealed class PadesAugmenter
     {
         using var stream = new MemoryStream(pdf, writable: false);
         var inspection = await PdfSignatureInspector.InspectAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var embedder = new LtvEmbedder(_httpClientProvider, _logger);
+        var embedder = new LtvEmbedder(_httpClientProvider, _logger) { RevocationCache = _revocationCache };
         var required = new List<X509Certificate2>();
         var parsed = new List<CmsSignedData>();
         try

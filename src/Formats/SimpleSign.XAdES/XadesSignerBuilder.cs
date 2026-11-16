@@ -1145,6 +1145,8 @@ public sealed partial class XadesSignerBuilder
             revocationPreference: ltvOptions.RevocationPreference,
             outboundPolicy: provider.OutboundPolicy ?? OutboundHttpPolicy.Default,
             clockSkewTolerance: ltvOptions.ClockSkewTolerance,
+            revocationCache: ltvOptions.RevocationCache,
+            reuseCrlsIssuedAfter: CachedCrl.GenTime(XadesSignatureBuilder.ExtractSignatureTimeStamp(signedXml, signatureId)),
             cancellationToken: cancellationToken).ConfigureAwait(false);
         if (!evidence.HasCompleteCoverage)
         {
@@ -1213,6 +1215,8 @@ public sealed partial class XadesSignerBuilder
             revocationPreference: profile.LongTermValidation.RevocationPreference,
             outboundPolicy: ltvProvider.OutboundPolicy ?? OutboundHttpPolicy.Default,
             clockSkewTolerance: profile.LongTermValidation.ClockSkewTolerance,
+            revocationCache: profile.LongTermValidation.RevocationCache,
+            reuseCrlsIssuedAfter: CachedCrl.GenTime(timestampToken),
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         bool hasLtvMaterial = ltvData.CertificateRawData.Count > 0 && ltvData.HasCompleteCoverage;

@@ -66,4 +66,34 @@ public sealed class XadesAugmenterTests : IDisposable
 
         await Should.ThrowAsync<ArgumentException>(() => XadesAugmenter.Document(signed).ForSignature("nope").AugmentAsync());
     }
+
+    [Theory]
+    [InlineData(true, 2)]
+    [InlineData(false, 4)]
+    public async Task AugmentAsync_BatchWithASharedRevocationCache_DownloadsEachCrlOnce(bool shared, int expectedDownloads)
+    {
+        using var server = new SyntheticPkiServer();
+        var tsa = new TimestampOptions(new Uri(SyntheticPkiServer.TsaUrl));
+        var signatures = new List<byte[]>();
+        for (int i = 0; i < 2; i++)
+        {
+            signatures.Add(await XadesSigner.Document(s_xml)
+                .WithCertificate(server.Pki.Leaf, server.Pki.IntermediatesAndRoot())
+                .WithHttpClientProvider(server.Provider)
+                .WithLevel(AdesBaselineProfile.Timestamped(tsa))
+                .SignAsync());
+        }
+
+        server.ResetCount();
+        var cache = new SimpleSign.Core.Revocation.InMemoryRevocationCache(TimeSpan.FromHours(1));
+        foreach (byte[] signature in signatures)
+        {
+            var augmenter = XadesAugmenter.Document(signature).WithTimestamp(tsa).WithHttpClientProvider(server.Provider).ToLevel(AdesBaselineLevel.LongTerm);
+            var result = await (shared ? augmenter.WithRevocationCache(cache) : augmenter).AugmentAsync();
+            result.Level.ShouldBe(AdesBaselineLevel.LongTerm);
+        }
+
+        // The time-stamps say 2024-01-01 and the CRLs were issued after it: the cached ones prove the same thing.
+        server.CrlDownloads.ShouldBe(expectedDownloads);
+    }
 }
