@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     INDETERMINATE "revocation status could not be established" where PAdES passed.
   - *After:* pass the provider. The existing constructors are unchanged.
 
+### Fixed
+
+- **`new TimestampClient(HttpClient, TimestampOptions)` applies the outbound policy of
+  `options.HttpClientProvider`.**
+  - *Before:* the constructor left `OutboundPolicy` at `OutboundHttpPolicy.Default`; only
+    `TimestampClient.Create(options, fallback)` took the provider's, so a TSA on a loopback origin
+    the provider allowed was refused with "SSRF blocked".
+  - *After:* the constructor takes the provider's policy, as `Create` does. Without a provider in
+    the options nothing changes, and an `OutboundPolicy` set in an object initializer still wins.
+
 ### Changed
 
 - **A trust profile no longer trusts the operating system's roots** (behaviour change for profile
