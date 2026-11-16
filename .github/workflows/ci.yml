@@ -99,7 +99,7 @@ jobs:
           SIMPLESIGN_REQUIRE_SANDBOX: "true"
         run: |
           dotnet test --no-build --configuration Release --framework ${{ matrix.framework }} \
-            --filter "Category!=Stress&Category!=VeraPdf&FullyQualifiedName!~SimpleSign.TestBench.Tests" \
+            --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop&FullyQualifiedName!~SimpleSign.TestBench.Tests" \
             --logger "trx" \
             --logger "console;verbosity=normal" \
             --results-directory TestResults
@@ -112,7 +112,7 @@ jobs:
           SIMPLESIGN_REQUIRE_SANDBOX: "true"
         run: |
           dotnet test --no-build --configuration Release \
-            --filter "Category!=Stress&Category!=VeraPdf" \
+            --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop" \
             --collect:"XPlat Code Coverage" \
             --settings coverlet.runsettings \
             --results-directory TestResults \
@@ -287,6 +287,56 @@ jobs:
         with:
           name: verapdf-results
           path: TestResults-VeraPdf/
+
+  # Independent implementations read what SimpleSign writes, and write what it reads: qpdf (PDF structure), pyHanko
+  # (PAdES), OpenSSL 3 (CAdES), xmlsec1 (XAdES), each trusting only the tests' root. SIMPLESIGN_REQUIRE_INTEROP turns
+  # a missing tool into a failure instead of a skip. pyHanko and its dependencies are pinned in tools/requirements.txt.
+  interop:
+    name: Interop (qpdf, pyHanko, OpenSSL, xmlsec1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install qpdf and xmlsec1
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qpdf xmlsec1
+
+      - name: Install pyHanko
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pyhanko"
+          "$RUNNER_TEMP/pyhanko/bin/pip" install --no-cache-dir -r tests/integration/SimpleSign.Interop.Tests/tools/requirements.txt
+          echo "SIMPLESIGN_PYTHON=$RUNNER_TEMP/pyhanko/bin/python" >> "$GITHUB_ENV"
+
+      - name: Tool versions
+        run: |
+          qpdf --version | head -1
+          openssl version
+          xmlsec1 --version
+          "$SIMPLESIGN_PYTHON" -I -c "import importlib.metadata as m; print('pyHanko', m.version('pyHanko'))"
+
+      - name: Test
+        timeout-minutes: 15
+        env:
+          SIMPLESIGN_REQUIRE_INTEROP: "true"
+          SIMPLESIGN_INTEROP_FAILURES: ${{ github.workspace }}/TestResults-Interop/rejected
+        run: |
+          dotnet test tests/integration/SimpleSign.Interop.Tests --configuration Release --framework net10.0 \
+            --filter "Category=Interop" \
+            --logger "trx" \
+            --logger "console;verbosity=normal" \
+            --results-directory TestResults-Interop
+
+      # The trx, and every file a tool rejected (rejected/).
+      - name: Upload interop results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: interop-results
+          path: TestResults-Interop/
 
   # AOT, PKCS#11, TestBench and Agent build what they need themselves: they start with the matrix instead of
   # waiting for its slowest OS (which added ~9 minutes at the end of every run).

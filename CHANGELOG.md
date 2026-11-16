@@ -19,6 +19,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recognize, is now found by the inspector and verifies; its test says so instead of only asking it not to throw.
   Origin and license: `tests/integration/SimpleSign.Integration.Tests/Fixtures/README.md`.
 
+### Fixed — PAdES: a visible signature on a page stored in an object stream
+
+- **`PdfSignatureWriter`:** auto-positioning a visible signature (`SignatureAppearance.Auto()`) read the page
+  dictionary straight from the file bytes. On a PDF whose page lives in a compressed object stream (ISO 32000 §7.5.7;
+  qpdf `--object-streams=generate`, many modern producers) there are none, and signing threw
+  `ArgumentOutOfRangeException`. The page is now read from its object stream, as the `/Annots` update already did.
+  Found by the qpdf interop tests below.
+
+### Added — interop with qpdf, pyHanko, OpenSSL and xmlsec1 in CI
+
+- **`tests/integration/SimpleSign.Interop.Tests`** has independent implementations read what SimpleSign writes, and
+  SimpleSign read what they write. Each trusts only the tests' own root: no `-noverify`, no `--insecure`.
+  - **qpdf `--check`:** every PAdES variant (B-B, visible, B-T, B-LT, B-LTA, two signatures, certification, ECDSA)
+    on a classic cross-reference table and on a cross-reference stream.
+  - **pyHanko 0.37:** the same PDFs, with every signature, embedded timestamp and document timestamp intact, valid and
+    trusted, and later revisions classed as acceptable (DSS and LTA updates, form filling).
+  - **pyHanko signs, SimpleSign validates and signs again,** then pyHanko validates both signatures.
+  - **OpenSSL 3 `cms -verify`:** `CadesSigner` output, detached and enveloped, RSA and ECDSA, B-B and B-T, chain
+    included. OpenSSL `cms -sign -cades` output is validated by `CadesSignatureValidator`.
+  - **xmlsec1 `--verify`:** `XadesSigner` output, enveloped, enveloping and detached, RSA and ECDSA, B-B and B-T.
+  - **Controls:** each tool has a test where a broken file must be rejected.
+- **CI job `Interop`** installs the tools (pyHanko pinned in `tools/requirements.txt`) and runs them with
+  `SIMPLESIGN_REQUIRE_INTEROP=true`. Rejected files are kept as an artifact. The category `Interop` is left out of the
+  other test runs.
+- `SyntheticPki` exports the signer's key as PEM and issues an ECDSA signer. `ExternalProcess` (TestHelpers) runs the
+  tools; the veraPDF tests use it too.
+
 ### Added — PDF/A preservation checked by veraPDF in CI
 
 - **`tests/integration/SimpleSign.VeraPdf.Tests`** signs the PDF/A-1b, 2b and 3b files of the veraPDF corpus

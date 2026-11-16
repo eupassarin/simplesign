@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
+using SimpleSign.TestHelpers;
 using Xunit;
 
 namespace SimpleSign.VeraPdf.Tests;
@@ -62,8 +62,6 @@ public static class VeraPdf
     /// </summary>
     public const string Image = "verapdf/cli@sha256:d5ee329657cf9bc4b2400392dd54c7d0a0ce9980ff6fa2da5590eebeec007cdb";
 
-    private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(3);
-
     private static readonly Lazy<string?> Unavailable = new(FindProblem, LazyThreadSafetyMode.ExecutionAndPublication);
 
     private static string? LocalExecutable => Environment.GetEnvironmentVariable("SIMPLESIGN_VERAPDF") is { Length: > 0 } path ? path : null;
@@ -104,13 +102,12 @@ public static class VeraPdf
             await File.WriteAllBytesAsync(input, pdf, cancellationToken);
 
             string[] verapdfArgs = ["--format", "mrr", "--flavour", flavour];
-            var (exitCode, stdout, stderr) = LocalExecutable is { } executable
-                ? await RunAsync(executable, [.. verapdfArgs, input], cancellationToken)
+            var run = LocalExecutable is { } executable
+                ? await ExternalProcess.RunAsync(executable, [.. verapdfArgs, input], cancellationToken: cancellationToken)
                 // The image's entry point is the veraPDF CLI. It is built for amd64 only (emulated on arm64).
-                : await RunAsync("docker", ["run", "--rm", "--platform", "linux/amd64", "-v", $"{directory}:/data", Image, .. verapdfArgs, "/data/input.pdf"], cancellationToken);
+                : await ExternalProcess.RunAsync("docker", ["run", "--rm", "--platform", "linux/amd64", "-v", $"{directory}:/data", Image, .. verapdfArgs, "/data/input.pdf"], cancellationToken: cancellationToken);
 
-            return Parse(stdout) ?? throw new InvalidOperationException(
-                $"veraPDF wrote no report (exit code {exitCode}).\nstdout:\n{stdout}\nstderr:\n{stderr}");
+            return Parse(run.Stdout) ?? throw new InvalidOperationException($"veraPDF wrote no report ({run.Output}).");
         }
         finally
         {
@@ -176,59 +173,13 @@ public static class VeraPdf
             return File.Exists(executable) ? null : $"SIMPLESIGN_VERAPDF names {executable}, which does not exist.";
         }
 
-        if (!Probe("docker", "info"))
+        if (!ExternalProcess.Succeeds("docker", "info"))
         {
             return "veraPDF is not available: no Docker here. Start Docker, or set SIMPLESIGN_VERAPDF to a local veraPDF CLI.";
         }
 
-        return Probe("docker", "image", "inspect", Image)
+        return ExternalProcess.Succeeds("docker", "image", "inspect", Image)
             ? null
             : $"veraPDF is not available: the image is not pulled. Run: docker pull {Image}";
-    }
-
-    private static bool Probe(string command, params string[] args)
-    {
-        try
-        {
-            var (exitCode, _, _) = RunAsync(command, args, CancellationToken.None, TimeSpan.FromSeconds(30)).GetAwaiter().GetResult();
-            return exitCode == 0;
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or TimeoutException)
-        {
-            return false;
-        }
-    }
-
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunAsync(
-        string command, IEnumerable<string> args, CancellationToken cancellationToken, TimeSpan? timeout = null)
-    {
-        var startInfo = new ProcessStartInfo(command)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        foreach (string arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Could not start {command}.");
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(timeout ?? Timeout);
-
-        // Both streams are drained at once: a full stderr pipe would otherwise block the process.
-        var stdout = process.StandardOutput.ReadToEndAsync(deadline.Token);
-        var stderr = process.StandardError.ReadToEndAsync(deadline.Token);
-        try
-        {
-            await process.WaitForExitAsync(deadline.Token);
-            return (process.ExitCode, await stdout, await stderr);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"{command} did not finish within {timeout ?? Timeout}.");
-        }
     }
 }
