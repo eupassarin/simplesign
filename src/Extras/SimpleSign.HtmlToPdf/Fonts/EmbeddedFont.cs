@@ -394,12 +394,6 @@ internal sealed class EmbeddedFont
             $"/DescendantFonts [{cidFont} 0 R] /ToUnicode {toUnicodeObj} 0 R >>");
     }
 
-    /// <summary>Kept for compatibility: writes the font and returns its resource entry.</summary>
-    internal string BuildFontResource(PdfObjectWriter writer)
-    {
-        WriteObjects(writer);
-        return $"/{ResourceKey} {ObjectNumber} 0 R";
-    }
 
     private string BuildWidths()
     {

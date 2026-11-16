@@ -41,7 +41,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
 
     /// <summary>The trust profile: its signing policy (unless --signing-policy) and its trust (unless --tsl).</summary>
     [CommandOption("--profile <NAME>")]
-    [Description("Trust profile: sandbox, iofe or icp-brasil (gov-br validates only). Sets the signing policy (unless --signing-policy) and the trust anchors (unless --tsl); see 'simplesign profiles'")]
+    [Description("Trust profile: sandbox, iofe, eidas or icp-brasil (gov-br validates only). Sets the signing policy (unless --signing-policy) and the trust anchors (unless --tsl); see 'simplesign profiles'")]
     public string? Profile { get; init; }
 
     /// <summary>Profiles whose trust is added before signing (their policies are not used).</summary>

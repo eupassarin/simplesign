@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Signers.Pkcs11</PackageId>
     <Description>Sign PAdES, CAdES and XAdES documents with A3 tokens, smartcards and HSMs through their PKCS#11 driver. Own minimal interop: no third-party dependencies, no unsafe code. Native AOT compatible.</Description>
     <PackageTags>pkcs11;cryptoki;hsm;smartcard;token;a3;icp-brasil;digital-signature;external-signer;native-aot</PackageTags>
-    <Version>0.10.1</Version>
+    <Version>0.11.0</Version>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

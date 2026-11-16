@@ -42,8 +42,6 @@ internal sealed class PdfContentStream
     /// <summary>Gets the registered fonts available to this content stream.</summary>
     internal FontCollection? Fonts { get; }
 
-    internal string ResolveFontName(string family, bool bold, bool italic) =>
-        Fonts is not null && Fonts.TryGet(family, out _) ? family : StandardFonts.Resolve(family, bold, italic);
 
     /// <summary>Saves graphics state (q operator).</summary>
     public void SaveState()

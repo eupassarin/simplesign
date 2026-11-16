@@ -81,3 +81,7 @@ PadesSigner.Document(pdf)
 | **Attribute-based discovery** | Zero-config for new assemblies | Reflection, AOT incompatible | Rejected |
 
 **Status:** Accepted. The two-interface composite is the canonical extension mechanism. `WithCountryExtension<T>()` on `PadesSignerBuilder` provides both DI and builder-based registration paths. `PdfSignatureValidator` consumes both `ITrustAnchorProvider` and `IChainValidationProvider` via constructor injection or `ICountryExtension` aggregator.
+
+**Superseded in part by [ADR 0029](0029-trust-profiles-and-signature-qualification.md):**
+a `TrustProfile` now carries a framework's policies together with the trust this ADR defines, and
+`ISignatureQualifier` adds the qualification of a validated signature as a separate extension point.

@@ -957,7 +957,7 @@ public sealed class CliCommandTests : IDisposable
     // ── ICP-Brasil options ──────────────────────────────────────────────
 
     [Fact]
-    public async Task Sign_IcpPolicyAndHealthDocument_ThenValidateJsonReportsLei14063()
+    public async Task Sign_IcpPolicyAndHealthDocument_WritesIcpAttributesAndNoLei14063ForASelfSignedChain()
     {
         string input = WriteMinimalPdf("icp-input.pdf");
         string output = Path.Combine(_tempDir, "icp.pdf");
@@ -976,8 +976,26 @@ public sealed class CliCommandTests : IDisposable
         validateExit.ShouldBe(0, json);
         using var doc = JsonDocument.Parse(json);
         var signature = doc.RootElement.GetProperty("signatures")[0];
-        signature.GetProperty("lei14063").GetString().ShouldBe("Simples", "a self-signed certificate is neither ICP-Brasil nor Gov.br");
+        // Lei 14.063 is a Brazilian concept, so it is reported only for a signature actually
+        // validated under the Brazilian framework. This chain is self-signed, so it is neither
+        // ICP-Brasil nor Gov.br and both fields stay null — the same guard keeps the level out of
+        // a Peruvian (IOFE) report, where it used to appear as "Simples".
+        signature.GetProperty("lei14063").ValueKind.ShouldBe(JsonValueKind.Null);
         signature.GetProperty("brasil").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Validate_SignatureOutsideTheBrazilianFramework_JsonOmitsLei14063()
+    {
+        string signed = await SignAsync("no-lei14063.pdf");
+
+        var (exit, json) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--json");
+
+        exit.ShouldBe(0, json);
+        using var doc = JsonDocument.Parse(json);
+        var signature = doc.RootElement.GetProperty("signatures")[0];
+        signature.GetProperty("indication").GetString().ShouldBe("Valid");
+        signature.GetProperty("lei14063").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
     [Theory]

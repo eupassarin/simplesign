@@ -1,5 +1,7 @@
 # SimpleSign Agent (local signing agent)
 
+> Part of [the apps that ship with SimpleSign](apps.md): the CLI, the Agent, the TestBench and the Sandbox.
+
 SimpleSign Agent is a small macOS, Windows and Linux app (Avalonia) that web pages call to sign
 with the user's certificate: the OS certificate store or an **A3 token / smartcard** (PKCS#11).
 The private key never leaves the computer. It replaces the former Windows-only
