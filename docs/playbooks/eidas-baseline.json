@@ -517,6 +517,108 @@
           }
         }
       ]
+    },
+    {
+      "id": "augment",
+      "title": "Raising a qualified signature (augmentation)",
+      "description": "A QESig made at B-B is raised later, without signing again, with the library's augmenter: the time-stamps it adds are qualified like those added at signing (TSA/QTST of the lists), the signature stays QESig, and its archive time-stamp can be renewed.",
+      "steps": [
+        {
+          "id": "aug-qesig-blta",
+          "kind": "augment",
+          "title": "QESig B-B raised to B-LTA with the qualified TSA",
+          "description": "Raises the tl-ok signature (QESig, B-B) to B-LTA with the Sandbox's main TSA, a TSA/QTST service of the lists: validation data and a document time-stamp are added, and the signature validates as QESig with a qualified time-stamp (QTSA).",
+          "tags": [
+            "T-4",
+            "Q-1",
+            "augment"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:tl-ok",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "validation": {
+              "trust": [],
+              "profile": "Eidas",
+              "profileSource": "Sandbox",
+              "policyId": "preset:validation:eidas"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED",
+            "timestampQualification": "QTSA",
+            "qualification": "QESig"
+          }
+        },
+        {
+          "id": "aug-non-qualified-tsa",
+          "kind": "augment",
+          "title": "QESig B-B raised to B-T with a non-qualified TSA",
+          "description": "Raises the same signature to B-T with a TSA listed only as a TSA service: the signature is still QESig, but the time-stamp the augmentation added is not qualified (TSA), as if it had been added at signing.",
+          "tags": [
+            "T-4",
+            "T-2",
+            "augment"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:tl-ok",
+            "level": "BT",
+            "timestamp": {
+              "provider": "SandboxNonQualified"
+            },
+            "validation": {
+              "trust": [],
+              "profile": "Eidas",
+              "profileSource": "Sandbox",
+              "policyId": "preset:validation:eidas"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-T",
+            "timestampQualification": "TSA",
+            "qualification": "QESig"
+          }
+        },
+        {
+          "id": "aug-qesig-renew",
+          "kind": "augment",
+          "title": "Renew the archive time-stamp of the QESig B-LTA",
+          "description": "Adds the validation data of the last archive time-stamp of aug-qesig-blta, then a new archive time-stamp from the qualified TSA: what keeps a qualified signature verifiable before its time-stamp's certificate expires.",
+          "tags": [
+            "T-4",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:aug-qesig-blta",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "renew": true,
+            "validation": {
+              "trust": [],
+              "profile": "Eidas",
+              "profileSource": "Sandbox",
+              "policyId": "preset:validation:eidas"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA",
+            "indication": "TOTAL_PASSED",
+            "qualification": "QESig"
+          }
+        }
+      ]
     }
   ]
 }

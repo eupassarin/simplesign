@@ -117,7 +117,8 @@ public sealed record RunView(
     string? ReportId = null,
     string Engine = RunEngines.Library,
     IReadOnlyList<CliStep>? Cli = null,
-    string? EtsiReportId = null);
+    string? EtsiReportId = null,
+    string? InitialLevel = null);
 
 /// <summary>A row of the run history.</summary>
 public sealed record RunSummary(string Id, string Format, string Status, DateTimeOffset StartedAt, long TotalMs, bool Success, string? RequestedLevel, string? AchievedLevel, string? Overall, string? FileName, string? Error, string Kind = RunKinds.Sign, string Engine = RunEngines.Library);
@@ -404,7 +405,7 @@ internal sealed class RunService(
         var options = Options<AugmentOptions>(run);
         var file = documents.Get(options.FileId);
         byte[]? data = options.DataId is { } dataId ? documents.Get(dataId).Content : null;
-        var target = options.Level.ToUpperInvariant().Replace("-", "", StringComparison.Ordinal) switch
+        var target = AugmentCode.Normalize(options.Level) switch
         {
             "BT" => AdesBaselineLevel.Timestamped,
             "BLT" => AdesBaselineLevel.LongTerm,
@@ -446,7 +447,7 @@ internal sealed class RunService(
         }
 
         RunLog.Logger.LogInformation("Augmented {Format} {From} to {To}", run.Format, LevelName(initial), LevelName(reached));
-        string name = Path.GetFileNameWithoutExtension(file.FileName) + "-augmented" + Path.GetExtension(file.FileName);
+        string name = AugmentedName(file.FileName, reached);
         var stored = documents.Add(name, output);
         var validation = new Run(run.Id, run.Format,
             JsonSerializer.SerializeToElement(new ValidateOptions(stored.Id, options.DataId, options.Validation), WorkbenchJson.Options),
@@ -461,8 +462,21 @@ internal sealed class RunService(
             Bytes = output.Length,
             RequestedLevel = LevelName(target),
             AchievedLevel = LevelName(reached),
+            InitialLevel = LevelName(initial),
             SignMs = watch.ElapsedMilliseconds,
+            Code = AugmentCode.For(run.Format, file.FileName, options.Level, options.Renew, data is not null),
         };
+    }
+
+    /// <summary>
+    /// contract-signed.pdf → contract-signed-b-lta.pdf, act.txt.p7s → act.txt-b-lta.p7s: the level reached, in place of
+    /// the one a file augmented before carries, so a chain of augmentations does not pile suffixes up.
+    /// </summary>
+    internal static string AugmentedName(string fileName, AdesBaselineLevel level)
+    {
+        string stem = Path.GetFileNameWithoutExtension(fileName);
+        stem = System.Text.RegularExpressions.Regex.Replace(stem, "-(augmented|b-(b|t|lt|lta))$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return stem + "-" + LevelName(level).ToLowerInvariant() + Path.GetExtension(fileName);
     }
 
     private static string LevelName(AdesBaselineLevel level) => level switch
@@ -473,27 +487,20 @@ internal sealed class RunService(
         _ => "B-B",
     };
 
-    /// <summary>The TSA of an augmentation: the connected Sandbox's TSAs by name, or a URL.</summary>
+    /// <summary>The TSA of an augmentation, chosen as a signature's is: the connected Sandbox's TSAs by name, a public one or a URL.</summary>
     private TimestampOptions TimestampOf(TimestampChoice choice, IHttpClientProvider http)
     {
-        var connection = sandbox?.Current;
-        Uri endpoint = choice.Provider switch
+        if (choice.Provider == TsaProvider.Custom && string.IsNullOrWhiteSpace(choice.Url))
         {
-            TsaProvider.Sandbox when connection is not null => connection.TsaUri,
-            TsaProvider.SandboxRevoked when connection is not null => connection.RevokedTsaUri,
-            TsaProvider.SandboxUntrusted when connection is not null => connection.UntrustedTsaUri,
-            TsaProvider.SandboxExpired when connection is not null => connection.ExpiredTsaUri,
-            TsaProvider.SandboxWrongName when connection is not null => connection.WrongNameTsaUri,
-            TsaProvider.SandboxShortLived when connection is not null => connection.ShortLivedTsaUri,
-            TsaProvider.SandboxIofe when connection is not null => connection.IofeTsaUri,
-            TsaProvider.SandboxNonQualified when connection is not null => connection.NonQualifiedTsaUri,
-            TsaProvider.DigiCert => TimestampOptions.DigiCert.Endpoint,
-            TsaProvider.Sectigo => TimestampOptions.Sectigo.Endpoint,
-            TsaProvider.FreeTsa => TimestampOptions.FreeTsa.Endpoint,
-            _ when choice.Url is { Length: > 0 } url => new Uri(url),
-            _ => throw new ArgumentException(L.T("Choose a TSA for the augmentation.")),
-        };
-        return new TimestampOptions(endpoint, http);
+            throw new ArgumentException(L.T("Choose a TSA for the augmentation."));
+        }
+
+        if (Signing.SharedRules.IsSandboxTsa(choice.Provider) && sandbox is not { IsConnected: true })
+        {
+            throw new ArgumentException(L.T("Connect a Sandbox to use its TSA, or choose a public TSA."));
+        }
+
+        return PlanContext.Timestamp(sandbox!, documents, choice, http);
     }
 
     /// <summary>Validates an existing file with the validator of its format, in the same shape as a signing run.</summary>

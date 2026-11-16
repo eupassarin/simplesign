@@ -59,15 +59,15 @@ a playbook or `curl` shows here too. The button turns red while a failure is on.
 Without a Sandbox, the Sandbox signers and TSAs are disabled and the validation samples that need
 signed files are not built.
 
-## One screen, two tasks
+## One screen, three tasks
 
-There is no menu. The top bar switches between the two tasks, **Sign** and **Validate**, which
+There is no menu. The top bar switches between the three tasks, **Sign**, **Validate** and **Augment**, which
 share the same screen: the input on the left, the result on the right. Right after them, in the same bar:
 the engine (**Library** or **CLI**); the panels **Policies**, **Reference** (what the library covers of each
 standard) and **Environment** (what this machine has), which open over either task; and the outside
 services, **Sandbox** and **DSS**. The DSS popup also shows how the DSS of `tools/dss` was set up: how it
 trusts the Sandbox (its trusted list, its root, or not at all), the EU lists, the ICP-Brasil, Gov.br,
-Peruvian and TSA roots, the revocation cache, and every trusted certificate. Each task keeps its own result, and both go to the same run history.
+Peruvian and TSA roots, the revocation cache, and every trusted certificate. Each task keeps its own result, and all go to the same run history.
 
 ## The workbench (Sign)
 
@@ -233,16 +233,35 @@ or broken in one specific way, each with the verdict it should get:
 that run. With DSS on, most of these samples are INDETERMINATE there unless the Sandbox environment
 names an address DSS reaches: they are B-B signatures.
 
+## Augment
+
+The Augment task raises the level of a signature that already exists, without signing again, with the format's
+augmenter (`PadesAugmenter`, `CadesAugmenter`, `XadesAugmenter`; ADR 0025). The file is chosen as in Validate (dropped,
+uploaded with the data of a detached signature, or a sample), then:
+
+- **Level to reach**: B-T (a signature time-stamp; a document time-stamp in PAdES), B-LT (also the chain's certificates
+  and revocation data) or B-LTA (also an archive time-stamp).
+- **Renew the archive time-stamp** (`RenewArchive()`): on a B-LTA, the validation data of the last archive time-stamp,
+  then a new one over it.
+- **TSA**: the same choices as signing (the Sandbox's TSAs, the public ones, a URL, with authentication).
+
+The result is validated with the Validate task's trust and policy (the Profile menu applies here too) and shows the
+level before and after (`B-B → B-LTA`), the new file (named after the level reached), what is inside it, the log and
+the matching C# and `simplesign augment` command. **Augment again** takes the new file back to the left, so
+B-B → B-T → B-LT → B-LTA → renewal is a few clicks; **Augment** on the result of a signature or a validation brings
+that file here. Augmentation always runs through the library: with the CLI engine on, the command is shown, not run.
+
 ## Playbook
 
-The **Playbook** tab (after Sign and Validate) runs a [playbook](playbook.md): sections of steps written beforehand,
+The **Playbook** tab (after Sign, Validate and Augment) runs a [playbook](playbook.md): sections of steps written beforehand,
 each with free tags, against the Sandbox, through the library, the CLI or both. In three columns: the steps (filter by
 tag, run one, a section or all), everything the selected step will do before it runs (what is signed and by whom,
 every setting by group, the Sandbox changes, the expectation, the C# and CLI commands), and its latest result with
 every detail (expected and found per engine, the report in a dialog, files, CLI commands, log). Results stay while the
 TestBench runs (**Clear result** forgets one, **Restart** all of them); the evidence (an HTML page and a zip) is built
 from them. Samples: `sandbox-basics`, INDECOPI's
-guide v4.0 and `etsi-baseline` (the ETSI standards, cross-validated with EU DSS). The **Options reference** button opens, in the UI's language, what a step can hold: the option paths of
+guide v4.0, `etsi-baseline` (the ETSI standards, cross-validated with EU DSS), `eidas-baseline`, `icp-brasil-pades`,
+`govbr-pades` and `augment-external` (signatures made by another product, uploaded and raised to B-LTA). The **Options reference** button opens, in the UI's language, what a step can hold: the option paths of
 each format, the symbolic values (`sandbox:`, `sample:`, `preset:`, `step:`…) and the Sandbox failures and ids; its
 Markdown version ([options.md](../playbooks/options.md)) is the one to attach for an LLM.
 

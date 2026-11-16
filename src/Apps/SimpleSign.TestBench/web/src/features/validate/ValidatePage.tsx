@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Check, ChevronRight, FileUp, ListChecks, Loader2, ShieldCheck, TriangleAlert } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Check, ListChecks, Loader2, ShieldCheck, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useT } from "@/i18n"
 import { api } from "@/lib/api"
@@ -9,13 +8,13 @@ import { cn } from "@/lib/utils"
 import { EtsiText, ReportButtons } from "../shared/ReportViewer"
 import { Indication } from "../shared/results"
 import { Pill } from "../shared/ui"
-import { UploadButton } from "../shared/UploadButton"
 import { OptionField, OptionScope } from "../workbench/fields"
 import { ProfileMenu, ProfileStrip } from "../workbench/profile"
 import { ResultPanel } from "../workbench/ResultPanel"
 import type { DssSignature, RunVerdict, RunView, ValidationSampleView } from "../workbench/schema"
-import { useWorkbench } from "../workbench/state"
+import { useWorkbench, type ValidateTarget } from "../workbench/state"
 import { HistoryDrawer } from "../workbench/WorkbenchPage"
+import { Block, SignedFilePicker, useOpenBlocks } from "./parts"
 
 /** The settings of a validation, in the order a validator uses them: whom to trust, what to check, where to look. */
 const settingBlocks = [
@@ -24,44 +23,7 @@ const settingBlocks = [
   { id: "revocation", title: "val.revocation", summary: "val.revocationHint", ids: ["common.validation.revocationStrategy"] },
 ] as const
 
-const sectionsKey = "val.sections"
 const openByDefault: Record<string, boolean> = { file: true, "samples.pades": true, trust: true, policy: true, revocation: false }
-
-function loadOpen(): Record<string, boolean> {
-  try {
-    return { ...openByDefault, ...(JSON.parse(localStorage.getItem(sectionsKey) ?? "{}") as Record<string, boolean>) }
-  } catch {
-    return openByDefault
-  }
-}
-
-/** A collapsible block, as in the Sign tab: title, one-line summary and how many options it holds. */
-function Block({ id, title, summary, count, open, toggle, children }: {
-  id: string
-  title: string
-  summary: string
-  count?: number
-  open: Record<string, boolean>
-  toggle: (id: string, value: boolean) => void
-  children: ReactNode
-}) {
-  const isOpen = open[id] ?? false
-  return (
-    <Collapsible open={isOpen} onOpenChange={(v) => toggle(id, v)} className="bg-card rounded-lg border">
-      <CollapsibleTrigger className="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors">
-        <ChevronRight className={cn("text-muted-foreground size-4 shrink-0 transition-transform", isOpen && "rotate-90")} />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold">{title}</span>
-          <span className="text-muted-foreground block truncate text-xs">{summary}</span>
-        </span>
-        {count !== undefined && <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{count}</span>}
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="divide-y border-t px-3">{children}</div>
-      </CollapsibleContent>
-    </Collapsible>
-  )
-}
 
 interface ConformanceRow {
   sample: ValidationSampleView
@@ -82,19 +44,14 @@ export function ValidatePage() {
   const [checking, setChecking] = useState(false)
   const [showConformance, setShowConformance] = useState(false)
   const stop = useRef(false)
-  const input = useRef<HTMLInputElement>(null)
   useEffect(() => {
     api.workbench.samples().then(setSamples).catch(() => setSamples([]))
   }, [schema])
 
-  const choose = (target: { fileId: string; name: string; dataId?: string | null; dataName?: string | null }) => {
+  const choose = (target: ValidateTarget) => {
     setShowConformance(false)
     setValidateTarget(target)
     void validate(target)
-  }
-  const upload = async (file: File) => {
-    const uploaded = await api.uploadFile(file)
-    choose({ fileId: uploaded.id, name: uploaded.fileName })
   }
 
   // Validates every sample and lines the verdicts up with what each sample should get.
@@ -122,13 +79,7 @@ export function ValidatePage() {
     }
   }
 
-  const [open, setOpen] = useState<Record<string, boolean>>(loadOpen)
-  const toggle = (id: string, value: boolean) => {
-    const next = { ...open, [id]: value }
-    try { localStorage.setItem(sectionsKey, JSON.stringify(next)) } catch { /* the choice is only kept for this page */ }
-    setOpen(next)
-  }
-  const groups = schema.formats.map((f) => ({ format: f, samples: samples.filter((s) => s.format === f.id) })).filter((g) => g.samples.length > 0)
+  const { open, toggle } = useOpenBlocks("val.sections", openByDefault)
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-2 border-b px-4 py-3">
@@ -155,59 +106,7 @@ export function ValidatePage() {
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(400px,5fr)_7fr]">
         <div className="min-h-0 space-y-3 overflow-y-auto border-r p-4">
           <Block id="file" title={t("val.file")} summary={t("val.fileHint")} open={open} toggle={toggle}>
-            <div className="space-y-3 py-3">
-              <div className="hover:border-foreground/30 hover:bg-accent/30 flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed p-5 text-center transition-colors"
-                onClick={() => input.current?.click()} onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); const file = e.dataTransfer.files[0]; if (file) void upload(file) }}>
-                <FileUp className="text-muted-foreground size-5" />
-                <p className="text-sm font-medium">{t("val.drop")}</p>
-                <p className="text-muted-foreground text-xs">PDF · .p7s · .p7m · XML</p>
-                <input ref={input} type="file" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = "" }} />
-              </div>
-              {validateTarget && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <UploadButton label={t("val.data")} accept="*/*" onUploaded={(f) => choose({ ...validateTarget, dataId: f.id, dataName: f.fileName })} />
-                  <span className="text-muted-foreground text-xs">{validateTarget.dataName ?? t("val.dataHint")}</span>
-                </div>
-              )}
-              {groups.length > 0 && (
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-sm font-medium">{t("val.samples")}</p>
-                    <p className="text-muted-foreground text-xs">{t("val.samplesHint")}</p>
-                  </div>
-                  {groups.map((group) => {
-                    const id = "samples." + group.format.id
-                    const isOpen = open[id] ?? false
-                    return (
-                      <Collapsible key={group.format.id} open={isOpen} onOpenChange={(v) => toggle(id, v)} className="rounded-md border">
-                        <CollapsibleTrigger className="hover:bg-accent/40 flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors">
-                          <ChevronRight className={cn("text-muted-foreground size-4 shrink-0 transition-transform", isOpen && "rotate-90")} />
-                          <span className="flex-1 text-sm font-semibold">{group.format.title}</span>
-                          <span className="text-muted-foreground text-xs tabular-nums">{group.samples.length}</span>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <ul className="border-t py-1">
-                            {group.samples.map((s) => (
-                              <li key={s.format + s.id}>
-                                <button type="button" onClick={() => choose({ fileId: s.fileId, name: s.fileName, dataId: s.dataId })}
-                                  className={cn("hover:bg-accent/50 flex w-full items-start gap-2 px-2.5 py-1.5 text-left", validateTarget?.fileId === s.fileId && (validateTarget.dataId ?? null) === (s.dataId ?? null) && "bg-accent/60")}>
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block text-sm">{s.title}</span>
-                                    <span className="text-muted-foreground block text-xs leading-snug">{s.description}</span>
-                                  </span>
-                                  {s.expectedIndication && <Indication value={s.expectedIndication as "Valid"} />}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+            <SignedFilePicker target={validateTarget} onChoose={choose} samples={samples} open={open} toggle={toggle} />
           </Block>
 
           <OptionScope.Provider value={{ options: validateOptions, set: setValidateOption }}>

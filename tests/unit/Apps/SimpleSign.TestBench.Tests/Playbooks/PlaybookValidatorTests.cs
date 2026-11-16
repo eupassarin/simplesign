@@ -246,7 +246,7 @@ public sealed class PlaybookValidatorTests
     [Fact]
     public void Samples_AreValidPlaybooks()
     {
-        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["eidas-baseline", "etsi-baseline", "govbr-pades", "icp-brasil-pades", "indecopi-guia-v4", "sandbox-basics"]);
+        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["augment-external", "eidas-baseline", "etsi-baseline", "govbr-pades", "icp-brasil-pades", "indecopi-guia-v4", "sandbox-basics"]);
         foreach (var sample in PlaybookSamples.All)
         {
             var check = PlaybookValidator.Check(PlaybookSamples.Json(sample.Id)!, sandbox: null);

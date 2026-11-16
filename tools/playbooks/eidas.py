@@ -1,6 +1,6 @@
 """Writes docs/playbooks/eidas-baseline.json: the eIDAS profile (SimpleSign.Europe.Eidas) run against the Sandbox's list of
 trusted lists, read the eIDAS way, through the library and the CLI: the faults of the lists, the qualification of the
-signatures (ETSI TS 119 615 and TS 119 172-4) and of the time-stamps.
+signatures (ETSI TS 119 615 and TS 119 172-4) and of the time-stamps, including those an augmentation adds later.
 
 Tags name the items of docs/playbooks/eidas-checklist.md (L-n: trusted lists; Q-n: qualification of the signature; T-n:
 time-stamps) and a topic. The checklist maps each item to the steps that show it.
@@ -33,6 +33,19 @@ def validate(id, title, tags, file_id, expect, desc=None, sandbox=None, **settin
     if sandbox:
         s["sandbox"] = sandbox
     return s
+
+
+def augment(id, title, tags, file_id, expect, desc=None, **opts):
+    """Raises an earlier step's file with the library's augmenter, then validates it under the eidas profile and policy."""
+    options = {"fileId": file_id, **opts, "validation": {"trust": [], **EIDAS_ON_SANDBOX, "policyId": "preset:validation:eidas"}}
+    s = {"id": id, "kind": "augment", "title": title, "tags": tags, "engine": "library", "options": options, "expect": expect}
+    if desc:
+        s["description"] = desc
+    return s
+
+
+def augmented(qualification, **more):
+    return {"outcome": "augmented", **more, "qualification": qualification}
 
 
 def refused(reason):
@@ -104,6 +117,21 @@ sections = [
                   sandbox={"trustedList": "WithdrawnAfterUse"},
                   desc="The time-stamp proves the signature existed while the root's CA/QC service was granted (its ServiceHistory)."),
      ]},
+    {"id": "augment", "title": "Raising a qualified signature (augmentation)",
+     "description": "A QESig made at B-B is raised later, without signing again, with the library's augmenter: the time-stamps it adds are "
+                    "qualified like those added at signing (TSA/QTST of the lists), the signature stays QESig, and its archive time-stamp "
+                    "can be renewed.",
+     "steps": [
+         augment("aug-qesig-blta", "QESig B-B raised to B-LTA with the qualified TSA", ["T-4", "Q-1", "augment"], "step:tl-ok",
+                 augmented("QESig", level="B-LTA", indication="TOTAL_PASSED", timestampQualification="QTSA"),
+                 level="BLTA", timestamp={"provider": "Sandbox"}),
+         augment("aug-non-qualified-tsa", "QESig B-B raised to B-T with a non-qualified TSA", ["T-4", "T-2", "augment"], "step:tl-ok",
+                 augmented("QESig", level="B-T", timestampQualification="TSA"),
+                 level="BT", timestamp={"provider": "SandboxNonQualified"}),
+         augment("aug-qesig-renew", "Renew the archive time-stamp of the QESig B-LTA", ["T-4", "augment", "preservation"], "step:aug-qesig-blta",
+                 augmented("QESig", level="B-LTA", indication="TOTAL_PASSED"),
+                 level="BLTA", timestamp={"provider": "Sandbox"}, renew=True),
+     ]},
 ]
 
 # Signing only with a qualified certificate whose key is on a QSCD: the eidas policy, with the QC checks failing.
@@ -169,6 +197,16 @@ DESCRIPTIONS = {
         "(TimestampCertificateRevoked).",
     "ts-untrusted":
         "Signs at B-T with a TSA that is in none of the lists: its token is not trusted, refused (TimestampUntrusted).",
+    "aug-qesig-blta":
+        "Raises the tl-ok signature (QESig, B-B) to B-LTA with the Sandbox's main TSA, a TSA/QTST service of the lists: "
+        "validation data and a document time-stamp are added, and the signature validates as QESig with a qualified "
+        "time-stamp (QTSA).",
+    "aug-non-qualified-tsa":
+        "Raises the same signature to B-T with a TSA listed only as a TSA service: the signature is still QESig, but the "
+        "time-stamp the augmentation added is not qualified (TSA), as if it had been added at signing.",
+    "aug-qesig-renew":
+        "Adds the validation data of the last archive time-stamp of aug-qesig-blta, then a new archive time-stamp from the "
+        "qualified TSA: what keeps a qualified signature verifiable before its time-stamp's certificate expires.",
 }
 
 sections = describe(sections, DESCRIPTIONS)

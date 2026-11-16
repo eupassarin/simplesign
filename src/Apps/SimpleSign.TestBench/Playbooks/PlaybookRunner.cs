@@ -339,14 +339,44 @@ internal sealed class PlaybookRunner(
         return users;
     }
 
-    /// <summary>The inputs a step uses that have no file yet.</summary>
-    private static List<string> MissingInputs(PlaybookSession session, PlaybookStep step) =>
-        [.. PlaybookValidator.Strings(JsonSerializer.SerializeToElement(Merge(session.Playbook.Defaults.Options, step.Format ?? session.Playbook.Defaults.Format, step.Options)), "$")
-            .Select(s => s.Value)
-            .Where(v => v.StartsWith(InputPrefix, StringComparison.Ordinal))
-            .Select(v => v[InputPrefix.Length..])
-            .Where(id => session.Input(id) is null)
-            .Distinct(StringComparer.Ordinal)];
+    /// <summary>
+    /// The inputs a step uses that have no file yet, directly or through the file of an earlier step (step:ID) that uses
+    /// one: a chain that starts from an upload (raise it to B-LT, then that to B-LTA) is skipped as a whole without it.
+    /// </summary>
+    private static List<string> MissingInputs(PlaybookSession session, PlaybookStep step)
+    {
+        var steps = session.Playbook.AllSteps().ToDictionary(s => s.Step.Id, s => s.Step, StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var missing = new List<string>();
+        void Visit(PlaybookStep current)
+        {
+            if (!seen.Add(current.Id))
+            {
+                return;
+            }
+
+            var values = PlaybookValidator.Strings(JsonSerializer.SerializeToElement(Merge(session.Playbook.Defaults.Options,
+                current.Format ?? session.Playbook.Defaults.Format, current.Options)), "$").Select(s => s.Value).ToList();
+            foreach (string id in values.Where(v => v.StartsWith(InputPrefix, StringComparison.Ordinal)).Select(v => v[InputPrefix.Length..]))
+            {
+                if (session.Input(id) is null && !missing.Contains(id, StringComparer.Ordinal))
+                {
+                    missing.Add(id);
+                }
+            }
+
+            foreach (string id in values.Where(v => v.StartsWith("step:", StringComparison.Ordinal)).Select(v => v["step:".Length..]))
+            {
+                if (steps.TryGetValue(id, out var earlier))
+                {
+                    Visit(earlier);
+                }
+            }
+        }
+
+        Visit(step);
+        return missing;
+    }
 
     private void ReleaseInputs(PlaybookSession? session)
     {
@@ -501,7 +531,7 @@ internal sealed class PlaybookRunner(
             target.Add(new("file", "File", Pending(missing, needsInputs)));
         }
 
-        string level = augment?.Level ?? "BLTA";
+        string level = AugmentCode.Normalize(augment?.Level);
         string tsa = augment?.Timestamp?.Provider.ToString() ?? "Sandbox";
         var settings = new List<PreviewSetting>
         {
@@ -509,24 +539,9 @@ internal sealed class PlaybookRunner(
             new("timestamp", "TSA", tsa, augment?.Timestamp is not null, true),
             new("renew", "Renew the archive time-stamp", augment?.Renew == true ? "on" : "off", augment?.Renew == true, augment?.Renew == true),
         };
-        string augmenter = format switch
-        {
-            RunFormats.Cades => "CadesAugmenter.Signature(File.ReadAllBytes(\"" + fileName + "\"), detachedData)",
-            RunFormats.Xades => "XadesAugmenter.Document(File.ReadAllBytes(\"" + fileName + "\"), detachedData)",
-            _ => "PadesAugmenter.Document(File.ReadAllBytes(\"" + fileName + "\"))",
-        };
-        string levelName = level.ToUpperInvariant().Replace("-", "", StringComparison.Ordinal) switch
-        {
-            "BT" => "Timestamped",
-            "BLT" => "LongTerm",
-            _ => "Archive",
-        };
-        string code = $"var result = await {augmenter}\n    .WithTimestamp(new TimestampOptions(new Uri(tsaUrl)))\n    .ToLevel(AdesBaselineLevel.{levelName})"
-            + (augment?.Renew == true ? "\n    .RenewArchive()" : "") + "\n    .AugmentAsync();\n// result.Level: the level reached";
-        string cli = $"simplesign augment {fileName} --level {level} --tsa $TSA_URL" + (augment?.DataId is not null ? " --data data" : "") + (augment?.Renew == true ? " --renew" : "");
         return new PlaybookStepPreview(step.Id, step.Kind, format, PlaybookEngines.Library, false, "defaults", target, [],
             [new PreviewGroup("augment", "Augmentation", settings)], sandboxLines, expect,
-            new CodeSnippets(code, cli, ["The library's augmenter for the format, then a validation of the result."]), [], missing, null);
+            AugmentCode.For(format, fileName, level, augment?.Renew == true, augment?.DataId is not null), [], missing, null);
     }
 
     private static T Options<T>(JsonElement options) =>

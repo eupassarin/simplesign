@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react"
-import { BookCheck, BookOpen, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
+import { ArrowUpFromLine, BookCheck, BookOpen, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Toaster } from "@/components/ui/sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { AugmentPage } from "@/features/augment/AugmentPage"
 import { RealEnvironment } from "@/features/environment/RealEnvironment"
 import { PoliciesPage } from "@/features/policies/PoliciesPage"
 import { SandboxControl } from "@/features/sandbox/SandboxControl"
@@ -53,12 +54,13 @@ export default function App() {
 const modes: { id: AppMode; icon: typeof PenTool }[] = [
   { id: "sign", icon: PenTool },
   { id: "validate", icon: ShieldCheck },
+  { id: "augment", icon: ArrowUpFromLine },
   { id: "playbook", icon: BookCheck },
 ]
 
 /**
- * One top bar and one task on screen. There are three tasks: Sign, Validate (the PAdES stamp opens as a drawer from Sign) and
- * Playbook (steps written beforehand, run against the Sandbox).
+ * One top bar and one task on screen. There are four tasks: Sign, Validate (the PAdES stamp opens as a drawer from Sign),
+ * Augment (raise a signed file's level without signing again) and Playbook (steps written beforehand, run against the Sandbox).
  * Everything that applies to both sits on the right, in three groups: the engine (library or CLI); the reference
  * panels (Policies, Reference, and Environment: what this machine has); and the outside services, the SimpleSign
  * Sandbox and DSS (each on or off: a popup to turn it on, a drawer with everything once on). Then language and theme.
@@ -112,7 +114,7 @@ function Shell() {
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col">
-        {mode === "sign" ? <WorkbenchPage /> : mode === "validate" ? <ValidatePage /> : <PlaybookPage />}
+        {mode === "sign" ? <WorkbenchPage /> : mode === "validate" ? <ValidatePage /> : mode === "augment" ? <AugmentPage /> : <PlaybookPage />}
       </main>
     </div>
   )

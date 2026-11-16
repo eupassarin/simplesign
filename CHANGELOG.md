@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **TestBench: an Augment tab** (Sign · Validate · Augment · Playbook). It raises a signed file
+  (made on the Sign tab, a sample, or uploaded from any other product, with the data of a detached
+  signature) to B-T, B-LT or B-LTA, or renews a B-LTA's archive time-stamp, through
+  `PadesAugmenter` / `CadesAugmenter` / `XadesAugmenter`, with any TSA the Sign tab offers. The
+  result shows the level before and after, is validated with the Validate tab's trust, and can be
+  augmented again; Sign and Validate results gain an **Augment** button. A run of kind `augment`
+  now carries `initialLevel` and its own C# and `simplesign augment` code, and its file is named
+  after the level reached (`contract-b-lta.pdf`).
+- **Playbooks: augmentation where it was missing.** `eidas-baseline` raises a QESig to B-LTA with
+  the qualified TSA, to B-T with a non-qualified one, and renews it (checklist item T-4: the
+  time-stamps an augmentation adds are qualified as those added at signing); `indecopi-guia-v4`
+  raises a TSL-trusted signature to B-LTA with a TSA of the TSL (F-31, V-31). A new sample,
+  `augment-external`, takes signatures made by another product (PDF, .p7m, detached .p7s with its
+  content, XML) as inputs and raises each to B-LT, B-LTA and a renewal.
 - **`CadesSignatureValidator(IHttpClientProvider, ValidationOptions?, ILogger?)` and
   `XadesSignatureValidator(IHttpClientProvider, ValidationOptions?, ILogger?)`**, as
   `PdfSignatureValidator` has: the revocation checks of `ValidateAsync` (signer and TSA chains) go
@@ -21,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **TestBench playbooks: a step whose file comes from a step skipped for a missing input is
+  skipped too.** *Before:* a chain that starts from an upload (raise it to B-LT, then that file to
+  B-LTA) showed every later step as failed ("Step … produced no file yet") when the input was
+  empty. *After:* they are skipped with the same "Upload the file of input:…" message, and the
+  preview names the input they wait for.
 - **`new TimestampClient(HttpClient, TimestampOptions)` applies the outbound policy of
   `options.HttpClientProvider`.**
   - *Before:* the constructor left `OutboundPolicy` at `OutboundHttpPolicy.Default`; only

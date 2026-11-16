@@ -1,0 +1,364 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",
+  "schema": 2,
+  "id": "augment-external",
+  "title": "Augmenting signatures made elsewhere",
+  "description": "Raises signatures made by another product (a signing portal, a desktop signer, another library) with SimpleSign's augmenters, without signing again: raise to B-LT, then B-LTA, then renew the archive time-stamp. Upload the files on the Playbook tab; the steps of a format whose file is missing are skipped. The time-stamps come from the Sandbox's TSA (change timestamp.provider to DigiCert, Sectigo or a URL of yours to keep the result); the revocation data come from the URLs in the file's certificates. Each step validates its result (default trust: the operating system's roots, the public TSAs and the Sandbox's) and shows the level the file had before.",
+  "inputs": [
+    {
+      "id": "pades",
+      "title": "A signed PDF (PAdES)",
+      "accept": ".pdf",
+      "description": "A PDF signed by any product, at any level up to B-LT. Its last signature is raised; earlier ones keep what they have."
+    },
+    {
+      "id": "cades",
+      "title": "A CMS signature with its content inside (CAdES, .p7m)",
+      "accept": ".p7m,.p7s",
+      "description": "An enveloping CMS signature (the signed content travels inside it). For a detached .p7s use the next two inputs instead."
+    },
+    {
+      "id": "cades-detached",
+      "title": "A detached CMS signature (CAdES, .p7s)",
+      "accept": ".p7s,.p7m",
+      "description": "A detached CMS signature: its content is uploaded separately in the next input, and both are needed for every step of that section."
+    },
+    {
+      "id": "cades-data",
+      "title": "The content the detached CMS signature signs",
+      "accept": "*/*",
+      "description": "The file the detached .p7s signs, exactly as it was signed: without it the time-stamps cannot be checked against the content."
+    },
+    {
+      "id": "xades",
+      "title": "A signed XML (XAdES, enveloped or enveloping)",
+      "accept": ".xml",
+      "description": "An XML with an enveloped or enveloping XAdES signature. A detached XAdES that points at files by URL is not covered: its references cannot be resolved here."
+    }
+  ],
+  "defaults": {
+    "engine": "library",
+    "crossValidate": false
+  },
+  "sections": [
+    {
+      "id": "pades",
+      "title": "PAdES",
+      "description": "The uploaded PDF (input:pades), raised in incremental updates: the bytes already signed are never touched, so the other product's signatures stay valid.",
+      "steps": [
+        {
+          "id": "pades-blt",
+          "kind": "augment",
+          "title": "PAdES: raise to B-LT",
+          "description": "Adds a signature time-stamp if the file has none, then the chain's certificates and revocation data, fetched from the URLs in the certificates (AIA, CRL, OCSP): the file becomes verifiable without asking the issuer again.",
+          "tags": [
+            "pades",
+            "external",
+            "augment"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "input:pades",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LT"
+          }
+        },
+        {
+          "id": "pades-blta",
+          "kind": "augment",
+          "title": "PAdES: raise the B-LT to B-LTA",
+          "description": "Adds an archive time-stamp over the B-LT made by the step before (and the validation data of its own time-stamp): the long-term preservation level, renewable before the time-stamp's certificate expires.",
+          "tags": [
+            "pades",
+            "external",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:pades-blt",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "pades-renew",
+          "kind": "augment",
+          "title": "PAdES: renew the archive time-stamp",
+          "description": "Renews the B-LTA of the step before: the validation data of its last archive time-stamp, then a new archive time-stamp over everything. Done again before each time-stamp's certificate expires, it keeps the signature verifiable indefinitely.",
+          "tags": [
+            "pades",
+            "external",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:pades-blta",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "renew": true
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cades",
+      "title": "CAdES with the content inside",
+      "description": "The uploaded .p7m (input:cades): the time-stamp and validation data go into the unsigned attributes of its SignerInfo.",
+      "steps": [
+        {
+          "id": "cades-blt",
+          "kind": "augment",
+          "title": "CAdES: raise to B-LT",
+          "description": "Adds a signature time-stamp if the file has none, then the chain's certificates and revocation data, fetched from the URLs in the certificates (AIA, CRL, OCSP): the file becomes verifiable without asking the issuer again.",
+          "tags": [
+            "cades",
+            "external",
+            "augment"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "input:cades",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LT"
+          }
+        },
+        {
+          "id": "cades-blta",
+          "kind": "augment",
+          "title": "CAdES: raise the B-LT to B-LTA",
+          "description": "Adds an archive time-stamp over the B-LT made by the step before (and the validation data of its own time-stamp): the long-term preservation level, renewable before the time-stamp's certificate expires.",
+          "tags": [
+            "cades",
+            "external",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:cades-blt",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "cades-renew",
+          "kind": "augment",
+          "title": "CAdES: renew the archive time-stamp",
+          "description": "Renews the B-LTA of the step before: the validation data of its last archive time-stamp, then a new archive time-stamp over everything. Done again before each time-stamp's certificate expires, it keeps the signature verifiable indefinitely.",
+          "tags": [
+            "cades",
+            "external",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:cades-blta",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "renew": true
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cades-detached",
+      "title": "CAdES detached",
+      "description": "The uploaded .p7s with its content (input:cades-detached and input:cades-data): the content is read to check the time-stamps, and stays outside the signature.",
+      "steps": [
+        {
+          "id": "cades-detached-blt",
+          "kind": "augment",
+          "title": "CAdES detached: raise to B-LT",
+          "description": "Adds a signature time-stamp if the file has none, then the chain's certificates and revocation data, fetched from the URLs in the certificates (AIA, CRL, OCSP): the file becomes verifiable without asking the issuer again.",
+          "tags": [
+            "cades-detached",
+            "external",
+            "augment"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "input:cades-detached",
+            "dataId": "input:cades-data",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LT"
+          }
+        },
+        {
+          "id": "cades-detached-blta",
+          "kind": "augment",
+          "title": "CAdES detached: raise the B-LT to B-LTA",
+          "description": "Adds an archive time-stamp over the B-LT made by the step before (and the validation data of its own time-stamp): the long-term preservation level, renewable before the time-stamp's certificate expires.",
+          "tags": [
+            "cades-detached",
+            "external",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:cades-detached-blt",
+            "dataId": "input:cades-data",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "cades-detached-renew",
+          "kind": "augment",
+          "title": "CAdES detached: renew the archive time-stamp",
+          "description": "Renews the B-LTA of the step before: the validation data of its last archive time-stamp, then a new archive time-stamp over everything. Done again before each time-stamp's certificate expires, it keeps the signature verifiable indefinitely.",
+          "tags": [
+            "cades-detached",
+            "external",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:cades-detached-blta",
+            "dataId": "input:cades-data",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "renew": true
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA"
+          }
+        }
+      ]
+    },
+    {
+      "id": "xades",
+      "title": "XAdES",
+      "description": "The uploaded XML (input:xades): the time-stamps and validation data go into the signature's UnsignedSignatureProperties.",
+      "steps": [
+        {
+          "id": "xades-blt",
+          "kind": "augment",
+          "title": "XAdES: raise to B-LT",
+          "description": "Adds a signature time-stamp if the file has none, then the chain's certificates and revocation data, fetched from the URLs in the certificates (AIA, CRL, OCSP): the file becomes verifiable without asking the issuer again.",
+          "tags": [
+            "xades",
+            "external",
+            "augment"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "input:xades",
+            "level": "BLT",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LT"
+          }
+        },
+        {
+          "id": "xades-blta",
+          "kind": "augment",
+          "title": "XAdES: raise the B-LT to B-LTA",
+          "description": "Adds an archive time-stamp over the B-LT made by the step before (and the validation data of its own time-stamp): the long-term preservation level, renewable before the time-stamp's certificate expires.",
+          "tags": [
+            "xades",
+            "external",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:xades-blt",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            }
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA"
+          }
+        },
+        {
+          "id": "xades-renew",
+          "kind": "augment",
+          "title": "XAdES: renew the archive time-stamp",
+          "description": "Renews the B-LTA of the step before: the validation data of its last archive time-stamp, then a new archive time-stamp over everything. Done again before each time-stamp's certificate expires, it keeps the signature verifiable indefinitely.",
+          "tags": [
+            "xades",
+            "external",
+            "augment",
+            "preservation"
+          ],
+          "engine": "library",
+          "options": {
+            "fileId": "step:xades-blta",
+            "level": "BLTA",
+            "timestamp": {
+              "provider": "Sandbox"
+            },
+            "renew": true
+          },
+          "expect": {
+            "outcome": "augmented",
+            "level": "B-LTA"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -71,7 +71,7 @@ the application…"), and the applicant justifies in annex B each item it says d
 | F-28 | Current, unbroken algorithms | P (`sandbox-basics:weak-key`, `sandbox-basics:weak-key-cades`, `sandbox-basics:weak-key-xades`, `sandbox-basics:sha1-ca`, `sandbox-basics:sign-rsa-4096`, `sandbox-basics:sign-ecdsa-p256`, `sandbox-basics:sign-ecdsa-p384`) |
 | F-29 | The application itself is signed with a code-signing certificate | X — the product's release (the NuGet packages are not what INDECOPI accredits) |
 | F-30 | A viewer shows the signer and the recipient the document's integrity, signing time, public key and certificate data | P (`viewer`: the validation report; `simplesign validate --html-report --report-language es`). The product's own screen is X |
-| F-31 | Signing time and the chain's public keys attached and signed (PAdES/XAdES/CAdES from the EPES-equivalent level comply) | P (`sandbox-basics:tsa-ok`, `sandbox-basics:sign-lt`, `sandbox-basics:pades-blta`, `sandbox-basics:cades-blt`, `etsi-baseline:cades-blta`, `sandbox-basics:xades-blt`, `etsi-baseline:xades-blta`, `sandbox-basics:cades-blta-enveloped`, `sandbox-basics:xades-blta-detached`, `sandbox-basics:xades-blta-enveloping`) |
+| F-31 | Signing time and the chain's public keys attached and signed (PAdES/XAdES/CAdES from the EPES-equivalent level comply) | P (`sandbox-basics:tsa-ok`, `sandbox-basics:sign-lt`, `sandbox-basics:pades-blta`, `sandbox-basics:cades-blt`, `etsi-baseline:cades-blta`, `sandbox-basics:xades-blt`, `etsi-baseline:xades-blta`, `sandbox-basics:cades-blta-enveloped`, `sandbox-basics:xades-blta-detached`, `sandbox-basics:xades-blta-enveloping`; raised later: `aug-tsl-blta`, `aug-tsa-unlisted`) |
 | F-32 | Administrator and user manuals (security policies, configuration options) | X — the product's documentation (`docs/articles/iofe.md` documents the library part) |
 
 ## 4.3 Verification by automated agents (V)
@@ -102,7 +102,7 @@ invalid ones); differences are noted.
 | V-28 | Current, unbroken algorithms | P (`etsi-baseline:va-weak-key`, `sandbox-basics:weak-key`, `sandbox-basics:sha1-ca`) + U (validation of obsolete algorithms, `ValidationPolicy` Cryptographic constraints) |
 | V-29 | The application is code-signed | X — as F-29 |
 | V-30 | (If the system signs the documents received) a viewer for the relying parties, or a standard format INDECOPI approved | P (`viewer`, `sandbox-basics:sample-tampered`, `sandbox-basics:sample-cades-changed`, `sandbox-basics:sample-xades-changed`) |
-| V-31 | (If the system signs) the validation data of F-31 (the body also asks a reference to the chain's non-revocation) | P (`sandbox-basics:sign-lt`, `sandbox-basics:pades-blta`, `sandbox-basics:cades-blt`, `etsi-baseline:cades-blta`, `sandbox-basics:xades-blt`, `etsi-baseline:xades-blta`: B-LT and B-LTA embed the revocation data) |
+| V-31 | (If the system signs) the validation data of F-31 (the body also asks a reference to the chain's non-revocation) | P (`sandbox-basics:sign-lt`, `sandbox-basics:pades-blta`, `sandbox-basics:cades-blt`, `etsi-baseline:cades-blta`, `sandbox-basics:xades-blt`, `etsi-baseline:xades-blta`: B-LT and B-LTA embed the revocation data; added later by augmentation: `aug-tsl-blta`) |
 | V-32 | Manuals | X — as F-32 |
 
 ## 4.4 Time-stamps (S)

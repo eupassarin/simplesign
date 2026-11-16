@@ -48,3 +48,4 @@ SimpleSign.Europe.Eidas, following the pivot LOTLs.
 | T-1 | A time-stamp from a granted TSA/QTST service is a qualified electronic time-stamp (QTSA) | P | `ts-qualified`, `v-withdrawn-after-use` |
 | T-2 | A time-stamp from a TSA service that is not TSA/QTST is not qualified (TSA) | P | `ts-non-qualified` |
 | T-3 | The eidas signing policy refuses a TSA outside the lists or whose certificate is revoked | P | `ts-untrusted`, `ts-revoked` |
+| T-4 | A time-stamp added later by augmentation is qualified as one added at signing; the signature stays QESig through B-LTA and the renewal | P | `aug-qesig-blta`, `aug-non-qualified-tsa`, `aug-qesig-renew` |
