@@ -31,7 +31,8 @@ internal static partial class XadesSignatureBuilder
         XadesDataObjectsTimeStamp? dataObjectsTimeStamp,
         IReadOnlyList<XadesAdditionalReference>? additionalReferences,
         ILogger logger,
-        string canonicalization)
+        string canonicalization,
+        bool detachedBinary)
     {
         string signatureId = XadesUris.SignatureIdPrefix + Guid.NewGuid().ToString("N")[..8];
         string signedPropertiesId = XadesUris.SignedPropertiesIdPrefix + Guid.NewGuid().ToString("N")[..8];
@@ -72,10 +73,7 @@ internal static partial class XadesSignatureBuilder
         byte[] docDigest;
         if (form == XadesForm.Detached)
         {
-            var dataDoc = new XmlDocument { PreserveWhitespace = true };
-            dataDoc.Load(new MemoryStream(xmlData));
-            byte[] canonicalData = CanonicalizeXml(dataDoc, canonicalization);
-            docDigest = HashData(hashAlgorithm, canonicalData);
+            docDigest = HashData(hashAlgorithm, DetachedDocumentOctets(xmlData, canonicalization, detachedBinary));
         }
         else
         {
@@ -99,7 +97,8 @@ internal static partial class XadesSignatureBuilder
         sm.SetAttribute("Algorithm", GetSignatureMethodUri(signatureAlgorithmOid, hashAlgorithm));
         signedInfo.AppendChild(sm);
 
-        signedInfo.AppendChild(CreateDocRef(siDoc, docRefUri, hashAlgorithm, enveloped: false, docDigest, canonicalization));
+        signedInfo.AppendChild(CreateDocRef(siDoc, docRefUri, hashAlgorithm, enveloped: false, docDigest, canonicalization,
+            rawOctets: form == XadesForm.Detached && detachedBinary));
         AppendAdditionalReferences(siDoc, signedInfo, additionalReferences, hashAlgorithm,
             DocumentReferenceId(signedPropertiesId, signingCertificateForm, dataObjectFormat, additionalReferences));
 
@@ -161,7 +160,8 @@ internal static partial class XadesSignatureBuilder
         out byte[] signedInfoXmlBytes,
         out string? dataObjectIdOut,
         string? dataUri,
-        string canonicalization)
+        string canonicalization,
+        bool detachedBinary)
     {
         bool isEnveloping = form == XadesForm.Enveloping;
 
@@ -201,10 +201,7 @@ internal static partial class XadesSignatureBuilder
         byte[] docDigest;
         if (form == XadesForm.Detached)
         {
-            var dataDoc = new XmlDocument { PreserveWhitespace = true };
-            dataDoc.Load(new MemoryStream(xmlData));
-            byte[] canonicalData = CanonicalizeXml(dataDoc, canonicalization);
-            docDigest = HashData(hashAlgorithm, canonicalData);
+            docDigest = HashData(hashAlgorithm, DetachedDocumentOctets(xmlData, canonicalization, detachedBinary));
         }
         else
         {
@@ -228,7 +225,8 @@ internal static partial class XadesSignatureBuilder
         smElement.SetAttribute("Algorithm", GetSignatureMethodUri(signatureAlgorithmOid, hashAlgorithm));
         siElement.AppendChild(smElement);
 
-        siElement.AppendChild(CreateDocRef(siDoc, docRefUri, hashAlgorithm, enveloped: false, docDigest, canonicalization));
+        siElement.AppendChild(CreateDocRef(siDoc, docRefUri, hashAlgorithm, enveloped: false, docDigest, canonicalization,
+            rawOctets: form == XadesForm.Detached && detachedBinary));
         AppendAdditionalReferences(siDoc, siElement, additionalReferences, hashAlgorithm,
             DocumentReferenceId(signedPropertiesId, signingCertificateForm, dataObjectFormat, additionalReferences));
 
@@ -319,5 +317,21 @@ internal static partial class XadesSignatureBuilder
         using var ms = new MemoryStream();
         outDoc.Save(ms);
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// What the reference to a detached document digests: the octets of the file as they are when
+    /// <paramref name="binary"/> (a reference without transforms, so any file can be signed), otherwise
+    /// the document parsed and canonicalized as XML.
+    /// </summary>
+    private static byte[] DetachedDocumentOctets(byte[] data, string canonicalization, bool binary)
+    {
+        if (binary)
+        {
+            return data;
+        }
+
+        var dataDoc = LoadDocument(data);
+        return CanonicalizeXml(dataDoc, canonicalization);
     }
 }

@@ -326,6 +326,17 @@ var detached = await XadesSigner
     .SignAsync();
 File.WriteAllBytes("invoice-signed.xml", detached);
 
+// Detached form over any file (a PDF, an image, a ZIP): the reference has no transforms and
+// digests the file's octets, so the data need not be XML. The MIME type goes in DataObjectFormat.
+var overPdf = await XadesSigner
+    .Document(await File.ReadAllBytesAsync("contract.pdf"))
+    .WithCertificate(certificate)
+    .WithDetachedBinary("application/pdf")
+    .WithDataUri("contract.pdf")
+    .WithLevel(AdesBaselineProfile.Basic())
+    .SignAsync();
+File.WriteAllBytes("contract.pdf.xml", overPdf);
+
 // Enveloping form (data wrapped inside the signature)
 var enveloping = await XadesSigner
     .Document(xml)
@@ -534,7 +545,9 @@ dictionary of external data objects by URI (`Document(signedXml, externalData)`)
 that do not carry what they signed.
 
 `RenewArchive()` adds a new archive timestamp to a B-LTA before the current one's TSA certificate
-expires. `LevelOf` reports a signature's current level without changing it:
+expires. `WithRevocationCache(cache)` shares a CRL cache across augmentations (see
+[sharing revocation data](pades.md#sharing-revocation-data)). `LevelOf` reports a signature's current
+level without changing it:
 
 ```csharp
 AdesBaselineLevel level = CadesAugmenter.LevelOf(cms);

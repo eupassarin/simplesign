@@ -57,7 +57,7 @@ dotnet run --project src/Apps/SimpleSign.Agent -- --export-icons <dir>
 ## Packaging
 
 ```bash
-scripts/package-agent.sh osx-arm64 0.11.1    # also osx-x64, linux-x64, linux-arm64, win-x64
+scripts/package-agent.sh osx-arm64 0.12.0    # also osx-x64, linux-x64, linux-arm64, win-x64
 ```
 
 Native AOT, so it must be built on the target OS (on macOS both architectures build from either

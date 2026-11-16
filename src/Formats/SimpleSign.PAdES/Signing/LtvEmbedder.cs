@@ -38,6 +38,13 @@ public sealed class LtvEmbedder : ILtvEmbedder
     public RevocationPreference RevocationPreference { get; init; }
 
     /// <summary>
+    /// A CRL cache shared with other operations (see <see cref="LongTermValidationOptions.RevocationCache"/>): CRLs
+    /// downloaded here are remembered, and a cached one is embedded when it was issued after the signature
+    /// time-stamp's genTime and is still current. Default: <see langword="null"/>, every CRL is downloaded.
+    /// </summary>
+    public IRevocationCache? RevocationCache { get; init; }
+
+    /// <summary>
     /// Clock skew allowed for the OCSP responses this embedder fetches (see
     /// <see cref="LongTermValidationOptions.ClockSkewTolerance"/>). Ignored when an <see cref="IOcspClient"/>
     /// is injected. Default: <see cref="OcspClient.DefaultClockSkewTolerance"/>.
@@ -299,7 +306,9 @@ public sealed class LtvEmbedder : ILtvEmbedder
                     {
                         try
                         {
-                            var crl = CrlEncoding.ToDer(await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false));
+                            var crl = await CachedCrl.GetAsync(RevocationCache, crlUrl, CachedCrl.GenTime(timestampTokenBytes), async () => CrlEncoding.ToDer(
+                                await ResilientHttp.GetBytesAsync(_httpClient, crlUrl, logger: _logger, policy: _outboundPolicy, ct: ct).ConfigureAwait(false)))
+                                .ConfigureAwait(false);
                             if (crl is not null && IsCrlIssuedFor(crl, cert))
                             {
                                 crlBag.Add(crl);

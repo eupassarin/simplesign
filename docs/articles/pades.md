@@ -248,6 +248,38 @@ simplesign augment signed.pdf --level BLTA --tsa http://timestamp.digicert.com
 CAdES and XAdES have the same shape — see
 [Augmenting an existing signature](cades-xades.md#augmenting-an-existing-signature).
 
+### Sharing revocation data
+
+A service that signs, extends and validates many documents can download each CRL once. Give the same
+`IRevocationCache` to everything that fetches CRLs:
+
+```csharp
+var cache = new InMemoryRevocationCache(TimeSpan.FromMinutes(15));
+var checker = new ChainRevocationChecker(httpClient) { Cache = cache };   // signers: WithChainRevocationChecker(checker)
+
+// B-LT/B-LTA collection, when signing…
+var profile = AdesBaselineProfile.Archive(tsa, new LongTermValidationOptions { RevocationCache = cache });
+// …and when extending (PadesAugmenter, CadesAugmenter, XadesAugmenter)
+await PadesAugmenter.Document(pdf).WithRevocationCache(cache).ToLevel(AdesBaselineLevel.LongTerm).WithTimestamp(tsa).AugmentAsync();
+
+// Validation: the signer chain's CRLs and the TSA chains
+var validator = new PdfSignatureValidator(provider, options, logger: null, trustAnchorProviders: null,
+    chainValidationProviders: null, chainRevocationChecker: checker, revocationCache: cache);
+```
+
+What the cache may serve depends on what is being proven:
+
+- **Before signing** the status is always asked now (OCSP, or the CRL downloaded again): a cached CRL
+  never lets a certificate revoked since then sign. Those downloads refresh the cache.
+- **B-LT/B-LTA collection** embeds a cached CRL only when it was issued *after* the signature
+  time-stamp's genTime and is still current — revocation data must postdate the time it proves.
+  Extending a batch of older signatures then downloads each CRL once; a signature made seconds ago
+  usually gets a fresh download.
+- **Validation** reuses a cached CRL until its `nextUpdate` (at most the cache's lifetime).
+
+Under dependency injection (`AddSimpleSign…`) the registered `IRevocationCache` and
+`IChainRevocationChecker` are already shared this way.
+
 ## Inspection
 
 Extract metadata without full validation (fast, non-cryptographic):

@@ -42,6 +42,9 @@ public sealed record XmlOptions
     /// <summary>The Reference URI of a detached signature (where the data will be found).</summary>
     public string DataUri { get; init; } = "document.xml";
 
+    /// <summary>A detached signature over a file of any type (no transforms, the octets are digested).</summary>
+    public bool DetachedBinary { get; init; }
+
     public XadesKind Kind { get; init; } = XadesKind.Baseline;
 
     /// <summary>The ICP-Brasil signature policy when <see cref="Kind"/> is <see cref="XadesKind.IcpBrasil"/>.</summary>

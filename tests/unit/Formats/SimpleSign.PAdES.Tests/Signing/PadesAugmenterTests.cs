@@ -87,4 +87,33 @@ public sealed class PadesAugmenterTests : IDisposable
     [Fact]
     public async Task AugmentAsync_UnsignedPdf_Throws() =>
         await Should.ThrowAsync<ArgumentException>(() => PadesAugmenter.Document(TestPdfFactory.CreateMinimalPdf()).AugmentAsync());
+
+    [Theory]
+    [InlineData(true, 2)]
+    [InlineData(false, 4)]
+    public async Task AugmentAsync_BatchWithASharedRevocationCache_DownloadsEachCrlOnce(bool shared, int expectedDownloads)
+    {
+        using var server = new SyntheticPkiServer();
+        var tsa = new TimestampOptions(new Uri(SyntheticPkiServer.TsaUrl));
+        var documents = new List<byte[]>();
+        for (int i = 0; i < 2; i++)
+        {
+            documents.Add(await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
+                .WithCertificate(server.Pki.Leaf, server.Pki.IntermediatesAndRoot())
+                .WithHttpClientProvider(server.Provider)
+                .WithLevel(AdesBaselineProfile.Timestamped(tsa))
+                .SignAsync());
+        }
+
+        server.ResetCount();
+        var cache = new SimpleSign.Core.Revocation.InMemoryRevocationCache(TimeSpan.FromHours(1));
+        foreach (byte[] document in documents)
+        {
+            var augmenter = PadesAugmenter.Document(document).WithTimestamp(tsa).WithHttpClientProvider(server.Provider).ToLevel(AdesBaselineLevel.LongTerm);
+            var result = await (shared ? augmenter.WithRevocationCache(cache) : augmenter).AugmentAsync();
+            result.Level.ShouldBe(AdesBaselineLevel.LongTerm);
+        }
+
+        server.CrlDownloads.ShouldBe(expectedDownloads);
+    }
 }

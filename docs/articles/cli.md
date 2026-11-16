@@ -158,6 +158,10 @@ simplesign xades sign data.xml --cert mycert.pfx \
     --tsa http://timestamp.digicert.com --level timestamped \
     --form detached --data-uri data.xml
 
+# XAdES detached over any file (a PDF here): the reference digests the file's octets
+simplesign xades sign contract.pdf --cert mycert.pfx \
+    --form detached --data-uri contract.pdf --detached-binary
+
 # XAdES-B-LT enveloping
 simplesign xades sign data.xml --cert mycert.pfx \
     --tsa http://timestamp.digicert.com --level longterm \

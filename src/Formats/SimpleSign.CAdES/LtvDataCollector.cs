@@ -109,20 +109,36 @@ public static class LtvDataCollector
     /// <param name="ocspClient">Optional OCSP client for DI integration; when set, it decides its own clock skew and policy.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Collected certificate raw data, OCSP responses, and CRLs.</returns>
-    public static async Task<LtvCollectionResult> CollectAsync(
+    public static Task<LtvCollectionResult> CollectAsync(
         IHttpClientProvider httpClientProvider,
         X509Certificate2 signerCert,
         IReadOnlyList<X509Certificate2>? chainCertificates,
         ILogger? logger,
         LongTermValidationOptions options,
         IOcspClient? ocspClient = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        CollectAsync(httpClientProvider, signerCert, chainCertificates, logger, options, reuseCrlsIssuedAfter: null, ocspClient, cancellationToken);
+
+    /// <summary>
+    /// Collects as <see cref="CollectAsync(IHttpClientProvider, X509Certificate2, IReadOnlyList{X509Certificate2}?, ILogger?, LongTermValidationOptions, IOcspClient?, CancellationToken)"/>,
+    /// reusing CRLs of <see cref="LongTermValidationOptions.RevocationCache"/> issued after <paramref name="reuseCrlsIssuedAfter"/>.
+    /// </summary>
+    internal static async Task<LtvCollectionResult> CollectAsync(
+        IHttpClientProvider httpClientProvider,
+        X509Certificate2 signerCert,
+        IReadOnlyList<X509Certificate2>? chainCertificates,
+        ILogger? logger,
+        LongTermValidationOptions options,
+        DateTimeOffset? reuseCrlsIssuedAfter,
+        IOcspClient? ocspClient,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpClientProvider);
         ArgumentNullException.ThrowIfNull(options);
         var evidence = await LtvEvidenceCollector.CollectAsync(
             httpClientProvider.GetClient(), signerCert, chainCertificates, logger, ocspClient, options.RevocationPreference,
-            httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default, options.ClockSkewTolerance, cancellationToken).ConfigureAwait(false);
+            httpClientProvider.OutboundPolicy ?? OutboundHttpPolicy.Default, options.ClockSkewTolerance,
+            options.RevocationCache, reuseCrlsIssuedAfter, cancellationToken).ConfigureAwait(false);
         return ToResult(evidence);
     }
 

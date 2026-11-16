@@ -83,6 +83,12 @@ internal sealed record XadesSigningOptions(
     /// <summary>The canonicalization of SignedInfo and of the references.</summary>
     public XadesCanonicalization Canonicalization { get; init; }
 
+    /// <summary>
+    /// Whether the detached document is referenced as raw octets (no transforms, digest of the bytes) instead of being
+    /// parsed and canonicalized as XML: what lets a detached signature cover a file that is not XML.
+    /// </summary>
+    public bool DetachedBinary { get; init; }
+
     /// <summary>The SignaturePolicyStore unsigned property to add, or null.</summary>
     public SignaturePolicyStore? PolicyStore { get; init; }
 

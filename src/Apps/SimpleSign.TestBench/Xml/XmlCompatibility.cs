@@ -86,6 +86,7 @@ public static class XmlCompatibility
         }
 
         Set("dataUri", o.Form == XadesFormChoice.Detached && !counterSign ? OptionState.Shown : OptionState.Hidden);
+        Set("detachedBinary", o.Form == XadesFormChoice.Detached && !counterSign ? OptionState.Shown : OptionState.Hidden);
         if (counterSign)
         {
             // Nothing to check: the form does not apply.
@@ -191,6 +192,7 @@ public static class XmlCompatibility
             ExternalObjectId = counterSign ? null : SigningPlan.Blank(o.ExternalObjectId),
             MimeType = counterSign ? null : o.MimeType,
             DataObjectsTimestamp = dataObjectsTimestamp,
+            DetachedBinary = o.DetachedBinary && o.Form == XadesFormChoice.Detached && !counterSign,
             CounterSignatureId = counterSign ? SigningPlan.Blank(o.CounterSignatureId)?.Trim() : null,
             PlaceCity = SigningPlan.Blank(o.PlaceCity),
             PlaceStreet = SigningPlan.Blank(o.PlaceStreet),

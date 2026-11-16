@@ -78,13 +78,15 @@ internal static partial class XadesSignatureBuilder
         IReadOnlyList<XadesAdditionalReference>? additionalReferences,
         ILogger logger,
         string? dataUri = null,
-        string canonicalization = XmlDSigUrls.ExcC14N)
+        string canonicalization = XmlDSigUrls.ExcC14N,
+        bool detachedBinary = false)
     {
         if (form != XadesForm.Enveloped)
         {
             return BuildStandaloneSignature(xmlData, certificate, hashAlgorithm, signingTime,
                 extraCertificates, commitmentType, signaturePolicy, signingCertificateForm,
-                signatureAlgorithmOid, form, dataUri, signerRoles, dataObjectFormat, productionPlace, dataObjectsTimeStamp, additionalReferences, logger, canonicalization);
+                signatureAlgorithmOid, form, dataUri, signerRoles, dataObjectFormat, productionPlace, dataObjectsTimeStamp, additionalReferences, logger, canonicalization,
+                detachedBinary);
         }
 
         var xmlDoc = LoadDocument(xmlData);
@@ -211,14 +213,15 @@ internal static partial class XadesSignatureBuilder
         out byte[] signedInfoXmlBytes,
         out string? dataObjectId,
         string? dataUri = null,
-        string canonicalization = XmlDSigUrls.ExcC14N)
+        string canonicalization = XmlDSigUrls.ExcC14N,
+        bool detachedBinary = false)
     {
         if (form != XadesForm.Enveloped)
         {
             return BuildStandaloneSignedInfoToHash(xmlData, certificate, hashAlgorithm, signingTime,
                 form, commitmentType, signaturePolicy, signingCertificateForm, signatureAlgorithmOid,
                 signerRoles, dataObjectFormat, productionPlace, dataObjectsTimeStamp, additionalReferences, out signedPropertiesId, out signedInfoXmlBytes,
-                out dataObjectId, dataUri, canonicalization);
+                out dataObjectId, dataUri, canonicalization, detachedBinary);
         }
 
         dataObjectId = null;
@@ -566,11 +569,35 @@ internal static partial class XadesSignatureBuilder
         bool enveloped,
         byte[] digestValue,
         string canonicalization,
-        bool signedPropsType = false)
+        bool signedPropsType = false,
+        bool rawOctets = false)
     {
         var refEl = doc.CreateElement("Reference", XmlDSigUrls.DsNamespace);
         refEl.SetAttribute("URI", uri);
 
+        if (!rawOctets)
+        {
+            refEl.AppendChild(CreateTransforms(doc, enveloped, canonicalization));
+        }
+
+        var dm = doc.CreateElement("DigestMethod", XmlDSigUrls.DsNamespace);
+        dm.SetAttribute("Algorithm", GetDigestMethod(hashAlgorithm));
+        refEl.AppendChild(dm);
+
+        var dv = doc.CreateElement("DigestValue", XmlDSigUrls.DsNamespace);
+        dv.InnerText = Convert.ToBase64String(digestValue);
+        refEl.AppendChild(dv);
+
+        if (signedPropsType)
+        {
+            refEl.SetAttribute("Type", XadesUris.SignedPropertiesType);
+        }
+
+        return refEl;
+    }
+
+    private static XmlElement CreateTransforms(XmlDocument doc, bool enveloped, string canonicalization)
+    {
         var transforms = doc.CreateElement("Transforms", XmlDSigUrls.DsNamespace);
         if (enveloped)
         {
@@ -592,21 +619,6 @@ internal static partial class XadesSignatureBuilder
         var t2 = doc.CreateElement("Transform", XmlDSigUrls.DsNamespace);
         t2.SetAttribute("Algorithm", canonicalization);
         transforms.AppendChild(t2);
-        refEl.AppendChild(transforms);
-
-        var dm = doc.CreateElement("DigestMethod", XmlDSigUrls.DsNamespace);
-        dm.SetAttribute("Algorithm", GetDigestMethod(hashAlgorithm));
-        refEl.AppendChild(dm);
-
-        var dv = doc.CreateElement("DigestValue", XmlDSigUrls.DsNamespace);
-        dv.InnerText = Convert.ToBase64String(digestValue);
-        refEl.AppendChild(dv);
-
-        if (signedPropsType)
-        {
-            refEl.SetAttribute("Type", XadesUris.SignedPropertiesType);
-        }
-
-        return refEl;
+        return transforms;
     }
 }

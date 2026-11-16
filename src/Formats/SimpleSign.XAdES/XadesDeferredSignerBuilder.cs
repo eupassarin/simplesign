@@ -159,6 +159,15 @@ public sealed class XadesDeferredSignerBuilder
     public XadesDeferredSignerBuilder WithDataUri(string dataUri) =>
         PhaseOne(b => b.WithDataUri(dataUri));
 
+    /// <summary>
+    /// Signs the data as a detached file of any type: the reference has no transforms and digests the octets as they
+    /// are. Sets the <see cref="XadesForm.Detached"/> form (see <see cref="XadesSignerBuilder.WithDetachedBinary(string?)"/>).
+    /// </summary>
+    /// <param name="mimeType">The data's MIME type, written in DataObjectFormat; null to leave the format as configured.</param>
+    /// <returns>A new builder that signs the detached data as raw octets.</returns>
+    public XadesDeferredSignerBuilder WithDetachedBinary(string? mimeType = null) =>
+        PhaseOne(b => b.WithDetachedBinary(mimeType));
+
     /// <summary>Sets the claimed signing time written in the signed properties. Default: the moment of <see cref="PrepareAsync(CancellationToken)"/>.</summary>
     /// <param name="signingTime">The claimed signing time.</param>
     /// <returns>A new builder with the signing time configured.</returns>
