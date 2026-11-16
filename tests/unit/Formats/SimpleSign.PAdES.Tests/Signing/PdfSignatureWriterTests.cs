@@ -2,6 +2,7 @@ using System.Text;
 using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Pdf;
+using SimpleSign.TestHelpers;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Signing;
@@ -298,6 +299,60 @@ public sealed class PdfSignatureWriterTests
         outputText.ShouldContain("10 0 R");
         outputText.ShouldContain("20 0 R");
         outputText.ShouldContain("/SigFlags 3");
+    }
+
+    [Fact(DisplayName = "PrepareAsync auto-positions a visible signature on a page stored in an object stream")]
+    public async Task PrepareAsync_AutoAppearanceOnPageInObjStm_AddsWidgetToPage()
+    {
+        // Found by qpdf interop (tests/integration/SimpleSign.Interop.Tests): the page dictionary has no bytes of its
+        // own to slice, and auto-positioning threw ArgumentOutOfRangeException.
+        byte[] pdfBytes = BuildPdfWithPageInObjStm();
+        using var certificate = TestCertificateFactory.CreateSelfSignedCert("CN=ObjStm Page");
+
+        byte[] signed = await PadesSigner.Document(pdfBytes).WithCertificate(certificate)
+            .WithAppearance(SignatureAppearance.Auto()).SignAsync();
+
+        string appended = Encoding.Latin1.GetString(signed, pdfBytes.Length, signed.Length - pdfBytes.Length);
+        appended.ShouldContain("3 0 obj");
+        appended.ShouldContain("/Annots");
+        appended.ShouldContain("/AP");
+    }
+
+    /// <summary>
+    /// A PDF whose /Pages (object 2) and only /Page (object 3, 612 × 792) are stored in a compressed Object Stream, as
+    /// qpdf's --object-streams=generate writes them.
+    /// </summary>
+    private static byte[] BuildPdfWithPageInObjStm()
+    {
+        string pages = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
+        string page = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << >> >>";
+        string header = $"2 0 3 {pages.Length + 1}\n";
+        byte[] compressed;
+        using (var ms = new MemoryStream())
+        {
+            using (var zlib = new System.IO.Compression.ZLibStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
+            {
+                zlib.Write(Encoding.Latin1.GetBytes(header + pages + " " + page));
+            }
+
+            compressed = ms.ToArray();
+        }
+
+        var pdf = new MemoryStream();
+        void Write(string text) => pdf.Write(Encoding.Latin1.GetBytes(text));
+        Write("%PDF-1.7\n");
+        long catalog = pdf.Position;
+        Write("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        long objStm = pdf.Position;
+        Write($"4 0 obj\n<< /Type /ObjStm /N 2 /First {header.Length} /Filter /FlateDecode /Length {compressed.Length} >>\nstream\n");
+        pdf.Write(compressed);
+        Write("\nendstream\nendobj\n");
+        long xref = pdf.Position;
+        Write("xref\n0 2\n0000000000 65535 f \n");
+        Write($"{catalog:D10} 00000 n \n");
+        Write($"4 1\n{objStm:D10} 00000 n \n");
+        Write($"trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+        return pdf.ToArray();
     }
 
     /// <summary>

@@ -271,6 +271,37 @@ public sealed class SyntheticPki : IDisposable
         return BuildCrl(IntermediateCa, _intermediateKey, serial);
     }
 
+    /// <summary>The leaf's private key as PKCS#8 PEM, for signing with tools outside .NET (pyHanko, OpenSSL).</summary>
+    public string LeafPrivateKeyPem() => _leafKey.ExportPkcs8PrivateKeyPem();
+
+    /// <summary>
+    /// Issues an ECDSA P-256 signer under the intermediate CA, with the leaf's extensions (digitalSignature and
+    /// nonRepudiation, emailProtection EKU, the leaf's CRL distribution point).
+    /// </summary>
+    /// <returns>The certificate, carrying its key, and the key as PKCS#8 PEM.</returns>
+    public (X509Certificate2 Certificate, string PrivateKeyPem) IssueEcdsaSigner(string subject = "CN=SimpleSign Synthetic ECDSA Signer, O=SimpleSign Tests")
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var req = new CertificateRequest(subject, key, HashAlgorithmName.SHA256);
+        req.CertificateExtensions.Add(
+            new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+        req.CertificateExtensions.Add(
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, critical: true));
+        req.CertificateExtensions.Add(
+            new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.4") }, critical: false));
+        req.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(req.PublicKey, critical: false));
+        AddAuthorityKeyIdentifier(req, IntermediateCa);
+        AddCrlAndOcspExtensions(req, CrlDistributionPoint, LeafCaIssuersUrl);
+
+        byte[] serial = RandomNumberGenerator.GetBytes(16);
+        serial[0] &= 0x7F;
+        var notBefore = IntermediateCa.NotBefore.ToUniversalTime().AddMinutes(1);
+        // The intermediate's key is RSA: the request's own key cannot sign it, so the generator is given explicitly.
+        using var cert = req.Create(IntermediateCa.SubjectName, X509SignatureGenerator.CreateForRSA(_intermediateKey, RSASignaturePadding.Pkcs1), notBefore, notBefore.AddYears(1), serial);
+        using var withKey = cert.CopyWithPrivateKey(key);
+        return (ExportAndReload(withKey), key.ExportPkcs8PrivateKeyPem());
+    }
+
     /// <summary>
     /// Issues a time-stamping authority certificate under the intermediate CA: critical, exclusive
     /// timeStamping EKU, the leaf's CRL distribution point and OCSP responder. The certificate carries its key.
