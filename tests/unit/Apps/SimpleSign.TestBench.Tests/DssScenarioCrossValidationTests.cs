@@ -43,12 +43,12 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
         // CERTIFICATE_CHAIN_GENERAL_FAILURE). An "unknown" answer is not acceptable revocation data, and the CRL is.
         ["fault:ocsp-unknown"] = "SimpleSign uses the valid CRL when OCSP answers unknown; DSS does not",
 
-        // A certificate issued on demand, expired by validation time. EN 319 102-1 §5.2.6: an expired signing certificate
-        // with no proof of existence is OUT_OF_BOUNDS_NO_POE, which SimpleSign gives; DSS looked at the revocation data
-        // first (CERTIFICATE_CHAIN_GENERAL_FAILURE) while the Sandbox's OCSP responder answered "unknown" for it. It now
-        // answers good for the short-lived certificates it issues, so DSS may agree: remove this entry once a run with
-        // DSS shows no difference (until then it does no harm: an entry that no longer differs is never reported).
-        ["sample:expired"] = "SimpleSign reports the expiry (OUT_OF_BOUNDS_NO_POE); DSS may stop at the revocation data",
+        // A certificate issued on demand, expired by validation time (PAdES B-B). EN 319 102-1 §5.2.6: an expired signing
+        // certificate with no proof of existence is OUT_OF_BOUNDS_NO_POE, which SimpleSign gives. DSS 6.3 gets a "good"
+        // answer from the Sandbox's OCSP responder and gives OUT_OF_BOUNDS_NOT_REVOKED (expired, but known not to be
+        // revoked), the more specific sub-indication of the two. Seen in a run with DSS on 2026-11-16; before, DSS stopped
+        // at the revocation data (CERTIFICATE_CHAIN_GENERAL_FAILURE) while the responder answered "unknown".
+        ["sample:expired"] = "SimpleSign reports OUT_OF_BOUNDS_NO_POE; DSS, with a good OCSP answer, OUT_OF_BOUNDS_NOT_REVOKED",
     };
 
     private static readonly string[] Signers =
@@ -312,7 +312,7 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
     };
 
     /// <summary>
-    /// The DSS settings when a DSS answers; skips the test otherwise. When the Sandbox publishes a trusted list, waits
+    /// The DSS settings when a DSS answers; skips the test otherwise (fails it with <c>SIMPLESIGN_REQUIRE_DSS=true</c>). When the Sandbox publishes a trusted list, waits
     /// (up to a minute) until DSS has loaded it, so the first validations do not run before DSS trusts the Sandbox.
     /// </summary>
     private async Task<DssSettings> ConnectAsync()
@@ -330,7 +330,11 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
         {
         }
 
-        Skip.IfNot(isDss, $"No DSS at {settings.Url}: docker compose -f tools/dss/docker-compose.yml up");
+        if (!isDss)
+        {
+            TestBenchFixture.NoDss(settings.Url);
+        }
+
         if (fixture.Sandbox.Current?.Info.TrustedLists is { } lists)
         {
             for (int i = 0; i < 60 && !(await TrustedListSummaryAsync(settings)).Contains(lists.TlUrl, StringComparison.Ordinal); i++)
