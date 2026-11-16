@@ -59,6 +59,7 @@ export type TsaFault = "None" | "Down" | "Slow" | "InvalidToken" | "Untrusted"
 export type CrlFault = "None" | "Down" | "Slow" | "Expired" | "WrongKey" | "Stale" | "NoNextUpdate"
 export type OcspFault = "None" | "Down" | "Slow" | "TryLater" | "Expired" | "Unauthorized" | "Unknown"
 export type OcspSigner = "Issuer" | "Delegated"
+export type CscFault = "None" | "Down" | "Slow" | "WrongSignature"
 export type TlFault = "None" | "Expired" | "WrongSigner" | "Tampered" | "WithdrawnAfterUse"
 
 export interface SandboxFaults {
@@ -70,6 +71,8 @@ export interface SandboxFaults {
   ocspDelayMs: number
   ocspSigner: OcspSigner
   trustedList: TlFault
+  csc: CscFault
+  cscDelayMs: number
 }
 
 export interface SandboxRequest {

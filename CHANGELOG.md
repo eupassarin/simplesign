@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sandbox: CSC v2 credentials for any signer, and CSC failures.** `POST /api/csc/credentials`
+  (`{ certificateId, credentialId?, scal?, multiSign? }`) gives a signer of the intermediate CA — a
+  certificate issued with `POST /api/certificates/custom`, say a company seal — a credential of the
+  simulated CSC v2 service, so a product that signs remotely sees its own certificate while the key
+  stays in the Sandbox; `GET /api/csc/credentials` lists them, `/api/info` and the TestBench's CSC
+  picker show them, and a reset removes them. A new failure, `csc` (`Down`: HTTP 503 on every call,
+  `Slow`: `signatures/signHash` waits `cscDelayMs`, `WrongSignature`: it signs with another key), is
+  switched like the others (`PATCH /api/faults`, the Sandbox control's Failures tab, a playbook
+  step's `sandbox.csc`).
 - **Detached XAdES over any file: `XadesSignerBuilder.WithDetachedBinary(mimeType)`** (and on
   `XadesDeferredSignerBuilder`). In the detached form the reference to the data has no transforms and
   digests the file's octets (W3C XMLDSig §4.4.3.1), so a PDF, an image or a ZIP can be signed; the

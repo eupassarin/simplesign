@@ -231,4 +231,4 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 
 ## Sandbox
 
-Signer ids (`sandbox:ID`) and certificate ids (`sandbox.revoke`) are those of the connected Sandbox (`GET /api/pki` on it); the TestBench checks them when it loads a playbook. Failures: crl None/Down/Slow/Expired/WrongKey/Stale/NoNextUpdate, ocsp None/Down/Slow/TryLater/Expired/Unauthorized/Unknown, tsa None/Down/Slow/InvalidToken/Untrusted, trustedList None/Expired/WrongSigner/Tampered/WithdrawnAfterUse, lotl None/Expired/WrongSigner/Tampered.
+Signer ids (`sandbox:ID`) and certificate ids (`sandbox.revoke`) are those of the connected Sandbox (`GET /api/pki` on it); the TestBench checks them when it loads a playbook. Failures: crl None/Down/Slow/Expired/WrongKey/Stale/NoNextUpdate, ocsp None/Down/Slow/TryLater/Expired/Unauthorized/Unknown, tsa None/Down/Slow/InvalidToken/Untrusted, trustedList None/Expired/WrongSigner/Tampered/WithdrawnAfterUse, lotl None/Expired/WrongSigner/Tampered, csc None/Down/Slow/WrongSignature.

@@ -171,4 +171,7 @@ internal sealed record SandboxState
     public string SigningCountry { get; init; } = SandboxOptions.DefaultSigningCountry;
 
     public SandboxFaults Faults { get; init; } = new();
+
+    /// <summary>The CSC credentials created on request (<c>POST /api/csc/credentials</c>), oldest first; kept until a reset.</summary>
+    public List<SandboxCscCredential> CscCredentials { get; init; } = [];
 }

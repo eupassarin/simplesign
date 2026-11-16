@@ -170,11 +170,14 @@ public sealed record PlaybookSandbox
     /// <summary>List of trusted lists failure (/tl/lotl.xml): None, Expired, WrongSigner, Tampered.</summary>
     public string? Lotl { get; init; }
 
+    /// <summary>CSC remote signing failure: None, Down, Slow, WrongSignature.</summary>
+    public string? Csc { get; init; }
+
     /// <summary>Sandbox certificates to revoke for the step.</summary>
     public IReadOnlyList<string> Revoke { get; init; } = [];
 
     /// <summary>Whether anything is asked.</summary>
-    public bool Any => Crl is not null || Ocsp is not null || Tsa is not null || TrustedList is not null || Lotl is not null || Revoke.Count > 0;
+    public bool Any => Crl is not null || Ocsp is not null || Tsa is not null || TrustedList is not null || Lotl is not null || Csc is not null || Revoke.Count > 0;
 
     /// <summary>The changes, one line each, as the page and the evidence show them.</summary>
     public IEnumerable<string> Describe()
@@ -202,6 +205,11 @@ public sealed record PlaybookSandbox
         if (Lotl is not null)
         {
             yield return $"List of trusted lists: {Lotl}";
+        }
+
+        if (Csc is not null)
+        {
+            yield return $"CSC: {Csc}";
         }
 
         foreach (string id in Revoke)

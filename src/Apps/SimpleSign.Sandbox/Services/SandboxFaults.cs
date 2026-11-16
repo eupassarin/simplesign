@@ -120,6 +120,22 @@ public enum LotlFault
     Tampered,
 }
 
+/// <summary>What the CSC v2 remote signing service (<c>/csc/v2/</c>) does with a request.</summary>
+public enum CscFault
+{
+    /// <summary>Answers normally.</summary>
+    None,
+
+    /// <summary>HTTP 503 on every call: the provider is down.</summary>
+    Down,
+
+    /// <summary><c>signatures/signHash</c> answers after <see cref="SandboxFaults.CscDelayMs"/>.</summary>
+    Slow,
+
+    /// <summary><c>signatures/signHash</c> returns a signature made with another key: the credential's certificate does not verify it.</summary>
+    WrongSignature,
+}
+
 /// <summary>Failures switched on, to see how a client reacts. Kept with the environment.</summary>
 public sealed record SandboxFaults(
     TsaFault Tsa = TsaFault.None,
@@ -130,10 +146,13 @@ public sealed record SandboxFaults(
     int OcspDelayMs = 3000,
     OcspSigner OcspSigner = OcspSigner.Issuer,
     TlFault TrustedList = TlFault.None,
-    LotlFault Lotl = LotlFault.None)
+    LotlFault Lotl = LotlFault.None,
+    CscFault Csc = CscFault.None,
+    int CscDelayMs = 3000)
 {
     /// <summary>Whether any failure is on.</summary>
-    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None || Lotl != LotlFault.None;
+    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None || Lotl != LotlFault.None
+        || Csc != CscFault.None;
 
     /// <summary>The same failures with the delays kept within 0–60 s.</summary>
     public SandboxFaults Clamped() => this with
@@ -141,6 +160,7 @@ public sealed record SandboxFaults(
         TsaDelayMs = Math.Clamp(TsaDelayMs, 0, 60_000),
         CrlDelayMs = Math.Clamp(CrlDelayMs, 0, 60_000),
         OcspDelayMs = Math.Clamp(OcspDelayMs, 0, 60_000),
+        CscDelayMs = Math.Clamp(CscDelayMs, 0, 60_000),
     };
 }
 
@@ -154,7 +174,9 @@ public sealed record SandboxFaultsPatch(
     int? OcspDelayMs = null,
     OcspSigner? OcspSigner = null,
     TlFault? TrustedList = null,
-    LotlFault? Lotl = null)
+    LotlFault? Lotl = null,
+    CscFault? Csc = null,
+    int? CscDelayMs = null)
 {
     /// <summary>The <paramref name="current"/> failures with this change applied.</summary>
     public SandboxFaults ApplyTo(SandboxFaults current) => current with
@@ -168,5 +190,7 @@ public sealed record SandboxFaultsPatch(
         OcspSigner = OcspSigner ?? current.OcspSigner,
         TrustedList = TrustedList ?? current.TrustedList,
         Lotl = Lotl ?? current.Lotl,
+        Csc = Csc ?? current.Csc,
+        CscDelayMs = CscDelayMs ?? current.CscDelayMs,
     };
 }

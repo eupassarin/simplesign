@@ -253,6 +253,16 @@
             "Tampered"
           ]
         },
+        "csc": {
+          "type": "string",
+          "description": "CSC v2 remote signing failure.",
+          "enum": [
+            "None",
+            "Down",
+            "Slow",
+            "WrongSignature"
+          ]
+        },
         "revoke": {
           "type": "array",
           "description": "Certificates to revoke for the step.",

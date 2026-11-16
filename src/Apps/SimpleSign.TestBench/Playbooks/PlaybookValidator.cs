@@ -241,6 +241,7 @@ internal static class PlaybookValidator
             CheckEnum<TsaFault>(box.Tsa, at + ".sandbox.tsa", error);
             CheckEnum<TlFault>(box.TrustedList, at + ".sandbox.trustedList", error);
             CheckEnum<LotlFault>(box.Lotl, at + ".sandbox.lotl", error);
+            CheckEnum<CscFault>(box.Csc, at + ".sandbox.csc", error);
             if (sandbox is not null)
             {
                 foreach (string id in box.Revoke.Where(id => sandbox.Certificates.All(c => c.Id != id)))
