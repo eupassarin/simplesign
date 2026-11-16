@@ -102,15 +102,27 @@ For invisible signatures or non-Helvetica fonts, Type1 Base14 references are use
 
 ### 5. Cross-platform verification
 
-PDF/A conformance after signing is verified against veraPDF corpus files covering PDF/A-1b, A-2b, and A-3b variants, using Docker-based veraPDF:
+`tests/integration/SimpleSign.VeraPdf.Tests` signs the PDF/A-1b, 2b and 3b files of the veraPDF corpus and has
+veraPDF (the `verapdf/cli` Docker image, pinned by digest in `VeraPdf.cs`, or a local CLI named by
+`SIMPLESIGN_VERAPDF`) validate the result. The CI job `PDF/A (veraPDF)` runs it on every push, with
+`SIMPLESIGN_REQUIRE_VERAPDF=true` so that a missing veraPDF fails instead of skipping; documents veraPDF rejects are
+kept as a build artifact with its report.
 
-| Test | Scenario |
-|---|---|
-| `SignOnce_PreservesConformance` | Each corpus file signed once → must PASS veraPDF |
-| `SignTwice_PreservesConformance` | Each corpus file signed twice → must still PASS |
-| `TamperedDocument_Rejected` | Signed PDF/A-3b with 1 byte flipped → veraPDF FAIL |
+| Test (`PadesSignerPdfAConformanceTests`) | Files | Must PASS veraPDF |
+|---|---|---|
+| `SignAsync_InvisibleSignature_PreservesConformance` | 2b, 3b | one invisible signature |
+| `SignAsync_VisibleSignature_PreservesConformance` | all | one visible signature (appearance, embedded LiberationSans; adbe.pkcs7.detached on 1b) |
+| `SignAsync_SecondSignature_PreservesConformance` | all | two visible signatures |
+| `SignAsync_ArchiveLevel_PreservesConformance` | 2b, 3b | B-LTA: signature timestamp, DSS, document timestamp (TSA and CRLs answered in memory) |
+| `SignAsync_WidgetWithoutPrintFlag_FailsConformance` | 3b | the control: with `/F 132` turned into `/F 128`, veraPDF must report §6.3.2 |
 
-Also verified with dockerized pdfbox (parse succeeds) and pyHanko/DSS (signature integrity valid).
+**Known gap:** the appearance stream paints in DeviceRGB. ISO 19005-2/3 §6.2.4.3 allows that only with an RGB
+OutputIntent or a DefaultRGB colour space, so a visible signature on a PDF/A-2/3 document without either (the corpus
+file `PDF_A-3b-6-8-t02-pass-b.pdf`) breaks conformance. The tests list it in `KnownVisibleFailures` and require exactly
+that failure, so they fail once the appearance is fixed and the entry can go.
+
+To update veraPDF: pull `verapdf/cli:latest`, take its digest, change it in `VeraPdf.cs` and `.github/workflows/ci.yml`,
+and run the tests.
 
 ### 6. API surface
 

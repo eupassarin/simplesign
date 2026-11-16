@@ -19,6 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recognize, is now found by the inspector and verifies; its test says so instead of only asking it not to throw.
   Origin and license: `tests/integration/SimpleSign.Integration.Tests/Fixtures/README.md`.
 
+### Added — PDF/A preservation checked by veraPDF in CI
+
+- **`tests/integration/SimpleSign.VeraPdf.Tests`** signs the PDF/A-1b, 2b and 3b files of the veraPDF corpus
+  (invisible, visible, twice, B-LTA) and requires veraPDF to find them still conforming (ADR 0014 §5). A control test
+  breaks the widget's Print flag and requires veraPDF to report it. veraPDF runs from the `verapdf/cli` image pinned by
+  digest, or from a local CLI named by `SIMPLESIGN_VERAPDF`; without either the tests are skipped.
+- **CI job `PDF/A (veraPDF)`** runs them on every push (`Category=VeraPdf`, left out of the other test runs) with
+  `SIMPLESIGN_REQUIRE_VERAPDF=true`, and keeps every document veraPDF rejects, with its report, as an artifact.
+- **Known gap, found by these tests:** a visible signature paints in DeviceRGB, which breaks ISO 19005-2/3 §6.2.4.3 on
+  a PDF/A document without an RGB OutputIntent or DefaultRGB (corpus `PDF_A-3b-6-8-t02-pass-b.pdf`). The tests
+  expect exactly that failure until the appearance is fixed.
+
 ### Added — Agent: trust frameworks the user enables, and generic hardening
 
 - **Every trust framework is built into `SimpleSign.Agent`** — ICP-Brasil, Gov.br, IOFE (Peru) and eIDAS (EU) — and

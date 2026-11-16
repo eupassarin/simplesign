@@ -99,7 +99,7 @@ jobs:
           SIMPLESIGN_REQUIRE_SANDBOX: "true"
         run: |
           dotnet test --no-build --configuration Release --framework ${{ matrix.framework }} \
-            --filter "Category!=Stress&FullyQualifiedName!~SimpleSign.TestBench.Tests" \
+            --filter "Category!=Stress&Category!=VeraPdf&FullyQualifiedName!~SimpleSign.TestBench.Tests" \
             --logger "trx" \
             --logger "console;verbosity=normal" \
             --results-directory TestResults
@@ -112,7 +112,7 @@ jobs:
           SIMPLESIGN_REQUIRE_SANDBOX: "true"
         run: |
           dotnet test --no-build --configuration Release \
-            --filter "Category!=Stress" \
+            --filter "Category!=Stress&Category!=VeraPdf" \
             --collect:"XPlat Code Coverage" \
             --settings coverlet.runsettings \
             --results-directory TestResults \
@@ -250,6 +250,43 @@ jobs:
         with:
           name: stress-test-results
           path: TestResults-Stress/
+
+  # PDF/A preservation (ADR 0014): veraPDF checks the corpus documents SimpleSign signs. Its own job, since veraPDF
+  # runs in Docker (Linux runners only) and starts a JVM per document. SIMPLESIGN_REQUIRE_VERAPDF turns a missing
+  # veraPDF into a failure instead of a skip. The image digest is the one in tests/integration/SimpleSign.VeraPdf.Tests/VeraPdf.cs.
+  verapdf:
+    name: PDF/A (veraPDF)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Pull veraPDF
+        run: docker pull verapdf/cli@sha256:d5ee329657cf9bc4b2400392dd54c7d0a0ce9980ff6fa2da5590eebeec007cdb
+
+      - name: Test
+        timeout-minutes: 20
+        env:
+          SIMPLESIGN_REQUIRE_VERAPDF: "true"
+          SIMPLESIGN_VERAPDF_FAILURES: ${{ github.workspace }}/TestResults-VeraPdf/rejected
+        run: |
+          dotnet test tests/integration/SimpleSign.VeraPdf.Tests --configuration Release --framework net10.0 \
+            --filter "Category=VeraPdf" \
+            --logger "trx" \
+            --logger "console;verbosity=normal" \
+            --results-directory TestResults-VeraPdf
+
+      # The trx, and every document veraPDF rejected with its report (rejected/).
+      - name: Upload veraPDF results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verapdf-results
+          path: TestResults-VeraPdf/
 
   # AOT, PKCS#11, TestBench and Agent build what they need themselves: they start with the matrix instead of
   # waiting for its slowest OS (which added ~9 minutes at the end of every run).
