@@ -12,7 +12,35 @@ public sealed class CadesSignatureValidatorRevocationTests
 {
     private const string LeafCrlUrl = "http://198.51.100.1/leaf.crl";
     private const string IntermediateCrlUrl = "http://198.51.100.1/intermediate.crl";
+    private const string LoopbackOrigin = "http://127.0.0.1:5399";
+    private const string LoopbackLeafCrlUrl = LoopbackOrigin + "/leaf.crl";
+    private const string LoopbackIntermediateCrlUrl = LoopbackOrigin + "/intermediate.crl";
     private static readonly byte[] Content = "revocation test"u8.ToArray();
+
+    [Fact]
+    public async Task ValidateAsync_HttpClientProvider_ChecksRevocationUnderItsOutboundPolicy()
+    {
+        // CRLs on this machine (a local Sandbox): only the provider's LoopbackOrigins lets the checker reach them.
+        using var pki = new SyntheticPki(crlDistributionPoint: LoopbackLeafCrlUrl, intermediateCrlDistributionPoint: LoopbackIntermediateCrlUrl);
+        byte[] signature = await CadesSigner.Document(Content).WithCertificate(pki.Leaf, [pki.IntermediateCa]).SignAsync();
+        byte[] leafCrl = pki.BuildLeafCrl(), intermediateCrl = pki.BuildIntermediateCrl();
+        using var http = new HttpClient(new MockHttpHandler(request => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(request.RequestUri!.AbsoluteUri == LoopbackLeafCrlUrl ? leafCrl : intermediateCrl),
+        })));
+        var provider = new PolicyHttpClientProvider(http, new() { LoopbackOrigins = [new Uri(LoopbackOrigin)] });
+        var validator = new CadesSignatureValidator(provider, new ValidationOptions { CheckRevocation = true, TrustSystemRoots = false });
+
+        var result = await validator.ValidateAsync(signature, Content, [pki.RootCa]);
+
+        result.Indication.ShouldBe(SignatureIndication.Valid);
+        result.IsNotRevoked.ShouldBe(true);
+        result.RevocationSource.ShouldBe(RevocationSource.CertificateChain);
+    }
+
+    [Fact]
+    public void Constructor_NullHttpClientProvider_Throws() =>
+        Should.Throw<ArgumentNullException>(() => new CadesSignatureValidator((SimpleSign.Core.Http.IHttpClientProvider)null!));
 
     [Fact]
     public async Task ValidateAsync_ChainNotRevoked_ValidWithChainRevocation()

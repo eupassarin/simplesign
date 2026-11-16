@@ -38,6 +38,18 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         _ocspClient = new OcspClient(httpClient, logger) { OutboundPolicy = _outboundPolicy };
     }
 
+    /// <summary>
+    /// A checker that downloads through <paramref name="httpClientProvider"/> — its client and its
+    /// <see cref="IHttpClientProvider.OutboundPolicy"/> (proxy, private hosts, loopback origins) — in the order and with
+    /// the fallback of <paramref name="verifier"/>. The checker a validator builds when it is given none.
+    /// </summary>
+    internal static ChainRevocationChecker For(IHttpClientProvider httpClientProvider, Validation.VerifierOptions verifier, ILogger? logger) =>
+        new(httpClientProvider.GetClient(), logger, httpClientProvider.OutboundPolicy)
+        {
+            Strategy = verifier.RevocationStrategy,
+            Fallback = verifier.RevocationFallback,
+        };
+
     /// <summary>Which source is asked first, embedded and online. Default: <see cref="Validation.RevocationStrategy.OcspFirst"/>.</summary>
     public Validation.RevocationStrategy Strategy { get; init; } = Validation.RevocationStrategy.OcspFirst;
 

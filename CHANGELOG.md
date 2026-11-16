@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`CadesSignatureValidator(IHttpClientProvider, ValidationOptions?, ILogger?)` and
+  `XadesSignatureValidator(IHttpClientProvider, ValidationOptions?, ILogger?)`**, as
+  `PdfSignatureValidator` has: the revocation checks of `ValidateAsync` (signer and TSA chains) go
+  through the provider's HTTP client and its `OutboundPolicy`.
+  - *Before:* without a `chainRevocationChecker` both validators fetched CRLs and OCSP through
+    `DefaultHttpClientProvider` with the default outbound policy, silently bypassing a proxy,
+    `PrivateNetworkHosts` or `LoopbackOrigins` — CAdES B-LTA against a loopback Sandbox gave
+    INDETERMINATE "revocation status could not be established" where PAdES passed.
+  - *After:* pass the provider. The existing constructors are unchanged.
+
 ### Changed
 
 - **A trust profile no longer trusts the operating system's roots** (behaviour change for profile

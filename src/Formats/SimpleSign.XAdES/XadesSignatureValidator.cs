@@ -42,11 +42,29 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     private static byte[] DecodeBase64(XmlNode el) =>
         Convert.FromBase64String(el.InnerText.Trim());
 
+    /// <summary>
+    /// Creates a validator whose revocation checks (CRL and OCSP, of the signer and TSA chains) go through
+    /// <paramref name="httpClientProvider"/>: its HTTP client and its <see cref="Core.Http.IHttpClientProvider.OutboundPolicy"/>
+    /// (a proxy, <c>PrivateNetworkHosts</c>, <c>LoopbackOrigins</c> for a local Sandbox), as
+    /// <c>PdfSignatureValidator</c> does with its provider.
+    /// </summary>
+    /// <param name="httpClientProvider">The HTTP client and outbound policy of the revocation checks.</param>
+    /// <param name="options">Validation options; defaults apply when <see langword="null"/>.</param>
+    /// <param name="logger">Receives diagnostics of each validation; nothing is logged when <see langword="null"/>.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="httpClientProvider"/> is null.</exception>
+    public XadesSignatureValidator(Core.Http.IHttpClientProvider httpClientProvider, ValidationOptions? options = null, ILogger? logger = null)
+        : this(options, logger: logger, chainRevocationChecker: ChainRevocationChecker.For(
+            httpClientProvider ?? throw new ArgumentNullException(nameof(httpClientProvider)), (options ?? ValidationOptions.Default).Verifier, logger))
+    {
+    }
+
     /// <summary>Creates a new XAdES signature validator with optional options.</summary>
     /// <param name="options">Validation options; defaults apply when <see langword="null"/>.</param>
     /// <param name="timestampValidator">Timestamp validator; the built-in one is used when <see langword="null"/>.</param>
     /// <param name="logger">Receives diagnostics of each validation; nothing is logged when <see langword="null"/>.</param>
-    /// <param name="chainRevocationChecker">The revocation checker of <c>ValidateAsync</c>; one on the default HTTP client when <see langword="null"/>.</param>
+    /// <param name="chainRevocationChecker">The revocation checker of <c>ValidateAsync</c>; when <see langword="null"/>, one on
+    /// <see cref="Core.Http.DefaultHttpClientProvider"/> with the default outbound policy — to use your own HTTP client, proxy
+    /// or outbound policy, pass an <see cref="Core.Http.IHttpClientProvider"/> to the other constructor.</param>
     public XadesSignatureValidator(
         ValidationOptions? options = null,
         ITimestampValidator? timestampValidator = null,
@@ -57,11 +75,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
         _logger = logger ?? NullLogger.Instance;
         _chainRevocationChecker = chainRevocationChecker
-            ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), _logger)
-            {
-                Strategy = _options.Verifier.RevocationStrategy,
-                Fallback = _options.Verifier.RevocationFallback,
-            };
+            ?? ChainRevocationChecker.For(Core.Http.DefaultHttpClientProvider.Instance, _options.Verifier, _logger);
     }
 
     /// <summary>

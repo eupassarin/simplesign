@@ -136,7 +136,27 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     private readonly ITimestampValidator _timestampValidator;
     private readonly IChainRevocationChecker _chainRevocationChecker;
 
-    /// <summary>Creates a validator with the specified options.</summary>
+    /// <summary>
+    /// Creates a validator whose revocation checks (CRL and OCSP, of the signer and TSA chains) go through
+    /// <paramref name="httpClientProvider"/>: its HTTP client and its <see cref="Core.Http.IHttpClientProvider.OutboundPolicy"/>
+    /// (a proxy, <c>PrivateNetworkHosts</c>, <c>LoopbackOrigins</c> for a local Sandbox), as
+    /// <c>PdfSignatureValidator</c> does with its provider.
+    /// </summary>
+    /// <param name="httpClientProvider">The HTTP client and outbound policy of the revocation checks.</param>
+    /// <param name="options">Validation options; defaults apply when <see langword="null"/>.</param>
+    /// <param name="logger">Receives diagnostics of each validation; nothing is logged when <see langword="null"/>.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="httpClientProvider"/> is null.</exception>
+    public CadesSignatureValidator(Core.Http.IHttpClientProvider httpClientProvider, ValidationOptions? options = null, ILogger? logger = null)
+        : this(options, logger, chainRevocationChecker: ChainRevocationChecker.For(
+            httpClientProvider ?? throw new ArgumentNullException(nameof(httpClientProvider)), (options ?? ValidationOptions.Default).Verifier, logger))
+    {
+    }
+
+    /// <summary>
+    /// Creates a validator with the specified options. Without <paramref name="chainRevocationChecker"/>, revocation is
+    /// checked through <see cref="Core.Http.DefaultHttpClientProvider"/> with the default outbound policy: to use your own
+    /// HTTP client, proxy or outbound policy, pass an <see cref="Core.Http.IHttpClientProvider"/> to the other constructor.
+    /// </summary>
     public CadesSignatureValidator(
         ValidationOptions? options = null,
         ILogger? logger = null,
@@ -148,11 +168,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         _options = (options ?? new ValidationOptions()).WithProfileApplied();
         _logger = logger;
         _chainRevocationChecker = chainRevocationChecker
-            ?? new ChainRevocationChecker(Core.Http.DefaultHttpClientProvider.Instance.GetClient(), logger)
-            {
-                Strategy = _options.Verifier.RevocationStrategy,
-                Fallback = _options.Verifier.RevocationFallback,
-            };
+            ?? ChainRevocationChecker.For(Core.Http.DefaultHttpClientProvider.Instance, _options.Verifier, logger);
         _cryptoVerifier = cryptoVerifier ?? new CryptoVerifierService();
         _cmsParser = cmsParser ?? new CmsParserService();
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
