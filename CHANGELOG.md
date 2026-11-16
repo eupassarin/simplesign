@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Tests: the EU DSS / ETSI corpus is back, offline, in the regular CI run
+
+- **Real-world signatures from other producers are validated again** in `SimpleSign.Integration.Tests`
+  (`Category=Integration`, offline): PAdES documents signed in BG, DE, FR, HU, ES and BE plus the EU DSS CAdES and
+  XAdES B-T/B-LT/B-LTA vectors, which left the repository with `tests/interop`. `PdfSignatureValidatorCorpusTests`,
+  `PdfSignatureInspectorCorpusTests`, `CadesSignatureValidatorCorpusTests` and `XadesSignatureValidatorCorpusTests`
+  keep the old expectations (the modified `ATSHashIndexV3` and the copied XAdES archive timestamp are rejected), and
+  `EtsiCorpusManifestTests` checks every CAdES/XAdES file against the SHA-256 of `Fixtures/ades/manifest.json`
+  (pinned EU DSS commit, LGPL-2.1). The Hungarian plugtest `Signature-P-HU_MIC-1.pdf`, which the parser used not to
+  recognize, is now found by the inspector and verifies; its test says so instead of only asking it not to throw.
+  Origin and license: `tests/integration/SimpleSign.Integration.Tests/Fixtures/README.md`.
+
 ### Added — Agent: trust frameworks the user enables, and generic hardening
 
 - **Every trust framework is built into `SimpleSign.Agent`** — ICP-Brasil, Gov.br, IOFE (Peru) and eIDAS (EU) — and
