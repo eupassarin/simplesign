@@ -22,12 +22,29 @@ internal static class SignatureAppearanceRenderer
     /// <param name="fontFileObjNum">Object number for the /FontFile2 stream (0 to skip embedding).</param>
     /// <param name="fontDescriptorObjNum">Object number for the /FontDescriptor (0 to skip embedding).</param>
     /// <param name="softMaskObjNum">Object number for the image soft mask (0 drops image transparency).</param>
-    /// <returns>Bytes for the Form XObject, followed by the image XObject and its soft mask when present.</returns>
-    public static byte[] BuildAppearanceXObject(int objNum, SignatureFieldOptions options, DateTime sigTime, float width, float height, int imageObjNum = 0, int fontFileObjNum = 0, int fontDescriptorObjNum = 0, int softMaskObjNum = 0)
+    /// <param name="colorProfiles">
+    /// Object numbers for the <c>/DefaultRGB</c> and <c>/DefaultGray</c> ICC profiles, for a PDF/A document;
+    /// <see langword="null"/> keeps the plain device colour spaces.
+    /// </param>
+    /// <returns>
+    /// Bytes for the Form XObject, followed by the image XObject and its soft mask when present, then the ICC
+    /// profile streams when <paramref name="colorProfiles"/> is set.
+    /// </returns>
+    /// <remarks>
+    /// The stamp paints with <c>rg</c>/<c>RG</c> (DeviceRGB). ISO 19005-2/3 §6.2.4.3 (and ISO 19005-1 §6.2.3.3)
+    /// allow DeviceRGB only with an RGB PDF/A OutputIntent or a <c>/DefaultRGB</c> colour space in the current
+    /// resources, and DeviceGray only with an OutputIntent or a <c>/DefaultGray</c>. With
+    /// <paramref name="colorProfiles"/>, the form's resources map both to the sRGB ICC profiles of
+    /// <see cref="SrgbIccProfile"/>, so the stamp conforms whatever OutputIntent the document has (ADR 0014 §5).
+    /// <c>/DefaultGray</c> is written only when a grayscale background image needs it.
+    /// </remarks>
+    public static byte[] BuildAppearanceXObject(int objNum, SignatureFieldOptions options, DateTime sigTime, float width, float height, int imageObjNum = 0, int fontFileObjNum = 0, int fontDescriptorObjNum = 0, int softMaskObjNum = 0, AppearanceColorProfiles? colorProfiles = null)
     {
         var appearance = options.Appearance!;
         AppearanceImage? image = imageObjNum > 0 ? AppearanceImage.FromAppearance(appearance) : null;
         string baseFontName = appearance.GetBaseFontName();
+        int defaultRgbObjNum = colorProfiles?.RgbObjNum ?? 0;
+        int defaultGrayObjNum = image is { PaintsDeviceGray: true } ? colorProfiles?.GrayObjNum ?? 0 : 0;
 
         var stream = new StringBuilder();
         Line(stream, "q");
@@ -86,17 +103,30 @@ internal static class SignatureAppearanceRenderer
         Line(stream, "Q");
 
         byte[] streamBytes = Encoding.Latin1.GetBytes(stream.ToString());
-        byte[] form = WrapInFormXObject(objNum, width, height, streamBytes, baseFontName, fontFileObjNum, fontDescriptorObjNum, image is not null ? imageObjNum : 0);
-        if (image is null)
+        byte[] form = WrapInFormXObject(objNum, width, height, streamBytes, baseFontName, fontFileObjNum, fontDescriptorObjNum, image is not null ? imageObjNum : 0, defaultRgbObjNum, defaultGrayObjNum);
+        if (image is null && defaultRgbObjNum == 0)
         {
             return form;
         }
 
-        byte[] imageObjects = image.BuildObjects(imageObjNum, softMaskObjNum);
-        byte[] result = new byte[form.Length + imageObjects.Length];
-        form.CopyTo(result, 0);
-        imageObjects.CopyTo(result, form.Length);
-        return result;
+        using var result = new MemoryStream();
+        result.Write(form);
+        if (image is not null)
+        {
+            result.Write(image.BuildObjects(imageObjNum, softMaskObjNum));
+        }
+
+        if (defaultRgbObjNum > 0)
+        {
+            result.Write(SrgbIccProfile.BuildStreamObject(defaultRgbObjNum, rgb: true));
+        }
+
+        if (defaultGrayObjNum > 0)
+        {
+            result.Write(SrgbIccProfile.BuildStreamObject(defaultGrayObjNum, rgb: false));
+        }
+
+        return result.ToArray();
     }
 
     /// <summary>Draws the background image with the requested fit mode.</summary>
@@ -169,9 +199,10 @@ internal static class SignatureAppearanceRenderer
 
     /// <summary>
     /// Wraps content stream bytes in a PDF Form XObject with <c>/BBox</c> and <c>/Resources</c>
-    /// (the stamp font with WinAnsiEncoding, plus the background image when present).
+    /// (the stamp font with WinAnsiEncoding, the background image when present, and the default colour spaces
+    /// of a PDF/A document).
     /// </summary>
-    private static byte[] WrapInFormXObject(int objNum, float width, float height, byte[] streamBytes, string baseFontName, int fontFileObjNum, int fontDescriptorObjNum, int imageObjNum)
+    private static byte[] WrapInFormXObject(int objNum, float width, float height, byte[] streamBytes, string baseFontName, int fontFileObjNum, int fontDescriptorObjNum, int imageObjNum, int defaultRgbObjNum, int defaultGrayObjNum)
     {
         bool embedFont = fontFileObjNum > 0 && fontDescriptorObjNum > 0;
         bool isHelvetica = string.Equals(baseFontName, "Helvetica", StringComparison.OrdinalIgnoreCase);
@@ -201,6 +232,17 @@ internal static class SignatureAppearanceRenderer
         if (imageObjNum > 0)
         {
             xObjDict.Append($"      /XObject << /Img0 {imageObjNum} 0 R >>\n");
+        }
+
+        if (defaultRgbObjNum > 0)
+        {
+            xObjDict.Append($"      /ColorSpace << /DefaultRGB [/ICCBased {defaultRgbObjNum} 0 R]");
+            if (defaultGrayObjNum > 0)
+            {
+                xObjDict.Append($" /DefaultGray [/ICCBased {defaultGrayObjNum} 0 R]");
+            }
+
+            xObjDict.Append(" >>\n");
         }
 
         xObjDict.Append("   >>\n");

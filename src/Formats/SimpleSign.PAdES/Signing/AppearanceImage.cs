@@ -34,6 +34,12 @@ internal sealed class AppearanceImage
     /// <summary>Image height in pixels.</summary>
     public int PixelHeight { get; }
 
+    /// <summary>
+    /// True when the image samples are in DeviceGray (a grayscale JPEG or PNG). Its soft mask, always
+    /// DeviceGray, does not count: a soft mask gives shape, not colour.
+    /// </summary>
+    public bool PaintsDeviceGray => _imageDict.Contains("/ColorSpace /DeviceGray", StringComparison.Ordinal);
+
     /// <summary>Creates the image for an appearance, or returns null when it has no background image.</summary>
     /// <exception cref="ArgumentException">The PNG data is malformed.</exception>
     /// <exception cref="NotSupportedException">The PNG uses a format the stamp does not support.</exception>
