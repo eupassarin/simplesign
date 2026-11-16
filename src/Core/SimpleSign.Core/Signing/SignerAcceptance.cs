@@ -186,7 +186,16 @@ internal static class SignerAcceptance
         x509.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
         x509.ChainPolicy.VerificationFlags = X509VerificationFlags.AllFlags;
         x509.ChainPolicy.ExtraStore.AddRange(chain.ToArray());
-        x509.Build(certificate);
+        try
+        {
+            x509.Build(certificate);
+        }
+        catch (CryptographicException)
+        {
+            // Windows' chain engine throws on some certificates it cannot process (seen with EU DSS XAdES vectors)
+            // where the other platforms return an unbuilt chain: only the order is needed here, so follow the names.
+            return OrderChainByName(certificate, chain);
+        }
 
         var ordered = new List<X509Certificate2>(x509.ChainElements.Count);
         foreach (var element in x509.ChainElements)
@@ -196,6 +205,33 @@ internal static class SignerAcceptance
                 raw.AsSpan().SequenceEqual(certificate.RawData) ? certificate
                 : chain.FirstOrDefault(c => raw.AsSpan().SequenceEqual(c.RawData))
                 ?? CertificateLoader.LoadCertificate(raw));
+        }
+
+        return ordered;
+    }
+
+    /// <summary>
+    /// The chain of <paramref name="certificate"/> from the certificates given with it, leaf first, by issuer and
+    /// subject names alone: each next certificate is the one whose subject is the issuer of the last, until a
+    /// self-issued certificate or one whose issuer is not among them. No signature is checked.
+    /// </summary>
+    internal static IReadOnlyList<X509Certificate2> OrderChainByName(X509Certificate2 certificate, IReadOnlyList<X509Certificate2> chain)
+    {
+        var ordered = new List<X509Certificate2> { certificate };
+        var remaining = chain.Where(c => !c.RawData.AsSpan().SequenceEqual(certificate.RawData)).ToList();
+        var current = certificate;
+        while (!current.SubjectName.RawData.AsSpan().SequenceEqual(current.IssuerName.RawData))
+        {
+            var issuerName = current.IssuerName.RawData;
+            var issuer = remaining.Find(c => c.SubjectName.RawData.AsSpan().SequenceEqual(issuerName));
+            if (issuer is null)
+            {
+                break;
+            }
+
+            ordered.Add(issuer);
+            remaining.Remove(issuer);
+            current = issuer;
         }
 
         return ordered;

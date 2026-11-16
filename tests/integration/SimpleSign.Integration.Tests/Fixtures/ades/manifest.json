@@ -1,0 +1,80 @@
+{
+  "source": {
+    "repository": "https://github.com/esig/dss",
+    "commit": "c8aea1f90958a851f651fe39f1575fcbd6d4a11d",
+    "license": "LGPL-2.1-or-later",
+    "retrievedAt": "2026-09-25"
+  },
+  "vectors": [
+    {
+      "resource": "cades/cades-bt.p7m",
+      "sourcePath": "dss-cades/src/test/resources/validation/cades-t-duplicated-sigtst.p7m",
+      "sha256": "358a5a035a2ffecc179459443ec12f7fd9d385b72db5ad3ea66156ff5fde424e",
+      "profile": "CAdES-B-T",
+      "contentResource": "cades/cades-bt.content",
+      "contentSha256": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e"
+    },
+    {
+      "resource": "cades/cades-blt.p7m",
+      "sourcePath": "dss-cades/src/test/resources/validation/Signature-CBp-LT-2.p7m",
+      "sha256": "761b93d2f325ce31da2fdaa1d53e4a8500e07eb40fc513fe674a6543ecaabe0a",
+      "profile": "CAdES-B-LT",
+      "contentResource": "cades/cades-blt.content",
+      "contentSha256": "24966de3536df15b186a13fe5ed8b8ad1def0439147d177a82ab88b65e91e4eb"
+    },
+    {
+      "resource": "cades/cades-blta.p7m",
+      "sourcePath": "dss-cades/src/test/resources/validation/cades-lta-en319122.cms",
+      "sha256": "ba98415ab542ef9b1b9f190e8a80e445a68f825df6de5d6f669ab8f458edd266",
+      "profile": "CAdES-B-LTA",
+      "contentResource": "cades/cades-blta.content",
+      "contentSha256": "b221d9dbb083a7f33428d7c2a3c3198ae925614d70210e28716ccaa7cd4ddb79"
+    },
+    {
+      "resource": "cades/cades-blt-ltv.p7s",
+      "sourcePath": "dss-cades/src/test/resources/validation/cades-ats-v3-rev-val-crl.p7s",
+      "sha256": "7e5a7d6f1ec0402777bd32bf32d5749efdcdb2f76b1a98ecf8bcd0943f009512",
+      "profile": "CAdES-B-LT-validation-material"
+    },
+    {
+      "resource": "cades/cades-blta-modified-ats.p7m",
+      "sourcePath": "dss-cades/src/test/resources/validation/dss-1220/CAdES-BpLTA_modified_ats_hash_element.p7m",
+      "sha256": "82875c47f351ef072682f36b08e711604382493ed4c3d8a4f28508048d48661e",
+      "profile": "CAdES-B-LTA-invalid-ATSHashIndexV3",
+      "contentResource": "cades/cades-blta-modified-ats.content",
+      "contentSha256": "8cd972d8f2c7283b4a590b8b4d00286de48c82fd08f6418eaac6482580075e5e"
+    },
+    {
+      "resource": "xades/xades-bt-enveloped.xml",
+      "sourcePath": "dss-xades/src/test/resources/validation/xades-extended-t.xml",
+      "sha256": "b4876b64715331ee4d4759035ad7fc7495b242a82f41bfb46ccaad1b4315c973",
+      "profile": "XAdES-B-T-enveloped"
+    },
+    {
+      "resource": "xades/xades-blt-enveloped.xml",
+      "sourcePath": "dss-xades/src/test/resources/validation/xades-t-with-tsvd.xml",
+      "sha256": "d70a6225ae34e0ea5246e4f4560364c9f91149bda15fa4d6f03db284e83e43f3",
+      "profile": "XAdES-B-T-with-TimeStampValidationData-enveloped"
+    },
+    {
+      "resource": "xades/xades-blta-enveloped.xml",
+      "sourcePath": "dss-xades/src/test/resources/validation/xades-lta-valid.xml",
+      "sha256": "d6ba7c610b283e8ccd8a0161081bc702c8ce31a1268369c2899a7c7c25cb6038",
+      "profile": "XAdES-B-LTA-enveloped"
+    },
+    {
+      "resource": "xades/xades-blta-detached.xml",
+      "sourcePath": "dss-xades/src/test/resources/validation/dss2011/xades-lta-detached.xml",
+      "sha256": "dd38419c1b4ef6e28c221ad99ebbe730591ef7bba270eb06e19494b4e7caaa56",
+      "profile": "XAdES-B-LTA-detached",
+      "contentResource": "xades/xades-detached-content.xml",
+      "contentSha256": "91c0c73998f066155fb8386e8427821114666294c7e098f84667d5562df543d8"
+    },
+    {
+      "resource": "xades/xades-blta-copied-ats.xml",
+      "sourcePath": "dss-xades/src/test/resources/validation/xades-lta-copied-atst.xml",
+      "sha256": "1d6631237e3868feaa61cb67b83a103965593e69cfb65df56d3c30dffdcf9b25",
+      "profile": "XAdES-B-LTA-invalid-ArchiveTimeStamp"
+    }
+  ]
+}
