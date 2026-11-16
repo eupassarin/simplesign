@@ -151,7 +151,7 @@ public sealed class DssCrossValidationTests(TestBenchFixture fixture, ITestOutpu
         _ => BaselineLevel.BLTA,
     };
 
-    /// <summary>A client for the DSS service; skips the test when the service is not there.</summary>
+    /// <summary>A client for the DSS service; skips the test when the service is not there (fails it with <c>SIMPLESIGN_REQUIRE_DSS=true</c>).</summary>
     private async Task<DssClient> ConnectAsync()
     {
         var dss = new DssClient(fixture.Documents);
@@ -171,7 +171,7 @@ public sealed class DssCrossValidationTests(TestBenchFixture fixture, ITestOutpu
         {
             string where = dss.Settings.Url;
             dss.Dispose();
-            Skip.If(true, $"No DSS at {where}: docker compose -f tools/dss/docker-compose.yml up");
+            TestBenchFixture.NoDss(where);
         }
 
         return dss;

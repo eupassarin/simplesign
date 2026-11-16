@@ -51,6 +51,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     framework's `--profile` no longer trust the system's roots (as if `--no-system-roots` were
     given). `--trust-profile` alone keeps them.
 
+### Added — Weekly cross-validation with the EU DSS in GitHub Actions
+
+- **`interop-weekly.yml`** runs `DssCrossValidationTests` and `DssScenarioCrossValidationTests` every Monday (and on
+  demand) against a Sandbox and the EU DSS 6.3, which CI never started, so they always skipped. The `.trx` and the
+  DSS and Sandbox logs are uploaded as the `dss-cross-validation` artifact.
+- **`dss-image.yml`** publishes `tools/dss` as `ghcr.io/eupassarin/simplesign-dss:6.3-<tree hash>` and `:6.3`.
+- **`SIMPLESIGN_REQUIRE_DSS=true`** makes those tests fail when no DSS answers instead of skipping them.
+- `tools/dss/Dockerfile` checks the SHA-256 of the DSS bundle it downloads (`DSS_SHA256`), pins its base images by
+  digest, and resumes an interrupted download where it stopped (curl's `--retry` started over from the first byte).
+
+## [0.11.1] - 2026-11-16
+
+A packaging release: the only change to the libraries is that one of them is now published.
+
+### Fixed
+
+- **`SimpleSign.Europe.Eidas` is published.** The pack list in `.github/workflows/release.yml` is
+  written by hand and the eIDAS package was never added to it, so 0.11.0 published 15 of the 16
+  packable projects — `dotnet add package SimpleSign.Europe.Eidas`, which `README.md` documents,
+  could not be satisfied. A new contract test (`ReleasePackagingContractTests`) fails when a
+  packable project under `src/` is missing from the pack list, or has no `<Description>` or
+  `PACKAGE.md`, so a new package cannot be left out again.
+- The meta-package `SimpleSign` names `SimpleSign.Europe.Eidas`,
+  `SimpleSign.Brazil.IcpBrasil.Xades` and `SimpleSign.Brazil.Fiscal` in its readme, next to the
+  other packages.
+- The release workflow's test step uses the same filter as the regular CI run
+  (`Category!=Stress&Category!=VeraPdf&Category!=Interop`): the `VeraPdf` and `Interop` suites need
+  veraPDF, qpdf, pyHanko, OpenSSL and xmlsec1, and have their own jobs on every push.
+
+Every other package is unchanged from 0.11.0 apart from its version.
+
 ## [0.11.0] - 2026-11-15
 
 The first release since 0.10.1 (2026-11-04), and a large one. **It contains breaking changes**: the

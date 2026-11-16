@@ -40,6 +40,22 @@ public sealed class TestBenchFixture : IAsyncLifetime, IDisposable
         Skip.If(true, message);
     }
 
+    /// <summary>
+    /// Skips the calling test because no DSS answers at <paramref name="url"/>; fails it instead when
+    /// <c>SIMPLESIGN_REQUIRE_DSS</c> is "true" (the weekly interop workflow starts one, so a missing DSS is an error there).
+    /// </summary>
+    /// <param name="url">Where the DSS service was looked for.</param>
+    public static void NoDss(string url)
+    {
+        string message = $"No DSS at {url}: docker compose -f tools/dss/docker-compose.yml up";
+        if (string.Equals(Environment.GetEnvironmentVariable("SIMPLESIGN_REQUIRE_DSS"), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        Skip.If(true, message);
+    }
+
     internal DocumentStore Documents { get; } = new();
 
     internal CredentialStore Credentials { get; } = new();
