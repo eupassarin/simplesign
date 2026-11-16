@@ -53,7 +53,16 @@ Before any PDF modification, `PdfAPreservationValidator` checks whether the requ
 **Check 2 — PNG background transparency (PDF/A-1 only):**
 PDF/A-1 forbids transparency. A visible signature with a PNG background image (which may contain transparency) is rejected with an error. JPEG is recommended for PDF/A-1.
 
-**Check 3 — Font (all levels):**
+**Check 3 — CMYK JPEG background (all levels, warning):**
+A CMYK JPEG is embedded in DeviceCMYK, which ISO 19005-1 §6.2.3.3 and ISO 19005-2/3 §6.2.4.3 allow only with a CMYK
+PDF/A OutputIntent or a `/DefaultCMYK`. The stamp maps DeviceRGB and DeviceGray to sRGB (§5) but has no CMYK profile to
+embed. The check does not read the document's OutputIntents, and print-oriented PDF/A documents often have a CMYK one,
+so it is a `Warning`, not an `Error`: `WithPdfAPreservation()` still signs, and logs the warning (event 1006,
+`LogLevel.Warning`). Callers of `PdfAPreservationValidator.Validate` see it in the returned issues.
+
+With `WithPdfAPreservation()`, errors refuse the signature and warnings are logged.
+
+**Check 4 — Font (all levels):**
 Base14 fonts (Helvetica, Times-Roman, Courier, etc.) are always allowed per ISO 19005. Non-standard font names are caught by the `GetBaseFontName()` normalisation guard.
 
 ### 3. Incremental update guarantees
@@ -144,7 +153,7 @@ content stream is unchanged, and a document that is not PDF/A gets the same byte
 
 Still open: a CMYK JPEG background image paints in DeviceCMYK, which §6.2.4.3 allows only with a CMYK OutputIntent or
 a `/DefaultCMYK`. SimpleSign has no CMYK profile to embed (a usable one is large and licensed), so use an RGB or
-grayscale image on PDF/A documents.
+grayscale image on PDF/A documents. `PdfAPreservationValidator` warns about it (§2, check 3).
 
 `KnownVisibleFailures` in the tests stays, empty, for the next gap: an entry requires exactly the failure it names, so
 the test fails once that gap is fixed and the entry can go.

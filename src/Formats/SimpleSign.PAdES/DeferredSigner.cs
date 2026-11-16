@@ -171,8 +171,13 @@ public static class DeferredSigner
 
         if (options.EnforcePdfA)
         {
-            var errors = PdfAPreservationValidator.Validate(pdfALevel, fieldOptions)
-                .Where(i => i.Severity == PdfAIssueSeverity.Error).ToList();
+            var pdfAIssues = PdfAPreservationValidator.Validate(pdfALevel, fieldOptions);
+            foreach (var warning in pdfAIssues.Where(i => i.Severity == PdfAIssueSeverity.Warning))
+            {
+                (logger ?? NullLogger.Instance).PdfAPreservationWarning(options.OperationId ?? "-", pdfALevel.ToString(), warning.Message);
+            }
+
+            var errors = pdfAIssues.Where(i => i.Severity == PdfAIssueSeverity.Error).ToList();
             if (errors.Count > 0)
             {
                 throw new SigningException(

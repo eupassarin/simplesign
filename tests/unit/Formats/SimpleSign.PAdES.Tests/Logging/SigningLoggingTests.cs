@@ -2,6 +2,7 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Shouldly;
+using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -81,6 +82,24 @@ public sealed class SigningLoggingTests : IDisposable
         logger.EventIds.ShouldContain(1005);
         var ids = logger.EventIds.ToList();
         ids.IndexOf(1005).ShouldBeLessThan(ids.IndexOf(1001));
+    }
+
+    [Fact(DisplayName = "PAdES: WithPdfAPreservation logs a warning issue (CMYK JPEG stamp) and still signs")]
+    public async Task SignAsync_PdfAPreservationWarning_LogsAndSigns()
+    {
+        var logger = new RecordingLogger();
+        byte[] pdfA2b = [.. CreateMinimalPdf(), .. "\n%<pdfaid:part>2</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>\n"u8];
+        byte[] cmykJpeg = [0xFF, 0xD8, 0xFF, 0xC0, 0, 20, 8, 0, 8, 0, 8, 4, 1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0, 4, 0x11, 0, 0xFF, 0xD9];
+
+        byte[] signed = await PadesSigner
+            .Document(pdfA2b).WithLogger(logger)
+            .WithCertificate(_cert)
+            .WithAppearance(new SignatureAppearance { BackgroundImageJpeg = cmykJpeg })
+            .WithPdfAPreservation()
+            .SignAsync();
+
+        signed.Length.ShouldBeGreaterThan(pdfA2b.Length);
+        logger.Entries.ShouldContain(e => e.EventId == 1006 && e.Level == LogLevel.Warning && e.Message.Contains("CMYK"));
     }
 
     [Fact(DisplayName = "PAdES: SignAsync logs 'completed' at Information level after success")]

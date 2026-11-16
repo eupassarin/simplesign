@@ -25,6 +25,10 @@ internal static partial class Log
         Message = "[{OperationId}] PDF/A level detected: {PdfALevel} (preservation enforced={Enforced})")]
     internal static partial void PdfALevelDetected(this ILogger logger, string operationId, string pdfALevel, bool enforced);
 
+    [LoggerMessage(EventId = 1006, Level = LogLevel.Warning,
+        Message = "[{OperationId}] PDF/A ({PdfALevel}) may not be preserved: {Issue}")]
+    internal static partial void PdfAPreservationWarning(this ILogger logger, string operationId, string pdfALevel, string issue);
+
     [LoggerMessage(EventId = 1004, Level = LogLevel.Debug,
         Message = "[{OperationId}] Signature field: name={FieldName}, existing={ExistingField}, visible={Visible}, certification={Certification}")]
     internal static partial void FieldConfigured(this ILogger logger, string operationId, string fieldName, bool existingField, bool visible, string certification);

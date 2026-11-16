@@ -54,7 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PDF/A detection reads XMP attributes too.** `DetectPdfALevel` found `<pdfaid:part>3</pdfaid:part>` but not the
   equally valid `pdfaid:part="3"` on `rdf:Description`, so such a document was taken for one that is not PDF/A:
   `WithPdfAPreservation()` checked nothing and validation reported no PDF/A level. Both forms are read now.
-- Still open: a CMYK JPEG background image on a PDF/A document without a CMYK OutputIntent.
+- **`PdfAPreservationValidator` warns about a CMYK JPEG background image** on a PDF/A document. Such an image is
+  embedded in DeviceCMYK, which conforms only when the document has a CMYK OutputIntent, and SimpleSign has no CMYK
+  profile to map it to. It is a `Warning`, because the check does not read OutputIntents.
+  `WithPdfAPreservation()` (one-call and deferred) now logs every warning issue as event 1006 at `LogLevel.Warning`
+  and still signs; errors refuse the signature as before.
 
 ### Added — Agent: trust frameworks the user enables, and generic hardening
 
