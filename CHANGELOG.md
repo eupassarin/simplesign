@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A trust profile no longer trusts the operating system's roots** (behaviour change for profile
+  users: a safer default). `ValidationOptions { Profile = iofe }` — or `IcpBrasilProfile`,
+  `GovBrProfile`, `EidasProfile`, any `TrustProfile` you build — now validates against the
+  framework's anchors only, as INDECOPI's guide (item V-3) and every framework expect.
+  - *Before:* `TrustSystemRoots` stayed `true` under a profile. Whenever the profile loaded no
+    self-signed root (a list that names only issuing CAs, or one that could not be loaded) the chain
+    was built in System mode, and a signer whose root is in the macOS/Windows store but not in the
+    framework's list was trusted. The PAdES validator also ignored `TrustSystemRoots = false` in
+    that case.
+  - *After:* `ValidationOptions.TrustSystemRoots` defaults to the profile's new
+    `TrustProfile.TrustSystemRoots` — `false` for a framework, `true` for `TrustProfile.Default` —
+    and to `true` without a profile. A value set on the options still wins:
+    `new ValidationOptions { Profile = iofe, TrustSystemRoots = true }` trusts both.
+    `WithTrustFrom` adds the system's roots when one of the added profiles trusts them. The PAdES
+    validator now builds chains with custom root trust whenever `TrustSystemRoots` is off, as the
+    CAdES and XAdES validators already did.
+  - The CLI follows: `validate`, `validate-dir`, `cades validate` and `xades validate` with a
+    framework's `--profile` no longer trust the system's roots (as if `--no-system-roots` were
+    given). `--trust-profile` alone keeps them.
+
 ## [0.11.0] - 2026-11-15
 
 The first release since 0.10.1 (2026-11-04), and a large one. **It contains breaking changes**: the

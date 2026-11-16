@@ -34,7 +34,9 @@ var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 
 `IcpBrasilProfile.Create()` and `GovBrProfile.Create()` give each framework as one `TrustProfile`: its roots, its chain
 validation and its policies (`IcpBrasilPolicies`, `GovBrPolicies`). One profile sets the policies; `WithTrustFrom` adds
-another's trust only. Gov.br's validates only: its signatures are made on Gov.br's service.
+another's trust only. Gov.br's validates only: its signatures are made on Gov.br's service. A profile trusts its own
+roots only: with `ValidationOptions.Profile` the operating system's roots are not trusted unless `TrustSystemRoots = true`
+is set (`--profile` on the CLI does the same).
 
 ```csharp
 var icp = IcpBrasilProfile.Create();

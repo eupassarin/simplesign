@@ -139,7 +139,7 @@ simplesign cades sign document.pdf --cert mycert.pfx --password secret --signing
 # Validate a CAdES signature
 simplesign cades validate document.pdf.p7s --data document.pdf
 
-# Validate with custom trust anchors (the operating system's roots stay trusted; add --no-system-roots to trust only these)
+# Validate with custom trust anchors (the operating system's roots stay trusted, unless --no-system-roots or a framework's --profile)
 simplesign cades validate document.pdf.p7s --data document.pdf --trust root-ca.pem
 ```
 
@@ -195,7 +195,7 @@ simplesign xades validate signed.xml --external-object terms.txt=terms.txt
 # Validate detached with original data
 simplesign xades validate signed.xml --data data.xml
 
-# Validate with custom trust anchors (the operating system's roots stay trusted; add --no-system-roots to trust only these)
+# Validate with custom trust anchors (the operating system's roots stay trusted, unless --no-system-roots or a framework's --profile)
 simplesign xades validate signed.xml --trust root-ca.pem
 ```
 
@@ -298,6 +298,8 @@ simplesign validate documento.pdf --profile icp-brasil --trust-profile gov-br
 
 - An explicit option wins: `--signing-policy` / `--policy` over the profile's policy, `--tsl` / `--lotl` over its trust.
 - `--trust-profile NAME` (repeatable) adds another profile's trust; the policy stays `--profile`'s.
+- With `--profile`, the validate commands trust the profile's anchors only: the operating system's roots are not
+  trusted, as if `--no-system-roots` were given (`ValidationOptions.Profile` does the same in the library).
 - `--sandbox URL` reads a running Sandbox once: its origins, LDAP and HTTPS chain are allowed (as `--allow-origin`,
   `--allow-ldap`, `--tls-trust` would), `--profile sandbox` trusts its LOTL, and `--profile iofe` reads the Sandbox's
   list the IOFE way instead of INDECOPI's (to test INDECOPI's rules with the Sandbox's certificates).

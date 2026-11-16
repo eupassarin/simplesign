@@ -30,7 +30,18 @@ public sealed record TrustProfile(
     IReadOnlyList<IChainValidationProvider> ChainValidationProviders) : ICountryExtension
 {
     /// <summary>The profile without a framework: SimpleSign's default policies, no anchors of its own (the system's roots).</summary>
-    public static TrustProfile Default { get; } = new("default", "SimpleSign default", Policies.SigningPolicy.Default, Policies.ValidationPolicy.Default, [], []);
+    public static TrustProfile Default { get; } = new("default", "SimpleSign default", Policies.SigningPolicy.Default, Policies.ValidationPolicy.Default, [], [])
+    {
+        TrustSystemRoots = true,
+    };
+
+    /// <summary>
+    /// Whether validation under this profile also trusts the operating system's roots. Default: false — a trust framework
+    /// trusts its own anchors only (its trusted list, its roots), so a signer whose root is in the macOS or Windows store
+    /// but not in the framework's list is not trusted. <see cref="Default"/> is true. It is the default of
+    /// <see cref="Validation.ValidationOptions.TrustSystemRoots"/> when the options set none.
+    /// </summary>
+    public bool TrustSystemRoots { get; init; }
 
     /// <summary>
     /// The qualifiers that say the qualification of a validated signature under the framework (the eIDAS profile's);
@@ -64,8 +75,9 @@ public sealed record TrustProfile(
     }
 
     /// <summary>
-    /// This profile with the trust of <paramref name="others"/> added (their anchors and chain validation); the policies
-    /// stay this profile's. For example ICP-Brasil's policies, trusting ICP-Brasil and Gov.br.
+    /// This profile with the trust of <paramref name="others"/> added (their anchors and chain validation, and the
+    /// operating system's roots when one of them trusts those, as <see cref="Default"/> does); the policies stay this
+    /// profile's. For example ICP-Brasil's policies, trusting ICP-Brasil and Gov.br.
     /// </summary>
     /// <param name="others">The profiles whose trust is added.</param>
     /// <returns>The combined profile.</returns>
@@ -76,6 +88,7 @@ public sealed record TrustProfile(
         {
             TrustAnchorProviders = [.. TrustAnchorProviders, .. others.SelectMany(o => o.TrustAnchorProviders)],
             ChainValidationProviders = [.. ChainValidationProviders, .. others.SelectMany(o => o.ChainValidationProviders)],
+            TrustSystemRoots = TrustSystemRoots || others.Any(o => o.TrustSystemRoots),
         };
     }
 
