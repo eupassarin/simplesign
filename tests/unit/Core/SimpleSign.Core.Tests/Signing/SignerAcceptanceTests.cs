@@ -202,6 +202,53 @@ public sealed class SignerAcceptanceTests
     }
 
     [Fact]
+    public void OrderChainByName_ShuffledChainWithLeaf_OrdersLeafToRoot()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var rootKey = RSA.Create(2048);
+        using var root = CaCertificate("CN=Root", rootKey, issuer: null, issuerKey: null, now.AddYears(-5), now.AddYears(5));
+        using var intermediateKey = RSA.Create(2048);
+        using var intermediate = CaCertificate("CN=Intermediate", intermediateKey, root, rootKey, now.AddYears(-3), now.AddYears(3));
+        using var leaf = LeafCertificate(intermediate, intermediateKey, now.AddDays(-10), now.AddYears(1));
+        using var unrelated = SelfSigned(X509KeyUsageFlags.DigitalSignature);
+
+        var ordered = SignerAcceptance.OrderChainByName(leaf, [root, unrelated, leaf, intermediate]);
+
+        ordered.Select(c => c.Subject).ShouldBe(["CN=Leaf", "CN=Intermediate", "CN=Root"]);
+        ordered[0].ShouldBeSameAs(leaf);
+    }
+
+    [Fact]
+    public void OrderChainByName_IssuerMissing_StopsAtLastKnownCertificate()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var rootKey = RSA.Create(2048);
+        using var root = CaCertificate("CN=Root", rootKey, issuer: null, issuerKey: null, now.AddYears(-5), now.AddYears(5));
+        using var intermediateKey = RSA.Create(2048);
+        using var intermediate = CaCertificate("CN=Intermediate", intermediateKey, root, rootKey, now.AddYears(-3), now.AddYears(3));
+        using var leaf = LeafCertificate(intermediate, intermediateKey, now.AddDays(-10), now.AddYears(1));
+
+        var ordered = SignerAcceptance.OrderChainByName(leaf, [root]);
+
+        ordered.ShouldBe([leaf]);
+    }
+
+    [Fact]
+    public void OrderChain_ShuffledChain_MatchesOrderByName()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var rootKey = RSA.Create(2048);
+        using var root = CaCertificate("CN=Root", rootKey, issuer: null, issuerKey: null, now.AddYears(-5), now.AddYears(5));
+        using var intermediateKey = RSA.Create(2048);
+        using var intermediate = CaCertificate("CN=Intermediate", intermediateKey, root, rootKey, now.AddYears(-3), now.AddYears(3));
+        using var leaf = LeafCertificate(intermediate, intermediateKey, now.AddDays(-10), now.AddYears(1));
+
+        var ordered = SignerAcceptance.OrderChain(leaf, [root, intermediate]);
+
+        ordered.Select(c => c.Subject).ShouldBe(SignerAcceptance.OrderChainByName(leaf, [root, intermediate]).Select(c => c.Subject));
+    }
+
+    [Fact]
     public void EnsureHashAllowed_Sha256_Passes() =>
         SignerAcceptance.EnsureHashAllowed(HashAlgorithmName.SHA256, SigningPolicy.Default);
 

@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a PDF/A document without an RGB OutputIntent or DefaultRGB (corpus `PDF_A-3b-6-8-t02-pass-b.pdf`). The tests
   expect exactly that failure until the appearance is fixed.
 
+### Fixed — Validation no longer throws on Windows when the chain engine cannot process a certificate
+
+- **`XadesSignatureValidator` (and every validator that orders a signer chain) returned an exception instead of a
+  result on Windows** for some EU DSS XAdES signatures: the Windows chain engine throws `CryptographicException`
+  ("An unknown chain building error occurred") where the other platforms return an unbuilt chain. Ordering the chain
+  now falls back to issuer and subject names, and the name-constraint and policy-tree checks report the chain as not
+  respected (never as passed) when the platform cannot evaluate it. Found by the restored EU DSS corpus tests.
+
 ### Added — Agent: trust frameworks the user enables, and generic hardening
 
 - **Every trust framework is built into `SimpleSign.Agent`** — ICP-Brasil, Gov.br, IOFE (Peru) and eIDAS (EU) — and
