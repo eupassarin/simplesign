@@ -41,6 +41,15 @@ public sealed record LongTermValidationOptions
 
     private readonly TimeSpan _clockSkewTolerance = OcspClient.DefaultClockSkewTolerance;
 
+    /// <summary>
+    /// A CRL cache shared with other operations (the one a <see cref="ChainRevocationChecker"/> or the validators use):
+    /// CRLs downloaded while collecting are remembered, and a cached CRL is embedded instead of downloading again when
+    /// it was issued after the signature time-stamp's genTime and is still current — so extending a batch of older
+    /// signatures downloads each CRL once. A CRL issued before that time is downloaded again, since revocation data
+    /// must postdate the time it proves. Default: <see langword="null"/>, every CRL is downloaded.
+    /// </summary>
+    public IRevocationCache? RevocationCache { get; init; }
+
     /// <summary>Creates a new instance.</summary>
     /// <param name="httpClientProvider">Optional certificate/revocation HTTP client provider.</param>
     public LongTermValidationOptions(IHttpClientProvider? httpClientProvider = null)

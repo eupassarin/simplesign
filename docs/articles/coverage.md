@@ -14,7 +14,7 @@ from the published standards; check them against the version you follow before q
 |---|---|---|---|
 | PAdES | 136 | 135 | 1 |
 | CAdES | 86 | 85 | 1 |
-| XAdES | 94 | 90 | 4 |
+| XAdES | 95 | 91 | 4 |
 
 ## PAdES
 
@@ -262,6 +262,7 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | What to sign | Packaging | W3C XMLDSig Core 1.1 · §10 Definitions: enveloped, enveloping, detached | `WithForm(XadesForm)` | yes |
 | What to sign | Packaging: Enveloped | W3C XMLDSig Core 1.1 · §6.6.4 Enveloped signature transform |  | yes |
 | What to sign | Reference URI | W3C XMLDSig Core 1.1 · §4.4.3.1 The URI attribute | `WithDataUri(string)` | yes |
+| What to sign | Any file (not XML) | W3C XMLDSig Core 1.1 · §4.4.3.1 The URI attribute | `WithDetachedBinary(string? mimeType)` | yes |
 | Signer | Certificate and key | RFC 5280 · §4 Certificate profile<br>ETSI EN 319 412-2 · Certificate profile for natural persons | `WithCertificate(cert, chain) / WithExternalSigner(cert, IExternalSigner, chain)` | yes |
 | What to sign | Additional data object (embedded) | W3C XMLDSig Core 1.1 · §4.4.3 The Reference element | `WithAdditionalDataObject(XadesDataObject.Embedded(content))` | yes |
 | What to sign | Additional data object (external) | W3C XMLDSig Core 1.1 · §4.4.3 The Reference element | `WithAdditionalDataObject(XadesDataObject.External(uri, content))` | yes |
@@ -772,6 +773,7 @@ Each clause and the options that implement it.
 | §4.4.3 The Reference element | Additional data object (embedded) | XAdES | yes |
 | §4.4.3 The Reference element | Additional data object (external) | XAdES | yes |
 | §4.4.3 The Reference element | XML to sign | XAdES | yes |
+| §4.4.3.1 The URI attribute | Any file (not XML) | XAdES | yes |
 | §4.4.3.1 The URI attribute | Reference URI | XAdES | yes |
 | §6.2 Message digests | Digest algorithm | PAdES, CAdES, XAdES | yes |
 | §6.6 Transform algorithms | XPath and XSLT transforms | XAdES | **no** |

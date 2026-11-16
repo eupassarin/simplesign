@@ -635,6 +635,7 @@ export interface XmlOptions {
   counterSign: boolean
   counterSignatureId?: string | null
   dataObjectsTimestamp: boolean
+  detachedBinary?: boolean
   canonicalization: XadesCanonicalization
   signingCertificateV1: boolean
   signerRoles: string[]

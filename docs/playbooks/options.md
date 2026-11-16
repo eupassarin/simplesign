@@ -174,6 +174,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `dataId` | data |  | XML to sign: A well-formed XML document. |
 | `form` | choice | `Enveloped`, `Enveloping`, `Detached` | Packaging: Where the signature is in relation to the data. |
 | `dataUri` | text |  | Reference URI: Where a validator will find the data of a detached signature. |
+| `detachedBinary` | toggle |  | Any file (not XML): The detached data is a file of any type — a PDF, an image, a ZIP: its reference has no transforms and digests the octets as they are. |
 | `credentialId` | credential |  | Certificate and key: A sandbox certificate, a PFX, the OS store, a PKCS#11 token or a cloud certificate. |
 | `embeddedObjectId` | upload |  | Additional data object (embedded): A file signed together with the document and carried inside the signature, as a base64 ds:Object with its own ds:Reference. |
 | `externalObjectId` | upload |  | Additional data object (external): A file signed together with the document and kept outside the signature: its ds:Reference points to the file name and digests the file as it is. |

@@ -105,6 +105,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         [Description("Data URI for Detached form (e.g., 'document.xml'). Required when --form detached.")]
         public string? DataUri { get; init; }
 
+        /// <summary>Sign the detached data as a file of any type (no transforms, the octets are digested). Requires --form detached.</summary>
+        [CommandOption("--detached-binary")]
+        [Description("Sign the detached data as a file of any type (PDF, image, ZIP): no transforms, its octets are digested. Requires --form detached")]
+        public bool DetachedBinary { get; init; }
+
         /// <summary>Production place: city.</summary>
         [CommandOption("--place-city <TEXT>")]
         [Description("Where the signature was produced: city")]
@@ -269,6 +274,11 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
                 return ValidationResult.Error("--data-uri is required when using --form detached");
             }
 
+            if (DetachedBinary && parsedForm != XadesForm.Detached)
+            {
+                return ValidationResult.Error("--detached-binary needs --form detached");
+            }
+
             return ValidationResult.Success();
         }
 
@@ -356,6 +366,10 @@ internal sealed class XadesSignCommand : AsyncCommand<XadesSignCommand.Settings>
         if (settings.DataUri is not null)
         {
             builder = builder.WithDataUri(settings.DataUri);
+        }
+        if (settings.DetachedBinary)
+        {
+            builder = builder.WithDetachedBinary();
         }
         if (commitment.HasValue)
         {

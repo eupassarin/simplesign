@@ -50,6 +50,9 @@ public static partial class OptionSchema
             ]),
         O("xades.dataUri", "input", s_xades, "text", "dataUri", "Reference URI", "Where a validator will find the data of a detached signature.",
             standards: R("W3C XMLDSig Core 1.1|§4.4.3.1 The URI attribute"), api: "WithDataUri(string)", stateKey: "dataUri"),
+        O("xades.detachedBinary", "input", s_xades, "toggle", "detachedBinary", "Any file (not XML)", "The detached data is a file of any type — a PDF, an image, a ZIP: its reference has no transforms and digests the octets as they are.",
+            "Without it the detached data must be XML, which is parsed and canonicalized. The MIME type option says what the file is.",
+            R("W3C XMLDSig Core 1.1|§4.4.3.1 The URI attribute"), api: "WithDetachedBinary(string? mimeType)", stateKey: "detachedBinary"),
 
         O("signer.credential", "signer", s_all, "credential", "credentialId", "Certificate and key", "A sandbox certificate, a PFX, the OS store, a PKCS#11 token or a cloud certificate.",
             "The private key signs the digest of the signed attributes. With a token or a cloud service the key never leaves the device: the library sends the bytes to sign through IExternalSigner.",

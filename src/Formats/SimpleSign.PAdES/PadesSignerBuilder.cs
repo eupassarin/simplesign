@@ -1095,6 +1095,7 @@ public sealed partial class PadesSignerBuilder
             {
                 RevocationPreference = ltvOptions.RevocationPreference,
                 ClockSkewTolerance = ltvOptions.ClockSkewTolerance,
+                RevocationCache = ltvOptions.RevocationCache,
             };
 
         var chain = BuildChainWithSigner();
