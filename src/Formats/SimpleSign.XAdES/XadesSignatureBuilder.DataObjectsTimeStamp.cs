@@ -26,11 +26,15 @@ internal static partial class XadesSignatureBuilder
     /// <param name="canonicalization">The canonicalization transform of the reference.</param>
     /// <param name="dataObjectId">The Id of the wrapping ds:Object (enveloping form only).</param>
     /// <param name="additionalReferences">The additional data objects, in the order of their references.</param>
+    /// <param name="detachedBinary">Whether a detached document is referenced as raw octets.</param>
     internal static byte[] DataObjectsTimeStampInput(
-        byte[] xmlData, XadesForm form, string canonicalization, string? dataObjectId, IReadOnlyList<XadesAdditionalReference>? additionalReferences)
+        byte[] xmlData, XadesForm form, string canonicalization, string? dataObjectId, IReadOnlyList<XadesAdditionalReference>? additionalReferences,
+        bool detachedBinary = false)
     {
         using var input = new MemoryStream();
-        input.Write(DocumentReferenceOctets(xmlData, form, canonicalization, dataObjectId));
+        input.Write(form == XadesForm.Detached && detachedBinary
+            ? xmlData
+            : DocumentReferenceOctets(xmlData, form, canonicalization, dataObjectId));
         foreach (XadesAdditionalReference reference in additionalReferences ?? [])
         {
             input.Write(reference.DataObject.Content.Span);

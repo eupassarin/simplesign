@@ -257,6 +257,24 @@ public sealed partial class XadesSignerBuilder
         return With(_options with { DataUri = dataUri });
     }
 
+    /// <summary>
+    /// Signs the data as a detached file of any type — a PDF, an image, a ZIP — instead of an XML document: the
+    /// reference to it has no transforms and digests its octets as they are (W3C XMLDSig Core 1.1 §4.4.3.1). Sets
+    /// the <see cref="XadesForm.Detached"/> form; give the reference URI with <see cref="WithDataUri(string)"/>.
+    /// Without it, detached data must be XML, which is parsed and canonicalized. Validators need nothing more: the
+    /// reference itself says how to digest the data.
+    /// </summary>
+    /// <param name="mimeType">The data's MIME type (e.g. <c>application/pdf</c>), written in the DataObjectFormat
+    /// signed property; null to leave the format as configured.</param>
+    /// <returns>A new builder that signs the detached data as raw octets.</returns>
+    public XadesSignerBuilder WithDetachedBinary(string? mimeType = null)
+    {
+        var format = mimeType is null
+            ? _options.DataObjectFormat
+            : new DataObjectFormat { ObjectReference = _options.DataObjectFormat?.ObjectReference, MimeType = mimeType };
+        return With(_options with { Form = XadesForm.Detached, DetachedBinary = true, DataObjectFormat = format });
+    }
+
     /// <summary>Sets the explicit claimed signing time (default: UTC now).</summary>
     /// <param name="signingTime">The claimed signing time.</param>
     /// <returns>A new builder with the signing time configured.</returns>
@@ -599,6 +617,12 @@ public sealed partial class XadesSignerBuilder
             EnsureCounterSignatureOptions(profile);
         }
 
+        if (_options.DetachedBinary && _options.Form != XadesForm.Detached)
+        {
+            throw new SigningException(
+                $"WithDetachedBinary signs a detached file, but the form is {_options.Form}.", SigningErrorReason.Unspecified);
+        }
+
         if (_options.Form == XadesForm.Detached && _options.AdditionalDataObjects is { } additional
             && additional.Any(o => o.Uri == _options.DataUri))
         {
@@ -876,7 +900,7 @@ public sealed partial class XadesSignerBuilder
             _options.CommitmentType, _options.SignaturePolicy, _options.SigningCertificateForm,
             sigAlgOid, _options.Form, _options.Roles, _options.DataObjectFormat, _options.ProductionPlace, dataObjectsTimeStamp, additionalReferences,
             _options.Dependencies.Logger, _options.DataUri,
-            XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization));
+            XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization), _options.DetachedBinary);
     }
 
     private async Task<byte[]> SignExternalCoreAsync(
@@ -926,7 +950,7 @@ public sealed partial class XadesSignerBuilder
             out string signedPropertiesId,
             out byte[] signedInfoXml,
             out string? dataObjectId, _options.DataUri,
-            XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization));
+            XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization), _options.DetachedBinary);
         return new ExternalPreparation(signingTime, signedInfoBytes, signedInfoXml, signedPropertiesId, dataObjectId);
     }
 
@@ -1046,7 +1070,8 @@ public sealed partial class XadesSignerBuilder
         var logger = _options.Dependencies.Logger;
         string? dataObjectId = _options.Form == XadesForm.Enveloping ? XadesSignatureBuilder.NewDataObjectId() : null;
         byte[] input = XadesSignatureBuilder.DataObjectsTimeStampInput(
-            _xmlData, _options.Form, XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization), dataObjectId, additionalReferences);
+            _xmlData, _options.Form, XadesSignatureBuilder.CanonicalizationUri(_options.Canonicalization), dataObjectId, additionalReferences,
+            _options.DetachedBinary);
         try
         {
             logger.TimestampRequested(operationId, timestamp.Endpoint.ToString());
