@@ -1,0 +1,74 @@
+name: DSS image
+
+# Builds the EU DSS validation service (tools/dss) and publishes it to GHCR, for the weekly
+# cross-validation (interop-weekly.yml):
+#   ghcr.io/<owner>/simplesign-dss:6.3-<tree hash of tools/dss>   this exact folder
+#   ghcr.io/<owner>/simplesign-dss:6.3                            the latest build
+# The first build downloads the DSS bundle from the European Commission (353 MB, 15 to 60 minutes: the server is slow and drops connections);
+# later builds reuse the layers from the GitHub Actions cache unless the download step changes.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/dss/**'
+      - '.github/workflows/dss-image.yml'
+
+concurrency:
+  group: dss-image
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DSS_VERSION: '6.3'
+
+jobs:
+  image:
+    name: Build and push the DSS image
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Tags
+        id: tags
+        shell: bash
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/simplesign-dss"
+          tree=$(git rev-parse --short HEAD:tools/dss)
+          {
+            echo "tags<<EOF"
+            echo "$image:$DSS_VERSION-$tree"
+            echo "$image:$DSS_VERSION"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Publishing $image:$DSS_VERSION-$tree and $image:$DSS_VERSION"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: tools/dss
+          build-args: DSS_VERSION=${{ env.DSS_VERSION }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          # Links the package to this repository, so the workflows here can pull it with their GITHUB_TOKEN.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=simplesign-dss
+            org.opencontainers.image.description=EU DSS ${{ env.DSS_VERSION }} demo web application for SimpleSign's cross-validation (tools/dss)
+          cache-from: type=gha,scope=dss-image
+          cache-to: type=gha,scope=dss-image,mode=max

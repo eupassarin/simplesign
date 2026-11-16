@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Weekly cross-validation with the EU DSS in GitHub Actions
+
+- **`interop-weekly.yml`** runs `DssCrossValidationTests` and `DssScenarioCrossValidationTests` every Monday (and on
+  demand) against a Sandbox and the EU DSS 6.3, which CI never started, so they always skipped. The `.trx` and the
+  DSS and Sandbox logs are uploaded as the `dss-cross-validation` artifact.
+- **`dss-image.yml`** publishes `tools/dss` as `ghcr.io/eupassarin/simplesign-dss:6.3-<tree hash>` and `:6.3`.
+- **`SIMPLESIGN_REQUIRE_DSS=true`** makes those tests fail when no DSS answers instead of skipping them.
+- `tools/dss/Dockerfile` checks the SHA-256 of the DSS bundle it downloads (`DSS_SHA256`), pins its base images by
+  digest, and resumes an interrupted download where it stopped (curl's `--retry` started over from the first byte).
+
 ## [0.11.1] - 2026-11-16
 
 A packaging release: the only change to the libraries is that one of them is now published.

@@ -25,8 +25,9 @@ on every `up` (`pull_policy: build`; seconds, from the build cache), so a change
 never left out.
 
 The first build downloads the DSS bundle published by the European Commission (353 MB). That
-server is slow (about 0.5 MB/s), so allow **around 15 minutes**. The download is kept in the
-build cache and resumes if the build is interrupted; later builds reuse it.
+server is slow (0.1 to 0.5 MB/s) and often closes the connection, so allow **15 to 60 minutes**. The
+download is kept in the build cache and resumes after a dropped connection or an interrupted build;
+later builds reuse it. The build then checks its SHA-256 (`DSS_SHA256` in the `Dockerfile`).
 When Tomcat is up:
 
 - `http://localhost:8080/` — the DSS demo pages
@@ -256,7 +257,9 @@ To keep settings across restarts, copy [`.env.example`](.env.example) to `tools/
 you change: Compose reads it on every `up`, and it is not committed (`.gitignore`). Through `tools/stack`, use
 `tools/stack/.env` (that compose is the one read).
 
-To use another DSS version, change `DSS_VERSION` in `docker-compose.yml`.
+To use another DSS version, change `DSS_VERSION` in `docker-compose.yml` and `DSS_SHA256` in the `Dockerfile` (the
+SHA-256 of the new `dss-demo-bundle-<version>.zip`): the build checks the download against it and stops when it differs.
+The base images are pinned by digest too; `docker buildx imagetools inspect <image>` gives a newer one.
 
 You can also point the TestBench at a DSS you already run: set its address in the **DSS** panel
 or in the `SIMPLESIGN_DSS_URL` environment variable.
@@ -278,3 +281,53 @@ The tests sign with the connected Sandbox's certificates and assert what DSS rea
 intact, references found, structure valid, baseline level). They do not depend on the roots DSS
 trusts, and they are skipped when nothing answers at `SIMPLESIGN_DSS_URL` (or no Sandbox answers
 at `SIMPLESIGN_SANDBOX_URL`).
+With `SIMPLESIGN_REQUIRE_DSS=true` a missing DSS fails the tests instead of skipping them (as
+`SIMPLESIGN_REQUIRE_SANDBOX=true` does for the Sandbox).
+
+## Published image
+
+The **DSS image** workflow (`.github/workflows/dss-image.yml`) builds this folder and publishes it to the GitHub
+Container Registry:
+
+| Tag | What |
+|---|---|
+| `ghcr.io/eupassarin/simplesign-dss:6.3-<hash>` | built from the `tools/dss` whose tree hash is `<hash>` (`git rev-parse --short HEAD:tools/dss`) |
+| `ghcr.io/eupassarin/simplesign-dss:6.3` | the latest build |
+
+It runs on every push to `main` that changes `tools/dss/**`, and by hand (*Actions → DSS image → Run workflow*, or
+`gh workflow run dss-image.yml`). The first build downloads the bundle from the European Commission (15 to 60 minutes);
+later ones reuse the layers from the GitHub Actions cache.
+
+The image starts as a local build does: start the Sandbox first, and mount the trust folders as `docker-compose.yml`
+does to trust the ICP-Brasil, Gov.br and public TSA roots (`interop-weekly.yml` does). On Linux, with a Sandbox on its
+default ports:
+
+```bash
+docker run -d --name dss --network host \
+  -e SANDBOX_URL=http://localhost:5300 -e SANDBOX_FORWARD_PORTS="" \
+  ghcr.io/eupassarin/simplesign-dss:6.3
+```
+
+With `--network host` the container's localhost is the host's, so the Sandbox's ports need no forwarding
+(`SANDBOX_FORWARD_PORTS=""`, which also keeps `forward.pl` from taking port 5300).
+
+## Weekly run in GitHub Actions
+
+The **Interop (weekly)** workflow (`.github/workflows/interop-weekly.yml`) runs the DSS cross-validation every Monday
+at 05:00 UTC:
+
+1. builds the TestBench tests and the Sandbox, and starts the Sandbox as the `testbench` job of `ci.yml` does;
+2. then pulls the published image (the `6.3-<hash>` of the commit's `tools/dss`, else `6.3`) and starts it with
+   `--network host`, `SANDBOX_FORWARD_PORTS=""` and `DSS_TRUST_PERU=false`, and waits (up to 10 minutes) for
+   `/services/`;
+3. runs `dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --filter "FullyQualifiedName~Dss"` with
+   `SIMPLESIGN_REQUIRE_SANDBOX=true` and `SIMPLESIGN_REQUIRE_DSS=true`, so nothing is skipped;
+4. uploads the results (`dss-cross-validation`: the `.trx`, the DSS container's log and the Sandbox's log).
+
+To run it by hand: *Actions → Interop (weekly) → Run workflow*, or
+
+```bash
+gh workflow run interop-weekly.yml --ref main
+```
+
+The image must have been published once before (run the **DSS image** workflow first).
