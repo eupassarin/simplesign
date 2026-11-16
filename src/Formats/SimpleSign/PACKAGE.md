@@ -3,8 +3,9 @@
 Umbrella package for the SimpleSign signature formats: PAdES (with the PDF parser),
 CAdES and XAdES signing and validation, on `SimpleSign.Core`.
 
-Country packages, signers and extras are separate: `SimpleSign.Brazil.IcpBrasil`,
-`SimpleSign.Brazil.GovBr`, `SimpleSign.Peru.Iofe`, `SimpleSign.Signers.Pkcs11`,
+Trust frameworks, signers and extras are separate: `SimpleSign.Brazil.IcpBrasil` (with
+`SimpleSign.Brazil.IcpBrasil.Xades` and `SimpleSign.Brazil.Fiscal`), `SimpleSign.Brazil.GovBr`,
+`SimpleSign.Peru.Iofe`, `SimpleSign.Europe.Eidas`, `SimpleSign.Signers.Pkcs11`,
 `SimpleSign.Signers.Cloud`, `SimpleSign.HtmlToPdf` and the `SimpleSign.Cli` tool.
 
 ```csharp
