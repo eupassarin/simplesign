@@ -47,7 +47,7 @@ internal class TrustedValidationSettings : CommonSettings
 
     /// <summary>Do not trust the operating system's roots.</summary>
     [CommandOption("--no-system-roots")]
-    [Description("Do not trust the operating system's roots: only --trust, --trust-dir and the trusted lists")]
+    [Description("Do not trust the operating system's roots: only --trust, --trust-dir and the trusted lists (implied by a framework's --profile)")]
     public bool NoSystemRoots { get; init; }
 
     /// <summary>Check the revocation of chains that do not reach a trust anchor.</summary>
@@ -225,6 +225,13 @@ internal class TrustedValidationSettings : CommonSettings
     /// <summary>The profile's qualifiers (eIDAS): each signature's qualification, QESig, AdESig-QC…</summary>
     internal List<ISignatureQualifier> LoadedQualifiers { get; } = [];
 
+    /// <summary>
+    /// Whether the operating system's roots are trusted: not with <c>--no-system-roots</c>, nor under a framework's
+    /// <c>--profile</c> (<see cref="TrustProfile.TrustSystemRoots"/>), as <c>ValidationOptions.Profile</c> does. Set by
+    /// <see cref="LoadTrustAsync"/>.
+    /// </summary>
+    internal bool TrustsSystemRoots { get; private set; } = true;
+
     /// <summary>The policy, and the trust anchors of the trust folder and the trusted list.</summary>
     /// <param name="http">The CLI's HTTP provider (its proxy and outbound policy, <c>--allow-origin</c>): the trusted lists are downloaded through it.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -236,6 +243,7 @@ internal class TrustedValidationSettings : CommonSettings
             : ValidationPolicy.LoadSigned(PolicyPath, PolicyPath + ".p7s", LoadCertificate(PolicySignerPath));
 
         var anchors = new List<X509Certificate2>();
+        TrustsSystemRoots = !NoSystemRoots;
 
         // The trust profile: its policy unless --policy, its trust unless a trusted list is given explicitly.
         if (await CliProfiles.ResolveAsync(Profile, TrustProfiles, Sandbox, http ?? CliNetwork.Provider, cancellationToken) is { } profile)
@@ -245,6 +253,7 @@ internal class TrustedValidationSettings : CommonSettings
                 policy = profile.ValidationPolicy;
             }
 
+            TrustsSystemRoots &= profile.TrustSystemRoots;
             LoadedQualifiers.AddRange(profile.SignatureQualifiers);
             if (TrustedList is null && Lotl is null)
             {

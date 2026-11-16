@@ -79,6 +79,16 @@ it.
   documented, and the TestBench marks each field that a profile set, because "why is this constraint
   FAIL?" is otherwise hard to answer.
 
+**Amendment (v0.11.x): a profile trusts its own anchors only.** `ValidationOptions.Profile` first left
+`TrustSystemRoots` at `true`, so whenever a framework's anchors gave no self-signed root (a list that
+names only issuing CAs, or one that failed to load) the chain was built in System mode and the
+operating system's store decided — a signer outside INDECOPI's list, say, was trusted. `TrustProfile`
+now carries `TrustSystemRoots` (`false`; `true` only for `TrustProfile.Default`), and
+`ValidationOptions.TrustSystemRoots` defaults to it when the caller sets none. The rule "an explicit
+setting wins over the profile's" holds here too: `TrustSystemRoots = true` on the options trusts both.
+`WithTrustFrom` ORs the flag, since the system's roots are part of `Default`'s trust. A `bool?` on
+`ValidationOptions` was rejected: it would break every reader of the property.
+
 **Alternatives considered:**
 
 - *Leave the wiring to the caller (the status quo).* Rejected: the combinations that must agree are

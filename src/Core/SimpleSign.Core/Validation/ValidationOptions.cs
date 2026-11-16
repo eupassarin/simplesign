@@ -6,8 +6,18 @@ public sealed class ValidationOptions
     /// <summary>Checks revocation (CRL/OCSP). Requires network access. Default: true.</summary>
     public bool CheckRevocation { get; init; } = true;
 
-    /// <summary>Includes system root certificates as trust anchors. Default: true.</summary>
-    public bool TrustSystemRoots { get; init; } = true;
+    private readonly bool? _trustSystemRoots;
+
+    /// <summary>
+    /// Includes the operating system's root certificates as trust anchors. Default: the <see cref="Profile"/>'s
+    /// <see cref="Extensions.TrustProfile.TrustSystemRoots"/> (false for a trust framework's profile: only its anchors are
+    /// trusted), or true without a profile. A value set here wins over the profile's.
+    /// </summary>
+    public bool TrustSystemRoots
+    {
+        get => _trustSystemRoots ?? Profile?.TrustSystemRoots ?? true;
+        init => _trustSystemRoots = value;
+    }
 
     /// <summary>Additional root certificates for trust (e.g., ICP-Brasil chain).</summary>
     public IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2>? TrustedRoots { get; init; }
@@ -66,7 +76,8 @@ public sealed class ValidationOptions
     /// <summary>
     /// A trust profile (<c>IofeProfile</c>, <c>IcpBrasilProfile</c>, <c>GovBrProfile</c>): its anchors, trusted lists and
     /// chain validation are added to the validator's, and its validation policy applies while <see cref="Policy"/> is
-    /// left at its default. Null: none.
+    /// left at its default. A framework's profile also stops the operating system's roots from being trusted
+    /// (<see cref="TrustSystemRoots"/>) unless that is set here. Null: none.
     /// </summary>
     public Extensions.TrustProfile? Profile { get; init; }
 
@@ -90,7 +101,8 @@ public sealed class ValidationOptions
 
     /// <summary>
     /// These options with <see cref="Profile"/> applied: its policy (when <see cref="Policy"/> is the default), its roots
-    /// in <see cref="TrustedRoots"/>, its trusted lists and its timed anchors. The same instance without a profile.
+    /// in <see cref="TrustedRoots"/>, its trusted lists and its timed anchors, and <see cref="TrustSystemRoots"/> as
+    /// resolved against it. The same instance without a profile.
     /// </summary>
     internal ValidationOptions WithProfileApplied()
     {

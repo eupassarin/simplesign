@@ -45,13 +45,16 @@ public sealed class TimestampClient : ITimestampClient
     }
 
     /// <summary>
-    /// Initializes from <see cref="TimestampOptions"/>: endpoint (HTTP(S) or TCP) and credentials.
-    /// For <see cref="TimestampOptions.ClientCertificate"/>, use <see cref="Create"/>, which builds an
-    /// HTTP client that presents the certificate.
+    /// Initializes from <see cref="TimestampOptions"/>: endpoint (HTTP(S) or TCP) and credentials. The
+    /// <see cref="OutboundPolicy"/> is that of <see cref="TimestampOptions.HttpClientProvider"/> when the options carry
+    /// one (a loopback origin it allows is reached), else <see cref="OutboundHttpPolicy.Default"/>; an
+    /// <see cref="OutboundPolicy"/> set in an object initializer wins. For <see cref="TimestampOptions.ClientCertificate"/>,
+    /// use <see cref="Create"/>, which builds an HTTP client that presents the certificate.
     /// </summary>
     public TimestampClient(HttpClient httpClient, TimestampOptions options, ILogger? logger = null)
         : this(httpClient, (options ?? throw new ArgumentNullException(nameof(options))).Endpoint.AbsoluteUri, options.Authorization, logger)
     {
+        OutboundPolicy = options.HttpClientProvider?.OutboundPolicy ?? OutboundHttpPolicy.Default;
     }
 
     private TimestampClient(HttpClient httpClient, string tsaUrl, AuthenticationHeaderValue? authorization, ILogger? logger)
@@ -84,7 +87,8 @@ public sealed class TimestampClient : ITimestampClient
     }
 
     /// <summary>
-    /// Outbound URL policy applied to the TSA URL when the request is sent. Default: <see cref="OutboundHttpPolicy.Default"/>.
+    /// Outbound URL policy applied to the TSA URL when the request is sent. Default: <see cref="OutboundHttpPolicy.Default"/>,
+    /// or the policy of the options' <see cref="TimestampOptions.HttpClientProvider"/> when built from <see cref="TimestampOptions"/>.
     /// </summary>
     public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
 

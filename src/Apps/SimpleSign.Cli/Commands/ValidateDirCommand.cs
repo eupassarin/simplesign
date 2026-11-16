@@ -131,7 +131,7 @@ internal sealed class ValidateDirCommand : AsyncCommand<ValidateDirCommand.Setti
         var options = new ValidationOptions
         {
             CheckRevocation = !settings.NoRevocation,
-            TrustSystemRoots = !settings.NoSystemRoots,
+            TrustSystemRoots = settings.TrustsSystemRoots,
             TrustedRoots = roots.Count == 0 ? null : roots,
             TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
             TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,

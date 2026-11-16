@@ -148,6 +148,10 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 await PadesSigner.Document(pdf).WithCertificate(certificate, chain).WithProfile(iofe).WithSigningPolicy(AutomatedAgent).SignAsync();
 ```
 
+Under the profile only INDECOPI's list is trusted (the guide's item V-3): `ValidationOptions.TrustSystemRoots` defaults
+to `false` with it, so a certificate whose root is in the operating system's store but not in the list is not trusted.
+Set `TrustSystemRoots = true` only if you mean to trust both; the CLI's `--profile iofe` behaves the same.
+
 ```bash
 simplesign sign contrato.pdf --cert signer.pfx --profile iofe --tsa <ACT URL>
 simplesign validate contrato-signed.pdf --profile iofe

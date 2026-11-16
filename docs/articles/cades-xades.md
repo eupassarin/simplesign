@@ -266,6 +266,14 @@ Console.WriteLine($"Not revoked: {result.IsNotRevoked} ({result.RevocationSource
 Console.WriteLine($"{result.Indication} {result.SubIndication}");   // IsValid follows the indication
 ```
 
+Revocation is fetched through SimpleSign's default HTTP client unless you say otherwise. To use your own — a proxy,
+`IHttpClientFactory`, or an `OutboundHttpPolicy` with `PrivateNetworkHosts` or `LoopbackOrigins` (a local Sandbox) —
+pass an `IHttpClientProvider`, as with `PdfSignatureValidator`; `XadesSignatureValidator` has the same constructor:
+
+```csharp
+var validator = new CadesSignatureValidator(httpClientProvider, new ValidationOptions { CheckRevocation = true });
+```
+
 ## XAdES — XML Signatures
 
 Sign and validate XML documents with XAdES (ETSI EN 319 132) using the same fluent builder API:

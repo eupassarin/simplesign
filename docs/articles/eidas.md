@@ -31,7 +31,8 @@ var qualification = results[0].Qualification;   // Level: QESig, AdESig-QC…; N
 `WithProfile` sets the signing policy (`EidasPolicies.Signing`: the signer and each TSA chain to the EU lists, the
 revocation of the whole chain, a warning on a non-qualified certificate) and the trust anchors. `ValidationOptions.Profile`
 sets the validation policy (`EidasPolicies.Validation`: a list that is expired or badly signed fails), the anchors, the
-lists' service history and the qualifier. An explicit `WithSigningPolicy` / `Policy` wins.
+lists' service history and the qualifier. An explicit `WithSigningPolicy` / `Policy` wins. Only the EU lists are
+trusted: the profile turns `ValidationOptions.TrustSystemRoots` off unless you set it.
 
 To sign only with a qualified certificate whose key is on a QSCD:
 

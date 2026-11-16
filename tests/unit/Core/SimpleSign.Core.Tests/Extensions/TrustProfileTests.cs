@@ -63,6 +63,47 @@ public sealed class TrustProfileTests : IDisposable
     }
 
     [Fact]
+    public void TrustSystemRoots_FrameworkProfileAndNoSetting_IsFalse()
+    {
+        var options = new ValidationOptions { Profile = Profile("iofe", _pki) };
+
+        options.TrustSystemRoots.ShouldBeFalse();
+        options.WithProfileApplied().TrustSystemRoots.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void TrustSystemRoots_FrameworkProfileWithExplicitTrue_KeepsIt()
+    {
+        var options = new ValidationOptions { TrustSystemRoots = true, Profile = Profile("iofe", _pki) };
+
+        options.WithProfileApplied().TrustSystemRoots.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TrustSystemRoots_NoProfileOrDefaultProfile_IsTrue()
+    {
+        new ValidationOptions().TrustSystemRoots.ShouldBeTrue();
+        new ValidationOptions { Profile = TrustProfile.Default }.WithProfileApplied().TrustSystemRoots.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TrustSystemRoots_ProfileFromExtension_IsFalse()
+    {
+        var profile = TrustProfile.FromExtension("x", "X", null, ValidationPolicy.Default, Profile("ext", _pki));
+
+        profile.TrustSystemRoots.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WithTrustFrom_DefaultProfile_AddsTheSystemRoots()
+    {
+        var main = Profile("main", _pki, SigningPolicy.Default);
+
+        main.WithTrustFrom(Profile("extra", _other)).TrustSystemRoots.ShouldBeFalse();
+        main.WithTrustFrom(TrustProfile.Default).TrustSystemRoots.ShouldBeTrue();
+    }
+
+    [Fact]
     public void WithProfileApplied_NoProfile_IsTheSameInstance()
     {
         var options = new ValidationOptions();

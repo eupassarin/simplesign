@@ -1164,32 +1164,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             chain.ChainPolicy.ExtraStore.Add(cert);
         }
 
-        // Auto-load bundled Brazilian trust anchors (ICP-Brasil + Gov.br)
-        // so that valid government signatures validate out of the box.
-        LoadBundledTrustAnchors(chain);
-
-        // User-provided trusted roots
-        if (_options.TrustedRoots is not null || anchorsAtTime is not null)
-        {
-            foreach (var root in (_options.TrustedRoots ?? []).Concat(anchorsAtTime ?? []))
-            {
-                if (root.IsSelfSigned())
-                {
-                    chain.ChainPolicy.CustomTrustStore.Add(root);
-                }
-                else
-                {
-                    chain.ChainPolicy.ExtraStore.Add(root);
-                }
-            }
-        }
-
-        // Use CustomRootTrust when we have any custom roots loaded.
-        // This is required by .NET: CustomTrustStore must be empty in System mode.
-        if (chain.ChainPolicy.CustomTrustStore.Count > 0)
-        {
-            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-        }
+        ConfigureTrust(chain, anchorsAtTime);
 
         bool chainBuilt = chain.Build(signerCert);
         reachesAnchor = CryptoUtility.ReachesTrustAnchor(chain, chainBuilt);
@@ -1224,6 +1199,41 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         return chainBuilt;
+    }
+
+    /// <summary>
+    /// The trust of <paramref name="chain"/>: the anchors of the providers, of <see cref="ValidationOptions.TrustedRoots"/>
+    /// and <paramref name="anchorsAtTime"/> (self-signed ones trusted, the others completing the path), and custom root
+    /// trust when any root is loaded or <see cref="ValidationOptions.TrustSystemRoots"/> is off — the operating system's
+    /// roots then count for nothing, even when the anchors are only intermediates or none were loaded.
+    /// </summary>
+    internal void ConfigureTrust(X509Chain chain, IEnumerable<X509Certificate2>? anchorsAtTime = null)
+    {
+        // The anchors of the trust anchor providers (country extensions, a profile's).
+        LoadBundledTrustAnchors(chain);
+
+        // User-provided trusted roots
+        if (_options.TrustedRoots is not null || anchorsAtTime is not null)
+        {
+            foreach (var root in (_options.TrustedRoots ?? []).Concat(anchorsAtTime ?? []))
+            {
+                if (root.IsSelfSigned())
+                {
+                    chain.ChainPolicy.CustomTrustStore.Add(root);
+                }
+                else
+                {
+                    chain.ChainPolicy.ExtraStore.Add(root);
+                }
+            }
+        }
+
+        // Use CustomRootTrust when we have any custom roots loaded (.NET requires CustomTrustStore to be empty in System
+        // mode), and whenever the system's roots are not trusted: System mode would trust them whatever the options say.
+        if (chain.ChainPolicy.CustomTrustStore.Count > 0 || !_options.TrustSystemRoots)
+        {
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        }
     }
 
     /// <summary>

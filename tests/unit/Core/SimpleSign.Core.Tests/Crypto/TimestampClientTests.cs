@@ -97,6 +97,47 @@ public sealed class TimestampClientTests
         calls.ShouldBe(1);
     }
 
+    [Fact]
+    public async Task Constructor_OptionsWithProvider_SendsUnderTheProvidersOutboundPolicy()
+    {
+        const string tsaUrl = "http://127.0.0.1:5300/tsa/tsr";
+        int calls = 0;
+        using var http = new HttpClient(new MockHttpHandler(async request =>
+        {
+            Interlocked.Increment(ref calls);
+            byte[] body = await request.Content!.ReadAsByteArrayAsync();
+            var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(BuildTimestampResponseForRequest(body)) };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-reply");
+            return response;
+        }));
+        var provider = new PolicyHttpClientProvider(http, new() { LoopbackOrigins = [new Uri("http://127.0.0.1:5300")] });
+
+        var client = new TimestampClient(provider.GetClient(), new TimestampOptions(new Uri(tsaUrl), provider));
+
+        client.OutboundPolicy.ShouldBeSameAs(provider.OutboundPolicy);
+        (await client.GetTimestampAsync(new byte[] { 1, 2, 3 }, HashAlgorithmName.SHA256)).Length.ShouldBeGreaterThan(0);
+        calls.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Constructor_OptionsWithoutProvider_KeepsTheDefaultPolicy()
+    {
+        var client = new TimestampClient(new HttpClient(), new TimestampOptions(new Uri("https://tsa.example.com/tsr")));
+
+        client.OutboundPolicy.ShouldBeSameAs(SimpleSign.Core.Http.OutboundHttpPolicy.Default);
+    }
+
+    [Fact]
+    public void Constructor_OptionsWithProviderAndExplicitPolicy_KeepsTheExplicitOne()
+    {
+        var provider = new PolicyHttpClientProvider(new HttpClient(), new() { LoopbackOrigins = [new Uri("http://127.0.0.1:5300")] });
+        var strict = new SimpleSign.Core.Http.OutboundHttpPolicy();
+
+        var client = new TimestampClient(new HttpClient(), new TimestampOptions(new Uri("https://tsa.example.com/tsr"), provider)) { OutboundPolicy = strict };
+
+        client.OutboundPolicy.ShouldBeSameAs(strict);
+    }
+
     [Fact(DisplayName = "Valid response returns timestamp token")]
     public async Task GetTimestampAsync_ValidResponse_ReturnsToken()
     {

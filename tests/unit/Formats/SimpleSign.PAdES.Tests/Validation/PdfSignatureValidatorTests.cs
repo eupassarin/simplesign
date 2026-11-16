@@ -30,6 +30,43 @@ public sealed class PdfSignatureValidatorTests
         return CertificateLoader.LoadPkcs12(x509Certificate.Export(X509ContentType.Pfx, "test-export"), "test-export");
     }
 
+    [Fact]
+    public void ConfigureTrust_ProfileAnchoringAnIntermediate_DoesNotTrustTheSystemRoots()
+    {
+        // A framework whose list names only an issuing CA: no self-signed root to load, so System trust used to
+        // decide — and trust any signer whose root is in the operating system's store.
+        using var pki = new SyntheticPki();
+        var profile = new TrustProfile("iofe", "Peru (IOFE)", null, Core.Policies.ValidationPolicy.Default, [new InMemoryTrustAnchors(pki.IntermediateCa)], []);
+        var validator = new PdfSignatureValidator(new ValidationOptions { Profile = profile });
+        using var chain = new X509Chain();
+
+        validator.ConfigureTrust(chain);
+
+        chain.ChainPolicy.TrustMode.ShouldBe(X509ChainTrustMode.CustomRootTrust);
+    }
+
+    [Fact]
+    public void ConfigureTrust_TrustSystemRootsOffAndNoAnchors_DoesNotTrustTheSystemRoots()
+    {
+        var validator = new PdfSignatureValidator(new ValidationOptions { TrustSystemRoots = false });
+        using var chain = new X509Chain();
+
+        validator.ConfigureTrust(chain);
+
+        chain.ChainPolicy.TrustMode.ShouldBe(X509ChainTrustMode.CustomRootTrust);
+    }
+
+    [Fact]
+    public void ConfigureTrust_DefaultOptions_TrustsTheSystemRoots()
+    {
+        var validator = new PdfSignatureValidator(new ValidationOptions());
+        using var chain = new X509Chain();
+
+        validator.ConfigureTrust(chain);
+
+        chain.ChainPolicy.TrustMode.ShouldBe(X509ChainTrustMode.System);
+    }
+
     [Fact(DisplayName = "Default options have expected values")]
     public void ValidationOptions_Default_HasExpectedValues()
     {

@@ -202,6 +202,19 @@ var options = new ValidationOptions
 };
 ```
 
+`TrustSystemRoots` decides whether the operating system's store (macOS Keychain, Windows, the Linux CA bundle) also
+counts. Without a profile it defaults to `true`. With a trust framework's `Profile` (`IofeProfile`, `IcpBrasilProfile`,
+`GovBrProfile`, `EidasProfile`, or any `TrustProfile` you build) it defaults to `false`: the framework trusts its own
+anchors only, so a signer whose root is in the OS store but not in the framework's list is not trusted — even when the
+list could not be loaded or names only issuing CAs. Set `TrustSystemRoots = true` explicitly to trust both; a value set
+on the options always wins over the profile's (`TrustProfile.TrustSystemRoots`, `true` only for `TrustProfile.Default`).
+
+```csharp
+var iofe = await IofeProfile.LoadAsync();
+var onlyIndecopi = new ValidationOptions { Profile = iofe };                         // TrustSystemRoots: false
+var alsoTheOs    = new ValidationOptions { Profile = iofe, TrustSystemRoots = true }; // explicit: both
+```
+
 Trust anchors can also come from a folder (`new DirectoryTrustAnchorProvider(dir, manifestSigner)`, with a signed
 manifest of the files' SHA-256) or from an ETSI trusted list (`TrustedList.Load(xml, new TrustedListOptions
 { SignerCertificates = [schemeOperator] })`), both `ITrustAnchorProvider`.
@@ -257,7 +270,7 @@ validators do it whenever the document carries the later time-stamp.
 | `TimedTrustAnchors` | The providers above. |
 | `PolicyProvider` | An `IPolicyProvider` that chooses the validation policy from the signature's policy OID. |
 | `SignaturePolicyDocuments` | An `ISignaturePolicyDocumentProvider` supplying policy documents the signature names but does not carry, so `PolicyAvailable` can be satisfied. CLI `--policy-signer`. |
-| `Profile` | A `TrustProfile` — a whole trust framework as one value (its anchors, chain rules, policy and qualifiers). `IcpBrasilProfile.Create()`, `await IofeProfile.LoadAsync()`, `EidasProfile`, `GovBrProfile.Create()`. An explicit `Policy` wins over the profile's. CLI `--profile`. |
+| `Profile` | A `TrustProfile` — a whole trust framework as one value (its anchors, chain rules, policy and qualifiers). `IcpBrasilProfile.Create()`, `await IofeProfile.LoadAsync()`, `EidasProfile`, `GovBrProfile.Create()`. An explicit `Policy` wins over the profile's, and the OS roots stop being trusted unless `TrustSystemRoots` is set. CLI `--profile`. |
 | `SignatureQualifiers` | `ISignatureQualifier`s that qualify a validated signature; a profile's and a country extension's are added to these. |
 | `CheckRevocation`, `TrustSystemRoots`, `TrustedRoots` | As above. |
 
