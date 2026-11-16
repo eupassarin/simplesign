@@ -61,7 +61,7 @@ public sealed class PdfSignatureWriter
                 throw new ArgumentException("Document information entries are not supported when signing an existing field.", nameof(documentInfo));
             }
 
-            return await PrepareExistingFieldAsync(outputStream, inputPdf, inputMem, options, cancellationToken, signingTime).ConfigureAwait(false);
+            return await PrepareExistingFieldAsync(outputStream, inputPdf, inputMem, options, pdfALevel, cancellationToken, signingTime).ConfigureAwait(false);
         }
 
         // Step 2: Determine the next available object number.
@@ -278,28 +278,24 @@ public sealed class PdfSignatureWriter
 
         // Step 8: Write appearance XObject (if visible) and update page /Annots (always).
         long appObjOffset = 0L;
-        long imageObjOffset = 0L;
-        long softMaskObjOffset = 0L;
         long updPageObjOffset = 0L;
+        Dictionary<int, long> appendedObjOffsets = [];
         bool hasImage = hasAppearance && options.Appearance?.HasBackgroundImage() == true;
         if (hasAppearance && options.Appearance != null)
         {
+            var colorProfiles = AppearanceColorProfiles.For(pdfALevel, appObjNum);
             byte[] appearanceBytes = SignatureAppearanceRenderer.BuildAppearanceXObject(
                 appObjNum, options, sigNow, appWidth, appHeight,
                 hasImage ? imageObjNum : 0,
                 fontFileObjNum,
                 fontDescriptorObjNum,
-                hasImage ? softMaskObjNum : 0);
+                hasImage ? softMaskObjNum : 0,
+                colorProfiles);
             appObjOffset = outputStream.Position;
             await outputStream.WriteAsync(appearanceBytes, cancellationToken).ConfigureAwait(false);
 
-            // The image XObject (and its soft mask, if any) follow the form XObject in the written bytes.
-            if (hasImage)
-            {
-                string appText = Encoding.Latin1.GetString(appearanceBytes);
-                imageObjOffset = FindAppendedObject(appText, appObjOffset, imageObjNum);
-                softMaskObjOffset = FindAppendedObject(appText, appObjOffset, softMaskObjNum);
-            }
+            // The image XObject, its soft mask and the ICC profiles, when present, follow the form XObject.
+            appendedObjOffsets = FindAppendedObjects(appearanceBytes, appObjOffset, imageObjNum, softMaskObjNum, colorProfiles);
         }
 
         // Always add the widget annotation to the page's /Annots array.
@@ -352,13 +348,9 @@ public sealed class PdfSignatureWriter
         if (hasAppearance)
         {
             objectOffsets[appObjNum] = appObjOffset;
-            if (hasImage && imageObjOffset > 0)
+            foreach (var (appendedObjNum, appendedOffset) in appendedObjOffsets)
             {
-                objectOffsets[imageObjNum] = imageObjOffset;
-            }
-            if (hasImage && softMaskObjOffset > 0)
-            {
-                objectOffsets[softMaskObjNum] = softMaskObjOffset;
+                objectOffsets[appendedObjNum] = appendedOffset;
             }
             objectOffsets[fontFileObjNum] = fontFileObjOffset;
             objectOffsets[fontDescriptorObjNum] = fontDescriptorObjOffset;
@@ -462,6 +454,29 @@ public sealed class PdfSignatureWriter
     }
 
     /// <summary>
+    /// Offsets of the objects written after the appearance form XObject (background image, its soft mask,
+    /// ICC profiles), keyed by object number; objects the renderer did not write are left out.
+    /// </summary>
+    private static Dictionary<int, long> FindAppendedObjects(byte[] appearanceBytes, long appearanceOffset, int imageObjNum, int softMaskObjNum, AppearanceColorProfiles? colorProfiles)
+    {
+        string appText = Encoding.Latin1.GetString(appearanceBytes);
+        var offsets = new Dictionary<int, long>();
+        int[] candidates = colorProfiles is { } profiles
+            ? [imageObjNum, softMaskObjNum, profiles.RgbObjNum, profiles.GrayObjNum]
+            : [imageObjNum, softMaskObjNum];
+        foreach (int objNum in candidates)
+        {
+            long offset = FindAppendedObject(appText, appearanceOffset, objNum);
+            if (offset > 0)
+            {
+                offsets[objNum] = offset;
+            }
+        }
+
+        return offsets;
+    }
+
+    /// <summary>
     /// Writes the CMS signature bytes (as hex) into the /Contents placeholder of the prepared PDF.
     /// </summary>
     public static async Task FinalizeAsync(Stream outputStream, PdfSignaturePrepareResult prepareResult, byte[] cmsBytes, ILogger? logger = null, CancellationToken cancellationToken = default(CancellationToken))
@@ -511,7 +526,7 @@ public sealed class PdfSignatureWriter
     // ── Private: I/O helpers ─────────────────────────────────────────────────
 
     private static async Task<PdfSignaturePrepareResult> PrepareExistingFieldAsync(
-        Stream outputStream, Stream inputPdf, Memory<byte> inputMem, SignatureFieldOptions options, CancellationToken cancellationToken, DateTimeOffset? signingTime = null)
+        Stream outputStream, Stream inputPdf, Memory<byte> inputMem, SignatureFieldOptions options, PdfALevel? pdfALevel, CancellationToken cancellationToken, DateTimeOffset? signingTime = null)
     {
         int fieldObjNum = PdfStructureParser.FindEmptySignatureField(inputMem.Span, options.ExistingFieldName!);
         if (fieldObjNum < 0)
@@ -583,26 +598,16 @@ public sealed class PdfSignatureWriter
             objectOffsets[fontDescriptorObjNum] = outputStream.Position;
             await outputStream.WriteAsync(PdfFontWriter.BuildFontDescriptorObject(fontDescriptorObjNum, fontFileObjNum), cancellationToken).ConfigureAwait(false);
             bool hasImage = options.Appearance.HasBackgroundImage();
+            var colorProfiles = AppearanceColorProfiles.For(pdfALevel, appObjNum);
             byte[] appearanceBytes = SignatureAppearanceRenderer.BuildAppearanceXObject(
                 appObjNum, options, sigNow, appWidth, appHeight,
-                hasImage ? imageObjNum : 0, fontFileObjNum, fontDescriptorObjNum, hasImage ? softMaskObjNum : 0);
+                hasImage ? imageObjNum : 0, fontFileObjNum, fontDescriptorObjNum, hasImage ? softMaskObjNum : 0, colorProfiles);
             long appObjOffset = outputStream.Position;
             objectOffsets[appObjNum] = appObjOffset;
             await outputStream.WriteAsync(appearanceBytes, cancellationToken).ConfigureAwait(false);
-            if (hasImage)
+            foreach (var (appendedObjNum, appendedOffset) in FindAppendedObjects(appearanceBytes, appObjOffset, imageObjNum, softMaskObjNum, colorProfiles))
             {
-                string appText = Encoding.Latin1.GetString(appearanceBytes);
-                long imageOffset = FindAppendedObject(appText, appObjOffset, imageObjNum);
-                long maskOffset = FindAppendedObject(appText, appObjOffset, softMaskObjNum);
-                if (imageOffset > 0)
-                {
-                    objectOffsets[imageObjNum] = imageOffset;
-                }
-
-                if (maskOffset > 0)
-                {
-                    objectOffsets[softMaskObjNum] = maskOffset;
-                }
+                objectOffsets[appendedObjNum] = appendedOffset;
             }
         }
 

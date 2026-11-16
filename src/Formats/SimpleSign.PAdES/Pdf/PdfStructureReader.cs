@@ -152,7 +152,7 @@ public sealed partial class PdfStructureReader
 
     /// <summary>
     /// Detects the PDF/A conformance level by scanning XMP metadata for <c>pdfaid:part</c>
-    /// and <c>pdfaid:conformance</c> elements.
+    /// and <c>pdfaid:conformance</c>, written as elements or as <c>rdf:Description</c> attributes.
     /// </summary>
     public static async Task<PdfALevel> DetectPdfALevelAsync(
         Stream pdfStream, ILogger? logger = null, CancellationToken cancellationToken = default)

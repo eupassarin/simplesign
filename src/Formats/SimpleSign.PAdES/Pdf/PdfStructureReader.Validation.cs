@@ -159,24 +159,13 @@ public sealed partial class PdfStructureReader
         return ScanCompressedObjStmsForPdfAIdTags(data);
     }
 
-    private static PdfALevel ScanForPdfAIdTags(ReadOnlySpan<byte> span)
-    {
-        var partTag = "pdfaid:part>"u8;
-        int partIdx = IndexOf(span, partTag, 0);
-        if (partIdx < 0)
-        {
-            return PdfALevel.None;
-        }
-
-        return ParsePdfALevelFromSpan(span, partIdx, partTag);
-    }
+    private static PdfALevel ScanForPdfAIdTags(ReadOnlySpan<byte> span) => ParsePdfALevelFromXmp(span);
 
     private static PdfALevel ScanCompressedObjStmsForPdfAIdTags(ReadOnlySpan<byte> data)
     {
         ReadOnlySpan<byte> objStmMarker1 = "/Type /ObjStm"u8;
         ReadOnlySpan<byte> objStmMarker2 = "/Type/ObjStm"u8;
         ReadOnlySpan<byte> streamMarker = "stream"u8;
-        var partTag = "pdfaid:part>"u8;
 
         int searchPos = 0;
         while (searchPos < data.Length)
@@ -241,10 +230,10 @@ public sealed partial class PdfStructureReader
                     continue;
                 }
 
-                int partIdx = new ReadOnlySpan<byte>(decompressed).IndexOf(partTag);
-                if (partIdx >= 0)
+                PdfALevel level = ParsePdfALevelFromXmp(decompressed);
+                if (level != PdfALevel.None)
                 {
-                    return ParsePdfALevelFromSpan(new ReadOnlySpan<byte>(decompressed), partIdx, partTag);
+                    return level;
                 }
             }
             catch
@@ -294,26 +283,31 @@ public sealed partial class PdfStructureReader
         return numStart < numEnd ? numStart : -1;
     }
 
-    private static PdfALevel ParsePdfALevelFromSpan(ReadOnlySpan<byte> span, int partIdx, ReadOnlySpan<byte> partTag)
+    /// <summary>
+    /// Reads <c>pdfaid:part</c> and <c>pdfaid:conformance</c> from XMP. XMP (ISO 16684-1 §7.9.2.2) writes a simple
+    /// property either as an element (<c>&lt;pdfaid:part&gt;3&lt;/pdfaid:part&gt;</c>) or as an attribute of
+    /// <c>rdf:Description</c> (<c>pdfaid:part="3"</c>); both are read. <see cref="PdfALevel.None"/> when there is no part.
+    /// </summary>
+    private static PdfALevel ParsePdfALevelFromXmp(ReadOnlySpan<byte> span)
     {
-        int partStart = partIdx + partTag.Length;
+        int partStart = FindXmpPropertyValue(span, "pdfaid:part"u8, 0);
+        if (partStart < 0)
+        {
+            return PdfALevel.None;
+        }
+
         if (partStart >= span.Length)
         {
             return PdfALevel.Unknown;
         }
+
         int part = span[partStart] - '0';
 
-        var confTag = "pdfaid:conformance>"u8;
-        int confIdx = IndexOf(span, confTag, partIdx);
-        char conformance = 'B';
-        if (confIdx >= 0)
-        {
-            int confStart = confIdx + confTag.Length;
-            if (confStart < span.Length)
-            {
-                conformance = char.ToUpperInvariant((char)span[confStart]);
-            }
-        }
+        // Conformance is optional for PDF/A-4; when absent, B is assumed, as before.
+        int confStart = FindXmpPropertyValue(span, "pdfaid:conformance"u8, 0);
+        char conformance = confStart >= 0 && confStart < span.Length
+            ? char.ToUpperInvariant((char)span[confStart])
+            : 'B';
 
         return (part, conformance) switch
         {
@@ -331,6 +325,53 @@ public sealed partial class PdfStructureReader
             (4, 'E') => PdfALevel.A4e,
             _ => PdfALevel.Unknown
         };
+    }
+
+    /// <summary>
+    /// Index of the first character of an XMP property's value, written as an element (<c>name&gt;value</c>) or as an
+    /// attribute (<c>name="value"</c> or <c>name='value'</c>); -1 when the property is absent. Whitespace after the
+    /// tag or quote is skipped, so the index points at the value itself (or at the end of the data).
+    /// </summary>
+    private static int FindXmpPropertyValue(ReadOnlySpan<byte> span, ReadOnlySpan<byte> name, int startAt)
+    {
+        int pos = startAt;
+        while (pos < span.Length)
+        {
+            int idx = IndexOf(span, name, pos);
+            if (idx < 0)
+            {
+                return -1;
+            }
+
+            int i = SkipXmlWhitespace(span, idx + name.Length);
+            if (i < span.Length && span[i] == (byte)'>')
+            {
+                return SkipXmlWhitespace(span, i + 1);
+            }
+
+            if (i < span.Length && span[i] == (byte)'=')
+            {
+                i = SkipXmlWhitespace(span, i + 1);
+                if (i < span.Length && span[i] is (byte)'"' or (byte)'\'')
+                {
+                    return SkipXmlWhitespace(span, i + 1);
+                }
+            }
+
+            pos = idx + 1;
+        }
+
+        return -1;
+    }
+
+    private static int SkipXmlWhitespace(ReadOnlySpan<byte> span, int i)
+    {
+        while (i < span.Length && span[i] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+        {
+            i++;
+        }
+
+        return i;
     }
     #endregion
 }

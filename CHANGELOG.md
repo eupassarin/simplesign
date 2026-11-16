@@ -54,9 +54,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   digest, or from a local CLI named by `SIMPLESIGN_VERAPDF`; without either the tests are skipped.
 - **CI job `PDF/A (veraPDF)`** runs them on every push (`Category=VeraPdf`, left out of the other test runs) with
   `SIMPLESIGN_REQUIRE_VERAPDF=true`, and keeps every document veraPDF rejects, with its report, as an artifact.
-- **Known gap, found by these tests:** a visible signature paints in DeviceRGB, which breaks ISO 19005-2/3 §6.2.4.3 on
-  a PDF/A document without an RGB OutputIntent or DefaultRGB (corpus `PDF_A-3b-6-8-t02-pass-b.pdf`). The tests
-  expect exactly that failure until the appearance is fixed.
+
+### Fixed — A visible signature no longer breaks PDF/A on a document without an RGB OutputIntent
+
+- The stamp paints in DeviceRGB, which ISO 19005-2/3 §6.2.4.3 (and ISO 19005-1 §6.2.3.3) allows only with an RGB
+  OutputIntent or a `/DefaultRGB` colour space; the veraPDF tests found it on the corpus file
+  `PDF_A-3b-6-8-t02-pass-b.pdf`. On a PDF/A document the appearance now maps DeviceRGB to sRGB with
+  `/DefaultRGB [/ICCBased …]` (and DeviceGray with `/DefaultGray` when a grayscale background image is drawn), backed
+  by ICC profiles SimpleSign builds itself, so no third-party profile or licence is involved (ADR 0014 §5). It adds
+  under 1 KB per visible signature on PDF/A documents; other documents get the same bytes as before.
+- **PDF/A detection reads XMP attributes too.** `DetectPdfALevel` found `<pdfaid:part>3</pdfaid:part>` but not the
+  equally valid `pdfaid:part="3"` on `rdf:Description`, so such a document was taken for one that is not PDF/A:
+  `WithPdfAPreservation()` checked nothing and validation reported no PDF/A level. Both forms are read now.
+- **`PdfAPreservationValidator` warns about a CMYK JPEG background image** on a PDF/A document. Such an image is
+  embedded in DeviceCMYK, which conforms only when the document has a CMYK OutputIntent, and SimpleSign has no CMYK
+  profile to map it to. It is a `Warning`, because the check does not read OutputIntents.
+  `WithPdfAPreservation()` (one-call and deferred) now logs every warning issue as event 1006 at `LogLevel.Warning`
+  and still signs; errors refuse the signature as before.
 
 ### Fixed — Validation no longer throws on Windows when the chain engine cannot process a certificate
 
