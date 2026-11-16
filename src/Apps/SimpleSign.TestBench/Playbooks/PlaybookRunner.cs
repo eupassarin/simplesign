@@ -717,7 +717,8 @@ internal sealed class PlaybookRunner(
             Crl: Parse(box.Crl, CrlFault.None),
             Ocsp: Parse(box.Ocsp, OcspFault.None),
             TrustedList: Parse(box.TrustedList, TlFault.None),
-            Lotl: Parse(box.Lotl, LotlFault.None));
+            Lotl: Parse(box.Lotl, LotlFault.None),
+            Csc: Parse(box.Csc, CscFault.None));
         if (faults.Any)
         {
             await sandbox.SetFaultsAsync(faults, cancellationToken).ConfigureAwait(false);
@@ -979,6 +980,7 @@ internal sealed class PlaybookRunner(
         Add("tsa", "TSA", box.Tsa);
         Add("trustedList", "Trusted list", box.TrustedList);
         Add("lotl", "List of trusted lists", box.Lotl);
+        Add("csc", "CSC", box.Csc);
         foreach (string id in box.Revoke)
         {
             rows.Add(new("revoke", "Revoke", id));

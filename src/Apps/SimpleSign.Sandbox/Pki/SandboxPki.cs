@@ -375,6 +375,39 @@ internal sealed class SandboxPki : IDisposable
     /// <summary>How many certificates issued on request an environment keeps (until <see cref="Reset"/>).</summary>
     public const int MaxCustom = 200;
 
+    /// <summary>How many CSC credentials created on request an environment keeps (until <see cref="Reset"/>).</summary>
+    public const int MaxCscCredentials = 200;
+
+    /// <summary>The CSC credentials created on request, oldest first.</summary>
+    public IReadOnlyList<SandboxCscCredential> CscCredentials
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _state.CscCredentials];
+            }
+        }
+    }
+
+    /// <summary>Keeps a CSC credential created on request, until <see cref="Reset"/>.</summary>
+    /// <param name="credential">The credential, already checked (<see cref="SandboxCsc.Create"/>).</param>
+    /// <exception cref="InvalidOperationException">The environment already has <see cref="MaxCscCredentials"/> of them.</exception>
+    public void AddCscCredential(SandboxCscCredential credential)
+    {
+        ArgumentNullException.ThrowIfNull(credential);
+        lock (_gate)
+        {
+            if (_state.CscCredentials.Count >= MaxCscCredentials)
+            {
+                throw new InvalidOperationException($"The environment already has {MaxCscCredentials} CSC credentials created on request; reset it to remove them.");
+            }
+
+            _state = _state with { CscCredentials = [.. _state.CscCredentials, credential] };
+            Save();
+        }
+    }
+
     /// <summary>Whether <paramref name="id"/> is a certificate issued on request.</summary>
     public static bool IsCustom(string id) => id.StartsWith(CustomPrefix, StringComparison.Ordinal);
 
@@ -474,6 +507,7 @@ internal sealed class SandboxPki : IDisposable
             _state = _state with
             {
                 Faults = new SandboxFaults(),
+                CscCredentials = [],
                 Certificates = [.. _state.Certificates.Where(c => !IsCustom(c.Id)).Select(c => c with
                 {
                     RevokedAt = c.RevokedByDefault ? revokedAt : null,

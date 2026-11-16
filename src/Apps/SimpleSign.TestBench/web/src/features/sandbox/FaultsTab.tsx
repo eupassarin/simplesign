@@ -10,15 +10,15 @@ import { api } from "./api"
 import type { SandboxFaults } from "./types"
 import { cn } from "@/lib/utils"
 
-type Prefix = "faults.tsaValues" | "faults.crlValues" | "faults.ocspValues" | "faults.signerValues" | "faults.tlValues"
+type Prefix = "faults.tsaValues" | "faults.crlValues" | "faults.ocspValues" | "faults.signerValues" | "faults.tlValues" | "faults.cscValues"
 
 /** One row: a service, its values, the delay field that applies when it is Slow. */
 interface Row {
-  field: "crl" | "ocsp" | "ocspSigner" | "tsa" | "trustedList"
+  field: "crl" | "ocsp" | "ocspSigner" | "tsa" | "trustedList" | "csc"
   title: MessageKey
   values: string[]
   prefix: Prefix
-  delay?: "crlDelayMs" | "ocspDelayMs" | "tsaDelayMs"
+  delay?: "crlDelayMs" | "ocspDelayMs" | "tsaDelayMs" | "cscDelayMs"
   /** A choice, not a failure: a value other than the first is not shown as one. */
   neutral?: boolean
 }
@@ -29,9 +29,10 @@ const rows: Row[] = [
   { field: "ocspSigner", title: "faults.ocspSigner", values: ["Issuer", "Delegated"], prefix: "faults.signerValues", neutral: true },
   { field: "tsa", title: "faults.tsa", values: ["None", "Down", "Slow", "InvalidToken", "Untrusted"], prefix: "faults.tsaValues", delay: "tsaDelayMs" },
   { field: "trustedList", title: "faults.trustedList", values: ["None", "Expired", "WrongSigner", "Tampered", "WithdrawnAfterUse"], prefix: "faults.tlValues" },
+  { field: "csc", title: "faults.csc", values: ["None", "Down", "Slow", "WrongSignature"], prefix: "faults.cscValues", delay: "cscDelayMs" },
 ]
 
-/** Switch failures of the CRL server (HTTP, HTTPS, LDAP), the OCSP responder, the TSA and the trusted list on and off, one at a time. */
+/** Switch failures of the CRL server (HTTP, HTTPS, LDAP), the OCSP responder, the TSA, the trusted list and the CSC remote signing service on and off, one at a time. */
 export function FaultsTab({ initial, onChanged }: { initial: SandboxFaults | null; onChanged: (faults: SandboxFaults) => void }) {
   const { t } = useI18n()
   const [faults, setFaults] = useState<SandboxFaults | null>(initial)

@@ -15,7 +15,9 @@ internal sealed record SandboxCscCredential(string Id, string Description, strin
 /// A simulated Cloud Signature Consortium API v2 service: client-credentials and authorization-code
 /// OAuth (the login page approves automatically and redirects back with the code),
 /// credentials/list|info|authorize and signatures/signHash with SCAL 1/2 semantics, signing with
-/// the Sandbox keys. Served under <c>{base}csc/v2/</c>.
+/// the Sandbox keys. Served under <c>{base}csc/v2/</c>. Besides its own credentials it serves those created on request
+/// for a certificate of the environment (<see cref="Create"/>), and it fails on purpose when
+/// <see cref="SandboxFaults.Csc"/> says so.
 /// </summary>
 internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
 {
@@ -32,6 +34,7 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
     private const string EcdsaSha256 = "1.2.840.10045.4.3.2";
 
     private readonly SandboxPki _pki;
+    private readonly IReadOnlyList<SandboxCscCredential> _builtIn;
     private readonly Lock _gate = new();
     private readonly Dictionary<string, (int Remaining, string CredentialId, HashSet<string>? Hashes)> _sads = [];
     private readonly Dictionary<string, (string Challenge, string Scope, string? CredentialId, HashSet<string>? Hashes)> _codes = [];
@@ -42,7 +45,7 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
     {
         _pki = pki;
         BaseUri = new Uri(pki.BaseUrl, "csc/v2/");
-        Credentials =
+        _builtIn =
         [
             new("rsa-scal1", "RSA 2048, PIN, SCAL 1, up to 5 signatures per authorization; PKCS#1 v1.5 and PSS", "rsa-2048", [RsaEncryption, RsaSha256, RsaPss], "explicit", "1", 5),
             new("rsa-scal2", "RSA 2048, PIN + OTP, SCAL 2 (the hashes are bound to the authorization)", "rsa-2048", [RsaSha256], "explicit", "2", 1),
@@ -55,7 +58,59 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
     /// <summary>The CSC API base URL (<c>{base}csc/v2/</c>); OAuth is under <c>oauth2/</c> below it.</summary>
     public Uri BaseUri { get; }
 
-    public IReadOnlyList<SandboxCscCredential> Credentials { get; }
+    /// <summary>Every credential: the service's own, then those created on request.</summary>
+    public IReadOnlyList<SandboxCscCredential> Credentials => [.. _builtIn, .. _pki.CscCredentials];
+
+    /// <summary>
+    /// Creates a credential for a signing certificate the intermediate CA issued (one of the seeded ones, or one issued on
+    /// request): its key signs, authorized with the PIN (SCAL 1) or the PIN and the OTP (SCAL 2). Kept until a reset.
+    /// </summary>
+    /// <param name="certificateId">The certificate.</param>
+    /// <param name="credentialId">The credential ID; null for the certificate's.</param>
+    /// <param name="scal">"1" (default) or "2".</param>
+    /// <param name="multiSign">Signatures per authorization, 1 to 100 (default 1); SCAL 2 always 1.</param>
+    /// <returns>The credential.</returns>
+    /// <exception cref="KeyNotFoundException">There is no such certificate.</exception>
+    /// <exception cref="ArgumentException">The certificate cannot sign through the service, or an argument is out of range.</exception>
+    /// <exception cref="InvalidOperationException">The credential ID is taken, or there are too many credentials.</exception>
+    public SandboxCscCredential Create(string certificateId, string? credentialId, string? scal, int? multiSign)
+    {
+        ArgumentNullException.ThrowIfNull(certificateId);
+        var certificate = _pki.Certificates.FirstOrDefault(c => c.Id == certificateId)
+            ?? throw new KeyNotFoundException($"No certificate '{certificateId}'.");
+        if (certificate.Usage != CertificateUsage.Signing || certificate.IssuerId != SandboxPki.IntermediateId)
+        {
+            throw new ArgumentException($"Certificate '{certificateId}' is not a signing certificate of the intermediate CA.", nameof(certificateId));
+        }
+
+        string id = credentialId is { Length: > 0 } ? credentialId : certificateId;
+        if (id.Length > 64 || !id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.'))
+        {
+            throw new ArgumentException("credentialId: 1 to 64 letters, digits, '-', '_' or '.'.", nameof(credentialId));
+        }
+
+        string level = scal is { Length: > 0 } ? scal : "1";
+        if (level is not ("1" or "2"))
+        {
+            throw new ArgumentException("scal must be \"1\" or \"2\".", nameof(scal));
+        }
+
+        int count = level == "2" ? 1 : multiSign ?? 1;
+        if (count is < 1 or > 100)
+        {
+            throw new ArgumentException("multiSign must be between 1 and 100.", nameof(multiSign));
+        }
+
+        if (Credentials.Any(c => c.Id == id))
+        {
+            throw new InvalidOperationException($"Credential '{id}' exists.");
+        }
+
+        string[] algorithms = certificate.Certificate.PublicKey.Oid.Value == RsaEncryption ? [RsaEncryption, RsaSha256, RsaPss] : [EcPublicKey, EcdsaSha256];
+        var credential = new SandboxCscCredential(id, $"{certificate.Title}, SCAL {level} (created on request)", certificateId, algorithms, "explicit", level, count);
+        _pki.AddCscCredential(credential);
+        return credential;
+    }
 
     public ValueTask<Uri> AuthorizeAsync(Uri authorizationUri, Uri redirectUri, CancellationToken cancellationToken)
     {
@@ -77,6 +132,18 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
     {
         string path = request.RequestUri!.AbsolutePath;
         string body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
+        var fault = _pki.Faults;
+        if (fault.Csc == CscFault.Down)
+        {
+            return Error(HttpStatusCode.ServiceUnavailable, "temporarily_unavailable", "Sandbox failure: the CSC service is down.");
+        }
+
+        bool signing = path.EndsWith("/signatures/signHash", StringComparison.Ordinal);
+        if (signing && fault.Csc == CscFault.Slow)
+        {
+            await Task.Delay(fault.CscDelayMs, cancellationToken);
+        }
+
         lock (_gate)
         {
             if (path.EndsWith("/oauth2/token", StringComparison.Ordinal))
@@ -110,7 +177,7 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
                 }),
                 _ when path.EndsWith("/credentials/info", StringComparison.Ordinal) => CredentialInfo(json),
                 _ when path.EndsWith("/credentials/authorize", StringComparison.Ordinal) => Authorize(json),
-                _ when path.EndsWith("/signatures/signHash", StringComparison.Ordinal) => SignHash(json, token),
+                _ when signing => SignHash(json, token, otherKey: fault.Csc == CscFault.WrongSignature),
                 _ => Error(HttpStatusCode.NotFound, "not_found", path),
             };
         }
@@ -211,7 +278,7 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
         return CscHttp.Json(HttpStatusCode.OK, new JsonObject { ["SAD"] = sad, ["expiresIn"] = 300 });
     }
 
-    private HttpResponseMessage SignHash(JsonNode body, (string Scope, string? CredentialId, HashSet<string>? Hashes) token)
+    private HttpResponseMessage SignHash(JsonNode body, (string Scope, string? CredentialId, HashSet<string>? Hashes) token, bool otherKey)
     {
         if (Find(body) is not { } credential)
         {
@@ -259,25 +326,26 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
         var signatures = new JsonArray();
         foreach (string hash in hashes)
         {
-            byte[] value = Convert.FromBase64String(hash);
-            byte[] signature;
-            if (certificate.GetRSAPrivateKey() is { } rsa)
-            {
-                using (rsa)
-                {
-                    signature = rsa.SignHash(value, hashAlgorithm, signAlgo == RsaPss ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1);
-                }
-            }
-            else
-            {
-                using var ec = certificate.GetECDsaPrivateKey()!;
-                signature = ec.SignHash(value, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
-            }
-
+            byte[] signature = Sign(certificate, Convert.FromBase64String(hash), hashAlgorithm, signAlgo == RsaPss, otherKey);
             signatures.Add((JsonNode)Convert.ToBase64String(signature));
         }
 
         return CscHttp.Json(HttpStatusCode.OK, new JsonObject { ["signatures"] = signatures });
+    }
+
+    /// <summary>Signs with the credential's key, or with a new key of the same kind (the "wrong signature" failure).</summary>
+    private static byte[] Sign(X509Certificate2 certificate, byte[] hash, HashAlgorithmName hashAlgorithm, bool pss, bool otherKey)
+    {
+        using var rsaPublic = certificate.GetRSAPublicKey();
+        if (rsaPublic is not null)
+        {
+            using var rsa = otherKey ? RSA.Create(rsaPublic.KeySize) : certificate.GetRSAPrivateKey()!;
+            return rsa.SignHash(hash, hashAlgorithm, pss ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1);
+        }
+
+        using var ecPublic = certificate.GetECDsaPublicKey()!;
+        using var ec = otherKey ? ECDsa.Create(ecPublic.ExportParameters(false).Curve) : certificate.GetECDsaPrivateKey()!;
+        return ec.SignHash(hash, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
     }
 
     private static HttpResponseMessage Error(HttpStatusCode status, string error, string description) =>

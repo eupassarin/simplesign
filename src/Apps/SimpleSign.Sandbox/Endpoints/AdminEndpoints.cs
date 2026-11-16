@@ -40,6 +40,16 @@ public sealed record CscInfo(string BaseUrl, string ClientId, string ClientSecre
 
 public sealed record CscCredentialView(string Id, string Description, string CertificateId, string AuthMode, string Scal, int MultiSign);
 
+/// <summary>
+/// A CSC credential to create for a signing certificate of the intermediate CA, such as one issued by
+/// <c>POST /api/certificates/custom</c>: the remote signing service then signs with its key.
+/// </summary>
+/// <param name="CertificateId">The certificate.</param>
+/// <param name="CredentialId">The credential ID the client sends (1 to 64 letters, digits, '-', '_', '.'); default the certificate's ID.</param>
+/// <param name="Scal">"1" (PIN; default) or "2" (PIN and OTP, the hashes bound to the authorization).</param>
+/// <param name="MultiSign">Signatures per authorization, 1 to 100; default 1 (SCAL 2: always 1).</param>
+public sealed record CscCredentialRequest(string CertificateId, string? CredentialId = null, string? Scal = null, int? MultiSign = null);
+
 /// <summary>A certificate as the UI shows it.</summary>
 public sealed record CertificateView(
     string Id,
@@ -137,6 +147,8 @@ internal static class AdminEndpoints
                 pki.Unrevoke(id);
                 return Results.Ok(View(pki.Certificate(id)));
             }));
+        admin.MapGet("/csc/credentials", (SandboxCsc csc) => csc.Credentials.Select(CscView));
+        admin.MapPost("/csc/credentials", (CscCredentialRequest request, SandboxCsc csc) => CreateCscCredential(request, csc));
         admin.MapGet("/faults", (SandboxPki pki) => pki.Faults);
         admin.MapPut("/faults", (SandboxFaults faults, SandboxPki pki) =>
         {
@@ -153,6 +165,7 @@ internal static class AdminEndpoints
             Ocsp = OcspFault.None,
             TrustedList = TlFault.None,
             Lotl = LotlFault.None,
+            Csc = CscFault.None,
         }));
         admin.MapGet("/log", (long? after, int? limit, string? service, RequestLog log) =>
             log.Since(after ?? 0, limit is { } n ? Math.Clamp(n, 1, RequestLog.Capacity) : null, string.IsNullOrEmpty(service) ? null : service));
@@ -189,7 +202,7 @@ internal static class AdminEndpoints
                 ServiceEndpoints.TsaUser, ServiceEndpoints.TsaPassword, Url("tsa/expired"), Url("tsa/iofe"),
                 Url("tsa/non-qualified")),
             new CscInfo(csc.BaseUri.AbsoluteUri, SandboxCsc.ClientId, SandboxCsc.ClientSecret, SandboxCsc.ServiceToken, SandboxCsc.Pin, SandboxCsc.Otp,
-                [.. csc.Credentials.Select(c => new CscCredentialView(c.Id, c.Description, c.CertificateId, c.AuthMode, c.Scal, c.MultiSign))]),
+                [.. csc.Credentials.Select(CscView)]),
             SandboxPki.PfxPassword,
             // What a client puts in OutboundHttpPolicy.LoopbackOrigins to reach this Sandbox on this machine.
             [.. new[] { pki.BaseUrl, pki.HttpsBaseUrl, pki.LdapBaseUrl }.Select(u => u.GetLeftPart(UriPartial.Authority))],
@@ -249,6 +262,34 @@ internal static class AdminEndpoints
             return Results.Conflict(new { error = ex.Message });
         }
     }
+
+    internal static IResult CreateCscCredential(CscCredentialRequest request, SandboxCsc csc)
+    {
+        if (request.CertificateId is not { Length: > 0 })
+        {
+            return Results.BadRequest(new { error = "certificateId is required." });
+        }
+
+        try
+        {
+            var credential = csc.Create(request.CertificateId, request.CredentialId, request.Scal, request.MultiSign);
+            return Results.Created($"/api/csc/credentials/{credential.Id}", CscView(credential));
+        }
+        catch (KeyNotFoundException e)
+        {
+            return Results.NotFound(new { error = e.Message });
+        }
+        catch (ArgumentException e)
+        {
+            return Results.BadRequest(new { error = e.Message.Split(" (Parameter", 2)[0] });
+        }
+        catch (InvalidOperationException e)
+        {
+            return Results.Conflict(new { error = e.Message });
+        }
+    }
+
+    private static CscCredentialView CscView(SandboxCscCredential c) => new(c.Id, c.Description, c.CertificateId, c.AuthMode, c.Scal, c.MultiSign);
 
     private static IResult Found(SandboxPki pki, string id, Func<IResult> action) =>
         pki.Certificates.Any(c => c.Id == id) ? action() : Results.NotFound(new { error = $"No certificate '{id}'." });

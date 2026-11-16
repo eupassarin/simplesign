@@ -97,6 +97,7 @@ export const sandboxEn = {
     crl: "CRL server (HTTP, HTTPS, LDAP)",
     ocsp: "OCSP responder",
     trustedList: "The trusted list (/tl/tl.xml)",
+    csc: "Remote signing (CSC v2)",
     ocspSigner: "Who signs the OCSP responses",
     delay: "Delay (ms)",
     saved: "Failures saved.",
@@ -138,6 +139,12 @@ export const sandboxEn = {
       WrongSigner: { title: "Wrong signer", hint: "Signed by a certificate the LOTL does not name: the list is refused, so its CAs are not trusted." },
       Tampered: { title: "Tampered", hint: "Changed after signing: its signature no longer verifies, so the list is refused." },
       WithdrawnAfterUse: { title: "Withdrawn after use", hint: "The root CA's service is withdrawn from now on and was granted before (service history): signatures proven to exist earlier stay trusted, new ones are not." },
+    },
+    cscValues: {
+      None: { title: "Normal", hint: "Signs every authorized hash." },
+      Down: { title: "Down (HTTP 503)", hint: "Every call fails, the token and credentials/info included: the client cannot sign with a remote credential." },
+      Slow: { title: "Slow", hint: "signatures/signHash answers after the delay: shows the client's timeout." },
+      WrongSignature: { title: "Wrong signature", hint: "signatures/signHash signs with another key: the credential's certificate does not verify it, and a correct client refuses to build the signature." },
     },
   },
   log: {

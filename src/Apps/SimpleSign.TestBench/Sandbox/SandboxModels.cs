@@ -156,6 +156,23 @@ public enum LotlFault
     Tampered,
 }
 
+/// <summary>What the Sandbox's CSC v2 remote signing service does.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CscFault>))]
+public enum CscFault
+{
+    /// <summary>Answers normally.</summary>
+    None,
+
+    /// <summary>HTTP 503 on every call.</summary>
+    Down,
+
+    /// <summary>signatures/signHash answers after the delay.</summary>
+    Slow,
+
+    /// <summary>signatures/signHash signs with another key.</summary>
+    WrongSignature,
+}
+
 /// <summary>The failures of a Sandbox (its /api/faults).</summary>
 public sealed record SandboxFaults(
     TsaFault Tsa = TsaFault.None,
@@ -166,10 +183,13 @@ public sealed record SandboxFaults(
     int OcspDelayMs = 3000,
     OcspSigner OcspSigner = OcspSigner.Issuer,
     TlFault TrustedList = TlFault.None,
-    LotlFault Lotl = LotlFault.None)
+    LotlFault Lotl = LotlFault.None,
+    CscFault Csc = CscFault.None,
+    int CscDelayMs = 3000)
 {
     /// <summary>Whether any failure is on.</summary>
-    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None || Lotl != LotlFault.None;
+    public bool Any => Tsa != TsaFault.None || Crl != CrlFault.None || Ocsp != OcspFault.None || TrustedList != TlFault.None || Lotl != LotlFault.None
+        || Csc != CscFault.None;
 }
 
 /// <summary>No Sandbox is connected, and the option or sample needs one.</summary>

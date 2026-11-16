@@ -151,8 +151,13 @@ internal static class ServiceEndpoints
             var back = await csc.AuthorizeAsync(request, redirectUri, ct);
             return Results.Redirect(back.AbsoluteUri);
         });
-        app.Map("/csc/v2/{**path}", async (string path, HttpContext context, SandboxCsc csc, CancellationToken ct) =>
+        app.Map("/csc/v2/{**path}", async (string path, HttpContext context, SandboxCsc csc, SandboxPki pki, CancellationToken ct) =>
         {
+            if (pki.Faults is { Csc: not CscFault.None } faults)
+            {
+                context.Items[FaultItem] = faults.Csc == CscFault.Slow ? $"Slow ({faults.CscDelayMs} ms)" : faults.Csc.ToString();
+            }
+
             using var request = new HttpRequestMessage(new HttpMethod(context.Request.Method), new Uri(csc.BaseUri, path + context.Request.QueryString));
             using var body = new MemoryStream();
             await context.Request.Body.CopyToAsync(body, ct);

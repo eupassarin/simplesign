@@ -84,6 +84,7 @@ internal static class PlaybookSchema
                 ["tsa"] = Str("TSA failure.", Enum.GetNames<TsaFault>()),
                 ["trustedList"] = Str("Trusted list failure.", Enum.GetNames<TlFault>()),
                 ["lotl"] = Str("List of trusted lists failure.", Enum.GetNames<LotlFault>()),
+                ["csc"] = Str("CSC v2 remote signing failure.", Enum.GetNames<CscFault>()),
                 ["revoke"] = Arr(Str("A Sandbox certificate id."), "Certificates to revoke for the step."),
             }),
             ["expect"] = Obj("What the run must show; every field given is checked, for each engine.", new JsonObject
@@ -212,7 +213,8 @@ internal static class PlaybookSchema
             .Append(", ocsp ").Append(string.Join("/", Enum.GetNames<OcspFault>()))
             .Append(", tsa ").Append(string.Join("/", Enum.GetNames<TsaFault>()))
             .Append(", trustedList ").Append(string.Join("/", Enum.GetNames<TlFault>()))
-            .Append(", lotl ").Append(string.Join("/", Enum.GetNames<LotlFault>())).Append(".\n");
+            .Append(", lotl ").Append(string.Join("/", Enum.GetNames<LotlFault>()))
+            .Append(", csc ").Append(string.Join("/", Enum.GetNames<CscFault>())).Append(".\n");
         return md.ToString();
     }
 

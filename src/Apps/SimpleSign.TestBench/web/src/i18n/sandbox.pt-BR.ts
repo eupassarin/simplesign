@@ -97,6 +97,7 @@ export const sandboxPtBR: SandboxMessages = {
     crl: "Servidor de LCR (HTTP, HTTPS, LDAP)",
     ocsp: "Respondedor OCSP",
     trustedList: "O trusted list (/tl/tl.xml)",
+    csc: "Assinatura remota (CSC v2)",
     ocspSigner: "Quem assina as respostas OCSP",
     delay: "Atraso (ms)",
     saved: "Falhas salvas.",
@@ -138,6 +139,12 @@ export const sandboxPtBR: SandboxMessages = {
       WrongSigner: { title: "Assinante errado", hint: "Assinado por um certificado que o LOTL não indica: a lista é recusada e as ACs dela deixam de ser confiáveis." },
       Tampered: { title: "Adulterado", hint: "Alterado depois de assinado: a assinatura não confere e a lista é recusada." },
       WithdrawnAfterUse: { title: "Retirado após uso", hint: "O serviço da AC raiz está retirado a partir de agora e esteve concedido antes (histórico do serviço): assinaturas com prova de existência anterior continuam confiáveis; novas, não." },
+    },
+    cscValues: {
+      None: { title: "Normal", hint: "Assina todo hash autorizado." },
+      Down: { title: "Fora do ar (HTTP 503)", hint: "Toda chamada falha, inclusive o token e o credentials/info: o cliente não consegue assinar com uma credencial remota." },
+      Slow: { title: "Lento", hint: "O signatures/signHash responde depois do atraso: mostra o tempo limite do cliente." },
+      WrongSignature: { title: "Assinatura errada", hint: "O signatures/signHash assina com outra chave: o certificado da credencial não a confere, e um cliente correto se recusa a montar a assinatura." },
     },
   },
   log: {

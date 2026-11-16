@@ -42,7 +42,7 @@ used for real signatures.
 | CRLs over LDAP | `ldap://localhost:5302/cn={ca},o=SimpleSign Sandbox?certificateRevocationList;binary` |
 | OCSP (RFC 6960) | `POST /ocsp/{ca}` and `GET /ocsp/{ca}/{request}` |
 | TSA (RFC 3161) | `/tsa/tsr`, `/tsa/authenticated` (HTTP Basic), `/tsa/untrusted`, `/tsa/revoked`, `/tsa/expired`, `/tsa/wrong-name`, `/tsa/shifted?seconds=N` (its clock is N seconds off, -86400 to 86400), `/tsa/no-accuracy` (no accuracy in the TSTInfo; the others give one second, as EN 319 422 asks), `/tsa/short-lived?seconds=N` (a TSA certificate issued for the request, valid N more seconds, 1 to 3600: its tokens outlive it), `/tsa/iofe` (a TSA under its own self-signed CA, trusted only through `/tl/tl.xml` read with the IOFE profile) |
-| CSC v2 | `/csc/v2/…` (PIN, OTP, SCAL 1/2, OAuth with a login page that approves at once) |
+| CSC v2 | `/csc/v2/…` (PIN, OTP, SCAL 1/2, OAuth with a login page that approves at once; credentials for any signer of the intermediate CA, created with `POST /api/csc/credentials`) |
 | Trusted lists (ETSI TS 119 612 v5) | `/tl/lotl.xml` (list of trusted lists), `/tl/tl.xml` (the trusted list), `/tl/lotl-signer.pem`, `/tl/tl-signer.pem` (the operators' certificates) |
 
 The HTTPS endpoint listens on the port after the HTTP one and LDAP on the one after that
@@ -104,6 +104,18 @@ curl -X POST http://localhost:5300/api/certificates/custom -H "Content-Type: app
   -d '{"subject":"CN=Juan Pérez, serialNumber=PNOPE-12345678, C=PE","keyType":"EcdsaP256"}'
 ```
 
+A remote signing service is simulated by the CSC v2 endpoint. Besides its own credentials (`rsa-scal1`,
+`ec-p256`…, on the seeded signers), it signs with any signer of the intermediate CA once a credential is created
+for it, so a product that signs remotely can use a certificate with its own subject (a company seal, say). The
+client then sees only the certificate and the signatures; the key stays in the Sandbox:
+
+```bash
+id=$(curl -s -X POST http://localhost:5300/api/certificates/custom -H "Content-Type: application/json" \
+  -d '{"subject":"CN=Empresa Z (sello), O=Empresa Z E.I.R.L., C=PE"}' | jq -r .id)
+curl -X POST http://localhost:5300/api/csc/credentials -H "Content-Type: application/json" \
+  -d "{\"certificateId\":\"$id\",\"credentialId\":\"sello-z\"}"
+```
+
 Every signer can be downloaded as a PKCS#12 (password in `GET /api/info`). **Revoke now** adds a
 certificate to its CA's CRL and OCSP answers at once (or to one of them only); **Back to normal**
 puts every revocation and failure back.
@@ -116,6 +128,7 @@ puts every revocation and failure back.
 | OCSP | down, slow, tryLater, expired response, signed by an unauthorized responder, unknown for every certificate; delegated responder (OCSPSigning, `id-pkix-ocsp-nocheck`) |
 | TSA | down, slow, invalid token |
 | Trusted list | expired (NextUpdate passed), signed by a certificate the LOTL does not name, changed after signing |
+| CSC v2 | down (HTTP 503 on every call), slow (`signatures/signHash` waits), wrong signature (`signatures/signHash` signs with another key: the credential's certificate does not verify it) |
 
 Every request is in the request log (`GET /api/log`; the **Requests** tab of the TestBench's Sandbox control):
 service, URL, status, the failure applied. The Sandbox keeps the last 500; the tab shows them 50 at a time.
@@ -142,19 +155,22 @@ drives the Sandbox the same way, with or without a TestBench, and what one clien
 | `POST /api/certificates/{id}/unrevoke` | Takes the revocation back | | `CertificateView` |
 | `POST /api/certificates/custom` | Issues a signer with a chosen subject under the intermediate CA (revocable, downloadable, removed by reset; at most 200) | `{"subject": "CN=…, serialNumber=…, C=PE"}` or `{"rdns": [{"type": "CN", "value": "…"}, …]}` (most specific first); optional `keyType` (`Rsa2048` default, `Rsa3072`, `Rsa4096`, `EcdsaP256/384/521`), `keyUsage` (`DigitalSignature`, `NonRepudiation`, `KeyEncipherment`, `DataEncipherment`, `KeyAgreement`; default the first two; `[]` for no extension), `title`, `validityDays` (1–825, default 365). Accepted attributes: `CN` (required), `serialNumber`, `C`, `O`, `OU`, `L`, `ST`, `T`, `G`/`GN`, `SN`, `organizationIdentifier`; 1–64 characters, 16 at most | 201 `CertificateView`, 400 for an invalid subject |
 | `POST /api/certificates/short-lived?seconds=3` | Issues a signer that expires in 1–3600 s (valid from two hours back, before the CRLs and OCSP responses it is checked against) | | `application/x-pkcs12` |
+| `GET /api/csc/credentials` | The CSC v2 credentials: the service's own, then those created on request | | `CscCredentialView[]` |
+| `POST /api/csc/credentials` | Creates a CSC v2 credential for a signer of the intermediate CA (removed by reset; at most 200) | `{"certificateId": "custom-…", "credentialId": "sello-z"}`; optional `scal` (`"1"` default, PIN; `"2"`, PIN and OTP), `multiSign` (1–100, default 1); `credentialId` defaults to the certificate id | 201 `CscCredentialView`, 404 unknown certificate, 400 not a signer of the intermediate CA or a bad field, 409 id taken |
 | `GET /api/faults` | The failures | | `SandboxFaults` |
 | `PUT /api/faults` | Replaces every failure | `SandboxFaults` (fields left out take their default) | `SandboxFaults` |
 | `PATCH /api/faults` | Changes only the fields sent | any subset of `SandboxFaults` | `SandboxFaults` |
 | `DELETE /api/faults` | Every failure off (the delays and `ocspSigner` stay) | | `SandboxFaults` |
 | `GET /api/log` | Requests answered, oldest first | `after` (id), `limit` (1–500: the newest N), `service` (`AIA`, `CRL`, `CRL (LDAP)`, `OCSP`, `TSA`, `CSC`, `TL`) | `SandboxRequest[]` |
 | `DELETE /api/log` | Clears the request log | | 204 |
-| `POST /api/reset` | Back to the initial state: revocations, failures off, log cleared, signers issued on request removed | | 204 |
+| `POST /api/reset` | Back to the initial state: revocations, failures off, log cleared, signers and CSC credentials created on request removed | | 204 |
 
 `SandboxFaults` fields: `tsa` (`None`, `Down`, `Slow`, `InvalidToken`, `Untrusted`), `crl` (`None`,
 `Down`, `Slow`, `Expired`, `WrongKey`, `Stale`, `NoNextUpdate`), `ocsp` (`None`, `Down`, `Slow`, `TryLater`, `Expired`,
 `Unauthorized`, `Unknown`), `ocspSigner` (`Issuer`, `Delegated`), `trustedList` (`None`, `Expired`,
 `WrongSigner`, `Tampered`, `WithdrawnAfterUse`: the root CA's service withdrawn now and granted before, in its
-service history), and `tsaDelayMs`, `crlDelayMs`, `ocspDelayMs` (0–60000, used when `Slow`).
+service history), `lotl` (`None`, `Expired`, `WrongSigner`, `Tampered`), `csc` (`None`, `Down`, `Slow`, `WrongSignature`),
+and `tsaDelayMs`, `crlDelayMs`, `ocspDelayMs`, `cscDelayMs` (0–60000, used when `Slow`).
 
 ```bash
 # CRL server down, the other failures as they are

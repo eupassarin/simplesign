@@ -11,6 +11,7 @@ using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.Sandbox.Endpoints;
 using SimpleSign.Sandbox.Services;
+using SimpleSign.Signers.Cloud;
 using SimpleSign.Signers.Cloud.Csc;
 
 namespace SimpleSign.Sandbox.Tests;
@@ -366,6 +367,78 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
     }
 
     [Fact]
+    public async Task CscCredential_CustomCertificate_SignsWithItsKey()
+    {
+        var (client, credentialId, leaf) = await CustomCscCredentialAsync("CN=Empresa Z E.I.R.L. (firma remota), O=Empresa Z E.I.R.L., C=PE");
+        using (leaf)
+        {
+            (await client.ListCredentialsAsync()).Select(c => c.Id).ShouldContain(credentialId);
+            using var signer = await CscSigner.CreateAsync(client, credentialId, new ExplicitCscAuthorizer(fixture.Info.Csc.Pin));
+            byte[] data = Encoding.UTF8.GetBytes("signed attributes");
+
+            var signature = await signer.SignAsync(Request(data), default);
+
+            signer.Certificate.Thumbprint.ShouldBe(leaf.Thumbprint);
+            using var rsa = leaf.GetRSAPublicKey()!;
+            rsa.VerifyData(data, signature.Span, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1).ShouldBeTrue();
+        }
+    }
+
+    [Theory]
+    [InlineData("""{"certificateId":"no-such-certificate"}""", HttpStatusCode.NotFound)]
+    [InlineData("""{"certificateId":"tsa"}""", HttpStatusCode.BadRequest)]
+    [InlineData("""{"certificateId":"under-revoked-ca"}""", HttpStatusCode.BadRequest)]
+    [InlineData("""{"certificateId":"rsa-2048","credentialId":"new-one","scal":"3"}""", HttpStatusCode.BadRequest)]
+    [InlineData("""{"certificateId":"rsa-2048","credentialId":"bad id"}""", HttpStatusCode.BadRequest)]
+    [InlineData("""{"certificateId":"rsa-2048","credentialId":"rsa-scal1"}""", HttpStatusCode.Conflict)]
+    public async Task CscCredential_InvalidRequest_IsRefused(string body, HttpStatusCode expected)
+    {
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        (await Http.PostAsync("api/csc/credentials", content)).StatusCode.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task CscFault_Down_EveryCallFails()
+    {
+        var client = new CscClient(new CscClientOptions { BaseUri = new Uri(fixture.Info.Csc.BaseUrl), AccessToken = fixture.Info.Csc.ServiceToken });
+
+        var error = await WithFaultsAsync(new SandboxFaults(Csc: CscFault.Down), () =>
+            Should.ThrowAsync<CloudSigningException>(() => CscSigner.CreateAsync(client, "rsa-scal1", new ExplicitCscAuthorizer(fixture.Info.Csc.Pin))));
+
+        error.Message.ShouldContain("503");
+    }
+
+    [Fact]
+    public async Task CscFault_WrongSignature_CertificateDoesNotVerifyIt()
+    {
+        var client = new CscClient(new CscClientOptions { BaseUri = new Uri(fixture.Info.Csc.BaseUrl), AccessToken = fixture.Info.Csc.ServiceToken });
+        using var signer = await CscSigner.CreateAsync(client, "rsa-scal1", new ExplicitCscAuthorizer(fixture.Info.Csc.Pin));
+        byte[] data = Encoding.UTF8.GetBytes("signed attributes");
+
+        var signature = await WithFaultsAsync(new SandboxFaults(Csc: CscFault.WrongSignature), async () => await signer.SignAsync(Request(data), default));
+
+        using var rsa = signer.Certificate.GetRSAPublicKey()!;
+        rsa.VerifyData(data, signature.Span, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task CscFault_Slow_SignHashWaitsForTheDelay()
+    {
+        var client = new CscClient(new CscClientOptions { BaseUri = new Uri(fixture.Info.Csc.BaseUrl), AccessToken = fixture.Info.Csc.ServiceToken });
+        using var signer = await CscSigner.CreateAsync(client, "rsa-scal1", new ExplicitCscAuthorizer(fixture.Info.Csc.Pin));
+
+        var elapsed = await WithFaultsAsync(new SandboxFaults(Csc: CscFault.Slow, CscDelayMs: 600), async () =>
+        {
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            await signer.SignAsync(Request(Encoding.UTF8.GetBytes("slow")), default);
+            return System.Diagnostics.Stopwatch.GetElapsedTime(started);
+        });
+
+        elapsed.ShouldBeGreaterThanOrEqualTo(TimeSpan.FromMilliseconds(600));
+    }
+
+    [Fact]
     public async Task Csc_OAuthAuthorize_RedirectsBackWithACode()
     {
         using var noRedirect = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, CheckCertificateRevocationList = true }) { BaseAddress = fixture.BaseUrl };
@@ -374,6 +447,25 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
         response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         response.Headers.Location!.AbsoluteUri.ShouldStartWith("http://127.0.0.1:1/callback?code=");
         response.Headers.Location.Query.ShouldContain("state=s1");
+    }
+
+    private static ExternalSigningRequest Request(byte[] data) =>
+        new(data, HashAlgorithmName.SHA256, "1.2.840.113549.1.1.11", ExternalSigningPayloadKind.CmsSignedAttributes);
+
+    /// <summary>Issues a certificate with <paramref name="subject"/> and creates a CSC credential for it.</summary>
+    private async Task<(CscClient Client, string CredentialId, X509Certificate2 Leaf)> CustomCscCredentialAsync(string subject)
+    {
+        using var issued = await Http.PostAsJsonAsync("api/certificates/custom", new CustomCertificateRequest(Subject: subject), SandboxFixture.Json);
+        issued.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var certificate = (await issued.Content.ReadFromJsonAsync<CertificateView>(SandboxFixture.Json))!;
+        string credentialId = "seal-" + certificate.Id;
+        using var created = await Http.PostAsJsonAsync("api/csc/credentials", new CscCredentialRequest(certificate.Id, credentialId), SandboxFixture.Json);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var view = (await created.Content.ReadFromJsonAsync<CscCredentialView>(SandboxFixture.Json))!;
+        view.CertificateId.ShouldBe(certificate.Id);
+        view.Scal.ShouldBe("1");
+        var client = new CscClient(new CscClientOptions { BaseUri = new Uri(fixture.Info.Csc.BaseUrl), AccessToken = fixture.Info.Csc.ServiceToken });
+        return (client, credentialId, await LeafAsync(certificate.Id));
     }
 
     private async Task<X509Certificate2> LeafAsync(string id) => X509CertificateLoader.LoadCertificate(await Http.GetByteArrayAsync($"api/certificates/{id}/cer"));

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sandbox: CSC v2 credentials for any signer, and CSC failures.** `POST /api/csc/credentials`
+  (`{ certificateId, credentialId?, scal?, multiSign? }`) gives a signer of the intermediate CA — a
+  certificate issued with `POST /api/certificates/custom`, say a company seal — a credential of the
+  simulated CSC v2 service, so a product that signs remotely sees its own certificate while the key
+  stays in the Sandbox; `GET /api/csc/credentials` lists them, `/api/info` and the TestBench's CSC
+  picker show them, and a reset removes them. A new failure, `csc` (`Down`: HTTP 503 on every call,
+  `Slow`: `signatures/signHash` waits `cscDelayMs`, `WrongSignature`: it signs with another key), is
+  switched like the others (`PATCH /api/faults`, the Sandbox control's Failures tab, a playbook
+  step's `sandbox.csc`).
 - **TestBench: an Augment tab** (Sign · Validate · Augment · Playbook). It raises a signed file
   (made on the Sign tab, a sample, or uploaded from any other product, with the data of a detached
   signature) to B-T, B-LT or B-LTA, or renews a B-LTA's archive time-stamp, through
