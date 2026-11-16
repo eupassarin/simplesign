@@ -515,6 +515,19 @@ when to use which; each has its own article.
   the signing options the library has, `--allow-origin` / `--allow-ldap` / `--tls-trust`, and
   `--json` on the signing commands.
 
+#### PDF/A preservation, checked by veraPDF
+
+- `tests/integration/SimpleSign.VeraPdf.Tests` signs the PDF/A-1b, 2b and 3b files of the veraPDF
+  corpus (invisible, visible, twice, B-LTA) and requires veraPDF to find them still conforming
+  (ADR 0014 §5); a control test breaks the widget's Print flag and requires veraPDF to report it.
+  veraPDF runs from the `verapdf/cli` image pinned by digest, or from a local CLI named by
+  `SIMPLESIGN_VERAPDF`; without either the tests skip. The CI job **PDF/A (veraPDF)** runs them on
+  every push (`Category=VeraPdf`, left out of the other test runs) with
+  `SIMPLESIGN_REQUIRE_VERAPDF=true`, keeping every rejected document and its report as an artifact.
+- **Known gap these tests found:** a visible signature paints in DeviceRGB, which breaks
+  ISO 19005-2/3 §6.2.4.3 on a PDF/A document with no RGB OutputIntent and no DefaultRGB. The tests
+  expect exactly that failure until the appearance is fixed.
+
 ### Changed
 
 - **CLI: an expired trusted list is judged by the policy.** `simplesign validate --tsl/--lotl` (and

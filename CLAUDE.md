@@ -13,7 +13,10 @@ SimpleSign is a .NET library for PAdES, CAdES and XAdES signatures (ETSI EN 319 
 dotnet build
 
 # Run every test project (what CI runs)
-dotnet test SimpleSign.sln --filter "Category!=Stress"
+dotnet test SimpleSign.sln --filter "Category!=Stress&Category!=VeraPdf"
+
+# PDF/A preservation checked by veraPDF (Docker: docker pull the image in VeraPdf.cs; or SIMPLESIGN_VERAPDF=<local CLI>)
+dotnet test tests/integration/SimpleSign.VeraPdf.Tests --framework net10.0
 
 # Run specific test project
 dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests
@@ -162,7 +165,7 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
   `tests/unit/Formats/SimpleSign.CAdES.Tests` (the CLI too: `tests/unit/Apps/SimpleSign.Cli.Tests`).
   Every test project is in `SimpleSign.sln`.
 - Every test class has `[Trait("Category", …)]`: `Unit` by default, `Contract` in Contracts.Tests,
-  `Integration` (network), `Stress` (excluded from the regular CI run)
+  `Integration` (network), `Stress` (excluded from the regular CI run), `VeraPdf` (needs veraPDF; its own CI job)
 - Test fixtures in `tests/shared/SimpleSign.TestFixtures`
 - Test helpers in `tests/shared/SimpleSign.TestHelpers`
 - Test cert generation: use helpers, don't commit real certificates
