@@ -925,6 +925,23 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task XadesSign_DetachedBinary_SignsAPdfAndValidatesWithIt()
+    {
+        string data = Path.Combine(_tempDir, "contract.pdf");
+        await File.WriteAllBytesAsync(data, [.. "%PDF-1.7\n"u8.ToArray(), 0x00, 0xFF, 0x80, .. "%%EOF\n"u8.ToArray()]);
+        string signature = Path.Combine(_tempDir, "contract.pdf.xml");
+        var (signExit, signOutput) = await RunAsync("xades", "sign", data, "--cert", _pfxPath, "--password", Password, "--output", signature,
+            "--form", "detached", "--data-uri", "contract.pdf", "--detached-binary");
+        signExit.ShouldBe(0, signOutput);
+
+        var (exit, output) = await RunAsync("xades", "validate", signature, "--data", data, "--trust", _cerPath, "--json");
+
+        exit.ShouldBe(0, output);
+        using var json = JsonDocument.Parse(output);
+        json.RootElement.GetProperty("isIntegrityValid").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task XadesValidate_DetachedWithChangedData_IsInvalid()
     {
         string data = Path.Combine(_tempDir, "data.xml");
@@ -1430,6 +1447,7 @@ public sealed class CliCommandTests : IDisposable
     [Theory]
     [InlineData("Invalid canonicalization", "--canonicalization", "c14n11")]
     [InlineData("--data-objects-timestamp requires --tsa", "--data-objects-timestamp")]
+    [InlineData("--detached-binary needs --form detached", "--detached-binary")]
     [InlineData("--countersign-id is used with --countersign", "--countersign-id", "S-1")]
     [InlineData("Invalid --external-object", "--external-object", "terms.txt")]
     [InlineData("File not found (--embed-object)", "--embed-object", "missing.bin,application/pdf")]

@@ -598,6 +598,10 @@ internal sealed class XadesPlan
         if (o.Form == XadesFormChoice.Detached)
         {
             _steps.Add(($".WithDataUri({SigningPlan.Str(o.DataUri)}) // where the validator will find the data", b => b.WithDataUri(o.DataUri)));
+            if (o.DetachedBinary)
+            {
+                _steps.Add((".WithDetachedBinary() // any file: the reference digests its octets, no canonicalization", b => b.WithDetachedBinary()));
+            }
         }
 
         var hash = SigningPlan.ToHash(o.Hash);
@@ -876,6 +880,10 @@ internal sealed class XadesPlan
         if (_o.Form == XadesFormChoice.Detached && !_o.CounterSign)
         {
             cli.Add("--data-uri", _o.DataUri ?? "");
+            if (_o.DetachedBinary)
+            {
+                cli.Add("--detached-binary");
+            }
         }
 
         if (_o.Level != BaselineLevel.BB)
