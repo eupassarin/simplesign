@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Shouldly;
+using SimpleSign.Core.Signing;
 using SimpleSign.TestBench.Cades;
 using SimpleSign.TestBench.Credentials;
 using SimpleSign.TestBench.CrossValidation;
@@ -35,6 +36,33 @@ public sealed class RunServiceTests(TestBenchFixture fixture)
 
     private static string Problems(RunView run) =>
         string.Join("; ", run.Issues.Select(i => i.Message).Concat(run.Validation.SelectMany(v => v.Errors)).Append(run.Error ?? ""));
+
+    [SkippableFact]
+    public async Task RunAsync_AugmentACadesBb_ReachesBltaAndSaysTheLevelBeforeAndTheCode()
+    {
+        var sample = fixture.CadesSamples.Single(s => s.Id == "enveloped");
+        var request = new RunRequest("", JsonSerializer.SerializeToElement(new AugmentOptions(sample.FileId, Level: "B-LTA",
+            Timestamp: new TimestampChoice { Provider = TsaProvider.SandboxAuthenticated }), WorkbenchJson.Options), Kind: RunKinds.Augment);
+
+        var run = await fixture.Runs().RunAsync(request, default);
+
+        run.Success.ShouldBeTrue(Problems(run));
+        run.Kind.ShouldBe(RunKinds.Augment);
+        run.Format.ShouldBe(RunFormats.Cades);
+        run.InitialLevel.ShouldBe("B-B");
+        run.AchievedLevel.ShouldBe("B-LTA");
+        run.FileName.ShouldBe("contrato.txt-b-lta.p7m");
+        run.Code.ShouldNotBeNull().CSharp.ShouldContain("CadesAugmenter.Signature(");
+        run.Code!.Cli.ShouldBe("simplesign augment contrato.txt.p7m --level BLTA --tsa $TSA_URL");
+    }
+
+    [Theory]
+    [InlineData("contract-signed.pdf", AdesBaselineLevel.Archive, "contract-signed-b-lta.pdf")]
+    [InlineData("contract-signed-b-t.pdf", AdesBaselineLevel.LongTerm, "contract-signed-b-lt.pdf")]
+    [InlineData("act.txt.p7s", AdesBaselineLevel.Timestamped, "act.txt-b-t.p7s")]
+    [InlineData("order-augmented.xml", AdesBaselineLevel.Archive, "order-b-lta.xml")]
+    public void AugmentedName_LevelReached_ReplacesTheLevelTheNameCarries(string fileName, AdesBaselineLevel level, string expected) =>
+        RunService.AugmentedName(fileName, level).ShouldBe(expected);
 
     [SkippableTheory]
     [InlineData(RunFormats.Pades, "sign")]

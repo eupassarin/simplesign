@@ -48,6 +48,7 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
     [InlineData("eidas-baseline")]
     [InlineData("icp-brasil-pades")]
     [InlineData("govbr-pades")]
+    [InlineData("augment-external")]
     public async Task RunToEnd_Sample_PassesEveryStep(string sample)
     {
         fixture.RequireSandbox();
@@ -101,6 +102,26 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
 
         runner.SetInput("theirs", null).Inputs.Single().File.ShouldBeNull();
         Should.Throw<KeyNotFoundException>(() => runner.SetInput("other", fileId));
+    }
+
+    [SkippableFact]
+    public async Task RunToEnd_AugmentExternalWithAFileOfEachFormat_RaisesEachToBltaAndRenews()
+    {
+        fixture.RequireSandbox();
+        using var runner = Runner();
+        runner.Load(PlaybookSamples.Json("augment-external")!).CanRun.ShouldBeTrue();
+        var detached = fixture.CadesSamples.Single(s => s.Id == "detached");
+        runner.SetInput("pades", fixture.ValidationSamples.Single(s => s.Id == "valid").FileId);
+        runner.SetInput("cades", fixture.CadesSamples.Single(s => s.Id == "enveloped").FileId);
+        runner.SetInput("cades-detached", detached.FileId);
+        runner.SetInput("cades-data", detached.DataId!);
+        runner.SetInput("xades", fixture.XmlSamples.Single(s => s.Id == "v-xades").FileId);
+
+        var view = await runner.RunToEndAsync(new PlaybookRunRequest()).WaitAsync(TimeSpan.FromMinutes(5));
+
+        view.Steps.ShouldAllBe(s => s.Status == PlaybookStatuses.Passed, Failures(view));
+        view.Steps.Where(s => s.StepId.EndsWith("-renew", StringComparison.Ordinal)).Select(s => s.Result!.Runs.Single().AchievedLevel)
+            .ShouldBe(["B-LTA", "B-LTA", "B-LTA", "B-LTA"]);
     }
 
     [SkippableFact]

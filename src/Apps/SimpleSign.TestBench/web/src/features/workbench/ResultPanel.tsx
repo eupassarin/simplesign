@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { Check, ChevronRight, CircleSlash, Download, FileCheck2, Info, Loader2, RefreshCw, ShieldCheck, ShieldQuestion, TriangleAlert, XCircle } from "lucide-react"
+import { ArrowUpFromLine, Check, ChevronRight, CircleSlash, Download, FileCheck2, Info, Loader2, RefreshCw, ShieldCheck, ShieldQuestion, TriangleAlert, XCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -46,8 +46,8 @@ export function ResultPanel({ extra }: { extra?: { id: string; label: ReactNode;
     return (
       <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
         <FileCheck2 className="size-8 opacity-40" />
-        <p className="text-sm font-medium">{t(mode === "validate" ? "val.emptyTitle" : "wb.result.emptyTitle")}</p>
-        <p className="max-w-sm text-xs leading-relaxed">{t(mode === "validate" ? "val.emptyHint" : "wb.result.emptyHint")}</p>
+        <p className="text-sm font-medium">{t(mode === "validate" ? "val.emptyTitle" : mode === "augment" ? "aug.emptyTitle" : "wb.result.emptyTitle")}</p>
+        <p className="max-w-sm text-xs leading-relaxed">{t(mode === "validate" ? "val.emptyHint" : mode === "augment" ? "aug.emptyHint" : "wb.result.emptyHint")}</p>
       </div>
     )
   }
@@ -107,8 +107,14 @@ export function CliSteps({ steps }: { steps: CliStep[] }) {
 
 function Summary({ run }: { run: RunView }) {
   const { t, number } = useI18n()
-  const { reuse, schema, openInValidate } = useWorkbench()
+  const { reuse, schema, openInValidate, openInAugment } = useWorkbench()
   const validating = run.kind === "validate"
+  const augmenting = run.kind === "augment"
+  // The file the run produced (or validated), with the data of a detached signature, ready for the next task.
+  const produced = {
+    fileId: run.outputId!, name: run.fileName ?? "",
+    dataId: run.format === "pades" ? null : (run.options.dataId as string | null | undefined) ?? null,
+  }
   const formatTitle = schema.formats.find((f) => f.id === run.format)?.title ?? run.format
   if (!run.success) {
     return (
@@ -131,25 +137,25 @@ function Summary({ run }: { run: RunView }) {
         <ShieldCheck className="text-success size-6" />
         <div className="min-w-0 flex-1">
           <p className="font-medium">
-            {formatTitle} · {validating ? run.fileName : run.achievedLevel ?? run.requestedLevel}
+            {formatTitle} · {validating ? run.fileName : augmenting ? `${run.initialLevel ?? "?"} → ${run.achievedLevel ?? run.requestedLevel}` : run.achievedLevel ?? run.requestedLevel}
             {run.engine === "cli" && <span className="ml-2"><Pill tone="info">{t("wb.engine.cli")}</Pill></span>}
           </p>
           <p className="text-muted-foreground text-xs">
             {validating
               ? t("val.summary", { size: number(run.bytes / 1024, 1), validate: run.validateMs, total: run.totalMs })
-              : t("wb.result.summary", { name: run.fileName ?? "", size: number(run.bytes / 1024, 1), sign: run.signMs, validate: run.validateMs, total: run.totalMs })}
+              : augmenting
+                ? `${run.fileName ?? ""} · ${t("aug.summary", { size: number(run.bytes / 1024, 1), sign: run.signMs, validate: run.validateMs, total: run.totalMs })}`
+                : t("wb.result.summary", { name: run.fileName ?? "", size: number(run.bytes / 1024, 1), sign: run.signMs, validate: run.validateMs, total: run.totalMs })}
           </p>
         </div>
         {run.overall && <Indication value={run.overall} />}
         {run.crossValidation?.available && <Pill tone={run.crossValidation.agree ? "success" : "warning"}>{t(run.crossValidation.agree ? "wb.dss.agrees" : "wb.dss.differs")}</Pill>}
-        {!validating && (
-          <Button variant="outline" size="sm" onClick={() => openInValidate({
-            fileId: run.outputId!, name: run.fileName ?? "", dataId: run.format === "pades" ? null : (run.options.dataId as string | null | undefined) ?? null,
-          })}><FileCheck2 /> {t("wb.result.openInValidate")}</Button>
-        )}
+        {!validating && <Button variant="outline" size="sm" onClick={() => openInValidate(produced)}><FileCheck2 /> {t("wb.result.openInValidate")}</Button>}
+        <Button variant="outline" size="sm" onClick={() => openInAugment(produced)}><ArrowUpFromLine /> {t(augmenting ? "aug.again" : "wb.result.openInAugment")}</Button>
         <Button size="sm" asChild><a href={api.fileUrl(run.outputId!, true)}><Download /> {t("common.download")}</a></Button>
       </div>
       <div className="grid gap-x-8 rounded-lg border px-4 py-2 sm:grid-cols-2">
+        {augmenting && <KeyValue label={t("aug.initial")}>{run.initialLevel ?? "—"}</KeyValue>}
         {!validating && <KeyValue label={t("wb.result.requested")}>{run.requestedLevel ?? "—"}</KeyValue>}
         <KeyValue label={t(validating ? "val.detectedLevel" : "wb.result.achieved")}>{downgraded ? <Pill tone="warning">{run.achievedLevel}</Pill> : run.achievedLevel ?? "—"}</KeyValue>
         <KeyValue label={t("wb.result.signatures")}>{run.validation.length}</KeyValue>
@@ -165,7 +171,7 @@ function Summary({ run }: { run: RunView }) {
       <IssueList issues={run.issues} />
       {run.cli && run.cli.length > 0 && <CliSteps steps={run.cli} />}
       <div className="space-y-2">{run.validation.map((v, i) => <VerdictCard key={i} verdict={v} compact />)}</div>
-      {!validating && <Button variant="ghost" size="sm" onClick={() => reuse(run)}><RefreshCw /> {t("wb.result.reuse")}</Button>}
+      {run.kind === "sign" && <Button variant="ghost" size="sm" onClick={() => reuse(run)}><RefreshCw /> {t("wb.result.reuse")}</Button>}
     </div>
   )
 }
@@ -319,8 +325,8 @@ function Difference({ row }: { row: DssComparisonRow }) {
 /** What is inside the produced file, in the terms of its format. */
 function Inspection({ run }: { run: RunView }) {
   const { t, number } = useI18n()
-  if (run.kind === "validate") {
-    // The validators' own reports: the same views, without the signing facts.
+  if (run.kind !== "sign") {
+    // The validators' own reports (an augmentation is validated after): the same views, without the signing facts.
     if (run.format === "cades") return <CmsStructure facts={(run.detail as CadesValidationView).structure} />
     if (run.format === "xades") return <div className="space-y-6"><XmlViews view={run.detail as XmlValidationView} /></div>
     const report = run.detail as ValidationReport

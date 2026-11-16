@@ -3,7 +3,7 @@ import { toast } from "sonner"
 import { useI18n } from "@/i18n"
 import { api } from "@/lib/api"
 import { pairwise, product } from "./combinations"
-import type { CredentialFacts, EnvironmentInfo, OptionState } from "@/lib/types"
+import type { CredentialFacts, EnvironmentInfo, OptionState, TimestampChoice } from "@/lib/types"
 import {
   asText, getPath, hasPath, setPath,
   type DssSettings, type DssStatus, type Evaluation, type Format, type Options, type RunEvent, type RunKind, type RunLogEntry, type RunSummary,
@@ -28,8 +28,15 @@ export interface ValidateTarget {
   dataName?: string | null
 }
 
-/** The tasks of the top bar: the two run kinds, and the Playbook tab. */
+/** The tasks of the top bar: the three run kinds (sign, validate, augment), and the Playbook tab. */
 export type AppMode = RunKind | "playbook"
+
+/** How the Augment task raises a signature: the level to reach, the TSA, and whether a B-LTA's archive time-stamp is renewed. */
+export interface AugmentSettings {
+  level: "BT" | "BLT" | "BLTA"
+  timestamp: TimestampChoice
+  renew: boolean
+}
 
 interface WorkbenchValue {
   /** The task on screen: make a signature, validate a file (each keeps its own result), or run a playbook. */
@@ -47,6 +54,15 @@ interface WorkbenchValue {
   validate: (target?: ValidateTarget) => Promise<RunView | null>
   /** Shows a file in the Validate task and validates it. */
   openInValidate: (target: ValidateTarget) => void
+  /** The signed file the Augment task raises (and, for a detached signature, its data). */
+  augmentTarget: ValidateTarget | null
+  setAugmentTarget: (target: ValidateTarget | null) => void
+  augmentSettings: AugmentSettings
+  setAugmentSettings: (change: (current: AugmentSettings) => AugmentSettings) => void
+  /** Raises the level of the Augment task's file (validated after, with the Validate task's trust). */
+  augment: (target?: ValidateTarget) => Promise<RunView | null>
+  /** Shows a file in the Augment task, without running it: the level and TSA are chosen there. */
+  openInAugment: (target: ValidateTarget) => void
   schema: WorkbenchSchema
   /** The connected Sandbox (env.sandbox) and the runtime. */
   env: EnvironmentInfo | null
@@ -149,13 +165,18 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
   const [evaluating, setEvaluating] = useState(false)
   const [mode, setModeState] = useState<AppMode>(() => {
     const saved = load<string>("wb.mode", "sign")
-    return saved === "validate" || saved === "playbook" ? saved : "sign"
+    return saved === "validate" || saved === "augment" || saved === "playbook" ? saved : "sign"
   })
-  const [slots, setSlots] = useState<Record<RunKind, Slot>>({ sign: emptySlot, validate: emptySlot })
+  const [slots, setSlots] = useState<Record<RunKind, Slot>>({ sign: emptySlot, validate: emptySlot, augment: emptySlot })
   const patchSlot = useCallback((kind: RunKind, change: (slot: Slot) => Slot) => setSlots((all) => ({ ...all, [kind]: change(all[kind]) })), [])
   const { run, logs, running } = slots[mode === "playbook" ? "sign" : mode]
   const [validateTarget, setValidateTarget] = useState<ValidateTarget | null>(null)
   const [validateOptions, setValidateOptions] = useState<Options>(() => ({ validate: true, validation: initial(schema, "pades", connected).validation }))
+  const [augmentTarget, setAugmentTarget] = useState<ValidateTarget | null>(null)
+  const [augmentSettings, setAugmentSettingsState] = useState<AugmentSettings>(() => ({
+    level: "BLTA", timestamp: { provider: connected ? "Sandbox" : "DigiCert", auth: "None" }, renew: false,
+  }))
+  const setAugmentSettings = useCallback((change: (current: AugmentSettings) => AugmentSettings) => setAugmentSettingsState(change), [])
   const setMode = useCallback((next: AppMode) => {
     localStorage.setItem("wb.mode", JSON.stringify(next))
     setModeState(next)
@@ -253,7 +274,8 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
       api.workbench.history().then(setHistory).catch(() => {})
       resolve(result)
     }
-    api.workbench.start(runFormat, runOptions, dss.enabled, kind, engine)
+    // An augmentation runs through the library only: the CLI's augment is shown as the matching command.
+    api.workbench.start(runFormat, runOptions, dss.enabled, kind, kind === "augment" ? "library" : engine)
       .then(({ id }) => {
         const source = new EventSource(api.workbench.eventsUrl(id))
         stream.current = source
@@ -291,6 +313,20 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
     setMode("validate")
     void startRun("validate", "", { fileId: target.fileId, dataId: target.dataId ?? null, settings: validateOptions.validation })
   }, [setMode, startRun, validateOptions])
+
+  const augment = useCallback((target?: ValidateTarget) => {
+    const file = target ?? augmentTarget
+    if (!file) return Promise.resolve(null)
+    return startRun("augment", "", {
+      fileId: file.fileId, dataId: file.dataId ?? null, level: augmentSettings.level, timestamp: augmentSettings.timestamp,
+      renew: augmentSettings.renew, validation: validateOptions.validation,
+    })
+  }, [startRun, augmentTarget, augmentSettings, validateOptions])
+
+  const openInAugment = useCallback((target: ValidateTarget) => {
+    setAugmentTarget(target)
+    setMode("augment")
+  }, [setMode])
 
   const openRun = useCallback(async (id: string) => {
     const result = await api.workbench.run(id)
@@ -385,10 +421,12 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
 
   const value = useMemo<WorkbenchValue>(() => ({
     signWithSandbox, mode, setMode, validateTarget, setValidateTarget, validateOptions, setValidateOption, updateValidate, updateAll, validate, openInValidate,
+    augmentTarget, setAugmentTarget, augmentSettings, setAugmentSettings, augment, openInAugment,
     schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, credential: evaluation?.credential ?? null, isVisible, visibleValues,
     run, logs, running, sign, history, openRun, reuse, variants, variantsRunning, variantValues, runVariants, stopVariants, engine, setEngine, dss, dssStatus, saveDss, checkDss,
-  }), [variantValues, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, updateValidate, updateAll, validate, openInValidate, variants, variantsRunning, runVariants, stopVariants, schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
+  }), [variantValues, signWithSandbox, mode, setMode, validateTarget, validateOptions, setValidateOption, updateValidate, updateAll, validate, openInValidate,
+    augmentTarget, augmentSettings, setAugmentSettings, augment, openInAugment, variants, variantsRunning, runVariants, stopVariants, schema, env, setEnv, format, setFormat, options, set, patch, applyPreset, reset,
     evaluation, evaluating, state, isVisible, visibleValues, run, logs, running, sign, history, openRun, reuse, engine, setEngine, dss, dssStatus, saveDss, checkDss])
 
   return <Context.Provider value={value}>{children}</Context.Provider>

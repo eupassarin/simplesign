@@ -37,6 +37,15 @@ def validate(id, title, tags, file_id, expect, desc=None, sandbox=None, data_id=
     return s
 
 
+def augment(id, title, tags, file_id, expect, desc=None, **opts):
+    """Raises an earlier step's file with the library's augmenter, then validates it under the iofe profile and policy."""
+    options = {"fileId": file_id, **opts, "validation": {"trust": [], "policyId": "preset:validation:iofe", **IOFE_ON_SANDBOX}}
+    s = {"id": id, "kind": "augment", "title": title, "tags": tags, "engine": "library", "options": options, "expect": expect}
+    if desc:
+        s["description"] = desc
+    return s
+
+
 def refused(reason=None):
     return {"outcome": "refused", **({"reason": reason} if reason else {})}
 
@@ -107,6 +116,21 @@ sections = [
                  desc="With the iofe policy requiring nonRepudiation (playbook:iofe-agent-validation) the certificate without it fails "
                       "the chain constraint (EN 319 102-1: INDETERMINATE)."),
     ]},
+    {"id": "augment", "title": "Raising the level later (B-LTA)",
+     "description": "A signature made at B-B and trusted through INDECOPI's TSL is raised to B-LTA afterwards, without signing again: the "
+                    "long-term validation data the guide asks (F-31, V-31) added later. The TSA used must be one the TSL lists.",
+     "steps": [
+         augment("aug-tsl-blta", "B-B raised to B-LTA with a TSA of the TSL", ["F-31", "V-31", "augment"], "step:tsl-ok",
+                 {"outcome": "augmented", "level": "B-LTA", "indication": "TOTAL_PASSED"},
+                 desc="Raises the tsl-ok signature to B-LTA with the Sandbox's IOFE TSA, listed in the Sandbox's TSL: the chain's certificates "
+                      "and revocation data and a document time-stamp are added, and the result validates under the IOFE profile and policy.",
+                 level="BLTA", timestamp={"provider": "SandboxIofe"}),
+         augment("aug-tsa-unlisted", "B-B raised to B-T with a TSA outside the TSL", ["F-31", "augment"], "step:tsl-ok",
+                 {"outcome": "augmented", "level": "B-T"},
+                 desc="Raises the same signature to B-T with the Sandbox's main TSA, which INDECOPI's TSL does not list: the augmenter adds the "
+                      "time-stamp, and the validation under the IOFE profile is what tells it is not from an accredited TSA.",
+                 level="BT", timestamp={"provider": "Sandbox"}),
+     ]},
     {"id": "report", "title": "Validation report",
      "description": "What the guide asks a viewer to show the signer and the relying parties (F-30, V-30), in Spanish.",
      "steps": [
@@ -175,7 +199,7 @@ playbook = {
                    "It complements sandbox-basics and etsi-baseline: the checks any signer or validator makes whatever the policy "
                    "(revocation, validity, time-stamps, levels, algorithms, changed files) are shown there, and the checklist names "
                    "those steps; here are only the ones the IOFE profile and policies decide (the TSL, nonRepudiation for an "
-                   "automated agent), the report and the audit trail.",
+                   "automated agent, a TSA of the TSL when the level is raised later), the report and the audit trail.",
     "defaults": {
         "engine": "both",
         "format": "pades",

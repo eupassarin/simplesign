@@ -103,8 +103,8 @@ internal sealed class PlanContext
         var endpoint = Endpoint(choice);
         var options = new TimestampOptions(endpoint, Http)
         {
-            Authorization = Authorization(choice),
-            ClientCertificate = ClientCertificate(choice),
+            Authorization = Authorization(_sandbox, choice),
+            ClientCertificate = ClientCertificate(_documents, choice),
             ExpectedTsaCertificate = Controls.ExpectedTsa,
         };
         _setup.Add($"var {variable} = new TimestampOptions(new Uri(\"{endpoint}\"){(IsSandbox ? ", sandboxHttp" : "")})"
@@ -162,8 +162,8 @@ internal sealed class PlanContext
             + (choice.Auth == TsaAuth.None ? ";" : " { Authorization = /* as above */ };"));
         return new ArchiveTimestampOptions(endpoint, Http)
         {
-            Authorization = Authorization(choice),
-            ClientCertificate = ClientCertificate(choice),
+            Authorization = Authorization(_sandbox, choice),
+            ClientCertificate = ClientCertificate(_documents, choice),
             ExpectedTsaCertificate = Controls.ExpectedTsa,
         };
     }
@@ -239,26 +239,40 @@ internal sealed class PlanContext
 
     /// <summary>The TSA URL of a choice; the Sandbox's TSAs come from the connected Sandbox.</summary>
     /// <exception cref="SandboxNotConnectedException">A Sandbox TSA was chosen and no Sandbox is connected.</exception>
-    internal Uri Endpoint(TimestampChoice choice) => choice.Provider switch
+    internal Uri Endpoint(TimestampChoice choice) => Endpoint(_sandbox, choice);
+
+    /// <summary>
+    /// The TSA of a choice without a signing plan (an augmentation): its URL, the authorization and the client
+    /// certificate, through <paramref name="http"/>.
+    /// </summary>
+    /// <exception cref="SandboxNotConnectedException">A Sandbox TSA was chosen and no Sandbox is connected.</exception>
+    internal static TimestampOptions Timestamp(SandboxEnvironment sandbox, DocumentStore documents, TimestampChoice choice, IHttpClientProvider http) =>
+        new(Endpoint(sandbox, choice), http)
+        {
+            Authorization = Authorization(sandbox, choice),
+            ClientCertificate = ClientCertificate(documents, choice),
+        };
+
+    private static Uri Endpoint(SandboxEnvironment sandbox, TimestampChoice choice) => choice.Provider switch
     {
-        TsaProvider.Sandbox => _sandbox.Connection.TsaUri,
-        TsaProvider.SandboxAuthenticated => _sandbox.Connection.AuthenticatedTsaUri,
-        TsaProvider.SandboxUntrusted => _sandbox.Connection.UntrustedTsaUri,
-        TsaProvider.SandboxRevoked => _sandbox.Connection.RevokedTsaUri,
-        TsaProvider.SandboxExpired => _sandbox.Connection.ExpiredTsaUri,
-        TsaProvider.SandboxWrongName => _sandbox.Connection.WrongNameTsaUri,
-        TsaProvider.SandboxShortLived => _sandbox.Connection.ShortLivedTsaUri,
-        TsaProvider.SandboxIofe => _sandbox.Connection.IofeTsaUri,
-        TsaProvider.SandboxNonQualified => _sandbox.Connection.NonQualifiedTsaUri,
+        TsaProvider.Sandbox => sandbox.Connection.TsaUri,
+        TsaProvider.SandboxAuthenticated => sandbox.Connection.AuthenticatedTsaUri,
+        TsaProvider.SandboxUntrusted => sandbox.Connection.UntrustedTsaUri,
+        TsaProvider.SandboxRevoked => sandbox.Connection.RevokedTsaUri,
+        TsaProvider.SandboxExpired => sandbox.Connection.ExpiredTsaUri,
+        TsaProvider.SandboxWrongName => sandbox.Connection.WrongNameTsaUri,
+        TsaProvider.SandboxShortLived => sandbox.Connection.ShortLivedTsaUri,
+        TsaProvider.SandboxIofe => sandbox.Connection.IofeTsaUri,
+        TsaProvider.SandboxNonQualified => sandbox.Connection.NonQualifiedTsaUri,
         TsaProvider.DigiCert => TimestampOptions.DigiCert.Endpoint,
         TsaProvider.Sectigo => TimestampOptions.Sectigo.Endpoint,
         TsaProvider.FreeTsa => TimestampOptions.FreeTsa.Endpoint,
         _ => new Uri(choice.Url!),
     };
 
-    private AuthenticationHeaderValue? Authorization(TimestampChoice choice) => choice.Provider == TsaProvider.SandboxAuthenticated
+    private static AuthenticationHeaderValue? Authorization(SandboxEnvironment sandbox, TimestampChoice choice) => choice.Provider == TsaProvider.SandboxAuthenticated
         // The Sandbox's authenticated TSA: its own test credentials.
-        ? new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_sandbox.Connection.Info.Tsa.User}:{_sandbox.Connection.Info.Tsa.Password}")))
+        ? new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{sandbox.Connection.Info.Tsa.User}:{sandbox.Connection.Info.Tsa.Password}")))
         : choice.Auth switch
         {
             TsaAuth.Basic => new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{choice.User}:{choice.Password}"))),
@@ -266,9 +280,9 @@ internal sealed class PlanContext
             _ => null,
         };
 
-    private X509Certificate2? ClientCertificate(TimestampChoice choice) =>
+    private static X509Certificate2? ClientCertificate(DocumentStore documents, TimestampChoice choice) =>
         string.IsNullOrEmpty(choice.ClientCertificateUploadId)
             ? null
-            : X509CertificateLoader.LoadPkcs12(_documents.Get(choice.ClientCertificateUploadId).Content, choice.ClientCertificatePassword,
+            : X509CertificateLoader.LoadPkcs12(documents.Get(choice.ClientCertificateUploadId).Content, choice.ClientCertificatePassword,
                 OperatingSystem.IsMacOS() ? X509KeyStorageFlags.DefaultKeySet : X509KeyStorageFlags.EphemeralKeySet);
 }
