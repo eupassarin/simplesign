@@ -515,6 +515,22 @@ when to use which; each has its own article.
   the signing options the library has, `--allow-origin` / `--allow-ldap` / `--tls-trust`, and
   `--json` on the signing commands.
 
+#### Independent implementations read what SimpleSign writes (CI)
+
+- `tests/integration/SimpleSign.Interop.Tests` has qpdf, pyHanko 0.37, OpenSSL 3 and xmlsec1 read
+  SimpleSign's output, and SimpleSign read theirs. Each trusts only the tests' own root — no
+  `-noverify`, no `--insecure`: qpdf `--check` on every PAdES variant (B-B, visible, B-T, B-LT,
+  B-LTA, two signatures, certification, ECDSA) over both a cross-reference table and a
+  cross-reference stream; pyHanko on the same files, with every signature, embedded time-stamp and
+  document time-stamp intact, valid and trusted, and the later revisions classed as acceptable;
+  pyHanko signing, SimpleSign validating and signing again, pyHanko validating both; OpenSSL
+  `cms -verify` on `CadesSigner` output and `CadesSignatureValidator` on OpenSSL's `-cades` output;
+  xmlsec1 `--verify` on `XadesSigner` output, enveloped, enveloping and detached. Each tool also has
+  a control test where a broken file must be rejected.
+- The CI job **Interop** installs the tools (pyHanko pinned in `tools/requirements.txt`) and runs
+  them with `SIMPLESIGN_REQUIRE_INTEROP=true`, keeping rejected files as an artifact; the `Interop`
+  category is left out of the other test runs.
+
 #### PDF/A preservation, checked by veraPDF
 
 - `tests/integration/SimpleSign.VeraPdf.Tests` signs the PDF/A-1b, 2b and 3b files of the veraPDF
@@ -564,6 +580,12 @@ when to use which; each has its own article.
 
 ### Fixed
 
+- **A visible signature on a page stored in an object stream.** Auto-positioning
+  (`SignatureAppearance.Auto()`) read the page dictionary straight from the file bytes, so on a PDF
+  whose page lives in a compressed object stream (ISO 32000 §7.5.7, what qpdf
+  `--object-streams=generate` and many modern producers write) signing threw
+  `ArgumentOutOfRangeException`. The page is now read from its object stream, as the `/Annots`
+  update already did. Found by the interop tests above.
 - **The operating system checked revocation during validation.** The three validators built the
   platform `X509Chain` with `X509RevocationMode.Online` when revocation was on, so the OS fetched
   each CRL itself — outside `IHttpClientProvider` and its outbound HTTP policy (the SSRF guard,

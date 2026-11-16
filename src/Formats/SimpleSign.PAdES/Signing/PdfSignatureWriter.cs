@@ -198,9 +198,12 @@ public sealed class PdfSignatureWriter
             appWidth = a.ComputeWidth(options.SignerName ?? "Signer", options.Reason, options.Location, sigNow);
             appHeight = a.ComputeHeight(hasReason, hasLocation);
 
-            if (a.AutoPosition && pageObjNum > 0)
+            // A page inside a compressed object stream (ISO 32000 §7.5.7) has no dictionary bytes of its own to slice.
+            string? pageDict = pageObjNum <= 0 ? null
+                : pageObjDictStart >= 0 ? Encoding.Latin1.GetString(inputMem.Span.Slice(pageObjDictStart, pageObjDictEnd - pageObjDictStart))
+                : PdfStructureParser.ExtractObjectFromObjStm(inputMem.Span, pageObjNum);
+            if (a.AutoPosition && pageDict is not null)
             {
-                string pageDict = Encoding.Latin1.GetString(inputMem.Span.Slice(pageObjDictStart, pageObjDictEnd - pageObjDictStart));
                 float pageWidth = PdfStructureParser.ParseMediaBoxWidth(inputMem.Span, pageDict);
                 int rotation = PdfStructureParser.ParsePageRotation(inputMem.Span, pageDict);
                 int existingSigCount = PdfStructureParser.CountVisibleSignatureAnnotations(inputMem.Span);
