@@ -119,7 +119,17 @@ internal static class CertificateChecks
         x509.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
         x509.ChainPolicy.VerificationFlags = X509VerificationFlags.IgnoreNotTimeValid | X509VerificationFlags.IgnoreNotTimeNested;
         x509.ChainPolicy.DisableCertificateDownloads = true;
-        x509.Build(chain[0]);
+        try
+        {
+            x509.Build(chain[0]);
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            // Windows' chain engine throws on some certificates it cannot process: the constraints were not
+            // evaluated, so they are not taken as respected.
+            return X509ChainStatusFlags.InvalidNameConstraints | X509ChainStatusFlags.InvalidPolicyConstraints;
+        }
+
         var flags = X509ChainStatusFlags.NoError;
         foreach (var element in x509.ChainElements)
         {

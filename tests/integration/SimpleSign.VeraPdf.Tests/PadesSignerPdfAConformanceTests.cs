@@ -24,15 +24,12 @@ public sealed class PadesSignerPdfAConformanceTests(ITestOutputHelper output)
     private static readonly string CorpusDirectory = Path.Combine(AppContext.BaseDirectory, "Fixtures", "corpus");
 
     /// <summary>
-    /// Files on which a visible signature breaks PDF/A today, and the clause it breaks. The appearance stream paints
-    /// in DeviceRGB (<c>rg</c> in SignatureAppearanceRenderer), which ISO 19005-2/3 §6.2.4.3 allows only with an RGB
-    /// OutputIntent or a DefaultRGB colour space; this file has neither. The test requires exactly that failure, so
-    /// it fails (and the entry must go) once the appearance paints in a colour space the document allows.
+    /// Files on which a visible signature breaks PDF/A today, and the clause it breaks. The test requires exactly that
+    /// failure, so it fails (and the entry must go) once the defect is fixed. None today: the stamp of
+    /// <c>PDF_A-3b-6-8-t02-pass-b.pdf</c> (no RGB OutputIntent) broke §6.2.4.3 until the appearance got a
+    /// <c>/DefaultRGB</c> ICC colour space on PDF/A documents (ADR 0014 §5).
     /// </summary>
-    private static readonly Dictionary<string, string> KnownVisibleFailures = new(StringComparer.Ordinal)
-    {
-        ["PDF_A-3b-6-8-t02-pass-b.pdf"] = "6.2.4.3",
-    };
+    private static readonly Dictionary<string, string> KnownVisibleFailures = new(StringComparer.Ordinal);
 
     /// <summary>Every corpus file.</summary>
     public static TheoryData<string> AllFiles => Corpus(_ => true);

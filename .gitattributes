@@ -16,3 +16,7 @@
 *.xml text eol=lf
 *.md text eol=lf
 
+
+# External EU DSS corpus vectors are byte-exact fixtures with recorded SHA-256 hashes (see their Fixtures/README.md).
+tests/integration/SimpleSign.Integration.Tests/Fixtures/ades/cades/** binary
+tests/integration/SimpleSign.Integration.Tests/Fixtures/ades/xades/** binary

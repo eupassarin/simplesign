@@ -968,6 +968,11 @@ public sealed partial class PadesSignerBuilder
         if (_options.EnforcePdfA)
         {
             var pdfAIssues = PdfAPreservationValidator.Validate(pdfALevel, _options.Field);
+            foreach (var warning in pdfAIssues.Where(i => i.Severity == PdfAIssueSeverity.Warning))
+            {
+                _options.Dependencies.Logger.PdfAPreservationWarning(opId, pdfALevel.ToString(), warning.Message);
+            }
+
             var errors = pdfAIssues.Where(i => i.Severity == PdfAIssueSeverity.Error).ToList();
             if (errors.Count > 0)
             {

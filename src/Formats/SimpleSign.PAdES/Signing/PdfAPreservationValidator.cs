@@ -80,6 +80,20 @@ public static class PdfAPreservationValidator
             }
         }
 
+        // A CMYK JPEG is embedded in DeviceCMYK. ISO 19005-1 §6.2.3.3 and ISO 19005-2/3 §6.2.4.3 allow DeviceCMYK only
+        // with a CMYK PDF/A OutputIntent or a /DefaultCMYK; the stamp maps DeviceRGB and DeviceGray to sRGB but has no
+        // CMYK profile to embed, and this check does not read the document's OutputIntents (ADR 0014 §5).
+        if (appearance.BackgroundImagePng is not { Length: > 0 }
+            && appearance.BackgroundImageJpeg is { Length: > 0 } jpeg
+            && AppearanceImage.ReadJpegInfo(jpeg.Span).Components == 4)
+        {
+            issues.Add(new PdfACompatibilityIssue(
+                PdfAIssueSeverity.Warning,
+                "CMYK JPEG background images are embedded in DeviceCMYK, which PDF/A allows only when the document has a " +
+                "CMYK OutputIntent (ISO 19005-2/3 §6.2.4.3, ISO 19005-1 §6.2.3.3). Use an RGB or grayscale image unless " +
+                "the document's OutputIntent is CMYK."));
+        }
+
         // Base14 fonts are always allowed in PDF/A (they're part of the spec)
         // Non-standard font names would be an issue, but GetBaseFontName() already normalizes to Base14
     }

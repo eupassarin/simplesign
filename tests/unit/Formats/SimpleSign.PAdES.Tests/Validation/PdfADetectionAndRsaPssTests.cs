@@ -131,6 +131,26 @@ public sealed class PdfADetectionAndRsaPssTests
         PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.A3u);
     }
 
+    [Theory(DisplayName = "PDF/A id written as rdf:Description attributes (XMP shorthand) is detected")]
+    [InlineData("<rdf:Description rdf:about=\"\" xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" pdfaid:part=\"3\" pdfaid:conformance=\"B\"/>", PdfALevel.A3b)]
+    [InlineData("<rdf:Description xmlns:pdfaid='http://www.aiim.org/pdfa/ns/id/' pdfaid:conformance='U' pdfaid:part='2'/>", PdfALevel.A2u)]
+    [InlineData("<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"\n  pdfaid:part = \"1\"\n  pdfaid:conformance = \"A\"/>", PdfALevel.A1a)]
+    [InlineData("<rdf:Description pdfaid:part=\"4\"/>", PdfALevel.A4b)]
+    public void DetectPdfALevel_AttributeForm_DetectsCorrectly(string description, PdfALevel expected)
+    {
+        var data = Encoding.ASCII.GetBytes("%PDF-1.7\n" + description);
+
+        PdfStructureReader.DetectPdfALevel(data).ShouldBe(expected);
+    }
+
+    [Fact(DisplayName = "The pdfaid namespace declaration alone is not a PDF/A claim")]
+    public void DetectPdfALevel_NamespaceOnly_ReturnsNone()
+    {
+        var data = Encoding.ASCII.GetBytes("%PDF-1.7\n<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"/>");
+
+        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.None);
+    }
+
     [Fact(DisplayName = "Normal PDF returns PDF/A level None via async")]
     public async Task DetectPdfALevelAsync_NormalPdf_ReturnsNone()
     {

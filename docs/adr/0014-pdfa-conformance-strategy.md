@@ -20,8 +20,12 @@ A four-layer conformance strategy covering detection, pre-signing validation, in
 
 `PdfStructureReader.DetectPdfALevel()` scans the raw PDF bytes for XMP metadata:
 
-- Searches for `<pdfaid:part>` → extracts the part number (1, 2, 3, 4)
-- Searches for `<pdfaid:conformance>` → extracts the conformance letter (A, B, U, E)
+- Searches for `pdfaid:part` → extracts the part number (1, 2, 3, 4)
+- Searches for `pdfaid:conformance` → extracts the conformance letter (A, B, U, E; B when absent)
+- Reads both XMP forms of a property (ISO 16684-1 §7.9.2.2): the element `<pdfaid:part>3</pdfaid:part>` and the
+  `rdf:Description` attribute `pdfaid:part="3"`. Only the element form was read until the veraPDF tests (§5) signed a
+  corpus file written with attributes: it was taken for a document that is not PDF/A, so `WithPdfAPreservation()`
+  checked nothing and the stamp got no `/DefaultRGB`.
 - Maps `(part, conformance)` to the `PdfALevel` enum:
 
 | Enum value | ISO 19005 part | Conformance |
@@ -33,7 +37,7 @@ A four-layer conformance strategy covering detection, pre-signing validation, in
 | `A4a`, `A4b`, `A4u`, `A4e` | Part 4 | A / B / U / E (embedded files) |
 | `Unknown` | — | Detected but unrecognised level |
 
-Detection is purely byte-level (text search for XML tags in the raw bytes) — no XML parser is involved. This is sufficient for the conformance validation checks SimpleSign performs and avoids a parser dependency.
+Detection is purely byte-level (text search for XMP properties in the raw bytes) — no XML parser is involved. This is sufficient for the conformance validation checks SimpleSign performs and avoids a parser dependency.
 
 ### 2. Pre-signing validation (`PdfAPreservationValidator`)
 
@@ -49,7 +53,16 @@ Before any PDF modification, `PdfAPreservationValidator` checks whether the requ
 **Check 2 — PNG background transparency (PDF/A-1 only):**
 PDF/A-1 forbids transparency. A visible signature with a PNG background image (which may contain transparency) is rejected with an error. JPEG is recommended for PDF/A-1.
 
-**Check 3 — Font (all levels):**
+**Check 3 — CMYK JPEG background (all levels, warning):**
+A CMYK JPEG is embedded in DeviceCMYK, which ISO 19005-1 §6.2.3.3 and ISO 19005-2/3 §6.2.4.3 allow only with a CMYK
+PDF/A OutputIntent or a `/DefaultCMYK`. The stamp maps DeviceRGB and DeviceGray to sRGB (§5) but has no CMYK profile to
+embed. The check does not read the document's OutputIntents, and print-oriented PDF/A documents often have a CMYK one,
+so it is a `Warning`, not an `Error`: `WithPdfAPreservation()` still signs, and logs the warning (event 1006,
+`LogLevel.Warning`). Callers of `PdfAPreservationValidator.Validate` see it in the returned issues.
+
+With `WithPdfAPreservation()`, errors refuse the signature and warnings are logged.
+
+**Check 4 — Font (all levels):**
 Base14 fonts (Helvetica, Times-Roman, Courier, etc.) are always allowed per ISO 19005. Non-standard font names are caught by the `GetBaseFontName()` normalisation guard.
 
 ### 3. Incremental update guarantees
@@ -116,10 +129,34 @@ kept as a build artifact with its report.
 | `SignAsync_ArchiveLevel_PreservesConformance` | 2b, 3b | B-LTA: signature timestamp, DSS, document timestamp (TSA and CRLs answered in memory) |
 | `SignAsync_WidgetWithoutPrintFlag_FailsConformance` | 3b | the control: with `/F 132` turned into `/F 128`, veraPDF must report §6.3.2 |
 
-**Known gap:** the appearance stream paints in DeviceRGB. ISO 19005-2/3 §6.2.4.3 allows that only with an RGB
-OutputIntent or a DefaultRGB colour space, so a visible signature on a PDF/A-2/3 document without either (the corpus
-file `PDF_A-3b-6-8-t02-pass-b.pdf`) breaks conformance. The tests list it in `KnownVisibleFailures` and require exactly
-that failure, so they fail once the appearance is fixed and the entry can go.
+**Device colours in the appearance (gap found by these tests, fixed).** The appearance stream paints with `rg`/`RG`
+(DeviceRGB). ISO 19005-2/3 §6.2.4.3 allows DeviceRGB only with an RGB PDF/A OutputIntent or a `/DefaultRGB` colour
+space in the current resources (ISO 19005-1 §6.2.3.3 says the same for PDF/A-1), and DeviceGray only with an
+OutputIntent or a `/DefaultGray`. A visible signature on a document with neither — the corpus file
+`PDF_A-3b-6-8-t02-pass-b.pdf` — broke conformance (4 checks of §6.2.4.3).
+
+When the document is PDF/A (any detected level, with or without `WithPdfAPreservation()`), the appearance form XObject
+now carries `/ColorSpace << /DefaultRGB [/ICCBased n 0 R] >>`, backed by an sRGB ICC profile stream written in the same
+incremental update; a grayscale background image adds `/DefaultGray` with a gray profile on the sRGB tone curve. The
+content stream is unchanged, and a document that is not PDF/A gets the same bytes as before. Why this option:
+
+- **It conforms whatever the OutputIntent.** A DefaultRGB is valid with an RGB OutputIntent, a CMYK one or none, so the
+  signer does not need to parse `/OutputIntents` and their profile headers (often inside object streams). Adding it
+  when an RGB OutputIntent already exists costs under 1 KB per signature and changes nothing visible: sRGB is what
+  those intents almost always are.
+- **The profiles are built in code** (`SrgbIccProfile`, ICC version 2.1, matrix/TRC: the IEC 61966-2-1 primaries
+  adapted to D50 and the sRGB transfer function sampled at its 256 8-bit code values). No third-party `.icc` file is shipped, so there
+  is no licence to carry; version 2.1 is readable by every PDF/A part (PDF/A-1 accepts profiles before version 4).
+- **Rejected:** painting in DeviceGray when there is a Gray OutputIntent (needs OutputIntent parsing, and loses colour);
+  explicit `[/ICCBased]` colour spaces with `cs`/`sc` (rewrites the content stream for every document, for the same
+  result); refusing visible signatures on such documents (no reason to, since a conforming option exists).
+
+Still open: a CMYK JPEG background image paints in DeviceCMYK, which §6.2.4.3 allows only with a CMYK OutputIntent or
+a `/DefaultCMYK`. SimpleSign has no CMYK profile to embed (a usable one is large and licensed), so use an RGB or
+grayscale image on PDF/A documents. `PdfAPreservationValidator` warns about it (§2, check 3).
+
+`KnownVisibleFailures` in the tests stays, empty, for the next gap: an entry requires exactly the failure it names, so
+the test fails once that gap is fixed and the entry can go.
 
 To update veraPDF: pull `verapdf/cli:latest`, take its digest, change it in `VeraPdf.cs` and `.github/workflows/ci.yml`,
 and run the tests.

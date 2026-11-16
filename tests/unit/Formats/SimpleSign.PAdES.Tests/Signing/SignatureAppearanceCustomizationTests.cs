@@ -370,6 +370,88 @@ public sealed class SignatureAppearanceCustomizationTests
             .ShouldContain("/ColorSpace /DeviceGray");
     }
 
+    [Fact(DisplayName = "Without colour profiles the stamp has no /ColorSpace resources (plain DeviceRGB)")]
+    public void Render_NoColorProfiles_NoDefaultColorSpace()
+    {
+        string content = Encoding.Latin1.GetString(RenderBytes(new SignatureAppearance(), imageObjNum: 0));
+
+        content.ShouldNotContain("/ColorSpace");
+        content.ShouldNotContain("/ICCBased");
+    }
+
+    [Fact(DisplayName = "With colour profiles the stamp maps DeviceRGB to sRGB with /DefaultRGB and appends the profile")]
+    public void Render_ColorProfiles_DefaultRgbWithProfile()
+    {
+        byte[] bytes = RenderBytes(
+            new SignatureFieldOptions { SignerName = "Maria Silva", Appearance = new SignatureAppearance() },
+            imageObjNum: 0, softMaskObjNum: 0, new AppearanceColorProfiles(15, 16));
+        string content = Encoding.Latin1.GetString(bytes);
+
+        content.ShouldContain("/ColorSpace << /DefaultRGB [/ICCBased 15 0 R] >>");
+        content.ShouldContain("endobj\n15 0 obj\n<< /N 3");
+        content.ShouldNotContain("/DefaultGray");
+        content.ShouldNotContain("16 0 obj");
+        Inflate(StreamOf(bytes, 15)).ShouldBe(SrgbIccProfile.Rgb.ToArray());
+    }
+
+    [Fact(DisplayName = "With colour profiles a grayscale image also gets /DefaultGray")]
+    public void Render_ColorProfilesGrayImage_AddsDefaultGray()
+    {
+        byte[] jpeg = TestJpeg.Header(width: 40, height: 20, components: 1, adobe: false);
+
+        byte[] bytes = RenderBytes(
+            new SignatureFieldOptions { SignerName = "Maria Silva", Appearance = new SignatureAppearance { BackgroundImageJpeg = jpeg } },
+            imageObjNum: 11, softMaskObjNum: 14, new AppearanceColorProfiles(15, 16));
+        string content = Encoding.Latin1.GetString(bytes);
+
+        content.ShouldContain("/ColorSpace << /DefaultRGB [/ICCBased 15 0 R] /DefaultGray [/ICCBased 16 0 R] >>");
+        content.ShouldContain("endobj\n16 0 obj\n<< /N 1");
+        Inflate(StreamOf(bytes, 16)).ShouldBe(SrgbIccProfile.Gray.ToArray());
+    }
+
+    [Fact(DisplayName = "An RGB image's soft mask (DeviceGray) does not add /DefaultGray")]
+    public void Render_ColorProfilesRgbaPng_NoDefaultGray()
+    {
+        byte[] png = TestPng.Rgba(2, 1, (x, _) => ((byte)x, 0, 0, (byte)(x * 100)));
+
+        string content = Encoding.Latin1.GetString(RenderBytes(
+            new SignatureFieldOptions { SignerName = "Maria Silva", Appearance = new SignatureAppearance { BackgroundImagePng = png } },
+            imageObjNum: 11, softMaskObjNum: 14, new AppearanceColorProfiles(15, 16)));
+
+        content.ShouldContain("/SMask 14 0 R");
+        content.ShouldContain("/DefaultRGB [/ICCBased 15 0 R]");
+        content.ShouldNotContain("/DefaultGray");
+    }
+
+    [Fact(DisplayName = "Visible signature on a PDF/A document: the written stamp has /DefaultRGB and the xref lists the profile")]
+    public async Task PrepareAsync_PdfADocument_WritesDefaultRgbProfile()
+    {
+        var options = new SignatureFieldOptions { SignerName = "Maria Silva", Appearance = new SignatureAppearance(), ContentsReservedBytes = 1024 };
+        using var input = new MemoryStream(BuildPdfWithPage());
+        using var output = new MemoryStream();
+
+        await PdfSignatureWriter.PrepareAsync(input, output, options, pdfALevel: PdfALevel.A2b);
+        string pdf = Encoding.Latin1.GetString(output.ToArray());
+
+        var reference = Regex.Match(pdf, @"/DefaultRGB \[/ICCBased (\d+) 0 R\]");
+        reference.Success.ShouldBeTrue();
+        int profileObjNum = int.Parse(reference.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        long offset = XrefOffset(pdf, profileObjNum);
+        pdf[(int)offset..].ShouldStartWith($"{profileObjNum} 0 obj\n<< /N 3");
+    }
+
+    [Fact(DisplayName = "Visible signature on a document that is not PDF/A keeps plain DeviceRGB")]
+    public async Task PrepareAsync_NotPdfA_NoDefaultRgb()
+    {
+        var options = new SignatureFieldOptions { SignerName = "Maria Silva", Appearance = new SignatureAppearance(), ContentsReservedBytes = 1024 };
+        using var input = new MemoryStream(BuildPdfWithPage());
+        using var output = new MemoryStream();
+
+        await PdfSignatureWriter.PrepareAsync(input, output, options, pdfALevel: PdfALevel.None);
+
+        Encoding.Latin1.GetString(output.ToArray()).ShouldNotContain("/ICCBased");
+    }
+
     [Fact(DisplayName = "Adobe CMYK JPEG uses DeviceCMYK with an inverted Decode array")]
     public void Render_AdobeCmykJpeg_DeviceCmykInverted()
     {
@@ -610,12 +692,12 @@ public sealed class SignatureAppearanceCustomizationTests
     private static byte[] RenderBytes(SignatureAppearance appearance, int imageObjNum, int softMaskObjNum = 0) =>
         RenderBytes(new SignatureFieldOptions { SignerName = "Maria Silva", Appearance = appearance }, imageObjNum, softMaskObjNum);
 
-    private static byte[] RenderBytes(SignatureFieldOptions options, int imageObjNum, int softMaskObjNum)
+    private static byte[] RenderBytes(SignatureFieldOptions options, int imageObjNum, int softMaskObjNum, AppearanceColorProfiles? colorProfiles = null)
     {
         var app = options.Appearance!;
         float width = app.ComputeWidth(options.SignerName ?? "Signer", options.Reason, options.Location, SampleTime);
         float height = app.ComputeHeight(!string.IsNullOrEmpty(options.Reason), !string.IsNullOrEmpty(options.Location));
-        return SignatureAppearanceRenderer.BuildAppearanceXObject(10, options, SampleTime, width, height, imageObjNum, softMaskObjNum: softMaskObjNum);
+        return SignatureAppearanceRenderer.BuildAppearanceXObject(10, options, SampleTime, width, height, imageObjNum, softMaskObjNum: softMaskObjNum, colorProfiles: colorProfiles);
     }
 
     private static byte[] StreamOf(byte[] bytes, int objNum)
