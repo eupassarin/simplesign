@@ -1,0 +1,22 @@
+# pyHanko and its whole dependency graph, pinned (pip freeze of `pip install pyHanko==0.37.0`).
+# To update: install the new pyHanko in a fresh venv, pip freeze, replace this list, run the Interop tests.
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.5
+aiosignal==1.4.0
+asn1crypto==1.5.1
+attrs==26.1.0
+certifi==2026.10.23
+cffi==2.1.1
+cryptography==50.0.2
+frozenlist==1.8.0
+idna==3.20
+lxml==6.1.3
+multidict==7.2.1
+oscrypto==1.3.0
+propcache==0.5.4
+pycparser==3.12
+pyHanko==0.37.0
+pyhanko-certvalidator==0.32.1
+tzlocal==5.4.5
+uritools==7.0.0
+yarl==1.25.1
