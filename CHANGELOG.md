@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-16
+
 ### Added
 
 - **Detached XAdES over any file: `XadesSignerBuilder.WithDetachedBinary(mimeType)`** (and on
@@ -18,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - *After:* `WithDetachedBinary()` signs the bytes. Without it the detached data is still XML, and a
     non-XML file now fails with an `ArgumentException`. Validators need nothing new: the reference
     says how to digest the data.
+  - From the CLI: `simplesign xades sign file.pdf --form detached --data-uri file.pdf --detached-binary`;
+    in the TestBench, the "Any file (not XML)" option of the detached form.
 - **A shared CRL cache for validation and for B-LT/B-LTA collection.**
   - `PdfSignatureValidator(provider, options, logger, trustAnchorProviders, chainValidationProviders,
     chainRevocationChecker, revocationCache)`: the signer chain's CRLs go through `revocationCache` and
