@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Detached XAdES over any file: `XadesSignerBuilder.WithDetachedBinary(mimeType)`** (and on
+  `XadesDeferredSignerBuilder`). In the detached form the reference to the data has no transforms and
+  digests the file's octets (W3C XMLDSig §4.4.3.1), so a PDF, an image or a ZIP can be signed; the
+  AllDataObjectsTimeStamp covers the octets too, and the MIME type goes in DataObjectFormat.
+  - *Before:* `WithForm(XadesForm.Detached)` parsed and canonicalized the data as XML, so a file that
+    is not XML failed with a raw `XmlException` ("Data at the root level is invalid").
+  - *After:* `WithDetachedBinary()` signs the bytes. Without it the detached data is still XML, and a
+    non-XML file now fails with an `ArgumentException`. Validators need nothing new: the reference
+    says how to digest the data.
+- **A shared CRL cache for validation and for B-LT/B-LTA collection.**
+  - `PdfSignatureValidator(provider, options, logger, trustAnchorProviders, chainValidationProviders,
+    chainRevocationChecker, revocationCache)`: the signer chain's CRLs go through `revocationCache` and
+    TSA chains through `chainRevocationChecker`. *Before:* each validator downloaded every CRL again and
+    kept a private checker for TSA chains, even under DI. Under DI the registered
+    `IChainRevocationChecker` now checks TSA chains.
+  - `LongTermValidationOptions.RevocationCache`, `LtvEmbedder.RevocationCache` and
+    `WithRevocationCache(cache)` on `PadesAugmenter`, `CadesAugmenter` and `XadesAugmenter`: CRLs
+    collected for B-LT are remembered, and a cached CRL is embedded only when it was issued after the
+    signature time-stamp's genTime and is still current (otherwise it is downloaded again). *Before:*
+    the collection downloaded every CRL for every signature.
+
 - **`CadesSignatureValidator(IHttpClientProvider, ValidationOptions?, ILogger?)` and
   `XadesSignatureValidator(IHttpClientProvider, ValidationOptions?, ILogger?)`**, as
   `PdfSignatureValidator` has: the revocation checks of `ValidateAsync` (signer and TSA chains) go
