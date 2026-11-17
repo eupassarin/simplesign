@@ -1,6 +1,7 @@
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.Peru.Iofe.Accredited.Internal;
+using SimpleSign.Signers.Cloud;
 using SimpleSign.Signers.Pkcs11;
 
 namespace SimpleSign.Peru.Iofe.Accredited;
@@ -9,16 +10,30 @@ namespace SimpleSign.Peru.Iofe.Accredited;
 public sealed record IofeSigningAgentOptions
 {
     /// <summary>
-    /// The organization's cryptographic module (HSM): its PKCS#11 driver, the key and the PIN. It is the only way to
-    /// give a key: a certificate file or a key in memory cannot be used (guide Req. 15).
+    /// The organization's cryptographic module (HSM): its PKCS#11 driver, the key and the PIN. The key is given either
+    /// this way or as a <see cref="RemoteService"/>, one of the two: a certificate file (PKCS#12) or a key in memory
+    /// cannot be used (guide Req. 15).
     /// </summary>
-    public required Pkcs11SignerOptions Module { get; init; }
+    public Pkcs11SignerOptions? Module { get; init; }
 
     /// <summary>
     /// The module the operator declares, with its FIPS 140-2 or Common Criteria EAL 4+ certificate (guide Req. 15: for
-    /// an automated agent the module is part of what is accredited). Another token is refused.
+    /// an automated agent the module is part of what is accredited). Another token is refused. Required with
+    /// <see cref="Module"/>.
     /// </summary>
-    public required IofeModuleDeclaration ModuleDeclaration { get; init; }
+    public IofeModuleDeclaration? ModuleDeclaration { get; init; }
+
+    /// <summary>
+    /// A remote signing service that keeps the organization's key in its own module, instead of <see cref="Module"/>:
+    /// the agent sends the hash and receives the signature.
+    /// </summary>
+    public IofeRemoteService? RemoteService { get; init; }
+
+    /// <summary>
+    /// The remote service the operator declares, with its accreditation. Another service is refused, before the PIN
+    /// or the service token is sent to it. Required with <see cref="RemoteService"/>.
+    /// </summary>
+    public IofeRemoteServiceDeclaration? RemoteServiceDeclaration { get; init; }
 
     /// <summary>Where each signature made or refused is recorded (guide Req. 14), e.g. a <see cref="JsonLinesAuditSink"/>.</summary>
     public required ISignatureAuditSink Audit { get; init; }
@@ -51,7 +66,8 @@ public sealed record IofeSigningAgentOptions
 
 /// <summary>
 /// Signing by an automated agent (INDECOPI's guide, section 4.2, Req. 11 to 20): unattended signatures of a legal
-/// person, with one key kept in the organization's cryptographic module. Before each signature the certificate and
+/// person, with one key kept in the organization's cryptographic module or in a remote signing service the operator
+/// declares. Before each signature the certificate and
 /// its chain are checked — trusted, not revoked (CRL or OCSP), not expired, with nonRepudiation, with current
 /// algorithms — every signature made or refused is recorded, and only the declared kinds of transaction are signed.
 /// Nothing here lets the caller skip a check; the one exception the guide allows is a declared
@@ -68,6 +84,14 @@ public sealed record IofeSigningAgentOptions
 ///     Timestamp = new IofeTimestampAuthority(new Uri(tsaUrl), tsaCertificate),
 /// });
 /// IofeSignedDocument signed = await agent.SignPdfAsync(pdf, new IofeTransaction("factura", "F001-123"));
+///
+/// // The same agent with the key in a remote signing service (CSC v2) instead of the organization's module:
+/// //   RemoteService = new IofeRemoteService
+/// //   {
+/// //       Service = new CscClientOptions { BaseUri = serviceUri, ClientId = clientId, ClientSecret = clientSecret },
+/// //       CredentialId = "sello-2026", Pin = pin,
+/// //   },
+/// //   RemoteServiceDeclaration = new IofeRemoteServiceDeclaration("Proveedor S.A.", "Firma Remota", "PSVA acreditado (firma remota)", "Res. 000-2025/DGI"),
 /// </code>
 /// </example>
 public sealed class IofeSigningAgent : IAsyncDisposable
@@ -81,8 +105,14 @@ public sealed class IofeSigningAgent : IAsyncDisposable
         _transactions = transactions;
     }
 
-    /// <summary>The module in use, how it protects the key, and what the operator declared about it.</summary>
-    public IofeModuleInfo Module => _core.Module;
+    /// <summary>
+    /// The module in use, how it protects the key, and what the operator declared about it; null when the key is in a
+    /// remote service.
+    /// </summary>
+    public IofeModuleInfo? Module => _core.Module;
+
+    /// <summary>The remote signing service in use and what the operator declared about it; null when the key is in a module.</summary>
+    public IofeRemoteServiceInfo? RemoteService => _core.RemoteService;
 
     /// <summary>The subject of the signing certificate.</summary>
     public string SignerSubject => _core.SignerSubject;
@@ -90,15 +120,20 @@ public sealed class IofeSigningAgent : IAsyncDisposable
     /// <summary>The viewer for the signed documents (Req. 18).</summary>
     public IofeViewer Viewer => _core.Viewer;
 
-    /// <summary>Loads the trust, opens the module and checks that it is the declared one and that its key cannot leave it.</summary>
+    /// <summary>
+    /// Loads the trust and opens the key: the module, checked to be the declared one and to keep its key inside; or
+    /// the credential of the remote service, checked to be the declared service.
+    /// </summary>
     /// <param name="options">The options.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The agent. Dispose it to log out of the module.</returns>
     /// <exception cref="IofeAccreditationException">
-    /// The options carry no audit sink, no declaration or no transactions; the key is not confined to the module; or the
-    /// module is not the declared one.
+    /// The options carry no audit sink, no transactions, no key source or two of them, or no declaration of it; the key
+    /// is not confined to the module; the module or the remote service is not the declared one; or the credential of
+    /// the remote service needs a person to authorize it.
     /// </exception>
     /// <exception cref="Pkcs11Exception">The module cannot be opened (driver, PIN, key selection).</exception>
+    /// <exception cref="CloudSigningException">The remote service refused the agent, or its credential cannot be read or is disabled.</exception>
     public static async Task<IofeSigningAgent> OpenAsync(IofeSigningAgentOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -108,10 +143,26 @@ public sealed class IofeSigningAgent : IAsyncDisposable
                 "Un agente automatizado no firma sin registro de auditoría (Audit).", IofeRefusal.AuditMissing);
         }
 
-        if (options.Module is null || options.ModuleDeclaration is null)
+        bool module = options.Module is not null || options.ModuleDeclaration is not null;
+        bool remote = options.RemoteService is not null || options.RemoteServiceDeclaration is not null;
+        if (module == remote)
+        {
+            throw new IofeAccreditationException(
+                "Se requiere una fuente de la clave, y solo una: el módulo criptográfico (Module) o el servicio de firma remota (RemoteService).",
+                IofeRefusal.OptionsIncomplete);
+        }
+
+        if (module && (options.Module is null || options.ModuleDeclaration is null))
         {
             throw new IofeAccreditationException(
                 "Se requieren el módulo criptográfico (Module) y su declaración (ModuleDeclaration).", IofeRefusal.OptionsIncomplete);
+        }
+
+        if (remote && (options.RemoteService is null || options.RemoteServiceDeclaration is null))
+        {
+            throw new IofeAccreditationException(
+                "Se requieren el servicio de firma remota (RemoteService) y su declaración (RemoteServiceDeclaration).",
+                IofeRefusal.OptionsIncomplete);
         }
 
         var transactions = new HashSet<string>(
@@ -122,18 +173,31 @@ public sealed class IofeSigningAgent : IAsyncDisposable
                 "Se requiere al menos un tipo de transacción (Transactions).", IofeRefusal.OptionsIncomplete);
         }
 
-        var core = await IofeSigningCore.OpenAsync(
-            options.Module,
-            options.ModuleDeclaration,
-            options.Trust,
-            IofePolicies.AgentSigning,
-            IofePolicies.AgentValidation,
-            options.Audit,
-            options.Timestamp?.ToOptions(),
-            options.Contingency,
-            options.HttpClientProvider,
-            options.TimeProvider,
-            cancellationToken).ConfigureAwait(false);
+        var core = remote
+            ? await IofeSigningCore.OpenRemoteAsync(
+                options.RemoteService!,
+                options.RemoteServiceDeclaration!,
+                options.Trust,
+                IofePolicies.AgentSigning,
+                IofePolicies.AgentValidation,
+                options.Audit,
+                options.Timestamp?.ToOptions(),
+                options.Contingency,
+                options.HttpClientProvider,
+                options.TimeProvider,
+                cancellationToken).ConfigureAwait(false)
+            : await IofeSigningCore.OpenModuleAsync(
+                options.Module!,
+                options.ModuleDeclaration!,
+                options.Trust,
+                IofePolicies.AgentSigning,
+                IofePolicies.AgentValidation,
+                options.Audit,
+                options.Timestamp?.ToOptions(),
+                options.Contingency,
+                options.HttpClientProvider,
+                options.TimeProvider,
+                cancellationToken).ConfigureAwait(false);
         return new IofeSigningAgent(core, transactions);
     }
 
@@ -181,7 +245,7 @@ public sealed class IofeSigningAgent : IAsyncDisposable
         return await _core.SignXmlAsync(xml, transaction.OperationId, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Logs out of the module and releases the trusted list this agent loaded.</summary>
+    /// <summary>Logs out of the module (or lets go of the remote credential) and releases the trusted list this agent loaded.</summary>
     /// <returns>A task that completes when both are released.</returns>
     public ValueTask DisposeAsync() => _core.DisposeAsync();
 

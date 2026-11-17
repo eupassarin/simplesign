@@ -458,6 +458,19 @@ simplesign iofe verify recibido.pdf --sender 20123456789 --audit-log verificacio
 simplesign iofe view factura-firmada.pdf -o visor.html
 ```
 
+The key of `iofe sign` is in a PKCS#11 module, as above, or in a remote signing service (CSC v2), which is declared
+the same way and must be the declared one; a PFX file is not accepted (`simplesign sign --cert file.pfx --profile iofe`
+signs with one, outside the accreditation):
+
+```bash
+simplesign iofe sign factura.pdf -o factura-firmada.pdf \
+  --csc-url https://provider.example/csc/v2/ --csc-credential sello-2026 --pin env:CSC_PIN \
+  --csc-client-id agente --csc-client-secret env:CSC_SECRET \
+  --service-provider "Proveedor S.A." --service-name "Firma Remota" \
+  --service-accreditation "PSVA de firma remota acreditado" --service-reference "Res. 000-2025/DGI-INDECOPI" \
+  --transaction factura/F001-123 --allow factura --audit-log auditoria.jsonl
+```
+
 `iofe verify` returns 0 when every signature is valid and 1 when the document is rejected, with the notice to the
 sender written to `--notice`. `--trust-root`, or `--tsl` with `--tsl-signer`, replace INDECOPI's trusted list;
 `--contingency` with `--contingency-until` declares a contingency. The manuals are in

@@ -12,6 +12,7 @@ namespace SimpleSign.Peru.Iofe.Accredited;
 /// <param name="SignerCertificateSha256">The SHA-256 of the signing certificate, upper-case hex.</param>
 /// <param name="PolicyName">The signing policy the signature was made under.</param>
 /// <param name="UnderContingency">Whether it was made under a declared contingency.</param>
+/// <param name="KeySource">Where the key that signed it is kept: the organization's module or a remote signing service.</param>
 public sealed record IofeSignedDocument(
     byte[] Document,
     IofeDocumentFormat Format,
@@ -21,4 +22,5 @@ public sealed record IofeSignedDocument(
     string SignerSubject,
     string SignerCertificateSha256,
     string PolicyName,
-    bool UnderContingency);
+    bool UnderContingency,
+    IofeKeySourceKind KeySource = IofeKeySourceKind.Module);

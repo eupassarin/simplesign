@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
     <ProjectReference Include="..\..\..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
     <ProjectReference Include="..\..\..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
+    <ProjectReference Include="..\..\..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
   </ItemGroup>
 
   <ItemGroup>

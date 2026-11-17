@@ -4,8 +4,9 @@ The configuration of SimpleSign that INDECOPI's *Guía de Acreditación de Aplic
 sections **4.2** (signing by automated agents), **4.3** (verification by automated agents) and **4.4** (time-stamp
 requests), as a narrow API with nothing to relax:
 
-- the private key signs only inside a PKCS#11 module, and a key the driver does not report as sensitive and not
-  extractable is refused;
+- the private key signs only inside a cryptographic module: the organization's, through PKCS#11 (a key the driver
+  does not report as sensitive and not extractable is refused), or that of a remote signing service the operator
+  declares (Cloud Signature Consortium API v2: only the hash is sent). A PKCS#12 (PFX) file is not accepted;
 - the checks of the certificate (trust, revocation by CRL or OCSP, validity, nonRepudiation, algorithms) are fixed —
   no policy is taken from the caller; the one exception is a declared contingency, written to the audit trail;
 - every signature made or refused, and every verification, is recorded in a hash-chained audit trail;

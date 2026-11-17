@@ -59,6 +59,9 @@ internal sealed class IofeTestPki : IDisposable
     /// <summary>Whether another authority of the same PKI answers at <see cref="TsaUrl"/>.</summary>
     public bool TsaImpostor { get; set; }
 
+    /// <summary>What answers the requests to <see cref="FakeRemoteSigningService.Host"/>; null when no remote signing service is up.</summary>
+    public Func<HttpRequestMessage, Task<HttpResponseMessage>>? RemoteService { get; set; }
+
     public void Reset()
     {
         LeafRevoked = false;
@@ -93,6 +96,11 @@ internal sealed class IofeTestPki : IDisposable
 
     private async Task<HttpResponseMessage> AnswerAsync(HttpRequestMessage request)
     {
+        if (RemoteService is not null && request.RequestUri?.Host == FakeRemoteSigningService.Host)
+        {
+            return await RemoteService(request).ConfigureAwait(false);
+        }
+
         if (request.Method == HttpMethod.Post)
         {
             byte[] query = await request.Content!.ReadAsByteArrayAsync().ConfigureAwait(false);

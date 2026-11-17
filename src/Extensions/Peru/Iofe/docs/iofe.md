@@ -191,7 +191,7 @@ IofeVerification result = await verifier.VerifyAsync(received, new IofeSender("2
 
 | The guide asks | The package |
 |---|---|
-| Key operations only in the cryptographic module, no copies (Req. 15) | The only key source is PKCS#11; a key the driver does not report as sensitive and not extractable is refused; the token must be the declared module |
+| Key operations only in the cryptographic module, no copies (Req. 15) | The key is in a PKCS#11 module — one the driver does not report as sensitive and not extractable is refused, and the token must be the declared module — or in a remote signing service the operator declares (CSC v2: only the hash is sent), which must be that service. No PKCS#12 (PFX) file, no key in memory |
 | The checks always on (Req. 14, 24) | No policy parameter. The one exception is an `IofeContingency` (procedure approved by INDECOPI, with its validity), written to each record |
 | An audit trail by kind of transaction (Req. 14, 24) | No agent without a sink; signatures carry `type/id`; verifications have their own hash-chained trail |
 | No signatures outside the defined transaction (Req. 14) | A closed list of kinds of transaction |
@@ -203,8 +203,33 @@ IofeVerification result = await verifier.VerifyAsync(received, new IofeSender("2
 The same from the command line, with the extension installed: `simplesign iofe sign`, `simplesign iofe verify`,
 `simplesign iofe view`.
 
-What stays with the operator: the certification of the module (declared, not checked by software), key custody under
-two-person control, access control of the system that hosts the library. What is still open on the library's side: the
+With the key in a remote signing service instead of the organization's module:
+
+```csharp
+RemoteService = new IofeRemoteService
+{
+    Service = new CscClientOptions { BaseUri = serviceUri, ClientId = clientId, ClientSecret = clientSecret },
+    CredentialId = "sello-2026",
+    Pin = pin,
+},
+RemoteServiceDeclaration = new IofeRemoteServiceDeclaration(
+    "Proveedor S.A.", "Firma Remota", "PSVA de firma remota acreditado ante el INDECOPI", "Res. 000-2025/DGI-INDECOPI"),
+```
+
+The agent signs unattended, so it authenticates with a service token or client credentials (renewed when the token
+expires) and the credential's PIN; a credential a person has to authorize is refused. The service is asked what it is
+before a secret is sent to it. On the command line: `--csc-url`, `--csc-credential`, `--csc-client-id`,
+`--csc-client-secret` (or `--csc-token`) and `--service-provider`, `--service-name`, `--service-accreditation`,
+`--service-reference`.
+
+**A PKCS#12 (PFX) file is not a key source of the accredited package**, and no option makes it one: it is a copy of the
+key, and signing with it is a key operation in the application (Req. 15). To sign with a PFX under IOFE's trust and
+policies, outside the accreditation, use the general signers: `PadesSigner…WithCertificate(pfx).WithProfile(iofe)`, or
+`simplesign sign --cert file.pfx --profile iofe`.
+
+What stays with the operator: the certification of the module or the accreditation of the remote service (declared,
+not checked by software — INDECOPI accredits remote signature services under Resolución 175-2024/DGI), key custody
+under two-person control, access control of the system that hosts the library. What is still open on the library's side: the
 code signing of the release (Req. 17, 27).
 
 ## Time-stamping authorities

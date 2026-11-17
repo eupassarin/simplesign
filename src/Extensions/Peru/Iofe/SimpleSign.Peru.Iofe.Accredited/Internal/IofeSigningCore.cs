@@ -6,14 +6,16 @@ using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
+using SimpleSign.Signers.Cloud.Csc;
 using SimpleSign.Signers.Pkcs11;
 using SimpleSign.XAdES;
 
 namespace SimpleSign.Peru.Iofe.Accredited.Internal;
 
 /// <summary>
-/// What signing under the accredited configuration is made of: the token, the profile with its fixed policy, the
-/// level, the audit sink and the contingency. Nothing here takes a policy from the caller.
+/// What signing under the accredited configuration is made of: the key (in a module or in a remote service), the
+/// profile with its fixed policy, the level, the audit sink and the contingency. Nothing here takes a policy from the
+/// caller.
 /// </summary>
 internal sealed class IofeSigningCore : IAsyncDisposable
 {
@@ -21,7 +23,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
 
     private static readonly PolicyConstraint Warn = new(ConstraintLevel.Warn);
 
-    private readonly Pkcs11Signer _token;
+    private readonly IofeKey _key;
     private readonly TrustProfile _profile;
     private readonly IAsyncDisposable? _ownedTrust;
     private readonly ISignatureAuditSink _audit;
@@ -31,20 +33,18 @@ internal sealed class IofeSigningCore : IAsyncDisposable
     private readonly TimeProvider _clock;
 
     private IofeSigningCore(
-        Pkcs11Signer token,
+        IofeKey key,
         TrustProfile profile,
         IAsyncDisposable? ownedTrust,
-        IofeModuleInfo module,
         ISignatureAuditSink audit,
         TimestampOptions? timestamp,
         IofeContingency? contingency,
         IHttpClientProvider? http,
         TimeProvider clock)
     {
-        _token = token;
+        _key = key;
         _profile = profile;
         _ownedTrust = ownedTrust;
-        Module = module;
         _audit = audit;
         _timestamp = timestamp;
         _contingency = contingency;
@@ -53,17 +53,19 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         Viewer = new IofeViewer(profile, http);
     }
 
-    internal IofeModuleInfo Module { get; }
+    internal IofeModuleInfo? Module => _key.Module;
+
+    internal IofeRemoteServiceInfo? RemoteService => _key.RemoteService;
 
     internal IofeViewer Viewer { get; }
 
-    internal string SignerSubject => _token.Certificate.Subject;
+    internal string SignerSubject => _key.Certificate.Subject;
 
     /// <summary>
     /// Opens the token and refuses it unless its driver states the key cannot leave it (Req. 15, 25) and it is the
     /// module the operator declared. A refusal is written to the audit sink.
     /// </summary>
-    internal static async Task<IofeSigningCore> OpenAsync(
+    internal static async Task<IofeSigningCore> OpenModuleAsync(
         Pkcs11SignerOptions module,
         IofeModuleDeclaration declaration,
         IofeTrust trust,
@@ -77,13 +79,12 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var (profile, owned) = await trust.ResolveAsync(signing, validation, cancellationToken).ConfigureAwait(false);
-        Pkcs11Signer? token = null;
+        IofeKey? key = null;
         try
         {
-            token = Pkcs11Signer.Open(module);
-            var info = new IofeModuleInfo(
-                token.TokenLabel, token.TokenManufacturer, token.TokenModel, token.TokenSerialNumber, token.KeyProtection, declaration);
-            var core = new IofeSigningCore(token, profile, owned, info, audit, timestamp, contingency, http, clock);
+            key = IofeKey.OpenModule(module, declaration);
+            var token = key.Module!;
+            var core = new IofeSigningCore(key, profile, owned, audit, timestamp, contingency, http, clock);
 
             if (!token.KeyProtection.IsConfinedToToken)
             {
@@ -95,11 +96,11 @@ internal sealed class IofeSigningCore : IAsyncDisposable
                     cancellationToken).ConfigureAwait(false);
             }
 
-            if (!declaration.Matches(token))
+            if (!declaration.Matches(token.Manufacturer, token.Model))
             {
                 await core.RefuseAsync(
                     IofeRefusal.ModuleMismatch,
-                    $"El token en uso ('{token.TokenManufacturer}' / '{token.TokenModel}') no es el módulo criptográfico declarado "
+                    $"El token en uso ('{token.Manufacturer}' / '{token.Model}') no es el módulo criptográfico declarado "
                     + $"('{declaration.Manufacturer}' / '{declaration.Model}').",
                     operationId: null,
                     cancellationToken).ConfigureAwait(false);
@@ -109,7 +110,76 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         }
         catch
         {
-            token?.Dispose();
+            key?.Dispose();
+            if (owned is not null)
+            {
+                await owned.DisposeAsync().ConfigureAwait(false);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Opens the credential of a remote signing service. The service is asked what it is before anything is sent to
+    /// it: one that is not the declared service gets neither the service token nor the PIN. A credential a person has
+    /// to authorize is refused, since the agent signs unattended. A refusal is written to the audit sink.
+    /// </summary>
+    internal static async Task<IofeSigningCore> OpenRemoteAsync(
+        IofeRemoteService service,
+        IofeRemoteServiceDeclaration declaration,
+        IofeTrust trust,
+        SigningPolicy signing,
+        ValidationPolicy validation,
+        ISignatureAuditSink audit,
+        TimestampOptions? timestamp,
+        IofeContingency? contingency,
+        IHttpClientProvider? http,
+        TimeProvider clock,
+        CancellationToken cancellationToken)
+    {
+        // The audit trail names the provider in the policy of every signature made with its key.
+        signing = signing.WithName($"{signing.Name} (firma remota: {declaration.Provider})");
+        var (profile, owned) = await trust.ResolveAsync(signing, validation, cancellationToken).ConfigureAwait(false);
+        IofeKey? key = null;
+        try
+        {
+            var client = new CscClient(service.Service, http?.GetClient(), clock);
+            var reported = await client.GetInfoAsync(cancellationToken).ConfigureAwait(false);
+            if (!declaration.Matches(reported))
+            {
+                await RefuseAsync(
+                    audit,
+                    clock,
+                    profile.SigningPolicy!,
+                    certificate: null,
+                    AdesBaselineLevel.Basic,
+                    IofeRefusal.RemoteServiceMismatch,
+                    $"El servicio en {client.Options.BaseUri} ('{reported.Name}') no es el servicio de firma remota declarado "
+                    + $"('{declaration.ServiceName}', {declaration.Provider}).",
+                    operationId: null,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            key = await IofeKey.OpenRemoteAsync(client, reported, service, declaration, clock, cancellationToken).ConfigureAwait(false);
+            var core = new IofeSigningCore(key, profile, owned, audit, timestamp, contingency, http, clock);
+
+            if (!string.Equals(key.RemoteService!.AuthMode, "explicit", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(key.RemoteService.AuthMode, "implicit", StringComparison.OrdinalIgnoreCase))
+            {
+                await core.RefuseAsync(
+                    IofeRefusal.RemoteAuthorizationNotUnattended,
+                    $"La credencial '{key.RemoteService.CredentialId}' se autoriza en modo '{key.RemoteService.AuthMode}', que requiere "
+                    + "la intervención de una persona: un agente automatizado firma de manera desatendida.",
+                    operationId: null,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            return core;
+        }
+        catch
+        {
+            key?.Dispose();
             if (owned is not null)
             {
                 await owned.DisposeAsync().ConfigureAwait(false);
@@ -120,24 +190,36 @@ internal sealed class IofeSigningCore : IAsyncDisposable
     }
 
     /// <summary>Records a refusal of this package (not of the signing policy) and throws it.</summary>
-    internal async Task RefuseAsync(IofeRefusal refusal, string message, string? operationId, CancellationToken cancellationToken)
+    internal Task RefuseAsync(IofeRefusal refusal, string message, string? operationId, CancellationToken cancellationToken) =>
+        RefuseAsync(_audit, _clock, _profile.SigningPolicy!, _key.Certificate, Level.Level, refusal, message, operationId, cancellationToken);
+
+    /// <summary>Records a refusal and throws it; <paramref name="certificate"/> is null when it came before the key was read.</summary>
+    private static async Task RefuseAsync(
+        ISignatureAuditSink audit,
+        TimeProvider clock,
+        SigningPolicy policy,
+        X509Certificate2? certificate,
+        AdesBaselineLevel level,
+        IofeRefusal refusal,
+        string message,
+        string? operationId,
+        CancellationToken cancellationToken)
     {
-        var certificate = _token.Certificate;
-        await _audit.RecordAsync(
+        await audit.RecordAsync(
             new SignatureAuditEvent
             {
-                Time = _clock.GetUtcNow(),
+                Time = clock.GetUtcNow(),
                 Format = AuditFormat,
                 OperationId = operationId,
-                RequestedLevel = Level.Level,
+                RequestedLevel = level,
                 Signed = false,
                 Message = $"{refusal}: {message}",
-                CertificateSubject = certificate.Subject,
-                CertificateIssuer = certificate.Issuer,
-                CertificateSerialNumber = certificate.SerialNumber,
-                CertificateSha256 = Convert.ToHexString(certificate.GetCertHash(HashAlgorithmName.SHA256)),
-                PolicyName = _profile.SigningPolicy!.Name,
-                PolicyDigest = _profile.SigningPolicy.Digest,
+                CertificateSubject = certificate?.Subject,
+                CertificateIssuer = certificate?.Issuer,
+                CertificateSerialNumber = certificate?.SerialNumber,
+                CertificateSha256 = certificate is null ? null : Convert.ToHexString(certificate.GetCertHash(HashAlgorithmName.SHA256)),
+                PolicyName = policy.Name,
+                PolicyDigest = policy.Digest,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -148,7 +230,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         SignAsync(IofeDocumentFormat.Pdf, operationId, async (policy, token) =>
         {
             var builder = PadesSigner.Document(pdf)
-                .WithExternalSigner(_token.Certificate, _token, Chain)
+                .WithExternalSigner(_key.Certificate, _key.Signer, Chain)
                 .WithProfile(_profile)
                 .WithSigningPolicy(policy)
                 .WithLevel(Level)
@@ -163,7 +245,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         SignAsync(IofeDocumentFormat.Cms, operationId, async (policy, token) =>
         {
             var builder = CadesSigner.Document(data)
-                .WithExternalSigner(_token.Certificate, _token, Chain)
+                .WithExternalSigner(_key.Certificate, _key.Signer, Chain)
                 .WithContentType(detached ? CadesContentType.Detached : CadesContentType.Enveloped)
                 .WithProfile(_profile)
                 .WithSigningPolicy(policy)
@@ -179,7 +261,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         SignAsync(IofeDocumentFormat.Xml, operationId, async (policy, token) =>
         {
             var builder = XadesSigner.Document(xml)
-                .WithExternalSigner(_token.Certificate, _token, Chain)
+                .WithExternalSigner(_key.Certificate, _key.Signer, Chain)
                 .WithProfile(_profile)
                 .WithSigningPolicy(policy)
                 .WithLevel(Level)
@@ -192,7 +274,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _token.Dispose();
+        _key.Dispose();
         if (_ownedTrust is not null)
         {
             await _ownedTrust.DisposeAsync().ConfigureAwait(false);
@@ -209,7 +291,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
             : AdesBaselineProfile.LongTerm(_timestamp, new LongTermValidationOptions(_http));
 
     /// <summary>The issuers of the signing certificate up to its root, read again at each signature: the trusted list may have changed.</summary>
-    private IReadOnlyList<X509Certificate2> Chain => IofeChains.Complete(_token.Certificate, _token.Chain, _profile.TrustAnchorProviders);
+    private IReadOnlyList<X509Certificate2> Chain => IofeChains.Complete(_key.Certificate, _key.Chain, _profile.TrustAnchorProviders);
 
     private async Task<IofeSignedDocument> SignAsync(
         IofeDocumentFormat format,
@@ -225,10 +307,11 @@ internal sealed class IofeSigningCore : IAsyncDisposable
             achieved,
             timestamped,
             operationId,
-            _token.Certificate.Subject,
-            Convert.ToHexString(_token.Certificate.GetCertHash(HashAlgorithmName.SHA256)),
+            _key.Certificate.Subject,
+            Convert.ToHexString(_key.Certificate.GetCertHash(HashAlgorithmName.SHA256)),
             policy.Name ?? string.Empty,
-            underContingency);
+            underContingency,
+            _key.Kind);
     }
 
     /// <summary>

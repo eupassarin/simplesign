@@ -24,6 +24,18 @@ public enum IofeRefusal
     /// <summary>The notice of a rejected document could not be handed to the notifier (guide section 4.3).</summary>
     NoticeNotDelivered = 6,
 
-    /// <summary>The options are incomplete: no transactions, no notifier, no module, no declaration of the module.</summary>
+    /// <summary>
+    /// The options are incomplete: no transactions, no notifier, no key source (a module or a remote service, one of
+    /// the two) or no declaration of it.
+    /// </summary>
     OptionsIncomplete = 7,
+
+    /// <summary>The remote signing service in use is not the one the operator declared.</summary>
+    RemoteServiceMismatch = 8,
+
+    /// <summary>
+    /// The credential of the remote service is authorized by a person (a login in a browser): an automated agent signs
+    /// unattended (guide section 4.2).
+    /// </summary>
+    RemoteAuthorizationNotUnattended = 9,
 }

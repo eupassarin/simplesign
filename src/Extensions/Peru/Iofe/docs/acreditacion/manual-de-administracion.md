@@ -45,10 +45,19 @@ todo paquete que distribuye (firma de repositorio).
 > requerimiento no está cumplido por el paquete por sí solo: quien acredita un producto debe firmar su propio
 > instalador o ejecutable con su certificado de firma de código.
 
-## 3. El módulo criptográfico (Req. 15)
+## 3. La clave privada: módulo criptográfico o servicio de firma remota (Req. 15)
 
-La librería firma **únicamente** a través de PKCS#11. No acepta archivos de certificado con clave (PKCS#12) ni claves
-en memoria, y nunca lee, exporta ni copia la clave privada.
+La librería firma **únicamente** de dos maneras, y en ambas la clave privada permanece dentro de un módulo
+criptográfico y la librería nunca la lee, exporta ni copia:
+
+- en el **módulo criptográfico del operador**, a través de PKCS#11 (`Module`);
+- en un **servicio de firma remota** que custodia la clave en su propio módulo (`RemoteService`): la librería envía
+  el resumen de lo que firma y recibe la firma.
+
+Se indica una de las dos, nunca ambas. No acepta archivos de certificado con clave (PKCS#12 / PFX) ni claves en
+memoria: ver [3.3](#33-archivos-pkcs12--pfx-fuera-del-alcance).
+
+### 3.1 Módulo criptográfico (PKCS#11)
 
 Al abrir el módulo comprueba y, si falla, rechaza la operación y lo registra en la auditoría:
 
@@ -65,6 +74,62 @@ simplesign pkcs11 list --lib /ruta/al/controlador.so
 
 La certificación FIPS 140-2 o Common Criteria del módulo **no puede comprobarse por software**: es una declaración del
 operador (`Certification`, `CertificateNumber`) que el auditor contrasta con el certificado del fabricante.
+
+### 3.2 Servicio de firma remota
+
+El servicio debe hablar el protocolo *Cloud Signature Consortium API v2* (el de ETSI TS 119 432). El agente firma de
+manera desatendida, de modo que se autentica con medios del propio servicio: un token de servicio o credenciales de
+cliente (`ClientId`, `ClientSecret`), que renueva cuando el token expira, y el PIN de la credencial. No admite
+contraseñas de un solo uso ni inicios de sesión que deba completar una persona.
+
+Al abrir el servicio comprueba y, si falla, rechaza la operación y lo registra en la auditoría:
+
+| Comprobación | Rechazo |
+|---|---|
+| El nombre con que el servicio se identifica (`info`) es el declarado en `RemoteServiceDeclaration`. Se comprueba **antes** de enviarle el secreto del cliente o el PIN | `RemoteServiceMismatch` |
+| La credencial se autoriza sin intervención de una persona (modo `explicit` o `implicit`, no `oauth2code`) | `RemoteAuthorizationNotUnattended` |
+| La dirección del servicio es `https` | error de configuración |
+
+Para conocer el nombre con que el servicio se identifica y sus credenciales:
+
+```bash
+simplesign csc list --csc-url https://proveedor.ejemplo.pe/csc/v2/ --csc-token env:CSC_TOKEN
+```
+
+Cada registro de auditoría de una firma hecha —o rechazada— con la clave remota lleva al prestador en el nombre de la
+política, que termina en `(firma remota: <prestador>)`.
+
+Lo que **no puede comprobarse por software** y queda como declaración del operador (`Accreditation`,
+`AccreditationReference`), que el auditor contrasta con la resolución o el certificado:
+
+- que el prestador esté acreditado ante el INDECOPI como servicio de firma remota (Resolución 175-2024/DGI-INDECOPI) o
+  que su dispositivo de firma esté certificado (EN 419 241-2, EN 419 221-5);
+- que la clave no sea extraíble: el protocolo no lo informa, a diferencia de PKCS#11. Lo garantiza la certificación
+  del servicio.
+
+Con la clave en un servicio remoto, el módulo criptográfico no forma parte de la solución: los controles de custodia
+de la sección siguiente corresponden al prestador del servicio.
+
+### 3.3 Archivos PKCS#12 / PFX: fuera del alcance
+
+Un archivo PKCS#12 (PFX) es una copia de la clave privada, y firmar con él es operar la clave en la memoria de la
+aplicación. Eso contradice el Req. 15 (operaciones solo dentro del módulo certificado, sin copias de la clave), por
+lo que `IofeSigningAgent` y `simplesign iofe sign` **no lo aceptan** y no hay opción para habilitarlo.
+
+Quien necesite firmar con un PFX —pruebas, o usos que no requieren la acreditación— puede hacerlo con los firmadores
+generales de SimpleSign bajo el perfil IOFE, que aplican las mismas verificaciones del certificado:
+
+```bash
+simplesign sign documento.pdf --cert certificado.pfx --password env:PFX_CLAVE --profile iofe -o firmado.pdf
+```
+
+```csharp
+var iofe = await IofeProfile.LoadAsync();
+byte[] firmado = await PadesSigner.Document(pdf).WithCertificate(certificado).WithProfile(iofe).SignAsync();
+```
+
+Esas firmas **están fuera del alcance de la acreditación**: no cumplen el Req. 15 ni lo que de él depende (clave en
+módulo certificado, sin copias), y no pasan por el agente (transacciones definidas, auditoría obligatoria).
 
 ### Lo que corresponde al operador
 

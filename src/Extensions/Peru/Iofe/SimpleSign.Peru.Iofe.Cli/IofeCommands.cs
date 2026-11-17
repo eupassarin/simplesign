@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.Peru.Iofe.Accredited;
+using SimpleSign.Signers.Cloud.Csc;
 using SimpleSign.Signers.Pkcs11;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -93,7 +94,7 @@ internal abstract class IofeTrustSettings : CommandSettings
 }
 
 /// <summary>Signs as the automated agent of INDECOPI's guide, section 4.2 (<see cref="IofeSigningAgent"/>).</summary>
-[Description("Sign as an automated agent under INDECOPI's accreditation guide (section 4.2): key in a PKCS#11 module, fixed policy, audit")]
+[Description("Sign as an automated agent under INDECOPI's accreditation guide (section 4.2): key in a PKCS#11 module or in a remote signing service, fixed policy, audit")]
 internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
 {
     /// <summary>The settings of <c>iofe sign</c>.</summary>
@@ -121,7 +122,7 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
 
         /// <summary>The PKCS#11 driver of the module.</summary>
         [CommandOption("--pkcs11-lib <PATH>")]
-        [Description("PKCS#11 library of the cryptographic module (HSM or token). See 'simplesign pkcs11 list'")]
+        [Description("PKCS#11 library of the cryptographic module (HSM or token). See 'simplesign pkcs11 list'. The key is here or in a remote service (--csc-url), one of the two")]
         public string? Pkcs11Library { get; init; }
 
         /// <summary>The token label.</summary>
@@ -136,7 +137,7 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
 
         /// <summary>The PIN.</summary>
         [CommandOption("--pin <PIN>")]
-        [Description("PIN of the module (omit for a prompt or a PIN pad). Accepts env:NAME")]
+        [Description("PIN of the module (omit for a prompt or a PIN pad), or of the remote credential (omit when it has none). Accepts env:NAME")]
         public string? Pin { get; init; }
 
         /// <summary>The declared manufacturer of the module.</summary>
@@ -158,6 +159,51 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
         [CommandOption("--module-certificate <NUMBER>")]
         [Description("The number of the certificate of that certification")]
         public string? ModuleCertificate { get; init; }
+
+        /// <summary>The remote signing service.</summary>
+        [CommandOption("--csc-url <URL>")]
+        [Description("Remote signing service that keeps the key (Cloud Signature Consortium API v2), e.g. https://provider/csc/v2/, instead of --pkcs11-lib")]
+        public string? CscUrl { get; init; }
+
+        /// <summary>The credential in the remote service.</summary>
+        [CommandOption("--csc-credential <ID>")]
+        [Description("The credential (key and certificate) in the remote service. See 'simplesign csc list'")]
+        public string? CscCredential { get; init; }
+
+        /// <summary>The service access token.</summary>
+        [CommandOption("--csc-token <TOKEN>")]
+        [Description("Service access token of the remote service, or use --csc-client-id and --csc-client-secret. Accepts env:NAME")]
+        public string? CscToken { get; init; }
+
+        /// <summary>The OAuth client of the agent in the remote service.</summary>
+        [CommandOption("--csc-client-id <ID>")]
+        [Description("OAuth client of this agent in the remote service (client credentials)")]
+        public string? CscClientId { get; init; }
+
+        /// <summary>The secret of that client.</summary>
+        [CommandOption("--csc-client-secret <SECRET>")]
+        [Description("The secret of that client. Accepts env:NAME")]
+        public string? CscClientSecret { get; init; }
+
+        /// <summary>The declared provider of the remote service.</summary>
+        [CommandOption("--service-provider <NAME>")]
+        [Description("Who provides the remote signing service")]
+        public string? ServiceProvider { get; init; }
+
+        /// <summary>The declared name of the remote service.</summary>
+        [CommandOption("--service-name <NAME>")]
+        [Description("The name the remote service reports about itself; another service is refused")]
+        public string? ServiceName { get; init; }
+
+        /// <summary>The declared accreditation of the remote service.</summary>
+        [CommandOption("--service-accreditation <TEXT>")]
+        [Description("Its accreditation or the certification of its signing device, e.g. \"PSVA de firma remota acreditado\"")]
+        public string? ServiceAccreditation { get; init; }
+
+        /// <summary>The reference of that accreditation.</summary>
+        [CommandOption("--service-reference <NUMBER>")]
+        [Description("The number of the resolution or of the certificate of that accreditation")]
+        public string? ServiceReference { get; init; }
 
         /// <summary>The transaction signed for.</summary>
         [CommandOption("--transaction <TYPE/ID>")]
@@ -202,15 +248,50 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
                 return ValidationResult.Error($"File not found: {Input}");
             }
 
-            (string Option, string? Value)[] required =
-            [
-                ("--output", Output), ("--pkcs11-lib", Pkcs11Library), ("--module-manufacturer", ModuleManufacturer),
-                ("--module-model", ModuleModel), ("--module-certification", ModuleCertification),
-                ("--module-certificate", ModuleCertificate), ("--transaction", Transaction), ("--audit-log", AuditLog),
-            ];
+            // The key is in a module or in a remote service: one of the two, each with its declaration.
+            bool remote = CscUrl is not null;
+            if (remote == (Pkcs11Library is not null))
+            {
+                return ValidationResult.Error("Give the key one way: --pkcs11-lib (a cryptographic module) or --csc-url (a remote signing service).");
+            }
+
+            (string Option, string? Value)[] required = remote
+                ?
+                [
+                    ("--output", Output), ("--csc-credential", CscCredential), ("--service-provider", ServiceProvider),
+                    ("--service-name", ServiceName), ("--service-accreditation", ServiceAccreditation),
+                    ("--service-reference", ServiceReference), ("--transaction", Transaction), ("--audit-log", AuditLog),
+                ]
+                :
+                [
+                    ("--output", Output), ("--module-manufacturer", ModuleManufacturer),
+                    ("--module-model", ModuleModel), ("--module-certification", ModuleCertification),
+                    ("--module-certificate", ModuleCertificate), ("--transaction", Transaction), ("--audit-log", AuditLog),
+                ];
             if (required.FirstOrDefault(r => string.IsNullOrWhiteSpace(r.Value)) is { Option: not null } missing)
             {
                 return ValidationResult.Error($"{missing.Option} is required.");
+            }
+
+            if (remote && !Uri.TryCreate(CscUrl, UriKind.Absolute, out _))
+            {
+                return ValidationResult.Error("--csc-url is the address of the service, e.g. https://provider/csc/v2/.");
+            }
+
+            if (remote && CscToken is null && (CscClientId is null || CscClientSecret is null))
+            {
+                return ValidationResult.Error("--csc-url needs --csc-token, or --csc-client-id and --csc-client-secret.");
+            }
+
+            (string Option, string? Value)[] ofTheOther = remote
+                ? [("--pkcs11-token", Pkcs11Token), ("--pkcs11-key", Pkcs11Key), ("--module-manufacturer", ModuleManufacturer),
+                    ("--module-model", ModuleModel), ("--module-certification", ModuleCertification), ("--module-certificate", ModuleCertificate)]
+                : [("--csc-credential", CscCredential), ("--csc-token", CscToken), ("--csc-client-id", CscClientId),
+                    ("--csc-client-secret", CscClientSecret), ("--service-provider", ServiceProvider), ("--service-name", ServiceName),
+                    ("--service-accreditation", ServiceAccreditation), ("--service-reference", ServiceReference)];
+            if (ofTheOther.FirstOrDefault(o => o.Value is not null) is { Option: not null } stray)
+            {
+                return ValidationResult.Error($"{stray.Option} goes with {(remote ? "--pkcs11-lib" : "--csc-url")}.");
             }
 
             if (Transaction!.Split('/', 2) is not [{ Length: > 0 }, { Length: > 0 }])
@@ -255,15 +336,29 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
             await using var agent = await IofeSigningAgent.OpenAsync(
                 new IofeSigningAgentOptions
                 {
-                    Module = new Pkcs11SignerOptions
+                    Module = settings.CscUrl is not null ? null : new Pkcs11SignerOptions
                     {
                         LibraryPath = settings.Pkcs11Library!,
                         TokenLabel = settings.Pkcs11Token,
                         KeyLabel = settings.Pkcs11Key,
                         Pin = await IofeCliExtension.Context.ResolvePinAsync(settings.Pin).ConfigureAwait(false),
                     },
-                    ModuleDeclaration = new IofeModuleDeclaration(
+                    ModuleDeclaration = settings.CscUrl is not null ? null : new IofeModuleDeclaration(
                         settings.ModuleManufacturer!, settings.ModuleModel!, settings.ModuleCertification!, settings.ModuleCertificate!),
+                    RemoteService = settings.CscUrl is null ? null : new IofeRemoteService
+                    {
+                        Service = new CscClientOptions
+                        {
+                            BaseUri = new Uri(settings.CscUrl.TrimEnd('/') + "/"),
+                            AccessToken = IofeCliExtension.Context.ResolveSecret(settings.CscToken),
+                            ClientId = settings.CscClientId,
+                            ClientSecret = IofeCliExtension.Context.ResolveSecret(settings.CscClientSecret),
+                        },
+                        CredentialId = settings.CscCredential!,
+                        Pin = IofeCliExtension.Context.ResolveSecret(settings.Pin),
+                    },
+                    RemoteServiceDeclaration = settings.CscUrl is null ? null : new IofeRemoteServiceDeclaration(
+                        settings.ServiceProvider!, settings.ServiceName!, settings.ServiceAccreditation!, settings.ServiceReference!),
                     Audit = audit,
                     Transactions = settings.Allowed,
                     Trust = await settings.TrustAsync(cancellationToken),
@@ -282,16 +377,25 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
             };
             await File.WriteAllBytesAsync(settings.Output!, signed.Document, cancellationToken);
 
-            var module = agent.Module;
             AnsiConsole.MarkupLine($"[green]✓ Signed:[/] {settings.Output!.EscapeMarkup()}");
             AnsiConsole.MarkupLine($"  Signer       {signed.SignerSubject.EscapeMarkup()}");
             AnsiConsole.MarkupLine($"  Level        {signed.Level}{(signed.Timestamped ? " (time-stamped)" : "")}");
             AnsiConsole.MarkupLine($"  Transaction  {signed.OperationId.EscapeMarkup()}");
             AnsiConsole.MarkupLine($"  Policy       {signed.PolicyName.EscapeMarkup()}");
-            AnsiConsole.MarkupLine($"  Module       {module.Manufacturer.EscapeMarkup()} / {module.Model.EscapeMarkup()} (serial {module.SerialNumber.EscapeMarkup()}), "
-                + $"{module.Declaration.Certification.EscapeMarkup()} #{module.Declaration.CertificateNumber.EscapeMarkup()}");
-            AnsiConsole.MarkupLine($"  Key          sensitive: {module.KeyProtection.Sensitive}, extractable: {module.KeyProtection.Extractable}, "
-                + $"generated on the module: {module.KeyProtection.GeneratedOnToken}, hardware slot: {module.KeyProtection.HardwareSlot}");
+            if (agent.Module is { } module)
+            {
+                AnsiConsole.MarkupLine($"  Module       {module.Manufacturer.EscapeMarkup()} / {module.Model.EscapeMarkup()} (serial {module.SerialNumber.EscapeMarkup()}), "
+                    + $"{module.Declaration.Certification.EscapeMarkup()} #{module.Declaration.CertificateNumber.EscapeMarkup()}");
+                AnsiConsole.MarkupLine($"  Key          sensitive: {module.KeyProtection.Sensitive}, extractable: {module.KeyProtection.Extractable}, "
+                    + $"generated on the module: {module.KeyProtection.GeneratedOnToken}, hardware slot: {module.KeyProtection.HardwareSlot}");
+            }
+            else if (agent.RemoteService is { } service)
+            {
+                AnsiConsole.MarkupLine($"  Service      {service.Name.EscapeMarkup()} ({service.BaseUri.AbsoluteUri.EscapeMarkup()}), {service.Declaration.Provider.EscapeMarkup()}: "
+                    + $"{service.Declaration.Accreditation.EscapeMarkup()} #{service.Declaration.AccreditationReference.EscapeMarkup()}");
+                AnsiConsole.MarkupLine($"  Key          in the remote service: credential {service.CredentialId.EscapeMarkup()}, authorization {service.AuthMode.EscapeMarkup()}, SCAL {service.Scal.EscapeMarkup()}");
+            }
+
             AnsiConsole.MarkupLine($"  Audit        {settings.AuditLog!.EscapeMarkup()}");
             return 0;
         }

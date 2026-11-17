@@ -16,12 +16,27 @@ simplesign iofe sign factura.pdf --output factura-firmada.pdf \
   --tsa https://tsa.ejemplo.pe/tsa --tsa-cert tsa.pem
 ```
 
+Con la clave en un servicio de firma remota, en lugar de las opciones `--pkcs11-…` y `--module-…`:
+
+```bash
+simplesign iofe sign factura.pdf --output factura-firmada.pdf \
+  --csc-url https://proveedor.ejemplo.pe/csc/v2/ --csc-credential sello-2026 --pin env:CSC_PIN \
+  --csc-client-id agente-de-firma --csc-client-secret env:CSC_SECRETO \
+  --service-provider "Proveedor S.A." --service-name "Firma Remota" \
+  --service-accreditation "PSVA de firma remota acreditado ante el INDECOPI" --service-reference "Res. 000-2025/DGI-INDECOPI" \
+  --transaction factura/F001-123 --allow factura --allow constancia \
+  --audit-log /var/log/firma/auditoria.jsonl
+```
+
 | Opción | Significado |
 |---|---|
 | `--format pdf\|xml\|cms` | Formato de la firma; por defecto, según la extensión del archivo |
 | `--detached` | En CMS, deja el contenido fuera de la firma |
 | `--pkcs11-lib`, `--pkcs11-token`, `--pkcs11-key`, `--pin` | El módulo criptográfico, la clave y el PIN (`env:NOMBRE` lo lee de una variable de entorno) |
 | `--module-…` | El módulo declarado y su certificación |
+| `--csc-url`, `--csc-credential`, `--pin` | El servicio de firma remota (Cloud Signature Consortium API v2), la credencial y su PIN, en lugar del módulo |
+| `--csc-token`, o `--csc-client-id` y `--csc-client-secret` | Cómo se autentica el agente ante el servicio (`env:NOMBRE` lee el secreto de una variable de entorno) |
+| `--service-…` | El servicio declarado: prestador, nombre con que se identifica, acreditación y su referencia |
 | `--transaction tipo/id` | La transacción para la que se firma |
 | `--allow tipo` | Tipos de transacción permitidos a este agente |
 | `--audit-log` | Registro de auditoría de firmas |
@@ -30,7 +45,10 @@ simplesign iofe sign factura.pdf --output factura-firmada.pdf \
 | `--contingency`, `--contingency-until` | Contingencia aprobada y su vigencia |
 
 Resultado: `✓ Signed`, con el firmante, el nivel (B-B sin sello de tiempo, B-LT con él), la transacción, la política,
-el módulo y la protección de la clave. Código de salida 0.
+el módulo y la protección de la clave (o el servicio de firma remota y su credencial). Código de salida 0.
+
+No hay opción para firmar con un archivo PKCS#12 (PFX): está fuera del alcance de la acreditación (manual de
+administración, sección 3.3).
 
 Si la operación se rechaza, el mensaje indica el motivo y el código de salida es distinto de 0:
 
@@ -38,6 +56,8 @@ Si la operación se rechaza, el mensaje indica el motivo y el código de salida 
 |---|---|
 | `Refused (KeyNotInModule)` | La clave es extraíble o no es sensible: use una clave generada en el módulo como no extraíble |
 | `Refused (ModuleMismatch)` | El token no es el declarado: revise `--module-manufacturer` y `--module-model` con `simplesign pkcs11 list` |
+| `Refused (RemoteServiceMismatch)` | El servicio no es el declarado: revise `--service-name` con `simplesign csc list` |
+| `Refused (RemoteAuthorizationNotUnattended)` | La credencial requiere que una persona la autorice: use una credencial de sello de la organización |
 | `Refused (TransactionNotAllowed)` | El tipo de transacción no está en `--allow` |
 | `Refused (ContingencyExpired)` | La vigencia de la contingencia terminó: retire `--contingency` |
 | `Error (CertificateRevoked)` | El certificado o uno de su cadena está revocado: no puede firmar |

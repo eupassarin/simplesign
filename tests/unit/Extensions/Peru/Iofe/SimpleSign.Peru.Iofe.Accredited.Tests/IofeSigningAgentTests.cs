@@ -66,8 +66,11 @@ public sealed class IofeSigningAgentTests : IDisposable
         signed.OperationId.ShouldBe("factura/F001-123");
         signed.PolicyName.ShouldBe(IofePolicies.AgentSigning.Name);
         signed.UnderContingency.ShouldBeFalse();
-        agent.Module.KeyProtection.IsConfinedToToken.ShouldBeTrue();
-        agent.Module.Declaration.ShouldBe(IofeTokenFixture.Declaration);
+        signed.KeySource.ShouldBe(IofeKeySourceKind.Module);
+        agent.RemoteService.ShouldBeNull();
+        var module = agent.Module.ShouldNotBeNull();
+        module.KeyProtection.IsConfinedToToken.ShouldBeTrue();
+        module.Declaration.ShouldBe(IofeTokenFixture.Declaration);
         var record = _audit.Events.ShouldHaveSingleItem();
         record.Signed.ShouldBeTrue();
         record.OperationId.ShouldBe("factura/F001-123");

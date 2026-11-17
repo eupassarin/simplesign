@@ -12,9 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`SimpleSign.Peru.Iofe.Accredited`: the configuration INDECOPI's accreditation guide asks for, with nothing to
   relax** (*Guía de Acreditación de Aplicaciones de Software* v4.0, sections 4.2, 4.3 and 4.4). What the checklist
   left to "the accredited product" is now what the API guarantees:
-  - `IofeSigningAgent` (section 4.2) signs PDF, CMS and XML for a transaction. Its only key source is a PKCS#11
-    module, which must be the one the operator declares (`IofeModuleDeclaration`) and whose key the driver reports
-    as sensitive and not extractable; it takes no policy (`IofePolicies.AgentSigning`), does not open without an
+  - `IofeSigningAgent` (section 4.2) signs PDF, CMS and XML for a transaction. Its key is in a cryptographic module,
+    one of two ways and no other: a PKCS#11 module, which must be the one the operator declares
+    (`IofeModuleDeclaration`) and whose key the driver reports as sensitive and not extractable; or a remote signing
+    service (`IofeRemoteService`, Cloud Signature Consortium API v2: the agent sends the hash), which must be the one
+    the operator declares (`IofeRemoteServiceDeclaration`) — it is asked what it is before a secret is sent to it —
+    and whose credential needs no person to authorize it. A PKCS#12 (PFX) file is not a key source: it contradicts
+    Req. 15, and signing with one under the IOFE profile stays with the general signers, outside the accreditation.
+    It takes no policy (`IofePolicies.AgentSigning`), does not open without an
     audit sink, and refuses a kind of transaction it was not set up for. Refusals of its own are
     `IofeAccreditationException` with an `IofeRefusal`; those of the policy stay `SigningException`.
   - `IofeVerificationAgent` (section 4.3) checks every signature of a received document under
@@ -27,7 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     to every audit record made under it; a revoked certificate is still refused.
   - `IofeViewer` (Req. 18, 28), and `IofeTrust`: INDECOPI's trusted list (default), a list already loaded, or roots
     the operator installed.
-  - CLI: `simplesign iofe sign`, `iofe verify` and `iofe view`, in the IOFE extension (below).
+  - CLI: `simplesign iofe sign` (`--pkcs11-lib …` or `--csc-url …`), `iofe verify` and `iofe view`, in the IOFE
+    extension (below).
   - The manuals the guide asks for, in Spanish, under `src/Extensions/Peru/Iofe/docs/acreditacion/` (administration,
     user, programmer, security configuration, scope); `src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md` marks
     what the package guarantees (**A**).

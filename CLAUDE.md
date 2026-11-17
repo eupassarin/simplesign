@@ -79,7 +79,7 @@ src/
 │   │   └── tools/eidas.py                      writes that playbook
 │   └── Peru/Iofe/                            everything of Peru/IOFE/INDECOPI lives here
 │       ├── SimpleSign.Peru.Iofe/             IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
-│       ├── SimpleSign.Peru.Iofe.Accredited/  INDECOPI's guide §4.2–4.4 with nothing to relax: signing agent (PKCS#11 only), verification agent, audit
+│       ├── SimpleSign.Peru.Iofe.Accredited/  INDECOPI's guide §4.2–4.4 with nothing to relax: signing agent (key in a PKCS#11 module or a declared remote service; no PFX), verification agent, audit
 │       ├── SimpleSign.Peru.Iofe.Cli/         the CLI extension: --profile iofe, iofe policies, --tsl-profile iofe, `simplesign iofe …`
 │       ├── docs/                             iofe.md; acreditacion/ = the manuals in Spanish
 │       ├── playbooks/                        indecopi-checklist.md (annex B), indecopi-guia-v4.json
@@ -224,7 +224,7 @@ SimpleSign.Peru.Iofe / SimpleSign.Europe.Eidas (one ICountryExtension each)
   └── depend on SimpleSign.Core + SimpleSign.XAdES — public API only
 
 SimpleSign.Peru.Iofe.Accredited (INDECOPI's guide §4.2–4.4: no policy, key or switch taken from the caller)
-  └── depends on SimpleSign.Peru.Iofe + PAdES + CAdES + XAdES + Signers.Pkcs11 — public API only
+  └── depends on SimpleSign.Peru.Iofe + PAdES + CAdES + XAdES + Signers.Pkcs11 + Signers.Cloud — public API only
 
 SimpleSign.Cli.Extensibility (the contract of CLI extensions)
   └── depends on SimpleSign.Core + SimpleSign.XAdES + SimpleSign.PAdES + Spectre.Console.Cli

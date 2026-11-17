@@ -6,11 +6,12 @@ los tipos de aplicación:
 
 | Sección de la Guía | Tipo | Componente |
 |---|---|---|
-| 4.2 (Req. 11–20) | Software de firma por parte de agentes automatizados | `IofeSigningAgent` · `simplesign iofe sign` |
+| 4.2 (Req. 11–20) | Software de firma por parte de agentes automatizados, con la clave en un módulo criptográfico (PKCS#11) o en un servicio de firma remota | `IofeSigningAgent` · `simplesign iofe sign` |
 | 4.3 (Req. 21–30) | Software de verificación por parte de agentes automatizados | `IofeVerificationAgent` · `simplesign iofe verify` |
 | 4.4 | Funcionalidad de solicitud de sellos de tiempo | `IofeTimestampAuthority` |
 
-El software de firma de usuario final (sección 4.1) no forma parte de este paquete.
+El software de firma de usuario final (sección 4.1) no forma parte de este paquete, ni la firma con archivos PKCS#12
+(PFX), que contradice el Req. 15.
 
 | Documento | Para quién | Requerimiento |
 |---|---|---|
@@ -24,5 +25,5 @@ La correspondencia de cada ítem del Anexo B con lo que lo evidencia está en
 [`src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md`](../../playbooks/indecopi-checklist.md).
 
 La acreditación la otorga el INDECOPI sobre un producto y su operación. Este paquete aporta la parte de software; los
-manuales indican qué queda a cargo del operador (certificación del módulo criptográfico, custodia de claves, control
-de acceso al sistema).
+manuales indican qué queda a cargo del operador (certificación del módulo criptográfico o acreditación del servicio de
+firma remota, custodia de claves, control de acceso al sistema).
